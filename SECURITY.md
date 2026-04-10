@@ -8,7 +8,7 @@ DeclaRenta processes sensitive financial and tax data. Your data never leaves yo
 
 Instead, please use GitHub's private vulnerability reporting:
 
-1. Go to https://github.com/GeiserX/declarenta/security/advisories
+1. Go to https://github.com/GeiserX/DeclaRenta/security/advisories
 2. Click "Report a vulnerability"
 3. Fill out the form with details
 
