@@ -52,11 +52,11 @@
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GeiserX/declarenta.git"
+    "url": "https://github.com/GeiserX/DeclaRenta.git"
   },
   "homepage": "https://declarenta.es",
   "bugs": {
-    "url": "https://github.com/GeiserX/declarenta/issues"
+    "url": "https://github.com/GeiserX/DeclaRenta/issues"
   },
   "engines": {
     "node": ">=20.0.0"
