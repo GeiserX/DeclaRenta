@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+
+# Debug
+npm-debug.log*
+
+# Cache
+.eslintcache
+*.tsbuildinfo
+
+# AGENTS.md contains secrets
+AGENTS.md

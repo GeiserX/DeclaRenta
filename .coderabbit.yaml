@@ -1,0 +1,69 @@
+language: "en-US"
+tone_instructions: "Be direct and concise. No fluff."
+
+reviews:
+  profile: "chill"
+  high_level_summary: true
+  collapse_walkthrough: true
+  poem: false
+  sequence_diagrams: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT REVIEW"
+  path_filters:
+    - "!dist/**"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+    - "!**/node_modules/**"
+    - "!**/package-lock.json"
+  path_instructions:
+    - path: "src/engine/**"
+      instructions: |
+        This is the core tax calculation engine. Verify:
+        - All monetary calculations use Decimal.js (never raw Number arithmetic)
+        - ECB rates are used, never IBKR's fxRateToBase
+        - FIFO order is strictly maintained
+        - Edge cases: partial lot consumption, zero-quantity, negative amounts
+    - path: "src/parsers/**"
+      instructions: |
+        Verify XML parsing handles missing/optional fields gracefully.
+        Check that all string-to-number conversions go through Decimal.js.
+    - path: "src/generators/**"
+      instructions: |
+        Verify Modelo 720 fixed-width format matches AEAT specs exactly.
+        Check field positions, padding, and encoding.
+    - path: "Dockerfile*"
+      instructions: |
+        Verify multi-stage builds. Check for non-root USER.
+        Ensure base image tags are pinned, not :latest.
+  tools:
+    gitleaks:
+      enabled: true
+    hadolint:
+      enabled: true
+    actionlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    eslint:
+      enabled: true
+    shellcheck:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: "local"
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "CLAUDE.md"
