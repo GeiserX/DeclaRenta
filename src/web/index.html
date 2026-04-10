@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeclaRenta - Broker extranjero → Renta española</title>
+  <meta name="description" content="Convierte reportes de IBKR, Degiro y Trade Republic en valores para tu declaración de la renta española. 100% en tu navegador, tus datos nunca salen de tu ordenador." />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>DeclaRenta</h1>
+      <p>Broker extranjero → Renta española</p>
+      <p class="privacy">Tus datos se procesan 100% en tu navegador. Nada se sube a ningún servidor.</p>
+    </header>
+
+    <section id="upload">
+      <h2>1. Sube tu Flex Query XML de IBKR</h2>
+      <div id="drop-zone">
+        <p>Arrastra tu fichero aquí o haz clic para seleccionar</p>
+        <input type="file" id="file-input" accept=".xml" />
+      </div>
+      <p class="help">Reports → Flex Queries → Custom → XML, período completo del año fiscal</p>
+    </section>
+
+    <section id="config" hidden>
+      <h2>2. Configura</h2>
+      <label>
+        Ejercicio fiscal:
+        <select id="year-select">
+          <option value="2025" selected>2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+        </select>
+      </label>
+    </section>
+
+    <section id="results" hidden>
+      <h2>3. Resultados para Modelo 100</h2>
+      <div id="casillas"></div>
+      <div id="operations"></div>
+      <button id="export-btn">Exportar JSON</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      <a href="https://github.com/GeiserX/declarenta">GitHub</a> ·
+      GPL-3.0 ·
+      <strong>Tus datos nunca salen de tu navegador</strong>
+    </p>
+  </footer>
+
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>
