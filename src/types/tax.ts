@@ -1,0 +1,125 @@
+import type Decimal from "decimal.js";
+
+/**
+ * Core tax calculation types for Spanish IRPF (Modelo 100).
+ */
+
+/** A single lot in the FIFO queue */
+export interface Lot {
+  id: string;
+  isin: string;
+  symbol: string;
+  description: string;
+  acquireDate: string;
+  quantity: Decimal;
+  pricePerShare: Decimal;
+  costInEur: Decimal;
+  currency: string;
+  ecbRate: Decimal;
+}
+
+/** Result of consuming lots via FIFO for a sale */
+export interface FifoDisposal {
+  isin: string;
+  symbol: string;
+  description: string;
+  sellDate: string;
+  acquireDate: string;
+  quantity: Decimal;
+  proceedsEur: Decimal;
+  costBasisEur: Decimal;
+  gainLossEur: Decimal;
+  holdingPeriodDays: number;
+  /** True if loss is blocked by the anti-churning rule (Art. 33.5.f LIRPF) */
+  washSaleBlocked: boolean;
+}
+
+/** Dividend received from a foreign security */
+export interface DividendEntry {
+  isin: string;
+  symbol: string;
+  description: string;
+  payDate: string;
+  grossAmountEur: Decimal;
+  withholdingTaxEur: Decimal;
+  withholdingCountry: string;
+  currency: string;
+  ecbRate: Decimal;
+}
+
+/** Interest income (cash, bonds, margin) */
+export interface InterestEntry {
+  type: "earned" | "paid";
+  description: string;
+  date: string;
+  amountEur: Decimal;
+  currency: string;
+  ecbRate: Decimal;
+}
+
+/** Aggregated results for Modelo 100 casillas */
+export interface TaxSummary {
+  /** Tax year */
+  year: number;
+
+  /** Capital gains: Ganancias y perdidas patrimoniales (Casillas 0327-0340) */
+  capitalGains: {
+    /** Casilla 0327: Valor de transmision (total proceeds) */
+    transmissionValue: Decimal;
+    /** Casilla 0328: Valor de adquisicion (total cost basis) */
+    acquisitionValue: Decimal;
+    /** Net gain/loss (0327 - 0328) */
+    netGainLoss: Decimal;
+    /** Gains blocked by anti-churning rule */
+    blockedLosses: Decimal;
+    /** Individual disposals */
+    disposals: FifoDisposal[];
+  };
+
+  /** Dividends: Rendimientos del capital mobiliario (Casillas 0029-0034) */
+  dividends: {
+    /** Casilla 0029: Ingresos integros (gross dividends) */
+    grossIncome: Decimal;
+    /** Casilla 0034: Retenciones / Gastos deducibles */
+    deductibleExpenses: Decimal;
+    /** Individual dividends */
+    entries: DividendEntry[];
+  };
+
+  /** Interest income */
+  interest: {
+    /** Casilla 0033: Intereses de cuentas y depositos */
+    earned: Decimal;
+    /** Casilla 0032: Gastos deducibles (margin interest) */
+    paid: Decimal;
+    entries: InterestEntry[];
+  };
+
+  /** Double taxation deduction: Deduccion por doble imposicion internacional */
+  doubleTaxation: {
+    /** Casilla 0588: Deduccion */
+    deduction: Decimal;
+    /** Breakdown by country */
+    byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>;
+  };
+}
+
+/** Modelo 720: Foreign asset declaration */
+export interface Modelo720Entry {
+  isin: string;
+  symbol: string;
+  description: string;
+  entityName: string;
+  countryCode: string;
+  acquisitionDate: string;
+  acquisitionValueEur: Decimal;
+  valuationDate: string;
+  valuationEur: Decimal;
+  quantity: Decimal;
+  ownershipPercentage: Decimal;
+  /** A = initial, M = existing unchanged, C = disposed */
+  declarationType: "A" | "M" | "C";
+  /** V = stocks/funds */
+  assetType: "V";
+  identifierType: "1"; // 1 = ISIN
+}
