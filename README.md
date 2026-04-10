@@ -96,8 +96,8 @@ DeclaRenta calcula automaticamente estas casillas:
 ## Desarrollo
 
 ```bash
-git clone https://github.com/GeiserX/declarenta.git
-cd declarenta
+git clone https://github.com/GeiserX/DeclaRenta.git
+cd DeclaRenta
 npm install
 
 # Tests
