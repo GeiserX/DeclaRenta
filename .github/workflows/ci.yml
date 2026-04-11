@@ -31,8 +31,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        if: matrix.node-version == 22
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage/coverage-final.json
+          fail_ci_if_error: false
 
       - name: Build
         run: npm run build:lib

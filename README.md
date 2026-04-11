@@ -1,5 +1,7 @@
 # DeclaRenta
 
+[![codecov](https://codecov.io/gh/GeiserX/DeclaRenta/graph/badge.svg)](https://codecov.io/gh/GeiserX/DeclaRenta)
+
 **Convierte reportes de brokers extranjeros en tu declaracion de la renta espanola.**
 
 IBKR, Degiro, Trade Republic → Modelo 100 (IRPF), Modelo 720, D-6.
