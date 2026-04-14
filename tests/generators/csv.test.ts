@@ -19,6 +19,19 @@ describe("escapeCsv", () => {
   it("should wrap strings with newlines in quotes", () => {
     expect(escapeCsv("line1\nline2")).toBe('"line1\nline2"');
   });
+
+  it("should prevent spreadsheet formula injection", () => {
+    expect(escapeCsv("=SUM(A1)")).toBe("'=SUM(A1)");
+    expect(escapeCsv("+cmd")).toBe("'+cmd");
+    expect(escapeCsv("-1+1")).toBe("'-1+1");
+    expect(escapeCsv("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(escapeCsv(" =indirect")).toBe("' =indirect");
+  });
+
+  it("should not inject-protect safe strings", () => {
+    expect(escapeCsv("APPLE INC")).toBe("APPLE INC");
+    expect(escapeCsv("US0378331005")).toBe("US0378331005");
+  });
 });
 
 function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
@@ -88,25 +101,31 @@ describe("formatCsv", () => {
     expect(csv).toContain("# RESUMEN CASILLAS");
   });
 
-  it("should include disposal rows with correct fields", () => {
+  it("should include disposal rows with correct fields and column order", () => {
     const csv = formatCsv(makeReport());
 
-    // Header + 1 data row in capital gains
     const lines = csv.split("\n");
     const header = lines.find((l) => l.startsWith("ISIN,Simbolo"))!;
-    expect(header).toContain("Tipo_ECB_Compra");
-    expect(header).toContain("Tipo_ECB_Venta");
-    expect(header).toContain("Bloqueada_Antichurning");
+    const headerCols = header.split(",");
+    expect(headerCols[0]).toBe("ISIN");
+    expect(headerCols[1]).toBe("Simbolo");
+    expect(headerCols[10]).toBe("Divisa");
+    expect(headerCols[11]).toBe("Tipo_ECB_Compra");
+    expect(headerCols[12]).toBe("Tipo_ECB_Venta");
+    expect(headerCols[13]).toBe("Bloqueada_Antichurning");
 
     const dataLine = lines.find((l) => l.startsWith("US0378331005,AAPL"))!;
-    expect(dataLine).toContain("1000.00"); // proceeds
-    expect(dataLine).toContain("800.00"); // cost
-    expect(dataLine).toContain("200.00"); // gain
-    expect(dataLine).toContain("189"); // holding days
-    expect(dataLine).toContain("USD"); // currency
-    expect(dataLine).toContain("0.920000"); // acquire ECB rate
-    expect(dataLine).toContain("0.910000"); // sell ECB rate
-    expect(dataLine).toContain("NO"); // not blocked
+    const dataCols = dataLine.split(",");
+    expect(dataCols[0]).toBe("US0378331005"); // ISIN
+    expect(dataCols[1]).toBe("AAPL"); // symbol
+    expect(dataCols[6]).toBe("800.00"); // cost
+    expect(dataCols[7]).toBe("1000.00"); // proceeds
+    expect(dataCols[8]).toBe("200.00"); // gain
+    expect(dataCols[9]).toBe("189"); // holding days
+    expect(dataCols[10]).toBe("USD"); // currency
+    expect(dataCols[11]).toBe("0.920000"); // acquire ECB rate
+    expect(dataCols[12]).toBe("0.910000"); // sell ECB rate
+    expect(dataCols[13]).toBe("NO"); // not blocked
   });
 
   it("should include dividend rows", () => {

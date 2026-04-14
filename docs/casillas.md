@@ -7,7 +7,7 @@
 | Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
 |---------|----------|------------------------|------------------|
 | **0327** | Valor de transmisión | Σ (precio_venta × cantidad × multiplicador − comisión − impuestos) × tipo_ECB_venta | Art. 35.2 LIRPF |
-| **0328** | Valor de adquisición | Σ coste FIFO en EUR de los lotes consumidos (precio × cantidad × multiplicador + comisión + impuestos) × tipo_ECB_compra | Art. 35.1 LIRPF |
+| **0328** | Valor de adquisición | Σ (precio_compra × cantidad × multiplicador + comisión + impuestos) × tipo_ECB_compra, siguiendo FIFO sobre los lotes consumidos | Art. 35.1 LIRPF |
 | **0358** | Pérdidas patrimoniales a compensar | Pérdidas netas NO bloqueadas por regla anti-churning | Art. 49 LIRPF |
 
 **Notas:**

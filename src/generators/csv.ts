@@ -7,10 +7,12 @@
 import type { TaxSummary } from "../types/tax.js";
 
 export function escapeCsv(val: string): string {
-  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
-    return `"${val.replace(/"/g, '""')}"`;
+  // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in Excel/Sheets)
+  const safe = /^[\t\r ]*[=+\-@]/.test(val) ? `'${val}` : val;
+  if (/[",\r\n]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
   }
-  return val;
+  return safe;
 }
 
 export function formatCsv(report: TaxSummary): string {

@@ -11,7 +11,7 @@ import type { Lot, FifoDisposal } from "../types/tax.js";
 import type { Trade, CorporateAction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
-import { daysBetween } from "./dates.js";
+import { daysBetween, normalizeDate } from "./dates.js";
 
 /** Lot grouping key: ISIN for stocks/funds, symbol for options (which lack ISINs) */
 function lotKey(trade: { isin: string; symbol: string }): string {
@@ -33,7 +33,7 @@ export class FifoEngine {
   processTrades(trades: Trade[], rateMap: EcbRateMap, corporateActions?: CorporateAction[]): FifoDisposal[] {
     const sorted = [...trades]
       .filter((t) => t.assetCategory === "STK" || t.assetCategory === "FUND" || t.assetCategory === "OPT")
-      .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+      .sort((a, b) => normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)));
 
     // Parse splits from corporate actions (deduplicate by ISIN+date)
     const splitMap = new Map<string, { isin: string; date: string; ratio: number }>();
@@ -41,7 +41,7 @@ export class FifoEngine {
       const ratioMatch = ca.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
       const ratio = ratioMatch ? parseInt(ratioMatch[1]!) / parseInt(ratioMatch[2]!) : 0;
       if (ratio <= 0) continue;
-      const date = ca.dateTime.slice(0, 8); // "20240807" — same format as trade.tradeDate
+      const date = normalizeDate(ca.dateTime.slice(0, 8));
       const key = `${ca.isin}:${date}`;
       if (!splitMap.has(key)) {
         splitMap.set(key, { isin: ca.isin, date, ratio });
@@ -49,42 +49,46 @@ export class FifoEngine {
     }
     const splits = [...splitMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
-    // Parse scrip dividends (stock dividends — new shares at cost basis from IBKR amount)
+    // Parse scrip dividends into timeline events (applied chronologically, not upfront)
+    const scripDivs: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SD")) {
       const qty = new Decimal(ca.quantity);
       if (qty.isZero()) continue;
       const amount = new Decimal(ca.amount).abs();
-      const date = ca.dateTime.slice(0, 8);
+      const date = normalizeDate(ca.dateTime.slice(0, 8));
       const ecbRate = getEcbRate(rateMap, date, ca.currency);
       const costInEur = amount.mul(ecbRate);
-      const lot: Lot = {
-        id: `LOT-${this.nextLotId++}`,
+      scripDivs.push({
+        key: ca.isin || ca.symbol,
         isin: ca.isin,
         symbol: ca.symbol,
         description: ca.description,
-        acquireDate: date,
+        date,
         quantity: qty.abs(),
-        pricePerShare: qty.isZero() ? new Decimal(0) : amount.dividedBy(qty.abs()),
+        pricePerShare: amount.dividedBy(qty.abs()),
         costInEur,
         currency: ca.currency,
         ecbRate,
-      };
-      const key = ca.isin || ca.symbol;
-      if (!this.lots.has(key)) {
-        this.lots.set(key, []);
-      }
-      this.lots.get(key)!.push(lot);
-      this.warnings.push(`📈 Scrip dividend: ${ca.symbol} +${qty.abs()} acciones (coste ${costInEur.toFixed(2)} EUR) el ${date}`);
+      });
+      this.warnings.push(`📈 Scrip dividend: ${ca.symbol} +${qty.abs()} acciones el ${date}`);
     }
+    const sortedScripDivs = scripDivs.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Merge trades and splits into a single timeline
+    // Merge trades, splits, and scrip dividends into a single chronological timeline
     let splitIdx = 0;
+    let sdIdx = 0;
 
     for (const trade of sorted) {
+      const tradeDate = normalizeDate(trade.tradeDate);
       // Apply any splits that occur before this trade
-      while (splitIdx < splits.length && splits[splitIdx]!.date <= trade.tradeDate) {
+      while (splitIdx < splits.length && splits[splitIdx]!.date <= tradeDate) {
         this.applySplit(splits[splitIdx]!);
         splitIdx++;
+      }
+      // Apply any scrip dividends that occur before this trade
+      while (sdIdx < sortedScripDivs.length && sortedScripDivs[sdIdx]!.date <= tradeDate) {
+        this.addScripDividendLot(sortedScripDivs[sdIdx]!);
+        sdIdx++;
       }
 
       if (trade.buySell === "BUY") {
@@ -94,10 +98,14 @@ export class FifoEngine {
       }
     }
 
-    // Apply remaining splits after all trades
+    // Apply remaining splits and scrip dividends after all trades
     while (splitIdx < splits.length) {
       this.applySplit(splits[splitIdx]!);
       splitIdx++;
+    }
+    while (sdIdx < sortedScripDivs.length) {
+      this.addScripDividendLot(sortedScripDivs[sdIdx]!);
+      sdIdx++;
     }
 
     return this.disposals;
@@ -115,14 +123,33 @@ export class FifoEngine {
       // costInEur stays the same — total cost doesn't change on a split
     }
 
-    // Remove lots that became 0-quantity after split (e.g. fractional shares rounded down)
-    const remaining = lots.filter((l) => l.quantity.greaterThan(0));
+    // Remove sub-share lots after split (fractional remainders become cash-in-lieu)
+    const remaining = lots.filter((l) => l.quantity.greaterThanOrEqualTo(1));
     if (remaining.length < lots.length) {
       this.lots.set(split.isin, remaining);
     }
 
     const direction = split.ratio >= 1 ? "forward" : "reverse";
     console.error(`  ⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`);
+  }
+
+  private addScripDividendLot(sd: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }): void {
+    const lot: Lot = {
+      id: `LOT-${this.nextLotId++}`,
+      isin: sd.isin,
+      symbol: sd.symbol,
+      description: sd.description,
+      acquireDate: sd.date,
+      quantity: sd.quantity,
+      pricePerShare: sd.pricePerShare,
+      costInEur: sd.costInEur,
+      currency: sd.currency,
+      ecbRate: sd.ecbRate,
+    };
+    if (!this.lots.has(sd.key)) {
+      this.lots.set(sd.key, []);
+    }
+    this.lots.get(sd.key)!.push(lot);
   }
 
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
