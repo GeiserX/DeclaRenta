@@ -29,9 +29,11 @@ export function generateTaxReport(
   rateMap: EcbRateMap,
   year: number,
 ): TaxSummary {
-  // 1. FIFO capital gains
+  // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
-  let disposals = fifoEngine.processTrades(statement.trades, rateMap);
+  const allDisposals = fifoEngine.processTrades(statement.trades, rateMap, statement.corporateActions);
+  const yearStr = year.toString();
+  let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   disposals = detectWashSales(disposals, statement.trades);
 
   const transmissionValue = disposals.reduce(
@@ -46,15 +48,16 @@ export function generateTaxReport(
     .filter((d) => d.washSaleBlocked)
     .reduce((sum, d) => sum.plus(d.gainLossEur.abs()), new Decimal(0));
 
-  // 2. Dividends
-  const dividendEntries = calculateDividends(statement.cashTransactions, rateMap);
+  // 2. Dividends (filter to target year)
+  const yearCashTransactions = statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
+  const dividendEntries = calculateDividends(yearCashTransactions, rateMap);
   const grossDividends = dividendEntries.reduce(
     (sum, d) => sum.plus(d.grossAmountEur),
     new Decimal(0),
   );
 
-  // 3. Interest
-  const interestTransactions = statement.cashTransactions.filter(
+  // 3. Interest (already filtered to target year)
+  const interestTransactions = yearCashTransactions.filter(
     (t) =>
       t.type === "Broker Interest Received" ||
       t.type === "Broker Interest Paid" ||
@@ -90,6 +93,7 @@ export function generateTaxReport(
 
   return {
     year,
+    warnings: fifoEngine.warnings,
     capitalGains: {
       transmissionValue,
       acquisitionValue,

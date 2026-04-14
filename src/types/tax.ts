@@ -61,6 +61,8 @@ export interface InterestEntry {
 export interface TaxSummary {
   /** Tax year */
   year: number;
+  /** Non-fatal warnings (short sales, missing lots, etc.) */
+  warnings: string[];
 
   /** Capital gains: Ganancias y pérdidas patrimoniales (Casillas 0327-0340) */
   capitalGains: {

@@ -99,6 +99,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     commissionCurrency: raw.commissionCurrency ?? "",
     commission: raw.commission ?? "0",
     taxes: raw.taxes ?? "0",
+    multiplier: raw.multiplier ?? "1",
   };
 }
 
