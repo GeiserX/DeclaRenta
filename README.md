@@ -68,6 +68,9 @@ declarenta convert --input flex_query.xml --year 2025
 # Generar informe y guardar en fichero
 declarenta convert --input flex_query.xml --year 2025 --output informe.json
 
+# Exportar detalle por operación en CSV
+declarenta convert --input flex_query.xml --year 2025 --format csv --output detalle.csv
+
 # Generar Modelo 720
 declarenta modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
 ```
