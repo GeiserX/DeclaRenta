@@ -95,7 +95,8 @@ export class FifoEngine {
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
     const commission = new Decimal(trade.commission).abs();
-    const costInOrigCurrency = quantity.mul(pricePerShare).mul(multiplier).plus(commission);
+    const taxes = new Decimal(trade.taxes || "0").abs();
+    const costInOrigCurrency = quantity.mul(pricePerShare).mul(multiplier).plus(commission).plus(taxes);
     const costInEur = costInOrigCurrency.mul(ecbRate);
 
     const lot: Lot = {
@@ -122,6 +123,7 @@ export class FifoEngine {
     const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     let remaining = new Decimal(trade.quantity).abs();
     const commission = new Decimal(trade.commission).abs();
+    const taxes = new Decimal(trade.taxes || "0").abs();
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
 
@@ -130,7 +132,7 @@ export class FifoEngine {
     if (!lots || lots.length === 0) {
       // Short sale or missing prior data — warn and record with zero cost basis
       this.warnings.push(`⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${trade.tradeDate}. Coste base = 0 (posible posición corta o datos previos incompletos).`);
-      const proceedsOrigCurrency = remaining.mul(pricePerShare).mul(multiplier).minus(commission);
+      const proceedsOrigCurrency = remaining.mul(pricePerShare).mul(multiplier).minus(commission).minus(taxes);
       const proceedsEur = proceedsOrigCurrency.mul(ecbRate);
       this.disposals.push({
         isin: trade.isin,
@@ -157,9 +159,10 @@ export class FifoEngine {
       const consumed = Decimal.min(remaining, lot.quantity);
       const fractionOfSale = consumed.dividedBy(totalSellQuantity);
       const commissionShare = commission.mul(fractionOfSale);
+      const taxesShare = taxes.mul(fractionOfSale);
 
       // Proceeds in EUR for this partial disposal
-      const proceedsOrigCurrency = consumed.mul(pricePerShare).mul(multiplier).minus(commissionShare);
+      const proceedsOrigCurrency = consumed.mul(pricePerShare).mul(multiplier).minus(commissionShare).minus(taxesShare);
       const proceedsEur = proceedsOrigCurrency.mul(ecbRate);
 
       // Cost basis in EUR: proportional from lot (cost per unit * consumed quantity)
@@ -200,7 +203,8 @@ export class FifoEngine {
       this.warnings.push(`⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${trade.tradeDate}. Coste base = 0.`);
       const fractionOfSale = remaining.dividedBy(totalSellQuantity);
       const commissionShare = commission.mul(fractionOfSale);
-      const proceedsOrigCurrency = remaining.mul(pricePerShare).mul(multiplier).minus(commissionShare);
+      const taxesShare = taxes.mul(fractionOfSale);
+      const proceedsOrigCurrency = remaining.mul(pricePerShare).mul(multiplier).minus(commissionShare).minus(taxesShare);
       const proceedsEur = proceedsOrigCurrency.mul(ecbRate);
       this.disposals.push({
         isin: trade.isin,
