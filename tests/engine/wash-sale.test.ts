@@ -16,6 +16,9 @@ function makeDisposal(overrides: Partial<FifoDisposal>): FifoDisposal {
     costBasisEur: new Decimal(1000),
     gainLossEur: new Decimal(-100),
     holdingPeriodDays: 156,
+    currency: "USD",
+    sellEcbRate: new Decimal("0.91"),
+    acquireEcbRate: new Decimal("0.92"),
     washSaleBlocked: false,
     ...overrides,
   };

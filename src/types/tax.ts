@@ -30,6 +30,12 @@ export interface FifoDisposal {
   costBasisEur: Decimal;
   gainLossEur: Decimal;
   holdingPeriodDays: number;
+  /** Original currency of the trade */
+  currency: string;
+  /** ECB rate (EUR per 1 FCY) used for the sale */
+  sellEcbRate: Decimal;
+  /** ECB rate (EUR per 1 FCY) used for the acquisition */
+  acquireEcbRate: Decimal;
   /** True if loss is blocked by the anti-churning rule (Art. 33.5.f LIRPF) */
   washSaleBlocked: boolean;
 }
