@@ -19,6 +19,9 @@ import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
 import { formatCsv } from "../generators/csv.js";
 
+// Read version from package.json (single source of truth)
+const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version: string };
+
 // Configure Decimal.js for financial precision
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -27,7 +30,7 @@ const program = new Command();
 program
   .name("declarenta")
   .description("Convert foreign broker reports into Spanish tax declarations")
-  .version("0.1.0");
+  .version(pkg.version);
 
 program
   .command("convert")
@@ -38,7 +41,7 @@ program
   .option("-f, --format <format>", "Output format: json or csv", "json")
   .action(async (opts: { input: string[]; year: number; output?: string; format: string }) => {
     try {
-      console.error(`DeclaRenta v0.2.0 - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
+      console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
       // 1. Parse all IBKR XMLs and merge into a single statement
       const merged: FlexStatement = {
