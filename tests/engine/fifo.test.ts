@@ -35,6 +35,7 @@ function makeTrade(overrides: Partial<Trade>): Trade {
     commissionCurrency: "USD",
     commission: "0",
     taxes: "0",
+    multiplier: "1",
     ...overrides,
   };
 }
@@ -106,13 +107,19 @@ describe("FifoEngine", () => {
     expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("100.00");
   });
 
-  it("should throw when selling without lots", () => {
+  it("should warn and use zero cost basis when selling without lots", () => {
     const rates = makeRateMap({ "2025-09-20": "0.91" });
     const trades: Trade[] = [
       makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
     ];
 
     const engine = new FifoEngine();
-    expect(() => engine.processTrades(trades, rates)).toThrow("no lots available");
+    const disposals = engine.processTrades(trades, rates);
+
+    expect(disposals).toHaveLength(1);
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("0.00");
+    expect(disposals[0]!.gainLossEur.toFixed(2)).toBe(disposals[0]!.proceedsEur.toFixed(2));
+    expect(engine.warnings).toHaveLength(1);
+    expect(engine.warnings[0]).toContain("Venta sin lotes");
   });
 });

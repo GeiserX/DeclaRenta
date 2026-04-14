@@ -2,7 +2,8 @@
  * DeclaRenta CLI.
  *
  * Usage:
- *   declarenta convert --input flex.xml --year 2025
+ *   declarenta convert --input flex2025.xml --year 2025
+ *   declarenta convert --input flex2023.xml --input flex2024.xml --input flex2025.xml --year 2025
  *   declarenta convert --input flex.xml --year 2025 --output report.json
  *   declarenta modelo720 --input flex.xml --year 2025 --nif 12345678A
  */
@@ -11,6 +12,8 @@ import { readFileSync, writeFileSync } from "fs";
 import { Command } from "commander";
 import Decimal from "decimal.js";
 import { parseIbkrFlexXml } from "../parsers/ibkr.js";
+import type { FlexStatement } from "../types/ibkr.js";
+import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
@@ -28,34 +31,63 @@ program
 program
   .command("convert")
   .description("Convert IBKR Flex Query XML to Modelo 100 casilla values")
-  .requiredOption("-i, --input <file>", "IBKR Flex Query XML file")
+  .requiredOption("-i, --input <files...>", "IBKR Flex Query XML file(s). Pass multiple for cross-year FIFO")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .option("-o, --output <file>", "Output file (JSON). Defaults to stdout")
-  .action(async (opts: { input: string; year: number; output?: string }) => {
+  .action(async (opts: { input: string[]; year: number; output?: string }) => {
     try {
-      console.error(`DeclaRenta v0.1.0 - Procesando ${opts.input} para el ejercicio ${opts.year}...`);
+      console.error(`DeclaRenta v0.1.0 - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
-      // 1. Parse IBKR XML
-      const xml = readFileSync(opts.input, "utf-8");
-      const statement = parseIbkrFlexXml(xml);
-      console.error(`  Operaciones: ${statement.trades.length}`);
-      console.error(`  Transacciones de caja: ${statement.cashTransactions.length}`);
-      console.error(`  Posiciones abiertas: ${statement.openPositions.length}`);
+      // 1. Parse all IBKR XMLs and merge into a single statement
+      const merged: FlexStatement = {
+        accountId: "",
+        fromDate: "",
+        toDate: "",
+        period: "",
+        trades: [],
+        cashTransactions: [],
+        corporateActions: [],
+        openPositions: [],
+        securitiesInfo: [],
+      };
 
-      // 2. Detect currencies and fetch ECB rates
+      for (const file of opts.input) {
+        const xml = readFileSync(file, "utf-8");
+        const statement = parseIbkrFlexXml(xml);
+        merged.accountId = merged.accountId || statement.accountId;
+        merged.trades.push(...statement.trades);
+        merged.cashTransactions.push(...statement.cashTransactions);
+        merged.corporateActions.push(...statement.corporateActions);
+        merged.openPositions = statement.openPositions; // Use last file's positions
+        merged.securitiesInfo.push(...statement.securitiesInfo);
+        console.error(`  ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
+      }
+
+      console.error(`  Total: ${merged.trades.length} operaciones, ${merged.cashTransactions.length} transacciones`);
+
+      // 2. Detect currencies and fetch ECB rates for ALL years involved
       const currencies = new Set<string>();
-      for (const t of statement.trades) currencies.add(t.currency);
-      for (const c of statement.cashTransactions) currencies.add(c.currency);
+      for (const t of merged.trades) currencies.add(t.currency);
+      for (const c of merged.cashTransactions) currencies.add(c.currency);
       currencies.delete("EUR");
 
       console.error(`  Divisas detectadas: ${[...currencies].join(", ") || "solo EUR"}`);
       console.error("  Obteniendo tipos de cambio ECB...");
 
-      const rateMap = await fetchEcbRates(opts.year, [...currencies]);
-      console.error(`  Tipos ECB cargados: ${rateMap.size} fechas`);
+      // Fetch ECB rates for all years covered by the input files
+      const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
+      years.add(opts.year);
+      const allRates: EcbRateMap = new Map();
+      for (const yr of years) {
+        const rates = await fetchEcbRates(yr, [...currencies]);
+        for (const [date, ratesByDate] of rates) {
+          allRates.set(date, ratesByDate);
+        }
+      }
+      console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...years].sort().join(", ")})`);
 
-      // 3. Generate tax report
-      const report = generateTaxReport(statement, rateMap, opts.year);
+      // 3. Generate tax report (processes ALL years, filters disposals to target year)
+      const report = generateTaxReport(merged, allRates, opts.year);
 
       // 4. Format output
       const output = formatReport(report);
@@ -67,7 +99,15 @@ program
         console.log(JSON.stringify(output, null, 2));
       }
 
-      // 5. Print summary to stderr
+      // 5. Print warnings
+      if (report.warnings.length > 0) {
+        console.error(`\n⚠ ${report.warnings.length} advertencia(s):`);
+        for (const w of report.warnings) {
+          console.error(`  ${w}`);
+        }
+      }
+
+      // 6. Print summary to stderr
       printSummary(report);
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);

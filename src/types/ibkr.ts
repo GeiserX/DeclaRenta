@@ -38,6 +38,7 @@ export interface Trade {
   commissionCurrency: string;
   commission: string;
   taxes: string;
+  multiplier: string;
 }
 
 export interface CashTransaction {
