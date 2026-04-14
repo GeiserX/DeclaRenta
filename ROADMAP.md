@@ -68,7 +68,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 |------|-----------|------|------------|-----|--------|
 | Acciones | `STK` | Sí | Sí | Sí | v0.1 |
 | ETFs / Fondos | `FUND` | Sí | Sí | Sí | v0.1 |
-| Opciones | `OPT` | — | — | — | Planificado |
+| Opciones | `OPT` | Sí | — | — | v0.1 (multiplicador, FIFO por símbolo) |
 | Futuros | `FUT` | — | — | — | Planificado |
 | Bonos | `BOND` | — | — | — | Planificado |
 | Forex | `CASH` | — | — | — | Planificado |
@@ -112,7 +112,11 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Web UI: upload XML → tabla casillas → exportar JSON
 - [x] Tests: 15 tests (parser, FIFO, wash sale)
 - [x] Docker image
-- [ ] Validar con datos IBKR reales propios (ejercicio 2025)
+- [x] Validar con datos IBKR reales propios (ejercicio 2025) — 1063 operaciones, 3 años, resultados dentro de 1.8K EUR del cálculo de referencia (diferencia por tipos ECB vs broker)
+- [x] Soporte opciones (`OPT`): multiplicador IBKR, FIFO por símbolo (opciones no tienen ISIN)
+- [x] Soporte stock splits: corporate actions tipo FS, deduplicación
+- [x] Resiliencia ventas cortas: warning + coste base 0 en vez de crash
+- [x] Multi-fichero: `--input` acepta múltiples XMLs para FIFO cross-year
 - [ ] Verificar tramos del ahorro 2025 (¿28% o 30% >300K?)
 - [ ] Publicar **v0.1.0**
 
@@ -126,12 +130,12 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 > **Objetivo**: que cada número sea correcto al céntimo, validado contra datos reales y contra cálculo manual.
 
-- [ ] Contrastar resultados IBKR 2024/2025 con cálculo manual en hoja de cálculo
-- [ ] Corporate actions en FIFO: stock splits, reverse splits, mergers, spin-offs
-  - Split: multiplicar quantity, dividir costPerShare, mantener costTotal
+- [x] Contrastar resultados IBKR 2024/2025 con referencia Python (validado en Fase 0)
+- [x] Stock splits en FIFO: parse corporate actions, deduplicación, formato fecha YYYYMMDD
+- [ ] Corporate actions avanzadas: reverse splits, mergers, spin-offs
   - Merger: cerrar lots del símbolo antiguo, abrir lots del nuevo con mismo coste
   - Spin-off: distribuir coste entre parent y spin-off según ratio de mercado
-- [ ] Posiciones cross-year: importar lots abiertos de ejercicios anteriores (JSON)
+- [x] Posiciones cross-year: multi-fichero `--input` carga lots de ejercicios anteriores
 - [ ] Comisiones: incluir impuestos de transacción (STT, FTT) en coste de adquisición
 - [ ] Multi-divisa simultáneo: manejar correctamente compras en USD pagadas con GBP
 - [ ] Informe detallado por operación: fecha, ISIN, tipo ECB usado, G/P en EUR
