@@ -83,7 +83,7 @@ program
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option("--phone <phone>", "Telefono de contacto", "")
+  .option("--phone <phone>", "Teléfono de contacto", "")
   .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; phone: string }) => {
     try {
       const xml = readFileSync(opts.input, "utf-8");
@@ -184,11 +184,11 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error(`  Ejercicio: ${report.year}`);
   console.error("");
   console.error("  GANANCIAS PATRIMONIALES (Base del ahorro)");
-  console.error(`    Casilla 0327 (Valor transmision):  ${report.capitalGains.transmissionValue.toFixed(2)} EUR`);
-  console.error(`    Casilla 0328 (Valor adquisicion):  ${report.capitalGains.acquisitionValue.toFixed(2)} EUR`);
-  console.error(`    Ganancia/Perdida neta:             ${report.capitalGains.netGainLoss.toFixed(2)} EUR`);
+  console.error(`    Casilla 0327 (Valor transmisión):  ${report.capitalGains.transmissionValue.toFixed(2)} EUR`);
+  console.error(`    Casilla 0328 (Valor adquisición):  ${report.capitalGains.acquisitionValue.toFixed(2)} EUR`);
+  console.error(`    Ganancia/Pérdida neta:             ${report.capitalGains.netGainLoss.toFixed(2)} EUR`);
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
-    console.error(`    ⚠ Perdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
+    console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
   }
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");
@@ -196,8 +196,8 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error(`    Casilla 0033 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
   console.error(`    Casilla 0032 (Intereses pagados):  ${report.interest.paid.toFixed(2)} EUR`);
   console.error("");
-  console.error("  DOBLE IMPOSICION INTERNACIONAL");
-  console.error(`    Casilla 0588 (Deduccion):          ${report.doubleTaxation.deduction.toFixed(2)} EUR`);
+  console.error("  DOBLE IMPOSICIÓN INTERNACIONAL");
+  console.error(`    Casilla 0588 (Deducción):          ${report.doubleTaxation.deduction.toFixed(2)} EUR`);
   console.error("═══════════════════════════════════════════════\n");
 }
 
