@@ -274,4 +274,25 @@ describe("FifoEngine", () => {
     expect(lots[0]!.quantity.toNumber()).toBe(70);
     expect(lots[0]!.costInEur.toFixed(2)).toBe("3226.44");
   });
+
+  it("should include transaction taxes in cost and proceeds", () => {
+    const rates = makeRateMap({
+      "2025-03-15": "0.92",
+      "2025-09-20": "0.91",
+    });
+
+    const trades: Trade[] = [
+      makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY", commission: "-5", taxes: "-2" }),
+      makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL", commission: "-5", taxes: "-3" }),
+    ];
+
+    const engine = new FifoEngine();
+    const disposals = engine.processTrades(trades, rates);
+
+    expect(disposals).toHaveLength(1);
+    // Cost: (10 × 100 + 5 + 2) × 0.92 = 1007 × 0.92 = 926.44
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("926.44");
+    // Proceeds: (10 × 120 - 5 - 3) × 0.91 = 1192 × 0.91 = 1084.72
+    expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1084.72");
+  });
 });

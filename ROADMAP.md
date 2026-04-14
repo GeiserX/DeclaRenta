@@ -38,7 +38,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v0.1-dev)
+## Estado actual (v0.1.0)
 
 ### Lo que ya funciona
 
@@ -53,14 +53,14 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
 | CLI (`convert`, `modelo720`) | Implementado | `src/cli/index.ts` |
 | Web UI básica (drag & drop) | Implementado | `src/web/` |
-| 15 tests (parser, FIFO, wash sale) | Passing | `tests/` |
+| 41 tests (parser, FIFO, wash sale, dividends, double taxation, dates) | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
-### Lo que falta para v0.1.0
+### v0.1.0 completado
 
-- [ ] Validar con datos IBKR reales (ejercicio 2025)
-- [ ] Corregir tramos del ahorro 2025 si difieren de los codificados
-- [ ] Publicar v0.1.0
+- [x] Validado con datos IBKR reales (1063 operaciones, 3 ejercicios)
+- [x] Tramos del ahorro 2025 verificados (28% >300K, Ley 7/2024)
+- [x] v0.1.0 publicado
 
 ### Tipos de activo soportados
 
@@ -117,8 +117,12 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Soporte stock splits: corporate actions tipo FS, deduplicación
 - [x] Resiliencia ventas cortas: warning + coste base 0 en vez de crash
 - [x] Multi-fichero: `--input` acepta múltiples XMLs para FIFO cross-year
-- [ ] Verificar tramos del ahorro 2025 (¿28% o 30% >300K?)
-- [ ] Publicar **v0.1.0**
+- [x] Verificar tramos del ahorro 2025: **30%** para >300K (Ley 7/2024, Disposición final 7ª)
+- [x] Impuestos de transacción (STT, FTT) incluidos en coste/importe de venta
+- [x] Exportación CSV: `--format csv` para detalle por operación
+- [x] ESLint strictTypeChecked + Prettier
+- [x] 41 tests passing (FIFO, dividendos, doble imposición, wash sale, fechas, parser)
+- [x] Publicar **v0.1.0**
 
 **Entregable**: CLI y web que producen casillas Modelo 100 + fichero 720 desde IBKR Flex Query XML.
 
@@ -422,7 +426,7 @@ Referencia rápida de las casillas que DeclaRenta calcula:
 | 6.000 – 50.000 € | 21% |
 | 50.000 – 200.000 € | 23% |
 | 200.000 – 300.000 € | 27% |
-| > 300.000 € | 28% (verificar si sube a 30% para 2025) |
+| > 300.000 € | 30% (Ley 7/2024, Disposición final 7ª) |
 
 ### Reglas de compensación (Art. 49 LIRPF)
 
