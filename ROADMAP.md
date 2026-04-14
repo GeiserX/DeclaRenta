@@ -38,7 +38,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v0.1.0)
+## Estado actual (v0.2.0)
 
 ### Lo que ya funciona
 
@@ -53,7 +53,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
 | CLI (`convert`, `modelo720`) | Implementado | `src/cli/index.ts` |
 | Web UI básica (drag & drop) | Implementado | `src/web/` |
-| 41 tests (parser, FIFO, wash sale, dividends, double taxation, dates) | Passing | `tests/` |
+| 75 tests (parser, FIFO, wash sale, dividends, double taxation, dates, ECB, CSV, report) | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -121,8 +121,9 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Impuestos de transacción (STT, FTT) incluidos en coste/importe de venta
 - [x] Exportación CSV: `--format csv` para detalle por operación
 - [x] ESLint strictTypeChecked + Prettier
-- [x] 41 tests passing (FIFO, dividendos, doble imposición, wash sale, fechas, parser)
+- [x] 75 tests passing (FIFO, dividendos, doble imposición, wash sale, fechas, parser, ECB, CSV, report)
 - [x] Publicar **v0.1.0**
+- [x] Automated release pipeline (auto-tag + changelog)
 
 **Entregable**: CLI y web que producen casillas Modelo 100 + fichero 720 desde IBKR Flex Query XML.
 
@@ -147,11 +148,11 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Dividendos en especie (scrip dividends): lotes con coste base de IBKR
 - [x] Payment In Lieu of Dividends: clasificación correcta como rendimiento
 - [x] Edge cases: cantidad 0 post-split (lotes eliminados automáticamente)
-- [x] 57 tests (>30 target)
+- [x] 75 tests (>30 target), 56.65% coverage
 - [x] ESLint strictTypeChecked + Prettier
 - [ ] Web UI: tabla de operaciones con ordenación, filtros, exportar CSV
 - [x] Documentación de cada casilla y cómo se calcula (`docs/casillas.md`)
-- [ ] Publicar **v0.2.0**
+- [x] Publicar **v0.2.0**
 
 **Criterio de éxito**: ≤0.01 € de desviación respecto a cálculo manual en 100+ operaciones reales.
 
