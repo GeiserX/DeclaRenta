@@ -1,9 +1,20 @@
-# DeclaRenta
+<p align="center">
+  <img src="docs/images/banner.svg" alt="DeclaRenta banner" width="900"/>
+</p>
 
-[![codecov](https://codecov.io/gh/GeiserX/DeclaRenta/graph/badge.svg)](https://codecov.io/gh/GeiserX/DeclaRenta)
-[![listed on awesome-spain](https://img.shields.io/badge/listed%20on-awesome--spain-c60b1e?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgdmlld0JveD0iMCAwIDIwIDE0Ij48cmVjdCB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIGZpbGw9IiNjNjBiMWUiLz48cmVjdCB5PSIzLjUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3IiBmaWxsPSIjZmZjNDAwIi8+PC9zdmc+&labelColor=ffc400)](https://github.com/GeiserX/awesome-spain#readme)
+<h1 align="center">DeclaRenta</h1>
 
-**Convierte reportes de brokers extranjeros en tu declaración de la renta española.**
+<p align="center">
+  <strong>Convierte reportes de brokers extranjeros en tu declaración de la renta española.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/GeiserX/DeclaRenta/blob/main/LICENSE"><img src="https://img.shields.io/github/license/GeiserX/DeclaRenta?style=flat-square&color=dc2626" alt="License"/></a>
+  <a href="https://codecov.io/gh/GeiserX/DeclaRenta"><img src="https://img.shields.io/codecov/c/github/GeiserX/DeclaRenta?style=flat-square&color=f59e0b" alt="Codecov"/></a>
+  <a href="https://github.com/GeiserX/DeclaRenta/actions"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/DeclaRenta/ci.yml?style=flat-square&label=CI" alt="CI"/></a>
+  <a href="https://github.com/GeiserX/DeclaRenta/stargazers"><img src="https://img.shields.io/github/stars/GeiserX/DeclaRenta?style=flat-square&color=f59e0b" alt="Stars"/></a>
+  <a href="https://github.com/GeiserX/awesome-spain#readme"><img src="https://img.shields.io/badge/listed%20on-awesome--spain-c60b1e?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgdmlld0JveD0iMCAwIDIwIDE0Ij48cmVjdCB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIGZpbGw9IiNjNjBiMWUiLz48cmVjdCB5PSIzLjUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3IiBmaWxsPSIjZmZjNDAwIi8+PC9zdmc+&labelColor=ffc400" alt="awesome-spain"/></a>
+</p>
 
 IBKR, Degiro, Trade Republic → Modelo 100 (IRPF), Modelo 720, D-6.
 
