@@ -215,6 +215,9 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       coste_eur: d.costBasisEur.toFixed(2),
       ganancia_eur: d.gainLossEur.toFixed(2),
       dias_tenencia: d.holdingPeriodDays,
+      divisa: d.currency,
+      tipo_ecb_compra: d.acquireEcbRate.toFixed(6),
+      tipo_ecb_venta: d.sellEcbRate.toFixed(6),
       bloqueada_antichurning: d.washSaleBlocked,
     })),
     dividendos: report.dividends.entries.map((d) => ({
