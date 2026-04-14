@@ -29,7 +29,7 @@ function makeTrade(isin: string, date: string, buySell: "BUY" | "SELL"): Trade {
     tradeMoney: "1000", proceeds: "1000", cost: "1000",
     fifoPnlRealized: "0", fxRateToBase: "1", buySell,
     openCloseIndicator: buySell === "BUY" ? "O" : "C",
-    exchange: "NASDAQ", commissionCurrency: "USD", commission: "0", taxes: "0",
+    exchange: "NASDAQ", commissionCurrency: "USD", commission: "0", taxes: "0", multiplier: "1",
   };
 }
 
