@@ -275,6 +275,50 @@ describe("FifoEngine", () => {
     expect(lots[0]!.costInEur.toFixed(2)).toBe("3226.44");
   });
 
+  it("should include taxes in short-sale proceeds (no lots)", () => {
+    const rates = makeRateMap({ "2025-09-20": "0.91" });
+    const trades: Trade[] = [
+      makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL", commission: "-5", taxes: "-3" }),
+    ];
+
+    const engine = new FifoEngine();
+    const disposals = engine.processTrades(trades, rates);
+
+    expect(disposals).toHaveLength(1);
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("0.00");
+    // Proceeds: (10 × 120 - 5 - 3) × 0.91 = 1192 × 0.91 = 1084.72
+    expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1084.72");
+    expect(engine.warnings).toHaveLength(1);
+  });
+
+  it("should include taxes in insufficient-lots fallback", () => {
+    const rates = makeRateMap({
+      "2025-03-15": "0.92",
+      "2025-09-20": "0.91",
+    });
+
+    const trades: Trade[] = [
+      makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "5", tradePrice: "100", buySell: "BUY" }),
+      // Sell 10 but only 5 lots available — 5 go through FIFO, 5 hit the fallback
+      makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL", commission: "-10", taxes: "-4" }),
+    ];
+
+    const engine = new FifoEngine();
+    const disposals = engine.processTrades(trades, rates);
+
+    // 2 disposals: 5 from lot + 5 from insufficient-lots fallback
+    expect(disposals).toHaveLength(2);
+    expect(engine.warnings).toHaveLength(1);
+    expect(engine.warnings[0]).toContain("Lotes insuficientes");
+
+    // Fallback disposal: 5 shares, fraction = 5/10 = 0.5
+    // commission share = 10 × 0.5 = 5, taxes share = 4 × 0.5 = 2
+    // proceeds = (5 × 120 - 5 - 2) × 0.91 = 593 × 0.91 = 539.63
+    const fallback = disposals[1]!;
+    expect(fallback.costBasisEur.toFixed(2)).toBe("0.00");
+    expect(fallback.proceedsEur.toFixed(2)).toBe("539.63");
+  });
+
   it("should include transaction taxes in cost and proceeds", () => {
     const rates = makeRateMap({
       "2025-03-15": "0.92",
