@@ -53,7 +53,10 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
 | CLI (`convert`, `modelo720`) | Implementado | `src/cli/index.ts` |
 | Web UI básica (drag & drop) | Implementado | `src/web/` |
-| 75 tests (parser, FIFO, wash sale, dividends, double taxation, dates, ECB, CSV, report) | Passing | `tests/` |
+| Interfaz `BrokerParser` + registry auto-detección | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
+| Parser Degiro (Transacciones CSV + Cuenta CSV) | Implementado | `src/parsers/degiro.ts` |
+| CLI auto-detección de broker + flag `--broker` | Implementado | `src/cli/index.ts` |
+| 99 tests (parser, FIFO, wash sale, dividends, double taxation, dates, ECB, CSV, report, Degiro, registry) | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -86,7 +89,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | **burocratin** | OSS (AGPL-3.0) | Gratis | IBKR, Degiro | 720, D-6 | Browser (WASM) | Solo genera 720 y D-6, no calcula IRPF; escrito en Rust/WASM (19 stars) |
 | **IBKR-RENTA** | OSS | Gratis | IBKR (CSV) | 100 | Browser | Single-file HTML; solo IBKR CSV (no Flex XML); sin 720/D-6; 1 star, creado mar 2026 |
 | **Asesor fiscal** | Servicio | 150-500 € | Cualquiera | Todos | Datos compartidos | Coste elevado, dependencia de tercero, tiempos de espera |
-| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR (Flex XML) → más | **100, 720** → más | **Browser-first, zero-server** | En desarrollo; aún no validado con datos reales |
+| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro → más | **100, 720** → más | **Browser-first, zero-server** | En desarrollo; IBKR validado con datos reales |
 
 **Hueco que cubre DeclaRenta**: no existe ninguna herramienta open source que cubra el ciclo completo (IRPF + 720 + D-6) con soporte multi-broker y privacidad total. burocratin solo hace 720/D-6. IBKR-RENTA solo hace Modelo 100 desde CSV. TaxDown cobra 239 € y sube los datos a la nube.
 
@@ -162,26 +165,37 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 > **Objetivo**: cubrir los brokers que usan la mayoría de inversores españoles con cuentas en el extranjero.
 
-**Brokers target y formatos de exportación**:
+**Investigación de integración fiscal (abril 2026)**:
+
+| Broker | Reporta a AEAT | Retenciones | Informe fiscal | 720 necesario | Prioridad DeclaRenta |
+|--------|----------------|-------------|----------------|---------------|---------------------|
+| **Degiro** | No (solo CRS) | No | PDF anual | Sí | **Alta** — máximo dolor |
+| **Scalable Capital** | No | No | PDF anual | Sí | **Alta** — mismo problema que Degiro |
+| **eToro** | No (solo CRS) | No | Solo Club members | Sí | **Media** — CFDs complican |
+| **Freedom24** | No | No | PDF (solo inglés) | Sí | **Media** |
+| **Trade Republic** | **Sí** (desde mid-2025) | **Sí** | PDF anual | **No** (DGT ruling, IBAN español) | Baja — ya integrado con AEAT |
+| **XTB** | **Sí** (entidad española) | Sí | Sí | No | Baja — pre-rellena borrador |
+| **Revolut** | Sí (lado bancario) | Parcial | Limitado | Parcial | Baja — inversiones secundarias |
+
+**Hallazgo clave**: ningún broker genera XML Modelo 100 importable en Renta Web. DeclaRenta cubre ese hueco.
+
+**Brokers target (ordenados por valor añadido)**:
 
 | Broker | Formato | Particularidades |
 |--------|---------|-----------------|
-| **Degiro** | CSV (Account Statement, Transactions) | Sin ISIN en transacciones; requiere cruzar con portfolio |
-| **Trade Republic** | CSV export + PDF statements | CSV limitado; puede necesitar parseo de PDF como fallback |
-| **Revolut** | CSV (Trading Statement) | Formato simple; solo acciones |
-| **eToro** | XLS (Account Statement) | Incluye CFDs y crypto; formato variable entre años |
-| **XTB** | CSV (Transaction History) | Incluye CFDs y forex |
-| **Scalable Capital** | CSV/PDF | Formato similar a Trade Republic |
-| **Freedom24** | CSV (Trade Report) | Formato propietario |
-| **Trading 212** | CSV | Formato relativamente limpio |
+| **Degiro** | CSV (Transacciones + Cuenta) | Multi-idioma (ES/EN/NL/DE); números formato EU; pares valor+divisa |
+| **Scalable Capital** | CSV/PDF | Formato similar a TR; sin reporting AEAT |
+| **eToro** | XLS (Account Statement) | Incluye CFDs y crypto; informe fiscal solo para Club members |
+| **Freedom24** | CSV (Trade Report) | Solo inglés; formato propietario |
 
 Tareas:
 
-- [ ] **Interfaz común de parser**: cada broker implementa `parse(input) → NormalizedStatement`
-- [ ] **Parser Degiro**: CSV Account Statement + Transactions
-- [ ] **Parser Trade Republic**: CSV export
-- [ ] **Parser Revolut**: CSV Trading Statement
+- [x] **Interfaz común de parser** (`BrokerParser`): `detect(input)` + `parse(input) → Statement`
+- [x] **Registry con auto-detección**: `detectBroker()`, `getBroker()`, `--broker` flag en CLI
+- [x] **Parser Degiro**: Transactions CSV (trades) + Account CSV (dividendos/retenciones). Multi-idioma ES/EN/NL/DE, auto-detect delimitador coma/punto y coma, números EU
+- [ ] **Parser Scalable Capital**: CSV export
 - [ ] **Parser eToro**: XLS Account Statement (acciones y ETFs; excluir CFDs inicialmente)
+- [ ] **Parser Freedom24**: CSV Trade Report
 - [ ] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
   - Un mismo ISIN comprado en IBKR y Degiro debe usar una sola cola FIFO
   - Orden cronológico global, no por broker
