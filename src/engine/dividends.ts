@@ -10,6 +10,7 @@ import type { CashTransaction } from "../types/ibkr.js";
 import type { DividendEntry } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
+import { parseDate } from "./dates.js";
 
 /**
  * Process IBKR cash transactions to extract dividends with withholdings.
@@ -37,7 +38,7 @@ export function calculateDividends(
         w.isin === div.isin &&
         w.currency === div.currency &&
         Math.abs(
-          new Date(w.dateTime.slice(0, 10)).getTime() - new Date(div.dateTime.slice(0, 10)).getTime(),
+          parseDate(w.dateTime.slice(0, 10)).getTime() - parseDate(div.dateTime.slice(0, 10)).getTime(),
         ) <= 7 * 24 * 60 * 60 * 1000, // Within 7 days
     );
 
