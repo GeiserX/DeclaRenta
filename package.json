@@ -1,6 +1,6 @@
 {
   "name": "declarenta",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Open-source tool to convert foreign broker reports (IBKR, Degiro, Trade Republic) into Spanish tax declarations (Modelo 100, 720, D-6). Browser-first, privacy-focused.",
   "type": "module",
   "main": "./dist/index.js",

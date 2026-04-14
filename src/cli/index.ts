@@ -38,7 +38,7 @@ program
   .option("-f, --format <format>", "Output format: json or csv", "json")
   .action(async (opts: { input: string[]; year: number; output?: string; format: string }) => {
     try {
-      console.error(`DeclaRenta v0.1.0 - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
+      console.error(`DeclaRenta v0.2.0 - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
       // 1. Parse all IBKR XMLs and merge into a single statement
       const merged: FlexStatement = {
