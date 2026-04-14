@@ -94,4 +94,25 @@ describe("calculateDoubleTaxation", () => {
     // Foreign: 5000, deduction = min(5000, 1980) = 1980
     expect(result.total.toFixed(2)).toBe("1980.00");
   });
+
+  it("should apply 30% top bracket for amounts over 300K (Ley 7/2024)", () => {
+    const entries = [
+      makeEntry({
+        grossAmountEur: new Decimal(400000),
+        withholdingTaxEur: new Decimal(200000),
+      }),
+    ];
+
+    const result = calculateDoubleTaxation(entries);
+
+    // Spanish tax on 400000:
+    // 6000 × 19% = 1140
+    // 44000 × 21% = 9240
+    // 150000 × 23% = 34500
+    // 100000 × 27% = 27000
+    // 100000 × 30% = 30000
+    // Total = 101880
+    // Foreign: 200000, deduction = min(200000, 101880) = 101880
+    expect(result.total.toFixed(2)).toBe("101880.00");
+  });
 });

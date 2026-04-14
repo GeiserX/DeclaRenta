@@ -10,7 +10,12 @@ import type { FifoDisposal } from "../types/tax.js";
 import type { Trade } from "../types/ibkr.js";
 import { parseDate } from "./dates.js";
 
-const TWO_MONTHS_MS = 2 * 30 * 24 * 60 * 60 * 1000; // ~60 days
+/** Add/subtract calendar months (Art. 33.5.f says "dos meses", not 60 days). */
+function addMonths(date: Date, months: number): Date {
+  const result = new Date(date);
+  result.setMonth(result.getMonth() + months);
+  return result;
+}
 
 /**
  * Detect wash sales and mark blocked losses.
@@ -43,8 +48,8 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     }
 
     const sellDate = parseDate(disposal.sellDate);
-    const windowStart = new Date(sellDate.getTime() - TWO_MONTHS_MS);
-    const windowEnd = new Date(sellDate.getTime() + TWO_MONTHS_MS);
+    const windowStart = addMonths(sellDate, -2);
+    const windowEnd = addMonths(sellDate, 2);
 
     const buys = buysByIsin.get(disposal.isin) ?? [];
     const hasRepurchase = buys.some((buyDate) => {
