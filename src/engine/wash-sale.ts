@@ -8,6 +8,7 @@
 
 import type { FifoDisposal } from "../types/tax.js";
 import type { Trade } from "../types/ibkr.js";
+import { parseDate } from "./dates.js";
 
 const TWO_MONTHS_MS = 2 * 30 * 24 * 60 * 60 * 1000; // ~60 days
 
@@ -31,7 +32,7 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       if (!buysByIsin.has(trade.isin)) {
         buysByIsin.set(trade.isin, []);
       }
-      buysByIsin.get(trade.isin)!.push(new Date(trade.tradeDate));
+      buysByIsin.get(trade.isin)!.push(parseDate(trade.tradeDate));
     }
   }
 
@@ -41,7 +42,7 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       return disposal;
     }
 
-    const sellDate = new Date(disposal.sellDate);
+    const sellDate = parseDate(disposal.sellDate);
     const windowStart = new Date(sellDate.getTime() - TWO_MONTHS_MS);
     const windowEnd = new Date(sellDate.getTime() + TWO_MONTHS_MS);
 

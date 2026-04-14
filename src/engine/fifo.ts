@@ -11,6 +11,7 @@ import type { Lot, FifoDisposal } from "../types/tax.js";
 import type { Trade, CorporateAction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
+import { daysBetween } from "./dates.js";
 
 /** Lot grouping key: ISIN for stocks/funds, symbol for options (which lack ISINs) */
 function lotKey(trade: { isin: string; symbol: string }): string {
@@ -167,9 +168,7 @@ export class FifoEngine {
 
       const sellDate = trade.tradeDate;
       const acquireDate = lot.acquireDate;
-      const holdingDays = Math.floor(
-        (new Date(sellDate).getTime() - new Date(acquireDate).getTime()) / (1000 * 60 * 60 * 24),
-      );
+      const holdingDays = daysBetween(acquireDate, sellDate);
 
       this.disposals.push({
         isin: trade.isin,
