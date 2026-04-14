@@ -62,11 +62,11 @@ export interface TaxSummary {
   /** Tax year */
   year: number;
 
-  /** Capital gains: Ganancias y perdidas patrimoniales (Casillas 0327-0340) */
+  /** Capital gains: Ganancias y pérdidas patrimoniales (Casillas 0327-0340) */
   capitalGains: {
-    /** Casilla 0327: Valor de transmision (total proceeds) */
+    /** Casilla 0327: Valor de transmisión (total proceeds) */
     transmissionValue: Decimal;
-    /** Casilla 0328: Valor de adquisicion (total cost basis) */
+    /** Casilla 0328: Valor de adquisición (total cost basis) */
     acquisitionValue: Decimal;
     /** Net gain/loss (0327 - 0328) */
     netGainLoss: Decimal;
@@ -78,7 +78,7 @@ export interface TaxSummary {
 
   /** Dividends: Rendimientos del capital mobiliario (Casillas 0029-0034) */
   dividends: {
-    /** Casilla 0029: Ingresos integros (gross dividends) */
+    /** Casilla 0029: Ingresos íntegros (gross dividends) */
     grossIncome: Decimal;
     /** Casilla 0034: Retenciones / Gastos deducibles */
     deductibleExpenses: Decimal;
@@ -88,16 +88,16 @@ export interface TaxSummary {
 
   /** Interest income */
   interest: {
-    /** Casilla 0033: Intereses de cuentas y depositos */
+    /** Casilla 0033: Intereses de cuentas y depósitos */
     earned: Decimal;
     /** Casilla 0032: Gastos deducibles (margin interest) */
     paid: Decimal;
     entries: InterestEntry[];
   };
 
-  /** Double taxation deduction: Deduccion por doble imposicion internacional */
+  /** Double taxation deduction: Deducción por doble imposición internacional */
   doubleTaxation: {
-    /** Casilla 0588: Deduccion */
+    /** Casilla 0588: Deducción */
     deduction: Decimal;
     /** Breakdown by country */
     byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>;
