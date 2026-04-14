@@ -1,171 +1,455 @@
 # Roadmap de DeclaRenta
 
-> Ultima actualizacion: abril 2026
-
-## Vision
-
-DeclaRenta es la herramienta open source de referencia para que los residentes fiscales espanoles con brokers extranjeros hagan su declaracion de la renta sin dolor. Privacidad absoluta: los datos nunca salen de la maquina del usuario.
+> Última actualización: abril 2026
 
 ---
 
-## Fase 0: Foundation (abr 2026) — EN CURSO
+## Visión
 
-Objetivo: esqueleto funcional con IBKR → casillas Modelo 100.
+DeclaRenta será la herramienta open source de referencia para que cualquier residente fiscal español con inversiones en brokers extranjeros pueda cumplir con todas sus obligaciones tributarias — Modelo 100 (IRPF), Modelo 720, Modelo D-6 y Modelo 721 — sin pagar cientos de euros a un asesor ni introducir miles de datos a mano.
 
-- [x] Repo, licencia GPL-3.0, estructura TypeScript
-- [x] Tipos: IBKR Flex XML, Tax (Lot, Disposal, Dividend), ECB rates
-- [x] Parser IBKR Flex Query XML (`fast-xml-parser`)
-- [x] Motor ECB: fetch tipos diarios via SDMX API, cache, fallback festivos
-- [x] Motor FIFO: lots, consumo parcial, Decimal.js everywhere
-- [x] Deteccion regla anti-churning (Art. 33.5.f LIRPF, 2 meses)
-- [x] Procesamiento dividendos + retenciones extranjeras
-- [x] Calculo doble imposicion internacional (Art. 80 LIRPF)
-- [x] Generador Modelo 720 (fixed-width 500 bytes/registro, ISO-8859-15)
-- [x] CLI: `declarenta convert`, `declarenta modelo720`
-- [x] Web UI basica: upload XML → ver casillas → exportar JSON
-- [x] Tests: parser, FIFO, wash sale
-- [x] CI/CD: GitHub Actions, lint, typecheck, test
-- [x] Docker image
-- [ ] `npm install` + verificar que tests pasan
-- [ ] Validar con datos IBKR reales (tus propios datos 2025)
+**Privacidad radical**: los datos financieros del usuario nunca abandonan su navegador ni su máquina. La única conexión de red es al API público del BCE para tipos de cambio.
+
+---
+
+## Calendario fiscal de referencia
+
+DeclaRenta se alinea con el calendario tributario español. Cada release se planifica para estar lista **antes** del deadline correspondiente.
+
+```
+ ENE        FEB        MAR        ABR        MAY        JUN
+ ├──────────┤          ├──────────┤                     │
+ │ D-6      │          │ 720/721  │                     │
+ │ (31 ene) │          │ (31 mar) │                     │
+ │          │          │          ├─────────────────────┤
+ │          │          │          │  Campaña IRPF        │
+ │          │          │          │  Modelo 100 + 714    │
+ │          │          │          │  (abr - 30 jun)      │
+ └──────────┘          └──────────┘                     │
+```
+
+| Modelo | Qué declara | Deadline | Formato AEAT |
+|--------|-------------|----------|--------------|
+| **100 (IRPF)** | Renta: ganancias, dividendos, intereses | abr-jun (año siguiente) | XSD (`Renta20XX.xsd`), pero Renta Web NO importa ficheros — entrada manual por casillas |
+| **720** | Bienes y derechos en el extranjero (>50.000 €) | 1 ene - 31 mar | Fixed-width 500 bytes/registro, ISO-8859-15, vía TGVI Online |
+| **721** | Criptomonedas en el extranjero (>50.000 €) | 1 ene - 31 mar | Fixed-width similar a 720 |
+| **D-6** | Inversiones españolas en el exterior | 1-31 ene | Formulario Banco de España (no AEAT) |
+| **714 (Patrimonio)** | Patrimonio neto (>700.000 € o norma CCAA) | abr-jun (con IRPF) | XSD similar a Modelo 100 |
+
+---
+
+## Estado actual (v0.1-dev)
+
+### Lo que ya funciona
+
+| Componente | Estado | Fichero |
+|-----------|--------|---------|
+| Parser IBKR Flex Query XML | Implementado | `src/parsers/ibkr.ts` |
+| Motor FIFO con tipos ECB oficiales | Implementado | `src/engine/fifo.ts` |
+| Detección regla anti-churning (2 meses) | Implementado | `src/engine/wash-sale.ts` |
+| Procesamiento dividendos + retenciones | Implementado | `src/engine/dividends.ts` |
+| Cálculo doble imposición (Art. 80) | Implementado | `src/engine/double-taxation.ts` |
+| Generador Modelo 720 (fixed-width) | Implementado | `src/generators/modelo720.ts` |
+| Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
+| CLI (`convert`, `modelo720`) | Implementado | `src/cli/index.ts` |
+| Web UI básica (drag & drop) | Implementado | `src/web/` |
+| 15 tests (parser, FIFO, wash sale) | Passing | `tests/` |
+| CI/CD GitHub Actions | Configurado | `.github/workflows/` |
+
+### Lo que falta para v0.1.0
+
+- [ ] Validar con datos IBKR reales (ejercicio 2025)
+- [ ] Corregir tramos del ahorro 2025 si difieren de los codificados
 - [ ] Publicar v0.1.0
 
-**Entregable**: CLI y web que producen casillas Modelo 100 desde IBKR Flex XML.
+### Tipos de activo soportados
+
+| Tipo | IBKR code | FIFO | Dividendos | 720 | Estado |
+|------|-----------|------|------------|-----|--------|
+| Acciones | `STK` | Sí | Sí | Sí | v0.1 |
+| ETFs / Fondos | `FUND` | Sí | Sí | Sí | v0.1 |
+| Opciones | `OPT` | — | — | — | Planificado |
+| Futuros | `FUT` | — | — | — | Planificado |
+| Bonos | `BOND` | — | — | — | Planificado |
+| Forex | `CASH` | — | — | — | Planificado |
+| Warrants | `WAR` | — | — | — | Planificado |
+| Crypto | N/A | — | — | — | Planificado (721) |
 
 ---
 
-## Fase 1: Pulido y validacion (may 2026)
+## Panorama competitivo
 
-Objetivo: que los calculos sean correctos al centimo, validados contra datos reales.
+| Herramienta | Tipo | Precio | Brokers | Modelos | Privacidad | Limitaciones |
+|-------------|------|--------|---------|---------|------------|-------------|
+| **TaxDown** | SaaS | 75-239 €/año | Varios (manual) | 100 | Suben datos a sus servidores | Sin automatización real para brokers extranjeros; el plan para inversores solo está disponible en el tier FULL (239 €) |
+| **TaxScouts → TaxFix** | SaaS | ~69-149 € | Manual | 100 | Datos en la nube | Redirigido a TaxFix; sin soporte específico para IBKR/Degiro |
+| **burocratin** | OSS (AGPL-3.0) | Gratis | IBKR, Degiro | 720, D-6 | Browser (WASM) | Solo genera 720 y D-6, no calcula IRPF; escrito en Rust/WASM (19 stars) |
+| **IBKR-RENTA** | OSS | Gratis | IBKR (CSV) | 100 | Browser | Single-file HTML; solo IBKR CSV (no Flex XML); sin 720/D-6; 1 star, creado mar 2026 |
+| **Asesor fiscal** | Servicio | 150-500 € | Cualquiera | Todos | Datos compartidos | Coste elevado, dependencia de tercero, tiempos de espera |
+| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR (Flex XML) → más | **100, 720** → más | **Browser-first, zero-server** | En desarrollo; aún no validado con datos reales |
 
-- [ ] Test con tus datos IBKR 2024/2025 — verificar contra calculo manual
-- [ ] Manejo de corporate actions (splits, mergers) en FIFO
-- [ ] Soporte multi-divisa simultaneo (USD, GBP, CHF, etc.)
-- [ ] Comisiones incluidas correctamente en coste/venta (ya parcial)
-- [ ] Informe detallado por operacion con tipo ECB usado
-- [ ] Manejo de posiciones abiertas cross-year (lots comprados en anos anteriores)
-- [ ] Edge cases: ventas parciales, lotes de 0, dividendos en especie
-- [ ] Mas tests con fixtures realistas (10+ escenarios)
-- [ ] Documentacion de cada casilla y como se calcula
-- [ ] ESLint config estricta
-- [ ] Web UI: tabla de operaciones con filtros, exportar CSV
-- [ ] Publicar v0.2.0
+**Hueco que cubre DeclaRenta**: no existe ninguna herramienta open source que cubra el ciclo completo (IRPF + 720 + D-6) con soporte multi-broker y privacidad total. burocratin solo hace 720/D-6. IBKR-RENTA solo hace Modelo 100 desde CSV. TaxDown cobra 239 € y sube los datos a la nube.
 
 ---
 
-## Fase 2: Mas brokers (jun-jul 2026)
+## Fases del roadmap
 
-Objetivo: soporte multi-broker para cubrir el grueso del mercado espanol.
+### Fase 0: Cimientos (abr 2026) — EN CURSO
 
-- [ ] **Parser Degiro**: CSV annual report (acciones, ETFs, dividendos)
-- [ ] **Parser Trade Republic**: CSV/PDF export
-- [ ] **Parser Revolut**: CSV trading statement
-- [ ] **Parser eToro**: account statement XLS
-- [ ] FIFO cross-broker: consolidar lots de multiples brokers para el mismo ISIN
-- [ ] Interfaz web: seleccionar broker → subir fichero
-- [ ] Tests por broker con fixtures anonimizados
-- [ ] Publicar v0.3.0
+> **Objetivo**: MVP funcional que genera casillas Modelo 100 y fichero 720 desde IBKR Flex XML.
+>
+> **Target**: campaña renta 2025 (abr-jun 2026) — uso personal inmediato.
 
----
+- [x] Estructura TypeScript, licencia GPL-3.0, CI/CD
+- [x] Parser IBKR Flex Query XML (`fast-xml-parser`, manejo de arrays)
+- [x] Motor ECB (SDMX API, cache, fallback festivos/fines de semana)
+- [x] Motor FIFO (lots, consumo parcial, `Decimal.js` everywhere)
+- [x] Detección anti-churning (Art. 33.5.f LIRPF, ventana de 2 meses)
+- [x] Procesamiento dividendos + matching retenciones extranjeras
+- [x] Cálculo doble imposición (Art. 80 LIRPF, tramos del ahorro)
+- [x] Generador Modelo 720 (fixed-width 500 bytes, ISO-8859-15)
+- [x] CLI: `declarenta convert`, `declarenta modelo720`
+- [x] Web UI: upload XML → tabla casillas → exportar JSON
+- [x] Tests: 15 tests (parser, FIFO, wash sale)
+- [x] Docker image
+- [ ] Validar con datos IBKR reales propios (ejercicio 2025)
+- [ ] Verificar tramos del ahorro 2025 (¿28% o 30% >300K?)
+- [ ] Publicar **v0.1.0**
 
-## Fase 3: Modelo 720 + D-6 completos (ago-sep 2026)
+**Entregable**: CLI y web que producen casillas Modelo 100 + fichero 720 desde IBKR Flex Query XML.
 
-Objetivo: cubrir todas las obligaciones fiscales de un inversor con broker extranjero.
-
-- [ ] **Generador D-6**: inversiones en el exterior (deadline: 31 enero)
-- [ ] Mejora Modelo 720: deteccion automatica de umbral 50K, tipo declaracion (A/M/C)
-- [ ] Valoracion 720 correcta: media Q4 o cierre 31 dic segun Ley Patrimonio
-- [ ] Soporte 721 (crypto en el extranjero)
-- [ ] Multi-year: carryforward de perdidas (Art. 49 LIRPF, 4 anos)
-- [ ] Informe PDF descargable (resumen ejecutivo + detalle operaciones)
-- [ ] Publicar v0.5.0
-
----
-
-## Fase 4: Web UI completa (oct-nov 2026)
-
-Objetivo: experiencia web de calidad profesional, zero-server.
-
-- [ ] Wizard multi-paso: elige broker → sube fichero → revisa → descarga
-- [ ] Tabla interactiva de operaciones con ordenacion y filtros
-- [ ] Graficos: distribucion por tipo de activo, ganancia/perdida por mes
-- [ ] Modo oscuro/claro
-- [ ] PWA: funciona offline una vez cargada
-- [ ] i18n: catalan, euskera, gallego
-- [ ] Deploy en GitHub Pages (coste cero)
-- [ ] Accesibilidad WCAG 2.1 AA
-- [ ] Publicar v0.8.0
+**Criterio de éxito**: los cálculos coinciden con los del borrador AEAT para el ejercicio 2025 del autor.
 
 ---
 
-## Fase 5: Lanzamiento v1.0 (dic 2026 - ene 2027)
+### Fase 1: Precisión al céntimo (may 2026)
 
-Objetivo: listo para la campana de renta 2026 (abr-jun 2027).
+> **Objetivo**: que cada número sea correcto al céntimo, validado contra datos reales y contra cálculo manual.
 
-- [ ] Todos los tests pasan con datos reales de 3+ brokers
-- [ ] XML validado contra XSD de AEAT (Renta2026.xsd)
-- [ ] Documentacion completa: guia de uso, FAQ, video tutorial
-- [ ] Security audit (OWASP, CSP headers en web)
-- [ ] Performance: procesar 10.000 operaciones en <2 segundos
-- [ ] Publicar v1.0.0
-- [ ] Publicar en awesome-spain
-- [ ] Publicar en npm
+- [ ] Contrastar resultados IBKR 2024/2025 con cálculo manual en hoja de cálculo
+- [ ] Corporate actions en FIFO: stock splits, reverse splits, mergers, spin-offs
+  - Split: multiplicar quantity, dividir costPerShare, mantener costTotal
+  - Merger: cerrar lots del símbolo antiguo, abrir lots del nuevo con mismo coste
+  - Spin-off: distribuir coste entre parent y spin-off según ratio de mercado
+- [ ] Posiciones cross-year: importar lots abiertos de ejercicios anteriores (JSON)
+- [ ] Comisiones: incluir impuestos de transacción (STT, FTT) en coste de adquisición
+- [ ] Multi-divisa simultáneo: manejar correctamente compras en USD pagadas con GBP
+- [ ] Informe detallado por operación: fecha, ISIN, tipo ECB usado, G/P en EUR
+- [ ] Dividendos en especie (scrip dividends): tratamiento fiscal correcto
+- [ ] Payment In Lieu of Dividends: clasificación correcta como rendimiento
+- [ ] Edge cases: ventas parciales con lotes fraccionarios, cantidad 0 post-split
+- [ ] Más tests: 30+ escenarios con fixtures realistas anonimizados
+- [ ] ESLint config estricta + Prettier
+- [ ] Web UI: tabla de operaciones con ordenación, filtros, exportar CSV
+- [ ] Documentación de cada casilla y cómo se calcula
+- [ ] Publicar **v0.2.0**
+
+**Criterio de éxito**: ≤0.01 € de desviación respecto a cálculo manual en 100+ operaciones reales.
+
+---
+
+### Fase 2: Multi-broker (jun-jul 2026)
+
+> **Objetivo**: cubrir los brokers que usan la mayoría de inversores españoles con cuentas en el extranjero.
+
+**Brokers target y formatos de exportación**:
+
+| Broker | Formato | Particularidades |
+|--------|---------|-----------------|
+| **Degiro** | CSV (Account Statement, Transactions) | Sin ISIN en transacciones; requiere cruzar con portfolio |
+| **Trade Republic** | CSV export + PDF statements | CSV limitado; puede necesitar parseo de PDF como fallback |
+| **Revolut** | CSV (Trading Statement) | Formato simple; solo acciones |
+| **eToro** | XLS (Account Statement) | Incluye CFDs y crypto; formato variable entre años |
+| **XTB** | CSV (Transaction History) | Incluye CFDs y forex |
+| **Scalable Capital** | CSV/PDF | Formato similar a Trade Republic |
+| **Freedom24** | CSV (Trade Report) | Formato propietario |
+| **Trading 212** | CSV | Formato relativamente limpio |
+
+Tareas:
+
+- [ ] **Interfaz común de parser**: cada broker implementa `parse(input) → NormalizedStatement`
+- [ ] **Parser Degiro**: CSV Account Statement + Transactions
+- [ ] **Parser Trade Republic**: CSV export
+- [ ] **Parser Revolut**: CSV Trading Statement
+- [ ] **Parser eToro**: XLS Account Statement (acciones y ETFs; excluir CFDs inicialmente)
+- [ ] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
+  - Un mismo ISIN comprado en IBKR y Degiro debe usar una sola cola FIFO
+  - Orden cronológico global, no por broker
+- [ ] Web UI: selector de broker → formato esperado → upload
+- [ ] Tests por broker con fixtures anonimizados (mínimo 5 por broker)
+- [ ] Publicar **v0.3.0**
+
+**Criterio de éxito**: procesamiento correcto de exports reales de al menos 3 brokers distintos.
+
+---
+
+### Fase 3: Todos los modelos fiscales (ago-sep 2026)
+
+> **Objetivo**: cubrir 100% de las obligaciones fiscales de un inversor con broker extranjero.
+>
+> **Target**: que 720, 721 y D-6 estén listos antes de los deadlines de enero-marzo 2027.
+
+#### Modelo D-6 (Banco de España)
+
+- [ ] Investigar formato exacto de presentación D-6 (Banco de España, no AEAT)
+- [ ] Generador D-6: inversiones en valores negociables en el exterior
+- [ ] Detección automática de obligación D-6 (cualquier valor en el extranjero a 31/dic)
+- [ ] Soporte para declaración negativa (cancelación de posiciones)
+
+#### Modelo 720 — mejoras
+
+- [ ] Detección automática de umbral 50.000 € por categoría (valores, cuentas, inmuebles)
+- [ ] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
+- [ ] Primera fecha de adquisición por posición (actualmente vacío)
+- [ ] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
+  - Acciones cotizadas: media del último trimestre (no cierre 31/dic)
+  - ETFs: valor liquidativo a 31/dic
+- [ ] País de emisión extraído del ISIN (primeros 2 caracteres)
+- [ ] Validación contra diseño de registro BOE antes de generar fichero
+
+#### Modelo 721 (crypto en el extranjero)
+
+- [ ] Parser Coinbase (CSV)
+- [ ] Parser Binance (CSV)
+- [ ] Parser Kraken (CSV/ledger)
+- [ ] Generador 721: formato fixed-width AEAT
+- [ ] Umbral 50.000 € en criptomonedas en exchanges extranjeros
+
+#### Multi-year
+
+- [ ] Compensación de pérdidas (Art. 49 LIRPF): arrastre a 4 años siguientes
+- [ ] Importar datos de ejercicios anteriores (JSON de DeclaRenta o manual)
+- [ ] Tracking de pérdidas pendientes de compensar por año de origen
+- [ ] Compensación cruzada: hasta 25% de rendimientos positivos con saldo negativo de ganancias (y viceversa)
+
+#### Informe PDF
+
+- [ ] Informe PDF descargable: resumen ejecutivo + detalle por operación
+- [ ] Formato orientado a llevar al asesor fiscal o adjuntar a la declaración
+- [ ] Incluir tipo ECB utilizado en cada operación para auditoría
+
+- [ ] Publicar **v0.5.0**
+
+**Criterio de éxito**: ficheros 720 y D-6 generados pasan validación de formato AEAT/BdE sin errores.
+
+---
+
+### Fase 4: Web UI profesional (oct-nov 2026)
+
+> **Objetivo**: experiencia web de calidad que elimine cualquier barrera de entrada. Zero-server.
+
+- [ ] **Wizard multi-paso**: elige broker(s) → sube fichero(s) → revisa datos → configura (NIF, año) → genera resultados → descarga
+- [ ] **Tabla interactiva de operaciones**: ordenación, filtros por ISIN/fecha/tipo, búsqueda
+- [ ] **Vista por casillas**: cada casilla expandible con desglose de las operaciones que la componen
+- [ ] **Gráficos**: distribución por tipo de activo, G/P por mes, composición por divisa, retenciones por país
+- [ ] **Comparador año a año**: si el usuario procesa múltiples años
+- [ ] **Modo oscuro/claro** con detección de preferencia del sistema
+- [ ] **PWA**: funciona offline una vez cargada (Service Worker)
+- [ ] **Accesibilidad WCAG 2.1 AA**: navegación por teclado, screen reader, contraste
+- [ ] **i18n**: castellano (default), catalán, euskera, gallego, inglés
+- [ ] **Deploy GitHub Pages**: coste cero de hosting, dominio custom `declarenta.es`
+- [ ] **Responsive**: móvil, tablet, desktop
+- [ ] Publicar **v0.8.0**
+
+**Criterio de éxito**: un usuario sin experiencia técnica puede generar su informe en <3 minutos desde la web.
+
+---
+
+### Fase 5: Más tipos de activo (nov-dic 2026)
+
+> **Objetivo**: cubrir los instrumentos financieros más allá de acciones y ETFs.
+
+#### Opciones y futuros (IBKR)
+
+- [ ] Parser de opciones IBKR: strike, expiry, put/call, multiplicador
+- [ ] Tratamiento fiscal: prima como coste/ingreso, ejercicio vs expiración vs cierre
+- [ ] Opciones ejercidas: coste de la prima se suma al coste de adquisición de las acciones
+- [ ] Futuros: liquidación diaria, ganancias/pérdidas como rendimiento del capital
+
+#### Forex
+
+- [ ] Operaciones forex spot: clasificación como ganancia/pérdida patrimonial
+- [ ] Conversiones de divisa en IBKR (no son trading, son cambio de base currency)
+- [ ] Distinguir entre forex trading y conversiones de divisa para depósitos
+
+#### Bonos y renta fija
+
+- [ ] Cupones: rendimiento del capital mobiliario (Casilla 0033)
+- [ ] Compraventa de bonos: ganancia/pérdida patrimonial
+- [ ] Letras del Tesoro extranjeras: tratamiento fiscal
+
+#### CFDs
+
+- [ ] Nota: los CFDs tributan como ganancia/pérdida patrimonial (no como rendimiento)
+- [ ] Parser específico para eToro y XTB (principales plataformas de CFDs)
+- [ ] Soporte para posiciones cortas
+
+- [ ] Publicar **v0.9.0**
+
+---
+
+### Fase 6: Lanzamiento v1.0 (ene 2027)
+
+> **Objetivo**: herramienta completa, validada, documentada, lista para la campaña de renta 2026 (abr-jun 2027) y los modelos 720/D-6 (ene-mar 2027).
+
+- [ ] Todos los tests pasan con datos reales de 4+ brokers
+- [ ] Ficheros 720 y D-6 validados contra formato AEAT/BdE
+- [ ] Documentación completa:
+  - Guía de uso paso a paso (web + CLI)
+  - FAQ con los 20 casos más frecuentes
+  - Vídeo tutorial de 5 minutos
+  - Guía para contribuir parsers de nuevos brokers
+- [ ] Security audit: CSP headers, input sanitization, OWASP checklist
+- [ ] Performance: procesar 10.000 operaciones en <2 segundos (browser)
+- [ ] Publicar **v1.0.0** en npm + GitHub Releases + Docker Hub
+- [ ] Publicar en awesome-selfhosted, awesome-spain
+
+**Criterio de éxito**: 10+ usuarios externos completan su declaración usando DeclaRenta sin soporte.
 
 ---
 
 ## Post-v1.0: Crecimiento (2027+)
 
-### Comunidad
-- [ ] Show HN: "Open-source tool: broker reports → Spanish tax declarations, all in-browser"
-- [ ] Post en Rankia (subforo Fiscalidad)
-- [ ] Post en r/SpainFIRE + r/SpainPersonalFinance
-- [ ] Contactar Value School, Gregorio Hernandez (YouTube)
-- [ ] Grupos Telegram: Inversores Espanoles, FIRE Espana
+### Comunidad y difusión
+
+| Canal | Acción | Timing |
+|-------|--------|--------|
+| Hacker News | Show HN: "Open-source tool: broker reports → Spanish tax declarations, all in-browser" | Feb 2027 |
+| Rankia | Post en subforo Fiscalidad + subforo Brokers | Feb 2027 |
+| Reddit | r/SpainFIRE + r/SpainPersonalFinance | Feb 2027 |
+| YouTube | Contactar Value School, Gregorio Hernández, Buscando Mi Libertad | Mar 2027 |
+| Telegram | Inversores Españoles, FIRE España, Indexa/Myinvestor | Mar 2027 |
+| Foros Bogleheads ES | Post con tutorial | Mar 2027 |
+| dev.to / Medium | Artículo técnico sobre el motor FIFO y tipos ECB | Abr 2027 |
 
 ### Funcionalidades avanzadas
-- [ ] Crypto: Binance, Kraken, Coinbase, wallets on-chain
-- [ ] Opciones y futuros (IBKR)
-- [ ] Bonos y letras del tesoro
-- [ ] Doble imposicion avanzada: aplicar convenios bilaterales por pais
-- [ ] Complementarias: detectar errores en declaraciones anteriores
-- [ ] MCP server para integracion con Claude/ChatGPT
-- [ ] n8n node
 
-### Monetizacion potencial (preservando core OSS GPL-3.0)
-- [ ] Cloud hosted (conveniencia, sin instalar nada)
-- [ ] Modo gestoria: procesamiento batch multi-cliente
-- [ ] Optimizador fiscal IA: sugerencias de tax-loss harvesting
-- [ ] API para integraciones con software de gestorias (A3, Sage)
-- [ ] Envio directo a AEAT con certificado digital (si AEAT lo permite)
+- [ ] **Complementarias y rectificativas**: detectar errores en declaraciones de años anteriores y generar complementaria
+- [ ] **Doble imposición avanzada**: aplicar convenios bilaterales específicos por país (ej. W-8BEN USA → retención 15% vs 30%)
+- [ ] **Optimizador fiscal**: sugerencias de tax-loss harvesting (qué vender antes de 31/dic para compensar ganancias)
+- [ ] **Importar borrador AEAT**: comparar datos declarados con datos calculados para detectar discrepancias
+- [ ] **Deducciones autonómicas**: casillas específicas por comunidad autónoma
+- [ ] **Modelo 714 (Patrimonio)**: para patrimonios >700.000 € (o umbral según CCAA)
+- [ ] **MCP server**: integración con Claude Code / ChatGPT para consultas fiscales contextuales
+- [ ] **n8n node**: automatización de procesamiento periódico
 
-### Numeros potenciales
-- ~1.5M residentes espanoles usan brokers extranjeros
-- TaxDown cobra 75-239 EUR/ano → DeclaRenta gratis o 29-49 EUR para premium
-- B2C: 1% conversion × 35 EUR = ~525K ARR
-- B2B: 500 gestorias × 300 EUR/ano = ~150K ARR
-- Potencial ano 2-3: ~675K+ ARR
+### Monetización (preservando core OSS GPL-3.0)
+
+El core siempre será gratuito. La monetización viene de conveniencia y servicios profesionales:
+
+| Tier | Precio | Qué incluye |
+|------|--------|-------------|
+| **Community** | Gratis | Todo el core: parsers, FIFO, casillas, 720, D-6, web y CLI |
+| **Cloud** | 9-19 €/año | Versión hosted (sin instalar nada), historial multi-year automático, alertas de deadlines |
+| **Gestoría** | 29-49 €/mes | Procesamiento batch multi-cliente, dashboard de clientes, exportación a A3/Sage/ContaPlus |
+| **API** | Usage-based | REST API para integraciones con software de gestorías |
+
+Posibilidades adicionales (a evaluar):
+- [ ] Envío directo a AEAT con certificado digital o Cl@ve (si AEAT lo permite técnicamente)
+- [ ] Integración con Renta Web vía automatización de navegador (frágil, último recurso)
+
+### Oportunidad de mercado
+
+| Métrica | Valor | Fuente |
+|---------|-------|--------|
+| Residentes fiscales españoles con broker extranjero | ~1.5M | Estimación CNMV + apertura cuentas IBKR/Degiro 2020-2025 |
+| Coste medio de asesor fiscal para inversores | 150-500 €/año | Rankia, foros |
+| Precio TaxDown para inversores extranjeros | 239 € (FULL obligatorio) | taxdown.es/precios (abr 2026) |
+| Herramientas OSS competidoras con cobertura completa | **0** | Investigación propia |
+
+**Escenarios de ingresos anuales (año 2-3)**:
+
+| Canal | Supuesto | ARR |
+|-------|----------|-----|
+| Cloud (B2C) | 1% de 1.5M × 15 € medio | ~225K € |
+| Gestorías (B2B) | 500 gestorías × 39 €/mes | ~234K € |
+| API | 200 integradores × 50 €/mes | ~120K € |
+| **Total potencial** | | **~579K €** |
 
 ---
 
-## Principios de diseno
+## Principios de diseño
 
-1. **Privacidad primero**: los datos fiscales son los datos mas sensibles. Nunca salen de la maquina del usuario.
-2. **Precision absoluta**: Decimal.js everywhere, tipos ECB oficiales, FIFO estricto. Un centimo de error es inaceptable.
-3. **Open source real**: el core es GPL-3.0 y siempre sera gratis. La monetizacion viene de conveniencia y servicios adicionales, no de features basicas.
-4. **Browser-first**: la mayoria de usuarios usaran la web. CLI y Docker son para power users y gestorias.
-5. **Comunidad**: los parsers de brokers los puede mantener la comunidad. Cada broker es un modulo independiente.
+1. **Privacidad primero**: los datos fiscales son los más sensibles que existen. Nunca salen de la máquina del usuario. Sin analytics, sin tracking, sin telemetría, sin cuentas de usuario. La única conexión de red es al API público del BCE.
+
+2. **Precisión absoluta**: `Decimal.js` en todo cálculo monetario, tipos ECB oficiales, FIFO estricto. Un céntimo de error es inaceptable — estamos generando datos para Hacienda.
+
+3. **Open source real**: el core es GPL-3.0 y siempre será gratis. La monetización viene de conveniencia (hosting, gestión multi-cliente), nunca de features básicas que necesita un contribuyente individual.
+
+4. **Browser-first**: la mayoría de usuarios usarán la web. CLI y Docker son para power users y gestorías. Todo lo que funciona en la web debe funcionar offline (PWA).
+
+5. **Modular y extensible**: cada broker es un módulo independiente con interfaz común. Cualquiera puede contribuir un parser nuevo sin tocar el motor fiscal.
+
+6. **Alineado con la ley**: cada cálculo referencia el artículo de ley correspondiente (LIRPF, Ley del Patrimonio, Orden EHA). Si la ley cambia, el código se actualiza.
 
 ---
 
-## Referencias tecnicas
+## Casillas del Modelo 100 (IRPF)
 
-- **AEAT Modelo 100 XSD**: `Renta2025.xsd` (793 KB, publicado por AEAT anualmente)
-- **AEAT Modelo 720**: formato fixed-width 500 bytes/registro, ISO-8859-15
-- **Art. 37.2 LIRPF**: FIFO obligatorio para valores homogeneos
-- **Art. 33.5.f LIRPF**: regla anti-churning (2 meses)
-- **Art. 80 LIRPF**: deduccion por doble imposicion internacional
-- **ECB SDMX API**: tipos de cambio diarios oficiales
-- **IBKR Flex Query XML**: 40+ secciones, parser basado en `fast-xml-parser`
-- **burocratin** (vaijira): referencia para formato AEAT 720 (Rust/WASM, AGPL-3.0)
-- **IBKR-RENTA** (AlbertoPorras): referencia para mapeo casillas Modelo 100 (JS)
-- **ibflex** (csingley): referencia para campos Flex Query (Python, BSD)
+Referencia rápida de las casillas que DeclaRenta calcula:
+
+### Base del ahorro — Ganancias y pérdidas patrimoniales
+
+| Casilla | Concepto | Cómo se calcula |
+|---------|----------|-----------------|
+| **0327** | Valor de transmisión | Suma de (precio_venta × cantidad - comisión_venta) × tipo_ECB para cada venta |
+| **0328** | Valor de adquisición | Suma del coste FIFO en EUR de los lotes consumidos por cada venta |
+| **0358** | Pérdidas patrimoniales a compensar | Pérdidas netas no bloqueadas por anti-churning |
+
+### Base del ahorro — Rendimientos del capital mobiliario
+
+| Casilla | Concepto | Cómo se calcula |
+|---------|----------|-----------------|
+| **0029** | Dividendos íntegros | Suma bruta de dividendos × tipo_ECB |
+| **0033** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
+| **0032** | Gastos deducibles | Intereses de margen pagados al broker × tipo_ECB |
+
+### Deducciones
+
+| Casilla | Concepto | Cómo se calcula |
+|---------|----------|-----------------|
+| **0588** | Deducción por doble imposición internacional | Por país: min(retención extranjera, impuesto español sobre esa renta) |
+
+### Tramos del ahorro (ejercicio 2025)
+
+| Base liquidable | Tipo |
+|----------------|------|
+| 0 – 6.000 € | 19% |
+| 6.000 – 50.000 € | 21% |
+| 50.000 – 200.000 € | 23% |
+| 200.000 – 300.000 € | 27% |
+| > 300.000 € | 28% (verificar si sube a 30% para 2025) |
+
+### Reglas de compensación (Art. 49 LIRPF)
+
+- Las **pérdidas patrimoniales** se compensan primero con ganancias patrimoniales del mismo ejercicio.
+- El exceso se puede compensar con hasta el **25%** de los rendimientos positivos del capital mobiliario.
+- Las pérdidas no compensadas se arrastran a los **4 ejercicios siguientes**.
+- Regla simétrica: rendimientos negativos del capital mobiliario se compensan con hasta el 25% de las ganancias patrimoniales.
+
+---
+
+## Marco legal y referencias técnicas
+
+### Normativa fiscal
+
+| Referencia | Contenido |
+|-----------|-----------|
+| **Art. 37.2 LIRPF** | FIFO obligatorio para valores homogéneos |
+| **Art. 33.5.f LIRPF** | Regla anti-churning: pérdidas no computables si se recompra el mismo valor en los 2 meses anteriores o posteriores a la venta |
+| **Art. 80 LIRPF** | Deducción por doble imposición internacional |
+| **Art. 49 LIRPF** | Compensación de pérdidas: arrastre 4 años, compensación cruzada 25% |
+| **Art. 46 LIRPF** | Base liquidable del ahorro: ganancias + rendimientos del capital mobiliario |
+| **Ley 19/1991 (Patrimonio)** | Valoración de acciones cotizadas: media Q4 |
+| **Orden EHA/3290/2008** | Diseño de registro Modelo 720 |
+| **RD 1065/2007, DA 18ª** | Obligación de información sobre bienes en el extranjero |
+
+### Formatos técnicos
+
+| Formato | Especificación |
+|---------|---------------|
+| **IBKR Flex Query XML** | 40+ secciones, `fast-xml-parser` con `isArray` para arrays correctos |
+| **Modelo 720** | Fixed-width 500 bytes/registro, ISO-8859-15, tipo 1 (resumen) + tipo 2 (detalle) |
+| **ECB SDMX API** | `https://data-api.ecb.europa.eu/service/data/EXR` — tipos diarios, invertidos a EUR/FCY |
+| **AEAT Modelo 100 XSD** | `Renta20XX.xsd` (~793 KB), publicado anualmente por AEAT |
+
