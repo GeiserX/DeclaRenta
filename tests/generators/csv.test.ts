@@ -42,6 +42,9 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
           costBasisEur: new Decimal(800),
           gainLossEur: new Decimal(200),
           holdingPeriodDays: 189,
+          currency: "USD",
+          sellEcbRate: new Decimal("0.91"),
+          acquireEcbRate: new Decimal("0.92"),
           washSaleBlocked: false,
         },
       ],
@@ -91,6 +94,8 @@ describe("formatCsv", () => {
     // Header + 1 data row in capital gains
     const lines = csv.split("\n");
     const header = lines.find((l) => l.startsWith("ISIN,Simbolo"))!;
+    expect(header).toContain("Tipo_ECB_Compra");
+    expect(header).toContain("Tipo_ECB_Venta");
     expect(header).toContain("Bloqueada_Antichurning");
 
     const dataLine = lines.find((l) => l.startsWith("US0378331005,AAPL"))!;
@@ -98,6 +103,9 @@ describe("formatCsv", () => {
     expect(dataLine).toContain("800.00"); // cost
     expect(dataLine).toContain("200.00"); // gain
     expect(dataLine).toContain("189"); // holding days
+    expect(dataLine).toContain("USD"); // currency
+    expect(dataLine).toContain("0.920000"); // acquire ECB rate
+    expect(dataLine).toContain("0.910000"); // sell ECB rate
     expect(dataLine).toContain("NO"); // not blocked
   });
 

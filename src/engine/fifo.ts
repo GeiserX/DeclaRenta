@@ -49,6 +49,34 @@ export class FifoEngine {
     }
     const splits = [...splitMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
+    // Parse scrip dividends (stock dividends — new shares at cost basis from IBKR amount)
+    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SD")) {
+      const qty = new Decimal(ca.quantity);
+      if (qty.isZero()) continue;
+      const amount = new Decimal(ca.amount).abs();
+      const date = ca.dateTime.slice(0, 8);
+      const ecbRate = getEcbRate(rateMap, date, ca.currency);
+      const costInEur = amount.mul(ecbRate);
+      const lot: Lot = {
+        id: `LOT-${this.nextLotId++}`,
+        isin: ca.isin,
+        symbol: ca.symbol,
+        description: ca.description,
+        acquireDate: date,
+        quantity: qty.abs(),
+        pricePerShare: qty.isZero() ? new Decimal(0) : amount.dividedBy(qty.abs()),
+        costInEur,
+        currency: ca.currency,
+        ecbRate,
+      };
+      const key = ca.isin || ca.symbol;
+      if (!this.lots.has(key)) {
+        this.lots.set(key, []);
+      }
+      this.lots.get(key)!.push(lot);
+      this.warnings.push(`📈 Scrip dividend: ${ca.symbol} +${qty.abs()} acciones (coste ${costInEur.toFixed(2)} EUR) el ${date}`);
+    }
+
     // Merge trades and splits into a single timeline
     let splitIdx = 0;
 
@@ -86,7 +114,15 @@ export class FifoEngine {
       lot.pricePerShare = lot.pricePerShare.dividedBy(ratio);
       // costInEur stays the same — total cost doesn't change on a split
     }
-    console.error(`  ⚡ Split ${split.isin} ${split.ratio}:1 aplicado (${split.date})`);
+
+    // Remove lots that became 0-quantity after split (e.g. fractional shares rounded down)
+    const remaining = lots.filter((l) => l.quantity.greaterThan(0));
+    if (remaining.length < lots.length) {
+      this.lots.set(split.isin, remaining);
+    }
+
+    const direction = split.ratio >= 1 ? "forward" : "reverse";
+    console.error(`  ⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`);
   }
 
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
@@ -145,6 +181,9 @@ export class FifoEngine {
         costBasisEur: new Decimal(0),
         gainLossEur: proceedsEur,
         holdingPeriodDays: 0,
+        currency: trade.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: ecbRate,
         washSaleBlocked: false,
       });
       return;
@@ -184,6 +223,9 @@ export class FifoEngine {
         costBasisEur: disposalCostEur,
         gainLossEur: proceedsEur.minus(disposalCostEur),
         holdingPeriodDays: holdingDays,
+        currency: trade.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: lot.ecbRate,
         washSaleBlocked: false, // Set later by wash sale detection
       });
 
@@ -217,6 +259,9 @@ export class FifoEngine {
         costBasisEur: new Decimal(0),
         gainLossEur: proceedsEur,
         holdingPeriodDays: 0,
+        currency: trade.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: ecbRate,
         washSaleBlocked: false,
       });
     }

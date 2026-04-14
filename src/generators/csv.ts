@@ -18,12 +18,14 @@ export function formatCsv(report: TaxSummary): string {
 
   // Capital gains section
   lines.push("# GANANCIAS PATRIMONIALES");
-  lines.push("ISIN,Simbolo,Descripcion,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Bloqueada_Antichurning");
+  lines.push("ISIN,Simbolo,Descripcion,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning");
   for (const d of report.capitalGains.disposals) {
     lines.push([
       d.isin, d.symbol, escapeCsv(d.description), d.acquireDate, d.sellDate,
       d.quantity.toString(), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
-      d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(), d.washSaleBlocked ? "SI" : "NO",
+      d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
+      d.currency, d.acquireEcbRate.toFixed(6), d.sellEcbRate.toFixed(6),
+      d.washSaleBlocked ? "SI" : "NO",
     ].join(","));
   }
 

@@ -18,6 +18,7 @@ export { calculateDoubleTaxation } from "./engine/double-taxation.js";
 // Generators
 export { generateTaxReport } from "./generators/report.js";
 export { generateModelo720 } from "./generators/modelo720.js";
+export { formatCsv, escapeCsv } from "./generators/csv.js";
 
 // Types
 export type * from "./types/index.js";
