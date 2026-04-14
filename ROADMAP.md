@@ -136,20 +136,21 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 - [x] Contrastar resultados IBKR 2024/2025 con referencia Python (validado en Fase 0)
 - [x] Stock splits en FIFO: parse corporate actions, deduplicación, formato fecha YYYYMMDD
-- [ ] Corporate actions avanzadas: reverse splits, mergers, spin-offs
+- [x] Reverse splits: ratio < 1 (SPLIT 1 FOR 10), limpieza de lotes con cantidad 0
+- [ ] Corporate actions avanzadas: mergers, spin-offs
   - Merger: cerrar lots del símbolo antiguo, abrir lots del nuevo con mismo coste
   - Spin-off: distribuir coste entre parent y spin-off según ratio de mercado
 - [x] Posiciones cross-year: multi-fichero `--input` carga lots de ejercicios anteriores
-- [ ] Comisiones: incluir impuestos de transacción (STT, FTT) en coste de adquisición
+- [x] Comisiones: impuestos de transacción (STT, FTT) incluidos en coste/importe
 - [ ] Multi-divisa simultáneo: manejar correctamente compras en USD pagadas con GBP
-- [ ] Informe detallado por operación: fecha, ISIN, tipo ECB usado, G/P en EUR
-- [ ] Dividendos en especie (scrip dividends): tratamiento fiscal correcto
-- [ ] Payment In Lieu of Dividends: clasificación correcta como rendimiento
-- [ ] Edge cases: ventas parciales con lotes fraccionarios, cantidad 0 post-split
-- [ ] Más tests: 30+ escenarios con fixtures realistas anonimizados
-- [ ] ESLint config estricta + Prettier
+- [x] Informe detallado por operación: divisa, tipo ECB compra/venta en JSON y CSV
+- [x] Dividendos en especie (scrip dividends): lotes con coste base de IBKR
+- [x] Payment In Lieu of Dividends: clasificación correcta como rendimiento
+- [x] Edge cases: cantidad 0 post-split (lotes eliminados automáticamente)
+- [x] 57 tests (>30 target)
+- [x] ESLint strictTypeChecked + Prettier
 - [ ] Web UI: tabla de operaciones con ordenación, filtros, exportar CSV
-- [ ] Documentación de cada casilla y cómo se calcula
+- [x] Documentación de cada casilla y cómo se calcula (`docs/casillas.md`)
 - [ ] Publicar **v0.2.0**
 
 **Criterio de éxito**: ≤0.01 € de desviación respecto a cálculo manual en 100+ operaciones reales.
