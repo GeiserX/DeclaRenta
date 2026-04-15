@@ -4,15 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DeclaRenta - Broker extranjero → Renta española</title>
-  <meta name="description" content="Convierte reportes de IBKR, Degiro, Scalable Capital, eToro y Freedom24 en valores para tu declaración de la renta española. 100% en tu navegador, tus datos nunca salen de tu ordenador." />
+  <meta name="description" content="Convierte reportes de IBKR, Degiro, Scalable Capital, eToro y Freedom24 en valores para tu declaración de la renta española. Self-hosted, privacidad total." />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
   <main id="app">
     <header>
-      <h1>DeclaRenta</h1>
-      <p>Broker extranjero → Renta española</p>
-      <p class="privacy">Tus datos se procesan 100% en tu navegador. Nada se sube a ningún servidor.</p>
+      <h1>Decla<span class="brand-accent">Renta</span></h1>
+      <p class="subtitle">Broker extranjero → Renta española</p>
+      <p class="privacy">Self-hosted. Tus datos no salen de tu equipo.</p>
     </header>
 
     <section id="upload">
@@ -31,6 +32,7 @@
         </label>
       </div>
       <div id="drop-zone">
+        <div class="drop-icon">&#8683;</div>
         <p>Arrastra tu fichero aquí o haz clic para seleccionar</p>
         <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple />
       </div>
@@ -79,8 +81,11 @@
   <footer>
     <p>
       <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> ·
-      GPL-3.0 ·
-      <strong>Tus datos nunca salen de tu navegador</strong>
+      <strong>Self-hosted · Privacidad total</strong>
+    </p>
+    <p class="credits">
+      Made with <span class="heart">&#9829;</span> by <a href="https://geiser.cloud">Sergio Fernández</a>
+      · <a href="https://github.com/sponsors/GeiserX" class="sponsor-link">Sponsor</a>
     </p>
   </footer>
 

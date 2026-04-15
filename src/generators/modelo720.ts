@@ -22,6 +22,8 @@ interface Modelo720Config {
   isComplementary: boolean;
   isReplacement: boolean;
   previousDeclarationId?: string;
+  /** ISINs declared in the previous year's 720 — used to determine A/M/C declaration types */
+  previousYearIsins?: string[];
 }
 
 /**
@@ -41,9 +43,11 @@ export function generateModelo720(
   /** Optional: remaining lots from FIFO engine, used to extract first acquisition date */
   remainingLots?: Map<string, Lot[]>,
 ): string {
-  // Filter to stocks/funds and calculate EUR values
+  const previousIsins = new Set(config.previousYearIsins ?? []);
+
+  // Filter to stocks/funds/bonds and calculate EUR values
   const entries = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND")
+    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .map((p) => {
       const yearEnd = `${config.year}-12-31`;
       const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
@@ -61,19 +65,35 @@ export function generateModelo720(
         }
       }
 
-      return { position: p, valueEur, costEur, firstAcquisitionDate };
+      // Declaration type: A (new), M (existing), C (cancelled/sold)
+      const declType: "A" | "M" | "C" = previousIsins.has(p.isin) ? "M" : "A";
+
+      return { position: p, valueEur, costEur, firstAcquisitionDate, declType };
     });
 
-  // Check 50,000 EUR threshold for values category
+  // Build "C" (cancelled) records for ISINs in previous year but not in current positions
+  const currentIsins = new Set(entries.map((e) => e.position.isin));
+  const cancelledIsins = [...previousIsins].filter((isin) => !currentIsins.has(isin));
+  const cancelledEntries = cancelledIsins.map((isin) => ({
+    isin,
+    declType: "C" as const,
+  }));
+
+  // Check 50,000 EUR threshold for values category (only current positions count)
   const totalValue = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  if (totalValue.lessThan(50000)) {
-    return ""; // Below threshold, no declaration needed
+  if (totalValue.lessThan(50000) && cancelledEntries.length === 0) {
+    return ""; // Below threshold and no cancellations needed
   }
 
   // Build records
   const detailRecords = entries.map((e) =>
-    buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate),
+    buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate, e.declType),
   );
+
+  // Add cancelled records
+  for (const c of cancelledEntries) {
+    detailRecords.push(buildCancelledRecord(c.isin, config));
+  }
 
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, entries);
 
@@ -131,6 +151,7 @@ function buildDetailRecord(
   costEur: Decimal,
   config: Modelo720Config,
   firstAcquisitionDate?: string,
+  declType: "A" | "M" | "C" = "M",
 ): string {
   // Extract country code from ISIN prefix (first 2 characters)
   const countryCode = pos.isin.length >= 2 ? pos.isin.slice(0, 2).toUpperCase() : "  ";
@@ -154,16 +175,58 @@ function buildDetailRecord(
   record += pad(pos.description, 41);                         // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
-  record += "M";                                              // 423: Type (M=existing)
+  record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
   record += pad("", 8);                                       // 424-431: Sell date
   record += (costEur.isNegative() ? "N" : " ");               // 432: Acquisition sign
   record += numPad(costEur.toString(), 13, 2);                // 433-447: Acquisition value
   record += (valueEur.isNegative() ? "N" : " ");              // 448: Valuation sign
-  record += numPad(valueEur.toString(), 13, 2);               // 449-462: Valuation value
-  record += "A";                                              // 463: Stock representation
-  record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 464-475: Quantity
-  record += pad("", 1);                                       // 476: Reserved
-  record += numPad("100", 3, 2);                              // 477-481: Ownership %
+  record += numPad(valueEur.toString(), 13, 2);               // 449-463: Valuation value
+  record += "A";                                              // 464: Stock representation
+  record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 465-476: Quantity
+  record += pad("", 1);                                       // 477: Reserved
+  record += numPad("100", 3, 2);                              // 478-482: Ownership %
+  record += pad("", 18);                                      // 483-500: Blank
+
+  return record;
+}
+
+/**
+ * Build a "C" (cancelled) detail record for an ISIN that was declared
+ * in the previous year but no longer held.
+ */
+function buildCancelledRecord(isin: string, config: Modelo720Config): string {
+  const countryCode = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "  ";
+  const yearEnd = `${config.year}1231`;
+
+  let record = "";
+  record += "2";                                              // 1: Register type
+  record += "720";                                            // 2-4: Model
+  record += config.year.toString();                           // 5-8: Year
+  record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
+  record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
+  record += pad("", 9);                                       // 27-35: Proxy NIF
+  record += pad("", 40);                                      // 36-75: Name (unknown for cancelled)
+  record += "1";                                              // 76: Declaration type (owner)
+  record += pad("", 25);                                      // 77-101: Reserved
+  record += "V";                                              // 102: Asset type (stocks)
+  record += pad("", 26);                                      // 103-128: Reserved
+  record += pad(countryCode, 2);                              // 129-130: Country code
+  record += "1";                                              // 131: ID type (ISIN)
+  record += pad(isin, 12);                                    // 132-143: ISIN
+  record += pad("", 46);                                      // 144-189: Reserved
+  record += pad("", 41);                                      // 190-230: Entity name
+  record += pad("", 184);                                     // 231-414: Reserved
+  record += pad("", 8);                                       // 415-422: First acquisition date
+  record += "C";                                              // 423: Type (C=cancelled)
+  record += pad(yearEnd, 8);                                  // 424-431: Sell/cancellation date
+  record += " ";                                              // 432: Acquisition sign
+  record += numPad("0", 13, 2);                               // 433-447: Acquisition value (0)
+  record += " ";                                              // 448: Valuation sign
+  record += numPad("0", 13, 2);                               // 449-463: Valuation value (0)
+  record += "A";                                              // 464: Stock representation
+  record += numPad("0", 9, 3);                                // 465-476: Quantity (0)
+  record += pad("", 1);                                       // 477: Reserved
+  record += numPad("100", 3, 2);                              // 478-482: Ownership %
   record += pad("", 18);                                      // 483-500: Blank
 
   return record;

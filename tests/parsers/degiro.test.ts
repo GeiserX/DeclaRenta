@@ -244,6 +244,64 @@ describe("degiroParser", () => {
     });
   });
 
+  describe("Account CSV — new format with Variación column", () => {
+    it("should parse new-format Account CSV with Variación header", () => {
+      // Real format: "Tipo,Variación,,Saldo,," — Variación col has currency, next col has amount
+      const csv = [
+        "Fecha,Hora,Fecha valor,Producto,ISIN,Descripción,Tipo,Variación,,Saldo,,ID Orden",
+        "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Dividendo,,USD,2.50,USD,500.00,",
+        "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Retención del dividendo,,USD,-0.38,USD,499.62,",
+      ].join("\n");
+
+      const result = degiroParser.parse(csv);
+      const divs = result.cashTransactions.filter((t) => t.type === "Dividends");
+      const whts = result.cashTransactions.filter((t) => t.type === "Withholding Tax");
+      expect(divs).toHaveLength(1);
+      expect(divs[0]!.amount).toBe("2.50");
+      expect(whts).toHaveLength(1);
+      expect(whts[0]!.amount).toBe("-0.38");
+    });
+  });
+
+  describe("Account CSV — Dutch language", () => {
+    it("should detect and parse Dutch Account CSV", () => {
+      const csv = [
+        "Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,Wisselkoers,,Mutatie,,Saldo,,Order ID",
+        "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Dividend,,USD,2.50,USD,500.00,USD,",
+      ].join("\n");
+
+      expect(degiroParser.detect(csv)).toBe(true);
+      const result = degiroParser.parse(csv);
+      expect(result.cashTransactions).toHaveLength(1);
+      expect(result.cashTransactions[0]!.type).toBe("Dividends");
+    });
+  });
+
+  describe("Account CSV — German language", () => {
+    it("should detect and parse German Account CSV", () => {
+      const csv = [
+        "Datum,Uhrzeit,Wertdatum,Produkt,ISIN,Beschreibung,Währung,,Änderung,,Kontostand,,Auftrags-ID",
+        "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Dividend,,USD,2.50,USD,500.00,USD,",
+      ].join("\n");
+
+      expect(degiroParser.detect(csv)).toBe(true);
+      const result = degiroParser.parse(csv);
+      expect(result.cashTransactions).toHaveLength(1);
+    });
+  });
+
+  describe("Transactions CSV — edge cases", () => {
+    it("should handle BOM in CSV", () => {
+      const csv = "\uFEFF" + TRANSACTIONS_CSV_EN;
+      const result = degiroParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+    });
+
+    it("should detect semicolon-delimited CSV", () => {
+      expect(degiroParser.detect(TRANSACTIONS_CSV_SEMICOLON)).toBe(true);
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => degiroParser.parse("")).toThrow("vacío");

@@ -47,6 +47,11 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       return disposal;
     }
 
+    // Anti-churning does NOT apply to options (CALL/PUT)
+    if (disposal.assetCategory === "OPT") {
+      return disposal;
+    }
+
     const sellDate = parseDate(disposal.sellDate);
     const windowStart = addMonths(sellDate, -2);
     const windowEnd = addMonths(sellDate, 2);
