@@ -7,10 +7,22 @@
 
 import type { BrokerParser } from "../types/broker.js";
 import { ibkrParser } from "./ibkr.js";
+import { freedom24Parser } from "./freedom24.js";
+import { etoroParser } from "./etoro.js";
 import { degiroParser } from "./degiro.js";
+import { scalableParser } from "./scalable.js";
 
-/** All registered broker parsers, checked in order for auto-detection */
-export const brokerParsers: BrokerParser[] = [ibkrParser, degiroParser];
+/**
+ * All registered broker parsers, checked in order for auto-detection.
+ * Order matters: more specific formats (XML, JSON, XLSX) before generic CSV.
+ */
+export const brokerParsers: BrokerParser[] = [
+  ibkrParser,       // XML with <FlexQueryResponse>
+  freedom24Parser,  // JSON with trades/corporate_actions/cash_flows
+  etoroParser,      // XLSX/CSV with "Closed Positions"
+  degiroParser,     // CSV with ISIN + quantity + price headers
+  scalableParser,   // CSV with date;time;status;reference headers
+];
 
 /**
  * Auto-detect which broker produced the input by trying each parser's detect().

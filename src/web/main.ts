@@ -2,26 +2,48 @@
  * DeclaRenta web UI entry point.
  *
  * All processing happens in the browser. No data is uploaded anywhere.
+ * Supports: IBKR (XML), Degiro (CSV), Scalable Capital (CSV), eToro (XLSX), Freedom24 (JSON).
  */
 
-import { parseIbkrFlexXml } from "../parsers/ibkr.js";
+import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
+import type { Statement } from "../types/broker.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
+import { formatCsv } from "../generators/csv.js";
+import { normalizeDate } from "../engine/dates.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
+
+/** Escape HTML to prevent XSS from user-derived content */
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 const dropZone = document.getElementById("drop-zone")!;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
 const configSection = document.getElementById("config")!;
 const resultsSection = document.getElementById("results")!;
 const casillasDiv = document.getElementById("casillas")!;
-const exportBtn = document.getElementById("export-btn")!;
+const opsTable = document.getElementById("operations-table")!;
+const divsTable = document.getElementById("dividends-table")!;
+const exportJsonBtn = document.getElementById("export-json-btn")!;
+const exportCsvBtn = document.getElementById("export-csv-btn")!;
 const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
+const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
+const processBtn = document.getElementById("process-btn")!;
+const fileListDiv = document.getElementById("file-list")!;
+const opsSearch = document.getElementById("ops-search") as HTMLInputElement;
+const opsFilter = document.getElementById("ops-filter") as HTMLSelectElement;
 
 let currentReport: ReturnType<typeof generateTaxReport> | null = null;
+const pendingFiles: File[] = [];
 
+// ---------------------------------------------------------------------------
 // File upload handlers
+// ---------------------------------------------------------------------------
+
 dropZone.addEventListener("click", () => fileInput.click());
 dropZone.addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -31,62 +53,198 @@ dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover
 dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("dragover");
-  const file = e.dataTransfer?.files[0];
-  if (file) processFile(file);
+  if (e.dataTransfer?.files) {
+    addFiles(Array.from(e.dataTransfer.files));
+  }
 });
 fileInput.addEventListener("change", () => {
-  const file = fileInput.files?.[0];
-  if (file) processFile(file);
+  if (fileInput.files) {
+    addFiles(Array.from(fileInput.files));
+  }
 });
 
-exportBtn.addEventListener("click", () => {
-  if (!currentReport) return;
-  const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `declarenta_${currentReport.year}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
+function addFiles(files: File[]) {
+  // Duplicate guard: skip files already in the list by name + size
+  const existing = new Set(pendingFiles.map((f) => `${f.name}:${f.size}`));
+  for (const f of files) {
+    if (!existing.has(`${f.name}:${f.size}`)) {
+      pendingFiles.push(f);
+    }
+  }
+  renderFileList();
+  configSection.hidden = pendingFiles.length === 0;
+}
 
-async function processFile(file: File) {
+function renderFileList() {
+  fileListDiv.innerHTML = pendingFiles
+    .map((f, i) => `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`)
+    .join(" ");
+
+  fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt((e.target as HTMLElement).dataset.idx!);
+      pendingFiles.splice(idx, 1);
+      renderFileList();
+      if (pendingFiles.length === 0) configSection.hidden = true;
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Process button
+// ---------------------------------------------------------------------------
+
+processBtn.addEventListener("click", () => void processFiles());
+
+async function processFiles() {
+  if (pendingFiles.length === 0) return;
+
   try {
-    dropZone.innerHTML = "<p>Procesando...</p>";
+    processBtn.textContent = "Procesando...";
+    processBtn.setAttribute("disabled", "true");
 
-    const xml = await file.text();
-    const statement = parseIbkrFlexXml(xml);
+    const merged: Statement = {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades: [], cashTransactions: [], corporateActions: [],
+      openPositions: [], securitiesInfo: [],
+    };
+    const brokerNames: string[] = [];
+
+    for (const file of pendingFiles) {
+      // Check for XLSX binary (eToro) first
+      const arrayBuf = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+      if (detectEtoroXlsx(uint8)) {
+        const statement = await parseEtoroXlsx(uint8);
+        merged.accountId = merged.accountId || statement.accountId;
+        merged.trades.push(...statement.trades);
+        merged.cashTransactions.push(...statement.cashTransactions);
+        merged.corporateActions.push(...statement.corporateActions);
+        merged.openPositions = statement.openPositions;
+        merged.securitiesInfo.push(...statement.securitiesInfo);
+        brokerNames.push("eToro");
+        continue;
+      }
+
+      const content = new TextDecoder("utf-8").decode(uint8);
+      const selectedBroker = brokerSelect.value;
+      const parser = selectedBroker !== "auto"
+        ? getBroker(selectedBroker)
+        : detectBroker(content);
+
+      if (!parser) {
+        throw new Error(
+          `No se pudo detectar el broker de "${esc(file.name)}". Selecciona el broker manualmente. Disponibles: ${brokerParsers.map((p) => p.name).join(", ")}`,
+        );
+      }
+
+      const statement = parser.parse(content);
+      merged.accountId = merged.accountId || statement.accountId;
+      merged.trades.push(...statement.trades);
+      merged.cashTransactions.push(...statement.cashTransactions);
+      merged.corporateActions.push(...statement.corporateActions);
+      merged.openPositions = statement.openPositions;
+      merged.securitiesInfo.push(...statement.securitiesInfo);
+      brokerNames.push(parser.name);
+    }
+
+    // Sort trades chronologically for cross-broker FIFO
+    merged.trades.sort((a, b) =>
+      normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
+    );
+
     const year = parseInt(yearSelect.value);
-
-    // Detect currencies
     const currencies = new Set<string>();
-    for (const t of statement.trades) currencies.add(t.currency);
-    for (const c of statement.cashTransactions) currencies.add(c.currency);
+    for (const t of merged.trades) currencies.add(t.currency);
+    for (const c of merged.cashTransactions) currencies.add(c.currency);
     currencies.delete("EUR");
 
-    dropZone.innerHTML = `<p>Obteniendo tipos ECB para ${[...currencies].join(", ")}...</p>`;
+    dropZone.textContent = `Obteniendo tipos ECB para ${[...currencies].join(", ") || "EUR"}...`;
 
-    const rateMap = await fetchEcbRates(year, [...currencies]);
-    const report = generateTaxReport(statement, rateMap, year);
+    const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
+    years.add(year);
+    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
+    for (const yr of years) {
+      const rates = await fetchEcbRates(yr, [...currencies]);
+      for (const [date, ratesByDate] of rates) {
+        allRates.set(date, ratesByDate);
+      }
+    }
+
+    const report = generateTaxReport(merged, allRates, year);
     currentReport = report;
 
-    configSection.hidden = false;
-    resultsSection.hidden = false;
-    dropZone.innerHTML = `<p>✓ ${file.name} procesado (${statement.trades.length} operaciones)</p>`;
+    const uniqueBrokers = [...new Set(brokerNames)];
+    dropZone.textContent = `✓ ${pendingFiles.length} fichero(s) procesado(s) — ${uniqueBrokers.join(", ")} — ${merged.trades.length} operaciones`;
 
+    resultsSection.hidden = false;
     renderResults(report);
   } catch (err) {
-    dropZone.innerHTML = `<p style="color: var(--danger)">Error: ${err instanceof Error ? err.message : err}</p>`;
+    const msg = err instanceof Error ? err.message : String(err);
+    dropZone.textContent = `Error: ${msg}`;
+    dropZone.style.color = "var(--danger)";
+    // Clear stale results
+    currentReport = null;
+    resultsSection.hidden = true;
+  } finally {
+    processBtn.textContent = "Procesar";
+    processBtn.removeAttribute("disabled");
   }
 }
 
+// ---------------------------------------------------------------------------
+// Export buttons
+// ---------------------------------------------------------------------------
+
+exportJsonBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  const blob = new Blob([JSON.stringify(currentReport, null, 2)], { type: "application/json" });
+  downloadBlob(blob, `declarenta_${currentReport.year}.json`);
+});
+
+exportCsvBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  const csv = formatCsv(currentReport);
+  const blob = new Blob([csv], { type: "text/csv" });
+  downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+});
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Search and filter
+// ---------------------------------------------------------------------------
+
+opsSearch.addEventListener("input", () => renderOperationsTable());
+opsFilter.addEventListener("change", () => renderOperationsTable());
+
+// ---------------------------------------------------------------------------
+// Render results
+// ---------------------------------------------------------------------------
+
+function formatDate(d: string): string {
+  if (d.length === 8) return `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
+  return d;
+}
+
 function renderResults(report: ReturnType<typeof generateTaxReport>) {
+  // Casillas summary
   casillasDiv.innerHTML = `
     <table>
       <thead><tr><th>Casilla</th><th>Concepto</th><th>Importe (EUR)</th></tr></thead>
       <tbody>
         <tr><td>0327</td><td>Valor de transmisión</td><td>${report.capitalGains.transmissionValue.toFixed(2)}</td></tr>
         <tr><td>0328</td><td>Valor de adquisición</td><td>${report.capitalGains.acquisitionValue.toFixed(2)}</td></tr>
+        <tr class="${report.capitalGains.netGainLoss.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">
+          <td></td><td><strong>Ganancia/Pérdida neta</strong></td><td><strong>${report.capitalGains.netGainLoss.toFixed(2)}</strong></td>
+        </tr>
         <tr><td>0029</td><td>Dividendos brutos</td><td>${report.dividends.grossIncome.toFixed(2)}</td></tr>
         <tr><td>0033</td><td>Intereses ganados</td><td>${report.interest.earned.toFixed(2)}</td></tr>
         <tr><td>0032</td><td>Intereses pagados (margen)</td><td>${report.interest.paid.toFixed(2)}</td></tr>
@@ -94,5 +252,97 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
       </tbody>
     </table>
     ${report.capitalGains.blockedLosses.greaterThan(0) ? `<p class="warning">⚠ Pérdidas bloqueadas por regla anti-churning (2 meses): ${report.capitalGains.blockedLosses.toFixed(2)} EUR</p>` : ""}
+    ${report.warnings.length > 0 ? `<details><summary>${report.warnings.length} advertencia(s)</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
+  `;
+
+  renderOperationsTable();
+  renderDividendsTable(report);
+}
+
+function renderOperationsTable() {
+  if (!currentReport) return;
+  const search = opsSearch.value.toLowerCase();
+  const filter = opsFilter.value;
+
+  let disposals = currentReport.capitalGains.disposals;
+
+  if (search) {
+    disposals = disposals.filter(
+      (d) => d.isin.toLowerCase().includes(search) || d.symbol.toLowerCase().includes(search),
+    );
+  }
+  if (filter === "gain") {
+    disposals = disposals.filter((d) => d.gainLossEur.greaterThanOrEqualTo(0));
+  } else if (filter === "loss") {
+    disposals = disposals.filter((d) => d.gainLossEur.lessThan(0));
+  }
+
+  opsTable.innerHTML = `
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th>ISIN</th>
+          <th>Símbolo</th>
+          <th>F. Compra</th>
+          <th>F. Venta</th>
+          <th>Uds.</th>
+          <th>Coste EUR</th>
+          <th>Venta EUR</th>
+          <th>G/P EUR</th>
+          <th>Días</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${disposals.map((d) => `
+          <tr>
+            <td class="mono">${esc(d.isin)}</td>
+            <td>${esc(d.symbol)}</td>
+            <td>${formatDate(d.acquireDate)}</td>
+            <td>${formatDate(d.sellDate)}</td>
+            <td>${d.quantity.toString()}</td>
+            <td>${d.costBasisEur.toFixed(2)}</td>
+            <td>${d.proceedsEur.toFixed(2)}</td>
+            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">${d.gainLossEur.toFixed(2)}</td>
+            <td>${d.holdingPeriodDays}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <p class="table-count">${disposals.length} operación(es)</p>
+  `;
+}
+
+function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
+  if (report.dividends.entries.length === 0) {
+    divsTable.innerHTML = "<p class='muted'>Sin dividendos</p>";
+    return;
+  }
+
+  divsTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>ISIN</th>
+          <th>Símbolo</th>
+          <th>Fecha</th>
+          <th>Bruto EUR</th>
+          <th>Retención EUR</th>
+          <th>País</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${report.dividends.entries.map((d) => `
+          <tr>
+            <td class="mono">${esc(d.isin)}</td>
+            <td>${esc(d.symbol)}</td>
+            <td>${formatDate(d.payDate)}</td>
+            <td>${d.grossAmountEur.toFixed(2)}</td>
+            <td>${d.withholdingTaxEur.toFixed(2)}</td>
+            <td>${esc(d.withholdingCountry)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <p class="table-count">${report.dividends.entries.length} dividendo(s)</p>
   `;
 }
