@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
 import { degiroParser } from "../../src/parsers/degiro.js";
 
 // ---------------------------------------------------------------------------
@@ -196,6 +197,72 @@ describe("degiroParser", () => {
 
     it("should throw on unrecognized CSV format", () => {
       expect(() => degiroParser.parse("Col1,Col2,Col3\na,b,c")).toThrow("no reconocido");
+    });
+  });
+
+  describe("real Degiro export (19-column format)", () => {
+    const realCsv = readFileSync(new URL("../fixtures/degiro-transactions-real.csv", import.meta.url), "utf-8");
+
+    it("should detect the real Degiro CSV", () => {
+      expect(degiroParser.detect(realCsv)).toBe(true);
+    });
+
+    it("should parse trades from the real export", () => {
+      const result = degiroParser.parse(realCsv);
+      // 13 data rows minus 1 zero-price rights assignment = 12 trades
+      expect(result.trades.length).toBe(12);
+    });
+
+    it("should parse USD buy with FX rate correctly", () => {
+      const result = degiroParser.parse(realCsv);
+      const nuscaleBuy = result.trades.find(
+        (t) => t.isin === "US67079K1007" && t.buySell === "BUY" && t.quantity === "1",
+      )!;
+      expect(nuscaleBuy).toBeDefined();
+      expect(nuscaleBuy.symbol).toBe("NUSCALE POWER CORP");
+      expect(nuscaleBuy.tradePrice).toBe("22.2000");
+      expect(nuscaleBuy.currency).toBe("USD");
+      expect(nuscaleBuy.tradeDate).toBe("20241108");
+      expect(nuscaleBuy.fxRateToBase).toBe("1.0702");
+      expect(nuscaleBuy.tradeMoney).toBe("-22.20");
+    });
+
+    it("should parse USD sell with negative quantity", () => {
+      const result = degiroParser.parse(realCsv);
+      const nuscaleSell = result.trades.find(
+        (t) => t.isin === "US67079K1007" && t.buySell === "SELL" && t.quantity === "-58",
+      )!;
+      expect(nuscaleSell).toBeDefined();
+      expect(nuscaleSell.tradePrice).toBe("9.1000");
+      expect(nuscaleSell.fxRateToBase).toBe("1.1094");
+      expect(nuscaleSell.tradeMoney).toBe("527.80");
+    });
+
+    it("should default FX rate to 1 for EUR trades", () => {
+      const result = degiroParser.parse(realCsv);
+      const eurTrade = result.trades.find((t) => t.currency === "EUR")!;
+      expect(eurTrade).toBeDefined();
+      expect(eurTrade.fxRateToBase).toBe("1");
+    });
+
+    it("should skip zero-price rights assignments", () => {
+      const result = degiroParser.parse(realCsv);
+      const rights = result.trades.find((t) => t.symbol.includes("RTS"));
+      expect(rights).toBeUndefined();
+    });
+
+    it("should parse commission correctly", () => {
+      const result = degiroParser.parse(realCsv);
+      // NUSCALE 7-share buy has -2.00 commission
+      const withComm = result.trades.find(
+        (t) => t.isin === "US67079K1007" && t.quantity === "7",
+      )!;
+      expect(withComm.commission).toBe("-2.00");
+      // NUSCALE 1-share buy has no commission (empty field)
+      const noComm = result.trades.find(
+        (t) => t.isin === "US67079K1007" && t.quantity === "1",
+      )!;
+      expect(noComm.commission).toBe("0");
     });
   });
 });

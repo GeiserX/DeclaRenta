@@ -20,7 +20,7 @@ import type { Trade, CashTransaction } from "../types/ibkr.js";
 // ---------------------------------------------------------------------------
 
 /** Known header keywords for the Transactions CSV quantity column */
-const QUANTITY_HEADERS = ["cantidad", "quantity", "anzahl", "aantal"];
+const QUANTITY_HEADERS = ["cantidad", "número", "number", "quantity", "anzahl", "aantal"];
 
 /** Known header keywords for price column */
 const PRICE_HEADERS = ["precio", "price", "kurs", "koers"];
@@ -135,8 +135,11 @@ interface TransactionColumns {
   quantity: number;
   price: number;
   priceCurrency: number;
-  value: number;
-  valueCurrency: number;
+  localValue: number;
+  localValueCurrency: number;
+  eurValue: number;
+  eurValueCurrency: number;
+  fxRate: number;
   costs: number;
   costsCurrency: number;
   total: number;
@@ -146,7 +149,15 @@ interface TransactionColumns {
 
 /**
  * Resolve column indices from the Transactions CSV header.
- * The Transactions CSV has paired value+currency columns (currency follows value).
+ *
+ * Degiro has two known Transactions CSV layouts:
+ * - 19-col (real export): Fecha,Hora,Producto,ISIN,Bolsa de,Centro de ejecución,
+ *   Número,Precio,[cur],Valor local,[cur],Valor,[cur],Tipo de cambio,
+ *   Costes de transacción,[cur],Total,[cur],ID Orden
+ * - 16-col (older/simplified): Fecha,Hora,Producto,ISIN,Centro de referencia,
+ *   Centro de ejecución,Cantidad,Precio,[cur],Valor,[cur],Costes,[cur],Total,[cur],ID Orden
+ *
+ * The parser handles both by searching for column names dynamically.
  */
 function resolveTransactionColumns(headers: string[]): TransactionColumns {
   const date = findColumn(headers, ["Fecha", "Date", "Datum"]);
@@ -165,9 +176,33 @@ function resolveTransactionColumns(headers: string[]): TransactionColumns {
   // Currency columns follow their value columns (empty header)
   const priceCurrency = price >= 0 ? price + 1 : -1;
 
-  // Value column: next numeric column after price+currency
-  const value = findColumn(headers, ["Valor", "Value", "Wert", "Waarde"]);
-  const valueCurrency = value >= 0 ? value + 1 : -1;
+  // 19-col format has "Valor local" (original currency) + "Valor" (EUR)
+  // 16-col format has only "Valor"
+  const localValue = findColumn(headers, ["Valor local", "Local value", "Lokaler Wert", "Lokale waarde"]);
+  const localValueCurrency = localValue >= 0 ? localValue + 1 : -1;
+
+  // "Valor" / "Value" — in 19-col format this is the EUR value; in 16-col it's the only value
+  // Use findColumn but skip the "Valor local" match by searching after localValue
+  let eurValue: number;
+  if (localValue >= 0) {
+    // 19-col: find "Valor"/"Value" that comes AFTER "Valor local"
+    eurValue = headers.findIndex(
+      (h, idx) =>
+        idx > localValue &&
+        ["valor", "value", "wert", "waarde"].includes(h.toLowerCase().trim()),
+    );
+  } else {
+    eurValue = findColumn(headers, ["Valor", "Value", "Wert", "Waarde"]);
+  }
+  const eurValueCurrency = eurValue >= 0 ? eurValue + 1 : -1;
+
+  // FX rate column (only in 19-col format)
+  const fxRate = findColumn(headers, [
+    "Tipo de cambio",
+    "Exchange rate",
+    "Wechselkurs",
+    "Wisselkoers",
+  ]);
 
   const costs = findColumn(headers, [
     "Costes de transacción y/o terceros",
@@ -192,8 +227,11 @@ function resolveTransactionColumns(headers: string[]): TransactionColumns {
     quantity,
     price,
     priceCurrency,
-    value,
-    valueCurrency,
+    localValue,
+    localValueCurrency,
+    eurValue,
+    eurValueCurrency,
+    fxRate,
     costs,
     costsCurrency,
     total,
@@ -207,7 +245,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
   const cols = resolveTransactionColumns(headers);
 
   if (cols.date < 0 || cols.quantity < 0 || cols.price < 0) {
-    throw new Error("Degiro Transactions CSV: faltan columnas obligatorias (Fecha, Cantidad, Precio)");
+    throw new Error("Degiro Transactions CSV: faltan columnas obligatorias (Fecha, Cantidad/Número, Precio)");
   }
 
   const trades: Trade[] = [];
@@ -223,17 +261,28 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const quantity = parseNumber(fields[cols.quantity] ?? "0");
     const price = parseNumber(fields[cols.price] ?? "0");
     const currency = cols.priceCurrency >= 0 ? (fields[cols.priceCurrency] ?? "").trim() : "";
-    const value = parseNumber(fields[cols.value] ?? "0");
-    const commission = parseNumber(fields[cols.costs] ?? "0");
     const isin = (fields[cols.isin] ?? "").trim();
     const product = (fields[cols.product] ?? "").trim();
     const exchange = cols.execVenue >= 0 ? (fields[cols.execVenue] ?? "").trim() : "";
     const orderId = cols.orderId >= 0 ? (fields[cols.orderId] ?? "").trim() : "";
+    const commission = parseNumber(fields[cols.costs] ?? "0");
     const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "").trim() : currency;
+
+    // Use local value (original currency) if available, otherwise EUR value
+    const localValue = cols.localValue >= 0 ? parseNumber(fields[cols.localValue] ?? "0") : "";
+    const eurValue = cols.eurValue >= 0 ? parseNumber(fields[cols.eurValue] ?? "0") : "";
+    const value = localValue || eurValue || "0";
+
+    // FX rate from the CSV (19-col format), defaults to "1" for same-currency trades
+    const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
+    const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
     if (!isin || quantity === "0") continue;
 
-    // Determine buy/sell from value sign (negative = you paid = buy)
+    // Skip zero-price rows (rights assignments, non-tradeable conversions)
+    if (price === "0" || price === "0.0000") continue;
+
+    // Determine buy/sell: negative local value = you paid = buy; or negative quantity = sell
     const valueNum = parseFloat(value);
     const qtyNum = parseFloat(quantity);
     const isSell = valueNum > 0 || qtyNum < 0;
@@ -250,11 +299,11 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       settlementDate: tradeDate, // T+2 estimated, but we use tradeDate for FIFO
       quantity: isSell ? `-${Math.abs(qtyNum)}` : `${Math.abs(qtyNum)}`,
       tradePrice: price,
-      tradeMoney: value || "0",
+      tradeMoney: value,
       proceeds: isSell ? value : "0",
       cost: isSell ? "0" : value,
       fifoPnlRealized: "0",
-      fxRateToBase: "1",
+      fxRateToBase: fxRate === "0" ? "1" : fxRate || "1",
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange,
