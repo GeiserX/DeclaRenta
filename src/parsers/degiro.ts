@@ -8,8 +8,8 @@
  * - Transactions CSV: structured trade data (quantity, price, costs)
  * - Account CSV: all movements incl. dividends (description-based)
  *
- * This parser handles the Transactions CSV for trades. Account CSV
- * support for dividends is planned for a future version.
+ * This parser handles the Transactions CSV for trades and the Account CSV
+ * for dividends and withholding taxes.
  */
 
 import type { BrokerParser, Statement } from "../types/broker.js";
