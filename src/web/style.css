@@ -26,7 +26,7 @@ body {
 }
 
 main {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
@@ -71,6 +71,22 @@ h2 {
   margin-bottom: 1rem;
 }
 
+h3 {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.75rem;
+  color: var(--accent);
+}
+
+/* Broker selector */
+.broker-selector {
+  margin-bottom: 1rem;
+}
+
+.broker-selector select {
+  margin-left: 0.5rem;
+}
+
+/* Drop zone */
 #drop-zone {
   border: 2px dashed var(--border);
   border-radius: 8px;
@@ -90,6 +106,40 @@ h2 {
   display: none;
 }
 
+/* File list */
+#file-list {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.file-tag .remove-file {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.file-tag .remove-file:hover {
+  color: var(--danger);
+}
+
 .help {
   margin-top: 0.75rem;
   font-size: 0.8rem;
@@ -101,13 +151,17 @@ label {
   margin-bottom: 0.5rem;
 }
 
-select {
+select, input[type="text"] {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.5rem 1rem;
   font-size: 1rem;
+}
+
+input[type="text"]::placeholder {
+  color: var(--muted);
 }
 
 button {
@@ -126,6 +180,120 @@ button:hover {
   background: var(--accent-hover);
 }
 
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Table controls */
+.table-controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.table-controls input[type="text"] {
+  flex: 1;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+th {
+  background: var(--bg);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+tbody tr:hover {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.mono {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.8rem;
+}
+
+.gain {
+  color: var(--success);
+}
+
+.loss {
+  color: var(--danger);
+}
+
+.warning {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+.table-count {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+details {
+  margin-top: 1rem;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--warning);
+  font-size: 0.85rem;
+}
+
+details ul {
+  margin: 0.5rem 0 0 1.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 footer {
   text-align: center;
   padding: 2rem 1rem;
@@ -140,4 +308,27 @@ footer a {
 
 footer a:hover {
   text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  main {
+    padding: 1rem 0.5rem;
+  }
+
+  .table-controls {
+    flex-direction: column;
+  }
+
+  .export-buttons {
+    flex-direction: column;
+  }
+
+  table {
+    font-size: 0.75rem;
+  }
+
+  th, td {
+    padding: 0.4rem 0.5rem;
+  }
 }
