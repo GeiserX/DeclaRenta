@@ -14,6 +14,13 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import {
+  detectDelimiter,
+  parseCsvLine,
+  parseNumber,
+  convertDateDMY,
+  findColumn,
+} from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // Header detection patterns (multi-language)
@@ -43,85 +50,6 @@ const WITHHOLDING_PATTERNS = [
   /dividendbelasting/i,
   /quellensteuer/i,
 ];
-
-// ---------------------------------------------------------------------------
-// CSV helpers
-// ---------------------------------------------------------------------------
-
-/** Auto-detect delimiter by checking the header line */
-function detectDelimiter(headerLine: string): string {
-  // If header has semicolons, it's likely EU-formatted with semicolons
-  const semicolons = (headerLine.match(/;/g) ?? []).length;
-  const commas = (headerLine.match(/,/g) ?? []).length;
-  return semicolons > commas ? ";" : ",";
-}
-
-/** Parse a single CSV line, handling quoted fields */
-function parseCsvLine(line: string, delimiter: string): string[] {
-  const fields: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]!;
-    if (char === '"') {
-      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === delimiter && !inQuotes) {
-      fields.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  fields.push(current);
-  return fields;
-}
-
-/**
- * Parse a number that may use EU format (dot thousands, comma decimal).
- * Handles: "1.234,56" → "1234.56", "-175,50" → "-175.50", "175.50" → "175.50"
- */
-function parseNumber(val: string): string {
-  const trimmed = val.trim();
-  if (!trimmed) return "0";
-
-  // If it has both dot and comma, the last one is the decimal separator
-  const lastDot = trimmed.lastIndexOf(".");
-  const lastComma = trimmed.lastIndexOf(",");
-
-  if (lastComma > lastDot) {
-    // EU format: dots are thousands, comma is decimal
-    return trimmed.replace(/\./g, "").replace(",", ".");
-  }
-  if (lastDot > lastComma && lastComma >= 0) {
-    // US/UK format: commas are thousands, dot is decimal
-    return trimmed.replace(/,/g, "");
-  }
-  // Only one separator or none — comma might be decimal (no thousands)
-  if (lastComma >= 0 && lastDot < 0) {
-    return trimmed.replace(",", ".");
-  }
-  return trimmed;
-}
-
-/** Convert DD-MM-YYYY to YYYYMMDD */
-function convertDate(date: string): string {
-  const trimmed = date.trim();
-  const match = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (!match) return trimmed;
-  return `${match[3]}${match[2]}${match[1]}`;
-}
-
-/** Find column index by checking header against a list of known names */
-function findColumn(headers: string[], names: string[]): number {
-  const lowerNames = names.map((n) => n.toLowerCase());
-  return headers.findIndex((h) => lowerNames.includes(h.toLowerCase().trim()));
-}
 
 // ---------------------------------------------------------------------------
 // Transactions CSV parser
@@ -258,7 +186,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const fields = parseCsvLine(line, delimiter);
 
     const dateStr = fields[cols.date] ?? "";
-    const tradeDate = convertDate(dateStr);
+    const tradeDate = convertDateDMY(dateStr);
     const quantity = parseNumber(fields[cols.quantity] ?? "0");
     const price = parseNumber(fields[cols.price] ?? "0");
     const currency = cols.priceCurrency >= 0 ? (fields[cols.priceCurrency] ?? "").trim() : "";
@@ -400,7 +328,7 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     const fields = parseCsvLine(line, delimiter);
 
     const dateStr = fields[cols.date] ?? "";
-    const tradeDate = convertDate(dateStr);
+    const tradeDate = convertDateDMY(dateStr);
     const description = (fields[cols.description] ?? "").trim();
     const isin = (fields[cols.isin] ?? "").trim();
     const product = (fields[cols.product] ?? "").trim();

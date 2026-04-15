@@ -5,7 +5,10 @@
  *   declarenta convert --input flex2025.xml --year 2025
  *   declarenta convert --input flex2023.xml --input flex2024.xml --input flex2025.xml --year 2025
  *   declarenta convert --input flex.xml --year 2025 --output report.json
+ *   declarenta convert --input flex.xml --year 2025 --format pdf --output report.pdf
  *   declarenta modelo720 --input flex.xml --year 2025 --nif 12345678A
+ *   declarenta modelo721 --input positions.json --year 2025 --nif 12345678A
+ *   declarenta d6 --input flex.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
  */
 
 import { readFileSync, writeFileSync } from "fs";
@@ -17,7 +20,10 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
+import { generateD6Report } from "../generators/d6.js";
+import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
+import { normalizeDate } from "../engine/dates.js";
 
 // Read version from package.json (single source of truth)
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version: string };
@@ -29,61 +35,95 @@ const program = new Command();
 
 program
   .name("declarenta")
-  .description("Convert foreign broker reports into Spanish tax declarations")
+  .description("Convert foreign broker reports (IBKR, Degiro, Scalable Capital, eToro, Freedom24) into Spanish tax declarations (Modelo 100, 720, D-6)")
   .version(pkg.version);
+
+// ---------------------------------------------------------------------------
+// Helper: parse and merge broker files
+// ---------------------------------------------------------------------------
+
+function parseAndMerge(
+  inputFiles: string[],
+  brokerName?: string,
+): { merged: Statement; brokerNames: string[] } {
+  const merged: Statement = {
+    accountId: "",
+    fromDate: "",
+    toDate: "",
+    period: "",
+    trades: [],
+    cashTransactions: [],
+    corporateActions: [],
+    openPositions: [],
+    securitiesInfo: [],
+  };
+  const brokerNames: string[] = [];
+
+  for (const file of inputFiles) {
+    // Try binary read for XLSX (eToro), fallback to UTF-8 for text formats
+    let content: string;
+    try {
+      content = readFileSync(file, "utf-8");
+    } catch {
+      // Binary file — try as buffer and convert
+      const buf = readFileSync(file);
+      content = buf.toString("utf-8");
+    }
+
+    const parser = brokerName ? getBroker(brokerName) : detectBroker(content);
+    if (!parser) {
+      const available = brokerParsers.map((p) => p.name).join(", ");
+      throw new Error(
+        brokerName
+          ? `Broker desconocido: "${brokerName}". Disponibles: ${available}`
+          : `No se pudo detectar el broker del fichero ${file}. Usa --broker para especificarlo. Disponibles: ${available}`,
+      );
+    }
+
+    const statement = parser.parse(content);
+    merged.accountId = merged.accountId || statement.accountId;
+    merged.trades.push(...statement.trades);
+    merged.cashTransactions.push(...statement.cashTransactions);
+    merged.corporateActions.push(...statement.corporateActions);
+    merged.openPositions = statement.openPositions;
+    merged.securitiesInfo.push(...statement.securitiesInfo);
+    brokerNames.push(parser.name);
+
+    console.error(`  [${parser.name}] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
+  }
+
+  // Sort trades chronologically for cross-broker FIFO
+  merged.trades.sort((a, b) =>
+    normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
+  );
+
+  return { merged, brokerNames };
+}
+
+// ---------------------------------------------------------------------------
+// Command: convert
+// ---------------------------------------------------------------------------
 
 program
   .command("convert")
-  .description("Convert IBKR Flex Query XML to Modelo 100 casilla values")
-  .requiredOption("-i, --input <files...>", "Broker report file(s). Pass multiple for cross-year FIFO")
+  .description("Convert broker reports to Modelo 100 casilla values. Supports: IBKR, Degiro, Scalable Capital, eToro, Freedom24")
+  .requiredOption("-i, --input <files...>", "Broker report file(s). Pass multiple for cross-year FIFO or cross-broker")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option("-f, --format <format>", "Output format: json or csv", "json")
+  .option("-f, --format <format>", "Output format: json, csv, or pdf", "json")
   .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`)
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string }) => {
+  .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
-      // 1. Parse all broker files and merge into a single statement
-      const merged: Statement = {
-        accountId: "",
-        fromDate: "",
-        toDate: "",
-        period: "",
-        trades: [],
-        cashTransactions: [],
-        corporateActions: [],
-        openPositions: [],
-        securitiesInfo: [],
-      };
-
-      for (const file of opts.input) {
-        const content = readFileSync(file, "utf-8");
-
-        // Resolve parser: explicit --broker flag or auto-detect
-        const parser = opts.broker ? getBroker(opts.broker) : detectBroker(content);
-        if (!parser) {
-          const available = brokerParsers.map((p) => p.name).join(", ");
-          throw new Error(
-            opts.broker
-              ? `Broker desconocido: "${opts.broker}". Disponibles: ${available}`
-              : `No se pudo detectar el broker del fichero ${file}. Usa --broker para especificarlo. Disponibles: ${available}`,
-          );
-        }
-
-        const statement = parser.parse(content);
-        merged.accountId = merged.accountId || statement.accountId;
-        merged.trades.push(...statement.trades);
-        merged.cashTransactions.push(...statement.cashTransactions);
-        merged.corporateActions.push(...statement.corporateActions);
-        merged.openPositions = statement.openPositions; // Use last file's positions
-        merged.securitiesInfo.push(...statement.securitiesInfo);
-        console.error(`  [${parser.name}] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
-      }
-
+      // 1. Parse and merge
+      const { merged, brokerNames } = parseAndMerge(opts.input, opts.broker);
+      const uniqueBrokers = [...new Set(brokerNames)];
+      console.error(`  Brokers: ${uniqueBrokers.join(", ")}`);
       console.error(`  Total: ${merged.trades.length} operaciones, ${merged.cashTransactions.length} transacciones`);
 
-      // 2. Detect currencies and fetch ECB rates for ALL years involved
+      // 2. Detect currencies and fetch ECB rates
       const currencies = new Set<string>();
       for (const t of merged.trades) currencies.add(t.currency);
       for (const c of merged.cashTransactions) currencies.add(c.currency);
@@ -92,7 +132,6 @@ program
       console.error(`  Divisas detectadas: ${[...currencies].join(", ") || "solo EUR"}`);
       console.error("  Obteniendo tipos de cambio ECB...");
 
-      // Fetch ECB rates for all years covered by the input files
       const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
       years.add(opts.year);
       const allRates: EcbRateMap = new Map();
@@ -104,11 +143,19 @@ program
       }
       console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...years].sort().join(", ")})`);
 
-      // 3. Generate tax report (processes ALL years, filters disposals to target year)
+      // 3. Generate tax report
       const report = generateTaxReport(merged, allRates, opts.year);
 
       // 4. Format output
-      if (opts.format === "csv") {
+      if (opts.format === "pdf") {
+        const pdfBuffer = await generatePdfReport(report);
+        if (opts.output) {
+          writeFileSync(opts.output, pdfBuffer);
+          console.error(`\nPDF guardado en ${opts.output}`);
+        } else {
+          process.stdout.write(pdfBuffer);
+        }
+      } else if (opts.format === "csv") {
         const csv = formatCsv(report);
         if (opts.output) {
           writeFileSync(opts.output, csv);
@@ -134,7 +181,7 @@ program
         }
       }
 
-      // 6. Print summary to stderr
+      // 6. Print summary
       printSummary(report);
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);
@@ -142,9 +189,13 @@ program
     }
   });
 
+// ---------------------------------------------------------------------------
+// Command: modelo720
+// ---------------------------------------------------------------------------
+
 program
   .command("modelo720")
-  .description("Generate Modelo 720 fixed-width file from IBKR positions")
+  .description("Generate Modelo 720 fixed-width file from broker positions")
   .requiredOption("-i, --input <file>", "Broker report file")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .requiredOption("--nif <nif>", "NIF del declarante")
@@ -198,6 +249,91 @@ program
       process.exit(1);
     }
   });
+
+// ---------------------------------------------------------------------------
+// Command: d6
+// ---------------------------------------------------------------------------
+
+program
+  .command("d6")
+  .description("Generate Modelo D-6 AFORIX guide from broker positions")
+  .requiredOption("-i, --input <file>", "Broker report file")
+  .requiredOption("-y, --year <year>", "Tax year", parseInt)
+  .requiredOption("--nif <nif>", "NIF del declarante")
+  .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
+  .option("-o, --output <file>", "Output file. Defaults to stdout")
+  .option("-f, --format <format>", "Output format: json or text", "text")
+  .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; format: string }) => {
+    try {
+      const content = readFileSync(opts.input, "utf-8");
+      const parser = detectBroker(content);
+      if (!parser) {
+        throw new Error(`No se pudo detectar el broker del fichero ${opts.input}. Formatos soportados: ${brokerParsers.map((p) => `${p.name} (${p.formats.join(", ")})`).join("; ")}`);
+      }
+      const statement = parser.parse(content);
+
+      const currencies = new Set<string>();
+      for (const p of statement.openPositions) currencies.add(p.currency);
+      currencies.delete("EUR");
+
+      const rateMap = await fetchEcbRates(opts.year, [...currencies]);
+      const report = generateD6Report(statement.openPositions, rateMap, opts.year, opts.name, opts.nif);
+
+      if (report.positions.length === 0) {
+        console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
+        return;
+      }
+
+      if (opts.format === "json") {
+        const json = JSON.stringify(report, null, 2);
+        if (opts.output) {
+          writeFileSync(opts.output, json);
+          console.error(`D-6 JSON guardado en ${opts.output}`);
+        } else {
+          console.log(json);
+        }
+      } else {
+        const text = report.guide.join("\n");
+        if (opts.output) {
+          writeFileSync(opts.output, text);
+          console.error(`D-6 guía guardada en ${opts.output}`);
+        } else {
+          console.log(text);
+        }
+      }
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Command: modelo721
+// ---------------------------------------------------------------------------
+
+program
+  .command("modelo721")
+  .description("Generate Modelo 721 fixed-width file for crypto assets (stub — no crypto parsers yet)")
+  .requiredOption("-i, --input <file>", "JSON file with crypto positions")
+  .requiredOption("-y, --year <year>", "Tax year", parseInt)
+  .requiredOption("--nif <nif>", "NIF del declarante")
+  .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
+  .option("-o, --output <file>", "Output file. Defaults to stdout")
+  .option("--phone <phone>", "Teléfono de contacto", "")
+  .action(() => {
+    try {
+      console.error("⚠ Modelo 721 es un stub: no hay parsers de crypto todavía.");
+      console.error("  El fichero de entrada debe ser un JSON con las posiciones manualmente.");
+      console.error("  Formato esperado: [{ assetId, description, exchangeName, countryCode, quantity, valuationEur, acquisitionCostEur }]");
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// Formatters
+// ---------------------------------------------------------------------------
 
 function formatReport(report: ReturnType<typeof generateTaxReport>) {
   return {
