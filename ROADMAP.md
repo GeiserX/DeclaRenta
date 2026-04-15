@@ -63,10 +63,12 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Generador informe PDF | Implementado | `src/generators/pdf.ts` |
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
 | CLI (`convert`, `modelo720`, `d6`, `modelo721`) | Implementado | `src/cli/index.ts` |
-| Web UI: selector broker, tabla operaciones, filtros, búsqueda | Implementado | `src/web/` |
+| Web UI: selector broker, tabla operaciones, filtros, búsqueda, ordenación | Implementado | `src/web/` |
+| Web UI: modo oscuro/claro con detección de preferencia del sistema | Implementado | `src/web/` |
+| Web UI: responsive (tablet, móvil, móvil pequeño) | Implementado | `src/web/` |
 | Interfaz `BrokerParser` + registry auto-detección (5 brokers) | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
 | FIFO cross-broker (orden cronológico global) | Implementado | `src/cli/index.ts`, `src/web/main.ts` |
-| 170 tests | Passing | `tests/` |
+| 183 tests | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -233,7 +235,7 @@ Tareas:
 #### Modelo 720 — mejoras
 
 - [ ] Detección automática de umbral 50.000 € por categoría (valores, cuentas, inmuebles)
-- [ ] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
+- [x] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
 - [x] Primera fecha de adquisición por posición (desde lotes FIFO)
 - [ ] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
   - Acciones cotizadas: media del último trimestre (no cierre 31/dic)
@@ -260,7 +262,7 @@ Tareas:
 
 - [x] Informe PDF descargable: resumen ejecutivo + detalle por operación (pdfkit)
 - [x] Formato orientado a llevar al asesor fiscal o adjuntar a la declaración
-- [ ] Incluir tipo ECB utilizado en cada operación para auditoría
+- [x] Incluir tipo ECB utilizado en cada operación para auditoría
 
 - [ ] Publicar **v0.5.0**
 
@@ -273,16 +275,16 @@ Tareas:
 > **Objetivo**: experiencia web de calidad que elimine cualquier barrera de entrada. Zero-server.
 
 - [ ] **Wizard multi-paso**: elige broker(s) → sube fichero(s) → revisa datos → configura (NIF, año) → genera resultados → descarga
-- [ ] **Tabla interactiva de operaciones**: ordenación, filtros por ISIN/fecha/tipo, búsqueda
+- [x] **Tabla interactiva de operaciones**: ordenación, filtros por ISIN/fecha/tipo, búsqueda
 - [ ] **Vista por casillas**: cada casilla expandible con desglose de las operaciones que la componen
 - [ ] **Gráficos**: distribución por tipo de activo, G/P por mes, composición por divisa, retenciones por país
 - [ ] **Comparador año a año**: si el usuario procesa múltiples años
-- [ ] **Modo oscuro/claro** con detección de preferencia del sistema
+- [x] **Modo oscuro/claro** con detección de preferencia del sistema
 - [ ] **PWA**: funciona offline una vez cargada (Service Worker)
 - [ ] **Accesibilidad WCAG 2.1 AA**: navegación por teclado, screen reader, contraste
 - [ ] **i18n**: castellano (default), catalán, euskera, gallego, inglés
 - [ ] **Deploy GitHub Pages**: coste cero de hosting, dominio custom `declarenta.es`
-- [ ] **Responsive**: móvil, tablet, desktop
+- [x] **Responsive**: móvil, tablet, desktop
 - [ ] Publicar **v0.8.0**
 
 **Criterio de éxito**: un usuario sin experiencia técnica puede generar su informe en <3 minutos desde la web.

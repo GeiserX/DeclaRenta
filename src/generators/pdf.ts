@@ -144,14 +144,15 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           .fill(COLORS.primary);
 
         const cols = [
-          { label: "ISIN", x: MARGIN + 4, w: 80 },
-          { label: "Símbolo", x: MARGIN + 88, w: 60 },
-          { label: "F. Compra", x: MARGIN + 152, w: 58 },
-          { label: "F. Venta", x: MARGIN + 214, w: 58 },
-          { label: "Uds.", x: MARGIN + 276, w: 35 },
-          { label: "Coste EUR", x: MARGIN + 315, w: 65 },
-          { label: "Venta EUR", x: MARGIN + 384, w: 65 },
-          { label: "G/P EUR", x: MARGIN + 453, w: 55 },
+          { label: "ISIN", x: MARGIN + 4, w: 72 },
+          { label: "Símbolo", x: MARGIN + 80, w: 50 },
+          { label: "F. Compra", x: MARGIN + 134, w: 54 },
+          { label: "F. Venta", x: MARGIN + 192, w: 54 },
+          { label: "Uds.", x: MARGIN + 250, w: 30 },
+          { label: "Coste EUR", x: MARGIN + 284, w: 58 },
+          { label: "Venta EUR", x: MARGIN + 346, w: 58 },
+          { label: "G/P EUR", x: MARGIN + 408, w: 50 },
+          { label: "Tipo ECB", x: MARGIN + 462, w: 46 },
         ];
 
         doc.fontSize(FONT_SIZE.small).fillColor("#ffffff");
@@ -183,6 +184,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           doc.text(d.costBasisEur.toFixed(2), cols[5]!.x, rowY + 2, { width: cols[5]!.w });
           doc.text(d.proceedsEur.toFixed(2), cols[6]!.x, rowY + 2, { width: cols[6]!.w });
           doc.fillColor(glColor).text(gainLoss.toFixed(2), cols[7]!.x, rowY + 2, { width: cols[7]!.w });
+          doc.fillColor(COLORS.muted).text(d.sellEcbRate.toFixed(4), cols[8]!.x, rowY + 2, { width: cols[8]!.w });
 
           doc.y = rowY + 14;
           checkPageBreak(doc);
@@ -204,7 +206,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         for (const d of report.dividends.entries.slice(0, 30)) {
           doc.fontSize(FONT_SIZE.small).fillColor(COLORS.text)
             .text(
-              `${formatDate(d.payDate)}  ${d.symbol.padEnd(12)}  ${d.isin}  Bruto: ${d.grossAmountEur.toFixed(2)} EUR  Retención: ${d.withholdingTaxEur.toFixed(2)} EUR  (${d.withholdingCountry})`,
+              `${formatDate(d.payDate)}  ${d.symbol.padEnd(12)}  ${d.isin}  Bruto: ${d.grossAmountEur.toFixed(2)} EUR  Retención: ${d.withholdingTaxEur.toFixed(2)} EUR  (${d.withholdingCountry})  ECB: ${d.ecbRate.toFixed(4)}`,
               MARGIN,
             );
           doc.moveDown(0.2);
@@ -239,6 +241,15 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           doc.moveDown(0.2);
         }
       }
+
+      // --- ECB footnote ---
+      checkPageBreak(doc);
+      doc.moveDown(0.5);
+      doc.fontSize(FONT_SIZE.small).fillColor(COLORS.muted)
+        .text(
+          "Tipo ECB: tipo de cambio oficial del Banco Central Europeo (EUR por 1 unidad de divisa extranjera) en la fecha de la operación. Fuente: ECB SDMX API.",
+          MARGIN,
+        );
 
       // --- Footer ---
       doc.fontSize(FONT_SIZE.small).fillColor(COLORS.muted)

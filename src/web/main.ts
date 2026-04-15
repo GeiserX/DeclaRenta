@@ -16,6 +16,36 @@ import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
+// ---------------------------------------------------------------------------
+// Theme toggle (auto / light / dark)
+// ---------------------------------------------------------------------------
+
+type ThemeMode = "auto" | "light" | "dark";
+
+const THEME_ICONS: Record<ThemeMode, string> = { auto: "\u25D1", light: "\u2600", dark: "\u263E" };
+const THEME_CYCLE: ThemeMode[] = ["auto", "light", "dark"];
+
+function applyTheme(mode: ThemeMode) {
+  const root = document.documentElement;
+  if (mode === "auto") {
+    root.removeAttribute("data-theme");
+  } else {
+    root.setAttribute("data-theme", mode);
+  }
+  const btn = document.getElementById("theme-toggle");
+  if (btn) btn.textContent = THEME_ICONS[mode];
+}
+
+const savedTheme = (localStorage.getItem("theme") as ThemeMode | null) ?? "auto";
+applyTheme(savedTheme);
+
+document.getElementById("theme-toggle")?.addEventListener("click", () => {
+  const current = (localStorage.getItem("theme") as ThemeMode | null) ?? "auto";
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length]!;
+  localStorage.setItem("theme", next);
+  applyTheme(next);
+});
+
 /** Escape HTML to prevent XSS from user-derived content */
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -219,6 +249,34 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Sort state
+// ---------------------------------------------------------------------------
+
+type SortDir = "asc" | "desc" | null;
+interface SortState { col: string; dir: SortDir }
+
+let opsSort: SortState = { col: "", dir: null };
+let divSort: SortState = { col: "", dir: null };
+
+function nextDir(current: SortDir): SortDir {
+  if (current === null) return "asc";
+  if (current === "asc") return "desc";
+  return null;
+}
+
+function attachSortHandlers(tableEl: HTMLElement, state: { get: () => SortState; set: (s: SortState) => void }, render: () => void) {
+  tableEl.querySelectorAll("th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = (th as HTMLElement).dataset.col!;
+      const cur = state.get();
+      const dir = cur.col === col ? nextDir(cur.dir) : "asc";
+      state.set({ col: dir ? col : "", dir });
+      render();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Search and filter
 // ---------------------------------------------------------------------------
 
@@ -259,12 +317,16 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
   renderDividendsTable(report);
 }
 
+function sortIndicator(col: string, state: SortState): string {
+  return state.col === col ? ` ${state.dir}` : "";
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
   const filter = opsFilter.value;
 
-  let disposals = currentReport.capitalGains.disposals;
+  let disposals = [...currentReport.capitalGains.disposals];
 
   if (search) {
     disposals = disposals.filter(
@@ -277,19 +339,41 @@ function renderOperationsTable() {
     disposals = disposals.filter((d) => d.gainLossEur.lessThan(0));
   }
 
+  // Apply sort
+  if (opsSort.dir && opsSort.col) {
+    const dir = opsSort.dir === "asc" ? 1 : -1;
+    const col = opsSort.col;
+    disposals.sort((a, b) => {
+      let cmp = 0;
+      if (col === "isin") cmp = a.isin.localeCompare(b.isin);
+      else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
+      else if (col === "buyDate") cmp = a.acquireDate.localeCompare(b.acquireDate);
+      else if (col === "sellDate") cmp = a.sellDate.localeCompare(b.sellDate);
+      else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
+      else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
+      else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
+      else if (col === "gl") cmp = a.gainLossEur.minus(b.gainLossEur).toNumber();
+      else if (col === "days") cmp = a.holdingPeriodDays - b.holdingPeriodDays;
+      return cmp * dir;
+    });
+  }
+
+  const th = (label: string, col: string) =>
+    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}">${label}</th>`;
+
   opsTable.innerHTML = `
-    <table class="sortable">
+    <table>
       <thead>
         <tr>
-          <th>ISIN</th>
-          <th>Símbolo</th>
-          <th>F. Compra</th>
-          <th>F. Venta</th>
-          <th>Uds.</th>
-          <th>Coste EUR</th>
-          <th>Venta EUR</th>
-          <th>G/P EUR</th>
-          <th>Días</th>
+          ${th("ISIN", "isin")}
+          ${th("Símbolo", "symbol")}
+          ${th("F. Compra", "buyDate")}
+          ${th("F. Venta", "sellDate")}
+          ${th("Uds.", "qty")}
+          ${th("Coste EUR", "cost")}
+          ${th("Venta EUR", "proceeds")}
+          ${th("G/P EUR", "gl")}
+          ${th("Días", "days")}
         </tr>
       </thead>
       <tbody>
@@ -310,6 +394,12 @@ function renderOperationsTable() {
     </table>
     <p class="table-count">${disposals.length} operación(es)</p>
   `;
+
+  attachSortHandlers(
+    opsTable,
+    { get: () => opsSort, set: (s) => { opsSort = s; } },
+    renderOperationsTable,
+  );
 }
 
 function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
@@ -318,20 +408,40 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
     return;
   }
 
+  const entries = [...report.dividends.entries];
+
+  if (divSort.dir && divSort.col) {
+    const dir = divSort.dir === "asc" ? 1 : -1;
+    const col = divSort.col;
+    entries.sort((a, b) => {
+      let cmp = 0;
+      if (col === "isin") cmp = a.isin.localeCompare(b.isin);
+      else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
+      else if (col === "date") cmp = a.payDate.localeCompare(b.payDate);
+      else if (col === "gross") cmp = a.grossAmountEur.minus(b.grossAmountEur).toNumber();
+      else if (col === "wht") cmp = a.withholdingTaxEur.minus(b.withholdingTaxEur).toNumber();
+      else if (col === "country") cmp = a.withholdingCountry.localeCompare(b.withholdingCountry);
+      return cmp * dir;
+    });
+  }
+
+  const th = (label: string, col: string) =>
+    `<th class="sortable${sortIndicator(col, divSort)}" data-col="${col}">${label}</th>`;
+
   divsTable.innerHTML = `
     <table>
       <thead>
         <tr>
-          <th>ISIN</th>
-          <th>Símbolo</th>
-          <th>Fecha</th>
-          <th>Bruto EUR</th>
-          <th>Retención EUR</th>
-          <th>País</th>
+          ${th("ISIN", "isin")}
+          ${th("Símbolo", "symbol")}
+          ${th("Fecha", "date")}
+          ${th("Bruto EUR", "gross")}
+          ${th("Retención EUR", "wht")}
+          ${th("País", "country")}
         </tr>
       </thead>
       <tbody>
-        ${report.dividends.entries.map((d) => `
+        ${entries.map((d) => `
           <tr>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
@@ -343,6 +453,12 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
         `).join("")}
       </tbody>
     </table>
-    <p class="table-count">${report.dividends.entries.length} dividendo(s)</p>
+    <p class="table-count">${entries.length} dividendo(s)</p>
   `;
+
+  attachSortHandlers(
+    divsTable,
+    { get: () => divSort, set: (s) => { divSort = s; } },
+    () => renderDividendsTable(report),
+  );
 }
