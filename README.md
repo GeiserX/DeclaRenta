@@ -35,7 +35,7 @@ Si inviertes con un broker extranjero, hacer la renta es un infierno:
 - **Regla anti-churning** de 2 meses que nadie detecta automáticamente
 - **Doble imposición** internacional que hay que calcular a mano
 - **Modelo 720** obligatorio si tus activos en el extranjero superan 50.000 EUR
-- **Modelo D-6** obligatorio para cualquier valor extranjero a 31 de diciembre
+- **Modelo D-6** para titulares de valores extranjeros a 31 de diciembre (verificar normativa vigente)
 
 DeclaRenta automatiza todo esto gratis.
 
@@ -129,7 +129,7 @@ git clone https://github.com/GeiserX/DeclaRenta.git
 cd DeclaRenta
 npm install
 
-npm test              # 170 tests
+npm test              # Ejecuta la suite de tests
 npm run dev           # Servidor web de desarrollo
 npm run build         # Build completo (lib + web)
 npm run lint          # ESLint
