@@ -1,34 +1,72 @@
-name: GitHub Release
+name: Auto Release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Create GitHub Release
+    name: Bump version and release
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get version from tag
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Get latest tag and bump patch
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          LATEST=$(git tag -l "v*" --sort=-version:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            LATEST="v0.0.0"
+          fi
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+          VERSION="${LATEST#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "Bumping $LATEST -> $NEW_TAG"
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
+          git push origin "${{ steps.version.outputs.new_tag }}"
+
+      - name: Sync package.json version
+        run: |
+          VERSION="${{ steps.version.outputs.new_tag }}"
+          VERSION="${VERSION#v}"
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            npm version "$VERSION" --no-git-tag-version
+            git add package.json package-lock.json
+            git commit -m "chore: bump version to ${{ steps.version.outputs.new_tag }} [skip ci]"
+            git push origin main
+          fi
 
       - name: Generate changelog
-        id: changelog
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          PREV_TAG=$(git tag -l "v*" --sort=-version:refname | sed -n '2p')
+          VERSION="${{ steps.version.outputs.new_tag }}"
+          PREV_TAG="${{ steps.version.outputs.latest }}"
 
-          if [ -z "$PREV_TAG" ]; then
+          if [ "$PREV_TAG" = "v0.0.0" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
 
@@ -62,9 +100,10 @@ jobs:
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...$VERSION"
           } > changelog.md
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.new_tag }}
           body_path: changelog.md
           draft: false
           prerelease: false
