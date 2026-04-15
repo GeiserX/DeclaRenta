@@ -11,8 +11,8 @@
 import { readFileSync, writeFileSync } from "fs";
 import { Command } from "commander";
 import Decimal from "decimal.js";
-import { parseIbkrFlexXml } from "../parsers/ibkr.js";
-import type { FlexStatement } from "../types/ibkr.js";
+import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
@@ -35,16 +35,17 @@ program
 program
   .command("convert")
   .description("Convert IBKR Flex Query XML to Modelo 100 casilla values")
-  .requiredOption("-i, --input <files...>", "IBKR Flex Query XML file(s). Pass multiple for cross-year FIFO")
+  .requiredOption("-i, --input <files...>", "Broker report file(s). Pass multiple for cross-year FIFO")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("-f, --format <format>", "Output format: json or csv", "json")
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string }) => {
+  .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`)
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
-      // 1. Parse all IBKR XMLs and merge into a single statement
-      const merged: FlexStatement = {
+      // 1. Parse all broker files and merge into a single statement
+      const merged: Statement = {
         accountId: "",
         fromDate: "",
         toDate: "",
@@ -57,15 +58,27 @@ program
       };
 
       for (const file of opts.input) {
-        const xml = readFileSync(file, "utf-8");
-        const statement = parseIbkrFlexXml(xml);
+        const content = readFileSync(file, "utf-8");
+
+        // Resolve parser: explicit --broker flag or auto-detect
+        const parser = opts.broker ? getBroker(opts.broker) : detectBroker(content);
+        if (!parser) {
+          const available = brokerParsers.map((p) => p.name).join(", ");
+          throw new Error(
+            opts.broker
+              ? `Broker desconocido: "${opts.broker}". Disponibles: ${available}`
+              : `No se pudo detectar el broker del fichero ${file}. Usa --broker para especificarlo. Disponibles: ${available}`,
+          );
+        }
+
+        const statement = parser.parse(content);
         merged.accountId = merged.accountId || statement.accountId;
         merged.trades.push(...statement.trades);
         merged.cashTransactions.push(...statement.cashTransactions);
         merged.corporateActions.push(...statement.corporateActions);
         merged.openPositions = statement.openPositions; // Use last file's positions
         merged.securitiesInfo.push(...statement.securitiesInfo);
-        console.error(`  ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
+        console.error(`  [${parser.name}] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
       }
 
       console.error(`  Total: ${merged.trades.length} operaciones, ${merged.cashTransactions.length} transacciones`);
@@ -132,7 +145,7 @@ program
 program
   .command("modelo720")
   .description("Generate Modelo 720 fixed-width file from IBKR positions")
-  .requiredOption("-i, --input <file>", "IBKR Flex Query XML file")
+  .requiredOption("-i, --input <file>", "Broker report file")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
@@ -140,8 +153,12 @@ program
   .option("--phone <phone>", "Teléfono de contacto", "")
   .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; phone: string }) => {
     try {
-      const xml = readFileSync(opts.input, "utf-8");
-      const statement = parseIbkrFlexXml(xml);
+      const content = readFileSync(opts.input, "utf-8");
+      const parser = detectBroker(content);
+      if (!parser) {
+        throw new Error(`No se pudo detectar el broker del fichero ${opts.input}. Formatos soportados: ${brokerParsers.map((p) => `${p.name} (${p.formats.join(", ")})`).join("; ")}`);
+      }
+      const statement = parser.parse(content);
 
       const currencies = new Set<string>();
       for (const p of statement.openPositions) currencies.add(p.currency);
@@ -153,7 +170,7 @@ program
       const surname = nameParts[0] ?? "";
       const firstName = nameParts[1] ?? "";
 
-      const content = generateModelo720(statement.openPositions, rateMap, {
+      const output720 = generateModelo720(statement.openPositions, rateMap, {
         nif: opts.nif,
         surname,
         name: firstName,
@@ -165,16 +182,16 @@ program
         isReplacement: false,
       });
 
-      if (!content) {
+      if (!output720) {
         console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
         return;
       }
 
       if (opts.output) {
-        writeFileSync(opts.output, content, { encoding: "latin1" });
+        writeFileSync(opts.output, output720, { encoding: "latin1" });
         console.error(`Modelo 720 guardado en ${opts.output}`);
       } else {
-        console.log(content);
+        console.log(output720);
       }
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);
