@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Get latest tag and bump patch
+      - name: Determine version bump
         id: version
         run: |
           LATEST=$(git tag -l "v*" --sort=-version:refname | head -1)
@@ -37,17 +37,26 @@ jobs:
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+
+          # Check commit messages since last tag for bump type
+          COMMITS=$(git log "$LATEST"..HEAD --pretty=format:"%s" 2>/dev/null || true)
+
+          if echo "$COMMITS" | grep -qiE "^feat(\(|:|\!)"; then
+            # feat: or feat!: → minor bump
+            NEW_MINOR=$((MINOR + 1))
+            NEW_TAG="v${MAJOR}.${NEW_MINOR}.0"
+          elif echo "$COMMITS" | grep -qiE "^(break|BREAKING)"; then
+            # BREAKING CHANGE → major bump
+            NEW_MAJOR=$((MAJOR + 1))
+            NEW_TAG="v${NEW_MAJOR}.0.0"
+          else
+            # fix/chore/docs/etc → patch bump
+            NEW_PATCH=$((PATCH + 1))
+            NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          fi
+
           echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
           echo "Bumping $LATEST -> $NEW_TAG"
-
-      - name: Create tag
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
-          git push origin "${{ steps.version.outputs.new_tag }}"
 
       - name: Sync package.json version
         run: |
@@ -56,10 +65,14 @@ jobs:
           CURRENT=$(node -p "require('./package.json').version")
           if [ "$CURRENT" != "$VERSION" ]; then
             npm version "$VERSION" --no-git-tag-version
-            git add package.json package-lock.json
-            git commit -m "chore: bump version to ${{ steps.version.outputs.new_tag }} [skip ci]"
-            git push origin main
           fi
+
+      - name: Create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
+          git push origin "${{ steps.version.outputs.new_tag }}"
 
       - name: Generate changelog
         run: |
