@@ -16,83 +16,50 @@
   <a href="https://github.com/GeiserX/awesome-spain#readme"><img src="https://img.shields.io/badge/listed%20on-awesome--spain-c60b1e?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgdmlld0JveD0iMCAwIDIwIDE0Ij48cmVjdCB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIGZpbGw9IiNjNjBiMWUiLz48cmVjdCB5PSIzLjUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3IiBmaWxsPSIjZmZjNDAwIi8+PC9zdmc+&labelColor=ffc400" alt="awesome-spain"/></a>
 </p>
 
-IBKR, Degiro, Trade Republic → Modelo 100 (IRPF), Modelo 720, D-6.
+<p align="center">
+  IBKR · Degiro · Scalable Capital · eToro · Freedom24 → Modelo 100 · Modelo 720 · D-6
+</p>
 
-100% open source. 100% en tu navegador. Tus datos nunca salen de tu ordenador.
+<p align="center">
+  100% open source · 100% en tu navegador · Tus datos nunca salen de tu ordenador
+</p>
 
 ---
 
 ## El problema
 
-Si inviertes con un broker extranjero (Interactive Brokers, Degiro, Trade Republic...), hacer la renta es un infierno:
+Si inviertes con un broker extranjero, hacer la renta es un infierno:
 
 - **Renta Web no importa datos** de brokers extranjeros — todo manual
 - **FIFO obligatorio** con tipos ECB oficiales (no los del broker)
 - **Regla anti-churning** de 2 meses que nadie detecta automáticamente
 - **Doble imposición** internacional que hay que calcular a mano
-- **Modelo 720** si tus activos en el extranjero superan 50.000 EUR
+- **Modelo 720** obligatorio si tus activos en el extranjero superan 50.000 EUR
+- **Modelo D-6** para titulares de valores extranjeros a 31 de diciembre (verificar normativa vigente)
 
-TaxDown cobra 75-239 EUR/año sin automatización real. DeclaRenta lo hace gratis.
+DeclaRenta automatiza todo esto gratis.
 
-## Qué hace
+## Brokers soportados
 
-| Funcionalidad | Estado |
-|---|---|
-| Parser IBKR Flex Query XML | v0.1 |
-| Motor FIFO con tipos ECB oficiales | v0.1 |
-| Detección regla anti-churning (2 meses) | v0.1 |
-| Mapeo a casillas Modelo 100 | v0.1 |
-| Cálculo doble imposición (Art. 80 LIRPF) | v0.1 |
-| Generador Modelo 720 (AEAT fixed-width) | v0.1 |
-| Web UI (browser-only) | v0.1 |
-| CLI | v0.1 |
-| Parser Degiro | Planificado |
-| Parser Trade Republic | Planificado |
-| Generador D-6 | Planificado |
-| Informe PDF | Planificado |
+| Broker | Formato | Notas |
+|---|---|---|
+| Interactive Brokers | Flex Query XML | Trades, dividendos, corporate actions, posiciones |
+| Degiro | CSV (transacciones + cartera) | Delimitador auto-detectado (coma/punto y coma) |
+| Scalable Capital | CSV (14 columnas) | Incluye savings plans y distribuciones |
+| eToro | XLSX (cuenta completa) | Posiciones cerradas + dividendos, 6+ versiones de cabeceras |
+| Freedom24 | JSON (report export) | Trades, dividendos, retenciones |
 
-## Inicio rápido
+Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO cruzado.
 
-### Web (recomendado)
+## Modelos fiscales
 
-Visita [declarenta.es](https://declarenta.es) — arrastra tu Flex Query XML y listo. Todo se procesa en tu navegador.
-
-### CLI
-
-```bash
-npm install -g declarenta
-
-# Generar informe para Modelo 100
-declarenta convert --input flex_query.xml --year 2025
-
-# Generar informe y guardar en fichero
-declarenta convert --input flex_query.xml --year 2025 --output informe.json
-
-# Exportar detalle por operación en CSV
-declarenta convert --input flex_query.xml --year 2025 --format csv --output detalle.csv
-
-# Generar Modelo 720
-declarenta modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
-```
-
-### Docker
-
-```bash
-docker run --rm -v $(pwd):/data declarenta convert --input /data/flex_query.xml --year 2025
-```
-
-## Cómo obtener el Flex Query XML de IBKR
-
-1. Inicia sesión en [IBKR Client Portal](https://www.interactivebrokers.com/sso/Login)
-2. Ve a **Reports** → **Flex Queries** → **Custom Flex Queries**
-3. Crea una nueva query con estas secciones: `Trades`, `CashTransactions`, `CorporateActions`, `OpenPositions`, `SecuritiesInfo`
-4. Período: `01/01/YYYY` a `31/12/YYYY` (año fiscal completo)
-5. Formato: **XML**
-6. Ejecuta y descarga
+| Modelo | Descripción | Formato |
+|---|---|---|
+| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0032, 0033, 0588 | JSON, CSV, PDF |
+| **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR) | Fixed-width AEAT |
+| **Modelo D-6** | Inversiones en el exterior (Banco de España / AFORIX) | Guía paso a paso |
 
 ## Casillas del Modelo 100
-
-DeclaRenta calcula automáticamente estas casillas:
 
 | Casilla | Concepto |
 |---|---|
@@ -103,12 +70,57 @@ DeclaRenta calcula automáticamente estas casillas:
 | 0033 | Intereses de cuentas y depósitos |
 | 0588 | Deducción por doble imposición internacional |
 
+## Inicio rápido
+
+### Web (recomendado)
+
+Visita [declarenta.es](https://declarenta.es) — arrastra tus ficheros y listo. Todo se procesa en tu navegador.
+
+Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
+
+### CLI
+
+```bash
+npm install -g declarenta
+
+# Informe Modelo 100 (JSON a stdout)
+declarenta convert --input flex_query.xml --year 2025
+
+# Varios ficheros de distintos brokers
+declarenta convert --input ibkr.xml --input degiro.csv --input etoro.xlsx --year 2025
+
+# Exportar en CSV
+declarenta convert --input flex_query.xml --year 2025 --format csv --output detalle.csv
+
+# Exportar en PDF
+declarenta convert --input flex_query.xml --year 2025 --format pdf --output informe.pdf
+
+# Con compensación de pérdidas de años anteriores (Art. 49 LIRPF)
+declarenta convert --input flex_query.xml --year 2025 --prior-losses perdidas.json
+
+# Modelo 720
+declarenta modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
+
+# Modelo D-6 (guía AFORIX)
+declarenta d6 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
+```
+
+El broker se auto-detecta a partir del contenido del fichero. Se puede forzar con `--broker <nombre>`.
+
+## Motor fiscal
+
+- **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
+- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses
+- **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
+- **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
+- **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
+- **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%
+
 ## Privacidad
 
-- **Modo web**: todo se procesa en JavaScript en tu navegador. Las únicas llamadas de red son para obtener tipos de cambio del BCE (datos públicos).
-- **Modo CLI**: se ejecuta enteramente en tu máquina. Solo se conecta al API del BCE para tipos de cambio.
-- **Sin analytics, sin tracking, sin telemetría.**
-- **Sin cuentas de usuario, sin autenticación.**
+- **Modo web**: todo se procesa en JavaScript en tu navegador. Las únicas llamadas de red son al BCE para tipos de cambio (datos públicos).
+- **Modo CLI**: se ejecuta enteramente en tu máquina. Solo se conecta al API del BCE.
+- Sin analytics, sin tracking, sin telemetría, sin cuentas de usuario.
 
 ## Desarrollo
 
@@ -117,16 +129,11 @@ git clone https://github.com/GeiserX/DeclaRenta.git
 cd DeclaRenta
 npm install
 
-# Tests
-npm test
-
-# Desarrollo web
-npm run dev
-
-# Build
-npm run build
-
-# CLI en desarrollo
+npm test              # Ejecuta la suite de tests
+npm run dev           # Servidor web de desarrollo
+npm run build         # Build completo (lib + web)
+npm run lint          # ESLint
+npm run typecheck     # TypeScript
 npm run cli -- convert --input test.xml --year 2025
 ```
 
@@ -134,10 +141,10 @@ npm run cli -- convert --input test.xml --year 2025
 
 Las contribuciones son bienvenidas. Áreas donde más ayuda se necesita:
 
-- **Parsers de brokers**: Degiro CSV, Trade Republic PDF
-- **Reglas fiscales**: casos edge de FIFO, doble imposición por convenio
-- **Traducciones**: interfaz web en catalán, euskera, gallego
+- **Parsers de brokers**: Trade Republic, Revolut, XTB, MyInvestor
+- **Reglas fiscales**: casos edge de FIFO, convenios de doble imposición por país
 - **Tests**: más fixtures con operaciones reales anonimizadas
+- **Traducciones**: interfaz web en catalán, euskera, gallego
 
 ## Licencia
 
