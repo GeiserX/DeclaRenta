@@ -11,8 +11,8 @@
   <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
   <main id="app">
     <header>
-      <h1>DeclaRenta</h1>
-      <p>Broker extranjero → Renta española</p>
+      <h1>Decla<span class="brand-accent">Renta</span></h1>
+      <p class="subtitle">Broker extranjero → Renta española</p>
       <p class="privacy">Self-hosted. Tus datos no salen de tu equipo.</p>
     </header>
 
@@ -32,6 +32,7 @@
         </label>
       </div>
       <div id="drop-zone">
+        <div class="drop-icon">&#8683;</div>
         <p>Arrastra tu fichero aquí o haz clic para seleccionar</p>
         <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple />
       </div>
@@ -81,6 +82,10 @@
     <p>
       <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> ·
       <strong>Self-hosted · Privacidad total</strong>
+    </p>
+    <p class="credits">
+      Made with <span class="heart">&#9829;</span> by <a href="https://geiser.cloud">Sergio Fernández</a>
+      · <a href="https://github.com/sponsors/GeiserX" class="sponsor-link">Sponsor</a>
     </p>
   </footer>
 
