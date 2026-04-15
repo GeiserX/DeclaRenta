@@ -112,4 +112,44 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
     expect(result.totalCompensated.toFixed(2)).toBe("0.00");
     expect(result.updatedCarryforward).toHaveLength(0);
   });
+
+  it("should add current year income losses to carryforward", () => {
+    const result = applyLossCarryforward(
+      2025,
+      new Decimal("500"),    // Positive gains
+      new Decimal("-1000"),  // Net loss on income
+      [],
+    );
+
+    const incomeLoss = result.updatedCarryforward.find((l) => l.category === "income");
+    expect(incomeLoss).toBeDefined();
+    expect(incomeLoss!.year).toBe(2025);
+    expect(incomeLoss!.remaining.toFixed(2)).toBe("-1000.00");
+  });
+
+  it("should add both gains and income losses when both negative", () => {
+    const result = applyLossCarryforward(
+      2025,
+      new Decimal("-3000"),  // Net loss on gains
+      new Decimal("-500"),   // Net loss on income
+      [],
+    );
+
+    expect(result.updatedCarryforward).toHaveLength(2);
+    const gainsLoss = result.updatedCarryforward.find((l) => l.category === "gains");
+    const incomeLoss = result.updatedCarryforward.find((l) => l.category === "income");
+    expect(gainsLoss!.remaining.toFixed(2)).toBe("-3000.00");
+    expect(incomeLoss!.remaining.toFixed(2)).toBe("-500.00");
+  });
+
+  it("should not create carryforward when both positive", () => {
+    const result = applyLossCarryforward(
+      2025,
+      new Decimal("5000"),
+      new Decimal("2000"),
+      [],
+    );
+
+    expect(result.updatedCarryforward).toHaveLength(0);
+  });
 });

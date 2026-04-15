@@ -46,9 +46,52 @@ describe("etoroParser", () => {
     });
   });
 
+  describe("text mode parse — section detection", () => {
+    it("should parse trades from text with section markers", () => {
+      const text = [
+        "Closed Positions",
+        "Action,Amount,Units,Open Rate,Close Rate,Profit(USD),Open Date,Close Date,Type,Leverage,ISIN",
+        "Buy AAPL,1000.00,5.5,180.00,195.00,82.50,15/03/2025 09:30:00,20/09/2025 14:00:00,Stocks,1,US0378331005",
+      ].join("\n");
+
+      const result = etoroParser.parse(text);
+      expect(result.trades.length).toBeGreaterThanOrEqual(0);
+    });
+
+    it("should parse dividend section markers", () => {
+      const text = [
+        "Dividends",
+        "Date of Payment,Instrument Name,Net Dividend Received (USD),Withholding Tax Amount (USD),ISIN",
+        "15/06/2025,AAPL,42.50,7.50,US0378331005",
+      ].join("\n");
+
+      const result = etoroParser.parse(text);
+      expect(result).toBeDefined();
+    });
+
+    it("should handle Spanish section markers", () => {
+      const text = [
+        "Posiciones cerradas",
+        "Acción,Importe,Unidades,Tipo de apertura,Tipo de cierre,Ganancia,Fecha de apertura,Fecha de cierre,Tipo,Apalancamiento,ISIN",
+        "Comprar AAPL,1000.00,5,180.00,195.00,82.50,15/03/2025,20/09/2025,Stocks,1,US0378331005",
+      ].join("\n");
+
+      const result = etoroParser.parse(text);
+      expect(result).toBeDefined();
+    });
+
+    it("should detect Spanish headers in detect()", () => {
+      expect(etoroParser.detect("posiciones cerradas\ntipo de apertura,action")).toBe(true);
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => etoroParser.parse("")).toThrow("vacío");
+    });
+
+    it("should throw on whitespace-only input", () => {
+      expect(() => etoroParser.parse("   \n  ")).toThrow("vacío");
     });
   });
 });

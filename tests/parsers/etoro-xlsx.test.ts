@@ -249,4 +249,132 @@ describe("eToro XLSX parsing", () => {
       expect(result.trades).toHaveLength(0);
     });
   });
+
+  describe("parseEtoroXlsx — date format edge cases", () => {
+    it("should handle ISO date format (YYYY-MM-DD)", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "2025-03-15 09:30:00", "2025-09-20 14:00:00", "Stocks", "1", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades[0]!.tradeDate).toBe("20250315");
+      expect(result.trades[1]!.tradeDate).toBe("20250920");
+    });
+
+    it("should handle fallback date format (no match)", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "20250315", "20250920", "Stocks", "1", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades[0]!.tradeDate).toBe("20250315");
+    });
+  });
+
+  describe("parseEtoroXlsx — filtering edge cases", () => {
+    it("should skip rows with unparseable action", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["INVALID ACTION", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should skip rows with NaN units", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy AAPL", "1000", "abc", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should skip ETF-like type that doesn't match", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy GOLD", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Commodity", "1", "XS0000000001"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should accept ETF type", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy VWCE", "2000", "10", "100", "110", "100", "15/03/2025", "20/09/2025", "ETF", "1", "IE00BK5BQT80"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+    });
+
+    it("should handle row with no type column (missing column)", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          // Header without Type and Leverage columns
+          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "ISIN"],
+          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      // Should still parse — no type/leverage filtering when columns missing
+      expect(result.trades).toHaveLength(2);
+    });
+
+    it("should handle Sell action", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Sell AAPL", "1000", "5", "195", "180", "-82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      // eToro still creates buy + sell legs regardless of action direction
+      const buy = result.trades.find((t) => t.buySell === "BUY");
+      const sell = result.trades.find((t) => t.buySell === "SELL");
+      expect(buy).toBeDefined();
+      expect(sell).toBeDefined();
+    });
+  });
+
+  describe("parseEtoroXlsx — Spanish sheet names", () => {
+    it("should find sheets with Spanish names", async () => {
+      const wb = XLSX.utils.book_new();
+
+      const closedSheet = XLSX.utils.aoa_to_sheet([
+        CLOSED_POSITIONS_HEADER,
+        ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
+      ]);
+      XLSX.utils.book_append_sheet(wb, closedSheet, "Posiciones Cerradas");
+
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+    });
+  });
 });
