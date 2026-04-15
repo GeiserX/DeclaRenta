@@ -50,7 +50,7 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
   const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(100).floor().toString().padStart(decLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
   return intPart + fracPart;
 }
 
@@ -137,7 +137,7 @@ function buildDetailRecord721(
   record += numPad(entry.quantity.toString(), 9, 3);          // 464-475: Quantity
   record += pad("", 1);                                       // 476: Reserved
   record += numPad("100", 3, 2);                              // 477-481: Ownership %
-  record += pad("", 19);                                      // 482-500: Blank
+  record += pad("", 18);                                      // 483-500: Blank
 
   return record;
 }

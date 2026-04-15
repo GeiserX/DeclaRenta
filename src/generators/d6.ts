@@ -86,16 +86,17 @@ export function generateD6Report(
       const country = p.isin.slice(0, 2).toUpperCase();
       return country !== "ES";
     })
+    .filter((p) => new Decimal(p.quantity).greaterThan(0)) // Exclude short positions
     .map((p) => {
       const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
-      const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
+      const valueEur = new Decimal(p.positionValue).mul(ecbRate);
 
       return {
         isin: p.isin,
         description: p.description,
         countryCode: p.isin.slice(0, 2).toUpperCase(),
         exchangeCode: exchangeFromIsin(p.isin),
-        sharesAtYearEnd: new Decimal(p.quantity).abs().toString(),
+        sharesAtYearEnd: new Decimal(p.quantity).toString(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,
       };

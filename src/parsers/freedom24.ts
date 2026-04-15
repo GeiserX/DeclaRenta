@@ -162,13 +162,15 @@ function parseFreedom24(input: string): Statement {
     const amount = str(ca.amount);
     const taxAmount = str(ca.tax_amount);
     const currency = ca.curr_c || "USD";
+    // Include ISIN country code so dividend engine can extract withholding country
+    const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
 
     // Dividend entry
     cashTransactions.push({
       transactionID: `freedom24-div-${tradeDate}-${isin}-${i}`,
       accountId: "",
       symbol,
-      description: ca.description || `${typeId} - ${ca.ticker}`,
+      description: ca.description || `${isinCountry} Dividend - ${ca.ticker}`,
       isin,
       currency,
       dateTime: tradeDate,
@@ -185,7 +187,7 @@ function parseFreedom24(input: string): Statement {
         transactionID: `freedom24-wht-${tradeDate}-${isin}-${i}`,
         accountId: "",
         symbol,
-        description: `Withholding tax - ${ca.ticker}`,
+        description: `${isinCountry} WHT - ${ca.ticker}`,
         isin,
         currency,
         dateTime: tradeDate,

@@ -119,11 +119,13 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
     // Distributions → cash transactions (dividends)
     if (DIVIDEND_TYPES.some((d) => type.includes(d))) {
+      // Include ISIN country code so dividend engine can extract withholding country
+      const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
       cashTransactions.push({
         transactionID: `scalable-${tradeDate}-${isin}-${i}`,
         accountId: "",
         symbol: description,
-        description: `${type} - ${description}`,
+        description: `${isinCountry} ${type} - ${description}`,
         isin,
         currency: currency || "EUR",
         dateTime: tradeDate,
@@ -140,7 +142,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           transactionID: `scalable-tax-${tradeDate}-${isin}-${i}`,
           accountId: "",
           symbol: description,
-          description: `Withholding tax - ${description}`,
+          description: `${isinCountry} WHT - ${description}`,
           isin,
           currency: currency || "EUR",
           dateTime: tradeDate,

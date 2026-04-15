@@ -6,6 +6,7 @@
  */
 
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import type { Statement } from "../types/broker.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
@@ -14,6 +15,11 @@ import { normalizeDate } from "../engine/dates.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
+
+/** Escape HTML to prevent XSS from user-derived content */
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 const dropZone = document.getElementById("drop-zone")!;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
@@ -58,14 +64,20 @@ fileInput.addEventListener("change", () => {
 });
 
 function addFiles(files: File[]) {
-  pendingFiles.push(...files);
+  // Duplicate guard: skip files already in the list by name + size
+  const existing = new Set(pendingFiles.map((f) => `${f.name}:${f.size}`));
+  for (const f of files) {
+    if (!existing.has(`${f.name}:${f.size}`)) {
+      pendingFiles.push(f);
+    }
+  }
   renderFileList();
-  configSection.hidden = false;
+  configSection.hidden = pendingFiles.length === 0;
 }
 
 function renderFileList() {
   fileListDiv.innerHTML = pendingFiles
-    .map((f, i) => `<span class="file-tag">${f.name} <button data-idx="${i}" class="remove-file">&times;</button></span>`)
+    .map((f, i) => `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`)
     .join(" ");
 
   fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
@@ -99,7 +111,22 @@ async function processFiles() {
     const brokerNames: string[] = [];
 
     for (const file of pendingFiles) {
-      const content = await file.text();
+      // Check for XLSX binary (eToro) first
+      const arrayBuf = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+      if (detectEtoroXlsx(uint8)) {
+        const statement = await parseEtoroXlsx(uint8);
+        merged.accountId = merged.accountId || statement.accountId;
+        merged.trades.push(...statement.trades);
+        merged.cashTransactions.push(...statement.cashTransactions);
+        merged.corporateActions.push(...statement.corporateActions);
+        merged.openPositions = statement.openPositions;
+        merged.securitiesInfo.push(...statement.securitiesInfo);
+        brokerNames.push("eToro");
+        continue;
+      }
+
+      const content = new TextDecoder("utf-8").decode(uint8);
       const selectedBroker = brokerSelect.value;
       const parser = selectedBroker !== "auto"
         ? getBroker(selectedBroker)
@@ -107,7 +134,7 @@ async function processFiles() {
 
       if (!parser) {
         throw new Error(
-          `No se pudo detectar el broker de "${file.name}". Selecciona el broker manualmente. Disponibles: ${brokerParsers.map((p) => p.name).join(", ")}`,
+          `No se pudo detectar el broker de "${esc(file.name)}". Selecciona el broker manualmente. Disponibles: ${brokerParsers.map((p) => p.name).join(", ")}`,
         );
       }
 
@@ -132,7 +159,7 @@ async function processFiles() {
     for (const c of merged.cashTransactions) currencies.add(c.currency);
     currencies.delete("EUR");
 
-    dropZone.innerHTML = `<p>Obteniendo tipos ECB para ${[...currencies].join(", ") || "EUR"}...</p>`;
+    dropZone.textContent = `Obteniendo tipos ECB para ${[...currencies].join(", ") || "EUR"}...`;
 
     const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
     years.add(year);
@@ -148,12 +175,17 @@ async function processFiles() {
     currentReport = report;
 
     const uniqueBrokers = [...new Set(brokerNames)];
-    dropZone.innerHTML = `<p>✓ ${pendingFiles.length} fichero(s) procesado(s) — ${uniqueBrokers.join(", ")} — ${merged.trades.length} operaciones</p>`;
+    dropZone.textContent = `✓ ${pendingFiles.length} fichero(s) procesado(s) — ${uniqueBrokers.join(", ")} — ${merged.trades.length} operaciones`;
 
     resultsSection.hidden = false;
     renderResults(report);
   } catch (err) {
-    dropZone.innerHTML = `<p style="color: var(--danger)">Error: ${err instanceof Error ? err.message : err}</p>`;
+    const msg = err instanceof Error ? err.message : String(err);
+    dropZone.textContent = `Error: ${msg}`;
+    dropZone.style.color = "var(--danger)";
+    // Clear stale results
+    currentReport = null;
+    resultsSection.hidden = true;
   } finally {
     processBtn.textContent = "Procesar";
     processBtn.removeAttribute("disabled");
@@ -220,7 +252,7 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
       </tbody>
     </table>
     ${report.capitalGains.blockedLosses.greaterThan(0) ? `<p class="warning">⚠ Pérdidas bloqueadas por regla anti-churning (2 meses): ${report.capitalGains.blockedLosses.toFixed(2)} EUR</p>` : ""}
-    ${report.warnings.length > 0 ? `<details><summary>${report.warnings.length} advertencia(s)</summary><ul>${report.warnings.map((w) => `<li>${w}</li>`).join("")}</ul></details>` : ""}
+    ${report.warnings.length > 0 ? `<details><summary>${report.warnings.length} advertencia(s)</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
   `;
 
   renderOperationsTable();
@@ -263,8 +295,8 @@ function renderOperationsTable() {
       <tbody>
         ${disposals.map((d) => `
           <tr>
-            <td class="mono">${d.isin}</td>
-            <td>${d.symbol}</td>
+            <td class="mono">${esc(d.isin)}</td>
+            <td>${esc(d.symbol)}</td>
             <td>${formatDate(d.acquireDate)}</td>
             <td>${formatDate(d.sellDate)}</td>
             <td>${d.quantity.toString()}</td>
@@ -301,12 +333,12 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
       <tbody>
         ${report.dividends.entries.map((d) => `
           <tr>
-            <td class="mono">${d.isin}</td>
-            <td>${d.symbol}</td>
+            <td class="mono">${esc(d.isin)}</td>
+            <td>${esc(d.symbol)}</td>
             <td>${formatDate(d.payDate)}</td>
             <td>${d.grossAmountEur.toFixed(2)}</td>
             <td>${d.withholdingTaxEur.toFixed(2)}</td>
-            <td>${d.withholdingCountry}</td>
+            <td>${esc(d.withholdingCountry)}</td>
           </tr>
         `).join("")}
       </tbody>

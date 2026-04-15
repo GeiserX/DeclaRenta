@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { Command } from "commander";
 import Decimal from "decimal.js";
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
@@ -24,6 +25,8 @@ import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
+import { applyLossCarryforward } from "../engine/loss-carryforward.js";
+import type { LossCarryforward } from "../types/tax.js";
 
 // Read version from package.json (single source of truth)
 const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version: string };
@@ -42,10 +45,10 @@ program
 // Helper: parse and merge broker files
 // ---------------------------------------------------------------------------
 
-function parseAndMerge(
+async function parseAndMerge(
   inputFiles: string[],
   brokerName?: string,
-): { merged: Statement; brokerNames: string[] } {
+): Promise<{ merged: Statement; brokerNames: string[] }> {
   const merged: Statement = {
     accountId: "",
     fromDate: "",
@@ -60,16 +63,22 @@ function parseAndMerge(
   const brokerNames: string[] = [];
 
   for (const file of inputFiles) {
-    // Try binary read for XLSX (eToro), fallback to UTF-8 for text formats
-    let content: string;
-    try {
-      content = readFileSync(file, "utf-8");
-    } catch {
-      // Binary file — try as buffer and convert
-      const buf = readFileSync(file);
-      content = buf.toString("utf-8");
+    // Check for binary XLSX (eToro) first
+    const buf = readFileSync(file);
+    if (detectEtoroXlsx(buf)) {
+      const statement = await parseEtoroXlsx(buf);
+      merged.accountId = merged.accountId || statement.accountId;
+      merged.trades.push(...statement.trades);
+      merged.cashTransactions.push(...statement.cashTransactions);
+      merged.corporateActions.push(...statement.corporateActions);
+      merged.openPositions = statement.openPositions;
+      merged.securitiesInfo.push(...statement.securitiesInfo);
+      brokerNames.push("eToro");
+      console.error(`  [eToro XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
+      continue;
     }
 
+    const content = buf.toString("utf-8");
     const parser = brokerName ? getBroker(brokerName) : detectBroker(content);
     if (!parser) {
       const available = brokerParsers.map((p) => p.name).join(", ");
@@ -118,7 +127,7 @@ program
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
       // 1. Parse and merge
-      const { merged, brokerNames } = parseAndMerge(opts.input, opts.broker);
+      const { merged, brokerNames } = await parseAndMerge(opts.input, opts.broker);
       const uniqueBrokers = [...new Set(brokerNames)];
       console.error(`  Brokers: ${uniqueBrokers.join(", ")}`);
       console.error(`  Total: ${merged.trades.length} operaciones, ${merged.cashTransactions.length} transacciones`);
@@ -145,6 +154,31 @@ program
 
       // 3. Generate tax report
       const report = generateTaxReport(merged, allRates, opts.year);
+
+      // 3b. Apply loss carryforward if prior losses provided
+      if (opts.priorLosses) {
+        const priorData = JSON.parse(readFileSync(opts.priorLosses, "utf-8")) as Array<{
+          year: number; amount: string; remaining: string; category: "gains" | "income";
+        }>;
+        const priorLosses: LossCarryforward[] = priorData.map((l) => ({
+          year: l.year,
+          amount: new Decimal(l.amount),
+          remaining: new Decimal(l.remaining),
+          category: l.category,
+        }));
+
+        const netGains = report.capitalGains.netGainLoss;
+        const netIncome = report.dividends.grossIncome.minus(report.interest.paid).plus(report.interest.earned);
+        const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
+
+        // Log carryforward details
+        for (const detail of carryResult.details) {
+          console.error(`  ${detail}`);
+        }
+        if (carryResult.totalCompensated.greaterThan(0)) {
+          console.error(`  Total compensado: ${carryResult.totalCompensated.toFixed(2)} EUR`);
+        }
+      }
 
       // 4. Format output
       if (opts.format === "pdf") {

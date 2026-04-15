@@ -90,7 +90,7 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
   const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(100).floor().toString().padStart(decLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
   return intPart + fracPart;
 }
 
@@ -153,7 +153,7 @@ function buildDetailRecord(
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad(pos.description, 41);                         // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
-  record += pad(firstAcquisitionDate ?? "", 8);               // 415-422: First acquisition date
+  record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
   record += "M";                                              // 423: Type (M=existing)
   record += pad("", 8);                                       // 424-431: Sell date
   record += (costEur.isNegative() ? "N" : " ");               // 432: Acquisition sign
@@ -164,7 +164,7 @@ function buildDetailRecord(
   record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 464-475: Quantity
   record += pad("", 1);                                       // 476: Reserved
   record += numPad("100", 3, 2);                              // 477-481: Ownership %
-  record += pad("", 19);                                      // 482-500: Blank
+  record += pad("", 18);                                      // 483-500: Blank
 
   return record;
 }

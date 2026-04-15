@@ -254,35 +254,48 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
     const netNum = parseFloat(netAmount);
     if (isNaN(netNum) || netNum === 0) continue;
 
-    // Dividend
+    // Compute gross dividend and withholding tax
+    const whtNum = parseFloat(whtAmount);
+    let grossAmount = netAmount;
+    let taxAmount = "0";
+    if (!isNaN(whtNum) && whtNum !== 0) {
+      // WHT might be a percentage or absolute amount
+      const isPercentage = whtNum > 0 && whtNum <= 100 && headers[whtCol]?.toLowerCase().includes("%");
+      if (isPercentage) {
+        const grossNum = netNum / (1 - whtNum / 100);
+        grossAmount = grossNum.toFixed(2);
+        taxAmount = `-${(grossNum * (whtNum / 100)).toFixed(2)}`;
+      } else {
+        const absWht = Math.abs(whtNum);
+        grossAmount = (netNum + absWht).toFixed(2);
+        taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
+      }
+    }
+
+    // Dividend (gross amount — downstream engine expects gross)
+    // Include ISIN country code so dividend engine can extract withholding country
+    const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
     cashTransactions.push({
       transactionID: `etoro-div-${tradeDate}-${instrument}-${i}`,
       accountId: "",
       symbol: instrument,
-      description: `Dividend - ${instrument}`,
+      description: `${isinCountry} Dividend - ${instrument}`,
       isin,
       currency: "USD",
       dateTime: tradeDate,
       settleDate: tradeDate,
-      amount: netAmount,
+      amount: grossAmount,
       fxRateToBase: "1",
       type: "Dividends",
     });
 
     // Withholding tax
-    const whtNum = parseFloat(whtAmount);
-    if (!isNaN(whtNum) && whtNum !== 0) {
-      // WHT might be a percentage or absolute amount
-      const isPercentage = whtNum > 0 && whtNum <= 100 && headers[whtCol]?.toLowerCase().includes("%");
-      const taxAmount = isPercentage
-        ? `-${((netNum / (1 - whtNum / 100)) * (whtNum / 100)).toFixed(2)}`
-        : whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
-
+    if (taxAmount !== "0") {
       cashTransactions.push({
         transactionID: `etoro-wht-${tradeDate}-${instrument}-${i}`,
         accountId: "",
         symbol: instrument,
-        description: `Withholding tax - ${instrument}`,
+        description: `${isinCountry} WHT - ${instrument}`,
         isin,
         currency: "USD",
         dateTime: tradeDate,
