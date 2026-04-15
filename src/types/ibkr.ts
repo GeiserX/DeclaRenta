@@ -39,6 +39,8 @@ export interface Trade {
   commission: string;
   taxes: string;
   multiplier: string;
+  /** Optional: which broker produced this trade (for cross-broker reports) */
+  brokerSource?: string;
 }
 
 export interface CashTransaction {

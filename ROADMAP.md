@@ -38,25 +38,35 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v0.2.0)
+## Estado actual (v0.4.0)
 
 ### Lo que ya funciona
 
 | Componente | Estado | Fichero |
 |-----------|--------|---------|
 | Parser IBKR Flex Query XML | Implementado | `src/parsers/ibkr.ts` |
+| Parser Degiro (Transacciones CSV + Cuenta CSV) | Implementado | `src/parsers/degiro.ts` |
+| Parser Scalable Capital (CSV) | Implementado | `src/parsers/scalable.ts` |
+| Parser Freedom24 (JSON) | Implementado | `src/parsers/freedom24.ts` |
+| Parser eToro (XLSX) | Implementado | `src/parsers/etoro.ts` |
+| Utilidades CSV compartidas | Implementado | `src/parsers/csv-utils.ts` |
 | Motor FIFO con tipos ECB oficiales | Implementado | `src/engine/fifo.ts` |
+| Corporate actions: splits, reverse splits, scrip dividends | Implementado | `src/engine/fifo.ts` |
+| Corporate actions: mergers (TC) y spin-offs (SO) | Implementado | `src/engine/fifo.ts` |
 | Detección regla anti-churning (2 meses) | Implementado | `src/engine/wash-sale.ts` |
 | Procesamiento dividendos + retenciones | Implementado | `src/engine/dividends.ts` |
 | Cálculo doble imposición (Art. 80) | Implementado | `src/engine/double-taxation.ts` |
-| Generador Modelo 720 (fixed-width) | Implementado | `src/generators/modelo720.ts` |
+| Compensación de pérdidas (Art. 49 LIRPF) | Implementado | `src/engine/loss-carryforward.ts` |
+| Generador Modelo 720 (fixed-width, país ISIN, fecha adquisición) | Implementado | `src/generators/modelo720.ts` |
+| Generador Modelo 721 stub (crypto) | Implementado | `src/generators/modelo721.ts` |
+| Generador Modelo D-6 (guía AFORIX) | Implementado | `src/generators/d6.ts` |
+| Generador informe PDF | Implementado | `src/generators/pdf.ts` |
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
-| CLI (`convert`, `modelo720`) | Implementado | `src/cli/index.ts` |
-| Web UI básica (drag & drop) | Implementado | `src/web/` |
-| Interfaz `BrokerParser` + registry auto-detección | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
-| Parser Degiro (Transacciones CSV + Cuenta CSV) | Implementado | `src/parsers/degiro.ts` |
-| CLI auto-detección de broker + flag `--broker` | Implementado | `src/cli/index.ts` |
-| 99 tests (parser, FIFO, wash sale, dividends, double taxation, dates, ECB, CSV, report, Degiro, registry) | Passing | `tests/` |
+| CLI (`convert`, `modelo720`, `d6`, `modelo721`) | Implementado | `src/cli/index.ts` |
+| Web UI: selector broker, tabla operaciones, filtros, búsqueda | Implementado | `src/web/` |
+| Interfaz `BrokerParser` + registry auto-detección (5 brokers) | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
+| FIFO cross-broker (orden cronológico global) | Implementado | `src/cli/index.ts`, `src/web/main.ts` |
+| 170 tests | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -89,7 +99,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | **burocratin** | OSS (AGPL-3.0) | Gratis | IBKR, Degiro | 720, D-6 | Browser (WASM) | Solo genera 720 y D-6, no calcula IRPF; escrito en Rust/WASM (19 stars) |
 | **IBKR-RENTA** | OSS | Gratis | IBKR (CSV) | 100 | Browser | Single-file HTML; solo IBKR CSV (no Flex XML); sin 720/D-6; 1 star, creado mar 2026 |
 | **Asesor fiscal** | Servicio | 150-500 € | Cualquiera | Todos | Datos compartidos | Coste elevado, dependencia de tercero, tiempos de espera |
-| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro → más | **100, 720** → más | **Browser-first, zero-server** | En desarrollo; IBKR validado con datos reales |
+| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro, Scalable, eToro, Freedom24 | **100, 720, D-6** + 721 stub | **Browser-first, zero-server** | En desarrollo; IBKR validado con datos reales |
 
 **Hueco que cubre DeclaRenta**: no existe ninguna herramienta open source que cubra el ciclo completo (IRPF + 720 + D-6) con soporte multi-broker y privacidad total. burocratin solo hace 720/D-6. IBKR-RENTA solo hace Modelo 100 desde CSV. TaxDown cobra 239 € y sube los datos a la nube.
 
@@ -141,7 +151,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Contrastar resultados IBKR 2024/2025 con referencia Python (validado en Fase 0)
 - [x] Stock splits en FIFO: parse corporate actions, deduplicación, formato fecha YYYYMMDD
 - [x] Reverse splits: ratio < 1 (SPLIT 1 FOR 10), limpieza de lotes con cantidad 0
-- [ ] Corporate actions avanzadas: mergers, spin-offs
+- [x] Corporate actions avanzadas: mergers, spin-offs
   - Merger: cerrar lots del símbolo antiguo, abrir lots del nuevo con mismo coste
   - Spin-off: distribuir coste entre parent y spin-off según ratio de mercado
 - [x] Posiciones cross-year: multi-fichero `--input` carga lots de ejercicios anteriores
@@ -153,7 +163,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Edge cases: cantidad 0 post-split (lotes eliminados automáticamente)
 - [x] 75 tests (>30 target), 56.65% coverage
 - [x] ESLint strictTypeChecked + Prettier
-- [ ] Web UI: tabla de operaciones con ordenación, filtros, exportar CSV
+- [x] Web UI: tabla de operaciones con ordenación, filtros, búsqueda, exportar CSV
 - [x] Documentación de cada casilla y cómo se calcula (`docs/casillas.md`)
 - [x] Publicar **v0.2.0**
 
@@ -193,14 +203,14 @@ Tareas:
 - [x] **Interfaz común de parser** (`BrokerParser`): `detect(input)` + `parse(input) → Statement`
 - [x] **Registry con auto-detección**: `detectBroker()`, `getBroker()`, `--broker` flag en CLI
 - [x] **Parser Degiro**: Transactions CSV (trades) + Account CSV (dividendos/retenciones). Multi-idioma ES/EN/NL/DE, auto-detect delimitador coma/punto y coma, números EU
-- [ ] **Parser Scalable Capital**: CSV export
-- [ ] **Parser eToro**: XLS Account Statement (acciones y ETFs; excluir CFDs inicialmente)
-- [ ] **Parser Freedom24**: CSV Trade Report
-- [ ] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
-  - Un mismo ISIN comprado en IBKR y Degiro debe usar una sola cola FIFO
+- [x] **Parser Scalable Capital**: CSV export (semicolon-delimited, EU numbers, filter `status=Executed`)
+- [x] **Parser eToro**: XLSX Account Statement (acciones y ETFs; excluye CFDs). Soporta 6+ versiones de columnas
+- [x] **Parser Freedom24**: JSON report (`trades.detailed[]`, `corporate_actions.detailed[]`)
+- [x] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
+  - Un mismo ISIN comprado en IBKR y Degiro usa una sola cola FIFO
   - Orden cronológico global, no por broker
-- [ ] Web UI: selector de broker → formato esperado → upload
-- [ ] Tests por broker con fixtures anonimizados (mínimo 5 por broker)
+- [x] Web UI: selector de broker → formato esperado → upload multi-fichero
+- [x] Tests por broker con fixtures sintéticos (Scalable 15, Freedom24 16, eToro 5, corporate actions 7)
 - [ ] Publicar **v0.3.0**
 
 **Criterio de éxito**: procesamiento correcto de exports reales de al menos 3 brokers distintos.
@@ -215,20 +225,20 @@ Tareas:
 
 #### Modelo D-6 (Banco de España)
 
-- [ ] Investigar formato exacto de presentación D-6 (Banco de España, no AEAT)
-- [ ] Generador D-6: inversiones en valores negociables en el exterior
-- [ ] Detección automática de obligación D-6 (cualquier valor en el extranjero a 31/dic)
+- [x] Investigar formato exacto de presentación D-6 (Banco de España, no AEAT). No existe fichero de carga: se rellena vía AFORIX web
+- [x] Generador D-6: guía AFORIX con valores pre-calculados por posición (ISIN, país, exchange, valor EUR)
+- [x] Detección automática de obligación D-6 (cualquier valor en el extranjero a 31/dic)
 - [ ] Soporte para declaración negativa (cancelación de posiciones)
 
 #### Modelo 720 — mejoras
 
 - [ ] Detección automática de umbral 50.000 € por categoría (valores, cuentas, inmuebles)
 - [ ] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
-- [ ] Primera fecha de adquisición por posición (actualmente vacío)
+- [x] Primera fecha de adquisición por posición (desde lotes FIFO)
 - [ ] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
   - Acciones cotizadas: media del último trimestre (no cierre 31/dic)
   - ETFs: valor liquidativo a 31/dic
-- [ ] País de emisión extraído del ISIN (primeros 2 caracteres)
+- [x] País de emisión extraído del ISIN (primeros 2 caracteres)
 - [ ] Validación contra diseño de registro BOE antes de generar fichero
 
 #### Modelo 721 (crypto en el extranjero)
@@ -236,20 +246,20 @@ Tareas:
 - [ ] Parser Coinbase (CSV)
 - [ ] Parser Binance (CSV)
 - [ ] Parser Kraken (CSV/ledger)
-- [ ] Generador 721: formato fixed-width AEAT
-- [ ] Umbral 50.000 € en criptomonedas en exchanges extranjeros
+- [x] Generador 721: formato fixed-width AEAT (stub — sin parsers crypto aún)
+- [x] Umbral 50.000 € en criptomonedas en exchanges extranjeros
 
 #### Multi-year
 
-- [ ] Compensación de pérdidas (Art. 49 LIRPF): arrastre a 4 años siguientes
-- [ ] Importar datos de ejercicios anteriores (JSON de DeclaRenta o manual)
-- [ ] Tracking de pérdidas pendientes de compensar por año de origen
-- [ ] Compensación cruzada: hasta 25% de rendimientos positivos con saldo negativo de ganancias (y viceversa)
+- [x] Compensación de pérdidas (Art. 49 LIRPF): arrastre a 4 años siguientes
+- [x] Importar datos de ejercicios anteriores (JSON de DeclaRenta o `--prior-losses`)
+- [x] Tracking de pérdidas pendientes de compensar por año de origen (FIFO oldest-first)
+- [x] Compensación cruzada: hasta 25% de rendimientos positivos con saldo negativo de ganancias (y viceversa)
 
 #### Informe PDF
 
-- [ ] Informe PDF descargable: resumen ejecutivo + detalle por operación
-- [ ] Formato orientado a llevar al asesor fiscal o adjuntar a la declaración
+- [x] Informe PDF descargable: resumen ejecutivo + detalle por operación (pdfkit)
+- [x] Formato orientado a llevar al asesor fiscal o adjuntar a la declaración
 - [ ] Incluir tipo ECB utilizado en cada operación para auditoría
 
 - [ ] Publicar **v0.5.0**

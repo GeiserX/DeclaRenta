@@ -7,6 +7,7 @@
 
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
+import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "../engine/ecb.js";
 
@@ -37,6 +38,8 @@ export function generateModelo720(
   positions: OpenPosition[],
   rateMap: EcbRateMap,
   config: Modelo720Config,
+  /** Optional: remaining lots from FIFO engine, used to extract first acquisition date */
+  remainingLots?: Map<string, Lot[]>,
 ): string {
   // Filter to stocks/funds and calculate EUR values
   const entries = positions
@@ -47,7 +50,18 @@ export function generateModelo720(
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
       const costEur = new Decimal(p.costBasisMoney).abs().mul(ecbRate);
 
-      return { position: p, valueEur, costEur };
+      // First acquisition date from FIFO lots (earliest lot for this ISIN)
+      let firstAcquisitionDate = "";
+      if (remainingLots) {
+        const lots = remainingLots.get(p.isin);
+        if (lots && lots.length > 0) {
+          const earliest = lots.reduce((min, lot) =>
+            lot.acquireDate < min ? lot.acquireDate : min, lots[0]!.acquireDate);
+          firstAcquisitionDate = earliest;
+        }
+      }
+
+      return { position: p, valueEur, costEur, firstAcquisitionDate };
     });
 
   // Check 50,000 EUR threshold for values category
@@ -58,7 +72,7 @@ export function generateModelo720(
 
   // Build records
   const detailRecords = entries.map((e) =>
-    buildDetailRecord(e.position, e.valueEur, e.costEur, config),
+    buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate),
   );
 
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, entries);
@@ -76,7 +90,7 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
   const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(100).floor().toString().padStart(decLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
   return intPart + fracPart;
 }
 
@@ -116,7 +130,11 @@ function buildDetailRecord(
   valueEur: Decimal,
   costEur: Decimal,
   config: Modelo720Config,
+  firstAcquisitionDate?: string,
 ): string {
+  // Extract country code from ISIN prefix (first 2 characters)
+  const countryCode = pos.isin.length >= 2 ? pos.isin.slice(0, 2).toUpperCase() : "  ";
+
   let record = "";
   record += "2";                                              // 1: Register type
   record += "720";                                            // 2-4: Model
@@ -129,13 +147,13 @@ function buildDetailRecord(
   record += pad("", 25);                                      // 77-101: Reserved
   record += "V";                                              // 102: Asset type (stocks)
   record += pad("", 26);                                      // 103-128: Reserved
-  record += pad("", 2);                                       // 129-130: Country code (from ISIN)
+  record += pad(countryCode, 2);                              // 129-130: Country code (from ISIN)
   record += "1";                                              // 131: ID type (ISIN)
   record += pad(pos.isin, 12);                                // 132-143: ISIN
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad(pos.description, 41);                         // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
-  record += pad("", 8);                                       // 415-422: First acquisition date
+  record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
   record += "M";                                              // 423: Type (M=existing)
   record += pad("", 8);                                       // 424-431: Sell date
   record += (costEur.isNegative() ? "N" : " ");               // 432: Acquisition sign
@@ -146,7 +164,7 @@ function buildDetailRecord(
   record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 464-475: Quantity
   record += pad("", 1);                                       // 476: Reserved
   record += numPad("100", 3, 2);                              // 477-481: Ownership %
-  record += pad("", 19);                                      // 482-500: Blank
+  record += pad("", 18);                                      // 483-500: Blank
 
   return record;
 }

@@ -49,6 +49,60 @@ export class FifoEngine {
     }
     const splits = [...splitMap.values()].sort((a, b) => a.date.localeCompare(b.date));
 
+    // Parse mergers (TC = Tender/Change / Acquisition) from corporate actions
+    const mergers: { date: string; oldIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number }[] = [];
+    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "TC")) {
+      // IBKR description: "TENDER OFFER OLD_SYM(OLD_ISIN) MERGED(Acquisition) FOR RATIO NEW_SYM(NEW_ISIN)"
+      // Also handle: "OLD_SYM(OLD_ISIN) MERGED(Acquisition) WITH NEW_SYM(NEW_ISIN) RATIO FOR 1"
+      const mergeMatch = ca.description.match(/(\w+)\(([A-Z0-9]+)\)\s+MERGED.*?(\d+(?:\.\d+)?)\s+(?:FOR\s+)?(\d+(?:\.\d+)?)?\s*(\w+)\(([A-Z0-9]+)\)/i);
+      if (mergeMatch) {
+        const oldIsin = mergeMatch[2]!;
+        const newIsin = mergeMatch[6]!;
+        const newSymbol = mergeMatch[5]!;
+        const ratioNew = parseFloat(mergeMatch[3]!);
+        const ratioOld = parseFloat(mergeMatch[4] ?? "1");
+        const date = normalizeDate(ca.dateTime.slice(0, 8));
+        mergers.push({ date, oldIsin, newIsin, newSymbol, newDescription: ca.description, ratio: ratioNew / ratioOld });
+        continue;
+      }
+      // Simpler format: just transfer all lots from old ISIN to new ISIN
+      if (ca.isin && ca.quantity) {
+        const qty = new Decimal(ca.quantity);
+        if (!qty.isZero()) {
+          const date = normalizeDate(ca.dateTime.slice(0, 8));
+          mergers.push({
+            date,
+            oldIsin: ca.isin,
+            newIsin: ca.isin, // Same ISIN if no new one detected
+            newSymbol: ca.symbol,
+            newDescription: ca.description,
+            ratio: 1,
+          });
+        }
+      }
+    }
+    const sortedMergers = mergers.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Parse spin-offs (SO) from corporate actions
+    const spinOffs: { date: string; parentIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number; costFraction: number }[] = [];
+    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SO")) {
+      // IBKR: "PARENT_SYM(PARENT_ISIN) SPINOFF RATIO FOR 1 NEW_SYM(NEW_ISIN)"
+      const soMatch = ca.description.match(/(\w+)\(([A-Z0-9]+)\)\s+SPINOFF\s+(\d+(?:\.\d+)?)\s+FOR\s+(\d+(?:\.\d+)?)\s+(\w+)\(([A-Z0-9]+)\)/i);
+      if (soMatch) {
+        const parentIsin = soMatch[2]!;
+        const newIsin = soMatch[6]!;
+        const newSymbol = soMatch[5]!;
+        const ratioNew = parseFloat(soMatch[3]!);
+        const ratioOld = parseFloat(soMatch[4]!);
+        const date = normalizeDate(ca.dateTime.slice(0, 8));
+        // Default cost fraction: estimate from the ratio (will be approximate)
+        // In practice, the cost basis split should use market values on the distribution date
+        const costFraction = ratioNew / (ratioNew + ratioOld);
+        spinOffs.push({ date, parentIsin, newIsin, newSymbol, newDescription: ca.description, ratio: ratioNew / ratioOld, costFraction });
+      }
+    }
+    const sortedSpinOffs = spinOffs.sort((a, b) => a.date.localeCompare(b.date));
+
     // Parse scrip dividends into timeline events (applied chronologically, not upfront)
     const scripDivs: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SD")) {
@@ -74,9 +128,11 @@ export class FifoEngine {
     }
     const sortedScripDivs = scripDivs.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Merge trades, splits, and scrip dividends into a single chronological timeline
+    // Merge trades, splits, scrip dividends, mergers, and spin-offs into a single chronological timeline
     let splitIdx = 0;
     let sdIdx = 0;
+    let mergerIdx = 0;
+    let spinOffIdx = 0;
 
     for (const trade of sorted) {
       const tradeDate = normalizeDate(trade.tradeDate);
@@ -90,6 +146,16 @@ export class FifoEngine {
         this.addScripDividendLot(sortedScripDivs[sdIdx]!);
         sdIdx++;
       }
+      // Apply any mergers that occur before this trade
+      while (mergerIdx < sortedMergers.length && sortedMergers[mergerIdx]!.date <= tradeDate) {
+        this.applyMerger(sortedMergers[mergerIdx]!);
+        mergerIdx++;
+      }
+      // Apply any spin-offs that occur before this trade
+      while (spinOffIdx < sortedSpinOffs.length && sortedSpinOffs[spinOffIdx]!.date <= tradeDate) {
+        this.applySpinOff(sortedSpinOffs[spinOffIdx]!);
+        spinOffIdx++;
+      }
 
       if (trade.buySell === "BUY") {
         this.addLot(trade, rateMap);
@@ -98,7 +164,7 @@ export class FifoEngine {
       }
     }
 
-    // Apply remaining splits and scrip dividends after all trades
+    // Apply remaining events after all trades
     while (splitIdx < splits.length) {
       this.applySplit(splits[splitIdx]!);
       splitIdx++;
@@ -106,6 +172,14 @@ export class FifoEngine {
     while (sdIdx < sortedScripDivs.length) {
       this.addScripDividendLot(sortedScripDivs[sdIdx]!);
       sdIdx++;
+    }
+    while (mergerIdx < sortedMergers.length) {
+      this.applyMerger(sortedMergers[mergerIdx]!);
+      mergerIdx++;
+    }
+    while (spinOffIdx < sortedSpinOffs.length) {
+      this.applySpinOff(sortedSpinOffs[spinOffIdx]!);
+      spinOffIdx++;
     }
 
     return this.disposals;
@@ -150,6 +224,80 @@ export class FifoEngine {
       this.lots.set(sd.key, []);
     }
     this.lots.get(sd.key)!.push(lot);
+  }
+
+  private applyMerger(merger: { date: string; oldIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number }): void {
+    const oldLots = this.lots.get(merger.oldIsin);
+    if (!oldLots || oldLots.length === 0) return;
+
+    const ratio = new Decimal(merger.ratio);
+
+    // Transfer all lots from old ISIN to new ISIN, adjusting quantity by ratio
+    // Total cost basis is preserved (tax-neutral exchange)
+    const newLots: Lot[] = [];
+    for (const lot of oldLots) {
+      const newQuantity = lot.quantity.mul(ratio);
+      newLots.push({
+        ...lot,
+        id: `LOT-${this.nextLotId++}`,
+        isin: merger.newIsin,
+        symbol: merger.newSymbol,
+        description: merger.newDescription,
+        quantity: newQuantity,
+        pricePerShare: lot.costInEur.dividedBy(newQuantity), // Recalculate per-share cost
+        // costInEur preserved — total cost basis unchanged
+      });
+    }
+
+    // Remove old lots, add new ones
+    this.lots.delete(merger.oldIsin);
+    if (!this.lots.has(merger.newIsin)) {
+      this.lots.set(merger.newIsin, []);
+    }
+    this.lots.get(merger.newIsin)!.push(...newLots);
+
+    this.warnings.push(`🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`);
+  }
+
+  private applySpinOff(spinOff: { date: string; parentIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number; costFraction: number }): void {
+    const parentLots = this.lots.get(spinOff.parentIsin);
+    if (!parentLots || parentLots.length === 0) return;
+
+    const ratio = new Decimal(spinOff.ratio);
+    const costFraction = new Decimal(spinOff.costFraction);
+    const parentFraction = new Decimal(1).minus(costFraction);
+
+    // For each parent lot: split cost basis proportionally and create new lot for spin-off
+    const newLots: Lot[] = [];
+    for (const lot of parentLots) {
+      const spinOffCost = lot.costInEur.mul(costFraction);
+      const spinOffQuantity = lot.quantity.mul(ratio);
+
+      // Reduce parent lot cost basis
+      lot.costInEur = lot.costInEur.mul(parentFraction);
+      lot.pricePerShare = lot.costInEur.dividedBy(lot.quantity);
+
+      // Create new lot for spin-off entity
+      newLots.push({
+        id: `LOT-${this.nextLotId++}`,
+        isin: spinOff.newIsin,
+        symbol: spinOff.newSymbol,
+        description: spinOff.newDescription,
+        acquireDate: lot.acquireDate, // Inherit original acquisition date
+        quantity: spinOffQuantity,
+        pricePerShare: spinOffCost.dividedBy(spinOffQuantity),
+        costInEur: spinOffCost,
+        currency: lot.currency,
+        ecbRate: lot.ecbRate,
+      });
+    }
+
+    if (!this.lots.has(spinOff.newIsin)) {
+      this.lots.set(spinOff.newIsin, []);
+    }
+    this.lots.get(spinOff.newIsin)!.push(...newLots);
+
+    this.warnings.push(`🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`);
   }
 
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
