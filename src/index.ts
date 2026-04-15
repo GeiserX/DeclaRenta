@@ -28,18 +28,19 @@ export {
 // Engine
 export { FifoEngine } from "./engine/fifo.js";
 export { detectWashSales } from "./engine/wash-sale.js";
-export { fetchEcbRates, getEcbRate } from "./engine/ecb.js";
+export { fetchEcbRates, getEcbRate, getQ4AverageRate } from "./engine/ecb.js";
 export { calculateDividends } from "./engine/dividends.js";
 export { calculateDoubleTaxation } from "./engine/double-taxation.js";
 export { applyLossCarryforward } from "./engine/loss-carryforward.js";
 
 // Generators
 export { generateTaxReport } from "./generators/report.js";
-export { generateModelo720 } from "./generators/modelo720.js";
+export { generateModelo720, checkModelo720Thresholds } from "./generators/modelo720.js";
 export { generateModelo721 } from "./generators/modelo721.js";
 export { generateD6Report } from "./generators/d6.js";
 export { generatePdfReport } from "./generators/pdf.js";
 export { formatCsv, escapeCsv } from "./generators/csv.js";
+export { validateModelo720Records } from "./generators/modelo720-validator.js";
 
 // Types
 export type * from "./types/index.js";
