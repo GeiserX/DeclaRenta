@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  100% open source · 100% en tu navegador · Tus datos nunca salen de tu ordenador
+  Self-hosted · Privacidad total · Tus datos no salen de tu equipo
 </p>
 
 ---
@@ -37,7 +37,7 @@ Si inviertes con un broker extranjero, hacer la renta es un infierno:
 - **Modelo 720** obligatorio si tus activos en el extranjero superan 50.000 EUR
 - **Modelo D-6** para titulares de valores extranjeros a 31 de diciembre (verificar normativa vigente)
 
-DeclaRenta automatiza todo esto gratis.
+DeclaRenta automatiza todo esto.
 
 ## Brokers soportados
 
@@ -74,7 +74,7 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 ### Web (recomendado)
 
-Visita [declarenta.es](https://declarenta.es) — arrastra tus ficheros y listo. Todo se procesa en tu navegador.
+Visita [declarenta.es](https://declarenta.es) — arrastra tus ficheros y listo.
 
 Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
 
@@ -118,9 +118,8 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 
 ## Privacidad
 
-- **Modo web**: todo se procesa en JavaScript en tu navegador. Las únicas llamadas de red son al BCE para tipos de cambio (datos públicos).
-- **Modo CLI**: se ejecuta enteramente en tu máquina. Solo se conecta al API del BCE.
-- Sin analytics, sin tracking, sin telemetría, sin cuentas de usuario.
+- **Self-hosted**: los datos se procesan en tu equipo. La única conexión externa es al API del BCE para tipos de cambio (datos públicos).
+- Sin analytics, sin tracking, sin telemetría.
 
 ## Desarrollo
 
