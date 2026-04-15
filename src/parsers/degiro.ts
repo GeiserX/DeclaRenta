@@ -36,6 +36,7 @@ const DIVIDEND_PATTERNS = [/dividendo/i, /dividend/i];
 
 /** Withholding tax description patterns (Account CSV) */
 const WITHHOLDING_PATTERNS = [
+  /retención del dividendo/i,
   /impuesto sobre dividendo/i,
   /withholding tax/i,
   /dividend.?tax/i,
@@ -347,18 +348,32 @@ function resolveAccountColumns(headers: string[]): AccountColumns {
   const product = findColumn(headers, ["Producto", "Product", "Produkt"]);
   const isin = findColumn(headers, ["ISIN"]);
   const description = findColumn(headers, DESCRIPTION_HEADERS);
-  const fx = findColumn(headers, ["Tipo de cambio", "FX", "Wisselkoers", "Wechselkurs"]);
+  const fx = findColumn(headers, ["Tipo de cambio", "Tipo", "FX", "Wisselkoers", "Wechselkurs"]);
 
-  // Currency column follows FX (or is a separate column)
-  let currency = findColumn(headers, [
-    "Divisa tipo de cambio",
-    "Currency",
-    "Währung",
-    "Valuta",
-  ]);
-  if (currency < 0 && fx >= 0) currency = fx + 1;
+  // Degiro Account CSV has two known layouts:
+  // Old: ..., Tipo de cambio, [empty], Importe, [empty], Saldo, ...
+  //   → "Importe" = amount col, currency at fx+1
+  // New (real export): ..., Tipo, Variación, [empty], Saldo, ...
+  //   → "Variación" col holds CURRENCY in data, amount is at Variación+1
 
-  const amount = findColumn(headers, ["Importe", "Amount", "Change", "Mutatie", "Änderung"]);
+  let currency: number;
+  let amount = findColumn(headers, ["Importe", "Amount", "Change", "Mutatie", "Änderung"]);
+
+  if (amount >= 0) {
+    // Old format: amount found directly, currency is before it
+    currency = findColumn(headers, ["Divisa tipo de cambio", "Currency", "Währung", "Valuta"]);
+    if (currency < 0 && fx >= 0) currency = fx + 1;
+  } else {
+    // New format: "Variación" header = currency position, amount = next column
+    const varCol = findColumn(headers, ["Variación", "Variation"]);
+    if (varCol >= 0) {
+      currency = varCol;
+      amount = varCol + 1;
+    } else {
+      currency = fx >= 0 ? fx + 1 : -1;
+    }
+  }
+
   const orderId = findColumn(headers, ["ID Orden", "Order ID", "Auftrags-ID"]);
 
   return { date, product, isin, description, fx, currency, amount, orderId };

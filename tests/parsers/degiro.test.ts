@@ -190,6 +190,60 @@ describe("degiroParser", () => {
     });
   });
 
+  describe("real Degiro Account export (12-column format)", () => {
+    const realCsv = readFileSync(new URL("../fixtures/degiro-account-real.csv", import.meta.url), "utf-8");
+
+    it("should detect the real Account CSV", () => {
+      expect(degiroParser.detect(realCsv)).toBe(true);
+    });
+
+    it("should parse dividends and retenciones", () => {
+      const result = degiroParser.parse(realCsv);
+      // 4 dividends + 4 retenciones = 8, skip cash sweep + STT + deposit
+      const dividends = result.cashTransactions.filter((t) => t.type === "Dividends");
+      const withholdings = result.cashTransactions.filter((t) => t.type === "Withholding Tax");
+      expect(dividends.length).toBe(4);
+      expect(withholdings.length).toBe(4);
+    });
+
+    it("should parse EUR dividend correctly", () => {
+      const result = degiroParser.parse(realCsv);
+      const mapfreDividend = result.cashTransactions.find(
+        (t) => t.isin === "ES0124244E34" && t.type === "Dividends",
+      )!;
+      expect(mapfreDividend).toBeDefined();
+      expect(mapfreDividend.amount).toBe("62.38");
+      expect(mapfreDividend.currency).toBe("EUR");
+      expect(mapfreDividend.symbol).toBe("MAPFRE");
+    });
+
+    it("should parse USD dividend with withholding", () => {
+      const result = degiroParser.parse(realCsv);
+      const tsmcDiv = result.cashTransactions.find(
+        (t) => t.isin === "US8740391003" && t.type === "Dividends",
+      )!;
+      const tsmcWht = result.cashTransactions.find(
+        (t) => t.isin === "US8740391003" && t.type === "Withholding Tax",
+      )!;
+      expect(tsmcDiv.amount).toBe("2.42");
+      expect(tsmcDiv.currency).toBe("USD");
+      expect(tsmcWht.amount).toBe("-0.51");
+      expect(tsmcWht.currency).toBe("USD");
+    });
+
+    it("should skip Spanish Transaction Tax and non-dividend rows", () => {
+      const result = degiroParser.parse(realCsv);
+      // STT, deposit, and cash sweep should NOT appear
+      const all = result.cashTransactions;
+      expect(all.every((t) => t.type === "Dividends" || t.type === "Withholding Tax")).toBe(true);
+    });
+
+    it("should return empty trades from Account CSV", () => {
+      const result = degiroParser.parse(realCsv);
+      expect(result.trades).toHaveLength(0);
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => degiroParser.parse("")).toThrow("vacío");
@@ -200,7 +254,7 @@ describe("degiroParser", () => {
     });
   });
 
-  describe("real Degiro export (19-column format)", () => {
+  describe("real Degiro Transactions export (19-column format)", () => {
     const realCsv = readFileSync(new URL("../fixtures/degiro-transactions-real.csv", import.meta.url), "utf-8");
 
     it("should detect the real Degiro CSV", () => {
