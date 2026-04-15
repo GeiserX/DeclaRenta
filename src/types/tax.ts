@@ -36,6 +36,8 @@ export interface FifoDisposal {
   sellEcbRate: Decimal;
   /** ECB rate (EUR per 1 FCY) used for the acquisition */
   acquireEcbRate: Decimal;
+  /** Asset category (STK, OPT, FUND, etc.) */
+  assetCategory: string;
   /** True if loss is blocked by the anti-churning rule (Art. 33.5.f LIRPF) */
   washSaleBlocked: boolean;
 }

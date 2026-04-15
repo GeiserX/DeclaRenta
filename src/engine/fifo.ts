@@ -359,6 +359,7 @@ export class FifoEngine {
         currency: trade.currency,
         sellEcbRate: ecbRate,
         acquireEcbRate: ecbRate,
+        assetCategory: trade.assetCategory,
         washSaleBlocked: false,
       });
       return;
@@ -401,6 +402,7 @@ export class FifoEngine {
         currency: trade.currency,
         sellEcbRate: ecbRate,
         acquireEcbRate: lot.ecbRate,
+        assetCategory: trade.assetCategory,
         washSaleBlocked: false, // Set later by wash sale detection
       });
 
@@ -437,6 +439,7 @@ export class FifoEngine {
         currency: trade.currency,
         sellEcbRate: ecbRate,
         acquireEcbRate: ecbRate,
+        assetCategory: trade.assetCategory,
         washSaleBlocked: false,
       });
     }
