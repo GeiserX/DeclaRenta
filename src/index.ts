@@ -6,7 +6,9 @@
  */
 
 // Parsers
-export { parseIbkrFlexXml } from "./parsers/ibkr.js";
+export { parseIbkrFlexXml, ibkrParser } from "./parsers/ibkr.js";
+export { degiroParser } from "./parsers/degiro.js";
+export { detectBroker, getBroker, brokerParsers } from "./parsers/index.js";
 
 // Engine
 export { FifoEngine } from "./engine/fifo.js";
