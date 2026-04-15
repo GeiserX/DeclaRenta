@@ -14,6 +14,7 @@ import type {
   OpenPosition,
   SecurityInfo,
 } from "../types/ibkr.js";
+import type { BrokerParser, Statement } from "../types/broker.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -166,3 +167,15 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     subCategory: raw.subCategory ?? "",
   };
 }
+
+/** IBKR Flex Query XML parser implementing BrokerParser interface */
+export const ibkrParser: BrokerParser = {
+  name: "Interactive Brokers",
+  formats: ["Flex Query XML"],
+  detect(input: string): boolean {
+    return input.includes("<FlexQueryResponse");
+  },
+  parse(input: string): Statement {
+    return parseIbkrFlexXml(input);
+  },
+};
