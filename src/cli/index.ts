@@ -21,6 +21,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
+import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
@@ -284,6 +285,21 @@ program
         return;
       }
 
+      // Validate generated records against BOE format specification
+      const records = output720.split("\n");
+      const validationResults = validateModelo720Records(records);
+      const invalidRecords = validationResults.filter((r) => !r.valid);
+      if (invalidRecords.length > 0) {
+        console.error(`\n⚠ ${invalidRecords.length} registro(s) con errores de formato:`);
+        for (const r of invalidRecords) {
+          for (const e of r.errors) {
+            console.error(`  Registro ${r.recordIndex}: ${e}`);
+          }
+        }
+      } else {
+        console.error(`✓ ${records.length} registro(s) validados correctamente.`);
+      }
+
       if (opts.output) {
         writeFileSync(opts.output, output720, { encoding: "latin1" });
         console.error(`Modelo 720 guardado en ${opts.output}`);
@@ -309,7 +325,8 @@ program
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("-f, --format <format>", "Output format: json or text", "text")
-  .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; format: string }) => {
+  .option("--previous-d6 <file>", "Previous year D-6 JSON output file (to generate cancellations)")
+  .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; format: string; previousD6?: string }) => {
     try {
       const content = readFileSync(opts.input, "utf-8");
       const parser = detectBroker(content);
@@ -322,8 +339,15 @@ program
       for (const p of statement.openPositions) currencies.add(p.currency);
       currencies.delete("EUR");
 
+      // Extract ISINs from previous year's D-6 JSON output
+      let previousYearIsins: string[] | undefined;
+      if (opts.previousD6) {
+        const prevJson = JSON.parse(readFileSync(opts.previousD6, "utf-8")) as { positions?: Array<{ isin: string }> };
+        previousYearIsins = (prevJson.positions ?? []).map((p) => p.isin);
+      }
+
       const rateMap = await fetchEcbRates(opts.year, [...currencies]);
-      const report = generateD6Report(statement.openPositions, rateMap, opts.year, opts.name, opts.nif);
+      const report = generateD6Report(statement.openPositions, rateMap, opts.year, opts.name, opts.nif, previousYearIsins);
 
       if (report.positions.length === 0) {
         console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");

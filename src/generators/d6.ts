@@ -28,12 +28,19 @@ export interface D6Position {
   currency: string;
 }
 
+/** A cancelled position (was in prior year, no longer held) */
+export interface D6Cancellation {
+  isin: string;
+  reason: string;
+}
+
 /** Complete D-6 report data */
 export interface D6Report {
   year: number;
   declarantName: string;
   declarantNif: string;
   positions: D6Position[];
+  cancelled: D6Cancellation[];
   totalPositions: number;
   totalValueEur: string;
   guide: string[];
@@ -68,7 +75,8 @@ function exchangeFromIsin(isin: string): string {
  * @param year - Tax year
  * @param declarantName - Full name
  * @param declarantNif - NIF
- * @returns D6Report with positions and AFORIX guide
+ * @param previousYearIsins - ISINs declared in the previous year's D-6 (for cancellations)
+ * @returns D6Report with positions, cancellations and AFORIX guide
  */
 export function generateD6Report(
   positions: OpenPosition[],
@@ -76,6 +84,7 @@ export function generateD6Report(
   year: number,
   declarantName: string,
   declarantNif: string,
+  previousYearIsins?: string[],
 ): D6Report {
   const yearEnd = `${year}-12-31`;
 
@@ -101,6 +110,16 @@ export function generateD6Report(
         currency: p.currency,
       };
     });
+
+  // Build cancellation list: ISINs in previousYearIsins NOT in current positions
+  const currentIsins = new Set(d6Positions.map((p) => p.isin));
+  const previousIsins = new Set(previousYearIsins ?? []);
+  const cancelled: D6Cancellation[] = [...previousIsins]
+    .filter((isin) => !currentIsins.has(isin))
+    .map((isin) => ({
+      isin,
+      reason: "Posición vendida o liquidada durante el ejercicio",
+    }));
 
   const totalValue = d6Positions.reduce(
     (sum, p) => sum.plus(new Decimal(p.marketValueEur)),
@@ -141,9 +160,22 @@ export function generateD6Report(
     guide.push(``);
   }
 
+  if (cancelled.length > 0) {
+    guide.push(`CANCELACIONES (posiciones declaradas el año anterior ya no mantenidas)`);
+    guide.push(``);
+    for (let i = 0; i < cancelled.length; i++) {
+      const c = cancelled[i]!;
+      guide.push(`  ─── Cancelación ${i + 1} de ${cancelled.length} ───`);
+      guide.push(`  ISIN:   ${c.isin}`);
+      guide.push(`  Motivo: ${c.reason}`);
+      guide.push(``);
+    }
+  }
+
   guide.push(`PASO 4: Revisar y enviar`);
-  guide.push(`  Total posiciones: ${d6Positions.length}`);
-  guide.push(`  Valor total:      ${totalValue.toFixed(2)} EUR`);
+  guide.push(`  Total posiciones activas:  ${d6Positions.length}`);
+  guide.push(`  Total cancelaciones:       ${cancelled.length}`);
+  guide.push(`  Valor total:               ${totalValue.toFixed(2)} EUR`);
   guide.push(``);
   guide.push(`NOTA: El D-6 es obligatorio para CUALQUIER importe de valores`);
   guide.push(`extranjeros. No tiene umbral mínimo (a diferencia del Modelo 720).`);
@@ -153,6 +185,7 @@ export function generateD6Report(
     declarantName,
     declarantNif,
     positions: d6Positions,
+    cancelled,
     totalPositions: d6Positions.length,
     totalValueEur: totalValue.toFixed(2),
     guide,
