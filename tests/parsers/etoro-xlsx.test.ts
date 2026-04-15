@@ -23,8 +23,8 @@ function buildEtoroWorkbook(opts: {
   }
 
   // Write workbook to a buffer
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return new Uint8Array(buf);
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
 // ---------------------------------------------------------------------------
@@ -214,8 +214,8 @@ describe("eToro XLSX parsing", () => {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([["Dummy"]]);
       XLSX.utils.book_append_sheet(wb, ws, "Other");
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-      const data = new Uint8Array(buf);
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 
       const result = await parseEtoroXlsx(data);
       expect(result.trades).toHaveLength(0);

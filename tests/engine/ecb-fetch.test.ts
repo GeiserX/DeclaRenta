@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fetchEcbRates } from "../../src/engine/ecb.js";
 
+function mockFetchOk(csvData: string) {
+  return {
+    ok: true,
+    text: () => Promise.resolve(csvData),
+  } as Response;
+}
+
 describe("fetchEcbRates", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -12,10 +19,7 @@ describe("fetchEcbRates", () => {
       "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n" +
       "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-03,1.0400\n";
 
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
-      ok: true,
-      text: async () => csvData,
-    } as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
 
     const rates = await fetchEcbRates(2025, ["USD"]);
     expect(rates.has("2025-01-02")).toBe(true);
@@ -35,8 +39,8 @@ describe("fetchEcbRates", () => {
       "EXR.D.GBP.EUR.SP00.A,D,GBP,EUR,SP00,A,2025-01-02,0.8600\n";
 
     vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({ ok: true, text: async () => usdCsv } as Response)
-      .mockResolvedValueOnce({ ok: true, text: async () => gbpCsv } as Response);
+      .mockResolvedValueOnce(mockFetchOk(usdCsv))
+      .mockResolvedValueOnce(mockFetchOk(gbpCsv));
 
     const rates = await fetchEcbRates(2025, ["USD", "GBP"]);
     expect(rates.get("2025-01-02")!.has("USD")).toBe(true);
@@ -65,10 +69,7 @@ describe("fetchEcbRates", () => {
       "\n" +
       "\n";
 
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
-      ok: true,
-      text: async () => csvData,
-    } as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
 
     const rates = await fetchEcbRates(2025, ["USD"]);
     expect(rates.size).toBe(1);
@@ -80,10 +81,7 @@ describe("fetchEcbRates", () => {
       "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n" +
       "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-03,\n";
 
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
-      ok: true,
-      text: async () => csvData,
-    } as Response);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
 
     const rates = await fetchEcbRates(2025, ["USD"]);
     expect(rates.has("2025-01-02")).toBe(true);
@@ -91,10 +89,7 @@ describe("fetchEcbRates", () => {
   });
 
   it("should use correct URL format with year range", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
-      ok: true,
-      text: async () => "header\n",
-    } as Response);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk("header\n"));
 
     await fetchEcbRates(2024, ["CHF"]);
 

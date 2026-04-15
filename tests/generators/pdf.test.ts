@@ -86,7 +86,7 @@ describe("PDF Report Generator", () => {
     expect(buffer).toBeInstanceOf(Buffer);
     expect(buffer.length).toBeGreaterThan(500);
     // PDF files start with %PDF
-    expect(buffer.slice(0, 4).toString()).toBe("%PDF");
+    expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
   });
 
   it("should produce a larger PDF with disposals than without", async () => {
