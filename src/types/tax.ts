@@ -112,6 +112,18 @@ export interface TaxSummary {
   };
 }
 
+/** Loss carryforward entry (Art. 49 LIRPF) */
+export interface LossCarryforward {
+  /** Tax year the loss was generated */
+  year: number;
+  /** Original loss amount (negative) */
+  amount: Decimal;
+  /** Remaining uncompensated amount */
+  remaining: Decimal;
+  /** "gains" = capital gains losses, "income" = capital income losses */
+  category: "gains" | "income";
+}
+
 /** Modelo 720: Foreign asset declaration */
 export interface Modelo720Entry {
   isin: string;
