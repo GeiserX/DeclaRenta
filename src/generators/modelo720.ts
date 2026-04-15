@@ -9,7 +9,58 @@ import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate } from "../engine/ecb.js";
+import { getEcbRate, getQ4AverageRate } from "../engine/ecb.js";
+
+/** Per-category threshold status for Modelo 720 */
+export interface Modelo720ThresholdResult {
+  values: { exceeds: boolean; total: Decimal };
+  accounts: { exceeds: boolean; total: Decimal };
+  realEstate: { exceeds: boolean; total: Decimal };
+}
+
+/**
+ * Check per-category 50,000 EUR thresholds for Modelo 720.
+ *
+ * Modelo 720 has three independent categories:
+ *  - Valores (stocks, funds, bonds) — "V"
+ *  - Cuentas (bank accounts) — "C" (not implemented in broker positions)
+ *  - Bienes inmuebles (real estate) — "I" (not implemented in broker positions)
+ *
+ * Each category is evaluated independently against the 50K threshold.
+ * Only categories exceeding 50K must be declared.
+ *
+ * @param positions - Open positions at year end
+ * @param rateMap - ECB exchange rates
+ * @param year - Tax year
+ * @returns Per-category threshold status with totals
+ */
+export function checkModelo720Thresholds(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  year: number,
+): Modelo720ThresholdResult {
+  const yearEnd = `${year}-12-31`;
+  const THRESHOLD = new Decimal(50000);
+
+  // Calculate total value for securities (V category: STK, FUND, BOND)
+  const valuesTotal = positions
+    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    .reduce((sum, p) => {
+      const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
+      return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
+    }, new Decimal(0));
+
+  // Accounts and real estate are not derived from broker positions —
+  // they would come from separate data sources. Return zero for now.
+  const accountsTotal = new Decimal(0);
+  const realEstateTotal = new Decimal(0);
+
+  return {
+    values: { exceeds: valuesTotal.greaterThanOrEqualTo(THRESHOLD), total: valuesTotal },
+    accounts: { exceeds: accountsTotal.greaterThanOrEqualTo(THRESHOLD), total: accountsTotal },
+    realEstate: { exceeds: realEstateTotal.greaterThanOrEqualTo(THRESHOLD), total: realEstateTotal },
+  };
+}
 
 interface Modelo720Config {
   nif: string;
@@ -46,11 +97,22 @@ export function generateModelo720(
   const previousIsins = new Set(config.previousYearIsins ?? []);
 
   // Filter to stocks/funds/bonds and calculate EUR values
+  // STK positions use Q4 average FX rate (media del cuarto trimestre);
+  // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
   const entries = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .map((p) => {
       const yearEnd = `${config.year}-12-31`;
-      const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
+      // STK: Q4 average rate; FUND/BOND: Dec 31 spot rate
+      let ecbRate: Decimal;
+      try {
+        ecbRate = p.assetCategory === "STK"
+          ? getQ4AverageRate(rateMap, config.year, p.currency)
+          : getEcbRate(rateMap, yearEnd, p.currency);
+      } catch {
+        // Fallback to Dec 31 spot rate if Q4 average unavailable
+        ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
+      }
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
       const costEur = new Decimal(p.costBasisMoney).abs().mul(ecbRate);
 
