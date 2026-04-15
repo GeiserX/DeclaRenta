@@ -111,4 +111,4 @@ export interface SecurityInfo {
   subCategory: string;
 }
 
-export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR";
+export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO";

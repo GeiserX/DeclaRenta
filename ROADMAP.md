@@ -38,7 +38,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v0.4.0)
+## Estado actual (v0.7.0)
 
 ### Lo que ya funciona
 
@@ -68,7 +68,17 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Web UI: responsive (tablet, móvil, móvil pequeño) | Implementado | `src/web/` |
 | Interfaz `BrokerParser` + registry auto-detección (5 brokers) | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
 | FIFO cross-broker (orden cronológico global) | Implementado | `src/cli/index.ts`, `src/web/main.ts` |
-| 228 tests | Passing | `tests/` |
+| Parser Coinbase (CSV) | Implementado | `src/parsers/coinbase.ts` |
+| Parser Binance (CSV) | Implementado | `src/parsers/binance.ts` |
+| Parser Kraken (CSV/Ledger) | Implementado | `src/parsers/kraken.ts` |
+| Validador Modelo 720 (BOE) | Implementado | `src/generators/modelo720-validator.ts` |
+| Web UI: gráficos SVG (activos, G/P mensual, divisas, retenciones) | Implementado | `src/web/charts.ts` |
+| Web UI: disclaimer modal | Implementado | `src/web/disclaimer.ts` |
+| Web UI: i18n 5 idiomas (es, en, ca, eu, gl) | Implementado | `src/i18n/` |
+| Web UI: accesibilidad WCAG 2.1 AA | Implementado | `src/web/` |
+| PWA: Service Worker + manifest | Implementado | `src/web/sw.ts`, `src/web/manifest.json` |
+| Deploy GitHub Pages | Configurado | `.github/workflows/deploy.yml` |
+| 370+ tests | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -230,24 +240,24 @@ Tareas:
 - [x] Investigar formato exacto de presentación D-6 (Banco de España, no AEAT). No existe fichero de carga: se rellena vía AFORIX web
 - [x] Generador D-6: guía AFORIX con valores pre-calculados por posición (ISIN, país, exchange, valor EUR)
 - [x] Detección automática de obligación D-6 (cualquier valor en el extranjero a 31/dic)
-- [ ] Soporte para declaración negativa (cancelación de posiciones)
+- [x] Soporte para declaración negativa (cancelación de posiciones)
 
 #### Modelo 720 — mejoras
 
-- [ ] Detección automática de umbral 50.000 € por categoría (valores, cuentas, inmuebles)
+- [x] Detección automática de umbral 50.000 € por categoría (valores, cuentas, inmuebles)
 - [x] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
 - [x] Primera fecha de adquisición por posición (desde lotes FIFO)
-- [ ] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
-  - Acciones cotizadas: media del último trimestre (no cierre 31/dic)
+- [x] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
+  - Acciones cotizadas: media del último trimestre (Q4 average via ECB)
   - ETFs: valor liquidativo a 31/dic
 - [x] País de emisión extraído del ISIN (primeros 2 caracteres)
-- [ ] Validación contra diseño de registro BOE antes de generar fichero
+- [x] Validación contra diseño de registro BOE antes de generar fichero
 
 #### Modelo 721 (crypto en el extranjero)
 
-- [ ] Parser Coinbase (CSV)
-- [ ] Parser Binance (CSV)
-- [ ] Parser Kraken (CSV/ledger)
+- [x] Parser Coinbase (CSV)
+- [x] Parser Binance (CSV)
+- [x] Parser Kraken (CSV/ledger)
 - [x] Generador 721: formato fixed-width AEAT (stub — sin parsers crypto aún)
 - [x] Umbral 50.000 € en criptomonedas en exchanges extranjeros
 
@@ -277,13 +287,13 @@ Tareas:
 - [ ] **Wizard multi-paso**: elige broker(s) → sube fichero(s) → revisa datos → configura (NIF, año) → genera resultados → descarga
 - [x] **Tabla interactiva de operaciones**: ordenación, filtros por ISIN/fecha/tipo, búsqueda
 - [ ] **Vista por casillas**: cada casilla expandible con desglose de las operaciones que la componen
-- [ ] **Gráficos**: distribución por tipo de activo, G/P por mes, composición por divisa, retenciones por país
+- [x] **Gráficos**: distribución por tipo de activo, G/P por mes, composición por divisa, retenciones por país
 - [ ] **Comparador año a año**: si el usuario procesa múltiples años
 - [x] **Modo oscuro/claro** con detección de preferencia del sistema
-- [ ] **PWA**: funciona offline una vez cargada (Service Worker)
-- [ ] **Accesibilidad WCAG 2.1 AA**: navegación por teclado, screen reader, contraste
-- [ ] **i18n**: castellano (default), catalán, euskera, gallego, inglés
-- [ ] **Deploy GitHub Pages**: coste cero de hosting, dominio custom `declarenta.es`
+- [x] **PWA**: funciona offline una vez cargada (Service Worker + manifest)
+- [x] **Accesibilidad WCAG 2.1 AA**: skip-link, focus-visible, ARIA roles, keyboard navigation
+- [x] **i18n**: castellano (default), catalán, euskera, gallego, inglés — selector de idioma en la UI
+- [x] **Deploy GitHub Pages**: workflow configurado, dominio custom ready
 - [x] **Responsive**: móvil, tablet, desktop
 - [ ] Publicar **v0.8.0**
 

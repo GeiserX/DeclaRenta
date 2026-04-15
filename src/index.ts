@@ -11,6 +11,9 @@ export { degiroParser } from "./parsers/degiro.js";
 export { scalableParser } from "./parsers/scalable.js";
 export { freedom24Parser } from "./parsers/freedom24.js";
 export { etoroParser, parseEtoroXlsx, detectEtoroXlsx } from "./parsers/etoro.js";
+export { coinbaseParser } from "./parsers/coinbase.js";
+export { binanceParser } from "./parsers/binance.js";
+export { krakenParser } from "./parsers/kraken.js";
 export { detectBroker, getBroker, brokerParsers } from "./parsers/index.js";
 
 // CSV utilities
@@ -41,6 +44,10 @@ export { generateD6Report } from "./generators/d6.js";
 export { generatePdfReport } from "./generators/pdf.js";
 export { formatCsv, escapeCsv } from "./generators/csv.js";
 export { validateModelo720Records } from "./generators/modelo720-validator.js";
+
+// i18n
+export { t, setLocale, getCurrentLocale, detectLocale, initLocale, getLocaleNames } from "./i18n/index.js";
+export type { Locale, TranslationKey } from "./i18n/index.js";
 
 // Types
 export type * from "./types/index.js";
