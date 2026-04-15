@@ -3,6 +3,20 @@ import { parseEtoroXlsx, detectEtoroXlsx } from "../../src/parsers/etoro.js";
 import * as XLSX from "xlsx";
 
 // ---------------------------------------------------------------------------
+// Shared constants
+// ---------------------------------------------------------------------------
+
+const CLOSED_POSITIONS_HEADER = [
+  "Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)",
+  "Open Date", "Close Date", "Type", "Leverage", "ISIN",
+];
+
+const DIVIDENDS_HEADER = [
+  "Date of Payment", "Instrument Name", "Net Dividend Received (USD)",
+  "Withholding Tax Amount (USD)", "ISIN",
+];
+
+// ---------------------------------------------------------------------------
 // Helper: build a minimal eToro-like XLSX workbook in memory
 // ---------------------------------------------------------------------------
 
@@ -36,7 +50,7 @@ describe("eToro XLSX parsing", () => {
     it("should detect a valid eToro XLSX", () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
         ],
       });
@@ -58,23 +72,25 @@ describe("eToro XLSX parsing", () => {
     it("should parse basic stock trades", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000.00", "5.5", "180.00", "195.00", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
         ],
       });
 
       const result = await parseEtoroXlsx(data);
       expect(result.trades).toHaveLength(2); // 1 buy + 1 sell
-      expect(result.trades[0]!.buySell).toBe("BUY");
-      expect(result.trades[0]!.symbol).toBe("AAPL");
-      expect(result.trades[0]!.isin).toBe("US0378331005");
-      expect(result.trades[1]!.buySell).toBe("SELL");
+      const buy = result.trades.find((t) => t.buySell === "BUY");
+      const sell = result.trades.find((t) => t.buySell === "SELL");
+      expect(buy).toBeDefined();
+      expect(buy!.symbol).toBe("AAPL");
+      expect(buy!.isin).toBe("US0378331005");
+      expect(sell).toBeDefined();
     });
 
     it("should skip CFDs (leverage > 1)", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
           ["Buy EURUSD", "1000", "1000", "1.08", "1.09", "10", "01/04/2025", "01/05/2025", "CFD", "2", ""],
         ],
@@ -89,7 +105,7 @@ describe("eToro XLSX parsing", () => {
     it("should skip crypto", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy BTC", "500", "0.01", "50000", "55000", "50", "01/01/2025", "01/03/2025", "Crypto", "1", ""],
         ],
       });
@@ -101,7 +117,7 @@ describe("eToro XLSX parsing", () => {
     it("should handle multiple trades", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
           ["Buy TSLA", "2000", "10", "200", "180", "-200", "01/02/2025", "15/06/2025", "Stocks", "1", "US88160R1014"],
         ],
@@ -117,7 +133,7 @@ describe("eToro XLSX parsing", () => {
     it("should parse dates in DD/MM/YYYY format", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
         ],
       });
@@ -130,7 +146,7 @@ describe("eToro XLSX parsing", () => {
     it("should calculate proceeds from amount + profit", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "1", "US0378331005"],
         ],
       });
@@ -146,10 +162,10 @@ describe("eToro XLSX parsing", () => {
     it("should parse dividend entries", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
         ],
         dividends: [
-          ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"],
+          DIVIDENDS_HEADER,
           ["15/06/2025", "AAPL", "42.50", "7.50", "US0378331005"],
           ["20/09/2025", "MSFT", "30.00", "5.30", "US5949181045"],
         ],
@@ -168,7 +184,7 @@ describe("eToro XLSX parsing", () => {
     it("should include ISIN country code in dividend description", async () => {
       const data = buildEtoroWorkbook({
         dividends: [
-          ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"],
+          DIVIDENDS_HEADER,
           ["15/06/2025", "AAPL", "42.50", "7.50", "US0378331005"],
         ],
       });
@@ -182,7 +198,7 @@ describe("eToro XLSX parsing", () => {
     it("should compute gross from net + withholding", async () => {
       const data = buildEtoroWorkbook({
         dividends: [
-          ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"],
+          DIVIDENDS_HEADER,
           ["15/06/2025", "AAPL", "42.50", "7.50", "US0378331005"],
         ],
       });
@@ -196,7 +212,7 @@ describe("eToro XLSX parsing", () => {
     it("should handle dividend with no withholding", async () => {
       const data = buildEtoroWorkbook({
         dividends: [
-          ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"],
+          DIVIDENDS_HEADER,
           ["15/06/2025", "VWCE", "100.00", "0", "IE00BK5BQT80"],
         ],
       });
@@ -225,7 +241,7 @@ describe("eToro XLSX parsing", () => {
     it("should handle empty closed positions sheet", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
-          ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+          CLOSED_POSITIONS_HEADER,
         ],
       });
 

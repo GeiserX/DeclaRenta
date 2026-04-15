@@ -68,7 +68,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Web UI: responsive (tablet, móvil, móvil pequeño) | Implementado | `src/web/` |
 | Interfaz `BrokerParser` + registry auto-detección (5 brokers) | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
 | FIFO cross-broker (orden cronológico global) | Implementado | `src/cli/index.ts`, `src/web/main.ts` |
-| 183 tests | Passing | `tests/` |
+| 228 tests | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado

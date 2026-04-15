@@ -180,11 +180,11 @@ function buildDetailRecord(
   record += (costEur.isNegative() ? "N" : " ");               // 432: Acquisition sign
   record += numPad(costEur.toString(), 13, 2);                // 433-447: Acquisition value
   record += (valueEur.isNegative() ? "N" : " ");              // 448: Valuation sign
-  record += numPad(valueEur.toString(), 13, 2);               // 449-462: Valuation value
-  record += "A";                                              // 463: Stock representation
-  record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 464-475: Quantity
-  record += pad("", 1);                                       // 476: Reserved
-  record += numPad("100", 3, 2);                              // 477-481: Ownership %
+  record += numPad(valueEur.toString(), 13, 2);               // 449-463: Valuation value
+  record += "A";                                              // 464: Stock representation
+  record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 465-476: Quantity
+  record += pad("", 1);                                       // 477: Reserved
+  record += numPad("100", 3, 2);                              // 478-482: Ownership %
   record += pad("", 18);                                      // 483-500: Blank
 
   return record;
@@ -222,11 +222,11 @@ function buildCancelledRecord(isin: string, config: Modelo720Config): string {
   record += " ";                                              // 432: Acquisition sign
   record += numPad("0", 13, 2);                               // 433-447: Acquisition value (0)
   record += " ";                                              // 448: Valuation sign
-  record += numPad("0", 13, 2);                               // 449-462: Valuation value (0)
-  record += "A";                                              // 463: Stock representation
-  record += numPad("0", 9, 3);                                // 464-475: Quantity (0)
-  record += pad("", 1);                                       // 476: Reserved
-  record += numPad("100", 3, 2);                              // 477-481: Ownership %
+  record += numPad("0", 13, 2);                               // 449-463: Valuation value (0)
+  record += "A";                                              // 464: Stock representation
+  record += numPad("0", 9, 3);                                // 465-476: Quantity (0)
+  record += pad("", 1);                                       // 477: Reserved
+  record += numPad("100", 3, 2);                              // 478-482: Ownership %
   record += pad("", 18);                                      // 483-500: Blank
 
   return record;

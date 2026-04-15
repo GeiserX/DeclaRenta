@@ -144,15 +144,15 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           .fill(COLORS.primary);
 
         const cols = [
-          { label: "ISIN", x: MARGIN + 4, w: 72 },
-          { label: "Símbolo", x: MARGIN + 80, w: 50 },
-          { label: "F. Compra", x: MARGIN + 134, w: 54 },
-          { label: "F. Venta", x: MARGIN + 192, w: 54 },
-          { label: "Uds.", x: MARGIN + 250, w: 30 },
-          { label: "Coste EUR", x: MARGIN + 284, w: 58 },
-          { label: "Venta EUR", x: MARGIN + 346, w: 58 },
-          { label: "G/P EUR", x: MARGIN + 408, w: 50 },
-          { label: "Tipo ECB", x: MARGIN + 462, w: 46 },
+          { label: "ISIN", x: MARGIN + 4, w: 68 },
+          { label: "Símbolo", x: MARGIN + 76, w: 46 },
+          { label: "F. Compra", x: MARGIN + 126, w: 52 },
+          { label: "F. Venta", x: MARGIN + 182, w: 52 },
+          { label: "Uds.", x: MARGIN + 238, w: 28 },
+          { label: "Coste EUR", x: MARGIN + 270, w: 56 },
+          { label: "Venta EUR", x: MARGIN + 330, w: 56 },
+          { label: "G/P EUR", x: MARGIN + 390, w: 48 },
+          { label: "Tipo ECB", x: MARGIN + 442, w: 48 },
         ];
 
         doc.fontSize(FONT_SIZE.small).fillColor("#ffffff");

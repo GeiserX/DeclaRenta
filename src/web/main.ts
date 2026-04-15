@@ -264,17 +264,24 @@ function nextDir(current: SortDir): SortDir {
   return null;
 }
 
-function attachSortHandlers(tableEl: HTMLElement, state: { get: () => SortState; set: (s: SortState) => void }, render: () => void) {
-  tableEl.querySelectorAll("th.sortable").forEach((th) => {
-    th.addEventListener("click", () => {
-      const col = (th as HTMLElement).dataset.col!;
-      const cur = state.get();
-      const dir = cur.col === col ? nextDir(cur.dir) : "asc";
-      state.set({ col: dir ? col : "", dir });
-      render();
-    });
-  });
-}
+// Event delegation: attach once on stable parent, works across re-renders
+opsTable.addEventListener("click", (e) => {
+  const th = (e.target as HTMLElement).closest<HTMLElement>("th.sortable");
+  if (!th) return;
+  const col = th.dataset.col!;
+  const dir = opsSort.col === col ? nextDir(opsSort.dir) : "asc";
+  opsSort = { col: dir ? col : "", dir };
+  renderOperationsTable();
+});
+
+divsTable.addEventListener("click", (e) => {
+  const th = (e.target as HTMLElement).closest<HTMLElement>("th.sortable");
+  if (!th) return;
+  const col = th.dataset.col!;
+  const dir = divSort.col === col ? nextDir(divSort.dir) : "asc";
+  divSort = { col: dir ? col : "", dir };
+  if (currentReport) renderDividendsTable(currentReport);
+});
 
 // ---------------------------------------------------------------------------
 // Search and filter
@@ -395,11 +402,6 @@ function renderOperationsTable() {
     <p class="table-count">${disposals.length} operación(es)</p>
   `;
 
-  attachSortHandlers(
-    opsTable,
-    { get: () => opsSort, set: (s) => { opsSort = s; } },
-    renderOperationsTable,
-  );
 }
 
 function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
@@ -456,9 +458,4 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
     <p class="table-count">${entries.length} dividendo(s)</p>
   `;
 
-  attachSortHandlers(
-    divsTable,
-    { get: () => divSort, set: (s) => { divSort = s; } },
-    () => renderDividendsTable(report),
-  );
 }

@@ -519,10 +519,6 @@ footer a:hover {
     width: 100%;
   }
 
-  .export-buttons button {
-    width: 100%;
-  }
-
   th.sortable {
     padding-right: 1rem;
   }
