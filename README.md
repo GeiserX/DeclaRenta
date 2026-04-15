@@ -55,8 +55,8 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 | Modelo | Descripción | Formato |
 |---|---|---|
-| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0032, 0033, 0588 | JSON, CSV, PDF |
-| **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR) | Fixed-width AEAT |
+| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0032, 0033, 0588 | JSON, CSV, PDF (con tipos ECB) |
+| **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR), tipos A/M/C | Fixed-width AEAT |
 | **Modelo D-6** | Inversiones en el exterior (Banco de España / AFORIX) | Guía paso a paso |
 
 ## Casillas del Modelo 100
@@ -100,6 +100,9 @@ declarenta convert --input flex_query.xml --year 2025 --prior-losses perdidas.js
 
 # Modelo 720
 declarenta modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
+
+# Modelo 720 con tipos A/M/C (comparando con declaración del año anterior)
+declarenta modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE" --previous-720 720_2024.txt
 
 # Modelo D-6 (guía AFORIX)
 declarenta d6 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"

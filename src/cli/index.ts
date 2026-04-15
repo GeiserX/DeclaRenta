@@ -236,7 +236,8 @@ program
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("--phone <phone>", "Teléfono de contacto", "")
-  .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; phone: string }) => {
+  .option("--previous-720 <file>", "Previous year 720 output file (to determine A/M/C types)")
+  .action(async (opts: { input: string; year: number; nif: string; name: string; output?: string; phone: string; previous720?: string }) => {
     try {
       const content = readFileSync(opts.input, "utf-8");
       const parser = detectBroker(content);
@@ -255,6 +256,16 @@ program
       const surname = nameParts[0] ?? "";
       const firstName = nameParts[1] ?? "";
 
+      // Extract ISINs from previous year's 720 file (detail records start with "2", ISIN at positions 131-142)
+      let previousYearIsins: string[] | undefined;
+      if (opts.previous720) {
+        const prev = readFileSync(opts.previous720, "utf-8");
+        previousYearIsins = prev.split("\n")
+          .filter((line) => line.startsWith("2"))
+          .map((line) => line.slice(131, 143).trim())
+          .filter((isin) => isin.length > 0);
+      }
+
       const output720 = generateModelo720(statement.openPositions, rateMap, {
         nif: opts.nif,
         surname,
@@ -265,6 +276,7 @@ program
         declarationId: "0000000000001",
         isComplementary: false,
         isReplacement: false,
+        previousYearIsins,
       });
 
       if (!output720) {

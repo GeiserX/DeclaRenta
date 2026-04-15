@@ -118,6 +118,90 @@ describe("scalableParser", () => {
     });
   });
 
+  describe("German status localization", () => {
+    it("should accept 'Ausgeführt' status", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Ausgeführt;REF001;iShares;Security;Buy;IE00B4L5Y983;10;80,00;-800,00;-1,50;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.buySell).toBe("BUY");
+    });
+  });
+
+  describe("Spanish status localization", () => {
+    it("should accept 'Ejecutada' status", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Ejecutada;REF001;Vanguard;Security;Sell;IE00BK5BQT80;-5;120,00;600,00;-0,99;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.buySell).toBe("SELL");
+    });
+  });
+
+  describe("edge cases", () => {
+    it("should skip rows with no ISIN", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Executed;REF001;Cash deposit;Cash;Deposit;;0;0;500,00;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+    });
+
+    it("should skip rows with zero shares for trades", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Executed;REF001;Test;Security;Buy;IE00BK5BQT80;0;100,00;0;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should skip unrecognized trade types", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Executed;REF001;Test;Security;Transfer;IE00BK5BQT80;5;100,00;-500;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should handle distribution with no withholding tax", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-07-15;00:00;Executed;REF005;Vanguard;Security;Distribution;IE00BK5BQT80;0;0;15,50;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const divs = result.cashTransactions.filter((t) => t.type === "Dividends");
+      const whts = result.cashTransactions.filter((t) => t.type === "Withholding Tax");
+      expect(divs).toHaveLength(1);
+      expect(whts).toHaveLength(0);
+    });
+
+    it("should handle rows with empty status (treated as executed)", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;;REF001;Test;Security;Buy;IE00BK5BQT80;5;100,00;-500;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+    });
+
+    it("should handle comma-delimited CSV", () => {
+      const csv = [
+        "date,time,status,reference,description,assetType,type,isin,shares,price,amount,fee,tax,currency",
+        "2025-03-15,09:15,Executed,REF001,iShares,Security,Buy,IE00B4L5Y983,10,80.00,-800.00,-1.50,0,EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => scalableParser.parse("")).toThrow("vacío");

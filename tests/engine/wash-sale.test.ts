@@ -19,6 +19,7 @@ function makeDisposal(overrides: Partial<FifoDisposal>): FifoDisposal {
     currency: "USD",
     sellEcbRate: new Decimal("0.91"),
     acquireEcbRate: new Decimal("0.92"),
+    assetCategory: "STK",
     washSaleBlocked: false,
     ...overrides,
   };
@@ -91,5 +92,21 @@ describe("detectWashSales", () => {
 
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("should NOT block loss for options (OPT assetCategory)", () => {
+    const disposals = [makeDisposal({
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-500),
+      assetCategory: "OPT",
+      symbol: "AAPL 250620C00200000",
+    })];
+    const trades = [
+      makeTrade("US0378331005", "2025-06-15", "SELL"),
+      makeTrade("US0378331005", "2025-06-20", "BUY"), // Same ISIN repurchase
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false); // Options excluded
   });
 });

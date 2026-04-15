@@ -113,4 +113,131 @@ describe("parseIbkrFlexXml", () => {
     expect(result.trades).toHaveLength(0);
     expect(result.cashTransactions).toHaveLength(0);
   });
+
+  it("should throw on missing FlexStatement", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="0">
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    expect(() => parseIbkrFlexXml(xml)).toThrow("missing FlexStatement");
+  });
+
+  it("should parse corporate actions", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades />
+          <CashTransactions />
+          <CorporateActions>
+            <CorporateAction transactionID="CA001" accountId="U1234567" symbol="AAPL" description="AAPL Split 4:1"
+                             isin="US0378331005" currency="USD" reportDate="20250601" dateTime="20250601"
+                             quantity="30" amount="0" type="SO" actionDescription="AAPL(US0378331005) SPLIT 4 FOR 1" />
+          </CorporateActions>
+          <OpenPositions />
+          <SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    expect(result.corporateActions).toHaveLength(1);
+    expect(result.corporateActions[0]!.symbol).toBe("AAPL");
+    expect(result.corporateActions[0]!.type).toBe("SO");
+    expect(result.corporateActions[0]!.quantity).toBe("30");
+    expect(result.corporateActions[0]!.actionDescription).toContain("SPLIT");
+  });
+
+  it("should parse open positions", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades />
+          <CashTransactions />
+          <CorporateActions />
+          <OpenPositions>
+            <OpenPosition accountId="U1234567" symbol="AAPL" description="APPLE INC"
+                          isin="US0378331005" currency="USD" assetCategory="STK"
+                          quantity="100" costBasisMoney="17500" costBasisPrice="175"
+                          markPrice="195" positionValue="19500" fifoPnlUnrealized="2000"
+                          fxRateToBase="0.92" />
+          </OpenPositions>
+          <SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    expect(result.openPositions).toHaveLength(1);
+    expect(result.openPositions[0]!.symbol).toBe("AAPL");
+    expect(result.openPositions[0]!.quantity).toBe("100");
+    expect(result.openPositions[0]!.markPrice).toBe("195");
+    expect(result.openPositions[0]!.assetCategory).toBe("STK");
+  });
+
+  it("should parse multiple corporate actions as array", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades />
+          <CashTransactions />
+          <CorporateActions>
+            <CorporateAction transactionID="CA001" accountId="U1234567" symbol="OLD" description="Merger"
+                             isin="US1111111111" currency="USD" reportDate="20250601" dateTime="20250601"
+                             quantity="-100" amount="0" type="TC" actionDescription="TENDER" />
+            <CorporateAction transactionID="CA002" accountId="U1234567" symbol="NEW" description="Merger"
+                             isin="US2222222222" currency="USD" reportDate="20250601" dateTime="20250601"
+                             quantity="100" amount="0" type="TC" actionDescription="TENDER" />
+          </CorporateActions>
+          <OpenPositions />
+          <SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    expect(result.corporateActions).toHaveLength(2);
+  });
+
+  it("should handle defaults for missing attributes", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement>
+          <Trades>
+            <Trade symbol="XYZ" />
+          </Trades>
+          <CashTransactions />
+          <CorporateActions />
+          <OpenPositions>
+            <OpenPosition symbol="XYZ" />
+          </OpenPositions>
+          <SecuritiesInfo>
+            <SecurityInfo symbol="XYZ" />
+          </SecuritiesInfo>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    expect(trade.symbol).toBe("XYZ");
+    expect(trade.isin).toBe("");
+    expect(trade.quantity).toBe("0");
+    expect(trade.buySell).toBe("BUY");
+    expect(trade.fxRateToBase).toBe("1");
+
+    const pos = result.openPositions[0]!;
+    expect(pos.symbol).toBe("XYZ");
+    expect(pos.quantity).toBe("0");
+    expect(pos.fxRateToBase).toBe("1");
+
+    const sec = result.securitiesInfo[0]!;
+    expect(sec.symbol).toBe("XYZ");
+    expect(sec.multiplier).toBe("1");
+  });
 });
