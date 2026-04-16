@@ -13,9 +13,12 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
-/** Lot grouping key: ISIN for stocks/funds, symbol for options (which lack ISINs) */
-function lotKey(trade: { isin: string; symbol: string }): string {
-  return trade.isin || trade.symbol;
+/** Known asset categories — warn on unknown values to catch future IBKR additions */
+const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "CASH", "BOND", "FUND", "WAR", "CRYPTO", "CFD"]);
+
+/** Lot grouping key: ISIN when available; otherwise asset category + symbol to prevent cross-type collisions */
+function lotKey(trade: { isin: string; symbol: string; assetCategory: string }): string {
+  return trade.isin || `${trade.assetCategory}:${trade.symbol}`;
 }
 
 export class FifoEngine {
@@ -31,8 +34,15 @@ export class FifoEngine {
    * Buys add lots; sells consume lots via FIFO; splits adjust lots.
    */
   processTrades(trades: Trade[], rateMap: EcbRateMap, corporateActions?: CorporateAction[]): FifoDisposal[] {
+    // Process all tradeable asset types (STK, FUND, OPT, FUT, BOND, CASH/forex, CFD, CRYPTO)
+    // Only WAR (warrants) is excluded — insufficient data for fiscal treatment
     const sorted = [...trades]
-      .filter((t) => t.assetCategory === "STK" || t.assetCategory === "FUND" || t.assetCategory === "OPT")
+      .filter((t) => {
+        if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
+          this.warnings.push(`⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`);
+        }
+        return t.assetCategory !== "WAR";
+      })
       .sort((a, b) => normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)));
 
     // Parse splits from corporate actions (deduplicate by ISIN+date)
@@ -204,7 +214,7 @@ export class FifoEngine {
     }
 
     const direction = split.ratio >= 1 ? "forward" : "reverse";
-    console.error(`  ⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`);
+    this.warnings.push(`⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`);
   }
 
   private addScripDividendLot(sd: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }): void {

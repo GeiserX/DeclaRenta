@@ -203,6 +203,118 @@ describe("parseIbkrFlexXml", () => {
     expect(result.corporateActions).toHaveLength(2);
   });
 
+  it("should parse option trades with derivative fields", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="OPT001" accountId="U1234567" symbol="AAPL 250620C00200000"
+                   description="AAPL 20JUN25 200 C" isin="" assetCategory="OPT" currency="USD"
+                   tradeDate="20250315" settlementDate="20250316"
+                   quantity="1" tradePrice="5.50" tradeMoney="550.00"
+                   proceeds="550.00" cost="0" fifoPnlRealized="0"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="CBOE" commissionCurrency="USD" commission="-0.65" taxes="0"
+                   multiplier="100" putCall="C" strike="200" expiry="20250620"
+                   underlyingSymbol="AAPL" underlyingIsin="US0378331005" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    expect(trade.assetCategory).toBe("OPT");
+    expect(trade.multiplier).toBe("100");
+    expect(trade.putCall).toBe("C");
+    expect(trade.strike).toBe("200");
+    expect(trade.expiry).toBe("20250620");
+    expect(trade.underlyingSymbol).toBe("AAPL");
+    expect(trade.underlyingIsin).toBe("US0378331005");
+  });
+
+  it("should parse futures with multiplier and asset category", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="FUT001" accountId="U1234567" symbol="ESU5"
+                   description="E-MINI S&amp;P 500" isin="" assetCategory="FUT" currency="USD"
+                   tradeDate="20250601" settlementDate="20250601"
+                   quantity="1" tradePrice="5500.00" tradeMoney="275000.00"
+                   proceeds="275000.00" cost="0" fifoPnlRealized="0"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="CME" commissionCurrency="USD" commission="-2.10" taxes="0"
+                   multiplier="50" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    expect(trade.assetCategory).toBe("FUT");
+    expect(trade.multiplier).toBe("50");
+    expect(trade.isin).toBe("");
+    expect(trade.symbol).toBe("ESU5");
+  });
+
+  it("should parse bond trades", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="BOND001" accountId="U1234567" symbol="T 3.5 05/15/33"
+                   description="US TREASURY 3.5% 05/15/2033" isin="US91282CGR69" assetCategory="BOND" currency="USD"
+                   tradeDate="20250315" settlementDate="20250317"
+                   quantity="10000" tradePrice="97.50" tradeMoney="9750.00"
+                   proceeds="9750.00" cost="0" fifoPnlRealized="0"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="SMART" commissionCurrency="USD" commission="-5.00" taxes="0"
+                   multiplier="1" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    expect(trade.assetCategory).toBe("BOND");
+    expect(trade.isin).toBe("US91282CGR69");
+    expect(trade.multiplier).toBe("1");
+  });
+
+  it("should reject invalid putCall values", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="OPT002" accountId="U1234567" symbol="SPY" isin="" assetCategory="OPT"
+                   currency="USD" tradeDate="20250315" settlementDate="20250316"
+                   quantity="1" tradePrice="3.00" tradeMoney="300"
+                   proceeds="300" cost="0" fifoPnlRealized="0"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="CBOE" commissionCurrency="USD" commission="-0.65" taxes="0"
+                   multiplier="100" putCall="X" strike="500" expiry="20250620" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    expect(trade.putCall).toBeUndefined();
+    expect(trade.strike).toBe("500");
+  });
+
   it("should handle defaults for missing attributes", () => {
     const xml = `<?xml version="1.0"?>
     <FlexQueryResponse queryName="Test" type="AF">

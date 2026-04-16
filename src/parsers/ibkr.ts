@@ -101,6 +101,11 @@ function mapTrade(raw: Record<string, string>): Trade {
     commission: raw.commission ?? "0",
     taxes: raw.taxes ?? "0",
     multiplier: raw.multiplier ?? "1",
+    putCall: raw.putCall === "P" || raw.putCall === "C" ? raw.putCall : undefined,
+    strike: raw.strike || undefined,
+    expiry: raw.expiry || undefined,
+    underlyingSymbol: raw.underlyingSymbol || undefined,
+    underlyingIsin: raw.underlyingIsin || undefined,
   };
 }
 
