@@ -79,6 +79,46 @@ const eu: TranslationKeys = {
 
   "theme.toggle": "Gaia aldatu",
 
+  // Wizard steps
+  "wizard.step1": "Fitxategiak igo",
+  "wizard.step2": "Datuak berrikusi",
+  "wizard.step3": "Konfiguratu",
+  "wizard.step4": "Emaitzak",
+  "wizard.next": "Hurrengoa",
+  "wizard.back": "Atzera",
+  "wizard.step_indicator": "{{current}}. urratsa {{total}}(e)tik",
+
+  // Review step
+  "review.title": "Kargatutako datuen laburpena",
+  "review.broker": "Brokerra",
+  "review.trades_count": "Eragiketak",
+  "review.dividends_count": "Dibidenduak",
+  "review.date_range": "Data-tartea",
+  "review.currencies": "Dibisak",
+  "review.no_data": "Ez da eragiketarik detektatu igotako fitxategietan.",
+  "review.file": "Fitxategia",
+
+  // Config step
+  "config.nif_label": "NIF (720 Eredu/D-6-rako):",
+  "config.nif_placeholder": "12345678A",
+  "config.generate_720": "720 Ereduaren fitxategia sortu",
+  "config.generate_d6": "D-6 gida sortu",
+
+  // Expandable casillas
+  "casilla.expand": "Xehetasuna ikusi",
+  "casilla.collapse": "Xehetasuna ezkutatu",
+  "casilla.operations_in": "Lauki honetako eragiketak",
+  "casilla.no_operations": "Eragiketarik ez",
+
+  // Year comparison
+  "compare.title": "Urteko konparazioa",
+  "compare.no_data": "Prozesatu gutxienez 2 ekitaldi konparazioa ikusteko.",
+  "compare.year": "Ekitaldia",
+  "compare.variation": "Aldakuntza",
+  "compare.saved_reports": "Gordetako txostenak",
+  "compare.clear_history": "Historiala ezabatu",
+  "compare.clear_confirm": "Gordetako txosten guztiak ezabatu?",
+
   "error.no_broker_detected": "Ezin izan da \"{{filename}}\" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.",
   "error.prefix": "Errorea: ",
 

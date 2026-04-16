@@ -1,19 +1,23 @@
 /**
  * DeclaRenta web UI entry point.
  *
+ * Multi-step wizard: Upload → Review → Configure → Results.
  * All processing happens in the browser. No data is uploaded anywhere.
- * Supports: IBKR (XML), Degiro (CSV), Scalable Capital (CSV), eToro (XLSX), Freedom24 (JSON).
  */
 
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import type { Statement } from "../types/broker.js";
+import type { TaxSummary } from "../types/tax.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
 import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart } from "./charts.js";
+import { renderCasillaCards } from "./casilla-detail.js";
+import { persistReport, renderYearComparison } from "./year-compare.js";
+import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import Decimal from "decimal.js";
 
@@ -103,27 +107,81 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// ---------------------------------------------------------------------------
+// DOM references
+// ---------------------------------------------------------------------------
+
 const dropZone = document.getElementById("drop-zone")!;
 const fileInput = document.getElementById("file-input") as HTMLInputElement;
-const configSection = document.getElementById("config")!;
-const resultsSection = document.getElementById("results")!;
 const casillasDiv = document.getElementById("casillas")!;
 const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
+const generate720Btn = document.getElementById("generate-720-btn")!;
+const generateD6Btn = document.getElementById("generate-d6-btn")!;
 const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
 const processBtn = document.getElementById("process-btn")!;
 const fileListDiv = document.getElementById("file-list")!;
 const opsSearch = document.getElementById("ops-search") as HTMLInputElement;
 const opsFilter = document.getElementById("ops-filter") as HTMLSelectElement;
+const reviewContent = document.getElementById("review-content")!;
+const yearCompareDiv = document.getElementById("year-compare")!;
 
-let currentReport: ReturnType<typeof generateTaxReport> | null = null;
+let currentReport: TaxSummary | null = null;
+let currentBrokers: string[] = [];
 const pendingFiles: File[] = [];
 
+/** Parsed statement data (available after step 2) */
+let mergedStatement: Statement | null = null;
+let detectedBrokers: string[] = [];
+
 // ---------------------------------------------------------------------------
-// File upload handlers
+// Wizard initialization
+// ---------------------------------------------------------------------------
+
+initWizard();
+
+/** Control wizard "Next" behavior per step */
+onStepChange((_from: WizardStep, to: WizardStep) => {
+  if (to === 2 && !mergedStatement) {
+    // Parse files when entering step 2
+    void parseFiles();
+  }
+  if (to === 4 && !currentReport) {
+    // Process when entering step 4
+    void processFiles();
+  }
+});
+
+// Override next button to trigger processing on step 3
+const wizardNext = document.getElementById("wizard-next")!;
+wizardNext.addEventListener("click", (e) => {
+  const step = getCurrentWizardStep();
+  if (step === 1 && pendingFiles.length === 0) {
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (step === 3) {
+    e.stopImmediatePropagation();
+    void processFiles().then(() => {
+      if (currentReport) goToStep(4);
+    });
+    return;
+  }
+}, true); // Capture phase to run before wizard's own handler
+
+function getCurrentWizardStep(): WizardStep {
+  for (let i = 1; i <= 4; i++) {
+    const panel = document.getElementById(`wizard-step-${i}`);
+    if (panel && !panel.hidden) return i as WizardStep;
+  }
+  return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: File upload handlers
 // ---------------------------------------------------------------------------
 
 dropZone.addEventListener("click", () => fileInput.click());
@@ -160,7 +218,9 @@ function addFiles(files: File[]) {
     }
   }
   renderFileList();
-  configSection.hidden = pendingFiles.length === 0;
+  // Reset downstream state when files change
+  mergedStatement = null;
+  currentReport = null;
 }
 
 function renderFileList() {
@@ -173,33 +233,28 @@ function renderFileList() {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
       pendingFiles.splice(idx, 1);
       renderFileList();
-      if (pendingFiles.length === 0) configSection.hidden = true;
+      mergedStatement = null;
+      currentReport = null;
     });
   });
 }
 
 // ---------------------------------------------------------------------------
-// Process button
+// Step 2: Parse and review
 // ---------------------------------------------------------------------------
 
-processBtn.addEventListener("click", () => void processFiles());
-
-async function processFiles() {
+async function parseFiles(): Promise<void> {
   if (pendingFiles.length === 0) return;
 
+  const merged: Statement = {
+    accountId: "", fromDate: "", toDate: "", period: "",
+    trades: [], cashTransactions: [], corporateActions: [],
+    openPositions: [], securitiesInfo: [],
+  };
+  const brokerNames: string[] = [];
+
   try {
-    processBtn.textContent = t("config.processing");
-    processBtn.setAttribute("disabled", "true");
-
-    const merged: Statement = {
-      accountId: "", fromDate: "", toDate: "", period: "",
-      trades: [], cashTransactions: [], corporateActions: [],
-      openPositions: [], securitiesInfo: [],
-    };
-    const brokerNames: string[] = [];
-
     for (const file of pendingFiles) {
-      // Check for XLSX binary (eToro) first
       const arrayBuf = await file.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuf);
       if (detectEtoroXlsx(uint8)) {
@@ -241,15 +296,97 @@ async function processFiles() {
       normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
     );
 
+    mergedStatement = merged;
+    detectedBrokers = [...new Set(brokerNames)];
+    renderReview(merged, detectedBrokers);
+    unlockStep(3);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+  }
+}
+
+function renderReview(merged: Statement, brokers: string[]): void {
+  const tradeCount = merged.trades.length;
+  const divCount = merged.cashTransactions.filter((c) =>
+    c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
+  ).length;
+
+  const currencies = new Set<string>();
+  for (const tr of merged.trades) currencies.add(tr.currency);
+  currencies.delete("EUR");
+
+  const dates = merged.trades.map((tr) => normalizeDate(tr.tradeDate)).sort();
+  const dateRange = dates.length > 0
+    ? `${formatDate(dates[0]!)} — ${formatDate(dates[dates.length - 1]!)}`
+    : "—";
+
+  reviewContent.innerHTML = `
+    <div class="review-grid">
+      <div class="review-card">
+        <div class="review-label">${t("review.broker")}</div>
+        <div class="review-value accent">${esc(brokers.join(", "))}</div>
+      </div>
+      <div class="review-card">
+        <div class="review-label">${t("review.trades_count")}</div>
+        <div class="review-value">${tradeCount}</div>
+      </div>
+      <div class="review-card">
+        <div class="review-label">${t("review.dividends_count")}</div>
+        <div class="review-value">${divCount}</div>
+      </div>
+      <div class="review-card">
+        <div class="review-label">${t("review.date_range")}</div>
+        <div class="review-value" style="font-size:1rem">${dateRange}</div>
+      </div>
+      <div class="review-card">
+        <div class="review-label">${t("review.currencies")}</div>
+        <div class="review-value" style="font-size:1rem">${currencies.size > 0 ? [...currencies].join(", ") : "EUR"}</div>
+      </div>
+    </div>
+    <div class="review-files">
+      <table>
+        <thead><tr><th>${t("review.file")}</th><th>${t("review.broker")}</th></tr></thead>
+        <tbody>${pendingFiles.map((f, i) => `
+          <tr><td>${esc(f.name)}</td><td>${esc(brokers[i] ?? "—")}</td></tr>
+        `).join("")}</tbody>
+      </table>
+    </div>
+  `;
+
+  if (tradeCount === 0 && divCount === 0) {
+    reviewContent.innerHTML += `<p class="warning">${t("review.no_data")}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: Process
+// ---------------------------------------------------------------------------
+
+processBtn.addEventListener("click", () => {
+  void processFiles().then(() => {
+    if (currentReport) goToStep(4);
+  });
+});
+
+async function processFiles(): Promise<void> {
+  if (!mergedStatement) {
+    await parseFiles();
+  }
+  if (!mergedStatement) return;
+
+  try {
+    processBtn.textContent = t("config.processing");
+    processBtn.setAttribute("disabled", "true");
+
+    const merged = mergedStatement;
     const year = parseInt(yearSelect.value);
     const currencies = new Set<string>();
-    for (const t of merged.trades) currencies.add(t.currency);
+    for (const tr of merged.trades) currencies.add(tr.currency);
     for (const c of merged.cashTransactions) currencies.add(c.currency);
     currencies.delete("EUR");
 
-    dropZone.textContent = t("status.fetching_rates", { currencies: [...currencies].join(", ") || "EUR" });
-
-    const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
+    const years = new Set(merged.trades.map((tr) => parseInt(tr.tradeDate.slice(0, 4))));
     years.add(year);
     const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
     for (const yr of years) {
@@ -261,19 +398,17 @@ async function processFiles() {
 
     const report = generateTaxReport(merged, allRates, year);
     currentReport = report;
+    currentBrokers = detectedBrokers;
 
-    const uniqueBrokers = [...new Set(brokerNames)];
-    dropZone.textContent = `✓ ${t("status.files_processed", { count: String(pendingFiles.length), brokers: uniqueBrokers.join(", "), trades: String(merged.trades.length) })}`;
+    // Persist for year comparison
+    persistReport(report, currentBrokers);
 
-    resultsSection.hidden = false;
+    unlockStep(4);
     renderResults(report);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    dropZone.textContent = `${t("error.prefix")}${msg}`;
-    dropZone.style.color = "var(--danger)";
-    // Clear stale results
+    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
     currentReport = null;
-    resultsSection.hidden = true;
   } finally {
     processBtn.textContent = t("config.process_btn");
     processBtn.removeAttribute("disabled");
@@ -281,7 +416,7 @@ async function processFiles() {
 }
 
 // ---------------------------------------------------------------------------
-// Export buttons
+// Export & generate buttons
 // ---------------------------------------------------------------------------
 
 exportJsonBtn.addEventListener("click", () => {
@@ -295,6 +430,60 @@ exportCsvBtn.addEventListener("click", () => {
   const csv = formatCsv(currentReport);
   const blob = new Blob([csv], { type: "text/csv" });
   downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+});
+
+generate720Btn.addEventListener("click", () => {
+  if (!currentReport || !mergedStatement) return;
+  // Import dynamically to avoid loading 720 generator in initial bundle
+  void import("../generators/modelo720.js").then(async ({ generateModelo720 }) => {
+    const year = currentReport!.year;
+    const currencies = new Set<string>();
+    for (const tr of mergedStatement!.trades) currencies.add(tr.currency);
+    currencies.delete("EUR");
+
+    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
+    const rates = await fetchEcbRates(year, [...currencies]);
+    for (const [date, ratesByDate] of rates) {
+      allRates.set(date, ratesByDate);
+    }
+
+    const nif = (document.getElementById("nif-input") as HTMLInputElement).value.trim() || "00000000T";
+    const config = {
+      nif,
+      surname: "",
+      name: "CONTRIBUYENTE",
+      year,
+      phone: "",
+      contactName: "",
+      declarationId: "",
+      isComplementary: false,
+      isReplacement: false,
+    };
+    const result = generateModelo720(mergedStatement!.openPositions, allRates, config);
+    const blob = new Blob([result], { type: "text/plain;charset=iso-8859-15" });
+    downloadBlob(blob, `modelo720_${year}.txt`);
+  });
+});
+
+generateD6Btn.addEventListener("click", () => {
+  if (!currentReport || !mergedStatement) return;
+  void import("../generators/d6.js").then(async ({ generateD6Report }) => {
+    const year = currentReport!.year;
+    const currencies = new Set<string>();
+    for (const tr of mergedStatement!.trades) currencies.add(tr.currency);
+    currencies.delete("EUR");
+
+    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
+    const rates = await fetchEcbRates(year, [...currencies]);
+    for (const [date, ratesByDate] of rates) {
+      allRates.set(date, ratesByDate);
+    }
+
+    const nif = (document.getElementById("nif-input") as HTMLInputElement).value.trim() || "00000000T";
+    const report = generateD6Report(mergedStatement!.openPositions, allRates, year, "CONTRIBUYENTE", nif);
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    downloadBlob(blob, `d6_guia_${year}.json`);
+  });
 });
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -349,7 +538,7 @@ opsSearch.addEventListener("input", () => renderOperationsTable());
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
-// Render results
+// Render results (Step 4)
 // ---------------------------------------------------------------------------
 
 function formatDate(d: string): string {
@@ -357,26 +546,9 @@ function formatDate(d: string): string {
   return d;
 }
 
-function renderResults(report: ReturnType<typeof generateTaxReport>) {
-  // Casillas summary
-  casillasDiv.innerHTML = `
-    <table>
-      <thead><tr><th>${t("table.casilla")}</th><th>${t("table.concept")}</th><th>${t("table.amount_eur")}</th></tr></thead>
-      <tbody>
-        <tr><td>0327</td><td>${t("casilla.transmission_value")}</td><td>${report.capitalGains.transmissionValue.toFixed(2)}</td></tr>
-        <tr><td>0328</td><td>${t("casilla.acquisition_value")}</td><td>${report.capitalGains.acquisitionValue.toFixed(2)}</td></tr>
-        <tr class="${report.capitalGains.netGainLoss.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">
-          <td></td><td><strong>${t("casilla.net_gain_loss")}</strong></td><td><strong>${report.capitalGains.netGainLoss.toFixed(2)}</strong></td>
-        </tr>
-        <tr><td>0029</td><td>${t("casilla.gross_dividends")}</td><td>${report.dividends.grossIncome.toFixed(2)}</td></tr>
-        <tr><td>0033</td><td>${t("casilla.interest_earned")}</td><td>${report.interest.earned.toFixed(2)}</td></tr>
-        <tr><td>0032</td><td>${t("casilla.interest_paid")}</td><td>${report.interest.paid.toFixed(2)}</td></tr>
-        <tr><td>0588</td><td>${t("casilla.double_taxation")}</td><td>${report.doubleTaxation.deduction.toFixed(2)}</td></tr>
-      </tbody>
-    </table>
-    ${report.capitalGains.blockedLosses.greaterThan(0) ? `<p class="warning">⚠ ${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>` : ""}
-    ${report.warnings.length > 0 ? `<details><summary>${t("casilla.warnings_count", { count: String(report.warnings.length) })}</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
-  `;
+function renderResults(report: TaxSummary) {
+  // Expandable casilla cards (replaces old table)
+  renderCasillaCards(casillasDiv, report);
 
   // Charts
   const chartData = extractChartData(report);
@@ -387,6 +559,7 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
   ].filter(Boolean).join("");
 
+  const resultsSection = document.getElementById("wizard-step-4")!;
   resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
   if (chartsHtml) {
     casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);
@@ -394,6 +567,9 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
 
   renderOperationsTable();
   renderDividendsTable(report);
+
+  // Year comparison
+  renderYearComparison(yearCompareDiv);
 }
 
 function sortIndicator(col: string, state: SortState): string {
@@ -473,10 +649,9 @@ function renderOperationsTable() {
     </table>
     <p class="table-count">${t("results.operations_count", { count: String(disposals.length) })}</p>
   `;
-
 }
 
-function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
+function renderDividendsTable(report: TaxSummary) {
   if (report.dividends.entries.length === 0) {
     divsTable.innerHTML = `<p class='muted'>${t("results.no_dividends")}</p>`;
     return;
@@ -529,7 +704,6 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
     </table>
     <p class="table-count">${t("results.dividends_count", { count: String(entries.length) })}</p>
   `;
-
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +720,7 @@ document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
 // ---------------------------------------------------------------------------
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {
+  navigator.serviceWorker.register("./sw.js").catch(() => {
     // SW registration is optional — fail silently
   });
 }

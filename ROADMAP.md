@@ -64,6 +64,9 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
 | CLI (`convert`, `modelo720`, `d6`, `modelo721`) | Implementado | `src/cli/index.ts` |
 | Web UI: selector broker, tabla operaciones, filtros, búsqueda, ordenación | Implementado | `src/web/` |
+| Web UI: wizard 4 pasos (subir → revisar → configurar → resultados) | Implementado | `src/web/wizard.ts` |
+| Web UI: casillas expandibles con desglose de operaciones | Implementado | `src/web/casilla-detail.ts` |
+| Web UI: comparador año a año (localStorage) | Implementado | `src/web/year-compare.ts`, `src/web/storage.ts` |
 | Web UI: modo oscuro/claro con detección de preferencia del sistema | Implementado | `src/web/` |
 | Web UI: responsive (tablet, móvil, móvil pequeño) | Implementado | `src/web/` |
 | Interfaz `BrokerParser` + registry auto-detección (5 brokers) | Implementado | `src/types/broker.ts`, `src/parsers/index.ts` |
@@ -78,7 +81,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Web UI: accesibilidad WCAG 2.1 AA | Implementado | `src/web/` |
 | PWA: Service Worker + manifest | Implementado | `src/web/sw.ts`, `src/web/manifest.json` |
 | Deploy GitHub Pages | Configurado | `.github/workflows/deploy.yml` |
-| 370+ tests | Passing | `tests/` |
+| 412+ tests | Passing | `tests/` |
 | CI/CD GitHub Actions | Configurado | `.github/workflows/` |
 
 ### v0.1.0 completado
@@ -284,11 +287,11 @@ Tareas:
 
 > **Objetivo**: experiencia web de calidad que elimine cualquier barrera de entrada. Zero-server.
 
-- [ ] **Wizard multi-paso**: elige broker(s) → sube fichero(s) → revisa datos → configura (NIF, año) → genera resultados → descarga
+- [x] **Wizard multi-paso**: elige broker(s) → sube fichero(s) → revisa datos → configura (NIF, año) → genera resultados → descarga
 - [x] **Tabla interactiva de operaciones**: ordenación, filtros por ISIN/fecha/tipo, búsqueda
-- [ ] **Vista por casillas**: cada casilla expandible con desglose de las operaciones que la componen
+- [x] **Vista por casillas**: cada casilla expandible con desglose de las operaciones que la componen
 - [x] **Gráficos**: distribución por tipo de activo, G/P por mes, composición por divisa, retenciones por país
-- [ ] **Comparador año a año**: si el usuario procesa múltiples años
+- [x] **Comparador año a año**: si el usuario procesa múltiples años (localStorage)
 - [x] **Modo oscuro/claro** con detección de preferencia del sistema
 - [x] **PWA**: funciona offline una vez cargada (Service Worker + manifest)
 - [x] **Accesibilidad WCAG 2.1 AA**: skip-link, focus-visible, ARIA roles, keyboard navigation
