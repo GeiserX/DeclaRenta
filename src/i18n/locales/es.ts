@@ -3,7 +3,7 @@ const es = {
   // App
   "app.title": "DeclaRenta",
   "app.subtitle": "Broker extranjero → Renta española",
-  "app.privacy": "Self-hosted. Tus datos no salen de tu equipo.",
+
 
   // Upload
   "upload.title": "1. Sube tu informe del broker",

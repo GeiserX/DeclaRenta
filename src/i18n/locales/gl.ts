@@ -5,7 +5,7 @@ import type { TranslationKeys } from "./es.js";
 const gl: TranslationKeys = {
   "app.title": "DeclaRenta",
   "app.subtitle": "Broker estranxeiro → Renda española",
-  "app.privacy": "Self-hosted. Os teus datos non saen do teu equipo.",
+
 
   "upload.title": "1. Sube o teu informe do broker",
   "upload.broker_label": "Broker:",

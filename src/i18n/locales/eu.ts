@@ -5,7 +5,7 @@ import type { TranslationKeys } from "./es.js";
 const eu: TranslationKeys = {
   "app.title": "DeclaRenta",
   "app.subtitle": "Atzerriko brokerra → Espainiako errenta",
-  "app.privacy": "Self-hosted. Zure datuak ez dira zure ekipotik ateratzen.",
+
 
   "upload.title": "1. Igo zure brokerraren txostena",
   "upload.broker_label": "Brokerra:",

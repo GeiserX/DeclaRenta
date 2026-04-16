@@ -15,8 +15,6 @@
   --drop-hover: rgba(59, 130, 246, 0.05);
   --tag-bg: rgba(59, 130, 246, 0.1);
   --tag-border: rgba(59, 130, 246, 0.3);
-  --privacy-bg: rgba(34, 197, 94, 0.1);
-  --privacy-border: rgba(34, 197, 94, 0.2);
   --warning-bg: rgba(245, 158, 11, 0.1);
   --warning-border: rgba(245, 158, 11, 0.3);
 }
@@ -39,8 +37,6 @@
     --drop-hover: rgba(59, 130, 246, 0.04);
     --tag-bg: rgba(59, 130, 246, 0.08);
     --tag-border: rgba(59, 130, 246, 0.25);
-    --privacy-bg: rgba(34, 197, 94, 0.08);
-    --privacy-border: rgba(34, 197, 94, 0.2);
     --warning-bg: rgba(245, 158, 11, 0.08);
     --warning-border: rgba(245, 158, 11, 0.25);
   }
@@ -63,8 +59,6 @@
   --drop-hover: rgba(59, 130, 246, 0.04);
   --tag-bg: rgba(59, 130, 246, 0.08);
   --tag-border: rgba(59, 130, 246, 0.25);
-  --privacy-bg: rgba(34, 197, 94, 0.08);
-  --privacy-border: rgba(34, 197, 94, 0.2);
   --warning-bg: rgba(245, 158, 11, 0.08);
   --warning-border: rgba(245, 158, 11, 0.25);
 }
@@ -86,8 +80,6 @@
   --drop-hover: rgba(59, 130, 246, 0.05);
   --tag-bg: rgba(59, 130, 246, 0.1);
   --tag-border: rgba(59, 130, 246, 0.3);
-  --privacy-bg: rgba(34, 197, 94, 0.1);
-  --privacy-border: rgba(34, 197, 94, 0.2);
   --warning-bg: rgba(245, 158, 11, 0.1);
   --warning-border: rgba(245, 158, 11, 0.3);
 }
@@ -176,17 +168,6 @@ header .subtitle {
 header p {
   color: var(--muted);
   margin-top: 0.5rem;
-}
-
-.privacy {
-  display: inline-block;
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: var(--privacy-bg);
-  border: 1px solid var(--privacy-border);
-  border-radius: 6px;
-  color: var(--success);
-  font-size: 0.875rem;
 }
 
 section {
