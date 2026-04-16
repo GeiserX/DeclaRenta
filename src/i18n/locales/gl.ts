@@ -63,6 +63,7 @@ const gl: TranslationKeys = {
   "chart.currency_composition": "Composición por divisa",
   "chart.withholdings_country": "Retencións por país",
 
+  "footer.docs": "Documentación",
   "footer.privacy": "Self-hosted · Privacidade total",
   "footer.disclaimer": "Aviso legal",
 

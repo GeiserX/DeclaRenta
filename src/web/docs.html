@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeclaRenta - Documentación</title>
+  <meta name="description" content="Documentación completa de DeclaRenta: brokers soportados, casillas del Modelo 100, FIFO, doble imposición, Modelo 720, D-6 y más." />
+  <meta name="theme-color" content="#3b82f6" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+  <link rel="stylesheet" href="./style.css" />
+  <style>
+    /* Docs-specific layout */
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+      align-items: start;
+    }
+
+    /* Sidebar TOC */
+    .docs-sidebar {
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .docs-sidebar h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .docs-sidebar ol {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .docs-sidebar li {
+      margin-bottom: 0.15rem;
+    }
+
+    .docs-sidebar a {
+      display: block;
+      padding: 0.3rem 0.5rem;
+      border-radius: 4px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .docs-sidebar a:hover {
+      background: var(--row-hover);
+      color: var(--accent);
+    }
+
+    .docs-sidebar a.active {
+      background: var(--tag-bg);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .toc-toggle {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      margin-bottom: 0.5rem;
+    }
+
+    .toc-toggle:hover {
+      border-color: var(--accent);
+    }
+
+    /* Docs content area */
+    .docs-content {
+      min-width: 0;
+    }
+
+    .docs-content section {
+      scroll-margin-top: 1.5rem;
+    }
+
+    .docs-content h2 {
+      font-size: 1.35rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .docs-content h3 {
+      font-size: 1.05rem;
+      margin: 1.5rem 0 0.75rem;
+    }
+
+    .docs-content h4 {
+      font-size: 0.95rem;
+      margin: 1.25rem 0 0.5rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .docs-content p {
+      margin-bottom: 0.75rem;
+      line-height: 1.7;
+    }
+
+    .docs-content ul, .docs-content ol {
+      margin: 0.5rem 0 1rem 1.5rem;
+      line-height: 1.7;
+    }
+
+    .docs-content li {
+      margin-bottom: 0.35rem;
+    }
+
+    .docs-content code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.85em;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+    }
+
+    .docs-content pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 0.75rem 0 1rem;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .docs-content pre code {
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1.5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    .docs-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .docs-header h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .docs-header .subtitle {
+      color: var(--muted);
+      margin-top: 0.5rem;
+      font-size: 1rem;
+    }
+
+    /* Steps */
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 0.75rem 0 1rem;
+    }
+
+    .steps li {
+      counter-increment: step;
+      padding-left: 2rem;
+      position: relative;
+      margin-bottom: 0.5rem;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0.1em;
+      width: 1.4rem;
+      height: 1.4rem;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Casilla reference card */
+    .casilla-ref {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 0.75rem 0;
+    }
+
+    .casilla-ref .casilla-num {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      background: var(--tag-bg);
+      border: 1px solid var(--tag-border);
+      border-radius: 4px;
+      padding: 0.15rem 0.5rem;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+    }
+
+    .casilla-ref p {
+      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    /* FAQ */
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+    }
+
+    .faq-item:last-child {
+      border-bottom: none;
+    }
+
+    .faq-item dt {
+      font-weight: 600;
+      margin-bottom: 0.4rem;
+      cursor: default;
+    }
+
+    .faq-item dd {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* Legal reference table */
+    .legal-table {
+      font-size: 0.85rem;
+    }
+
+    .legal-table td:first-child {
+      white-space: nowrap;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.8rem;
+    }
+
+    /* Smooth scroll */
+    html {
+      scroll-behavior: smooth;
+    }
+
+    /* Mobile: collapsible sidebar */
+    @media (max-width: 900px) {
+      .docs-layout {
+        grid-template-columns: 1fr;
+        padding: 1rem 0.5rem;
+      }
+
+      .docs-sidebar {
+        position: static;
+        max-height: none;
+      }
+
+      .docs-sidebar.collapsed ol {
+        display: none;
+      }
+
+      .toc-toggle {
+        display: block;
+      }
+    }
+
+    /* Print-friendly */
+    @media print {
+      .docs-sidebar, .top-bar, .toc-toggle, .back-link, footer {
+        display: none !important;
+      }
+
+      .docs-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .docs-content section {
+        break-inside: avoid;
+      }
+
+      body {
+        background: #fff;
+        color: #000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="top-bar">
+    <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
+  </nav>
+
+  <div class="docs-layout">
+    <!-- Sidebar TOC -->
+    <aside class="docs-sidebar" id="sidebar">
+      <button class="toc-toggle" id="toc-toggle" aria-expanded="true" aria-controls="toc-list">Índice de contenidos</button>
+      <h2>Contenidos</h2>
+      <ol id="toc-list">
+        <li><a href="#guía-rápida">1. Guía rápida</a></li>
+        <li><a href="#brokers-soportados">2. Brokers soportados</a></li>
+        <li><a href="#casillas-modelo-100">3. Casillas del Modelo 100</a></li>
+        <li><a href="#motor-fifo">4. Motor FIFO</a></li>
+        <li><a href="#norma-antiaplicación">5. Regla anti-churning</a></li>
+        <li><a href="#doble-imposición">6. Doble imposición</a></li>
+        <li><a href="#compensación-pérdidas">7. Compensación de pérdidas</a></li>
+        <li><a href="#modelo-720">8. Modelo 720</a></li>
+        <li><a href="#modelo-d6">9. Modelo D-6</a></li>
+        <li><a href="#modelo-721">10. Modelo 721</a></li>
+        <li><a href="#acciones-corporativas">11. Acciones corporativas</a></li>
+        <li><a href="#faq">12. Preguntas frecuentes</a></li>
+        <li><a href="#privacidad">13. Privacidad y seguridad</a></li>
+        <li><a href="#referencia-legal">14. Referencia legal</a></li>
+      </ol>
+    </aside>
+
+    <!-- Main content -->
+    <div class="docs-content">
+      <a href="./index.html" class="back-link">&larr; Volver a la aplicación</a>
+
+      <header class="docs-header">
+        <h1>Decla<span class="brand-accent">Renta</span></h1>
+        <p class="subtitle">Documentación</p>
+      </header>
+
+      <!-- 1. Guía rápida -->
+      <section id="guía-rápida">
+        <h2>1. Guía rápida</h2>
+
+        <h3>Uso de la aplicación web</h3>
+        <p>La interfaz web funciona como un asistente de cuatro pasos:</p>
+        <ol class="steps">
+          <li><strong>Subir ficheros</strong> &mdash; Arrastra o selecciona los informes de tu broker. Puedes subir varios ficheros de distintos brokers a la vez. El formato se auto-detecta, aunque también puedes forzar el broker en el desplegable.</li>
+          <li><strong>Revisar datos</strong> &mdash; DeclaRenta muestra un resumen de lo que ha detectado: número de operaciones, dividendos, acciones corporativas y posiciones abiertas. Comprueba que todo cuadra antes de continuar.</li>
+          <li><strong>Configurar</strong> &mdash; Selecciona el ejercicio fiscal (2023, 2024 o 2025) e introduce tu NIF si necesitas generar el Modelo 720 o D-6.</li>
+          <li><strong>Resultados</strong> &mdash; Obtienes los valores de cada casilla del Modelo 100, la tabla de operaciones con ganancias y pérdidas, los dividendos desglosados y la opción de exportar en JSON, CSV o generar los ficheros del Modelo 720 y la guía D-6.</li>
+        </ol>
+
+        <h3>Uso de la línea de comandos (CLI)</h3>
+        <p>Instala DeclaRenta globalmente con <code>npm install -g declarenta</code> o ejecútalo con <code>npx declarenta</code>. Los tres comandos principales son:</p>
+        <pre><code># Convertir informes a valores del Modelo 100
+declarenta convert --input informe.xml --year 2025
+declarenta convert --input ibkr.xml --input degiro.csv --year 2025
+
+# Generar fichero Modelo 720
+declarenta modelo720 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
+
+# Generar guía D-6
+declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"</code></pre>
+        <p>Opciones adicionales del comando <code>convert</code>:</p>
+        <ul>
+          <li><code>--output fichero.json</code> &mdash; Guardar resultado en un fichero en vez de stdout.</li>
+          <li><code>--format pdf|csv|json</code> &mdash; Formato de salida (por defecto JSON).</li>
+          <li><code>--broker ibkr|degiro|scalable|etoro|freedom24|coinbase|binance|kraken</code> &mdash; Forzar broker si la auto-detección falla.</li>
+          <li><code>--prior-losses fichero.json</code> &mdash; Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF).</li>
+        </ul>
+
+        <h3>Formatos soportados por broker</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Broker</th>
+                <th>Formato</th>
+                <th>Extensión</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Interactive Brokers</td><td>Flex Query XML</td><td>.xml</td></tr>
+              <tr><td>Degiro</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Scalable Capital</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>eToro</td><td>Account Statement XLSX</td><td>.xlsx</td></tr>
+              <tr><td>Freedom24</td><td>JSON</td><td>.json</td></tr>
+              <tr><td>Coinbase</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Binance</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Kraken</td><td>CSV</td><td>.csv</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 2. Brokers soportados -->
+      <section id="brokers-soportados">
+        <h2>2. Brokers soportados</h2>
+
+        <h3>Interactive Brokers (IBKR)</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en <strong>Client Portal</strong> o <strong>Account Management</strong>.</li>
+          <li>Ve a <em>Informes &gt; Flex Queries</em> (o <em>Reports &gt; Flex Queries</em>).</li>
+          <li>Crea una nueva Flex Query de tipo <strong>Activity Flex Query</strong>.</li>
+          <li>En las secciones, activa: <strong>Trades</strong>, <strong>Cash Transactions</strong>, <strong>Corporate Actions</strong>, <strong>Open Positions</strong> y <strong>Securities Info</strong>.</li>
+          <li>Selecciona el período que cubra todos los ejercicios necesarios (incluye ejercicios anteriores si tienes posiciones abiertas de años previos, para que FIFO funcione correctamente).</li>
+          <li>Formato de salida: <strong>XML</strong>.</li>
+          <li>Ejecuta la query y descarga el fichero <code>.xml</code>.</li>
+        </ol>
+        <p><strong>Formato:</strong> XML con estructura <code>&lt;FlexQueryResponse&gt;</code>.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa (STK, FUND, OPT), dividendos, intereses, retenciones, acciones corporativas (splits, fusiones, spin-offs, scrip dividends) y posiciones abiertas.</p>
+        <p><strong>Notas:</strong> IBKR es el broker con soporte más completo. Las comisiones en divisa distinta a la operación se convierten correctamente. El multiplicador de opciones se aplica automáticamente.</p>
+
+        <h3>Degiro</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en la web de Degiro.</li>
+          <li>Ve a <em>Actividad &gt; Transacciones</em>.</li>
+          <li>Selecciona el período deseado.</li>
+          <li>Pulsa el botón <strong>Exportar</strong> y elige formato <strong>CSV</strong>.</li>
+          <li>Repite con la sección <em>Cuenta &gt; Extracto</em> si necesitas dividendos.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras que incluyen ISIN, cantidad y precio.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa, dividendos y posiciones.</p>
+        <p><strong>Limitaciones:</strong> Degiro no exporta acciones corporativas. Los splits deben reflejarse ya en el historial de operaciones. Si tienes operaciones en varios ejercicios, exporta todos los años.</p>
+
+        <h3>Scalable Capital</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en la web de Scalable Capital.</li>
+          <li>Ve a tu perfil y busca la opción <em>Transacciones</em> o <em>Historial</em>.</li>
+          <li>Exporta en formato <strong>CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras <code>date;time;status;reference</code> (separador punto y coma).</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa y dividendos.</p>
+        <p><strong>Limitaciones:</strong> Los informes de Scalable no incluyen posiciones abiertas para el Modelo 720. Necesitarás esa información por separado.</p>
+
+        <h3>eToro</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en eToro.</li>
+          <li>Ve a <em>Portafolio &gt; Historial</em> o a <em>Configuración &gt; Cuenta &gt; Extracto de cuenta</em>.</li>
+          <li>Selecciona el período y pulsa <strong>Descargar</strong>.</li>
+          <li>El fichero descargado es un <strong>XLSX</strong> (Excel) con varias pestañas.</li>
+        </ol>
+        <p><strong>Formato:</strong> XLSX (Excel) con pestaña "Closed Positions".</p>
+        <p><strong>Datos extraídos:</strong> Posiciones cerradas con precios de apertura y cierre, dividendos.</p>
+        <p><strong>Limitaciones:</strong> eToro no proporciona ISINs directamente; DeclaRenta los mapea desde el nombre del activo. Las operaciones con CFDs no están soportadas.</p>
+
+        <h3>Freedom24</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en la web de Freedom24.</li>
+          <li>Ve a <em>Informes</em> o <em>Reports</em>.</li>
+          <li>Genera un informe de actividad para el período deseado.</li>
+          <li>Descarga en formato <strong>JSON</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> JSON con arrays de <code>trades</code>, <code>corporate_actions</code> y <code>cash_flows</code>.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones, dividendos, acciones corporativas y flujos de caja.</p>
+        <p><strong>Limitaciones:</strong> El formato JSON de Freedom24 puede variar entre versiones. Si la estructura no coincide, el auto-detector no reconocerá el fichero.</p>
+
+        <h3>Coinbase</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en Coinbase.</li>
+          <li>Ve a <em>Configuración &gt; Informes</em> (o <em>Settings &gt; Reports</em>).</li>
+          <li>Selecciona <strong>Transaction history</strong> y el período.</li>
+          <li>Descarga en formato <strong>CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras <code>Transaction Type</code> y <code>Spot Price</code>.</p>
+        <p><strong>Datos extraídos:</strong> Compras, ventas, conversiones y posiciones de criptomonedas.</p>
+        <p><strong>Limitaciones:</strong> Solo operaciones de criptoactivos. Los staking rewards se interpretan como ingresos.</p>
+
+        <h3>Binance</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en Binance.</li>
+          <li>Ve a <em>Órdenes &gt; Historial de spot</em> (o <em>Orders &gt; Spot Order History</em>).</li>
+          <li>Selecciona el período y pulsa <strong>Exportar</strong>.</li>
+          <li>Descarga en formato <strong>CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras <code>Date(UTC),Pair,Side,Price</code>.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa en mercado spot.</p>
+        <p><strong>Limitaciones:</strong> Solo mercado spot. Operaciones de futuros o derivados no están soportadas. Las distribuciones y staking pueden requerir exportaciones adicionales.</p>
+
+        <h3>Kraken</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en Kraken.</li>
+          <li>Ve a <em>History &gt; Export</em>.</li>
+          <li>Selecciona <strong>Trades</strong> o <strong>Ledger</strong> y el período.</li>
+          <li>Descarga en formato <strong>CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras <code>txid</code>, <code>pair</code>/<code>ordertxid</code> o <code>refid</code>/<code>aclass</code>.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa y movimientos de fondos.</p>
+        <p><strong>Limitaciones:</strong> Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente.</p>
+      </section>
+
+      <!-- 3. Casillas del Modelo 100 -->
+      <section id="casillas-modelo-100">
+        <h2>3. Casillas del Modelo 100 (IRPF)</h2>
+        <p>DeclaRenta calcula los valores de las siguientes casillas de la base del ahorro del IRPF. Los valores se obtienen en euros utilizando los tipos de cambio oficiales del BCE.</p>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0327</span>
+          <h4>Valor de transmisión</h4>
+          <p>Suma de los importes netos de venta de todas las operaciones del ejercicio: <code>(precio_venta x cantidad - comisión_venta) x tipo_ECB</code>.</p>
+          <p>Refleja el importe total recibido por la venta de acciones, fondos y opciones, convertido a euros al tipo de cambio del BCE del día de la operación.</p>
+          <p class="muted">Base legal: Art. 35 LIRPF. En Renta Web: Ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales &gt; Valor de transmisión.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0328</span>
+          <h4>Valor de adquisición</h4>
+          <p>Suma del coste base FIFO de todas las ventas: <code>(precio_compra x cantidad + comisión_compra) x tipo_ECB_compra</code>.</p>
+          <p>El coste se calcula mediante FIFO. Si una venta consume lotes de varias compras, el coste base se calcula proporcionalmente para cada lote consumido.</p>
+          <p class="muted">Base legal: Art. 35 y 37.2 LIRPF. En Renta Web: junto a la casilla 0327.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0358</span>
+          <h4>Pérdidas patrimoniales a compensar</h4>
+          <p>Pérdidas bloqueadas por la norma anti-churning (Art. 33.5.f LIRPF). Son las pérdidas en las que se ha recomprado el mismo valor en los 2 meses anteriores o posteriores a la venta.</p>
+          <p class="muted">Estas pérdidas no se pierden: se integran en el coste de adquisición de los nuevos títulos adquiridos.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0029</span>
+          <h4>Dividendos íntegros</h4>
+          <p>Suma bruta de todos los dividendos recibidos durante el ejercicio, convertidos a EUR al tipo ECB del día de pago: <code>dividendo_bruto x tipo_ECB</code>.</p>
+          <p>Incluye dividendos ordinarios, extraordinarios y distribuciones de fondos. Se declara el importe bruto <em>antes</em> de retenciones extranjeras.</p>
+          <p class="muted">Base legal: Art. 25.1.a LIRPF. En Renta Web: Rendimientos del capital mobiliario &gt; Dividendos y demás rendimientos por la participación en fondos propios de entidades.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0033</span>
+          <h4>Intereses de cuentas y depósitos</h4>
+          <p>Intereses recibidos por saldos en efectivo en el broker, depósitos o bonos. Convertidos a EUR al tipo ECB del día del cobro.</p>
+          <p class="muted">Base legal: Art. 25.2 LIRPF. En Renta Web: Rendimientos del capital mobiliario &gt; Intereses de cuentas y depósitos.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0032</span>
+          <h4>Gastos deducibles (intereses de margen)</h4>
+          <p>Intereses pagados al broker por uso de margen (préstamo de valores o apalancamiento). Se declaran como gasto deducible de los rendimientos del capital mobiliario.</p>
+          <p class="muted">Base legal: Art. 26.1.a LIRPF. En Renta Web: Gastos fiscalmente deducibles.</p>
+        </div>
+
+        <div class="casilla-ref">
+          <span class="casilla-num">0588</span>
+          <h4>Deducción por doble imposición internacional</h4>
+          <p>Suma de las deducciones permitidas por retenciones extranjeras sobre dividendos e intereses. Para cada país, la deducción es el <strong>menor</strong> de: (a) impuesto retenido en origen, o (b) cuota que correspondería en España sobre esa renta.</p>
+          <p class="muted">Base legal: Art. 80 LIRPF. En Renta Web: Deducciones &gt; Doble imposición internacional.</p>
+        </div>
+      </section>
+
+      <!-- 4. Motor FIFO -->
+      <section id="motor-fifo">
+        <h2>4. Motor FIFO</h2>
+
+        <h3>Qué es FIFO y por qué es obligatorio</h3>
+        <p>FIFO (<em>First In, First Out</em>) es el método de valoración que la legislación fiscal española exige para calcular las ganancias y pérdidas patrimoniales derivadas de la transmisión de valores homogéneos (Art. 37.2 LIRPF). Cuando vendes acciones, las primeras que se consideran vendidas son las primeras que compraste.</p>
+
+        <h3>Cómo funcionan los lotes</h3>
+        <p>Cada compra crea un <strong>lote</strong> con su fecha de adquisición, cantidad, precio por acción y coste total en euros. Cuando vendes:</p>
+        <ul>
+          <li>Se consume el lote más antiguo primero.</li>
+          <li>Si la venta es mayor que un lote, se consume parcialmente el siguiente.</li>
+          <li>El coste base se calcula proporcionalmente: si un lote de 100 acciones con coste de 1.000 EUR pierde 30 acciones, el coste base de esas 30 es 300 EUR.</li>
+          <li>El resto del lote (70 acciones, 700 EUR) permanece en la cola para futuras ventas.</li>
+        </ul>
+
+        <h3>Tipos de cambio del BCE</h3>
+        <p>La legislación fiscal española exige usar tipos de cambio oficiales, no los del broker. DeclaRenta obtiene los tipos diarios del BCE mediante su API SDMX:</p>
+        <ul>
+          <li>Se usa el tipo del día de la operación (compra o venta).</li>
+          <li>Si es fin de semana o festivo, se retrocede hasta 10 días para encontrar el último tipo publicado.</li>
+          <li>El BCE publica tipos como "1 EUR = X moneda extranjera". DeclaRenta invierte el tipo para obtener "1 unidad de moneda extranjera = Y EUR".</li>
+          <li>La única conexión a Internet que realiza DeclaRenta es a la API pública del BCE.</li>
+        </ul>
+
+        <h3>FIFO cross-broker</h3>
+        <p>Si tienes el mismo ISIN en varios brokers (por ejemplo, acciones de Apple compradas en IBKR y en Degiro), DeclaRenta unifica las colas FIFO por ISIN. Al subir ficheros de múltiples brokers, todas las operaciones se ordenan cronológicamente y los lotes se consumen en orden global, independientemente del broker de origen.</p>
+
+        <h3>Precisión decimal</h3>
+        <p>DeclaRenta utiliza la librería <strong>Decimal.js</strong> con precisión de 20 dígitos significativos y redondeo <code>ROUND_HALF_UP</code>. Esto evita los errores de punto flotante típicos de JavaScript (como <code>0.1 + 0.2 = 0.30000000000000004</code>), garantizando que los cálculos fiscales sean exactos hasta el céntimo.</p>
+      </section>
+
+      <!-- 5. Regla anti-churning -->
+      <section id="norma-antiaplicación">
+        <h2>5. Regla anti-churning (norma antiaplicación)</h2>
+
+        <h3>Qué dice la ley</h3>
+        <p>El Art. 33.5.f de la Ley del IRPF establece que no se computarán como pérdidas patrimoniales las derivadas de la transmisión de valores cuando el contribuyente hubiera adquirido <strong>valores homogéneos</strong> dentro de los <strong>dos meses anteriores o posteriores</strong> a la venta.</p>
+
+        <h3>Ventana de dos meses</h3>
+        <p>La ventana se calcula en meses naturales (no en días). Si vendes el 15 de marzo con pérdida:</p>
+        <ul>
+          <li>Ventana anterior: desde el 15 de enero.</li>
+          <li>Ventana posterior: hasta el 15 de mayo.</li>
+          <li>Si has comprado el mismo ISIN en cualquier momento dentro de esa ventana, la pérdida queda <strong>bloqueada</strong>.</li>
+        </ul>
+
+        <h3>Qué ocurre con las pérdidas bloqueadas</h3>
+        <p>Las pérdidas bloqueadas no se pierden definitivamente. Se integran en el valor de adquisición de los títulos que provocaron el bloqueo. Es decir, el coste de las nuevas acciones se incrementa en el importe de la pérdida bloqueada, lo que reducirá la ganancia (o aumentará la pérdida) cuando finalmente se vendan esos títulos.</p>
+
+        <h3>Cómo lo detecta DeclaRenta</h3>
+        <p>El motor de anti-churning:</p>
+        <ol>
+          <li>Identifica todas las ventas con pérdida (<code>gainLossEur &lt; 0</code>).</li>
+          <li>Para cada una, busca compras del mismo ISIN en la ventana de 2 meses antes y después.</li>
+          <li>Si existe recompra, marca la operación como <code>washSaleBlocked = true</code>.</li>
+          <li>Las operaciones bloqueadas aparecen resaltadas en la tabla de resultados.</li>
+        </ol>
+        <p class="warning">La regla anti-churning <strong>no se aplica a opciones</strong> (categorías OPT/CALL/PUT), solo a acciones (STK) y fondos (FUND).</p>
+      </section>
+
+      <!-- 6. Doble imposición -->
+      <section id="doble-imposición">
+        <h2>6. Doble imposición internacional</h2>
+
+        <h3>Art. 80 LIRPF</h3>
+        <p>Cuando recibes dividendos de una empresa extranjera, el país de origen suele retener un porcentaje en concepto de impuestos (por ejemplo, EE.UU. retiene un 15% si tienes el W-8BEN firmado, o un 30% sin él). España permite deducir ese impuesto pagado en el extranjero para evitar la doble tributación.</p>
+
+        <h3>Cálculo de la deducción</h3>
+        <p>Para cada país, la deducción es el <strong>menor</strong> de:</p>
+        <ul>
+          <li><strong>Impuesto efectivamente pagado</strong> en el país de origen (la retención).</li>
+          <li><strong>Cuota que correspondería en España</strong> sobre esa misma renta, calculada aplicando los tramos del ahorro.</li>
+        </ul>
+
+        <h3>Tramos del ahorro 2025</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Hasta (EUR)</th><th>Tipo</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>6.000</td><td>19%</td></tr>
+              <tr><td>50.000</td><td>21%</td></tr>
+              <tr><td>200.000</td><td>23%</td></tr>
+              <tr><td>300.000</td><td>27%</td></tr>
+              <tr><td>En adelante</td><td>30%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">El tramo del 30% fue introducido por la Ley 7/2024.</p>
+
+        <h3>Desglose por país</h3>
+        <p>DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En los resultados verás una tabla con el impuesto pagado y la deducción máxima por país.</p>
+
+        <h3>W-8BEN y convenios de doble imposición</h3>
+        <p>El formulario <strong>W-8BEN</strong> es un certificado que presentas ante brokers estadounidenses para acogerte al convenio de doble imposición entre España y EE.UU. Con él firmado, la retención sobre dividendos de EE.UU. se reduce del 30% al 15%. Es fundamental firmarlo para maximizar la deducción por doble imposición.</p>
+        <p>España tiene convenios con la mayoría de países. La retención aplicable depende de cada convenio bilateral.</p>
+      </section>
+
+      <!-- 7. Compensación de pérdidas -->
+      <section id="compensación-pérdidas">
+        <h2>7. Compensación de pérdidas</h2>
+
+        <h3>Art. 49 LIRPF</h3>
+        <p>Las pérdidas patrimoniales que no se hayan compensado en el ejercicio en que se generaron pueden arrastrarse durante los <strong>cuatro ejercicios siguientes</strong>.</p>
+
+        <h3>Compensación en la misma categoría</h3>
+        <ul>
+          <li>Las pérdidas de ganancias patrimoniales (ventas con pérdida) se compensan primero con ganancias del mismo tipo.</li>
+          <li>Las pérdidas de rendimientos del capital mobiliario (si las hubiera) se compensan con rendimientos positivos del mismo tipo.</li>
+        </ul>
+
+        <h3>Compensación cruzada (límite del 25%)</h3>
+        <p>Si después de la compensación en la misma categoría quedan pérdidas pendientes:</p>
+        <ul>
+          <li>Las pérdidas de ganancias patrimoniales pueden compensar hasta el <strong>25%</strong> de los rendimientos positivos del capital mobiliario (dividendos + intereses).</li>
+          <li>Las pérdidas de rendimientos del capital mobiliario pueden compensar hasta el <strong>25%</strong> de las ganancias patrimoniales positivas.</li>
+        </ul>
+
+        <h3>Cómo lo gestiona DeclaRenta</h3>
+        <p>Mediante la opción <code>--prior-losses</code> del CLI, puedes proporcionar un fichero JSON con las pérdidas de ejercicios anteriores. DeclaRenta:</p>
+        <ol>
+          <li>Descarta las pérdidas con más de 4 años de antigüedad (expiradas).</li>
+          <li>Aplica compensación en la misma categoría (las más antiguas primero).</li>
+          <li>Aplica compensación cruzada con el límite del 25%.</li>
+          <li>Añade las pérdidas del ejercicio actual al arrastre si el resultado neto es negativo.</li>
+        </ol>
+        <p>El formato del fichero JSON es:</p>
+        <pre><code>[
+  { "year": 2022, "amount": "-1500.00", "remaining": "-1200.00", "category": "gains" },
+  { "year": 2023, "amount": "-800.00", "remaining": "-800.00", "category": "income" }
+]</code></pre>
+      </section>
+
+      <!-- 8. Modelo 720 -->
+      <section id="modelo-720">
+        <h2>8. Modelo 720</h2>
+
+        <h3>Qué es</h3>
+        <p>El Modelo 720 es una declaración informativa de bienes y derechos situados en el extranjero. No tiene cuota a pagar; es puramente informativo. Lo gestiona la Agencia Tributaria (AEAT).</p>
+
+        <h3>Quién debe presentarlo</h3>
+        <p>Cualquier residente fiscal en España que a 31 de diciembre posea bienes en el extranjero cuyo valor <strong>por categoría</strong> supere los <strong>50.000 EUR</strong>. Las tres categorías independientes son:</p>
+        <ul>
+          <li><strong>Valores y derechos</strong> (acciones, fondos, bonos) &mdash; la que DeclaRenta calcula.</li>
+          <li><strong>Cuentas en entidades financieras</strong> &mdash; no aplica a posiciones del broker.</li>
+          <li><strong>Bienes inmuebles</strong> &mdash; no aplica a posiciones del broker.</li>
+        </ul>
+        <p>Cada categoría se evalúa de forma independiente. Solo se declaran las categorías que superan el umbral.</p>
+
+        <h3>Plazo de presentación</h3>
+        <p>Del <strong>1 de enero al 31 de marzo</strong> del ejercicio siguiente.</p>
+
+        <h3>Qué genera DeclaRenta</h3>
+        <p>Un fichero de texto de <strong>ancho fijo</strong> (500 bytes por registro) codificado en <strong>ISO-8859-15</strong>, listo para subir a la AEAT. El fichero contiene:</p>
+        <ul>
+          <li>Un <strong>registro resumen</strong> (tipo 1) con datos del declarante y totales.</li>
+          <li>Un <strong>registro detalle</strong> (tipo 2) por cada posición con ISIN, país, valor de adquisición, valoración a 31/dic, cantidad y porcentaje de titularidad.</li>
+          <li>Registros de tipo <strong>A</strong> (alta), <strong>M</strong> (modificación) o <strong>C</strong> (cancelación) según si la posición es nueva, ya existía o se ha vendido.</li>
+        </ul>
+        <p>Para acciones (STK), la valoración se calcula con el <strong>tipo medio del cuarto trimestre</strong> del BCE. Para fondos y bonos, se usa el tipo a 31 de diciembre.</p>
+
+        <h3>Cómo presentarlo en sede electrónica</h3>
+        <ol class="steps">
+          <li>Accede a <strong>sede.agenciatributaria.gob.es</strong>.</li>
+          <li>Busca "Modelo 720" o navega a <em>Todas las gestiones &gt; Modelos y formularios &gt; 720</em>.</li>
+          <li>Selecciona <strong>TGVI Online</strong> (Transmisión de Grandes Volúmenes de Información).</li>
+          <li>Identifícate con certificado digital, DNIe o Cl@ve PIN.</li>
+          <li>Sube el fichero generado por DeclaRenta.</li>
+          <li>Revisa el resumen y confirma el envío.</li>
+        </ol>
+      </section>
+
+      <!-- 9. Modelo D-6 -->
+      <section id="modelo-d6">
+        <h2>9. Modelo D-6</h2>
+
+        <h3>Qué es</h3>
+        <p>El Modelo D-6 es la declaración de inversiones españolas en el exterior, regulada por el Banco de España. Es independiente del Modelo 720 y se presenta ante la Dirección General de Comercio Internacional e Inversiones.</p>
+
+        <h3>Quién debe presentarlo</h3>
+        <p><strong>Cualquier residente</strong> que mantenga valores negociables depositados en entidades no residentes (brokers extranjeros) a 31 de diciembre. <strong>No tiene umbral mínimo</strong>: si tienes una sola acción en un broker extranjero, debes presentarlo.</p>
+
+        <h3>Plazo de presentación</h3>
+        <p>Del <strong>1 al 31 de enero</strong> del ejercicio siguiente.</p>
+
+        <h3>Formulario web AFORIX</h3>
+        <p>A diferencia del Modelo 720, el D-6 <strong>no admite carga de fichero</strong>. Se cumplimenta manualmente en el formulario web AFORIX del Banco de España, posición por posición.</p>
+
+        <h3>Qué genera DeclaRenta</h3>
+        <p>Una <strong>guía de cumplimentación</strong> con los valores exactos que debes introducir en cada campo de AFORIX para cada posición:</p>
+        <ul>
+          <li>ISIN, denominación y país emisor.</li>
+          <li>Código de mercado (NYSE, Xetra, LSE, etc.).</li>
+          <li>Número de títulos a 31 de diciembre.</li>
+          <li>Valor de mercado en EUR al tipo ECB de 31 de diciembre.</li>
+        </ul>
+        <p>Si proporcionas el D-6 del año anterior (vía <code>--previous-d6</code>), DeclaRenta genera también las <strong>cancelaciones</strong> para posiciones que ya no mantienes.</p>
+
+        <h3>Cómo acceder a AFORIX</h3>
+        <ol class="steps">
+          <li>Accede a <strong>sefreca.bde.es/sefreca/</strong>.</li>
+          <li>Selecciona "Modelo D-6 (Inversiones en el exterior)".</li>
+          <li>Identifícate con certificado digital o Cl@ve.</li>
+          <li>Introduce cada posición siguiendo la guía generada por DeclaRenta.</li>
+          <li>Revisa y envía.</li>
+        </ol>
+      </section>
+
+      <!-- 10. Modelo 721 -->
+      <section id="modelo-721">
+        <h2>10. Modelo 721</h2>
+
+        <h3>Qué es</h3>
+        <p>El Modelo 721 es la declaración informativa de monedas virtuales situadas en el extranjero. Es el equivalente del Modelo 720 para criptoactivos.</p>
+
+        <h3>Quién debe presentarlo</h3>
+        <p>Cualquier residente fiscal en España que a 31 de diciembre posea criptomonedas en exchanges extranjeros cuyo valor total supere los <strong>50.000 EUR</strong>.</p>
+
+        <h3>Exchanges aplicables</h3>
+        <p>Cualquier exchange con sede fuera de España. Los más comunes son Coinbase, Binance y Kraken. Si el exchange tiene sede en España (como Bit2Me), no es necesario declararlo en el 721.</p>
+
+        <h3>Qué genera DeclaRenta</h3>
+        <p>DeclaRenta genera un fichero de ancho fijo similar al Modelo 720 (500 bytes por registro) con los datos de cada criptoactivo: identificador, exchange, país, cantidad, valoración en EUR y coste de adquisición.</p>
+        <p class="warning">El soporte de Modelo 721 está actualmente en fase inicial. Los parsers de Coinbase, Binance y Kraken extraen operaciones pero la generación del fichero 721 requiere que proporciones las posiciones a 31 de diciembre manualmente en formato JSON.</p>
+      </section>
+
+      <!-- 11. Acciones corporativas -->
+      <section id="acciones-corporativas">
+        <h2>11. Acciones corporativas</h2>
+        <p>Las acciones corporativas modifican los lotes FIFO sin generar hechos imponibles (salvo excepciones). DeclaRenta las procesa cronológicamente junto con las operaciones de compraventa.</p>
+
+        <h3>Stock splits y reverse splits</h3>
+        <p>Un <em>split</em> multiplica el número de acciones por un ratio y divide el precio proporcionalmente. Un <em>reverse split</em> hace lo contrario. En ambos casos:</p>
+        <ul>
+          <li>La <strong>cantidad</strong> de cada lote se multiplica (o divide) por el ratio.</li>
+          <li>El <strong>precio por acción</strong> se ajusta inversamente.</li>
+          <li>El <strong>coste total en euros</strong> del lote no cambia &mdash; es una operación fiscalmente neutra.</li>
+          <li>Las fracciones residuales (sub-acciones) se eliminan automáticamente.</li>
+        </ul>
+
+        <h3>Fusiones (mergers / acquisitions)</h3>
+        <p>Cuando una empresa es adquirida por otra, los lotes del ISIN antiguo se transfieren al ISIN nuevo:</p>
+        <ul>
+          <li>La cantidad se ajusta por el ratio de canje.</li>
+          <li>El <strong>coste base total se conserva</strong> &mdash; es un canje fiscalmente neutro.</li>
+          <li>El precio por acción se recalcula sobre la nueva cantidad.</li>
+          <li>La fecha de adquisición original se mantiene.</li>
+        </ul>
+
+        <h3>Spin-offs</h3>
+        <p>En un spin-off, una empresa separa una división como entidad independiente. El coste base del lote original se reparte proporcionalmente:</p>
+        <ul>
+          <li>Se crea un nuevo lote para la entidad escindida con una fracción del coste base original.</li>
+          <li>El lote de la empresa matriz reduce su coste base en la misma proporción.</li>
+          <li>La fecha de adquisición del nuevo lote hereda la fecha original del lote padre.</li>
+          <li>La fracción se estima a partir del ratio de distribución (en la práctica debería basarse en valores de mercado el día de la distribución).</li>
+        </ul>
+
+        <h3>Scrip dividends (dividendos en acciones)</h3>
+        <p>Un scrip dividend entrega nuevas acciones en lugar de efectivo. DeclaRenta lo trata como:</p>
+        <ul>
+          <li>Un nuevo lote con el coste base que reporta el broker (importe del dividendo equivalente).</li>
+          <li>La fecha de adquisición es la fecha del evento corporativo.</li>
+          <li>Estos lotes entran en la cola FIFO como cualquier compra.</li>
+        </ul>
+      </section>
+
+      <!-- 12. FAQ -->
+      <section id="faq">
+        <h2>12. Preguntas frecuentes</h2>
+
+        <dl>
+          <div class="faq-item">
+            <dt>¿Mis datos salen de mi ordenador?</dt>
+            <dd>No. Todo el procesamiento ocurre en tu navegador. Ningún fichero se sube a ningún servidor. La única conexión de red es a la API pública del BCE para obtener tipos de cambio.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Qué tipos de cambio se usan?</dt>
+            <dd>Los tipos de cambio oficiales diarios del Banco Central Europeo (BCE), obtenidos vía su API SDMX. La normativa fiscal española exige usar tipos oficiales, no los del broker.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Qué pasa si compré en un broker y vendí en otro?</dt>
+            <dd>DeclaRenta implementa FIFO cross-broker. Si subes ficheros de varios brokers, todas las operaciones del mismo ISIN comparten una única cola FIFO ordenada cronológicamente.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿DeclaRenta sustituye a un asesor fiscal?</dt>
+            <dd>No. DeclaRenta es una herramienta auxiliar de cálculo. Los resultados deben validarse con un profesional fiscal. La responsabilidad de la declaración es siempre del contribuyente.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Puedo usar DeclaRenta sin conexión a Internet?</dt>
+            <dd>Sí. La aplicación web es una PWA (Progressive Web App) que funciona offline una vez cargada. Sin embargo, necesitarás conexión la primera vez para descargar la aplicación y cada vez que se necesiten tipos de cambio nuevos del BCE.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Cómo se tratan las opciones?</dt>
+            <dd>Las opciones se procesan con FIFO por símbolo (ya que no tienen ISIN). El multiplicador del contrato se aplica automáticamente al calcular el coste base y los importes de venta. La norma anti-churning no se aplica a opciones.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Se soportan los CFDs?</dt>
+            <dd>No. Los contratos por diferencia (CFDs) tienen un tratamiento fiscal distinto y no están soportados actualmente. Si tu broker ofrece operaciones en CFDs, estas serán ignoradas.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Los dividendos en especie se incluyen?</dt>
+            <dd>Sí. Los scrip dividends (dividendos pagados en acciones) se detectan como acciones corporativas y crean nuevos lotes FIFO con el coste base equivalente al dividendo.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Cómo se calcula la deducción por doble imposición?</dt>
+            <dd>Para cada país, se compara el impuesto retenido en origen con la cuota española que correspondería sobre esa renta (aplicando los tramos del ahorro). La deducción es el menor de ambos importes. Véase la sección <a href="#doble-imposición">Doble imposición internacional</a>.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Puedo procesar varios años a la vez?</dt>
+            <dd>Sí. Puedes subir ficheros de varios ejercicios. DeclaRenta los ordena cronológicamente para calcular el FIFO correctamente y luego filtra los resultados al ejercicio seleccionado. Esto es fundamental si tienes posiciones abiertas de años anteriores.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿DeclaRenta genera el borrador de la renta?</dt>
+            <dd>No. DeclaRenta genera los valores numéricos de cada casilla. Debes introducirlos manualmente en Renta Web (sede.agenciatributaria.gob.es) ya que la AEAT no permite importar estos datos por fichero.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Qué hago con las pérdidas bloqueadas por anti-churning?</dt>
+            <dd>Las pérdidas bloqueadas se integran en el coste de adquisición de los nuevos títulos. No tienes que hacer nada especial: cuando vendas esos títulos, el mayor coste base reducirá la ganancia imponible. DeclaRenta las muestra resaltadas para que lleves el control.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Puedo exportar los resultados?</dt>
+            <dd>Sí. Desde la web puedes exportar en JSON o CSV. Desde el CLI también puedes generar un informe en PDF. El JSON incluye todos los detalles de cada operación, dividendo y cálculo.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Por qué la ganancia neta no coincide con la diferencia entre 0327 y 0328?</dt>
+            <dd>Si hay pérdidas bloqueadas por la norma anti-churning, la ganancia neta "real" es menor que la aritmética. Las casillas 0327 y 0328 reflejan los importes brutos; las pérdidas bloqueadas se declaran por separado.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Tengo ventas sin lotes previos ("venta sin lotes"). ¿Qué significa?</dt>
+            <dd>Significa que DeclaRenta encontró una venta sin compras previas para ese ISIN. Puede deberse a: (a) una posición corta, (b) falta de datos de ejercicios anteriores, o (c) una transferencia de otro broker sin historial. En estos casos, el coste base se asume como 0 EUR y aparece una advertencia.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿Necesito declarar si mis posiciones no superan 50.000 EUR?</dt>
+            <dd>Depende del modelo. El Modelo 720 y 721 requieren superar 50.000 EUR por categoría. Sin embargo, el Modelo D-6 es obligatorio con <strong>cualquier importe</strong> de valores extranjeros. Y el IRPF (Modelo 100) se declara siempre, independientemente del importe.</dd>
+          </div>
+
+          <div class="faq-item">
+            <dt>¿DeclaRenta maneja criptomonedas?</dt>
+            <dd>Parcialmente. Los parsers de Coinbase, Binance y Kraken extraen operaciones de compraventa de criptoactivos. El cálculo FIFO y las ganancias patrimoniales funcionan para cripto. El Modelo 721 está en fase inicial y requiere posiciones manuales.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- 13. Privacidad y seguridad -->
+      <section id="privacidad">
+        <h2>13. Privacidad y seguridad</h2>
+
+        <h3>Arquitectura sin servidor</h3>
+        <p>DeclaRenta no tiene backend. No hay servidor que reciba tus datos. La aplicación web es un conjunto de ficheros estáticos (HTML, CSS, JavaScript) que se ejecutan íntegramente en tu navegador.</p>
+
+        <h3>Sin analítica, sin tracking, sin telemetría</h3>
+        <p>No hay Google Analytics, ni cookies de terceros, ni píxeles de seguimiento, ni ninguna forma de telemetría. No se recopila ningún dato de uso.</p>
+
+        <h3>Única conexión de red</h3>
+        <p>La única petición que DeclaRenta realiza a Internet es a la <strong>API pública del BCE</strong> (<code>data-api.ecb.europa.eu</code>) para obtener tipos de cambio oficiales. Esta petición no contiene ningún dato personal ni financiero: solo solicita tipos de cambio para un año y divisa concretos.</p>
+
+        <h3>Procesamiento local</h3>
+        <p>Todos los cálculos &mdash; parseo de ficheros, FIFO, detección de anti-churning, generación de modelos &mdash; se ejecutan en tu navegador mediante JavaScript. Tus extractos del broker nunca salen de tu equipo.</p>
+
+        <h3>Código abierto</h3>
+        <p>El código fuente está disponible en <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> bajo licencia GPL-3.0. Cualquiera puede auditar el código, verificar que no hay transmisión de datos y contribuir mejoras.</p>
+      </section>
+
+      <!-- 14. Referencia legal -->
+      <section id="referencia-legal">
+        <h2>14. Referencia legal</h2>
+        <p>DeclaRenta implementa las siguientes normas de la legislación fiscal española:</p>
+
+        <div class="table-wrapper">
+          <table class="legal-table">
+            <thead>
+              <tr><th>Norma</th><th>Descripción</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Art. 25.1.a LIRPF</td>
+                <td>Rendimientos del capital mobiliario: dividendos y participaciones en beneficios de entidades.</td>
+              </tr>
+              <tr>
+                <td>Art. 25.2 LIRPF</td>
+                <td>Rendimientos del capital mobiliario: intereses de cuentas, depósitos y activos financieros.</td>
+              </tr>
+              <tr>
+                <td>Art. 26.1.a LIRPF</td>
+                <td>Gastos deducibles de los rendimientos del capital mobiliario (gastos de administración y custodia).</td>
+              </tr>
+              <tr>
+                <td>Art. 33.5.f LIRPF</td>
+                <td>Norma anti-churning: no se computan pérdidas patrimoniales por venta de valores si se recompran homogéneos en 2 meses.</td>
+              </tr>
+              <tr>
+                <td>Art. 35 LIRPF</td>
+                <td>Transmisiones onerosas: valor de transmisión y valor de adquisición de elementos patrimoniales.</td>
+              </tr>
+              <tr>
+                <td>Art. 37.2 LIRPF</td>
+                <td>Método FIFO obligatorio para valores homogéneos: las primeras adquiridas se consideran las primeras transmitidas.</td>
+              </tr>
+              <tr>
+                <td>Art. 46 LIRPF</td>
+                <td>Base del ahorro: ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales.</td>
+              </tr>
+              <tr>
+                <td>Art. 49 LIRPF</td>
+                <td>Compensación de pérdidas patrimoniales: arrastre 4 años, compensación cruzada con límite del 25%.</td>
+              </tr>
+              <tr>
+                <td>Art. 80 LIRPF</td>
+                <td>Deducción por doble imposición internacional: menor entre impuesto pagado en origen y cuota española.</td>
+              </tr>
+              <tr>
+                <td>Art. 47 LGT</td>
+                <td>Tipos de cambio: obligación de usar tipos oficiales (BCE) para la conversión de moneda extranjera.</td>
+              </tr>
+              <tr>
+                <td>Ley 7/2024</td>
+                <td>Introduce el tramo del 30% en la base del ahorro para rentas superiores a 300.000 EUR.</td>
+              </tr>
+              <tr>
+                <td>RD 1065/2007</td>
+                <td>Reglamento general de gestión e inspección tributaria. Regula la obligación de informar sobre bienes en el extranjero (Modelo 720).</td>
+              </tr>
+              <tr>
+                <td>Orden EHA/3290/2008</td>
+                <td>Regula la declaración de inversiones españolas en el exterior (Modelo D-6).</td>
+              </tr>
+              <tr>
+                <td>Ley 19/1991</td>
+                <td>Impuesto sobre el Patrimonio. Relevante para la valoración de activos en el extranjero.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="muted">LIRPF = Ley 35/2006, de 28 de noviembre, del Impuesto sobre la Renta de las Personas Físicas. LGT = Ley 58/2003, General Tributaria.</p>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>
+    <p>
+      <a href="./index.html">Aplicación</a> ·
+      <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> ·
+      <strong>Self-hosted &middot; Privacidad total</strong>
+    </p>
+    <p class="credits">
+      Made with <span class="heart">&#9829;</span> by <a href="https://geiser.cloud">Sergio Fernández</a>
+      &middot; <a href="https://github.com/sponsors/GeiserX" class="sponsor-link">Sponsor</a>
+    </p>
+  </footer>
+
+  <script>
+    /* Theme toggle (auto / light / dark) */
+    (function() {
+      var ICONS = { auto: "\u25D1", light: "\u2600", dark: "\u263E" };
+      var CYCLE = ["auto", "light", "dark"];
+
+      function applyTheme(mode) {
+        var root = document.documentElement;
+        if (mode === "auto") {
+          root.removeAttribute("data-theme");
+        } else {
+          root.setAttribute("data-theme", mode);
+        }
+        var btn = document.getElementById("theme-toggle");
+        if (btn) btn.textContent = ICONS[mode];
+      }
+
+      var saved = localStorage.getItem("theme") || "auto";
+      applyTheme(saved);
+
+      document.getElementById("theme-toggle").addEventListener("click", function() {
+        var current = localStorage.getItem("theme") || "auto";
+        var idx = CYCLE.indexOf(current);
+        var next = CYCLE[(idx + 1) % CYCLE.length];
+        localStorage.setItem("theme", next);
+        applyTheme(next);
+      });
+    })();
+
+    /* Mobile TOC toggle */
+    (function() {
+      var toggle = document.getElementById("toc-toggle");
+      var sidebar = document.getElementById("sidebar");
+      toggle.addEventListener("click", function() {
+        sidebar.classList.toggle("collapsed");
+        var expanded = !sidebar.classList.contains("collapsed");
+        toggle.setAttribute("aria-expanded", expanded);
+      });
+    })();
+
+    /* Active section highlighting in TOC */
+    (function() {
+      var links = document.querySelectorAll(".docs-sidebar a[href^='#']");
+      var sections = [];
+      links.forEach(function(link) {
+        var id = link.getAttribute("href").slice(1);
+        var el = document.getElementById(id);
+        if (el) sections.push({ el: el, link: link });
+      });
+
+      function update() {
+        var scrollY = window.scrollY + 80;
+        var active = null;
+        for (var i = sections.length - 1; i >= 0; i--) {
+          if (sections[i].el.offsetTop <= scrollY) {
+            active = sections[i];
+            break;
+          }
+        }
+        links.forEach(function(l) { l.classList.remove("active"); });
+        if (active) active.link.classList.add("active");
+      }
+
+      window.addEventListener("scroll", update, { passive: true });
+      update();
+    })();
+  </script>
+</body>
+</html>

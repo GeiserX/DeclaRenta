@@ -63,6 +63,7 @@ const ca: TranslationKeys = {
   "chart.currency_composition": "Composició per divisa",
   "chart.withholdings_country": "Retencions per país",
 
+  "footer.docs": "Documentació",
   "footer.privacy": "Self-hosted · Privacitat total",
   "footer.disclaimer": "Avís legal",
 
