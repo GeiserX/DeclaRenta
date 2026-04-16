@@ -78,6 +78,46 @@ const en: TranslationKeys = {
 
   "theme.toggle": "Toggle theme",
 
+  // Wizard steps
+  "wizard.step1": "Upload files",
+  "wizard.step2": "Review data",
+  "wizard.step3": "Configure",
+  "wizard.step4": "Results",
+  "wizard.next": "Next",
+  "wizard.back": "Back",
+  "wizard.step_indicator": "Step {{current}} of {{total}}",
+
+  // Review step
+  "review.title": "Loaded data summary",
+  "review.broker": "Broker",
+  "review.trades_count": "Trades",
+  "review.dividends_count": "Dividends",
+  "review.date_range": "Date range",
+  "review.currencies": "Currencies",
+  "review.no_data": "No transactions detected in the uploaded files.",
+  "review.file": "File",
+
+  // Config step
+  "config.nif_label": "NIF (for Modelo 720/D-6):",
+  "config.nif_placeholder": "12345678A",
+  "config.generate_720": "Generate Modelo 720 file",
+  "config.generate_d6": "Generate D-6 guide",
+
+  // Expandable casillas
+  "casilla.expand": "Show detail",
+  "casilla.collapse": "Hide detail",
+  "casilla.operations_in": "Transactions in this box",
+  "casilla.no_operations": "No transactions",
+
+  // Year comparison
+  "compare.title": "Annual comparison",
+  "compare.no_data": "Process at least 2 tax years to see the comparison.",
+  "compare.year": "Tax year",
+  "compare.variation": "Variation",
+  "compare.saved_reports": "Saved reports",
+  "compare.clear_history": "Clear history",
+  "compare.clear_confirm": "Delete all saved reports?",
+
   "error.no_broker_detected": "Could not detect broker for \"{{filename}}\". Select the broker manually.",
   "error.prefix": "Error: ",
 

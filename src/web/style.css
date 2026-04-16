@@ -614,6 +614,313 @@ footer a:hover {
   height: auto;
 }
 
+/* Wizard progress indicator */
+.wizard-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 2rem;
+  padding: 0 1rem;
+}
+
+.wizard-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  cursor: default;
+  padding: 0.5rem;
+  margin: 0;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+
+.wizard-indicator.reachable {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.wizard-indicator.active {
+  opacity: 1;
+}
+
+.wizard-indicator.completed {
+  opacity: 0.8;
+}
+
+.wizard-step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: background 0.2s, color 0.2s;
+}
+
+.wizard-indicator.active .wizard-step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.wizard-indicator.completed .wizard-step-num {
+  background: var(--success);
+  color: #fff;
+}
+
+.wizard-step-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.wizard-indicator.active .wizard-step-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.wizard-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  min-width: 2rem;
+  max-width: 6rem;
+  margin: 0 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Wizard panels */
+.wizard-panel {
+  animation: fadeIn 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Wizard navigation */
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.wizard-nav button {
+  min-width: 120px;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--row-hover);
+  border-color: var(--accent);
+}
+
+.btn-small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Config grid */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Review cards */
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.review-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.review-card .review-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.review-card .review-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.review-card .review-value.accent {
+  color: var(--accent);
+}
+
+.review-files {
+  margin-top: 1rem;
+}
+
+.review-files table {
+  font-size: 0.85rem;
+}
+
+/* Casilla cards (expandable) */
+.casilla-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.casilla-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.casilla-card.expandable {
+  cursor: pointer;
+}
+
+.casilla-card.expandable:hover {
+  border-color: var(--accent);
+}
+
+.casilla-card.expanded {
+  border-color: var(--accent);
+}
+
+.casilla-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.casilla-code {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--tag-bg);
+  border: 1px solid var(--tag-border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  min-width: 3.5rem;
+  text-align: center;
+}
+
+.casilla-concept {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.casilla-value {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.casilla-toggle {
+  color: var(--muted);
+  font-size: 0.9rem;
+  transition: transform 0.2s;
+}
+
+.casilla-net {
+  border-width: 2px;
+}
+
+.casilla-detail {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.detail-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.detail-table {
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.detail-table th {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.detail-table td {
+  padding: 0.3rem 0.5rem;
+}
+
+/* Year comparison */
+.year-compare {
+  margin-top: 2rem;
+}
+
+.compare-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.compare-table {
+  font-size: 0.85rem;
+}
+
+.compare-table .row-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compare-meta {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.stats-divider td {
+  border-bottom: 2px solid var(--border);
+  padding: 0;
+}
+
 /* Responsive — tablet */
 @media (max-width: 1024px) {
   main {
@@ -664,6 +971,27 @@ footer a:hover {
   .top-bar {
     top: 0.5rem;
     right: 0.5rem;
+  }
+
+  .wizard-step-label {
+    display: none;
+  }
+
+  .wizard-connector {
+    margin-bottom: 0;
+  }
+
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .casilla-header {
+    flex-wrap: wrap;
+  }
+
+  .casilla-value {
+    width: 100%;
+    text-align: right;
   }
 }
 
