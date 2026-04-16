@@ -33,7 +33,9 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
 
   // Index all buy dates by ISIN
   for (const trade of allTrades) {
-    if (trade.buySell === "BUY" && (trade.assetCategory === "STK" || trade.assetCategory === "FUND")) {
+    // Anti-churning applies to STK, FUND, and BOND (homogeneous securities)
+    // Excluded: OPT, FUT, CFD, CASH (derivatives and forex are not "valores homogéneos")
+    if (trade.buySell === "BUY" && (trade.assetCategory === "STK" || trade.assetCategory === "FUND" || trade.assetCategory === "BOND")) {
       if (!buysByIsin.has(trade.isin)) {
         buysByIsin.set(trade.isin, []);
       }
@@ -47,8 +49,9 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       return disposal;
     }
 
-    // Anti-churning does NOT apply to options (CALL/PUT)
-    if (disposal.assetCategory === "OPT") {
+    // Anti-churning does NOT apply to derivatives, forex, or CFDs
+    if (disposal.assetCategory === "OPT" || disposal.assetCategory === "FUT" ||
+        disposal.assetCategory === "CFD" || disposal.assetCategory === "CASH") {
       return disposal;
     }
 

@@ -125,17 +125,17 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     const row = rows[i]!;
     if (!row.length) continue;
 
-    // Filter: only real stocks/ETFs (leverage = 1)
-    if (leverageCol >= 0) {
-      const leverage = (row[leverageCol] ?? "").trim();
-      if (leverage && leverage !== "1") continue;
-    }
+    // Determine asset category from type and leverage
+    const leverage = leverageCol >= 0 ? (row[leverageCol] ?? "").trim() : "1";
+    const rowType = typeCol >= 0 ? (row[typeCol] ?? "").toLowerCase().trim() : "";
 
-    // Filter: only stocks and ETFs
-    if (typeCol >= 0) {
-      const type = (row[typeCol] ?? "").toLowerCase().trim();
-      if (type && !type.includes("stock") && !type.includes("etf") && !type.includes("accion")) continue;
-    }
+    // Skip unknown/unsupported types (e.g. crypto on eToro — use dedicated crypto parsers)
+    if (rowType && !rowType.includes("stock") && !rowType.includes("etf") &&
+        !rowType.includes("accion") && !rowType.includes("cfd")) continue;
+
+    // CFD: leverage > 1 OR type explicitly says "cfd"
+    const isCfd = (leverage && leverage !== "1") || rowType.includes("cfd");
+    const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
     const actionStr = row[actionCol] ?? "";
     const parsed = parseAction(actionStr);
@@ -164,7 +164,7 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       symbol: parsed.symbol,
       description: parsed.symbol,
       isin,
-      assetCategory: "STK",
+      assetCategory: assetCat,
       currency: "USD",
       tradeDate: openDate,
       settlementDate: openDate,
@@ -195,7 +195,7 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       symbol: parsed.symbol,
       description: parsed.symbol,
       isin,
-      assetCategory: "STK",
+      assetCategory: assetCat,
       currency: "USD",
       tradeDate: closeDate,
       settlementDate: closeDate,

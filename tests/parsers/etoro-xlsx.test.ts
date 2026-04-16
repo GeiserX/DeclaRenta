@@ -87,7 +87,7 @@ describe("eToro XLSX parsing", () => {
       expect(sell).toBeDefined();
     });
 
-    it("should skip CFDs (leverage > 1)", async () => {
+    it("should parse CFDs (leverage > 1) as CFD asset category", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
@@ -97,9 +97,12 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      // Only AAPL (stock, leverage 1) — CFD filtered out
-      expect(result.trades).toHaveLength(2); // 1 buy + 1 sell for AAPL only
+      // Both AAPL (stock) and EURUSD (CFD) are parsed
+      expect(result.trades).toHaveLength(4); // 2 buy+sell for AAPL + 2 buy+sell for EURUSD
       expect(result.trades[0]!.symbol).toBe("AAPL");
+      expect(result.trades[0]!.assetCategory).toBe("STK");
+      expect(result.trades[2]!.symbol).toBe("EURUSD");
+      expect(result.trades[2]!.assetCategory).toBe("CFD");
     });
 
     it("should skip crypto", async () => {

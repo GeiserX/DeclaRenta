@@ -348,9 +348,10 @@
         <li><a href="#modelo-d6">9. Modelo D-6</a></li>
         <li><a href="#modelo-721">10. Modelo 721</a></li>
         <li><a href="#acciones-corporativas">11. Acciones corporativas</a></li>
-        <li><a href="#faq">12. Preguntas frecuentes</a></li>
-        <li><a href="#privacidad">13. Privacidad y seguridad</a></li>
-        <li><a href="#referencia-legal">14. Referencia legal</a></li>
+        <li><a href="#otros-activos">12. Otros tipos de activo</a></li>
+        <li><a href="#faq">13. Preguntas frecuentes</a></li>
+        <li><a href="#privacidad">14. Privacidad y seguridad</a></li>
+        <li><a href="#referencia-legal">15. Referencia legal</a></li>
       </ol>
     </aside>
 
@@ -472,7 +473,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </ol>
         <p><strong>Formato:</strong> XLSX (Excel) con pestaña "Closed Positions".</p>
         <p><strong>Datos extraídos:</strong> Posiciones cerradas con precios de apertura y cierre, dividendos.</p>
-        <p><strong>Limitaciones:</strong> eToro no proporciona ISINs directamente; DeclaRenta los mapea desde el nombre del activo. Las operaciones con CFDs no están soportadas.</p>
+        <p><strong>Limitaciones:</strong> eToro no proporciona ISINs directamente; DeclaRenta los mapea desde el nombre del activo. Los CFDs de acciones e índices se procesan; los CFDs de criptomonedas no están soportados.</p>
 
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
@@ -850,9 +851,43 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </ul>
       </section>
 
-      <!-- 12. FAQ -->
+      <!-- 12. Otros tipos de activo -->
+      <section id="otros-activos">
+        <h2>12. Otros tipos de activo</h2>
+        <p>Además de acciones (STK) y fondos (FUND), DeclaRenta procesa estos instrumentos financieros:</p>
+
+        <h3>Opciones (OPT)</h3>
+        <p>Las opciones se procesan con FIFO por símbolo (no tienen ISIN). El multiplicador del contrato (normalmente 100) se aplica automáticamente al calcular costes e importes de venta. DeclaRenta extrae los campos <code>putCall</code>, <code>strike</code>, <code>expiry</code> y <code>underlyingSymbol</code> del Flex Query XML de IBKR.</p>
+        <ul>
+          <li><strong>Compraventa de opciones</strong>: la prima pagada es el coste de adquisición; la prima recibida al vender es el valor de transmisión.</li>
+          <li><strong>Opciones ejercidas</strong>: el coste de la prima se integra en el coste de adquisición de las acciones subyacentes.</li>
+          <li><strong>Opciones que expiran sin valor</strong>: la prima pagada se declara como pérdida patrimonial total.</li>
+        </ul>
+        <p class="muted">La regla anti-churning (Art. 33.5.f) no se aplica a opciones.</p>
+
+        <h3>Futuros (FUT)</h3>
+        <p>Los contratos de futuros se procesan con FIFO por símbolo, aplicando el multiplicador del contrato. Las ganancias y pérdidas tributan como ganancias patrimoniales en la base del ahorro.</p>
+        <p class="muted">La regla anti-churning no se aplica a futuros.</p>
+
+        <h3>Forex (CASH)</h3>
+        <p>Las operaciones de compraventa de divisas (forex spot) tributan como ganancias y pérdidas patrimoniales. DeclaRenta las procesa con FIFO por par de divisas (símbolo). Los tipos de cambio ECB se aplican tanto a la compra como a la venta.</p>
+        <p>Las conversiones de divisa en IBKR (cambiar USD a EUR para depositar) se registran como operaciones CASH. Si generas ganancia o pérdida por la fluctuación del tipo de cambio entre la compra y la venta de la divisa, esta se declara como ganancia patrimonial.</p>
+        <p class="muted">La regla anti-churning no se aplica a operaciones forex.</p>
+
+        <h3>Bonos y renta fija (BOND)</h3>
+        <p>La compraventa de bonos tributa como ganancia o pérdida patrimonial, procesada con FIFO. Los cupones (intereses de bonos) se declaran como rendimiento del capital mobiliario en la Casilla 0033, al igual que los intereses de cuentas.</p>
+        <p>Las letras del Tesoro extranjeras reciben el mismo tratamiento fiscal que los bonos corporativos.</p>
+        <p class="muted">La regla anti-churning sí se aplica a bonos (son valores homogéneos).</p>
+
+        <h3>CFDs (Contratos por Diferencia)</h3>
+        <p>Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo <code>leverage &gt; 1</code> o el tipo <code>"CFD"</code> en el informe.</p>
+        <p>Las posiciones cortas en CFDs se soportan: si vendes primero sin lotes previos, DeclaRenta registra un coste base de 0 EUR y emite un aviso.</p>
+        <p class="muted">La regla anti-churning no se aplica a CFDs. Los CFDs de criptomonedas no están soportados actualmente.</p>
+      </section>
+
+      <!-- 13. FAQ -->
       <section id="faq">
-        <h2>12. Preguntas frecuentes</h2>
+        <h2>13. Preguntas frecuentes</h2>
 
         <dl>
           <div class="faq-item">
@@ -887,7 +922,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
 
           <div class="faq-item">
             <dt>¿Se soportan los CFDs?</dt>
-            <dd>No. Los contratos por diferencia (CFDs) tienen un tratamiento fiscal distinto y no están soportados actualmente. Si tu broker ofrece operaciones en CFDs, estas serán ignoradas.</dd>
+            <dd>Sí, parcialmente. Los CFDs de acciones e índices en eToro se procesan como ganancias y pérdidas patrimoniales. Los CFDs de criptomonedas no están soportados. Otros brokers de CFDs (como XTB) están planificados para futuras versiones.</dd>
           </div>
 
           <div class="faq-item">
@@ -942,9 +977,9 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </dl>
       </section>
 
-      <!-- 13. Privacidad y seguridad -->
+      <!-- 14. Privacidad y seguridad -->
       <section id="privacidad">
-        <h2>13. Privacidad y seguridad</h2>
+        <h2>14. Privacidad y seguridad</h2>
 
         <h3>Arquitectura sin servidor</h3>
         <p>DeclaRenta no tiene backend. No hay servidor que reciba tus datos. La aplicación web es un conjunto de ficheros estáticos (HTML, CSS, JavaScript) que se ejecutan íntegramente en tu navegador.</p>
@@ -962,9 +997,9 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>El código fuente está disponible en <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> bajo licencia GPL-3.0. Cualquiera puede auditar el código, verificar que no hay transmisión de datos y contribuir mejoras.</p>
       </section>
 
-      <!-- 14. Referencia legal -->
+      <!-- 15. Referencia legal -->
       <section id="referencia-legal">
-        <h2>14. Referencia legal</h2>
+        <h2>15. Referencia legal</h2>
         <p>DeclaRenta implementa las siguientes normas de la legislación fiscal española:</p>
 
         <div class="table-wrapper">

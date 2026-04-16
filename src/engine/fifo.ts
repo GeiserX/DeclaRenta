@@ -31,8 +31,10 @@ export class FifoEngine {
    * Buys add lots; sells consume lots via FIFO; splits adjust lots.
    */
   processTrades(trades: Trade[], rateMap: EcbRateMap, corporateActions?: CorporateAction[]): FifoDisposal[] {
+    // Process all tradeable asset types (STK, FUND, OPT, FUT, BOND, CASH/forex, CFD, CRYPTO)
+    // Only WAR (warrants) is excluded — insufficient data for fiscal treatment
     const sorted = [...trades]
-      .filter((t) => t.assetCategory === "STK" || t.assetCategory === "FUND" || t.assetCategory === "OPT")
+      .filter((t) => t.assetCategory !== "WAR")
       .sort((a, b) => normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)));
 
     // Parse splits from corporate actions (deduplicate by ISIN+date)
