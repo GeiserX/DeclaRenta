@@ -13,9 +13,11 @@ const CACHE_VERSION = "declarenta-v1";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
+// Use SW scope as base — works for both local dev (/) and GitHub Pages (/DeclaRenta/)
+const BASE = self.registration.scope;
 const STATIC_URLS = [
-  "/",
-  "/index.html",
+  BASE,
+  `${BASE}index.html`,
 ];
 
 self.addEventListener("install", (event) => {

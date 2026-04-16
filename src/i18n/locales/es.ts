@@ -68,6 +68,7 @@ const es = {
   "chart.withholdings_country": "Retenciones por país",
 
   // Footer
+  "footer.docs": "Documentación",
   "footer.privacy": "Self-hosted · Privacidad total",
   "footer.disclaimer": "Aviso legal",
 

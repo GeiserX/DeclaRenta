@@ -62,6 +62,7 @@ const en: TranslationKeys = {
   "chart.currency_composition": "Currency composition",
   "chart.withholdings_country": "Withholdings by country",
 
+  "footer.docs": "Documentation",
   "footer.privacy": "Self-hosted · Total privacy",
   "footer.disclaimer": "Legal notice",
 
