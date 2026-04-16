@@ -89,7 +89,7 @@ export function generateD6Report(
   const yearEnd = `${year}-12-31`;
 
   const d6Positions: D6Position[] = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND")
+    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
       // Only foreign positions (non-Spanish ISINs)
       const country = p.isin.slice(0, 2).toUpperCase();

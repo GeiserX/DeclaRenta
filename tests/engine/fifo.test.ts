@@ -224,7 +224,9 @@ describe("FifoEngine", () => {
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("5005.00");
     // Cost: 50/100 of original cost (10 × 1000 × 0.92 = 9200), so 4600
     expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("4600.00");
-    expect(engine.warnings).toHaveLength(0);
+    // Split application generates an informational warning
+    expect(engine.warnings).toHaveLength(1);
+    expect(engine.warnings[0]).toContain("Split");
   });
 
   it("should calculate correct holding days with YYYYMMDD dates", () => {

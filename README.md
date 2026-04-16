@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  IBKR · Degiro · Scalable Capital · eToro · Freedom24 → Modelo 100 · Modelo 720 · D-6
+  IBKR · Degiro · Scalable Capital · eToro · Freedom24 · Coinbase · Binance · Kraken → Modelo 100 · Modelo 720 · D-6
 </p>
 
 <p align="center">
@@ -46,8 +46,11 @@ DeclaRenta automatiza todo esto.
 | Interactive Brokers | Flex Query XML | Trades, dividendos, corporate actions, posiciones |
 | Degiro | CSV (transacciones + cartera) | Delimitador auto-detectado (coma/punto y coma) |
 | Scalable Capital | CSV (14 columnas) | Incluye savings plans y distribuciones |
-| eToro | XLSX (cuenta completa) | Posiciones cerradas + dividendos, 6+ versiones de cabeceras |
+| eToro | XLSX (cuenta completa) | Posiciones cerradas + dividendos + CFDs, 6+ versiones de cabeceras |
 | Freedom24 | JSON (report export) | Trades, dividendos, retenciones |
+| Coinbase | CSV (historial de transacciones) | Crypto trades y conversiones |
+| Binance | CSV (historial de trades) | Spot trades de criptomonedas |
+| Kraken | CSV (trades/ledger) | Crypto trades y staking |
 
 Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO cruzado.
 
@@ -113,7 +116,8 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 ## Motor fiscal
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
-- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses
+- **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
+- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (aplica a acciones, fondos y bonos; excluye derivados, forex y crypto)
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)

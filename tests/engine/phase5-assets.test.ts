@@ -486,6 +486,41 @@ describe("Phase 5 — Options (OPT)", () => {
     // Options are NOT "valores homogeneos" — must NOT block
     expect(checked[0]!.washSaleBlocked).toBe(false);
   });
+
+  it("should NOT apply anti-churning to crypto losses", () => {
+    const rates = makeRateMap({
+      "2025-03-01": { "USD": "0.92" },
+      "2025-06-01": { "USD": "0.91" },
+      "2025-06-15": { "USD": "0.91" },
+    });
+
+    const trades: Trade[] = [
+      makeTrade({
+        tradeID: "1", symbol: "BTC", isin: "",
+        assetCategory: "CRYPTO", tradeDate: "2025-03-01",
+        quantity: "1", tradePrice: "60000", buySell: "BUY",
+      }),
+      makeTrade({
+        tradeID: "2", symbol: "BTC", isin: "",
+        assetCategory: "CRYPTO", tradeDate: "2025-06-01",
+        quantity: "-1", tradePrice: "50000", buySell: "SELL",
+      }),
+      // Repurchase within 2 months
+      makeTrade({
+        tradeID: "3", symbol: "BTC", isin: "",
+        assetCategory: "CRYPTO", tradeDate: "2025-06-15",
+        quantity: "1", tradePrice: "51000", buySell: "BUY",
+      }),
+    ];
+
+    const engine = new FifoEngine();
+    const disposals = engine.processTrades(trades, rates);
+    const checked = detectWashSales(disposals, trades);
+
+    expect(checked).toHaveLength(1);
+    // Crypto is NOT "valores homogeneos" — must NOT block
+    expect(checked[0]!.washSaleBlocked).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

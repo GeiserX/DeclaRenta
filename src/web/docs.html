@@ -6,6 +6,8 @@
   <title>DeclaRenta - Documentación</title>
   <meta name="description" content="Documentación completa de DeclaRenta: brokers soportados, casillas del Modelo 100, FIFO, doble imposición, Modelo 720, D-6 y más." />
   <meta name="theme-color" content="#3b82f6" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
   <link rel="stylesheet" href="./style.css" />
   <style>
@@ -860,7 +862,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>Las opciones se procesan con FIFO por símbolo (no tienen ISIN). El multiplicador del contrato (normalmente 100) se aplica automáticamente al calcular costes e importes de venta. DeclaRenta extrae los campos <code>putCall</code>, <code>strike</code>, <code>expiry</code> y <code>underlyingSymbol</code> del Flex Query XML de IBKR.</p>
         <ul>
           <li><strong>Compraventa de opciones</strong>: la prima pagada es el coste de adquisición; la prima recibida al vender es el valor de transmisión.</li>
-          <li><strong>Opciones ejercidas</strong>: el coste de la prima se integra en el coste de adquisición de las acciones subyacentes.</li>
+          <li><strong>Opciones ejercidas</strong>: en el futuro, el coste de la prima se integrará en el coste de adquisición de las acciones subyacentes. Actualmente, el ejercicio se procesa como cierre estándar de la posición de opciones.</li>
           <li><strong>Opciones que expiran sin valor</strong>: la prima pagada se declara como pérdida patrimonial total.</li>
         </ul>
         <p class="muted">La regla anti-churning (Art. 33.5.f) no se aplica a opciones.</p>
@@ -871,7 +873,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
 
         <h3>Forex (CASH)</h3>
         <p>Las operaciones de compraventa de divisas (forex spot) tributan como ganancias y pérdidas patrimoniales. DeclaRenta las procesa con FIFO por par de divisas (símbolo). Los tipos de cambio ECB se aplican tanto a la compra como a la venta.</p>
-        <p>Las conversiones de divisa en IBKR (cambiar USD a EUR para depositar) se registran como operaciones CASH. Si generas ganancia o pérdida por la fluctuación del tipo de cambio entre la compra y la venta de la divisa, esta se declara como ganancia patrimonial.</p>
+        <p>Las conversiones de divisa en IBKR (cambiar USD a EUR para depositar) se registran como operaciones CASH. Actualmente, DeclaRenta no distingue entre conversiones de divisa (FXCONV) y operaciones de trading de forex; todas se procesan con FIFO. Si generas ganancia o pérdida por la fluctuación del tipo de cambio entre la compra y la venta de la divisa, esta se declara como ganancia patrimonial.</p>
         <p class="muted">La regla anti-churning no se aplica a operaciones forex.</p>
 
         <h3>Bonos y renta fija (BOND)</h3>

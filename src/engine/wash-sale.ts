@@ -10,6 +10,9 @@ import type { FifoDisposal } from "../types/tax.js";
 import type { Trade } from "../types/ibkr.js";
 import { parseDate } from "./dates.js";
 
+/** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f) */
+const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "CFD", "CASH", "CRYPTO"]);
+
 /** Add/subtract calendar months (Art. 33.5.f says "dos meses", not 60 days). */
 function addMonths(date: Date, months: number): Date {
   const result = new Date(date);
@@ -34,8 +37,8 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
   // Index all buy dates by ISIN
   for (const trade of allTrades) {
     // Anti-churning applies to STK, FUND, and BOND (homogeneous securities)
-    // Excluded: OPT, FUT, CFD, CASH (derivatives and forex are not "valores homogéneos")
-    if (trade.buySell === "BUY" && (trade.assetCategory === "STK" || trade.assetCategory === "FUND" || trade.assetCategory === "BOND")) {
+    // Excluded: OPT, FUT, CFD, CASH, CRYPTO (derivatives, forex, and crypto are not "valores homogéneos")
+    if (trade.buySell === "BUY" && !WASH_SALE_EXEMPT.has(trade.assetCategory)) {
       if (!buysByIsin.has(trade.isin)) {
         buysByIsin.set(trade.isin, []);
       }
@@ -49,9 +52,8 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       return disposal;
     }
 
-    // Anti-churning does NOT apply to derivatives, forex, or CFDs
-    if (disposal.assetCategory === "OPT" || disposal.assetCategory === "FUT" ||
-        disposal.assetCategory === "CFD" || disposal.assetCategory === "CASH") {
+    // Anti-churning does NOT apply to derivatives, forex, CFDs, or crypto
+    if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) {
       return disposal;
     }
 

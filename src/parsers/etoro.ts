@@ -135,7 +135,7 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
         !rowType.includes("index") && !rowType.includes("indice")) continue;
 
     // CFD: leverage > 1 OR type explicitly says "cfd"
-    const isCfd = (leverage && leverage !== "1") || rowType.includes("cfd");
+    const isCfd = leverage !== "1" || rowType.includes("cfd");
     const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
     const actionStr = row[actionCol] ?? "";

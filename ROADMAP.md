@@ -87,7 +87,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 ### v0.1.0 completado
 
 - [x] Validado con datos IBKR reales (1063 operaciones, 3 ejercicios)
-- [x] Tramos del ahorro 2025 verificados (28% >300K, Ley 7/2024)
+- [x] Tramos del ahorro 2025 verificados (30% >300K, Ley 7/2024)
 - [x] v0.1.0 publicado
 
 ### Tipos de activo soportados
@@ -312,15 +312,15 @@ Tareas:
 #### Opciones y futuros (IBKR)
 
 - [x] Parser de opciones IBKR: strike, expiry, put/call, multiplicador (campos putCall, strike, expiry, underlyingSymbol, underlyingIsin en Trade)
-- [x] Tratamiento fiscal: prima como coste/ingreso, ejercicio vs expiración vs cierre
-- [x] Opciones ejercidas: coste de la prima se suma al coste de adquisición de las acciones
+- [x] Tratamiento fiscal: prima como coste/ingreso, expiración y cierre vía FIFO
+- [ ] Opciones ejercidas: coste de la prima se suma al coste de adquisición de las acciones (pendiente: detectar ejercicio C;O y transferir prima a lote STK)
 - [x] Futuros: FIFO con multiplicador, ganancias/pérdidas como ganancia patrimonial
 
 #### Forex
 
 - [x] Operaciones forex spot: clasificación como ganancia/pérdida patrimonial
 - [x] Conversiones de divisa en IBKR (CASH asset category, FIFO por símbolo)
-- [x] Distinguir entre forex trading y conversiones de divisa para depósitos
+- [ ] Distinguir entre forex trading y conversiones de divisa para depósitos (pendiente: detectar FXCONV vs trades en Flex Query)
 
 #### Bonos y renta fija
 
