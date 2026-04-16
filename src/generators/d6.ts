@@ -46,8 +46,10 @@ export interface D6Report {
   guide: string[];
 }
 
-/** Map ISIN country prefix to AFORIX exchange code (best-effort) */
-function exchangeFromIsin(isin: string): string {
+/** Map ISIN country prefix to AFORIX exchange code (best-effort, equities only) */
+function exchangeFromIsin(isin: string, assetCategory?: string): string {
+  // Bonds trade OTC or on dedicated platforms, not equity exchanges
+  if (assetCategory === "BOND") return "XOTC";
   const country = isin.slice(0, 2).toUpperCase();
   const map: Record<string, string> = {
     US: "XNYS", // NYSE (default for US)
@@ -89,7 +91,7 @@ export function generateD6Report(
   const yearEnd = `${year}-12-31`;
 
   const d6Positions: D6Position[] = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND")
+    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
       // Only foreign positions (non-Spanish ISINs)
       const country = p.isin.slice(0, 2).toUpperCase();
@@ -104,7 +106,7 @@ export function generateD6Report(
         isin: p.isin,
         description: p.description,
         countryCode: p.isin.slice(0, 2).toUpperCase(),
-        exchangeCode: exchangeFromIsin(p.isin),
+        exchangeCode: exchangeFromIsin(p.isin, p.assetCategory),
         sharesAtYearEnd: new Decimal(p.quantity).toString(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,

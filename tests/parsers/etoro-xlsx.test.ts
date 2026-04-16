@@ -87,7 +87,7 @@ describe("eToro XLSX parsing", () => {
       expect(sell).toBeDefined();
     });
 
-    it("should skip CFDs (leverage > 1)", async () => {
+    it("should parse CFDs (leverage > 1) as CFD asset category", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
@@ -97,9 +97,12 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      // Only AAPL (stock, leverage 1) — CFD filtered out
-      expect(result.trades).toHaveLength(2); // 1 buy + 1 sell for AAPL only
+      // Both AAPL (stock) and EURUSD (CFD) are parsed
+      expect(result.trades).toHaveLength(4); // 2 buy+sell for AAPL + 2 buy+sell for EURUSD
       expect(result.trades[0]!.symbol).toBe("AAPL");
+      expect(result.trades[0]!.assetCategory).toBe("STK");
+      expect(result.trades[2]!.symbol).toBe("EURUSD");
+      expect(result.trades[2]!.assetCategory).toBe("CFD");
     });
 
     it("should skip crypto", async () => {
@@ -304,7 +307,7 @@ describe("eToro XLSX parsing", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip ETF-like type that doesn't match", async () => {
+    it("should parse Commodity type as CFD (eToro commodities are always derivatives)", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
@@ -313,7 +316,37 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades).toHaveLength(2); // buy + sell legs
+      expect(result.trades[0]!.assetCategory).toBe("CFD");
+    });
+
+    it("should parse leverage-based CFD with correct asset category", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025", "20/09/2025", "Stocks", "5", "US0378331005"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      // Leverage 5 → CFD
+      expect(result.trades[0]!.assetCategory).toBe("CFD");
+      expect(result.trades[1]!.assetCategory).toBe("CFD");
+    });
+
+    it("should parse index CFDs (leveraged index positions)", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy SPX500", "2000", "1", "4500", "4600", "200", "01/04/2025", "01/05/2025", "Index", "10", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades[0]!.assetCategory).toBe("CFD");
+      expect(result.trades[0]!.symbol).toBe("SPX500");
     });
 
     it("should accept ETF type", async () => {

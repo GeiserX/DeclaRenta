@@ -41,6 +41,16 @@ export interface Trade {
   multiplier: string;
   /** Optional: which broker produced this trade (for cross-broker reports) */
   brokerSource?: string;
+  /** Option put/call indicator */
+  putCall?: "P" | "C";
+  /** Option/future strike price */
+  strike?: string;
+  /** Option/future expiry date (YYYYMMDD) */
+  expiry?: string;
+  /** Underlying symbol for derivatives */
+  underlyingSymbol?: string;
+  /** Underlying ISIN for derivatives */
+  underlyingIsin?: string;
 }
 
 export interface CashTransaction {
@@ -111,4 +121,4 @@ export interface SecurityInfo {
   subCategory: string;
 }
 
-export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO";
+export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";

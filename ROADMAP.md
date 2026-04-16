@@ -38,7 +38,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v0.7.0)
+## Estado actual (v0.9.0)
 
 ### Lo que ya funciona
 
@@ -87,7 +87,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 ### v0.1.0 completado
 
 - [x] Validado con datos IBKR reales (1063 operaciones, 3 ejercicios)
-- [x] Tramos del ahorro 2025 verificados (28% >300K, Ley 7/2024)
+- [x] Tramos del ahorro 2025 verificados (30% >300K, Ley 7/2024)
 - [x] v0.1.0 publicado
 
 ### Tipos de activo soportados
@@ -97,11 +97,12 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Acciones | `STK` | Sí | Sí | Sí | v0.1 |
 | ETFs / Fondos | `FUND` | Sí | Sí | Sí | v0.1 |
 | Opciones | `OPT` | Sí | — | — | v0.1 (multiplicador, FIFO por símbolo) |
-| Futuros | `FUT` | — | — | — | Planificado |
-| Bonos | `BOND` | — | — | — | Planificado |
-| Forex | `CASH` | — | — | — | Planificado |
+| Futuros | `FUT` | Sí | — | — | v0.10 |
+| Bonos | `BOND` | Sí | Sí (cupones) | Sí | v0.10 |
+| Forex | `CASH` | Sí | — | — | v0.10 |
 | Warrants | `WAR` | — | — | — | Planificado |
-| Crypto | N/A | — | — | — | Planificado (721) |
+| Crypto | N/A | Sí | — | — (721) | v0.7 |
+| CFDs | N/A | Sí | — | — | v0.10 (eToro) |
 
 ---
 
@@ -114,7 +115,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | **burocratin** | OSS (AGPL-3.0) | Gratis | IBKR, Degiro | 720, D-6 | Browser (WASM) | Solo genera 720 y D-6, no calcula IRPF; escrito en Rust/WASM (19 stars) |
 | **IBKR-RENTA** | OSS | Gratis | IBKR (CSV) | 100 | Browser | Single-file HTML; solo IBKR CSV (no Flex XML); sin 720/D-6; 1 star, creado mar 2026 |
 | **Asesor fiscal** | Servicio | 150-500 € | Cualquiera | Todos | Datos compartidos | Coste elevado, dependencia de tercero, tiempos de espera |
-| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro, Scalable, eToro, Freedom24 | **100, 720, D-6** + 721 stub | **Browser-first, zero-server** | En desarrollo; IBKR validado con datos reales |
+| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro, Scalable, eToro, Freedom24, Coinbase, Binance, Kraken | **100, 720, D-6** + 721 | **Browser-first, zero-server** | En desarrollo activo |
 
 **Hueco que cubre DeclaRenta**: no existe ninguna herramienta open source que cubra el ciclo completo (IRPF + 720 + D-6) con soporte multi-broker y privacidad total. burocratin solo hace 720/D-6. IBKR-RENTA solo hace Modelo 100 desde CSV. TaxDown cobra 239 € y sube los datos a la nube.
 
@@ -132,7 +133,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Parser IBKR Flex Query XML (`fast-xml-parser`, manejo de arrays)
 - [x] Motor ECB (SDMX API, cache, fallback festivos/fines de semana)
 - [x] Motor FIFO (lots, consumo parcial, `Decimal.js` everywhere)
-- [x] Detección anti-churning (Art. 33.5.f LIRPF, ventana de 2 meses)
+- [x] Detección anti-churning (Art. 33.5.f LIRPF, ventana de 2 meses — aplica a STK, FUND, BOND; excluye OPT, FUT, CFD, CASH, CRYPTO)
 - [x] Procesamiento dividendos + matching retenciones extranjeras
 - [x] Cálculo doble imposición (Art. 80 LIRPF, tramos del ahorro)
 - [x] Generador Modelo 720 (fixed-width 500 bytes, ISO-8859-15)
@@ -171,7 +172,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
   - Spin-off: distribuir coste entre parent y spin-off según ratio de mercado
 - [x] Posiciones cross-year: multi-fichero `--input` carga lots de ejercicios anteriores
 - [x] Comisiones: impuestos de transacción (STT, FTT) incluidos en coste/importe
-- [ ] Multi-divisa simultáneo: manejar correctamente compras en USD pagadas con GBP
+- [x] Multi-divisa simultáneo: compras en USD pagadas con GBP manejadas correctamente con tipos ECB separados
 - [x] Informe detallado por operación: divisa, tipo ECB compra/venta en JSON y CSV
 - [x] Dividendos en especie (scrip dividends): lotes con coste base de IBKR
 - [x] Payment In Lieu of Dividends: clasificación correcta como rendimiento
@@ -219,14 +220,14 @@ Tareas:
 - [x] **Registry con auto-detección**: `detectBroker()`, `getBroker()`, `--broker` flag en CLI
 - [x] **Parser Degiro**: Transactions CSV (trades) + Account CSV (dividendos/retenciones). Multi-idioma ES/EN/NL/DE, auto-detect delimitador coma/punto y coma, números EU
 - [x] **Parser Scalable Capital**: CSV export (semicolon-delimited, EU numbers, filter `status=Executed`)
-- [x] **Parser eToro**: XLSX Account Statement (acciones y ETFs; excluye CFDs). Soporta 6+ versiones de columnas
+- [x] **Parser eToro**: XLSX Account Statement (acciones, ETFs y CFDs). Soporta 6+ versiones de columnas
 - [x] **Parser Freedom24**: JSON report (`trades.detailed[]`, `corporate_actions.detailed[]`)
 - [x] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
   - Un mismo ISIN comprado en IBKR y Degiro usa una sola cola FIFO
   - Orden cronológico global, no por broker
 - [x] Web UI: selector de broker → formato esperado → upload multi-fichero
 - [x] Tests por broker con fixtures sintéticos (Scalable 15, Freedom24 16, eToro 5, corporate actions 7)
-- [ ] Publicar **v0.3.0**
+- [x] Publicar **v0.3.0**
 
 **Criterio de éxito**: procesamiento correcto de exports reales de al menos 3 brokers distintos.
 
@@ -277,7 +278,7 @@ Tareas:
 - [x] Formato orientado a llevar al asesor fiscal o adjuntar a la declaración
 - [x] Incluir tipo ECB utilizado en cada operación para auditoría
 
-- [ ] Publicar **v0.5.0**
+- [x] Publicar **v0.5.0**
 
 **Criterio de éxito**: ficheros 720 y D-6 generados pasan validación de formato AEAT/BdE sin errores.
 
@@ -298,7 +299,7 @@ Tareas:
 - [x] **i18n**: castellano (default), catalán, euskera, gallego, inglés — selector de idioma en la UI
 - [x] **Deploy GitHub Pages**: workflow configurado, dominio custom ready
 - [x] **Responsive**: móvil, tablet, desktop
-- [ ] Publicar **v0.8.0**
+- [x] Publicar **v0.8.0**
 
 **Criterio de éxito**: un usuario sin experiencia técnica puede generar su informe en <3 minutos desde la web.
 
@@ -310,30 +311,30 @@ Tareas:
 
 #### Opciones y futuros (IBKR)
 
-- [ ] Parser de opciones IBKR: strike, expiry, put/call, multiplicador
-- [ ] Tratamiento fiscal: prima como coste/ingreso, ejercicio vs expiración vs cierre
-- [ ] Opciones ejercidas: coste de la prima se suma al coste de adquisición de las acciones
-- [ ] Futuros: liquidación diaria, ganancias/pérdidas como rendimiento del capital
+- [x] Parser de opciones IBKR: strike, expiry, put/call, multiplicador (campos putCall, strike, expiry, underlyingSymbol, underlyingIsin en Trade)
+- [x] Tratamiento fiscal: prima como coste/ingreso, expiración y cierre vía FIFO
+- [ ] Opciones ejercidas: coste de la prima se suma al coste de adquisición de las acciones (pendiente: detectar ejercicio C;O y transferir prima a lote STK)
+- [x] Futuros: FIFO con multiplicador, ganancias/pérdidas como ganancia patrimonial
 
 #### Forex
 
-- [ ] Operaciones forex spot: clasificación como ganancia/pérdida patrimonial
-- [ ] Conversiones de divisa en IBKR (no son trading, son cambio de base currency)
-- [ ] Distinguir entre forex trading y conversiones de divisa para depósitos
+- [x] Operaciones forex spot: clasificación como ganancia/pérdida patrimonial
+- [x] Conversiones de divisa en IBKR (CASH asset category, FIFO por símbolo)
+- [ ] Distinguir entre forex trading y conversiones de divisa para depósitos (pendiente: detectar FXCONV vs trades en Flex Query)
 
 #### Bonos y renta fija
 
-- [ ] Cupones: rendimiento del capital mobiliario (Casilla 0033)
-- [ ] Compraventa de bonos: ganancia/pérdida patrimonial
-- [ ] Letras del Tesoro extranjeras: tratamiento fiscal
+- [x] Cupones: rendimiento del capital mobiliario (Casilla 0033) — ya soportado vía Bond Interest Received/Paid
+- [x] Compraventa de bonos: ganancia/pérdida patrimonial vía FIFO
+- [x] Letras del Tesoro extranjeras: tratamiento fiscal como BOND
 
 #### CFDs
 
-- [ ] Nota: los CFDs tributan como ganancia/pérdida patrimonial (no como rendimiento)
-- [ ] Parser específico para eToro y XTB (principales plataformas de CFDs)
-- [ ] Soporte para posiciones cortas
+- [x] CFDs tributan como ganancia/pérdida patrimonial (no como rendimiento)
+- [x] Parser eToro CFDs (tipo CFD detectado por leverage > 1 o type "cfd")
+- [x] Soporte para posiciones cortas (warning + coste base 0)
 
-- [ ] Publicar **v0.9.0**
+- [x] Publicar **v0.9.0**
 
 ---
 
