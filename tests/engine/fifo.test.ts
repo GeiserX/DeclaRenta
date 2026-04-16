@@ -478,4 +478,148 @@ describe("FifoEngine", () => {
     // Proceeds: (10 × 120 - 5 - 3) × 0.91 = 1192 × 0.91 = 1084.72
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1084.72");
   });
+
+  describe("Multi-currency verification", () => {
+    it("should handle cross-currency: buy USD stock from GBP account, sell later", () => {
+      // Scenario: UK-based account (GBP), buying AAPL which trades in USD.
+      // IBKR reports the trade in the trade currency (USD), not the settlement
+      // currency (GBP). The FIFO engine uses trade.currency for ECB conversion.
+      // Settlement FX is handled by the broker — not relevant for Spanish tax.
+      //
+      // The gain/loss reflects both:
+      //   1. The stock price movement (USD 100 → 110)
+      //   2. The USD/EUR rate change (0.92 → 0.88)
+      const rates: EcbRateMap = new Map();
+      rates.set("2025-03-15", new Map([["USD", "0.9200"], ["GBP", "1.1500"]]));
+      rates.set("2025-09-20", new Map([["USD", "0.8800"], ["GBP", "1.1300"]]));
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          tradeDate: "2025-03-15",
+          currency: "USD",   // Trade currency is USD
+          quantity: "10",
+          tradePrice: "100",
+          buySell: "BUY",
+          commission: "0",
+        }),
+        makeTrade({
+          tradeID: "2",
+          tradeDate: "2025-09-20",
+          currency: "USD",   // Still USD trade
+          quantity: "-10",
+          tradePrice: "110",
+          buySell: "SELL",
+          commission: "0",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+
+      // Cost: 10 × 100 USD × 0.92 EUR/USD = 920.00 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("920.00");
+      // Proceeds: 10 × 110 USD × 0.88 EUR/USD = 968.00 EUR
+      expect(d.proceedsEur.toFixed(2)).toBe("968.00");
+      // Gain: 968 - 920 = 48.00 EUR
+      // Note: USD gained 10% in price but EUR/USD dropped from 0.92 to 0.88,
+      // so the EUR gain is smaller than the USD gain would suggest
+      expect(d.gainLossEur.toFixed(2)).toBe("48.00");
+
+      // ECB rates in disposal should reflect the USD rates used
+      expect(d.acquireEcbRate.toFixed(4)).toBe("0.9200");
+      expect(d.sellEcbRate.toFixed(4)).toBe("0.8800");
+      expect(d.currency).toBe("USD");
+    });
+
+    it("should handle GBP-denominated stock with correct FX conversion", () => {
+      // Buy a UK stock priced in GBP
+      const rates: EcbRateMap = new Map();
+      rates.set("2025-03-15", new Map([["GBP", "1.1500"]]));
+      rates.set("2025-09-20", new Map([["GBP", "1.1300"]]));
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          symbol: "SHEL",
+          isin: "GB00BP6MXD84",
+          tradeDate: "2025-03-15",
+          currency: "GBP",
+          quantity: "10",
+          tradePrice: "25",
+          buySell: "BUY",
+          commission: "0",
+        }),
+        makeTrade({
+          tradeID: "2",
+          symbol: "SHEL",
+          isin: "GB00BP6MXD84",
+          tradeDate: "2025-09-20",
+          currency: "GBP",
+          quantity: "-10",
+          tradePrice: "28",
+          buySell: "SELL",
+          commission: "0",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+
+      // Cost: 10 × 25 GBP × 1.15 EUR/GBP = 287.50 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("287.50");
+      // Proceeds: 10 × 28 GBP × 1.13 EUR/GBP = 316.40 EUR
+      expect(d.proceedsEur.toFixed(2)).toBe("316.40");
+      // Gain: 316.40 - 287.50 = 28.90 EUR
+      expect(d.gainLossEur.toFixed(2)).toBe("28.90");
+      expect(d.currency).toBe("GBP");
+    });
+
+    it("should track FX impact separately from price gain in cross-currency trade", () => {
+      // Same stock price, different FX — should show FX-only gain/loss
+      const rates: EcbRateMap = new Map();
+      rates.set("2025-03-15", new Map([["USD", "0.9200"]]));
+      rates.set("2025-09-20", new Map([["USD", "0.9500"]])); // USD strengthened
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          tradeDate: "2025-03-15",
+          currency: "USD",
+          quantity: "10",
+          tradePrice: "100",
+          buySell: "BUY",
+          commission: "0",
+        }),
+        makeTrade({
+          tradeID: "2",
+          tradeDate: "2025-09-20",
+          currency: "USD",
+          quantity: "-10",
+          tradePrice: "100", // Same price — no USD gain
+          buySell: "SELL",
+          commission: "0",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+
+      // Cost: 10 × 100 × 0.92 = 920.00 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("920.00");
+      // Proceeds: 10 × 100 × 0.95 = 950.00 EUR
+      expect(d.proceedsEur.toFixed(2)).toBe("950.00");
+      // Gain is purely from FX: 950 - 920 = 30.00 EUR
+      expect(d.gainLossEur.toFixed(2)).toBe("30.00");
+    });
+  });
 });

@@ -5,75 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DeclaRenta - Broker extranjero → Renta española</title>
   <meta name="description" content="Convierte reportes de IBKR, Degiro, Scalable Capital, eToro y Freedom24 en valores para tu declaración de la renta española. Self-hosted, privacidad total." />
+  <meta name="theme-color" content="#3b82f6" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
+  <a href="#upload" class="skip-link" data-i18n="a11y.skip_link">Saltar al contenido</a>
+  <nav class="top-bar" data-i18n-aria="a11y.nav_label" aria-label="Ajustes">
+    <select id="lang-select" class="lang-select" data-i18n-aria="a11y.lang_label" aria-label="Idioma"></select>
+    <button class="theme-toggle" id="theme-toggle" data-i18n-title="a11y.theme_toggle" data-i18n-aria="a11y.theme_toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
+  </nav>
   <main id="app">
     <header>
       <h1>Decla<span class="brand-accent">Renta</span></h1>
-      <p class="subtitle">Broker extranjero → Renta española</p>
-      <p class="privacy">Self-hosted. Tus datos no salen de tu equipo.</p>
+      <p class="subtitle" data-i18n="app.subtitle">Broker extranjero → Renta española</p>
     </header>
 
     <section id="upload">
-      <h2>1. Sube tu informe del broker</h2>
+      <h2 data-i18n="upload.title">1. Sube tu informe del broker</h2>
       <div class="broker-selector">
         <label>
-          Broker:
+          <span data-i18n="upload.broker_label">Broker:</span>
           <select id="broker-select">
-            <option value="auto" selected>Auto-detectar</option>
+            <option value="auto" selected data-i18n="upload.auto_detect">Auto-detectar</option>
             <option value="ibkr">Interactive Brokers (XML)</option>
             <option value="degiro">Degiro (CSV)</option>
             <option value="scalable">Scalable Capital (CSV)</option>
             <option value="etoro">eToro (XLSX)</option>
             <option value="freedom24">Freedom24 (JSON)</option>
+            <option value="coinbase">Coinbase (CSV)</option>
+            <option value="binance">Binance (CSV)</option>
+            <option value="kraken">Kraken (CSV)</option>
           </select>
         </label>
       </div>
-      <div id="drop-zone">
-        <div class="drop-icon">&#8683;</div>
-        <p>Arrastra tu fichero aquí o haz clic para seleccionar</p>
-        <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple />
+      <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
+        <div class="drop-icon" aria-hidden="true">&#8683;</div>
+        <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
+        <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple data-i18n-aria="a11y.file_input" aria-label="Seleccionar ficheros" />
       </div>
-      <p class="help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable), JSON (Freedom24), XLSX (eToro)</p>
+      <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable), JSON (Freedom24), XLSX (eToro)</p>
       <div id="file-list"></div>
     </section>
 
     <section id="config" hidden>
-      <h2>2. Configura</h2>
+      <h2 data-i18n="config.title">2. Configura</h2>
       <label>
-        Ejercicio fiscal:
+        <span data-i18n="config.year_label">Ejercicio fiscal:</span>
         <select id="year-select">
           <option value="2025" selected>2025</option>
           <option value="2024">2024</option>
           <option value="2023">2023</option>
         </select>
       </label>
-      <button id="process-btn">Procesar</button>
+      <button id="process-btn" data-i18n="config.process_btn">Procesar</button>
     </section>
 
     <section id="results" hidden>
-      <h2>3. Resultados para Modelo 100</h2>
+      <h2 data-i18n="results.title">3. Resultados para Modelo 100</h2>
       <div id="casillas"></div>
 
-      <h3>Operaciones</h3>
+      <h3 data-i18n="results.operations">Operaciones</h3>
       <div class="table-controls">
-        <input type="text" id="ops-search" placeholder="Buscar por ISIN o símbolo..." />
+        <input type="text" id="ops-search" data-i18n-placeholder="results.search_placeholder" placeholder="Buscar por ISIN o símbolo..." />
         <select id="ops-filter">
-          <option value="all">Todas</option>
-          <option value="gain">Ganancias</option>
-          <option value="loss">Pérdidas</option>
+          <option value="all" data-i18n="results.filter_all">Todas</option>
+          <option value="gain" data-i18n="results.filter_gains">Ganancias</option>
+          <option value="loss" data-i18n="results.filter_losses">Pérdidas</option>
         </select>
       </div>
       <div id="operations-table" class="table-wrapper"></div>
 
-      <h3>Dividendos</h3>
+      <h3 data-i18n="results.dividends">Dividendos</h3>
       <div id="dividends-table" class="table-wrapper"></div>
 
       <div class="export-buttons">
-        <button id="export-json-btn">Exportar JSON</button>
-        <button id="export-csv-btn">Exportar CSV</button>
+        <button id="export-json-btn" data-i18n="results.export_json">Exportar JSON</button>
+        <button id="export-csv-btn" data-i18n="results.export_csv">Exportar CSV</button>
       </div>
     </section>
   </main>
@@ -81,12 +90,13 @@
   <footer>
     <p>
       <a href="https://github.com/GeiserX/DeclaRenta">GitHub</a> ·
-      <strong>Self-hosted · Privacidad total</strong>
+      <strong data-i18n="footer.privacy">Self-hosted · Privacidad total</strong>
     </p>
     <p class="credits">
       Made with <span class="heart">&#9829;</span> by <a href="https://geiser.cloud">Sergio Fernández</a>
       · <a href="https://github.com/sponsors/GeiserX" class="sponsor-link">Sponsor</a>
     </p>
+    <p class="disclaimer-link"><a href="#" id="open-disclaimer" data-i18n="footer.disclaimer">Aviso legal</a></p>
   </footer>
 
   <script type="module" src="./main.ts"></script>

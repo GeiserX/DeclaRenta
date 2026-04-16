@@ -110,4 +110,66 @@ describe("D-6 Guide Generator", () => {
 
     expect(report.guide.some((l) => l.includes("CUALQUIER importe"))).toBe(true);
   });
+
+  describe("D-6 cancellations (declaración negativa)", () => {
+    it("should have no cancellations when no previous ISINs provided", () => {
+      const positions = [makePosition()];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A");
+
+      expect(report.cancelled).toHaveLength(0);
+      expect(report.positions).toHaveLength(1);
+    });
+
+    it("should generate cancellations for ISINs in previous year but not current", () => {
+      const positions = [makePosition()]; // only US78462F1030
+      const previousIsins = ["US78462F1030", "IE00BK5BQT80", "GB00B03MLX29"];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A", previousIsins);
+
+      // US78462F1030 is still held, IE00BK5BQT80 and GB00B03MLX29 are cancelled
+      expect(report.positions).toHaveLength(1);
+      expect(report.cancelled).toHaveLength(2);
+      expect(report.cancelled.map((c) => c.isin).sort()).toEqual(["GB00B03MLX29", "IE00BK5BQT80"]);
+    });
+
+    it("should show all positions as new when mixed with cancellations", () => {
+      const positions = [
+        makePosition(), // US78462F1030
+        makePosition({ isin: "DE000A0F5UF5", currency: "EUR", positionValue: "5000" }),
+      ];
+      const previousIsins = ["US78462F1030", "IE00BK5BQT80"];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A", previousIsins);
+
+      // 2 active positions, 1 cancellation (IE00BK5BQT80)
+      expect(report.positions).toHaveLength(2);
+      expect(report.cancelled).toHaveLength(1);
+      expect(report.cancelled[0]!.isin).toBe("IE00BK5BQT80");
+    });
+
+    it("should handle all cancelled (no current positions)", () => {
+      const positions: OpenPosition[] = [];
+      const previousIsins = ["US78462F1030", "IE00BK5BQT80"];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A", previousIsins);
+
+      expect(report.positions).toHaveLength(0);
+      expect(report.cancelled).toHaveLength(2);
+      expect(report.totalPositions).toBe(0);
+      expect(report.totalValueEur).toBe("0.00");
+    });
+
+    it("should include CANCELACIONES section in guide when cancellations exist", () => {
+      const positions = [makePosition()];
+      const previousIsins = ["US78462F1030", "IE00BK5BQT80"];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A", previousIsins);
+
+      expect(report.guide.some((l) => l.includes("CANCELACIONES"))).toBe(true);
+      expect(report.guide.some((l) => l.includes("IE00BK5BQT80"))).toBe(true);
+    });
+
+    it("should not include CANCELACIONES section when no cancellations", () => {
+      const positions = [makePosition()];
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A", []);
+
+      expect(report.guide.some((l) => l.includes("CANCELACIONES"))).toBe(false);
+    });
+  });
 });
