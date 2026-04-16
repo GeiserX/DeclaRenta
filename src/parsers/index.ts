@@ -11,6 +11,9 @@ import { freedom24Parser } from "./freedom24.js";
 import { etoroParser } from "./etoro.js";
 import { degiroParser } from "./degiro.js";
 import { scalableParser } from "./scalable.js";
+import { binanceParser } from "./binance.js";
+import { coinbaseParser } from "./coinbase.js";
+import { krakenParser } from "./kraken.js";
 
 /**
  * All registered broker parsers, checked in order for auto-detection.
@@ -22,6 +25,9 @@ export const brokerParsers: BrokerParser[] = [
   etoroParser,      // XLSX/CSV with "Closed Positions"
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
+  binanceParser,    // CSV with Date(UTC),Pair,Side,Price headers
+  coinbaseParser,   // CSV with Transaction Type + Spot Price headers
+  krakenParser,     // CSV with txid + pair/ordertxid or refid/aclass headers
 ];
 
 /**

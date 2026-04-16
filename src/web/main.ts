@@ -12,9 +12,61 @@ import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
+import { openDisclaimer } from "./disclaimer.js";
+import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart } from "./charts.js";
+import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
+
+// ---------------------------------------------------------------------------
+// i18n initialization
+// ---------------------------------------------------------------------------
+
+initLocale();
+
+/** Update all static elements with data-i18n attributes */
+function updateStaticText() {
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((el) => {
+    const key = el.dataset.i18n!;
+    el.textContent = t(key as Parameters<typeof t>[0]);
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.dataset.i18nPlaceholder!;
+    (el as HTMLInputElement).placeholder = t(key as Parameters<typeof t>[0]);
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
+    const key = el.dataset.i18nAria!;
+    el.setAttribute("aria-label", t(key as Parameters<typeof t>[0]));
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
+    const key = el.dataset.i18nTitle!;
+    el.title = t(key as Parameters<typeof t>[0]);
+  });
+  document.documentElement.lang = getCurrentLocale();
+}
+
+// Populate language selector
+const langSelect = document.getElementById("lang-select") as HTMLSelectElement;
+const localeNames = getLocaleNames();
+for (const [code, name] of Object.entries(localeNames)) {
+  const opt = document.createElement("option");
+  opt.value = code;
+  opt.textContent = name;
+  if (code === getCurrentLocale()) opt.selected = true;
+  langSelect.appendChild(opt);
+}
+
+langSelect.addEventListener("change", () => {
+  setLocale(langSelect.value as Locale);
+});
+
+document.addEventListener("localechange", () => {
+  updateStaticText();
+  if (currentReport) renderResults(currentReport);
+});
+
+updateStaticText();
 
 // ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)
@@ -75,6 +127,12 @@ const pendingFiles: File[] = [];
 // ---------------------------------------------------------------------------
 
 dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    fileInput.click();
+  }
+});
 dropZone.addEventListener("dragover", (e) => {
   e.preventDefault();
   dropZone.classList.add("dragover");
@@ -130,7 +188,7 @@ async function processFiles() {
   if (pendingFiles.length === 0) return;
 
   try {
-    processBtn.textContent = "Procesando...";
+    processBtn.textContent = t("config.processing");
     processBtn.setAttribute("disabled", "true");
 
     const merged: Statement = {
@@ -164,7 +222,7 @@ async function processFiles() {
 
       if (!parser) {
         throw new Error(
-          `No se pudo detectar el broker de "${esc(file.name)}". Selecciona el broker manualmente. Disponibles: ${brokerParsers.map((p) => p.name).join(", ")}`,
+          t("error.no_broker_detected", { filename: file.name }) + ` ${brokerParsers.map((p) => p.name).join(", ")}`,
         );
       }
 
@@ -189,7 +247,7 @@ async function processFiles() {
     for (const c of merged.cashTransactions) currencies.add(c.currency);
     currencies.delete("EUR");
 
-    dropZone.textContent = `Obteniendo tipos ECB para ${[...currencies].join(", ") || "EUR"}...`;
+    dropZone.textContent = t("status.fetching_rates", { currencies: [...currencies].join(", ") || "EUR" });
 
     const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
     years.add(year);
@@ -205,19 +263,19 @@ async function processFiles() {
     currentReport = report;
 
     const uniqueBrokers = [...new Set(brokerNames)];
-    dropZone.textContent = `✓ ${pendingFiles.length} fichero(s) procesado(s) — ${uniqueBrokers.join(", ")} — ${merged.trades.length} operaciones`;
+    dropZone.textContent = `✓ ${t("status.files_processed", { count: String(pendingFiles.length), brokers: uniqueBrokers.join(", "), trades: String(merged.trades.length) })}`;
 
     resultsSection.hidden = false;
     renderResults(report);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    dropZone.textContent = `Error: ${msg}`;
+    dropZone.textContent = `${t("error.prefix")}${msg}`;
     dropZone.style.color = "var(--danger)";
     // Clear stale results
     currentReport = null;
     resultsSection.hidden = true;
   } finally {
-    processBtn.textContent = "Procesar";
+    processBtn.textContent = t("config.process_btn");
     processBtn.removeAttribute("disabled");
   }
 }
@@ -303,22 +361,36 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
   // Casillas summary
   casillasDiv.innerHTML = `
     <table>
-      <thead><tr><th>Casilla</th><th>Concepto</th><th>Importe (EUR)</th></tr></thead>
+      <thead><tr><th>${t("table.casilla")}</th><th>${t("table.concept")}</th><th>${t("table.amount_eur")}</th></tr></thead>
       <tbody>
-        <tr><td>0327</td><td>Valor de transmisión</td><td>${report.capitalGains.transmissionValue.toFixed(2)}</td></tr>
-        <tr><td>0328</td><td>Valor de adquisición</td><td>${report.capitalGains.acquisitionValue.toFixed(2)}</td></tr>
+        <tr><td>0327</td><td>${t("casilla.transmission_value")}</td><td>${report.capitalGains.transmissionValue.toFixed(2)}</td></tr>
+        <tr><td>0328</td><td>${t("casilla.acquisition_value")}</td><td>${report.capitalGains.acquisitionValue.toFixed(2)}</td></tr>
         <tr class="${report.capitalGains.netGainLoss.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">
-          <td></td><td><strong>Ganancia/Pérdida neta</strong></td><td><strong>${report.capitalGains.netGainLoss.toFixed(2)}</strong></td>
+          <td></td><td><strong>${t("casilla.net_gain_loss")}</strong></td><td><strong>${report.capitalGains.netGainLoss.toFixed(2)}</strong></td>
         </tr>
-        <tr><td>0029</td><td>Dividendos brutos</td><td>${report.dividends.grossIncome.toFixed(2)}</td></tr>
-        <tr><td>0033</td><td>Intereses ganados</td><td>${report.interest.earned.toFixed(2)}</td></tr>
-        <tr><td>0032</td><td>Intereses pagados (margen)</td><td>${report.interest.paid.toFixed(2)}</td></tr>
-        <tr><td>0588</td><td>Deducción doble imposición</td><td>${report.doubleTaxation.deduction.toFixed(2)}</td></tr>
+        <tr><td>0029</td><td>${t("casilla.gross_dividends")}</td><td>${report.dividends.grossIncome.toFixed(2)}</td></tr>
+        <tr><td>0033</td><td>${t("casilla.interest_earned")}</td><td>${report.interest.earned.toFixed(2)}</td></tr>
+        <tr><td>0032</td><td>${t("casilla.interest_paid")}</td><td>${report.interest.paid.toFixed(2)}</td></tr>
+        <tr><td>0588</td><td>${t("casilla.double_taxation")}</td><td>${report.doubleTaxation.deduction.toFixed(2)}</td></tr>
       </tbody>
     </table>
-    ${report.capitalGains.blockedLosses.greaterThan(0) ? `<p class="warning">⚠ Pérdidas bloqueadas por regla anti-churning (2 meses): ${report.capitalGains.blockedLosses.toFixed(2)} EUR</p>` : ""}
-    ${report.warnings.length > 0 ? `<details><summary>${report.warnings.length} advertencia(s)</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
+    ${report.capitalGains.blockedLosses.greaterThan(0) ? `<p class="warning">⚠ ${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>` : ""}
+    ${report.warnings.length > 0 ? `<details><summary>${t("casilla.warnings_count", { count: String(report.warnings.length) })}</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : ""}
   `;
+
+  // Charts
+  const chartData = extractChartData(report);
+  const chartsHtml = [
+    renderDonutChart(t("chart.asset_distribution"), chartData.assetDistribution),
+    renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
+    renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
+    renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
+  ].filter(Boolean).join("");
+
+  resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
+  if (chartsHtml) {
+    casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);
+  }
 
   renderOperationsTable();
   renderDividendsTable(report);
@@ -372,15 +444,15 @@ function renderOperationsTable() {
     <table>
       <thead>
         <tr>
-          ${th("ISIN", "isin")}
-          ${th("Símbolo", "symbol")}
-          ${th("F. Compra", "buyDate")}
-          ${th("F. Venta", "sellDate")}
-          ${th("Uds.", "qty")}
-          ${th("Coste EUR", "cost")}
-          ${th("Venta EUR", "proceeds")}
-          ${th("G/P EUR", "gl")}
-          ${th("Días", "days")}
+          ${th(t("table.isin"), "isin")}
+          ${th(t("table.symbol"), "symbol")}
+          ${th(t("table.buy_date"), "buyDate")}
+          ${th(t("table.sell_date"), "sellDate")}
+          ${th(t("table.units"), "qty")}
+          ${th(t("table.cost_eur"), "cost")}
+          ${th(t("table.proceeds_eur"), "proceeds")}
+          ${th(t("table.gain_loss_eur"), "gl")}
+          ${th(t("table.days"), "days")}
         </tr>
       </thead>
       <tbody>
@@ -399,14 +471,14 @@ function renderOperationsTable() {
         `).join("")}
       </tbody>
     </table>
-    <p class="table-count">${disposals.length} operación(es)</p>
+    <p class="table-count">${t("results.operations_count", { count: String(disposals.length) })}</p>
   `;
 
 }
 
 function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
   if (report.dividends.entries.length === 0) {
-    divsTable.innerHTML = "<p class='muted'>Sin dividendos</p>";
+    divsTable.innerHTML = `<p class='muted'>${t("results.no_dividends")}</p>`;
     return;
   }
 
@@ -434,12 +506,12 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
     <table>
       <thead>
         <tr>
-          ${th("ISIN", "isin")}
-          ${th("Símbolo", "symbol")}
-          ${th("Fecha", "date")}
-          ${th("Bruto EUR", "gross")}
-          ${th("Retención EUR", "wht")}
-          ${th("País", "country")}
+          ${th(t("table.isin"), "isin")}
+          ${th(t("table.symbol"), "symbol")}
+          ${th(t("table.date"), "date")}
+          ${th(t("table.gross_eur"), "gross")}
+          ${th(t("table.withholding_eur"), "wht")}
+          ${th(t("table.country"), "country")}
         </tr>
       </thead>
       <tbody>
@@ -455,7 +527,26 @@ function renderDividendsTable(report: ReturnType<typeof generateTaxReport>) {
         `).join("")}
       </tbody>
     </table>
-    <p class="table-count">${entries.length} dividendo(s)</p>
+    <p class="table-count">${t("results.dividends_count", { count: String(entries.length) })}</p>
   `;
 
+}
+
+// ---------------------------------------------------------------------------
+// Disclaimer modal
+// ---------------------------------------------------------------------------
+
+document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openDisclaimer();
+});
+
+// ---------------------------------------------------------------------------
+// Service Worker registration
+// ---------------------------------------------------------------------------
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {
+    // SW registration is optional — fail silently
+  });
 }

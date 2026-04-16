@@ -96,3 +96,42 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 
   throw new Error(`No ECB rate found for ${currency} near ${normalizedDate} (searched 10 days back)`);
 }
+
+/**
+ * Calculate the Q4 (Oct 1 - Dec 31) average exchange rate for a given currency.
+ *
+ * Modelo 720 requires STK positions to use the Q4 average FX rate
+ * (media del cuarto trimestre) rather than the Dec 31 spot rate.
+ * This averages all available daily ECB rates in Q4 for the given currency.
+ *
+ * @param rateMap - Pre-fetched rate map
+ * @param year - Tax year
+ * @param currency - Currency code
+ * @returns Average EUR per 1 FCY rate for Q4, or Decimal(1) for EUR
+ * @throws Error if no rates found in Q4 for the currency
+ */
+export function getQ4AverageRate(rateMap: EcbRateMap, year: number, currency: string): Decimal {
+  if (currency === "EUR") return new Decimal(1);
+
+  const q4Start = `${year}-10-01`;
+  const q4End = `${year}-12-31`;
+
+  let sum = new Decimal(0);
+  let count = 0;
+
+  for (const [date, currencies] of rateMap) {
+    if (date >= q4Start && date <= q4End) {
+      const rate = currencies.get(currency);
+      if (rate) {
+        sum = sum.plus(new Decimal(rate));
+        count++;
+      }
+    }
+  }
+
+  if (count === 0) {
+    throw new Error(`No ECB Q4 rates found for ${currency} in ${year} (Oct-Dec)`);
+  }
+
+  return sum.dividedBy(count);
+}

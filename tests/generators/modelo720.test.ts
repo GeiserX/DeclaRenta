@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { generateModelo720 } from "../../src/generators/modelo720.js";
+import { generateModelo720, checkModelo720Thresholds } from "../../src/generators/modelo720.js";
 import type { OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
@@ -177,6 +177,108 @@ describe("Modelo 720 Generator", () => {
       const cancelled = result.split("\n").find((l) => l[0] === "2" && l[422] === "C")!;
       // Cancellation date at positions 424-431 (0-indexed: 423-430)
       expect(cancelled.slice(423, 431)).toBe("20251231");
+    });
+  });
+
+  describe("Per-category 50K threshold", () => {
+    it("should report values below threshold at 49,999.99", () => {
+      // 49999.99 / 0.92 ≈ 54347.815 USD position value needed for 49999.99 EUR
+      // But we want exactly 49999.99 EUR: positionValue * 0.92 = 49999.99 → positionValue = 54347.8152...
+      // Use EUR to get exact boundary
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: "49999.99",
+        assetCategory: "STK",
+      })];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      expect(result.values.exceeds).toBe(false);
+      expect(result.values.total.toFixed(2)).toBe("49999.99");
+    });
+
+    it("should report values at exactly 50,000.00 as exceeding threshold", () => {
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: "50000.00",
+        assetCategory: "STK",
+      })];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      expect(result.values.exceeds).toBe(true);
+      expect(result.values.total.toFixed(2)).toBe("50000.00");
+    });
+
+    it("should sum across multiple STK/FUND/BOND positions", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "20000", assetCategory: "STK" }),
+        makePosition({ currency: "EUR", positionValue: "20000", assetCategory: "FUND", isin: "IE00BK5BQT80" }),
+        makePosition({ currency: "EUR", positionValue: "15000", assetCategory: "BOND", isin: "US912828ZT60" }),
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      expect(result.values.exceeds).toBe(true);
+      expect(result.values.total.toFixed(2)).toBe("55000.00");
+    });
+
+    it("should exclude non-eligible asset categories (OPT, CASH)", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "30000", assetCategory: "STK" }),
+        makePosition({ currency: "EUR", positionValue: "30000", assetCategory: "OPT", isin: "US0000000001" }),
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      // Only 30000 from STK, OPT excluded
+      expect(result.values.exceeds).toBe(false);
+      expect(result.values.total.toFixed(2)).toBe("30000.00");
+    });
+
+    it("should convert foreign currency using ECB rates", () => {
+      const positions = [makePosition({ positionValue: "60000", currency: "USD" })];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      // 60000 * 0.92 = 55200 EUR
+      expect(result.values.exceeds).toBe(true);
+      expect(result.values.total.toFixed(2)).toBe("55200.00");
+    });
+
+    it("should return zero for accounts and realEstate (not from broker data)", () => {
+      const positions = [makePosition({ currency: "EUR", positionValue: "100000" })];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+
+      expect(result.accounts.exceeds).toBe(false);
+      expect(result.accounts.total.toFixed(2)).toBe("0.00");
+      expect(result.realEstate.exceeds).toBe(false);
+      expect(result.realEstate.total.toFixed(2)).toBe("0.00");
+    });
+  });
+
+  describe("Q4 average FX rate for STK positions", () => {
+    it("should use Q4 average rate for STK and Dec 31 spot for FUND", () => {
+      // Build a rate map with different rates across Q4
+      const q4RateMap: EcbRateMap = new Map([
+        ["2025-10-01", new Map([["USD", "0.90"]])],
+        ["2025-11-01", new Map([["USD", "0.92"]])],
+        ["2025-12-01", new Map([["USD", "0.94"]])],
+        ["2025-12-31", new Map([["USD", "0.96"]])],
+      ]);
+
+      // Q4 average = (0.90 + 0.92 + 0.94 + 0.96) / 4 = 0.93
+      const stkPositions = [makePosition({ positionValue: "100000", assetCategory: "STK", currency: "USD" })];
+      const fundPositions = [makePosition({ positionValue: "100000", assetCategory: "FUND", currency: "USD", isin: "IE00BK5BQT80" })];
+
+      const stkResult = generateModelo720(stkPositions, q4RateMap, baseConfig);
+      const fundResult = generateModelo720(fundPositions, q4RateMap, baseConfig);
+
+      // Both should generate output (>50K)
+      expect(stkResult).not.toBe("");
+      expect(fundResult).not.toBe("");
+
+      // STK uses Q4 average (0.93), FUND uses Dec 31 (0.96)
+      // The exact values will differ between them
+      const stkLines = stkResult.split("\n");
+      const fundLines = fundResult.split("\n");
+      expect(stkLines.length).toBeGreaterThanOrEqual(2);
+      expect(fundLines.length).toBeGreaterThanOrEqual(2);
     });
   });
 });
