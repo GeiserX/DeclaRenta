@@ -79,6 +79,46 @@ const gl: TranslationKeys = {
 
   "theme.toggle": "Cambiar tema",
 
+  // Wizard steps
+  "wizard.step1": "Subir ficheiros",
+  "wizard.step2": "Revisar datos",
+  "wizard.step3": "Configurar",
+  "wizard.step4": "Resultados",
+  "wizard.next": "Seguinte",
+  "wizard.back": "Atrás",
+  "wizard.step_indicator": "Paso {{current}} de {{total}}",
+
+  // Review step
+  "review.title": "Resumo de datos cargados",
+  "review.broker": "Broker",
+  "review.trades_count": "Operacións",
+  "review.dividends_count": "Dividendos",
+  "review.date_range": "Rango de datas",
+  "review.currencies": "Divisas",
+  "review.no_data": "Non se detectaron operacións nos ficheiros subidos.",
+  "review.file": "Ficheiro",
+
+  // Config step
+  "config.nif_label": "NIF (para Modelo 720/D-6):",
+  "config.nif_placeholder": "12345678A",
+  "config.generate_720": "Xerar ficheiro Modelo 720",
+  "config.generate_d6": "Xerar guía D-6",
+
+  // Expandable casillas
+  "casilla.expand": "Ver detalle",
+  "casilla.collapse": "Agochar detalle",
+  "casilla.operations_in": "Operacións nesta casilla",
+  "casilla.no_operations": "Sen operacións",
+
+  // Year comparison
+  "compare.title": "Comparativa anual",
+  "compare.no_data": "Procesa polo menos 2 exercicios para ver a comparativa.",
+  "compare.year": "Exercicio",
+  "compare.variation": "Variación",
+  "compare.saved_reports": "Informes gardados",
+  "compare.clear_history": "Borrar historial",
+  "compare.clear_confirm": "Borrar todos os informes gardados?",
+
   "error.no_broker_detected": "Non se puido detectar o broker de \"{{filename}}\". Selecciona o broker manualmente.",
   "error.prefix": "Erro: ",
 

@@ -79,6 +79,46 @@ const ca: TranslationKeys = {
 
   "theme.toggle": "Canviar tema",
 
+  // Wizard steps
+  "wizard.step1": "Pujar fitxers",
+  "wizard.step2": "Revisar dades",
+  "wizard.step3": "Configurar",
+  "wizard.step4": "Resultats",
+  "wizard.next": "Següent",
+  "wizard.back": "Enrere",
+  "wizard.step_indicator": "Pas {{current}} de {{total}}",
+
+  // Review step
+  "review.title": "Resum de dades carregades",
+  "review.broker": "Broker",
+  "review.trades_count": "Operacions",
+  "review.dividends_count": "Dividends",
+  "review.date_range": "Rang de dates",
+  "review.currencies": "Divises",
+  "review.no_data": "No s'han detectat operacions als fitxers pujats.",
+  "review.file": "Fitxer",
+
+  // Config step
+  "config.nif_label": "NIF (per al Model 720/D-6):",
+  "config.nif_placeholder": "12345678A",
+  "config.generate_720": "Generar fitxer Model 720",
+  "config.generate_d6": "Generar guia D-6",
+
+  // Expandable casillas
+  "casilla.expand": "Veure detall",
+  "casilla.collapse": "Amagar detall",
+  "casilla.operations_in": "Operacions en aquesta casella",
+  "casilla.no_operations": "Sense operacions",
+
+  // Year comparison
+  "compare.title": "Comparativa anual",
+  "compare.no_data": "Processa almenys 2 exercicis per veure la comparativa.",
+  "compare.year": "Exercici",
+  "compare.variation": "Variació",
+  "compare.saved_reports": "Informes desats",
+  "compare.clear_history": "Esborrar historial",
+  "compare.clear_confirm": "Esborrar tots els informes desats?",
+
   "error.no_broker_detected": "No s'ha pogut detectar el broker de \"{{filename}}\". Selecciona el broker manualment.",
   "error.prefix": "Error: ",
 
