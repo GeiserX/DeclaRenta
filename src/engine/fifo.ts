@@ -13,9 +13,9 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
-/** Lot grouping key: ISIN for stocks/funds, symbol for options (which lack ISINs) */
-function lotKey(trade: { isin: string; symbol: string }): string {
-  return trade.isin || trade.symbol;
+/** Lot grouping key: ISIN when available; otherwise asset category + symbol to prevent cross-type collisions */
+function lotKey(trade: { isin: string; symbol: string; assetCategory: string }): string {
+  return trade.isin || `${trade.assetCategory}:${trade.symbol}`;
 }
 
 export class FifoEngine {

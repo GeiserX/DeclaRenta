@@ -96,8 +96,8 @@ describe("Phase 5 — Futures (FUT)", () => {
     expect(disposals[0]!.symbol).toBe("ESU5");
     expect(engine.warnings).toHaveLength(0);
 
-    // NQ lots should remain untouched
-    const nqLots = engine.getRemainingLots().get("NQU5") ?? [];
+    // NQ lots should remain untouched (keyed by assetCategory:symbol when ISIN is empty)
+    const nqLots = engine.getRemainingLots().get("FUT:NQU5") ?? [];
     expect(nqLots).toHaveLength(1);
     expect(nqLots[0]!.quantity.toNumber()).toBe(2);
   });
