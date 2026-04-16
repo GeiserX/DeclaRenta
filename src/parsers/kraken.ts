@@ -10,6 +10,7 @@
  *   Z prefix = fiat   (ZEUR = EUR, ZUSD = USD)
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import {
@@ -206,9 +207,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const { base, quote } = splitPair(pair);
     const tradeDate = krakenDate(timeStr);
     const isSell = type === "sell";
-    const volNum = Math.abs(parseFloat(vol));
-    const costNum = Math.abs(parseFloat(cost));
-    const feeNum = parseFloat(fee);
+    const volDec = new Decimal(vol || "0").abs();
+    const costDec = new Decimal(cost || "0").abs();
+    const feeDec = new Decimal(fee || "0");
 
     trades.push({
       tradeID: txid,
@@ -220,18 +221,18 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
       currency: quote,
       tradeDate,
       settlementDate: tradeDate,
-      quantity: isSell ? `-${volNum}` : `${volNum}`,
+      quantity: isSell ? volDec.neg().toString() : volDec.toString(),
       tradePrice: price,
-      tradeMoney: `${costNum}`,
-      proceeds: isSell ? `${costNum}` : "0",
-      cost: isSell ? "0" : `${costNum}`,
+      tradeMoney: costDec.toString(),
+      proceeds: isSell ? costDec.toString() : "0",
+      cost: isSell ? "0" : costDec.toString(),
       fifoPnlRealized: "0",
       fxRateToBase: quote === "EUR" ? "1" : "1",
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "KRAKEN",
       commissionCurrency: quote,
-      commission: feeNum !== 0 ? `-${Math.abs(feeNum)}` : "0",
+      commission: feeDec.isZero() ? "0" : feeDec.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
     });
@@ -283,8 +284,9 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     if (type === "staking") {
       const symbol = cleanSymbol(asset);
       const tradeDate = krakenDate(timeStr);
-      const feeNum = parseFloat(fee);
-      const netAmount = parseFloat(amount) - Math.abs(feeNum);
+      const amountDec = new Decimal(amount || "0");
+      const feeLedgerDec = new Decimal(fee || "0").abs();
+      const netAmount = amountDec.minus(feeLedgerDec);
 
       cashTransactions.push({
         transactionID: `kraken-staking-${txid}`,
@@ -295,7 +297,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         currency: symbol,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: `${netAmount}`,
+        amount: netAmount.toString(),
         fxRateToBase: "1",
         type: "Dividends",
       });

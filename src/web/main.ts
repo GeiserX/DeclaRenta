@@ -35,6 +35,14 @@ function updateStaticText() {
     const key = el.dataset.i18nPlaceholder!;
     (el as HTMLInputElement).placeholder = t(key as Parameters<typeof t>[0]);
   });
+  document.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
+    const key = el.dataset.i18nAria!;
+    el.setAttribute("aria-label", t(key as Parameters<typeof t>[0]));
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
+    const key = el.dataset.i18nTitle!;
+    el.title = t(key as Parameters<typeof t>[0]);
+  });
   document.documentElement.lang = getCurrentLocale();
 }
 
@@ -379,6 +387,7 @@ function renderResults(report: ReturnType<typeof generateTaxReport>) {
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
   ].filter(Boolean).join("");
 
+  resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
   if (chartsHtml) {
     casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);
   }

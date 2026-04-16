@@ -248,7 +248,7 @@ Tareas:
 - [x] Tipo de declaración: A (alta), M (mantenimiento), C (cancelación)
 - [x] Primera fecha de adquisición por posición (desde lotes FIFO)
 - [x] Valoración correcta según Ley del Impuesto sobre el Patrimonio:
-  - Acciones cotizadas: media del último trimestre (Q4 average via ECB)
+  - Acciones cotizadas: media del último trimestre; conversión a EUR con tipo BCE
   - ETFs: valor liquidativo a 31/dic
 - [x] País de emisión extraído del ISIN (primeros 2 caracteres)
 - [x] Validación contra diseño de registro BOE antes de generar fichero

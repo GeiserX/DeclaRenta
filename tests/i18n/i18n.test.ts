@@ -50,9 +50,10 @@ describe("i18n", () => {
   });
 
   describe("locale management", () => {
-    it("should default to detected locale", () => {
+    it("should reset to detected locale on initLocale()", () => {
+      setLocale("ca"); // Set to something other than default
       initLocale();
-      // In test environment, detectLocale() uses navigator.language
+      // initLocale always resets to detected locale
       const expected = detectLocale();
       expect(getCurrentLocale()).toBe(expected);
     });

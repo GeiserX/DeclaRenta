@@ -11,6 +11,22 @@ import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, getQ4AverageRate } from "../engine/ecb.js";
 
+/** Get the correct valuation rate for a position: Q4 average for STK, year-end spot for others. */
+function getValuationRate(rateMap: EcbRateMap, year: number, currency: string, assetCategory: string): Decimal {
+  const yearEnd = `${year}-12-31`;
+  if (assetCategory !== "STK") {
+    return getEcbRate(rateMap, yearEnd, currency);
+  }
+  try {
+    return getQ4AverageRate(rateMap, year, currency);
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.startsWith("No ECB Q4 rates found")) {
+      return getEcbRate(rateMap, yearEnd, currency);
+    }
+    throw error;
+  }
+}
+
 /** Per-category threshold status for Modelo 720 */
 export interface Modelo720ThresholdResult {
   values: { exceeds: boolean; total: Decimal };
@@ -39,14 +55,13 @@ export function checkModelo720Thresholds(
   rateMap: EcbRateMap,
   year: number,
 ): Modelo720ThresholdResult {
-  const yearEnd = `${year}-12-31`;
   const THRESHOLD = new Decimal(50000);
 
   // Calculate total value for securities (V category: STK, FUND, BOND)
   const valuesTotal = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .reduce((sum, p) => {
-      const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
+      const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
@@ -102,17 +117,7 @@ export function generateModelo720(
   const entries = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .map((p) => {
-      const yearEnd = `${config.year}-12-31`;
-      // STK: Q4 average rate; FUND/BOND: Dec 31 spot rate
-      let ecbRate: Decimal;
-      try {
-        ecbRate = p.assetCategory === "STK"
-          ? getQ4AverageRate(rateMap, config.year, p.currency)
-          : getEcbRate(rateMap, yearEnd, p.currency);
-      } catch {
-        // Fallback to Dec 31 spot rate if Q4 average unavailable
-        ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
-      }
+      const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
       const costEur = new Decimal(p.costBasisMoney).abs().mul(ecbRate);
 

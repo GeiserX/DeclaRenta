@@ -11,10 +11,10 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <a href="#upload" class="skip-link">Saltar al contenido</a>
-  <nav class="top-bar" aria-label="Ajustes">
-    <select id="lang-select" class="lang-select" aria-label="Idioma"></select>
-    <button class="theme-toggle" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
+  <a href="#upload" class="skip-link" data-i18n="a11y.skip_link">Saltar al contenido</a>
+  <nav class="top-bar" data-i18n-aria="a11y.nav_label" aria-label="Ajustes">
+    <select id="lang-select" class="lang-select" data-i18n-aria="a11y.lang_label" aria-label="Idioma"></select>
+    <button class="theme-toggle" id="theme-toggle" data-i18n-title="a11y.theme_toggle" data-i18n-aria="a11y.theme_toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
   </nav>
   <main id="app">
     <header>
@@ -41,10 +41,10 @@
           </select>
         </label>
       </div>
-      <div id="drop-zone" role="button" tabindex="0" aria-label="Zona de carga de ficheros">
+      <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
         <div class="drop-icon" aria-hidden="true">&#8683;</div>
         <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
-        <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple aria-label="Seleccionar ficheros" />
+        <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple data-i18n-aria="a11y.file_input" aria-label="Seleccionar ficheros" />
       </div>
       <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable), JSON (Freedom24), XLSX (eToro)</p>
       <div id="file-list"></div>

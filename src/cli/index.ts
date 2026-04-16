@@ -296,9 +296,9 @@ program
             console.error(`  Registro ${r.recordIndex}: ${e}`);
           }
         }
-      } else {
-        console.error(`✓ ${records.length} registro(s) validados correctamente.`);
+        throw new Error("Modelo 720 generado con errores de formato.");
       }
+      console.error(`✓ ${records.length} registro(s) validados correctamente.`);
 
       if (opts.output) {
         writeFileSync(opts.output, output720, { encoding: "latin1" });

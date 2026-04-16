@@ -57,7 +57,7 @@ function resolveColumns(headers: string[]): BinanceColumns {
 // Pair parsing: "BTCEUR" -> { symbol: "BTC", currency: "EUR" }
 // ---------------------------------------------------------------------------
 
-const KNOWN_QUOTES = ["EUR", "USD", "USDT", "USDC", "BUSD", "BTC", "ETH", "BNB", "GBP"];
+const KNOWN_QUOTES = ["FDUSD", "USDT", "USDC", "BUSD", "EUR", "USD", "BTC", "ETH", "BNB", "GBP", "TRY", "BRL", "ARS"];
 
 function parsePair(pair: string): { symbol: string; currency: string } {
   const upper = pair.trim().toUpperCase();
@@ -73,15 +73,7 @@ function parsePair(pair: string): { symbol: string; currency: string } {
     }
   }
 
-  // Fallback: assume last 3 chars are currency
-  if (upper.length > 3) {
-    return {
-      symbol: upper.slice(0, -3),
-      currency: upper.slice(-3),
-    };
-  }
-
-  return { symbol: upper, currency: "EUR" };
+  throw new Error(`Binance CSV: par no soportado o ambiguo: ${pair}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,8 +119,8 @@ function parseBinanceCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
   const cols = resolveColumns(headers);
 
-  if (cols.date < 0 || cols.pair < 0 || cols.side < 0 || cols.price < 0) {
-    throw new Error("Binance CSV: faltan columnas obligatorias (Date(UTC), Pair, Side, Price)");
+  if (cols.date < 0 || cols.pair < 0 || cols.side < 0 || cols.price < 0 || cols.executed < 0 || cols.amount < 0) {
+    throw new Error("Binance CSV: faltan columnas obligatorias (Date(UTC), Pair, Side, Price, Executed, Amount)");
   }
 
   const trades: Trade[] = [];

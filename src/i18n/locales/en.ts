@@ -69,6 +69,13 @@ const en: TranslationKeys = {
   "disclaimer.text": "This tool is for informational purposes only and does not constitute tax or legal advice. The generated results must be verified by the user and/or a qualified professional before being used in any tax filing.\n\nDeclaRenta is not responsible for errors, omissions, or the consequences arising from the use of this information. The user is solely responsible for the accuracy of the data entered and the declarations filed with the Spanish Tax Agency (AEAT).\n\nExchange rates are sourced from the European Central Bank (ECB). Tax calculations are based on current legislation (LIRPF, Wealth Tax Act, Order EHA/3290/2008) but may not cover all scenarios or reflect regulatory changes after the last software update.",
   "disclaimer.accept": "Understood",
 
+  "a11y.skip_link": "Skip to content",
+  "a11y.nav_label": "Settings",
+  "a11y.lang_label": "Language",
+  "a11y.theme_toggle": "Toggle theme",
+  "a11y.drop_zone": "File upload area",
+  "a11y.file_input": "Select files",
+
   "theme.toggle": "Toggle theme",
 
   "error.no_broker_detected": "Could not detect broker for \"{{filename}}\". Select the broker manually.",

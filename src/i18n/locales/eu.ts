@@ -70,6 +70,13 @@ const eu: TranslationKeys = {
   "disclaimer.text": "Tresna hau informazio-helburuetarako soilik da eta ez du zerga- edo lege-aholkularitza osatzen. Sortutako emaitzak erabiltzaileak eta/edo profesional kualifikatu batek egiaztatu behar ditu edozein zerga-aitorpenean erabili aurretik.\n\nDeclaRenta ez da informazio honen erabileratik eratorritako akats, omisio edo ondorioen erantzulea. Erabiltzailea da sartutako datuen eta Zerga Agentzian aurkeztutako aitorpenen zehaztasunaren erantzule bakarra.\n\nTruke-tasak Europako Banku Zentraletik (EBZ) datoz. Zerga-kalkuluak indarrean dagoen araudian oinarritzen dira (LIRPF, Ondare Zerga, EHA/3290/2008 Agindua) baina baliteke supostu guztiak ez estaltzea edo softwarearen azken eguneratzearen ondorengo arau-aldaketak ez islatzea.",
   "disclaimer.accept": "Ulertuta",
 
+  "a11y.skip_link": "Edukira salto egin",
+  "a11y.nav_label": "Ezarpenak",
+  "a11y.lang_label": "Hizkuntza",
+  "a11y.theme_toggle": "Gaia aldatu",
+  "a11y.drop_zone": "Fitxategiak igotzeko eremua",
+  "a11y.file_input": "Fitxategiak hautatu",
+
   "theme.toggle": "Gaia aldatu",
 
   "error.no_broker_detected": "Ezin izan da \"{{filename}}\" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.",

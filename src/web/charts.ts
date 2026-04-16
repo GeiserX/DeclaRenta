@@ -5,7 +5,7 @@
  * All charts use CSS custom properties for theming.
  */
 
-import type Decimal from "decimal.js";
+import Decimal from "decimal.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -184,7 +184,7 @@ export function extractChartData(report: {
   }
   const assetDistribution = [...byAsset.entries()].map(([label, value]) => ({
     label: ASSET_LABELS[label] ?? label,
-    value: { greaterThan: (n: number) => value > n, toNumber: () => value } as Decimal,
+    value: new Decimal(value),
   }));
 
   // Currency composition
@@ -194,7 +194,7 @@ export function extractChartData(report: {
   }
   const currencyComposition = [...byCurrency.entries()].map(([label, value]) => ({
     label,
-    value: { greaterThan: (n: number) => value > n, toNumber: () => value } as Decimal,
+    value: new Decimal(value),
   }));
 
   // Withholdings by country
@@ -205,7 +205,7 @@ export function extractChartData(report: {
   }
   const withholdingsByCountry = [...byCountry.entries()].map(([label, value]) => ({
     label,
-    value: { greaterThan: (n: number) => value > n, toNumber: () => value } as Decimal,
+    value: new Decimal(value),
   }));
 
   // Monthly G/P

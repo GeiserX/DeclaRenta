@@ -8,6 +8,7 @@
  * Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import {
@@ -142,8 +143,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // The Notes field typically contains "Converted X ASSET1 to Y ASSET2"
       const convertMatch = notes.match(/Converted\s+[\d.,]+\s+\w+\s+to\s+([\d.,]+)\s+(\w+)/i);
 
-      const quantityNum = Math.abs(parseFloat(quantity));
-      const feeNum = parseFloat(fees);
+      const quantityDec = new Decimal(quantity || "0").abs();
+      const feeDec = new Decimal(fees || "0");
 
       // Close (sell) the source asset
       trades.push({
@@ -156,7 +157,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         currency: spotCurrency || "EUR",
         tradeDate,
         settlementDate: tradeDate,
-        quantity: `-${quantityNum}`,
+        quantity: quantityDec.neg().toString(),
         tradePrice: spotPrice,
         tradeMoney: subtotal,
         proceeds: subtotal,
@@ -167,18 +168,17 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         openCloseIndicator: "C",
         exchange: "COINBASE",
         commissionCurrency: spotCurrency || "EUR",
-        commission: feeNum !== 0 ? `-${Math.abs(feeNum)}` : "0",
+        commission: feeDec.isZero() ? "0" : feeDec.abs().neg().toString(),
         taxes: "0",
         multiplier: "1",
       });
 
       // Open (buy) the destination asset
       if (convertMatch) {
-        const destQuantity = parseNumber(convertMatch[1]!);
         const destAsset = convertMatch[2]!;
-        const destQuantityNum = Math.abs(parseFloat(destQuantity));
-        const subtotalNum = Math.abs(parseFloat(subtotal));
-        const destPrice = destQuantityNum !== 0 ? `${subtotalNum / destQuantityNum}` : "0";
+        const destQuantityDec = new Decimal(parseNumber(convertMatch[1]!)).abs();
+        const subtotalDec = new Decimal(subtotal || "0").abs();
+        const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
 
         trades.push({
           tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${i}`,
@@ -190,7 +190,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
           currency: spotCurrency || "EUR",
           tradeDate,
           settlementDate: tradeDate,
-          quantity: `${destQuantityNum}`,
+          quantity: destQuantityDec.toString(),
           tradePrice: destPrice,
           tradeMoney: subtotal,
           proceeds: "0",
@@ -214,10 +214,10 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const isBuy = txType === "buy";
     if (!isSell && !isBuy) continue;
 
-    const quantityNum = Math.abs(parseFloat(quantity));
-    if (quantityNum === 0) continue;
+    const qtyDec = new Decimal(quantity || "0").abs();
+    if (qtyDec.isZero()) continue;
 
-    const feeNum = parseFloat(fees);
+    const feeDec2 = new Decimal(fees || "0");
 
     trades.push({
       tradeID: `coinbase-${txType}-${tradeDate}-${asset}-${i}`,
@@ -229,7 +229,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       currency: spotCurrency || "EUR",
       tradeDate,
       settlementDate: tradeDate,
-      quantity: isSell ? `-${quantityNum}` : `${quantityNum}`,
+      quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: spotPrice,
       tradeMoney: total,
       proceeds: isSell ? subtotal : "0",
@@ -240,7 +240,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "COINBASE",
       commissionCurrency: spotCurrency || "EUR",
-      commission: feeNum !== 0 ? `-${Math.abs(feeNum)}` : "0",
+      commission: feeDec2.isZero() ? "0" : feeDec2.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
     });

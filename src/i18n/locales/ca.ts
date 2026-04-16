@@ -70,6 +70,13 @@ const ca: TranslationKeys = {
   "disclaimer.text": "Aquesta eina és merament informativa i no constitueix assessorament fiscal ni jurídic. Els resultats generats han de ser verificats per l'usuari i/o un professional qualificat abans de ser utilitzats en qualsevol declaració tributària.\n\nDeclaRenta no es responsabilitza d'errors, omissions ni de les conseqüències derivades de l'ús d'aquesta informació. L'usuari és l'únic responsable de la veracitat i exactitud de les dades introduïdes i de les declaracions presentades davant l'Agència Tributària.\n\nEls tipus de canvi procedeixen del Banc Central Europeu (BCE). Els càlculs fiscals es basen en la normativa vigent (LIRPF, Llei del Patrimoni, Ordre EHA/3290/2008) però poden no cobrir tots els supòsits ni reflectir canvis normatius posteriors a l'última actualització del programari.",
   "disclaimer.accept": "Entès",
 
+  "a11y.skip_link": "Saltar al contingut",
+  "a11y.nav_label": "Ajustos",
+  "a11y.lang_label": "Idioma",
+  "a11y.theme_toggle": "Canviar tema",
+  "a11y.drop_zone": "Zona de càrrega de fitxers",
+  "a11y.file_input": "Seleccionar fitxers",
+
   "theme.toggle": "Canviar tema",
 
   "error.no_broker_detected": "No s'ha pogut detectar el broker de \"{{filename}}\". Selecciona el broker manualment.",

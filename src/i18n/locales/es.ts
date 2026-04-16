@@ -76,6 +76,14 @@ const es = {
   "disclaimer.text": "Esta herramienta es meramente informativa y no constituye asesoramiento fiscal ni jurídico. Los resultados generados deben ser verificados por el usuario y/o un profesional cualificado antes de ser utilizados en cualquier declaración tributaria.\n\nDeclaRenta no se responsabiliza de errores, omisiones ni de las consecuencias derivadas del uso de esta información. El usuario es el único responsable de la veracidad y exactitud de los datos introducidos y de las declaraciones presentadas ante la Agencia Tributaria.\n\nLos tipos de cambio proceden del Banco Central Europeo (BCE). Los cálculos fiscales se basan en la normativa vigente (LIRPF, Ley del Patrimonio, Orden EHA/3290/2008) pero pueden no cubrir todos los supuestos ni reflejar cambios normativos posteriores a la última actualización del software.",
   "disclaimer.accept": "Entendido",
 
+  // Accessibility
+  "a11y.skip_link": "Saltar al contenido",
+  "a11y.nav_label": "Ajustes",
+  "a11y.lang_label": "Idioma",
+  "a11y.theme_toggle": "Cambiar tema",
+  "a11y.drop_zone": "Zona de carga de ficheros",
+  "a11y.file_input": "Seleccionar ficheros",
+
   // Theme
   "theme.toggle": "Cambiar tema",
 
