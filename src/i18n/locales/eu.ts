@@ -63,6 +63,7 @@ const eu: TranslationKeys = {
   "chart.currency_composition": "Dibisa konposizioa",
   "chart.withholdings_country": "Atxikipenak herrialdearen arabera",
 
+  "footer.docs": "Dokumentazioa",
   "footer.privacy": "Self-hosted · Pribatutasun osoa",
   "footer.disclaimer": "Lege-oharra",
 
