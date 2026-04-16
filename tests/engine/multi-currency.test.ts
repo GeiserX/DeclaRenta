@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { FifoEngine } from "../../src/engine/fifo.js";
 import type { Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
