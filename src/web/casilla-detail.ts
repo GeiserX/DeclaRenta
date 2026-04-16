@@ -8,10 +8,12 @@
 import type { TaxSummary, FifoDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 
+/** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Format a date string (YYYYMMDD or YYYY-MM-DD) to DD/MM/YYYY display format. */
 function formatDate(d: string): string {
   if (d.length === 8) return `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
   if (d.length >= 10) return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
@@ -30,6 +32,7 @@ interface CasillaConfig {
   getDetail: (r: TaxSummary) => string;
 }
 
+/** Render a detail table of FIFO disposals for a casilla drill-down. */
 function renderDisposalsDetail(disposals: FifoDisposal[], label: string): string {
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   return `
@@ -51,6 +54,7 @@ function renderDisposalsDetail(disposals: FifoDisposal[], label: string): string
     </table>`;
 }
 
+/** Render a detail table of dividend entries for a casilla drill-down. */
 function renderDividendsDetail(entries: DividendEntry[]): string {
   if (entries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   return `
@@ -72,6 +76,7 @@ function renderDividendsDetail(entries: DividendEntry[]): string {
     </table>`;
 }
 
+/** Render a detail table of interest entries (earned or paid) for a casilla drill-down. */
 function renderInterestDetail(entries: InterestEntry[], filterType: "earned" | "paid"): string {
   const filtered = entries.filter((e) => e.type === filterType);
   if (filtered.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
@@ -91,6 +96,7 @@ function renderInterestDetail(entries: InterestEntry[], filterType: "earned" | "
     </table>`;
 }
 
+/** Render a detail table of double taxation deductions by country. */
 function renderDoubleTaxDetail(report: TaxSummary): string {
   const countries = Object.entries(report.doubleTaxation.byCountry);
   if (countries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;

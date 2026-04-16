@@ -9,6 +9,7 @@ import type { TaxSummary } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { saveReport, loadAllReports, clearAllReports, type StoredReport } from "./storage.js";
 
+/** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -49,6 +50,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
 /**
  * Format a variation between two numbers as a percentage string.
  */
+/** Format the percentage variation between two values (e.g. "+12.3%"). */
 function formatVariation(current: number, previous: number): string {
   if (previous === 0) return current === 0 ? "—" : "+∞";
   const pct = ((current - previous) / Math.abs(previous)) * 100;
@@ -56,6 +58,7 @@ function formatVariation(current: number, previous: number): string {
   return `${sign}${pct.toFixed(1)}%`;
 }
 
+/** Return CSS class ("gain" or "loss") based on value direction. */
 function variationClass(current: number, previous: number): string {
   if (current > previous) return "gain";
   if (current < previous) return "loss";
