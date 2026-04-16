@@ -307,7 +307,7 @@ describe("eToro XLSX parsing", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip ETF-like type that doesn't match", async () => {
+    it("should parse Commodity type as CFD (eToro commodities are always derivatives)", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
@@ -316,7 +316,8 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades).toHaveLength(2); // buy + sell legs
+      expect(result.trades[0]!.assetCategory).toBe("CFD");
     });
 
     it("should parse leverage-based CFD with correct asset category", async () => {

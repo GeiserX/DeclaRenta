@@ -220,7 +220,7 @@ Tareas:
 - [x] **Registry con auto-detección**: `detectBroker()`, `getBroker()`, `--broker` flag en CLI
 - [x] **Parser Degiro**: Transactions CSV (trades) + Account CSV (dividendos/retenciones). Multi-idioma ES/EN/NL/DE, auto-detect delimitador coma/punto y coma, números EU
 - [x] **Parser Scalable Capital**: CSV export (semicolon-delimited, EU numbers, filter `status=Executed`)
-- [x] **Parser eToro**: XLSX Account Statement (acciones y ETFs; excluye CFDs). Soporta 6+ versiones de columnas
+- [x] **Parser eToro**: XLSX Account Statement (acciones, ETFs y CFDs). Soporta 6+ versiones de columnas
 - [x] **Parser Freedom24**: JSON report (`trades.detailed[]`, `corporate_actions.detailed[]`)
 - [x] **FIFO cross-broker**: consolidar lots de múltiples brokers por ISIN
   - Un mismo ISIN comprado en IBKR y Degiro usa una sola cola FIFO

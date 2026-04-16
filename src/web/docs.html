@@ -6,7 +6,7 @@
   <title>DeclaRenta - Documentación</title>
   <meta name="description" content="Documentación completa de DeclaRenta: brokers soportados, casillas del Modelo 100, FIFO, doble imposición, Modelo 720, D-6 y más." />
   <meta name="theme-color" content="#3b82f6" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
   <link rel="stylesheet" href="./style.css" />
@@ -642,7 +642,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
           <li>Si existe recompra, marca la operación como <code>washSaleBlocked = true</code>.</li>
           <li>Las operaciones bloqueadas aparecen resaltadas en la tabla de resultados.</li>
         </ol>
-        <p class="warning">La regla anti-churning <strong>no se aplica a opciones</strong> (categorías OPT/CALL/PUT), solo a acciones (STK) y fondos (FUND).</p>
+        <p class="warning">La regla anti-churning solo se aplica a <strong>valores homogéneos</strong>: acciones (STK), fondos (FUND) y bonos (BOND). <strong>No se aplica</strong> a opciones (OPT), futuros (FUT), CFDs, forex (CASH) ni criptomonedas.</p>
       </section>
 
       <!-- 6. Doble imposición -->

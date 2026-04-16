@@ -132,10 +132,12 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     // Skip unknown/unsupported types (e.g. crypto on eToro — use dedicated crypto parsers)
     if (rowType && !rowType.includes("stock") && !rowType.includes("etf") &&
         !rowType.includes("accion") && !rowType.includes("cfd") &&
-        !rowType.includes("index") && !rowType.includes("indice")) continue;
+        !rowType.includes("index") && !rowType.includes("indice") &&
+        !rowType.includes("commodit")) continue;
 
-    // CFD: leverage > 1 OR type explicitly says "cfd"
-    const isCfd = leverage !== "1" || rowType.includes("cfd");
+    // CFD: leverage > 1 OR type explicitly says "cfd" OR commodity (always derivative on eToro)
+    const leverageNum = parseFloat(leverage);
+    const isCfd = (!isNaN(leverageNum) && leverageNum > 1) || rowType.includes("cfd") || rowType.includes("commodit");
     const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
     const actionStr = row[actionCol] ?? "";
