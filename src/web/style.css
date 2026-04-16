@@ -560,6 +560,7 @@ footer a:hover {
   padding: 0;
   max-width: 540px;
   width: 90vw;
+  margin: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
