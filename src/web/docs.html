@@ -7,7 +7,6 @@
   <meta name="description" content="Documentación completa de DeclaRenta: brokers soportados, casillas del Modelo 100, FIFO, doble imposición, Modelo 720, D-6 y más." />
   <meta name="theme-color" content="#3b82f6" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
-  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
   <link rel="stylesheet" href="./style.css" />
   <style>
@@ -882,7 +881,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p class="muted">La regla anti-churning sí se aplica a bonos (son valores homogéneos).</p>
 
         <h3>CFDs (Contratos por Diferencia)</h3>
-        <p>Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo <code>leverage &gt; 1</code> o el tipo <code>"CFD"</code> en el informe.</p>
+        <p>Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo <code>leverage &gt; 1</code>, el tipo <code>"CFD"</code>, o el tipo <code>"Commodity"</code> (las materias primas en eToro son siempre CFDs). Se soportan acciones, índices y materias primas como CFDs.</p>
         <p>Las posiciones cortas en CFDs se soportan: si vendes primero sin lotes previos, DeclaRenta registra un coste base de 0 EUR y emite un aviso.</p>
         <p class="muted">La regla anti-churning no se aplica a CFDs. Los CFDs de criptomonedas no están soportados actualmente.</p>
       </section>

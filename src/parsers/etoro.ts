@@ -136,7 +136,8 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
         !rowType.includes("commodit")) continue;
 
     // CFD: leverage > 1 OR type explicitly says "cfd" OR commodity (always derivative on eToro)
-    const leverageNum = parseFloat(leverage);
+    // Strip non-numeric prefixes (e.g. "x5", "X10") before parsing
+    const leverageNum = parseFloat(leverage.replace(/^[xX]/, ""));
     const isCfd = (!isNaN(leverageNum) && leverageNum > 1) || rowType.includes("cfd") || rowType.includes("commodit");
     const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
