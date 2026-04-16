@@ -38,7 +38,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 
 ---
 
-## Estado actual (v1.0.0-rc)
+## Estado actual (v0.9.0)
 
 ### Lo que ya funciona
 
@@ -133,7 +133,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 - [x] Parser IBKR Flex Query XML (`fast-xml-parser`, manejo de arrays)
 - [x] Motor ECB (SDMX API, cache, fallback festivos/fines de semana)
 - [x] Motor FIFO (lots, consumo parcial, `Decimal.js` everywhere)
-- [x] Detección anti-churning (Art. 33.5.f LIRPF, ventana de 2 meses)
+- [x] Detección anti-churning (Art. 33.5.f LIRPF, ventana de 2 meses — aplica a STK, FUND, BOND; excluye OPT, FUT, CFD, CASH, CRYPTO)
 - [x] Procesamiento dividendos + matching retenciones extranjeras
 - [x] Cálculo doble imposición (Art. 80 LIRPF, tramos del ahorro)
 - [x] Generador Modelo 720 (fixed-width 500 bytes, ISO-8859-15)
