@@ -10,6 +10,7 @@ try {
 
 export default defineConfig({
   root: "src/web",
+  publicDir: resolve(__dirname, "src/web/public"),
   base: "/DeclaRenta/",
   define: {
     __APP_VERSION__: JSON.stringify(version),

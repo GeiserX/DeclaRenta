@@ -442,6 +442,10 @@ details ul {
   gap: 0.75rem;
 }
 
+.brand-logo {
+  border-radius: 6px;
+}
+
 .top-bar-brand h1 {
   font-size: 1.4rem;
   font-weight: 800;
