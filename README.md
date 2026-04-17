@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/images/banner.svg" alt="DeclaRenta banner" width="700"/>
+</p>
+
+<p align="center">
   <img src="docs/images/logo.png" alt="DeclaRenta logo" width="200"/>
 </p>
 
