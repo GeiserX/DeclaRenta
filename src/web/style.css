@@ -166,14 +166,13 @@
 }
 
 body {
-  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
 }
 
-body.splash-visible .top-bar,
 body.splash-visible .app-layout {
   display: none;
 }
@@ -222,7 +221,7 @@ section {
 }
 
 h2 {
-  font-family: "DM Serif Display", Georgia, serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.5rem;
   font-weight: 400;
   margin-bottom: 1rem;
@@ -583,7 +582,7 @@ details ul {
 }
 
 .top-bar-brand h1 {
-  font-family: "DM Serif Display", Georgia, serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.4rem;
   font-weight: 400;
   letter-spacing: -0.01em;
@@ -1637,8 +1636,11 @@ footer a:hover {
 
 .splash {
   position: fixed;
-  inset: 0;
-  z-index: 1000;
+  top: var(--topbar-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1681,9 +1683,9 @@ footer a:hover {
 }
 
 .splash-logo {
-  width: 120px;
-  height: 120px;
-  border-radius: 24px;
+  width: 180px;
+  height: 180px;
+  border-radius: 28px;
   box-shadow: var(--shadow-lg);
   position: relative;
   z-index: 1;
@@ -1705,7 +1707,7 @@ footer a:hover {
 }
 
 .splash-title {
-  font-family: "DM Serif Display", Georgia, serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 3.5rem;
   font-weight: 400;
   letter-spacing: -0.02em;
@@ -1724,7 +1726,7 @@ footer a:hover {
 
 .splash-brokers {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 0.5rem;
   margin-bottom: 2rem;
@@ -1829,8 +1831,8 @@ footer a:hover {
   }
 
   .splash-logo {
-    width: 96px;
-    height: 96px;
+    width: 140px;
+    height: 140px;
   }
 
   .splash-tagline {
