@@ -8,6 +8,8 @@ const ca: TranslationKeys = {
 
 
   "upload.title": "Puja el teu informe del broker",
+  "upload.broker_question": "Quin(s) broker(s) fas servir?",
+  "upload.broker_hint": "Selecciona un o diversos. Et guiarem pas a pas.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
@@ -147,6 +149,7 @@ const ca: TranslationKeys = {
   "guide.title": "Com obtenir l'informe?",
   "guide.tip_fifo": "Inclou tot l'històric — DeclaRenta necessita operacions anteriors per al càlcul FIFO correcte.",
   "guide.select_broker_hint": "Selecciona el teu broker per veure les instruccions de descàrrega de l'informe.",
+  "guide.heading": "Com obtenir l'informe del teu broker?",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sessió al <strong>Portal del Client</strong> d'IBKR",
   "guide.ibkr.step2": "Ves a <strong>Rendiment i Informes → Flex Queries</strong>",

@@ -8,6 +8,8 @@ const eu: TranslationKeys = {
 
 
   "upload.title": "Igo zure brokerraren txostena",
+  "upload.broker_question": "Zein broker(ak) erabiltzen d(it)uzu?",
+  "upload.broker_hint": "Hautatu bat edo gehiago. Pausoz pauso gidatuko zaitugu.",
   "upload.broker_label": "Brokerra:",
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
@@ -147,6 +149,7 @@ const eu: TranslationKeys = {
   "guide.title": "Nola lortu txostena?",
   "guide.tip_fifo": "Historial osoa sartu — DeclaRentak aurreko eragiketak behar ditu FIFO kalkulu zuzenera.",
   "guide.select_broker_hint": "Hautatu zure brokerra txostenaren deskarga-argibideak ikusteko.",
+  "guide.heading": "Nola lortu zure brokerraren txostena?",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Hasi saioa IBKRren <strong>Bezero Atarian</strong>",
   "guide.ibkr.step2": "Joan <strong>Errendimendua eta Txostenak → Flex Queries</strong> atalera",

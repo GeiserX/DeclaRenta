@@ -8,6 +8,8 @@ const gl: TranslationKeys = {
 
 
   "upload.title": "Sube o teu informe do broker",
+  "upload.broker_question": "Que broker(s) utilizas?",
+  "upload.broker_hint": "Selecciona un ou varios. Guiarémoste paso a paso.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
@@ -147,6 +149,7 @@ const gl: TranslationKeys = {
   "guide.title": "Como obter o informe?",
   "guide.tip_fifo": "Inclúe todo o histórico — DeclaRenta necesita operacións anteriores para o cálculo FIFO correcto.",
   "guide.select_broker_hint": "Selecciona o teu broker para ver as instrucións de descarga do informe.",
+  "guide.heading": "Como obter o informe do teu broker?",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sesión no <strong>Portal do Cliente</strong> de IBKR",
   "guide.ibkr.step2": "Vai a <strong>Rendemento e Informes → Flex Queries</strong>",

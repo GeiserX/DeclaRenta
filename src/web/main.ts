@@ -89,21 +89,35 @@ function dismissSplash() {
   if (!splash) return;
   splash.classList.add("splash-exit");
   splash.addEventListener("animationend", () => {
-    splash.remove();
+    splash.hidden = true;
+    splash.classList.remove("splash-exit");
     document.body.classList.remove("splash-visible");
   }, { once: true });
   try { localStorage.setItem("declarenta_splash_seen", "1"); } catch { /* noop */ }
 }
 
+function showSplash() {
+  if (!splash) return;
+  splash.hidden = false;
+  splash.classList.remove("splash-exit");
+  document.body.classList.add("splash-visible");
+}
+
 if (splash) {
   const seen = localStorage.getItem("declarenta_splash_seen");
   if (seen) {
-    splash.remove();
+    splash.hidden = true;
   } else {
     document.body.classList.add("splash-visible");
     splashCta?.addEventListener("click", dismissSplash);
   }
 }
+
+// Logo click → show splash
+document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  showSplash();
+});
 
 // ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)

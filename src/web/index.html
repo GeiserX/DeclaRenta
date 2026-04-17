@@ -136,27 +136,24 @@
             </button>
           </div>
 
-          <!-- Step 1: Upload -->
+          <!-- Step 1: Select brokers + Upload -->
           <section id="wizard-step-1" class="wizard-panel">
-            <h2 data-i18n="upload.title">Sube tu informe del broker</h2>
-            <div class="broker-selector">
-              <label>
-                <span data-i18n="upload.broker_label">Broker:</span>
-                <select id="broker-select">
-                  <option value="auto" selected data-i18n="upload.auto_detect">Auto-detectar</option>
-                  <option value="ibkr">Interactive Brokers (XML)</option>
-                  <option value="degiro">Degiro (CSV)</option>
-                  <option value="scalable">Scalable Capital (CSV)</option>
-                  <option value="etoro">eToro (XLSX)</option>
-                  <option value="freedom24">Freedom24 (JSON)</option>
-                  <option value="coinbase">Coinbase (CSV)</option>
-                  <option value="binance">Binance (CSV)</option>
-                  <option value="kraken">Kraken (CSV)</option>
-                </select>
-              </label>
-            </div>
-            <!-- Broker guide panel (inserted dynamically) -->
+            <!-- Hidden select for backwards compatibility -->
+            <select id="broker-select" hidden>
+              <option value="auto" selected>Auto-detectar</option>
+            </select>
+
+            <h2 data-i18n="upload.broker_question">¿Qué broker(s) utilizas?</h2>
+            <p class="section-description" data-i18n="upload.broker_hint">Selecciona uno o varios. Te guiaremos paso a paso.</p>
+
+            <!-- Broker card grid (rendered by broker-guides.ts) -->
+            <div id="broker-card-grid" class="broker-card-grid"></div>
+
+            <!-- Guides for selected brokers (rendered by broker-guides.ts) -->
             <div id="broker-guide-container" class="broker-guide-container"></div>
+
+            <!-- Upload zone -->
+            <h3 class="upload-heading" data-i18n="upload.title">Sube tu informe del broker</h3>
             <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
               <div class="drop-icon" aria-hidden="true">&#8683;</div>
               <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
