@@ -89,7 +89,8 @@ export function initProfile(): void {
     (c) => `<option value="${esc(c)}"${c === profile.ccaa ? " selected" : ""}>${esc(c)}</option>`,
   ).join("");
 
-  const yearOptions = [2025, 2024, 2023].map(
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [currentYear, currentYear - 1, currentYear - 2].map(
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");
 
@@ -136,7 +137,7 @@ export function initProfile(): void {
       nombre: (document.getElementById("profile-name") as HTMLInputElement).value.trim(),
       ccaa: (document.getElementById("profile-ccaa") as HTMLSelectElement).value,
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
-      year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value),
+      year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
     };
     saveProfile(updated);
     showSavedMessage();

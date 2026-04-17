@@ -12,7 +12,7 @@ const en: TranslationKeys = {
   "upload.drop_text": "Drag your file here or click to select",
   "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
 
-  "config.title": "2. Configure",
+  "config.title": "Configure",
   "config.year_label": "Tax year:",
   "config.process_btn": "Process",
   "config.processing": "Processing...",
@@ -82,11 +82,9 @@ const en: TranslationKeys = {
   // Wizard steps
   "wizard.step1": "Upload files",
   "wizard.step2": "Review data",
-  "wizard.step3": "Configure",
-  "wizard.step4": "Results",
+  "wizard.step3": "Results",
   "wizard.next": "Next",
   "wizard.back": "Back",
-  "wizard.step_indicator": "Step {{current}} of {{total}}",
 
   // Review step
   "review.title": "Loaded data summary",
@@ -164,6 +162,10 @@ const en: TranslationKeys = {
   "m720.filing_title": "How to file?",
   "m720.rates_title": "Applied exchange rates (ECB)",
   "m720.deadline_short": "Deadline: Jan 1 – Mar 31",
+  "m720.filing_step1": "Access the AEAT Electronic Office",
+  "m720.filing_step2": "Search for «Modelo 720»",
+  "m720.filing_step3": "Import the generated file (TGVI Online)",
+  "m720.filing_step4": "Review and sign with digital certificate or Cl@ve",
 
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Foreign investments declaration",
@@ -180,8 +182,11 @@ const en: TranslationKeys = {
   "d6.copied": "Copied",
   "d6.rates_title": "Applied exchange rates (ECB)",
   "d6.deadline_short": "Deadline: Jan 1 – 31",
+  "d6.copy_failed": "Copy error",
+  "d6.aforix_position_of": "Position {{index}} of {{total}}",
 
-  // Badge statuses
+  "section.year_label": "Tax year",
+
   "badge.complete": "Complete",
   "badge.pending": "Pending",
   "badge.not_applicable": "N/A",

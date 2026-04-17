@@ -42,6 +42,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   const positions = statement.openPositions.filter(
     (p) =>
       (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND") &&
+      p.isin.length >= 2 &&
       p.isin.slice(0, 2).toUpperCase() !== "ES" &&
       new Decimal(p.quantity).greaterThan(0),
   );
@@ -55,7 +56,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   // Year + deadline header
   html += `<div class="section-header-bar">
-    <span class="section-year">Ejercicio ${year}</span>
+    <span class="section-year">${t("section.year_label")} ${year}</span>
     <span class="section-deadline">${t("d6.deadline_short")}</span>
   </div>`;
 
@@ -135,6 +136,13 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
           btn.textContent = t("d6.copy_btn");
           btn.classList.remove("copied");
         }, 1500);
+      }).catch(() => {
+        btn.textContent = t("d6.copy_failed");
+        btn.classList.add("error");
+        setTimeout(() => {
+          btn.textContent = t("d6.copy_btn");
+          btn.classList.remove("error");
+        }, 1500);
       });
     });
   });
@@ -161,7 +169,7 @@ function renderAforixGuide(
     const p = positions[i]!;
     const rate = getEcbRate(rateMap, yearEnd, p.currency);
     const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
-    html += `<p style="margin-top:1rem;font-weight:600">Posición ${i + 1} de ${positions.length}</p>`;
+    html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField("ISIN", p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
@@ -184,6 +192,7 @@ function aforixField(label: string, value: string): string {
 
 async function generateD6File(): Promise<void> {
   if (!cachedStatement || !cachedRateMap) return;
+  if (!isProfileComplete()) return;
 
   const { generateD6Report } = await import("../generators/d6.js");
   const profile = getProfile();

@@ -6,6 +6,7 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     globals: false,
     coverage: {
+      provider: "v8",
       include: ["src/engine/**", "src/generators/**", "src/parsers/**", "src/i18n/**"],
     },
   },

@@ -6,8 +6,10 @@ beforeEach(() => {
   globalThis.localStorage = {
     getItem: (key: string) => store[key] ?? null,
     setItem: (key: string, val: string) => { store[key] = val; },
-    removeItem: (key: string) => { store[key] = undefined as never; },
-    clear: () => { Object.keys(store).forEach((k) => { store[k] = undefined as never; }); },
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    removeItem: (key: string) => { delete store[key]; },
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    clear: () => { Object.keys(store).forEach((k) => { delete store[k]; }); },
     get length() { return Object.keys(store).length; },
     key: (i: number) => Object.keys(store)[i] ?? null,
   } as Storage;

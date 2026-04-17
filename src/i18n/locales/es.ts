@@ -13,7 +13,7 @@ const es = {
   "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
 
   // Config
-  "config.title": "2. Configura",
+  "config.title": "Configura",
   "config.year_label": "Ejercicio fiscal:",
   "config.process_btn": "Procesar",
   "config.processing": "Procesando...",
@@ -91,11 +91,9 @@ const es = {
   // Wizard steps
   "wizard.step1": "Subir ficheros",
   "wizard.step2": "Revisar datos",
-  "wizard.step3": "Configurar",
-  "wizard.step4": "Resultados",
+  "wizard.step3": "Resultados",
   "wizard.next": "Siguiente",
   "wizard.back": "Atrás",
-  "wizard.step_indicator": "Paso {{current}} de {{total}}",
 
   // Review step
   "review.title": "Resumen de datos cargados",
@@ -175,6 +173,10 @@ const es = {
   "m720.filing_title": "¿Cómo presentarlo?",
   "m720.rates_title": "Tipos de cambio aplicados (BCE)",
   "m720.deadline_short": "Plazo: 1 enero – 31 marzo",
+  "m720.filing_step1": "Accede a la Sede Electrónica de la AEAT",
+  "m720.filing_step2": "Busca «Modelo 720»",
+  "m720.filing_step3": "Importa el fichero generado (TGVI Online)",
+  "m720.filing_step4": "Revisa y firma con certificado digital o Cl@ve",
 
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Inversiones en el exterior",
@@ -191,6 +193,11 @@ const es = {
   "d6.copied": "Copiado",
   "d6.rates_title": "Tipos de cambio aplicados (BCE)",
   "d6.deadline_short": "Plazo: 1 – 31 enero",
+  "d6.copy_failed": "Error al copiar",
+  "d6.aforix_position_of": "Posición {{index}} de {{total}}",
+
+  // Section headers
+  "section.year_label": "Ejercicio",
 
   // Badge statuses
   "badge.complete": "Completo",

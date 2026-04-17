@@ -115,6 +115,7 @@ export function initBrokerGuides(): void {
   }
 
   brokerSelect.addEventListener("change", renderGuide);
+  renderGuide();
 }
 
 function renderPanel(guide: BrokerGuide): string {

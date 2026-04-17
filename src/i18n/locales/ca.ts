@@ -13,7 +13,7 @@ const ca: TranslationKeys = {
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
   "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
 
-  "config.title": "2. Configura",
+  "config.title": "Configura",
   "config.year_label": "Exercici fiscal:",
   "config.process_btn": "Processar",
   "config.processing": "Processant...",
@@ -83,11 +83,9 @@ const ca: TranslationKeys = {
   // Wizard steps
   "wizard.step1": "Pujar fitxers",
   "wizard.step2": "Revisar dades",
-  "wizard.step3": "Configurar",
-  "wizard.step4": "Resultats",
+  "wizard.step3": "Resultats",
   "wizard.next": "Següent",
   "wizard.back": "Enrere",
-  "wizard.step_indicator": "Pas {{current}} de {{total}}",
 
   // Review step
   "review.title": "Resum de dades carregades",
@@ -161,6 +159,10 @@ const ca: TranslationKeys = {
   "m720.filing_title": "Com presentar-lo?",
   "m720.rates_title": "Tipus de canvi aplicats (BCE)",
   "m720.deadline_short": "Termini: 1 gener – 31 març",
+  "m720.filing_step1": "Accedeix a la Seu Electrònica de l'AEAT",
+  "m720.filing_step2": "Cerca «Modelo 720»",
+  "m720.filing_step3": "Importa el fitxer generat (TGVI Online)",
+  "m720.filing_step4": "Revisa i signa amb certificat digital o Cl@ve",
 
   "d6.title": "Model D-6 — Inversions a l'exterior",
   "d6.description": "Declaració al Registre d'Inversions del Ministeri d'Economia.",
@@ -176,6 +178,10 @@ const ca: TranslationKeys = {
   "d6.copied": "Copiat",
   "d6.rates_title": "Tipus de canvi aplicats (BCE)",
   "d6.deadline_short": "Termini: 1 – 31 gener",
+  "d6.copy_failed": "Error en copiar",
+  "d6.aforix_position_of": "Posició {{index}} de {{total}}",
+
+  "section.year_label": "Exercici",
 
   "badge.complete": "Complet",
   "badge.pending": "Pendent",

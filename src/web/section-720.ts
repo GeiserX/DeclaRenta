@@ -47,7 +47,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
   // Year + deadline header
   html += `<div class="section-header-bar">
-    <span class="section-year">Ejercicio ${year}</span>
+    <span class="section-year">${t("section.year_label")} ${year}</span>
     <span class="section-deadline">${t("m720.deadline_short")}</span>
   </div>`;
 
@@ -127,10 +127,10 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   html += `<div class="filing-guide">
     <h3>${t("m720.filing_title")}</h3>
     <ol>
-      <li>Accede a la <a href="https://sede.agenciatributaria.gob.es" target="_blank" rel="noopener"><strong>Sede Electrónica de la AEAT</strong></a></li>
-      <li>Busca <strong>«Modelo 720»</strong></li>
-      <li>Importa el fichero generado (<strong>TGVI Online</strong>)</li>
-      <li>Revisa y firma con certificado digital o Cl@ve</li>
+      <li><a href="https://sede.agenciatributaria.gob.es" target="_blank" rel="noopener">${esc(t("m720.filing_step1"))}</a></li>
+      <li>${esc(t("m720.filing_step2"))}</li>
+      <li>${esc(t("m720.filing_step3"))}</li>
+      <li>${esc(t("m720.filing_step4"))}</li>
     </ol>
   </div>`;
 
@@ -147,15 +147,16 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
 async function generate720File(): Promise<void> {
   if (!cachedStatement || !cachedRateMap) return;
+  if (!isProfileComplete()) return;
 
   const { generateModelo720 } = await import("../generators/modelo720.js");
   const profile = getProfile();
   const fullName = `${profile.apellidos} ${profile.nombre}`.trim();
 
   const config = {
-    nif: profile.nif || "00000000T",
+    nif: profile.nif,
     surname: profile.apellidos,
-    name: profile.nombre || "CONTRIBUYENTE",
+    name: profile.nombre,
     year: profile.year,
     phone: profile.telefono,
     contactName: fullName || "CONTRIBUYENTE",

@@ -9,6 +9,7 @@ import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import type { Statement } from "../types/broker.js";
 import type { TaxSummary } from "../types/tax.js";
+import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
@@ -385,7 +386,7 @@ async function processFiles(): Promise<void> {
 
     const years = new Set(merged.trades.map((tr) => parseInt(tr.tradeDate.slice(0, 4))));
     years.add(year);
-    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
+    const allRates: EcbRateMap = new Map();
     for (const yr of years) {
       const rates = await fetchEcbRates(yr, [...currencies]);
       for (const [date, ratesByDate] of rates) {
@@ -483,7 +484,7 @@ opsSearch.addEventListener("input", () => renderOperationsTable());
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
-// Render results (Step 4)
+// Render results (Step 3)
 // ---------------------------------------------------------------------------
 
 function formatDate(d: string): string {

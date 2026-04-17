@@ -225,8 +225,8 @@ describe("krakenParser", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("throws on non-Kraken content", () => {
-      expect(() => krakenParser.parse("Foo,Bar\ndata1,data2")).toThrow();
+    it("throws on non-Kraken content with specific message", () => {
+      expect(() => krakenParser.parse("Foo,Bar\ndata1,data2")).toThrow("no reconocido");
     });
   });
 });

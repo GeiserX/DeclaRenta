@@ -13,7 +13,7 @@ const gl: TranslationKeys = {
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
   "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
 
-  "config.title": "2. Configura",
+  "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",
   "config.process_btn": "Procesar",
   "config.processing": "Procesando...",
@@ -83,11 +83,9 @@ const gl: TranslationKeys = {
   // Wizard steps
   "wizard.step1": "Subir ficheiros",
   "wizard.step2": "Revisar datos",
-  "wizard.step3": "Configurar",
-  "wizard.step4": "Resultados",
+  "wizard.step3": "Resultados",
   "wizard.next": "Seguinte",
   "wizard.back": "Atrás",
-  "wizard.step_indicator": "Paso {{current}} de {{total}}",
 
   // Review step
   "review.title": "Resumo de datos cargados",
@@ -161,6 +159,10 @@ const gl: TranslationKeys = {
   "m720.filing_title": "Como presentalo?",
   "m720.rates_title": "Tipos de cambio aplicados (BCE)",
   "m720.deadline_short": "Prazo: 1 xaneiro – 31 marzo",
+  "m720.filing_step1": "Accede á Sede Electrónica da AEAT",
+  "m720.filing_step2": "Busca «Modelo 720»",
+  "m720.filing_step3": "Importa o ficheiro xerado (TGVI Online)",
+  "m720.filing_step4": "Revisa e asina con certificado dixital ou Cl@ve",
 
   "d6.title": "Modelo D-6 — Investimentos no exterior",
   "d6.description": "Declaración ao Rexistro de Investimentos do Ministerio de Economía.",
@@ -176,6 +178,10 @@ const gl: TranslationKeys = {
   "d6.copied": "Copiado",
   "d6.rates_title": "Tipos de cambio aplicados (BCE)",
   "d6.deadline_short": "Prazo: 1 – 31 xaneiro",
+  "d6.copy_failed": "Erro ao copiar",
+  "d6.aforix_position_of": "Posición {{index}} de {{total}}",
+
+  "section.year_label": "Exercicio",
 
   "badge.complete": "Completo",
   "badge.pending": "Pendente",

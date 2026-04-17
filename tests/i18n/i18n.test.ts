@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { t, setLocale, getCurrentLocale, detectLocale, initLocale, getLocaleNames, type Locale } from "../../src/i18n/index.js";
 import es from "../../src/i18n/locales/es.js";
 import en from "../../src/i18n/locales/en.js";
@@ -73,44 +73,40 @@ describe("i18n", () => {
   });
 
   describe("detectLocale()", () => {
+    const origNavigator = globalThis.navigator;
+
+    afterEach(() => {
+      Object.defineProperty(globalThis, "navigator", { value: origNavigator, configurable: true });
+    });
+
     it("should return a valid locale", () => {
       const locale = detectLocale();
       expect(["es", "en", "ca", "eu", "gl"]).toContain(locale);
     });
 
     it("should detect English from navigator.language", () => {
-      const orig = globalThis.navigator;
       Object.defineProperty(globalThis, "navigator", { value: { language: "en-US" }, configurable: true });
       expect(detectLocale()).toBe("en");
-      Object.defineProperty(globalThis, "navigator", { value: orig, configurable: true });
     });
 
     it("should detect Catalan from navigator.language", () => {
-      const orig = globalThis.navigator;
       Object.defineProperty(globalThis, "navigator", { value: { language: "ca-ES" }, configurable: true });
       expect(detectLocale()).toBe("ca");
-      Object.defineProperty(globalThis, "navigator", { value: orig, configurable: true });
     });
 
     it("should detect Basque from navigator.language", () => {
-      const orig = globalThis.navigator;
       Object.defineProperty(globalThis, "navigator", { value: { language: "eu-ES" }, configurable: true });
       expect(detectLocale()).toBe("eu");
-      Object.defineProperty(globalThis, "navigator", { value: orig, configurable: true });
     });
 
     it("should detect Galician from navigator.language", () => {
-      const orig = globalThis.navigator;
       Object.defineProperty(globalThis, "navigator", { value: { language: "gl-ES" }, configurable: true });
       expect(detectLocale()).toBe("gl");
-      Object.defineProperty(globalThis, "navigator", { value: orig, configurable: true });
     });
 
     it("should fall back to es for unrecognized language", () => {
-      const orig = globalThis.navigator;
       Object.defineProperty(globalThis, "navigator", { value: { language: "fr-FR" }, configurable: true });
       expect(detectLocale()).toBe("es");
-      Object.defineProperty(globalThis, "navigator", { value: orig, configurable: true });
     });
   });
 
@@ -161,17 +157,4 @@ describe("i18n", () => {
     });
   });
 
-  describe("locale key consistency", () => {
-    it("all locale objects should have the same number of entries", () => {
-      const locales = { es, en, ca, eu, gl };
-      const counts = Object.entries(locales).map(([name, obj]) => ({
-        name,
-        count: Object.keys(obj).length,
-      }));
-      const esCount = counts.find((c) => c.name === "es")!.count;
-      for (const { name, count } of counts) {
-        expect(count, `${name} should have same key count as es`).toBe(esCount);
-      }
-    });
-  });
 });

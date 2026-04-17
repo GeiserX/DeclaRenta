@@ -83,10 +83,6 @@ describe("parseNumber", () => {
   it("should handle comma-only decimal (no thousands)", () => {
     // Line 74-76: lastComma >= 0 && lastDot < 0
     expect(parseNumber("175,50")).toBe("175.50");
-  });
-
-  it("handles comma-only decimal (no dots)", () => {
-    expect(parseNumber("175,50")).toBe("175.50");
     expect(parseNumber("-42,5")).toBe("-42.5");
     expect(parseNumber("0,99")).toBe("0.99");
   });

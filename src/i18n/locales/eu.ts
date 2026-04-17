@@ -13,7 +13,7 @@ const eu: TranslationKeys = {
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
   "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
 
-  "config.title": "2. Konfiguratu",
+  "config.title": "Konfiguratu",
   "config.year_label": "Ekitaldi fiskala:",
   "config.process_btn": "Prozesatu",
   "config.processing": "Prozesatzen...",
@@ -83,11 +83,9 @@ const eu: TranslationKeys = {
   // Wizard steps
   "wizard.step1": "Fitxategiak igo",
   "wizard.step2": "Datuak berrikusi",
-  "wizard.step3": "Konfiguratu",
-  "wizard.step4": "Emaitzak",
+  "wizard.step3": "Emaitzak",
   "wizard.next": "Hurrengoa",
   "wizard.back": "Atzera",
-  "wizard.step_indicator": "{{current}}. urratsa {{total}}(e)tik",
 
   // Review step
   "review.title": "Kargatutako datuen laburpena",
@@ -161,6 +159,10 @@ const eu: TranslationKeys = {
   "m720.filing_title": "Nola aurkeztu?",
   "m720.rates_title": "Aplikatutako truke-tasak (BZE)",
   "m720.deadline_short": "Epea: urtarrilak 1 – martxoak 31",
+  "m720.filing_step1": "Sartu AEATen Egoitza Elektronikoan",
+  "m720.filing_step2": "Bilatu «Modelo 720»",
+  "m720.filing_step3": "Inportatu sortutako fitxategia (TGVI Online)",
+  "m720.filing_step4": "Berrikusi eta sinatu ziurtagiri digitalarekin edo Cl@ve-rekin",
 
   "d6.title": "D-6 Eredua — Atzerriko inbertsioak",
   "d6.description": "Ekonomia Ministerioko Inbertsio Erregistroko aitorpena.",
@@ -176,6 +178,10 @@ const eu: TranslationKeys = {
   "d6.copied": "Kopiatuta",
   "d6.rates_title": "Aplikatutako truke-tasak (BZE)",
   "d6.deadline_short": "Epea: urtarrilak 1 – 31",
+  "d6.copy_failed": "Errorea kopiatzean",
+  "d6.aforix_position_of": "{{index}}. posizioa {{total}}(e)tik",
+
+  "section.year_label": "Ekitaldia",
 
   "badge.complete": "Osatuta",
   "badge.pending": "Zain",
