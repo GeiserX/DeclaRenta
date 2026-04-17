@@ -130,4 +130,42 @@ describe("calculateDividends", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!.grossAmountEur.toFixed(2)).toBe("92.00");
   });
+
+  describe("Withholding country extraction", () => {
+    it("should extract country code from description with Tax pattern", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          amount: "100",
+          type: "Dividends",
+          description: "US Tax - APPLE INC",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("US");
+    });
+
+    it("should default to XX when no country pattern matches", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          amount: "100",
+          type: "Dividends",
+          description: "SOME DIVIDEND",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("XX");
+    });
+  });
 });

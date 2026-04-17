@@ -172,4 +172,56 @@ describe("D-6 Guide Generator", () => {
       expect(report.guide.some((l) => l.includes("CANCELACIONES"))).toBe(false);
     });
   });
+
+  describe("Exchange code edge cases", () => {
+    it("should return XOTC for BOND positions", () => {
+      const positions = [
+        makePosition({
+          isin: "US912828ZT60",
+          assetCategory: "BOND",
+          description: "US Treasury Bond",
+          positionValue: "50000",
+        }),
+      ];
+
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A");
+
+      expect(report.positions).toHaveLength(1);
+      expect(report.positions[0]!.exchangeCode).toBe("XOTC");
+    });
+
+    it("should return XXXX for unmapped country ISIN prefix", () => {
+      const positions = [
+        makePosition({
+          isin: "BRPETRACNOR9",
+          assetCategory: "STK",
+          description: "Petrobras",
+          positionValue: "20000",
+        }),
+      ];
+
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A");
+
+      expect(report.positions).toHaveLength(1);
+      expect(report.positions[0]!.exchangeCode).toBe("XXXX");
+    });
+
+    it("should include FUND positions in the report", () => {
+      const positions = [
+        makePosition({
+          isin: "IE00BK5BQT80",
+          assetCategory: "FUND",
+          description: "Vanguard FTSE All-World UCITS ETF",
+          currency: "EUR",
+          positionValue: "30000",
+        }),
+      ];
+
+      const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A");
+
+      expect(report.positions).toHaveLength(1);
+      expect(report.positions[0]!.isin).toBe("IE00BK5BQT80");
+      expect(report.positions[0]!.exchangeCode).toBe("XDUB");
+    });
+  });
 });

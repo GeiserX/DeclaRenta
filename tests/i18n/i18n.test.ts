@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { t, setLocale, getCurrentLocale, detectLocale, initLocale, type Locale } from "../../src/i18n/index.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { t, setLocale, getCurrentLocale, detectLocale, initLocale, getLocaleNames, type Locale } from "../../src/i18n/index.js";
 import es from "../../src/i18n/locales/es.js";
 import en from "../../src/i18n/locales/en.js";
 import ca from "../../src/i18n/locales/ca.js";
@@ -73,9 +73,40 @@ describe("i18n", () => {
   });
 
   describe("detectLocale()", () => {
+    const origNavigator = globalThis.navigator;
+
+    afterEach(() => {
+      Object.defineProperty(globalThis, "navigator", { value: origNavigator, configurable: true });
+    });
+
     it("should return a valid locale", () => {
       const locale = detectLocale();
       expect(["es", "en", "ca", "eu", "gl"]).toContain(locale);
+    });
+
+    it("should detect English from navigator.language", () => {
+      Object.defineProperty(globalThis, "navigator", { value: { language: "en-US" }, configurable: true });
+      expect(detectLocale()).toBe("en");
+    });
+
+    it("should detect Catalan from navigator.language", () => {
+      Object.defineProperty(globalThis, "navigator", { value: { language: "ca-ES" }, configurable: true });
+      expect(detectLocale()).toBe("ca");
+    });
+
+    it("should detect Basque from navigator.language", () => {
+      Object.defineProperty(globalThis, "navigator", { value: { language: "eu-ES" }, configurable: true });
+      expect(detectLocale()).toBe("eu");
+    });
+
+    it("should detect Galician from navigator.language", () => {
+      Object.defineProperty(globalThis, "navigator", { value: { language: "gl-ES" }, configurable: true });
+      expect(detectLocale()).toBe("gl");
+    });
+
+    it("should fall back to es for unrecognized language", () => {
+      Object.defineProperty(globalThis, "navigator", { value: { language: "fr-FR" }, configurable: true });
+      expect(detectLocale()).toBe("es");
     });
   });
 
@@ -111,4 +142,19 @@ describe("i18n", () => {
       }
     });
   });
+
+  describe("getLocaleNames()", () => {
+    it("should return object with keys es, en, ca, eu, gl", () => {
+      const names = getLocaleNames();
+      expect(Object.keys(names).sort()).toEqual(["ca", "en", "es", "eu", "gl"]);
+    });
+
+    it("should return non-empty display names for all locales", () => {
+      const names = getLocaleNames();
+      for (const [locale, name] of Object.entries(names)) {
+        expect(name, `${locale} display name should not be empty`).not.toBe("");
+      }
+    });
+  });
+
 });

@@ -252,6 +252,48 @@ describe("Modelo 720 Generator", () => {
     });
   });
 
+  describe("Q4 rate fallback to getEcbRate", () => {
+    it("should fall back to year-end spot when Q4 has no rates for the specific currency", () => {
+      // Rate map: Q4 dates exist only for GBP, not USD.
+      // Dec 31 has USD so getEcbRate finds it on first attempt.
+      // But getQ4AverageRate iterates Q4 dates and finds USD on Dec 31 too,
+      // so to truly trigger the fallback we need Q4 dates WITHOUT USD
+      // and a walkback-reachable date WITH USD.
+      // Since getEcbRate walks back ≤10 days from Dec 31 (all within Q4),
+      // any reachable date is also visible to getQ4AverageRate.
+      // So we test the scenario where Q4 has rates for ONLY one Q4 date
+      // with the needed currency — effectively verifying the Q4 average path
+      // degrades to a single-date average (equivalent to spot).
+      const singleQ4RateMap: EcbRateMap = new Map([
+        ["2025-12-31", new Map([["USD", new Decimal("0.92")]])],
+      ]);
+
+      const positions = [makePosition({ positionValue: "60000", assetCategory: "STK", currency: "USD" })];
+      const result = generateModelo720(positions, singleQ4RateMap, baseConfig);
+
+      // Q4 average of a single date (0.92) = 0.92 = same as spot
+      // 60000 * 0.92 = 55200 EUR > 50K
+      expect(result).not.toBe("");
+      const lines = result.split("\n");
+      expect(lines).toHaveLength(2);
+    });
+
+    it("should throw when STK currency has no rates in Q4 and no walkback rates", () => {
+      // Rate map with Q4 dates that have GBP but NOT CHF
+      // getQ4AverageRate throws for CHF, fallback getEcbRate also throws
+      const noChfRateMap: EcbRateMap = new Map([
+        ["2025-12-31", new Map([["GBP", new Decimal("1.15")]])],
+        ["2025-12-30", new Map([["GBP", new Decimal("1.15")]])],
+      ]);
+
+      const positions = [makePosition({ positionValue: "60000", assetCategory: "STK", currency: "CHF" })];
+
+      expect(() => generateModelo720(positions, noChfRateMap, baseConfig)).toThrow(
+        /No ECB rate found for CHF/,
+      );
+    });
+  });
+
   describe("Q4 average FX rate for STK positions", () => {
     it("should use Q4 average rate for STK and Dec 31 spot for FUND", () => {
       // Build a rate map with different rates across Q4

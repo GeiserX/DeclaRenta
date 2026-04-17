@@ -152,4 +152,101 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
 
     expect(result.updatedCarryforward).toHaveLength(0);
   });
+
+  describe("Early break in same-category gains loop", () => {
+    it("should stop consuming gains losses when gains reach zero", () => {
+      const priorLosses: LossCarryforward[] = [
+        { year: 2022, amount: new Decimal("-3000"), remaining: new Decimal("-3000"), category: "gains" },
+        { year: 2023, amount: new Decimal("-2000"), remaining: new Decimal("-2000"), category: "gains" },
+      ];
+
+      // Current gains of 2000 — first loss (3000) exceeds it
+      const result = applyLossCarryforward(2025, new Decimal("2000"), new Decimal("0"), priorLosses);
+
+      expect(result.adjustedGains.toFixed(2)).toBe("0.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("2000.00");
+
+      // 2022 loss partially consumed: 3000 - 2000 = 1000 remaining
+      const remaining2022 = result.updatedCarryforward.find((l) => l.year === 2022);
+      expect(remaining2022).toBeDefined();
+      expect(remaining2022!.remaining.abs().toFixed(2)).toBe("1000.00");
+
+      // 2023 loss untouched
+      const remaining2023 = result.updatedCarryforward.find((l) => l.year === 2023);
+      expect(remaining2023).toBeDefined();
+      expect(remaining2023!.remaining.abs().toFixed(2)).toBe("2000.00");
+    });
+  });
+
+  describe("Early break in same-category income loop", () => {
+    it("should stop consuming income losses when income reaches zero", () => {
+      const priorLosses: LossCarryforward[] = [
+        { year: 2022, amount: new Decimal("-5000"), remaining: new Decimal("-5000"), category: "income" },
+        { year: 2023, amount: new Decimal("-3000"), remaining: new Decimal("-3000"), category: "income" },
+      ];
+
+      // Current income of 4000 — first loss (5000) exceeds it
+      const result = applyLossCarryforward(2025, new Decimal("0"), new Decimal("4000"), priorLosses);
+
+      expect(result.adjustedIncome.toFixed(2)).toBe("0.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("4000.00");
+
+      // 2022 loss partially consumed: 5000 - 4000 = 1000 remaining
+      const remaining2022 = result.updatedCarryforward.find((l) => l.year === 2022);
+      expect(remaining2022).toBeDefined();
+      expect(remaining2022!.remaining.abs().toFixed(2)).toBe("1000.00");
+
+      // 2023 loss untouched
+      const remaining2023 = result.updatedCarryforward.find((l) => l.year === 2023);
+      expect(remaining2023).toBeDefined();
+      expect(remaining2023!.remaining.abs().toFixed(2)).toBe("3000.00");
+    });
+  });
+
+  describe("Cross-compensation break at 25% cap", () => {
+    it("should stop cross-compensating gains losses when 25% cap of income is reached", () => {
+      const priorLosses: LossCarryforward[] = [
+        { year: 2022, amount: new Decimal("-8000"), remaining: new Decimal("-8000"), category: "gains" },
+        { year: 2023, amount: new Decimal("-5000"), remaining: new Decimal("-5000"), category: "gains" },
+      ];
+
+      // No current gains (so same-category step does nothing), income = 10000 → max cross = 2500
+      const result = applyLossCarryforward(2025, new Decimal("0"), new Decimal("10000"), priorLosses);
+
+      // 25% of 10000 = 2500 max cross-compensation
+      expect(result.adjustedIncome.toFixed(2)).toBe("7500.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("2500.00");
+
+      // 2022 loss: 8000 - 2500 = 5500 remaining (cap hit during first loss)
+      const remaining2022 = result.updatedCarryforward.find((l) => l.year === 2022);
+      expect(remaining2022).toBeDefined();
+      expect(remaining2022!.remaining.abs().toFixed(2)).toBe("5500.00");
+
+      // 2023 loss untouched (cap already hit)
+      const remaining2023 = result.updatedCarryforward.find((l) => l.year === 2023);
+      expect(remaining2023).toBeDefined();
+      expect(remaining2023!.remaining.abs().toFixed(2)).toBe("5000.00");
+    });
+  });
+
+  describe("Zero-remaining continue in cross-compensation", () => {
+    it("should skip a fully consumed income loss in cross-compensation", () => {
+      const priorLosses: LossCarryforward[] = [
+        { year: 2022, amount: new Decimal("-200"), remaining: new Decimal("-200"), category: "income" },
+      ];
+
+      // Income 300 consumes the 200 loss in same-category step, leaving 0 remaining
+      // Gains 1000 → cross-compensation encounters 0-remaining entry and skips it
+      const result = applyLossCarryforward(2025, new Decimal("1000"), new Decimal("300"), priorLosses);
+
+      // Same-category: income 300 - 200 = 100
+      expect(result.adjustedIncome.toFixed(2)).toBe("100.00");
+      // Cross-compensation: no remaining income losses to apply to gains
+      expect(result.adjustedGains.toFixed(2)).toBe("1000.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("200.00");
+
+      // The 2022 loss is fully consumed — should not appear in carryforward
+      expect(result.updatedCarryforward).toHaveLength(0);
+    });
+  });
 });

@@ -12,132 +12,182 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <a href="#wizard" class="skip-link" data-i18n="a11y.skip_link">Saltar al contenido</a>
+  <a href="#app-content" class="skip-link" data-i18n="a11y.skip_link">Saltar al contenido</a>
+
+  <!-- Top bar -->
   <nav class="top-bar" data-i18n-aria="a11y.nav_label" aria-label="Ajustes">
-    <select id="lang-select" class="lang-select" data-i18n-aria="a11y.lang_label" aria-label="Idioma"></select>
-    <button class="theme-toggle" id="theme-toggle" data-i18n-title="a11y.theme_toggle" data-i18n-aria="a11y.theme_toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
-  </nav>
-  <main id="app">
-    <header>
+    <div class="top-bar-brand">
+      <button class="sidebar-toggle" id="sidebar-toggle" data-i18n-aria="sidebar.toggle" aria-label="Abrir/cerrar menú">&#9776;</button>
       <h1>Decla<span class="brand-accent">Renta</span></h1>
-      <p class="subtitle" data-i18n="app.subtitle">Broker extranjero → Renta española</p>
-    </header>
-
-    <!-- Wizard progress indicator -->
-    <div id="wizard" class="wizard">
-      <div class="wizard-progress">
-        <button class="wizard-indicator active reachable" data-step="1">
-          <span class="wizard-step-num">1</span>
-          <span class="wizard-step-label" data-i18n="wizard.step1">Subir ficheros</span>
-        </button>
-        <div class="wizard-connector"></div>
-        <button class="wizard-indicator" data-step="2">
-          <span class="wizard-step-num">2</span>
-          <span class="wizard-step-label" data-i18n="wizard.step2">Revisar datos</span>
-        </button>
-        <div class="wizard-connector"></div>
-        <button class="wizard-indicator" data-step="3">
-          <span class="wizard-step-num">3</span>
-          <span class="wizard-step-label" data-i18n="wizard.step3">Configurar</span>
-        </button>
-        <div class="wizard-connector"></div>
-        <button class="wizard-indicator" data-step="4">
-          <span class="wizard-step-num">4</span>
-          <span class="wizard-step-label" data-i18n="wizard.step4">Resultados</span>
-        </button>
-      </div>
-
-      <!-- Step 1: Upload -->
-      <section id="wizard-step-1" class="wizard-panel">
-        <h2 data-i18n="upload.title">1. Sube tu informe del broker</h2>
-        <div class="broker-selector">
-          <label>
-            <span data-i18n="upload.broker_label">Broker:</span>
-            <select id="broker-select">
-              <option value="auto" selected data-i18n="upload.auto_detect">Auto-detectar</option>
-              <option value="ibkr">Interactive Brokers (XML)</option>
-              <option value="degiro">Degiro (CSV)</option>
-              <option value="scalable">Scalable Capital (CSV)</option>
-              <option value="etoro">eToro (XLSX)</option>
-              <option value="freedom24">Freedom24 (JSON)</option>
-              <option value="coinbase">Coinbase (CSV)</option>
-              <option value="binance">Binance (CSV)</option>
-              <option value="kraken">Kraken (CSV)</option>
-            </select>
-          </label>
-        </div>
-        <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
-          <div class="drop-icon" aria-hidden="true">&#8683;</div>
-          <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
-          <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple data-i18n-aria="a11y.file_input" aria-label="Seleccionar ficheros" />
-        </div>
-        <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)</p>
-        <div id="file-list"></div>
-      </section>
-
-      <!-- Step 2: Review -->
-      <section id="wizard-step-2" class="wizard-panel" hidden>
-        <h2 data-i18n="review.title">Resumen de datos cargados</h2>
-        <div id="review-content"></div>
-      </section>
-
-      <!-- Step 3: Configure -->
-      <section id="wizard-step-3" class="wizard-panel" hidden>
-        <h2 data-i18n="config.title">2. Configura</h2>
-        <div class="config-grid">
-          <label>
-            <span data-i18n="config.year_label">Ejercicio fiscal:</span>
-            <select id="year-select">
-              <option value="2025" selected>2025</option>
-              <option value="2024">2024</option>
-              <option value="2023">2023</option>
-            </select>
-          </label>
-          <label>
-            <span data-i18n="config.nif_label">NIF (para Modelo 720/D-6):</span>
-            <input type="text" id="nif-input" data-i18n-placeholder="config.nif_placeholder" placeholder="12345678A" maxlength="9" />
-          </label>
-        </div>
-        <button id="process-btn" data-i18n="config.process_btn">Procesar</button>
-      </section>
-
-      <!-- Step 4: Results -->
-      <section id="wizard-step-4" class="wizard-panel" hidden>
-        <h2 data-i18n="results.title">3. Resultados para Modelo 100</h2>
-        <div id="casillas"></div>
-
-        <h3 data-i18n="results.operations">Operaciones</h3>
-        <div class="table-controls">
-          <input type="text" id="ops-search" data-i18n-placeholder="results.search_placeholder" placeholder="Buscar por ISIN o símbolo..." />
-          <select id="ops-filter">
-            <option value="all" data-i18n="results.filter_all">Todas</option>
-            <option value="gain" data-i18n="results.filter_gains">Ganancias</option>
-            <option value="loss" data-i18n="results.filter_losses">Pérdidas</option>
-          </select>
-        </div>
-        <div id="operations-table" class="table-wrapper"></div>
-
-        <h3 data-i18n="results.dividends">Dividendos</h3>
-        <div id="dividends-table" class="table-wrapper"></div>
-
-        <div class="export-buttons">
-          <button id="export-json-btn" data-i18n="results.export_json">Exportar JSON</button>
-          <button id="export-csv-btn" data-i18n="results.export_csv">Exportar CSV</button>
-          <button id="generate-720-btn" class="btn-secondary" data-i18n="config.generate_720">Generar fichero Modelo 720</button>
-          <button id="generate-d6-btn" class="btn-secondary" data-i18n="config.generate_d6">Generar guía D-6</button>
-        </div>
-
-        <!-- Year comparison -->
-        <div id="year-compare"></div>
-      </section>
-
-      <!-- Wizard navigation -->
-      <div class="wizard-nav">
-        <button id="wizard-back" class="btn-secondary" hidden data-i18n="wizard.back">Atrás</button>
-        <button id="wizard-next" data-i18n="wizard.next">Siguiente</button>
-      </div>
     </div>
-  </main>
+    <div class="top-bar-actions">
+      <select id="lang-select" class="lang-select" data-i18n-aria="a11y.lang_label" aria-label="Idioma"></select>
+      <button class="theme-toggle" id="theme-toggle" data-i18n-title="a11y.theme_toggle" data-i18n-aria="a11y.theme_toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
+    </div>
+  </nav>
+
+  <div class="app-layout">
+    <!-- Sidebar navigation -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <nav class="sidebar-nav">
+        <a href="#perfil" class="sidebar-link" data-section="perfil">
+          <span class="sidebar-icon" aria-hidden="true">&#128100;</span>
+          <span data-i18n="sidebar.profile">Perfil fiscal</span>
+          <span class="sidebar-badge" id="badge-perfil"></span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="#renta" class="sidebar-link active" data-section="renta">
+          <span class="sidebar-icon" aria-hidden="true">&#128202;</span>
+          <span data-i18n="sidebar.renta">Modelo 100 (Renta)</span>
+          <span class="sidebar-badge" id="badge-renta"></span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="#m720" class="sidebar-link" data-section="m720">
+          <span class="sidebar-icon" aria-hidden="true">&#127758;</span>
+          <span data-i18n="sidebar.m720">Modelo 720</span>
+          <span class="sidebar-badge" id="badge-m720"></span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="#d6" class="sidebar-link" data-section="d6">
+          <span class="sidebar-icon" aria-hidden="true">&#127974;</span>
+          <span data-i18n="sidebar.d6">Modelo D-6</span>
+          <span class="sidebar-badge" id="badge-d6"></span>
+        </a>
+      </nav>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- Main content area -->
+    <main class="app-content" id="app-content">
+
+      <!-- ============================================================ -->
+      <!-- SECTION: Perfil fiscal                                       -->
+      <!-- ============================================================ -->
+      <section id="section-perfil" class="app-section" hidden>
+        <h2 data-i18n="profile.title">Perfil fiscal</h2>
+        <p class="section-description" data-i18n="profile.description">Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.</p>
+        <div id="profile-form-container"></div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: Modelo 100 (Renta) — contains wizard sub-steps      -->
+      <!-- ============================================================ -->
+      <section id="section-renta" class="app-section">
+        <header>
+          <p class="subtitle" data-i18n="app.subtitle">Broker extranjero → Renta española</p>
+        </header>
+
+        <!-- Wizard progress indicator (3 steps within Renta) -->
+        <div id="wizard" class="wizard">
+          <div class="wizard-progress">
+            <button class="wizard-indicator active reachable" data-step="1">
+              <span class="wizard-step-num">1</span>
+              <span class="wizard-step-label" data-i18n="wizard.step1">Subir ficheros</span>
+            </button>
+            <div class="wizard-connector"></div>
+            <button class="wizard-indicator" data-step="2">
+              <span class="wizard-step-num">2</span>
+              <span class="wizard-step-label" data-i18n="wizard.step2">Revisar datos</span>
+            </button>
+            <div class="wizard-connector"></div>
+            <button class="wizard-indicator" data-step="3">
+              <span class="wizard-step-num">3</span>
+              <span class="wizard-step-label" data-i18n="wizard.step3">Resultados</span>
+            </button>
+          </div>
+
+          <!-- Step 1: Upload -->
+          <section id="wizard-step-1" class="wizard-panel">
+            <h2 data-i18n="upload.title">Sube tu informe del broker</h2>
+            <div class="broker-selector">
+              <label>
+                <span data-i18n="upload.broker_label">Broker:</span>
+                <select id="broker-select">
+                  <option value="auto" selected data-i18n="upload.auto_detect">Auto-detectar</option>
+                  <option value="ibkr">Interactive Brokers (XML)</option>
+                  <option value="degiro">Degiro (CSV)</option>
+                  <option value="scalable">Scalable Capital (CSV)</option>
+                  <option value="etoro">eToro (XLSX)</option>
+                  <option value="freedom24">Freedom24 (JSON)</option>
+                  <option value="coinbase">Coinbase (CSV)</option>
+                  <option value="binance">Binance (CSV)</option>
+                  <option value="kraken">Kraken (CSV)</option>
+                </select>
+              </label>
+            </div>
+            <!-- Broker guide panel (inserted dynamically) -->
+            <div id="broker-guide-container" class="broker-guide-container"></div>
+            <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
+              <div class="drop-icon" aria-hidden="true">&#8683;</div>
+              <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
+              <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple data-i18n-aria="a11y.file_input" aria-label="Seleccionar ficheros" />
+            </div>
+            <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)</p>
+            <div id="file-list"></div>
+          </section>
+
+          <!-- Step 2: Review -->
+          <section id="wizard-step-2" class="wizard-panel" hidden>
+            <h2 data-i18n="review.title">Resumen de datos cargados</h2>
+            <div id="review-content"></div>
+          </section>
+
+          <!-- Step 3: Results -->
+          <section id="wizard-step-3" class="wizard-panel" hidden>
+            <h2 data-i18n="results.title">Resultados para Modelo 100</h2>
+            <div id="casillas"></div>
+
+            <h3 data-i18n="results.operations">Operaciones</h3>
+            <div class="table-controls">
+              <input type="text" id="ops-search" data-i18n-placeholder="results.search_placeholder" placeholder="Buscar por ISIN o símbolo..." />
+              <select id="ops-filter">
+                <option value="all" data-i18n="results.filter_all">Todas</option>
+                <option value="gain" data-i18n="results.filter_gains">Ganancias</option>
+                <option value="loss" data-i18n="results.filter_losses">Pérdidas</option>
+              </select>
+            </div>
+            <div id="operations-table" class="table-wrapper"></div>
+
+            <h3 data-i18n="results.dividends">Dividendos</h3>
+            <div id="dividends-table" class="table-wrapper"></div>
+
+            <div class="export-buttons">
+              <button id="export-json-btn" data-i18n="results.export_json">Exportar JSON</button>
+              <button id="export-csv-btn" data-i18n="results.export_csv">Exportar CSV</button>
+            </div>
+
+            <!-- Year comparison -->
+            <div id="year-compare"></div>
+          </section>
+
+          <!-- Wizard navigation -->
+          <div class="wizard-nav">
+            <button id="wizard-back" class="btn-secondary" hidden data-i18n="wizard.back">Atrás</button>
+            <button id="wizard-next" data-i18n="wizard.next">Siguiente</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: Modelo 720                                          -->
+      <!-- ============================================================ -->
+      <section id="section-m720" class="app-section" hidden>
+        <h2 data-i18n="m720.title">Modelo 720 — Bienes en el extranjero</h2>
+        <p class="section-description" data-i18n="m720.description">Declaración informativa sobre bienes y derechos situados en el extranjero.</p>
+        <div id="m720-content"></div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: Modelo D-6                                          -->
+      <!-- ============================================================ -->
+      <section id="section-d6" class="app-section" hidden>
+        <h2 data-i18n="d6.title">Modelo D-6 — Inversiones en el exterior</h2>
+        <p class="section-description" data-i18n="d6.description">Declaración al Registro de Inversiones del Ministerio de Economía.</p>
+        <div id="d6-content"></div>
+      </section>
+
+    </main>
+  </div>
 
   <footer>
     <p>
