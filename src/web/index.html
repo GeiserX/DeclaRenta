@@ -21,6 +21,7 @@
       <h1>Decla<span class="brand-accent">Renta</span></h1>
     </div>
     <div class="top-bar-actions">
+      <a href="#" id="open-disclaimer" class="top-bar-legal" data-i18n="footer.disclaimer">Aviso legal</a>
       <select id="lang-select" class="lang-select" data-i18n-aria="a11y.lang_label" aria-label="Idioma"></select>
       <button class="theme-toggle" id="theme-toggle" data-i18n-title="a11y.theme_toggle" data-i18n-aria="a11y.theme_toggle" title="Cambiar tema" aria-label="Cambiar tema"></button>
     </div>
@@ -31,25 +32,25 @@
     <aside class="app-sidebar" id="app-sidebar">
       <nav class="sidebar-nav">
         <a href="#perfil" class="sidebar-link" data-section="perfil">
-          <span class="sidebar-icon" aria-hidden="true">&#128100;</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
           <span data-i18n="sidebar.profile">Perfil fiscal</span>
           <span class="sidebar-badge" id="badge-perfil"></span>
         </a>
         <div class="sidebar-divider"></div>
-        <a href="#renta" class="sidebar-link active" data-section="renta">
-          <span class="sidebar-icon" aria-hidden="true">&#128202;</span>
+        <a href="#renta" class="sidebar-link" data-section="renta">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
           <span data-i18n="sidebar.renta">Modelo 100 (Renta)</span>
           <span class="sidebar-badge" id="badge-renta"></span>
         </a>
         <div class="sidebar-divider"></div>
         <a href="#m720" class="sidebar-link" data-section="m720">
-          <span class="sidebar-icon" aria-hidden="true">&#127758;</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
           <span data-i18n="sidebar.m720">Modelo 720</span>
           <span class="sidebar-badge" id="badge-m720"></span>
         </a>
         <div class="sidebar-divider"></div>
         <a href="#d6" class="sidebar-link" data-section="d6">
-          <span class="sidebar-icon" aria-hidden="true">&#127974;</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg></span>
           <span data-i18n="sidebar.d6">Modelo D-6</span>
           <span class="sidebar-badge" id="badge-d6"></span>
         </a>
@@ -123,7 +124,7 @@
               <input type="file" id="file-input" accept=".xml,.csv,.json,.xlsx,.xls" multiple data-i18n-aria="a11y.file_input" aria-label="Seleccionar ficheros" />
             </div>
             <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)</p>
-            <div id="file-list"></div>
+            <div id="file-list" aria-live="polite"></div>
           </section>
 
           <!-- Step 2: Review -->
@@ -163,7 +164,7 @@
           <!-- Wizard navigation -->
           <div class="wizard-nav">
             <button id="wizard-back" class="btn-secondary" hidden data-i18n="wizard.back">Atrás</button>
-            <button id="wizard-next" data-i18n="wizard.next">Siguiente</button>
+            <button id="wizard-next" disabled data-i18n="wizard.next">Siguiente</button>
           </div>
         </div>
       </section>
@@ -197,9 +198,18 @@
     </p>
     <p class="credits">
       Made with <span class="heart">&#9829;</span> by <a href="https://geiser.cloud">Sergio Fernández</a>
-      · <a href="https://github.com/sponsors/GeiserX" class="sponsor-link">Sponsor</a>
     </p>
-    <p class="disclaimer-link"><a href="#" id="open-disclaimer" data-i18n="footer.disclaimer">Aviso legal</a></p>
+    <p class="footer-sponsor">
+      <a href="https://github.com/sponsors/GeiserX" class="sponsor-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        Sponsor
+      </a>
+    </p>
+    <p class="footer-trust">
+      <span data-i18n="footer.open_source">100% código abierto</span> ·
+      <a href="https://github.com/GeiserX/DeclaRenta" data-i18n="footer.verify_source">Verificar código fuente</a>
+      · <span class="footer-version" id="footer-version"></span>
+    </p>
   </footer>
 
   <script type="module" src="./main.ts"></script>

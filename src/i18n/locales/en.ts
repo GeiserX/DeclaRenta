@@ -148,6 +148,48 @@ const en: TranslationKeys = {
   // Broker guides
   "guide.title": "How to get the report?",
   "guide.tip_fifo": "Include the full history — DeclaRenta needs past trades for correct FIFO calculation.",
+  "guide.select_broker_hint": "Select your broker to see report download instructions.",
+  "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
+  "guide.ibkr.step1": "Log in to the IBKR <strong>Client Portal</strong>",
+  "guide.ibkr.step2": "Go to <strong>Performance &amp; Reports → Flex Queries</strong>",
+  "guide.ibkr.step3": "Create a new <em>Activity Flex Query</em> including:<ul><li>Trades (required)</li><li>Cash Transactions — dividends and withholdings (required)</li><li>Open Positions — for Modelo 720/D-6 (recommended)</li><li>Securities Info — ISINs (recommended)</li></ul>",
+  "guide.ibkr.step4": "Output format: <strong>XML</strong>",
+  "guide.ibkr.step5": "Include <strong>all available years</strong> for correct FIFO calculation",
+  "guide.ibkr.step6": "Run the query and download the <code>.xml</code> file",
+  "guide.degiro.title": "Degiro (CSV)",
+  "guide.degiro.step1": "Log in to the <strong>Degiro website</strong> (not the app)",
+  "guide.degiro.step2": "Go to <strong>Activity → Transactions</strong>",
+  "guide.degiro.step3": "Select the desired date range",
+  "guide.degiro.step4": "Click <strong>Export</strong> and download the CSV file",
+  "guide.etoro.title": "eToro (XLSX)",
+  "guide.etoro.step1": "Log in to <strong>eToro</strong>",
+  "guide.etoro.step2": "Go to <strong>Settings → Account Statement</strong>",
+  "guide.etoro.step3": "Select the tax year period",
+  "guide.etoro.step4": "Download the <strong>XLSX</strong> (Excel) file",
+  "guide.scalable.title": "Scalable Capital (CSV)",
+  "guide.scalable.step1": "Log in to <strong>Scalable Capital</strong>",
+  "guide.scalable.step2": "Go to <strong>Profile → Tax Documents</strong>",
+  "guide.scalable.step3": "Download the transaction report in <strong>CSV</strong> format",
+  "guide.freedom24.title": "Freedom24 (JSON)",
+  "guide.freedom24.step1": "Log in to the <strong>Freedom24 web platform</strong>",
+  "guide.freedom24.step2": "Go to <strong>Reports → Operations Report</strong>",
+  "guide.freedom24.step3": "Select the period and <strong>JSON</strong> format",
+  "guide.freedom24.step4": "Download the file",
+  "guide.coinbase.title": "Coinbase (CSV)",
+  "guide.coinbase.step1": "Log in to <strong>Coinbase</strong>",
+  "guide.coinbase.step2": "Go to <strong>Taxes → Documents</strong>",
+  "guide.coinbase.step3": "Click <strong>Generate report</strong>",
+  "guide.coinbase.step4": "Download the transaction history in CSV format",
+  "guide.binance.title": "Binance (CSV)",
+  "guide.binance.step1": "Log in to <strong>Binance</strong>",
+  "guide.binance.step2": "Go to <strong>Orders → Trade History</strong>",
+  "guide.binance.step3": "Click <strong>Export Trade History</strong>",
+  "guide.binance.step4": "Select the date range and <strong>CSV</strong> format",
+  "guide.kraken.title": "Kraken (CSV)",
+  "guide.kraken.step1": "Log in to <strong>Kraken</strong>",
+  "guide.kraken.step2": "Go to <strong>History → Export</strong>",
+  "guide.kraken.step3": "Select <strong>Trades</strong> and the date range",
+  "guide.kraken.step4": "Format: <strong>CSV</strong>, download the file",
 
   // Modelo 720 section
   "m720.title": "Modelo 720 — Foreign assets declaration",
@@ -191,6 +233,22 @@ const en: TranslationKeys = {
   "badge.pending": "Pending",
   "badge.not_applicable": "N/A",
   "badge.generated": "Generated",
+
+  // Empty states
+  "m720.empty_title": "No positions loaded",
+  "m720.empty_description": "Modelo 720 is a mandatory informative declaration if you hold foreign assets valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold and generate the file. Deadline: January 1 – March 31.",
+  "m720.empty_cta": "Go to Modelo 100",
+  "d6.empty_title": "No positions loaded",
+  "d6.empty_description": "Modelo D-6 declares your foreign securities investments to the Ministry of Economy. It is mandatory for ANY amount (no minimum threshold). Upload your broker report in the Modelo 100 section and DeclaRenta will generate a step-by-step guide to fill in the AFORIX form. Deadline: January 1–31.",
+  "d6.empty_cta": "Go to Modelo 100",
+
+  // Profile required warnings
+  "m720.profile_required": "Complete your tax profile before generating the Modelo 720 file.",
+  "d6.profile_required": "Complete your tax profile before generating the D-6 guide.",
+
+  // Trust signal
+  "footer.open_source": "100% open source",
+  "footer.verify_source": "Verify source code",
 };
 
 export default en;

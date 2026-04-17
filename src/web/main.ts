@@ -228,6 +228,7 @@ function addFiles(files: File[]) {
   // Reset downstream state when files change
   mergedStatement = null;
   currentReport = null;
+  (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
 function renderFileList() {
@@ -244,6 +245,7 @@ function renderFileList() {
       currentReport = null;
     });
   });
+  (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -660,6 +662,17 @@ document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
   e.preventDefault();
   openDisclaimer();
 });
+
+// ---------------------------------------------------------------------------
+// Version display
+// ---------------------------------------------------------------------------
+
+const versionEl = document.getElementById("footer-version");
+if (versionEl) {
+  const v = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "";
+  const h = typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__ : "";
+  versionEl.textContent = v && h ? `v${v} (${h})` : v ? `v${v}` : "";
+}
 
 // ---------------------------------------------------------------------------
 // Service Worker registration
