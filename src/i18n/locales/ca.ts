@@ -8,6 +8,8 @@ const ca: TranslationKeys = {
 
 
   "upload.title": "Puja el teu informe del broker",
+  "upload.broker_question": "Quin(s) broker(s) fas servir?",
+  "upload.broker_hint": "Selecciona un o diversos. Et guiarem pas a pas.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
@@ -147,6 +149,7 @@ const ca: TranslationKeys = {
   "guide.title": "Com obtenir l'informe?",
   "guide.tip_fifo": "Inclou tot l'històric — DeclaRenta necessita operacions anteriors per al càlcul FIFO correcte.",
   "guide.select_broker_hint": "Selecciona el teu broker per veure les instruccions de descàrrega de l'informe.",
+  "guide.heading": "Com obtenir l'informe del teu broker?",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sessió al <strong>Portal del Client</strong> d'IBKR",
   "guide.ibkr.step2": "Ves a <strong>Rendiment i Informes → Flex Queries</strong>",
@@ -245,6 +248,14 @@ const ca: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% codi obert",
   "footer.verify_source": "Verificar codi font",
+
+  // Splash screen
+  "splash.tagline": "Converteix informes de brokers estrangers en la teva declaraci\u00f3 de la renda espanyola",
+  "splash.feature_free": "100% gratu\u00eft",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacitat total",
+  "splash.feature_opensource": "Codi obert",
+  "splash.cta": "Comen\u00e7ar",
 };
 
 export default ca;

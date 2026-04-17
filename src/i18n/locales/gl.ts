@@ -8,6 +8,8 @@ const gl: TranslationKeys = {
 
 
   "upload.title": "Sube o teu informe do broker",
+  "upload.broker_question": "Que broker(s) utilizas?",
+  "upload.broker_hint": "Selecciona un ou varios. Guiarémoste paso a paso.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
@@ -147,6 +149,7 @@ const gl: TranslationKeys = {
   "guide.title": "Como obter o informe?",
   "guide.tip_fifo": "Inclúe todo o histórico — DeclaRenta necesita operacións anteriores para o cálculo FIFO correcto.",
   "guide.select_broker_hint": "Selecciona o teu broker para ver as instrucións de descarga do informe.",
+  "guide.heading": "Como obter o informe do teu broker?",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sesión no <strong>Portal do Cliente</strong> de IBKR",
   "guide.ibkr.step2": "Vai a <strong>Rendemento e Informes → Flex Queries</strong>",
@@ -245,6 +248,14 @@ const gl: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% código aberto",
   "footer.verify_source": "Verificar código fonte",
+
+  // Splash screen
+  "splash.tagline": "Converte reportes de brokers estranxeiros na túa declaración da renda española",
+  "splash.feature_free": "100% gratuíto",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacidade total",
+  "splash.feature_opensource": "Código aberto",
+  "splash.cta": "Comezar",
 };
 
 export default gl;

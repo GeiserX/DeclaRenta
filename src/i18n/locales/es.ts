@@ -7,6 +7,8 @@ const es = {
 
   // Upload
   "upload.title": "Sube tu informe del broker",
+  "upload.broker_question": "¿Qué broker(s) utilizas?",
+  "upload.broker_hint": "Selecciona uno o varios. Te guiaremos paso a paso.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
@@ -160,6 +162,7 @@ const es = {
   "guide.title": "¿Cómo obtener el informe?",
   "guide.tip_fifo": "Incluye todo el histórico — DeclaRenta necesita operaciones anteriores para el cálculo FIFO correcto.",
   "guide.select_broker_hint": "Selecciona tu broker para ver las instrucciones de descarga del informe.",
+  "guide.heading": "¿Cómo obtener el informe de tu broker?",
 
   // IBKR
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
@@ -278,6 +281,14 @@ const es = {
   // Trust signal
   "footer.open_source": "100% código abierto",
   "footer.verify_source": "Verificar código fuente",
+
+  // Splash screen
+  "splash.tagline": "Convierte reportes de brokers extranjeros en tu declaración de la renta española",
+  "splash.feature_free": "100% gratuito",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacidad total",
+  "splash.feature_opensource": "Open source",
+  "splash.cta": "Comenzar",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
