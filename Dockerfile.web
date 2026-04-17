@@ -6,7 +6,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npm run build:web
+RUN npx vite build --base=/
 
 FROM nginx:1.27-alpine
 
