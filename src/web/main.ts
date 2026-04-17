@@ -89,8 +89,7 @@ function dismissSplash() {
   if (!splash) return;
   splash.classList.add("splash-exit");
   splash.addEventListener("animationend", () => {
-    splash.hidden = true;
-    splash.classList.remove("splash-exit");
+    splash.style.display = "none";
     document.body.classList.remove("splash-visible");
   }, { once: true });
   try { localStorage.setItem("declarenta_splash_seen", "1"); } catch { /* noop */ }
@@ -98,7 +97,7 @@ function dismissSplash() {
 
 function showSplash() {
   if (!splash) return;
-  splash.hidden = false;
+  splash.style.display = "";
   splash.classList.remove("splash-exit");
   document.body.classList.add("splash-visible");
 }
@@ -107,7 +106,7 @@ if (splash) {
   splashCta?.addEventListener("click", dismissSplash);
   const seen = localStorage.getItem("declarenta_splash_seen");
   if (seen) {
-    splash.hidden = true;
+    splash.style.display = "none";
   } else {
     document.body.classList.add("splash-visible");
   }
