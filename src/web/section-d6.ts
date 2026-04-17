@@ -24,7 +24,15 @@ let cachedRateMap: EcbRateMap | null = null;
 export function initSectionD6(): void {
   const container = document.getElementById("d6-content");
   if (!container) return;
-  container.innerHTML = `<p class="muted">${t("d6.no_positions")}</p>`;
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
+      </div>
+      <h3>${t("d6.empty_title")}</h3>
+      <p>${t("d6.empty_description")}</p>
+      <a href="#renta" class="btn-cta">${t("d6.empty_cta")}</a>
+    </div>`;
 }
 
 /** Render D-6 section with processed data */
@@ -192,7 +200,16 @@ function aforixField(label: string, value: string): string {
 
 async function generateD6File(): Promise<void> {
   if (!cachedStatement || !cachedRateMap) return;
-  if (!isProfileComplete()) return;
+  if (!isProfileComplete()) {
+    const container = document.getElementById("d6-content");
+    if (container && !container.querySelector(".profile-required")) {
+      const banner = document.createElement("div");
+      banner.className = "banner banner-warning profile-required";
+      banner.innerHTML = `<span>${t("d6.profile_required")}</span> <a href="#perfil">${t("profile.go_to_profile")}</a>`;
+      container.prepend(banner);
+    }
+    return;
+  }
 
   const { generateD6Report } = await import("../generators/d6.js");
   const profile = getProfile();
@@ -213,4 +230,11 @@ async function generateD6File(): Promise<void> {
   a.download = `d6_guia_${profile.year}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Re-render if data was previously cached (for locale changes) */
+export function rerenderSectionD6(): void {
+  if (cachedStatement && cachedRateMap) {
+    renderSectionD6(cachedStatement, cachedRateMap);
+  }
 }

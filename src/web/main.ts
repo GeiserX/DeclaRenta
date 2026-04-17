@@ -228,6 +228,7 @@ function addFiles(files: File[]) {
   // Reset downstream state when files change
   mergedStatement = null;
   currentReport = null;
+  (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
 function renderFileList() {
@@ -244,6 +245,7 @@ function renderFileList() {
       currentReport = null;
     });
   });
+  (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -656,10 +658,20 @@ function renderDividendsTable(report: TaxSummary) {
 // Disclaimer modal
 // ---------------------------------------------------------------------------
 
-document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
-  e.preventDefault();
+document.getElementById("open-disclaimer")?.addEventListener("click", () => {
   openDisclaimer();
 });
+
+// ---------------------------------------------------------------------------
+// Version display
+// ---------------------------------------------------------------------------
+
+const versionEl = document.getElementById("footer-version");
+if (versionEl) {
+  const v = __APP_VERSION__;
+  const h = __COMMIT_HASH__;
+  versionEl.textContent = v && h ? `v${v} (${h})` : v ? `v${v}` : "";
+}
 
 // ---------------------------------------------------------------------------
 // Service Worker registration

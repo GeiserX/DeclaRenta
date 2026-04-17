@@ -1,9 +1,20 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
+import { execSync } from "child_process";
+
+const version = process.env.npm_package_version ?? "dev";
+let commitHash = "dev";
+try {
+  commitHash = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+} catch { /* not in git repo */ }
 
 export default defineConfig({
   root: "src/web",
   base: "/DeclaRenta/",
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+    __COMMIT_HASH__: JSON.stringify(commitHash),
+  },
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),

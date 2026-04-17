@@ -24,7 +24,15 @@ let cachedRateMap: EcbRateMap | null = null;
 export function initSection720(): void {
   const container = document.getElementById("m720-content");
   if (!container) return;
-  container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <h3>${t("m720.empty_title")}</h3>
+      <p>${t("m720.empty_description")}</p>
+      <a href="#renta" class="btn-cta">${t("m720.empty_cta")}</a>
+    </div>`;
 }
 
 /** Render 720 section with processed data */
@@ -147,7 +155,16 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
 async function generate720File(): Promise<void> {
   if (!cachedStatement || !cachedRateMap) return;
-  if (!isProfileComplete()) return;
+  if (!isProfileComplete()) {
+    const container = document.getElementById("m720-content");
+    if (container && !container.querySelector(".profile-required")) {
+      const banner = document.createElement("div");
+      banner.className = "banner banner-warning profile-required";
+      banner.innerHTML = `<span>${t("m720.profile_required")}</span> <a href="#perfil">${t("profile.go_to_profile")}</a>`;
+      container.prepend(banner);
+    }
+    return;
+  }
 
   const { generateModelo720 } = await import("../generators/modelo720.js");
   const profile = getProfile();
@@ -175,4 +192,11 @@ async function generate720File(): Promise<void> {
   a.download = `modelo720_${profile.year}.txt`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Re-render if data was previously cached (for locale changes) */
+export function rerenderSection720(): void {
+  if (cachedStatement && cachedRateMap) {
+    renderSection720(cachedStatement, cachedRateMap);
+  }
 }

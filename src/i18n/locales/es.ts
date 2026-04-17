@@ -159,6 +159,64 @@ const es = {
   // Broker guides
   "guide.title": "¿Cómo obtener el informe?",
   "guide.tip_fifo": "Incluye todo el histórico — DeclaRenta necesita operaciones anteriores para el cálculo FIFO correcto.",
+  "guide.select_broker_hint": "Selecciona tu broker para ver las instrucciones de descarga del informe.",
+
+  // IBKR
+  "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
+  "guide.ibkr.step1": "Inicia sesión en el <strong>Portal del Cliente</strong> de IBKR",
+  "guide.ibkr.step2": "Ve a <strong>Rendimiento e Informes → Flex Queries</strong>",
+  "guide.ibkr.step3": "Crea una nueva <em>Activity Flex Query</em> incluyendo:<ul><li>Trades (obligatorio)</li><li>Cash Transactions — dividendos y retenciones (obligatorio)</li><li>Open Positions — para Modelo 720/D-6 (recomendado)</li><li>Securities Info — ISINs (recomendado)</li></ul>",
+  "guide.ibkr.step4": "Formato de salida: <strong>XML</strong>",
+  "guide.ibkr.step5": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
+  "guide.ibkr.step6": "Ejecuta la query y descarga el fichero <code>.xml</code>",
+
+  // Degiro
+  "guide.degiro.title": "Degiro (CSV)",
+  "guide.degiro.step1": "Inicia sesión en la <strong>web de Degiro</strong> (no la app)",
+  "guide.degiro.step2": "Ve a <strong>Actividad → Transacciones</strong>",
+  "guide.degiro.step3": "Selecciona el rango de fechas deseado",
+  "guide.degiro.step4": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
+
+  // eToro
+  "guide.etoro.title": "eToro (XLSX)",
+  "guide.etoro.step1": "Inicia sesión en <strong>eToro</strong>",
+  "guide.etoro.step2": "Ve a <strong>Ajustes → Extracto de cuenta</strong>",
+  "guide.etoro.step3": "Selecciona el período del ejercicio fiscal",
+  "guide.etoro.step4": "Descarga el fichero <strong>XLSX</strong> (Excel)",
+
+  // Scalable
+  "guide.scalable.title": "Scalable Capital (CSV)",
+  "guide.scalable.step1": "Inicia sesión en <strong>Scalable Capital</strong>",
+  "guide.scalable.step2": "Ve a <strong>Perfil → Documentos fiscales</strong>",
+  "guide.scalable.step3": "Descarga el informe de transacciones en formato <strong>CSV</strong>",
+
+  // Freedom24
+  "guide.freedom24.title": "Freedom24 (JSON)",
+  "guide.freedom24.step1": "Inicia sesión en la <strong>plataforma web de Freedom24</strong>",
+  "guide.freedom24.step2": "Ve a <strong>Informes → Informe de operaciones</strong>",
+  "guide.freedom24.step3": "Selecciona el período y formato <strong>JSON</strong>",
+  "guide.freedom24.step4": "Descarga el fichero",
+
+  // Coinbase
+  "guide.coinbase.title": "Coinbase (CSV)",
+  "guide.coinbase.step1": "Inicia sesión en <strong>Coinbase</strong>",
+  "guide.coinbase.step2": "Ve a <strong>Impuestos → Documentos</strong>",
+  "guide.coinbase.step3": "Haz clic en <strong>Generar informe</strong>",
+  "guide.coinbase.step4": "Descarga el historial de transacciones en formato CSV",
+
+  // Binance
+  "guide.binance.title": "Binance (CSV)",
+  "guide.binance.step1": "Inicia sesión en <strong>Binance</strong>",
+  "guide.binance.step2": "Ve a <strong>Pedidos → Historial de operaciones</strong>",
+  "guide.binance.step3": "Haz clic en <strong>Exportar historial de operaciones</strong>",
+  "guide.binance.step4": "Selecciona el rango de fechas y formato <strong>CSV</strong>",
+
+  // Kraken
+  "guide.kraken.title": "Kraken (CSV)",
+  "guide.kraken.step1": "Inicia sesión en <strong>Kraken</strong>",
+  "guide.kraken.step2": "Ve a <strong>History → Export</strong>",
+  "guide.kraken.step3": "Selecciona <strong>Trades</strong> y el rango de fechas",
+  "guide.kraken.step4": "Formato: <strong>CSV</strong>, descarga el fichero",
 
   // Modelo 720 section
   "m720.title": "Modelo 720 — Bienes en el extranjero",
@@ -204,6 +262,22 @@ const es = {
   "badge.pending": "Pendiente",
   "badge.not_applicable": "No aplica",
   "badge.generated": "Generado",
+
+  // Empty states with educational content
+  "m720.empty_title": "No hay posiciones cargadas",
+  "m720.empty_description": "El Modelo 720 es una declaración informativa obligatoria si posees bienes en el extranjero valorados en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral y genere el fichero. Plazo: 1 de enero – 31 de marzo.",
+  "m720.empty_cta": "Ir a Modelo 100",
+  "d6.empty_title": "No hay posiciones cargadas",
+  "d6.empty_description": "El Modelo D-6 declara tus inversiones en valores extranjeros ante el Ministerio de Economía. Es obligatorio para CUALQUIER importe (sin umbral mínimo). Sube tu informe del broker en la sección Modelo 100 y DeclaRenta generará la guía paso a paso para rellenar el formulario AFORIX. Plazo: 1 – 31 de enero.",
+  "d6.empty_cta": "Ir a Modelo 100",
+
+  // Profile required warnings
+  "m720.profile_required": "Completa tu perfil fiscal antes de generar el fichero del Modelo 720.",
+  "d6.profile_required": "Completa tu perfil fiscal antes de generar la guía D-6.",
+
+  // Trust signal
+  "footer.open_source": "100% código abierto",
+  "footer.verify_source": "Verificar código fuente",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
