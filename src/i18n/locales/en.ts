@@ -7,6 +7,8 @@ const en: TranslationKeys = {
 
 
   "upload.title": "Upload your broker report",
+  "upload.broker_question": "Which broker(s) do you use?",
+  "upload.broker_hint": "Select one or more. We'll guide you step by step.",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detect",
   "upload.drop_text": "Drag your file here or click to select",
@@ -149,6 +151,7 @@ const en: TranslationKeys = {
   "guide.title": "How to get the report?",
   "guide.tip_fifo": "Include the full history — DeclaRenta needs past trades for correct FIFO calculation.",
   "guide.select_broker_hint": "Select your broker to see report download instructions.",
+  "guide.heading": "How to get your broker report",
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Log in to the IBKR <strong>Client Portal</strong>",
   "guide.ibkr.step2": "Go to <strong>Performance &amp; Reports → Flex Queries</strong>",
@@ -249,6 +252,14 @@ const en: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% open source",
   "footer.verify_source": "Verify source code",
+
+  // Splash screen
+  "splash.tagline": "Convert foreign broker reports into your Spanish tax declaration",
+  "splash.feature_free": "100% free",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Total privacy",
+  "splash.feature_opensource": "Open source",
+  "splash.cta": "Get Started",
 };
 
 export default en;
