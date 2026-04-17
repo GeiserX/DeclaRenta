@@ -79,6 +79,33 @@ document.addEventListener("localechange", () => {
 updateStaticText();
 
 // ---------------------------------------------------------------------------
+// Splash screen
+// ---------------------------------------------------------------------------
+
+const splash = document.getElementById("splash");
+const splashCta = document.getElementById("splash-cta");
+
+function dismissSplash() {
+  if (!splash) return;
+  splash.classList.add("splash-exit");
+  splash.addEventListener("animationend", () => {
+    splash.remove();
+    document.body.classList.remove("splash-visible");
+  }, { once: true });
+  try { localStorage.setItem("declarenta_splash_seen", "1"); } catch { /* noop */ }
+}
+
+if (splash) {
+  const seen = localStorage.getItem("declarenta_splash_seen");
+  if (seen) {
+    splash.remove();
+  } else {
+    document.body.classList.add("splash-visible");
+    splashCta?.addEventListener("click", dismissSplash);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)
 // ---------------------------------------------------------------------------
 

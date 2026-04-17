@@ -249,6 +249,14 @@ const en: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% open source",
   "footer.verify_source": "Verify source code",
+
+  // Splash screen
+  "splash.tagline": "Convert foreign broker reports into your Spanish tax declaration",
+  "splash.feature_free": "100% free",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Total privacy",
+  "splash.feature_opensource": "Open source",
+  "splash.cta": "Get Started",
 };
 
 export default en;

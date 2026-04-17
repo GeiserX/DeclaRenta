@@ -245,6 +245,14 @@ const eu: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% kode irekia",
   "footer.verify_source": "Iturburu-kodea egiaztatu",
+
+  // Splash screen
+  "splash.tagline": "Bihurtu atzerriko broker-en txostenak zure Espainiako errenta aitorpenera",
+  "splash.feature_free": "100% doakoa",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Pribatutasun osoa",
+  "splash.feature_opensource": "Kode irekia",
+  "splash.cta": "Hasi",
 };
 
 export default eu;

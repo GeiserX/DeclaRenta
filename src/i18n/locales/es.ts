@@ -278,6 +278,14 @@ const es = {
   // Trust signal
   "footer.open_source": "100% código abierto",
   "footer.verify_source": "Verificar código fuente",
+
+  // Splash screen
+  "splash.tagline": "Convierte reportes de brokers extranjeros en tu declaración de la renta española",
+  "splash.feature_free": "100% gratuito",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacidad total",
+  "splash.feature_opensource": "Open source",
+  "splash.cta": "Comenzar",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

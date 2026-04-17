@@ -7,14 +7,50 @@
   <meta name="description" content="Convierte reportes de IBKR, Degiro, Scalable Capital, eToro y Freedom24 en valores para tu declaración de la renta española. Self-hosted, privacidad total." />
   <meta name="theme-color" content="#3b82f6" />
   <link rel="manifest" href="./manifest.json" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:; frame-ancestors 'none'" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <a href="#app-content" class="skip-link" data-i18n="a11y.skip_link">Saltar al contenido</a>
+
+  <!-- Splash / Landing screen -->
+  <div id="splash" class="splash">
+    <div class="splash-bg-grid" aria-hidden="true"></div>
+    <div class="splash-content">
+      <div class="splash-logo-wrap">
+        <img src="./icon-192.png" alt="DeclaRenta" class="splash-logo" width="120" height="120" />
+        <div class="splash-logo-glow" aria-hidden="true"></div>
+      </div>
+      <h1 class="splash-title">Decla<span class="brand-accent">Renta</span></h1>
+      <p class="splash-tagline" data-i18n="splash.tagline">Convierte reportes de brokers extranjeros en tu declaraci&oacute;n de la renta espa&ntilde;ola</p>
+
+      <div class="splash-brokers">
+        <span class="splash-broker-tag">IBKR</span>
+        <span class="splash-broker-tag">Degiro</span>
+        <span class="splash-broker-tag">eToro</span>
+        <span class="splash-broker-tag">Scalable</span>
+        <span class="splash-broker-tag">Freedom24</span>
+        <span class="splash-broker-tag">Coinbase</span>
+        <span class="splash-broker-tag">Binance</span>
+        <span class="splash-broker-tag">Kraken</span>
+      </div>
+
+      <div class="splash-features">
+        <div class="splash-feature" data-i18n="splash.feature_free">100% gratuito</div>
+        <div class="splash-feature" data-i18n="splash.feature_selfhosted">Self-hosted</div>
+        <div class="splash-feature" data-i18n="splash.feature_privacy">Privacidad total</div>
+        <div class="splash-feature" data-i18n="splash.feature_opensource">Open source</div>
+      </div>
+
+      <button id="splash-cta" class="splash-cta" data-i18n="splash.cta">Comenzar</button>
+    </div>
+  </div>
 
   <!-- Top bar -->
   <nav class="top-bar" data-i18n-aria="a11y.nav_label" aria-label="Ajustes">

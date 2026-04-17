@@ -245,6 +245,14 @@ const gl: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% código aberto",
   "footer.verify_source": "Verificar código fonte",
+
+  // Splash screen
+  "splash.tagline": "Converte reportes de brokers estranxeiros na túa declaración da renda española",
+  "splash.feature_free": "100% gratuíto",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacidade total",
+  "splash.feature_opensource": "Código aberto",
+  "splash.cta": "Comezar",
 };
 
 export default gl;

@@ -245,6 +245,14 @@ const ca: TranslationKeys = {
   // Trust signal
   "footer.open_source": "100% codi obert",
   "footer.verify_source": "Verificar codi font",
+
+  // Splash screen
+  "splash.tagline": "Converteix informes de brokers estrangers en la teva declaraci\u00f3 de la renda espanyola",
+  "splash.feature_free": "100% gratu\u00eft",
+  "splash.feature_selfhosted": "Self-hosted",
+  "splash.feature_privacy": "Privacitat total",
+  "splash.feature_opensource": "Codi obert",
+  "splash.cta": "Comen\u00e7ar",
 };
 
 export default ca;
