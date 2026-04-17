@@ -41,7 +41,7 @@ function renderCards(grid: HTMLElement): void {
     const title = t(`guide.${b.id}.title` as Parameters<typeof t>[0]);
     const isSelected = selected.has(b.id);
     return `
-      <button class="broker-card${isSelected ? " selected" : ""}" data-broker="${b.id}" type="button">
+      <button class="broker-card${isSelected ? " selected" : ""}" data-broker="${b.id}" type="button" aria-pressed="${isSelected}">
         <span class="broker-card-check">${isSelected ? "&#10003;" : ""}</span>
         <span class="broker-card-name">${title}</span>
         <span class="broker-card-format">${b.format}</span>
