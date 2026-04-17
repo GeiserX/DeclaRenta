@@ -173,7 +173,6 @@ body {
   min-height: 100vh;
 }
 
-body.splash-visible .top-bar,
 body.splash-visible .app-layout {
   display: none;
 }
@@ -1637,8 +1636,11 @@ footer a:hover {
 
 .splash {
   position: fixed;
-  inset: 0;
-  z-index: 1000;
+  top: var(--topbar-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1681,9 +1683,9 @@ footer a:hover {
 }
 
 .splash-logo {
-  width: 120px;
-  height: 120px;
-  border-radius: 24px;
+  width: 180px;
+  height: 180px;
+  border-radius: 28px;
   box-shadow: var(--shadow-lg);
   position: relative;
   z-index: 1;
@@ -1724,7 +1726,7 @@ footer a:hover {
 
 .splash-brokers {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 0.5rem;
   margin-bottom: 2rem;
@@ -1829,8 +1831,8 @@ footer a:hover {
   }
 
   .splash-logo {
-    width: 96px;
-    height: 96px;
+    width: 140px;
+    height: 140px;
   }
 
   .splash-tagline {

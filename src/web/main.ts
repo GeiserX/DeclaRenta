@@ -104,12 +104,12 @@ function showSplash() {
 }
 
 if (splash) {
+  splashCta?.addEventListener("click", dismissSplash);
   const seen = localStorage.getItem("declarenta_splash_seen");
   if (seen) {
     splash.hidden = true;
   } else {
     document.body.classList.add("splash-visible");
-    splashCta?.addEventListener("click", dismissSplash);
   }
 }
 
