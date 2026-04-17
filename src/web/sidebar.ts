@@ -35,6 +35,12 @@ export function initSidebar(): void {
     document.body.classList.remove("sidebar-open");
   });
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("sidebar-open")) {
+      document.body.classList.remove("sidebar-open");
+    }
+  });
+
   handleHash();
 }
 
@@ -48,7 +54,14 @@ function handleHash(): void {
 export function navigateToSection(section: Section): void {
   for (const s of SECTIONS) {
     const el = document.getElementById(`section-${s}`);
-    if (el) el.hidden = s !== section;
+    if (el) {
+      el.hidden = s !== section;
+      if (s === section) {
+        el.classList.remove("fade-in");
+        void el.offsetHeight;
+        el.classList.add("fade-in");
+      }
+    }
   }
 
   document.querySelectorAll<HTMLAnchorElement>(".sidebar-link").forEach((link) => {

@@ -13,6 +13,7 @@ const TOTAL_STEPS = 3;
 
 let currentStep: WizardStep = 1;
 let maxReachedStep: WizardStep = 1;
+let isInitialRender = true;
 
 type StepChangeCallback = (from: WizardStep, to: WizardStep) => void;
 const listeners: StepChangeCallback[] = [];
@@ -64,6 +65,7 @@ export function unlockStep(step: WizardStep): void {
 export function resetWizard(): void {
   currentStep = 1;
   maxReachedStep = 1;
+  isInitialRender = true;
   updateDOM();
 }
 
@@ -92,8 +94,11 @@ function updateDOM(): void {
     nextBtn.hidden = currentStep === TOTAL_STEPS;
   }
 
-  // Scroll to top of wizard
-  document.getElementById("wizard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Scroll to top of wizard (skip on first render to avoid flash)
+  if (!isInitialRender) {
+    document.getElementById("wizard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  isInitialRender = false;
 }
 
 function updateProgressIndicator(): void {

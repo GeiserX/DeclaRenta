@@ -144,7 +144,7 @@ main {
 
 header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 }
 
 header h1 {
@@ -180,7 +180,8 @@ section {
 }
 
 h2 {
-  font-size: 1.25rem;
+  font-size: 1.4rem;
+  font-weight: 700;
   margin-bottom: 1rem;
 }
 
@@ -276,7 +277,7 @@ label {
   margin-bottom: 0.5rem;
 }
 
-select, input[type="text"] {
+select, input[type="text"], input[type="tel"] {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--border);
@@ -298,6 +299,9 @@ button {
   font-size: 1rem;
   cursor: pointer;
   transition: background 0.2s;
+}
+
+.export-buttons button {
   margin-top: 1rem;
 }
 
@@ -517,10 +521,17 @@ details ul {
 }
 
 .sidebar-icon {
-  font-size: 1.1rem;
-  width: 1.5rem;
-  text-align: center;
+  width: 1.25rem;
+  height: 1.25rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .sidebar-badge {
@@ -567,7 +578,7 @@ details ul {
   overflow-y: auto;
 }
 
-.app-section {
+.app-section.fade-in {
   animation: fadeIn 0.25s ease-out;
 }
 
@@ -665,27 +676,34 @@ footer a:hover {
   color: var(--danger);
 }
 
-.sponsor-link {
-  color: var(--muted);
-  transition: color 0.2s;
+.sponsor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 1rem;
+  background: rgba(219, 39, 119, 0.1);
+  border: 1px solid rgba(219, 39, 119, 0.3);
+  border-radius: 20px;
+  color: #db2777;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s, border-color 0.2s;
 }
 
-.sponsor-link:hover {
-  color: var(--accent);
+.sponsor-btn:hover {
+  background: rgba(219, 39, 119, 0.2);
+  border-color: rgba(219, 39, 119, 0.5);
+  text-decoration: none;
 }
 
-.disclaimer-link {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+.sponsor-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
-.disclaimer-link a {
-  color: var(--text);
-  opacity: 0.7;
-}
-
-.disclaimer-link a:hover {
-  color: var(--text);
+.footer-sponsor {
+  margin-top: 0.5rem;
 }
 
 /* Disclaimer modal */
@@ -841,6 +859,11 @@ footer a:hover {
 /* Wizard panels */
 .wizard-panel {
   animation: fadeIn 0.25s ease-out;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 0;
 }
 
 @keyframes fadeIn {
@@ -858,6 +881,10 @@ footer a:hover {
 
 .wizard-nav button {
   min-width: 120px;
+}
+
+#wizard-next {
+  margin-left: auto;
 }
 
 .btn-secondary {
@@ -1349,6 +1376,84 @@ footer a:hover {
   font-size: 0.875rem;
   line-height: 1.8;
   color: var(--muted);
+}
+
+/* Top bar legal button */
+.top-bar-legal {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.top-bar-legal:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.empty-state-icon {
+  margin-bottom: 1rem;
+}
+
+.empty-state-icon svg {
+  width: 64px;
+  height: 64px;
+  color: var(--muted);
+  opacity: 0.4;
+}
+
+.empty-state h3 {
+  color: var(--text);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 500px;
+  margin: 0 auto 0.5rem;
+  line-height: 1.7;
+}
+
+.empty-state .btn-cta {
+  display: inline-block;
+  padding: 0.6rem 1.5rem;
+  margin-top: 1rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.empty-state .btn-cta:hover {
+  background: var(--accent-hover);
+}
+
+/* Footer trust signal */
+.footer-trust {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.footer-version {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.7rem;
 }
 
 /* Responsive — tablet */
