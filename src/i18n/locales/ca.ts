@@ -159,6 +159,8 @@ const ca: TranslationKeys = {
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",
   "m720.filing_title": "Com presentar-lo?",
+  "m720.rates_title": "Tipus de canvi aplicats (BCE)",
+  "m720.deadline_short": "Termini: 1 gener – 31 març",
 
   "d6.title": "Model D-6 — Inversions a l'exterior",
   "d6.description": "Declaració al Registre d'Inversions del Ministeri d'Economia.",
@@ -172,6 +174,8 @@ const ca: TranslationKeys = {
   "d6.aforix_title": "Guia AFORIX pas a pas",
   "d6.copy_btn": "Copiar",
   "d6.copied": "Copiat",
+  "d6.rates_title": "Tipus de canvi aplicats (BCE)",
+  "d6.deadline_short": "Termini: 1 – 31 gener",
 
   "badge.complete": "Complet",
   "badge.pending": "Pendent",

@@ -159,6 +159,8 @@ const gl: TranslationKeys = {
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",
   "m720.filing_title": "Como presentalo?",
+  "m720.rates_title": "Tipos de cambio aplicados (BCE)",
+  "m720.deadline_short": "Prazo: 1 xaneiro – 31 marzo",
 
   "d6.title": "Modelo D-6 — Investimentos no exterior",
   "d6.description": "Declaración ao Rexistro de Investimentos do Ministerio de Economía.",
@@ -172,6 +174,8 @@ const gl: TranslationKeys = {
   "d6.aforix_title": "Guía AFORIX paso a paso",
   "d6.copy_btn": "Copiar",
   "d6.copied": "Copiado",
+  "d6.rates_title": "Tipos de cambio aplicados (BCE)",
+  "d6.deadline_short": "Prazo: 1 – 31 xaneiro",
 
   "badge.complete": "Completo",
   "badge.pending": "Pendente",

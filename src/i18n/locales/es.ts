@@ -173,6 +173,8 @@ const es = {
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",
   "m720.filing_title": "¿Cómo presentarlo?",
+  "m720.rates_title": "Tipos de cambio aplicados (BCE)",
+  "m720.deadline_short": "Plazo: 1 enero – 31 marzo",
 
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Inversiones en el exterior",
@@ -187,6 +189,8 @@ const es = {
   "d6.aforix_title": "Guía AFORIX paso a paso",
   "d6.copy_btn": "Copiar",
   "d6.copied": "Copiado",
+  "d6.rates_title": "Tipos de cambio aplicados (BCE)",
+  "d6.deadline_short": "Plazo: 1 – 31 enero",
 
   // Badge statuses
   "badge.complete": "Completo",

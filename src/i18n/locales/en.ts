@@ -162,6 +162,8 @@ const en: TranslationKeys = {
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
   "m720.filing_title": "How to file?",
+  "m720.rates_title": "Applied exchange rates (ECB)",
+  "m720.deadline_short": "Deadline: Jan 1 – Mar 31",
 
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Foreign investments declaration",
@@ -176,6 +178,8 @@ const en: TranslationKeys = {
   "d6.aforix_title": "AFORIX step-by-step guide",
   "d6.copy_btn": "Copy",
   "d6.copied": "Copied",
+  "d6.rates_title": "Applied exchange rates (ECB)",
+  "d6.deadline_short": "Deadline: Jan 1 – 31",
 
   // Badge statuses
   "badge.complete": "Complete",

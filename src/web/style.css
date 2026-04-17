@@ -1280,6 +1280,49 @@ footer a:hover {
   margin-bottom: 1.5rem;
 }
 
+/* Section header bar */
+.section-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.section-header-bar .section-deadline {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Exchange rates display */
+.rates-display {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.rates-display h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.rates-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.rate-item {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9rem;
+}
+
 /* Deadline reminder */
 .deadline-reminder {
   display: flex;

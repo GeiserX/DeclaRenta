@@ -45,6 +45,12 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
   let html = "";
 
+  // Year + deadline header
+  html += `<div class="section-header-bar">
+    <span class="section-year">Ejercicio ${year}</span>
+    <span class="section-deadline">${t("m720.deadline_short")}</span>
+  </div>`;
+
   // Profile warning
   if (!isProfileComplete()) {
     html += `<div class="banner banner-warning">
@@ -98,6 +104,18 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(p.isin.slice(0, 2))}</td><td>${val}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
+
+    // Exchange rates display
+    const uniqueCurrencies = [...new Set(positions.map((p) => p.currency))].filter((c) => c !== "EUR").sort();
+    if (uniqueCurrencies.length > 0) {
+      html += `<div class="rates-display">
+        <h4>${t("m720.rates_title")}</h4>
+        <div class="rates-grid">${uniqueCurrencies.map((cur) => {
+          const rate = getEcbRate(rateMap, `${year}-12-31`, cur);
+          return `<span class="rate-item">${esc(cur)}: ${rate.toFixed(4)} &euro;</span>`;
+        }).join("")}</div>
+      </div>`;
+    }
   }
 
   // Generate button
@@ -109,7 +127,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   html += `<div class="filing-guide">
     <h3>${t("m720.filing_title")}</h3>
     <ol>
-      <li>Accede a la <strong>Sede Electrónica de la AEAT</strong></li>
+      <li>Accede a la <a href="https://sede.agenciatributaria.gob.es" target="_blank" rel="noopener"><strong>Sede Electrónica de la AEAT</strong></a></li>
       <li>Busca <strong>«Modelo 720»</strong></li>
       <li>Importa el fichero generado (<strong>TGVI Online</strong>)</li>
       <li>Revisa y firma con certificado digital o Cl@ve</li>

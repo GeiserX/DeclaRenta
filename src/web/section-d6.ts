@@ -53,6 +53,12 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   let html = "";
 
+  // Year + deadline header
+  html += `<div class="section-header-bar">
+    <span class="section-year">Ejercicio ${year}</span>
+    <span class="section-deadline">${t("d6.deadline_short")}</span>
+  </div>`;
+
   // Profile warning
   if (!isProfileComplete()) {
     html += `<div class="banner banner-warning">
@@ -89,6 +95,18 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
       })
       .join("")}</tbody>
   </table></div>`;
+
+  // Exchange rates display
+  const uniqueCurrencies = [...new Set(positions.map((p) => p.currency))].filter((c) => c !== "EUR").sort();
+  if (uniqueCurrencies.length > 0) {
+    html += `<div class="rates-display">
+      <h4>${t("d6.rates_title")}</h4>
+      <div class="rates-grid">${uniqueCurrencies.map((cur) => {
+        const rate = getEcbRate(rateMap, yearEnd, cur);
+        return `<span class="rate-item">${esc(cur)}: ${rate.toFixed(4)} &euro;</span>`;
+      }).join("")}</div>
+    </div>`;
+  }
 
   // Generate button
   html += `<button id="d6-generate-btn">${t("d6.generate_btn")}</button>`;

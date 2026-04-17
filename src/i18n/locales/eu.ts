@@ -159,6 +159,8 @@ const eu: TranslationKeys = {
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
   "m720.filing_title": "Nola aurkeztu?",
+  "m720.rates_title": "Aplikatutako truke-tasak (BZE)",
+  "m720.deadline_short": "Epea: urtarrilak 1 – martxoak 31",
 
   "d6.title": "D-6 Eredua — Atzerriko inbertsioak",
   "d6.description": "Ekonomia Ministerioko Inbertsio Erregistroko aitorpena.",
@@ -172,6 +174,8 @@ const eu: TranslationKeys = {
   "d6.aforix_title": "AFORIX gida pausoz pauso",
   "d6.copy_btn": "Kopiatu",
   "d6.copied": "Kopiatuta",
+  "d6.rates_title": "Aplikatutako truke-tasak (BZE)",
+  "d6.deadline_short": "Epea: urtarrilak 1 – 31",
 
   "badge.complete": "Osatuta",
   "badge.pending": "Zain",
