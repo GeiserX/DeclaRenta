@@ -310,6 +310,16 @@ describe("degiroParser", () => {
     it("should throw on unrecognized CSV format", () => {
       expect(() => degiroParser.parse("Col1,Col2,Col3\na,b,c")).toThrow("no reconocido");
     });
+
+    it("should throw on Account CSV with missing required columns", () => {
+      // Header passes isDegiroAccount (has isin + description + value date)
+      // but fails resolveAccountColumns (no Fecha/Date and no Importe/Amount)
+      const csv = [
+        "ISIN,Description,Value date,Extra",
+        "US0378331005,Dividend,15-05-2025,foo",
+      ].join("\n");
+      expect(() => degiroParser.parse(csv)).toThrow("faltan columnas obligatorias");
+    });
   });
 
   describe("real Degiro Transactions export (19-column format)", () => {

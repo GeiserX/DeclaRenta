@@ -481,6 +481,113 @@ describe("FifoEngine", () => {
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1084.72");
   });
 
+  describe("getDisposals() accessor", () => {
+    it("should return the same disposals as processTrades", () => {
+      const rates = makeRateMap({
+        "2025-03-15": "0.9200",
+        "2025-09-20": "0.9100",
+      });
+
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ];
+
+      const engine = new FifoEngine();
+      const fromProcess = engine.processTrades(trades, rates);
+      const fromAccessor = engine.getDisposals();
+
+      expect(fromAccessor).toBe(fromProcess);
+      expect(fromAccessor).toHaveLength(1);
+    });
+  });
+
+  describe("Short sale (no prior BUY)", () => {
+    it("should produce a disposal with zero cost basis for an unknown ISIN", () => {
+      const rates = makeRateMap({ "2025-06-01": "0.90" });
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          isin: "US9999999999",
+          symbol: "UNKNOWN",
+          tradeDate: "2025-06-01",
+          quantity: "-5",
+          tradePrice: "50",
+          buySell: "SELL",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("0.00");
+      expect(disposals[0]!.quantity.toString()).toBe("5");
+      expect(engine.warnings).toHaveLength(1);
+      expect(engine.warnings[0]).toContain("Venta sin lotes");
+    });
+  });
+
+  describe("Sell exceeding available lots", () => {
+    it("should produce FIFO disposal + insufficient-lots fallback", () => {
+      const rates = makeRateMap({
+        "2025-03-15": "0.92",
+        "2025-09-20": "0.91",
+      });
+
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "5", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      // 2 disposals: 5 from FIFO lot + 5 from insufficient-lots fallback
+      expect(disposals).toHaveLength(2);
+      expect(disposals[0]!.quantity.toString()).toBe("5");
+      expect(disposals[0]!.costBasisEur.greaterThan(0)).toBe(true);
+      expect(disposals[1]!.quantity.toString()).toBe("5");
+      expect(disposals[1]!.costBasisEur.toFixed(2)).toBe("0.00");
+      expect(engine.warnings).toHaveLength(1);
+      expect(engine.warnings[0]).toContain("Lotes insuficientes");
+    });
+  });
+
+  describe("WAR (warrant) filtering", () => {
+    it("should produce no disposals for WAR asset category", () => {
+      const rates = makeRateMap({
+        "2025-03-15": "0.92",
+        "2025-09-20": "0.91",
+      });
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          assetCategory: "WAR",
+          tradeDate: "2025-03-15",
+          quantity: "10",
+          tradePrice: "5",
+          buySell: "BUY",
+        }),
+        makeTrade({
+          tradeID: "2",
+          assetCategory: "WAR",
+          tradeDate: "2025-09-20",
+          quantity: "-10",
+          tradePrice: "8",
+          buySell: "SELL",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(0);
+    });
+  });
+
   describe("Multi-currency verification", () => {
     it("should handle cross-currency: buy USD stock from GBP account, sell later", () => {
       // Scenario: UK-based account (GBP), buying AAPL which trades in USD.
@@ -622,6 +729,159 @@ describe("FifoEngine", () => {
       expect(d.proceedsEur.toFixed(2)).toBe("950.00");
       // Gain is purely from FX: 950 - 920 = 30.00 EUR
       expect(d.gainLossEur.toFixed(2)).toBe("30.00");
+    });
+  });
+
+  describe("Commission in different currency", () => {
+    it("should convert commission separately when commissionCurrency differs from trade currency", () => {
+      const rates: EcbRateMap = new Map();
+      rates.set("2025-03-15", new Map([["USD", "0.92"], ["GBP", "1.15"]]));
+      rates.set("2025-09-20", new Map([["USD", "0.88"], ["GBP", "1.12"]]));
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          tradeDate: "2025-03-15",
+          currency: "USD",
+          commissionCurrency: "GBP",
+          quantity: "10",
+          tradePrice: "100",
+          commission: "-5",
+          buySell: "BUY",
+        }),
+        makeTrade({
+          tradeID: "2",
+          tradeDate: "2025-09-20",
+          currency: "USD",
+          commissionCurrency: "GBP",
+          quantity: "-10",
+          tradePrice: "110",
+          commission: "-5",
+          buySell: "SELL",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+      // BUY cost: 10×100×0.92 + 5×1.15 = 920 + 5.75 = 925.75
+      expect(d.costBasisEur.toFixed(2)).toBe("925.75");
+      // SELL proceeds: 10×110×0.88 - 5×1.12 = 968 - 5.60 = 962.40
+      expect(d.proceedsEur.toFixed(2)).toBe("962.40");
+    });
+  });
+
+  describe("Unknown asset category warning", () => {
+    it("should warn on unknown assetCategory but still process trade", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.92", "2025-09-20": "0.91" });
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", assetCategory: "UNKNOWN", tradeDate: "2025-03-15", buySell: "BUY", quantity: "10", tradePrice: "50" }),
+        makeTrade({ tradeID: "2", assetCategory: "UNKNOWN", tradeDate: "2025-09-20", buySell: "SELL", quantity: "-10", tradePrice: "60" }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      expect(engine.warnings.some((w) => w.includes("Categoría de activo desconocida"))).toBe(true);
+    });
+  });
+
+  describe("Scrip dividend for new ISIN (no prior lots)", () => {
+    it("should create lots for scrip dividend even when ISIN has no existing lots", () => {
+      const rates: EcbRateMap = new Map();
+      rates.set("2025-06-15", new Map([["USD", "0.91"]]));
+      rates.set("2025-09-20", new Map([["USD", "0.90"]]));
+
+      const ca: CorporateAction[] = [{
+        type: "SD",
+        dateTime: "20250615",
+        isin: "US1234567890",
+        symbol: "NEWCO",
+        description: "NEWCO SCRIP DIV",
+        quantity: "5",
+        amount: "500",
+        currency: "USD",
+        proceeds: "0",
+        value: "500",
+      }];
+
+      // SELL the scrip dividend shares — they should exist as lots
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          isin: "US1234567890",
+          symbol: "NEWCO",
+          tradeDate: "2025-09-20",
+          currency: "USD",
+          quantity: "-5",
+          tradePrice: "120",
+          buySell: "SELL",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, ca);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.isin).toBe("US1234567890");
+      // Cost basis should come from the scrip dividend lot
+      expect(disposals[0]!.costBasisEur.greaterThan(0)).toBe(true);
+    });
+  });
+
+  describe("Spin-off corporate action", () => {
+    it("should split cost basis between parent and spin-off", () => {
+      const rates = makeRateMap({ "2025-01-10": "0.92", "2025-06-15": "0.91", "2025-09-20": "0.90" });
+
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1",
+          isin: "US0000000001",
+          symbol: "PARENT",
+          tradeDate: "2025-01-10",
+          quantity: "100",
+          tradePrice: "50",
+          buySell: "BUY",
+        }),
+        // Sell spin-off shares
+        makeTrade({
+          tradeID: "2",
+          isin: "US0000000002",
+          symbol: "SPINCO",
+          tradeDate: "2025-09-20",
+          quantity: "-50",
+          tradePrice: "20",
+          buySell: "SELL",
+        }),
+      ];
+
+      const ca: CorporateAction[] = [{
+        type: "SO",
+        dateTime: "20250615",
+        isin: "US0000000001",
+        symbol: "PARENT",
+        description: "PARENT(US0000000001) SPINOFF 1 FOR 2 SPINCO(US0000000002)",
+        quantity: "50",
+        amount: "0",
+        currency: "USD",
+        proceeds: "0",
+        value: "0",
+      }];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, ca);
+
+      // Should have a disposal for the spin-off sale
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.isin).toBe("US0000000002");
+      expect(disposals[0]!.symbol).toBe("SPINCO");
+      // Spin-off should have inherited a portion of the parent's cost basis
+      expect(disposals[0]!.costBasisEur.greaterThan(0)).toBe(true);
+      // Check spin-off warning
+      expect(engine.warnings.some((w) => w.includes("Spin-off"))).toBe(true);
     });
   });
 });

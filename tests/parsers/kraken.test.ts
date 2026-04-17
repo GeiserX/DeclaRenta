@@ -224,5 +224,9 @@ describe("krakenParser", () => {
       const result = krakenParser.parse(csv);
       expect(result.trades).toHaveLength(0);
     });
+
+    it("throws on non-Kraken content", () => {
+      expect(() => krakenParser.parse("Foo,Bar\ndata1,data2")).toThrow();
+    });
   });
 });

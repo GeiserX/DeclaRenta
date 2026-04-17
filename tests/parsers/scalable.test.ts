@@ -215,5 +215,9 @@ describe("scalableParser", () => {
       const result = scalableParser.parse(csv);
       expect(result.trades).toHaveLength(0);
     });
+
+    it("throws on non-Scalable content", () => {
+      expect(() => scalableParser.parse("Foo;Bar\ndata1;data2")).toThrow("formato no reconocido");
+    });
   });
 });

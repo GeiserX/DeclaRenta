@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     globals: false,
+    coverage: {
+      include: ["src/engine/**", "src/generators/**", "src/parsers/**", "src/i18n/**"],
+    },
   },
   resolve: {
     alias: {

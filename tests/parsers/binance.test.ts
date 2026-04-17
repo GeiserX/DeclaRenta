@@ -165,4 +165,10 @@ describe("binanceParser", () => {
       expect(result.corporateActions).toHaveLength(0);
     });
   });
+
+  describe("error handling", () => {
+    it("throws on non-Binance content", () => {
+      expect(() => binanceParser.parse("Foo,Bar\ndata1,data2")).toThrow("formato no reconocido");
+    });
+  });
 });

@@ -128,4 +128,39 @@ describe("Modelo 721 Generator", () => {
     const count = summary.slice(135, 144);
     expect(parseInt(count)).toBe(2);
   });
+
+  describe("Negative value sign fields", () => {
+    it("should set acquisition sign to N for negative acquisition cost", () => {
+      const entries = [makeEntry({
+        acquisitionCostEur: new Decimal("-30000"),
+        valuationEur: new Decimal("60000"),
+      })];
+      const result = generateModelo721(entries, baseConfig);
+      const detail = result.split("\n")[1]!;
+      // Acquisition sign at position 432 (0-indexed: 431)
+      expect(detail[431]).toBe("N");
+    });
+
+    it("should set valuation sign to N for negative valuation", () => {
+      const entries = [
+        makeEntry({
+          assetId: "ETH",
+          valuationEur: new Decimal("-60000"),
+          acquisitionCostEur: new Decimal("30000"),
+        }),
+        makeEntry({
+          assetId: "BTC",
+          valuationEur: new Decimal("120000"),
+          acquisitionCostEur: new Decimal("50000"),
+        }),
+      ];
+      // Total valuation: -60000 + 120000 = 60000 > 50K threshold
+      const result = generateModelo721(entries, baseConfig);
+      expect(result).not.toBe("");
+      // First detail record (ETH) has the negative valuation
+      const detail = result.split("\n")[1]!;
+      // Valuation sign at position 448 (0-indexed: 447)
+      expect(detail[447]).toBe("N");
+    });
+  });
 });

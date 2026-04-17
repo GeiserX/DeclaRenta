@@ -204,4 +204,10 @@ describe("coinbaseParser", () => {
       expect(result.trades).toHaveLength(0);
     });
   });
+
+  describe("error handling", () => {
+    it("throws on non-Coinbase content", () => {
+      expect(() => coinbaseParser.parse("Foo,Bar\ndata1,data2")).toThrow("formato no reconocido");
+    });
+  });
 });

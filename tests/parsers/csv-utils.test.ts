@@ -85,6 +85,12 @@ describe("parseNumber", () => {
     expect(parseNumber("175,50")).toBe("175.50");
   });
 
+  it("handles comma-only decimal (no dots)", () => {
+    expect(parseNumber("175,50")).toBe("175.50");
+    expect(parseNumber("-42,5")).toBe("-42.5");
+    expect(parseNumber("0,99")).toBe("0.99");
+  });
+
   it("should handle integer", () => {
     expect(parseNumber("100")).toBe("100");
   });
