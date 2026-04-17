@@ -1,7 +1,7 @@
 /**
  * DeclaRenta web UI entry point.
  *
- * Multi-step wizard: Upload → Review → Configure → Results.
+ * Sidebar-based layout with sections: Perfil, Renta, 720, D-6.
  * All processing happens in the browser. No data is uploaded anywhere.
  */
 
@@ -9,6 +9,7 @@ import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import type { Statement } from "../types/broker.js";
 import type { TaxSummary } from "../types/tax.js";
+import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
@@ -18,6 +19,11 @@ import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderH
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
+import { initSidebar, updateBadge } from "./sidebar.js";
+import { initProfile, getProfile } from "./profile.js";
+import { initBrokerGuides } from "./broker-guides.js";
+import { initSection720, renderSection720 } from "./section-720.js";
+import { initSectionD6, renderSectionD6 } from "./section-d6.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import Decimal from "decimal.js";
 
@@ -118,11 +124,7 @@ const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
-const generate720Btn = document.getElementById("generate-720-btn")!;
-const generateD6Btn = document.getElementById("generate-d6-btn")!;
-const yearSelect = document.getElementById("year-select") as HTMLSelectElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
-const processBtn = document.getElementById("process-btn")!;
 const fileListDiv = document.getElementById("file-list")!;
 const opsSearch = document.getElementById("ops-search") as HTMLInputElement;
 const opsFilter = document.getElementById("ops-filter") as HTMLSelectElement;
@@ -142,6 +144,11 @@ let detectedBrokers: string[] = [];
 // ---------------------------------------------------------------------------
 
 initWizard();
+initSidebar();
+initProfile();
+initBrokerGuides();
+initSection720();
+initSectionD6();
 
 /** Control wizard "Next" behavior per step */
 onStepChange((_from: WizardStep, to: WizardStep) => {
@@ -149,13 +156,13 @@ onStepChange((_from: WizardStep, to: WizardStep) => {
     // Parse files when entering step 2
     void parseFiles();
   }
-  if (to === 4 && !currentReport) {
-    // Process when entering step 4
+  if (to === 3 && !currentReport) {
+    // Process when entering step 3
     void processFiles();
   }
 });
 
-// Override next button to trigger processing on step 3
+// Override next button to trigger processing on step 2
 const wizardNext = document.getElementById("wizard-next")!;
 wizardNext.addEventListener("click", (e) => {
   const step = getCurrentWizardStep();
@@ -163,17 +170,17 @@ wizardNext.addEventListener("click", (e) => {
     e.stopImmediatePropagation();
     return;
   }
-  if (step === 3) {
+  if (step === 2) {
     e.stopImmediatePropagation();
     void processFiles().then(() => {
-      if (currentReport) goToStep(4);
+      if (currentReport) goToStep(3);
     });
     return;
   }
 }, true); // Capture phase to run before wizard's own handler
 
 function getCurrentWizardStep(): WizardStep {
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const panel = document.getElementById(`wizard-step-${i}`);
     if (panel && !panel.hidden) return i as WizardStep;
   }
@@ -363,12 +370,6 @@ function renderReview(merged: Statement, brokers: string[]): void {
 // Step 3: Process
 // ---------------------------------------------------------------------------
 
-processBtn.addEventListener("click", () => {
-  void processFiles().then(() => {
-    if (currentReport) goToStep(4);
-  });
-});
-
 async function processFiles(): Promise<void> {
   if (!mergedStatement) {
     await parseFiles();
@@ -376,11 +377,8 @@ async function processFiles(): Promise<void> {
   if (!mergedStatement) return;
 
   try {
-    processBtn.textContent = t("config.processing");
-    processBtn.setAttribute("disabled", "true");
-
     const merged = mergedStatement;
-    const year = parseInt(yearSelect.value);
+    const year = getProfile().year;
     const currencies = new Set<string>();
     for (const tr of merged.trades) currencies.add(tr.currency);
     for (const c of merged.cashTransactions) currencies.add(c.currency);
@@ -388,7 +386,7 @@ async function processFiles(): Promise<void> {
 
     const years = new Set(merged.trades.map((tr) => parseInt(tr.tradeDate.slice(0, 4))));
     years.add(year);
-    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
+    const allRates: EcbRateMap = new Map();
     for (const yr of years) {
       const rates = await fetchEcbRates(yr, [...currencies]);
       for (const [date, ratesByDate] of rates) {
@@ -403,15 +401,17 @@ async function processFiles(): Promise<void> {
     // Persist for year comparison
     persistReport(report, currentBrokers);
 
-    unlockStep(4);
+    unlockStep(3);
     renderResults(report);
+
+    // Render 720 and D-6 sections with processed data
+    renderSection720(merged, allRates);
+    renderSectionD6(merged, allRates);
+    updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
     currentReport = null;
-  } finally {
-    processBtn.textContent = t("config.process_btn");
-    processBtn.removeAttribute("disabled");
   }
 }
 
@@ -430,60 +430,6 @@ exportCsvBtn.addEventListener("click", () => {
   const csv = formatCsv(currentReport);
   const blob = new Blob([csv], { type: "text/csv" });
   downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
-});
-
-generate720Btn.addEventListener("click", () => {
-  if (!currentReport || !mergedStatement) return;
-  // Import dynamically to avoid loading 720 generator in initial bundle
-  void import("../generators/modelo720.js").then(async ({ generateModelo720 }) => {
-    const year = currentReport!.year;
-    const currencies = new Set<string>();
-    for (const tr of mergedStatement!.trades) currencies.add(tr.currency);
-    currencies.delete("EUR");
-
-    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
-    const rates = await fetchEcbRates(year, [...currencies]);
-    for (const [date, ratesByDate] of rates) {
-      allRates.set(date, ratesByDate);
-    }
-
-    const nif = (document.getElementById("nif-input") as HTMLInputElement).value.trim() || "00000000T";
-    const config = {
-      nif,
-      surname: "",
-      name: "CONTRIBUYENTE",
-      year,
-      phone: "",
-      contactName: "",
-      declarationId: "",
-      isComplementary: false,
-      isReplacement: false,
-    };
-    const result = generateModelo720(mergedStatement!.openPositions, allRates, config);
-    const blob = new Blob([result], { type: "text/plain;charset=iso-8859-15" });
-    downloadBlob(blob, `modelo720_${year}.txt`);
-  });
-});
-
-generateD6Btn.addEventListener("click", () => {
-  if (!currentReport || !mergedStatement) return;
-  void import("../generators/d6.js").then(async ({ generateD6Report }) => {
-    const year = currentReport!.year;
-    const currencies = new Set<string>();
-    for (const tr of mergedStatement!.trades) currencies.add(tr.currency);
-    currencies.delete("EUR");
-
-    const allRates = new Map() as ReturnType<typeof fetchEcbRates> extends Promise<infer R> ? R : never;
-    const rates = await fetchEcbRates(year, [...currencies]);
-    for (const [date, ratesByDate] of rates) {
-      allRates.set(date, ratesByDate);
-    }
-
-    const nif = (document.getElementById("nif-input") as HTMLInputElement).value.trim() || "00000000T";
-    const report = generateD6Report(mergedStatement!.openPositions, allRates, year, "CONTRIBUYENTE", nif);
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-    downloadBlob(blob, `d6_guia_${year}.json`);
-  });
 });
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -538,7 +484,7 @@ opsSearch.addEventListener("input", () => renderOperationsTable());
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
-// Render results (Step 4)
+// Render results (Step 3)
 // ---------------------------------------------------------------------------
 
 function formatDate(d: string): string {
@@ -559,7 +505,7 @@ function renderResults(report: TaxSummary) {
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
   ].filter(Boolean).join("");
 
-  const resultsSection = document.getElementById("wizard-step-4")!;
+  const resultsSection = document.getElementById("wizard-step-3")!;
   resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
   if (chartsHtml) {
     casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);

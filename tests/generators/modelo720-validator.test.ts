@@ -159,4 +159,20 @@ describe("validateModelo720Records", () => {
     const results = validateModelo720Records([]);
     expect(results).toHaveLength(0);
   });
+
+  describe("Summary record numeric field validation", () => {
+    it("should detect non-numeric total acquisition in summary record", () => {
+      const record = buildRecord("1", { 145: "ABCDEFGHIJKLMNOPQ" });
+      const results = validateModelo720Records([record]);
+      expect(results[0]!.valid).toBe(false);
+      expect(results[0]!.errors).toContainEqual(expect.stringContaining("Total adquisición"));
+    });
+
+    it("should detect non-numeric total valuation in summary record", () => {
+      const record = buildRecord("1", { 163: "ABCDEFGHIJKLMNOPQ" });
+      const results = validateModelo720Records([record]);
+      expect(results[0]!.valid).toBe(false);
+      expect(results[0]!.errors).toContainEqual(expect.stringContaining("Total valoración"));
+    });
+  });
 });
