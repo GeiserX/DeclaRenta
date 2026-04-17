@@ -65,6 +65,7 @@ export function unlockStep(step: WizardStep): void {
 export function resetWizard(): void {
   currentStep = 1;
   maxReachedStep = 1;
+  isInitialRender = true;
   updateDOM();
 }
 

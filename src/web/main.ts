@@ -658,8 +658,7 @@ function renderDividendsTable(report: TaxSummary) {
 // Disclaimer modal
 // ---------------------------------------------------------------------------
 
-document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
-  e.preventDefault();
+document.getElementById("open-disclaimer")?.addEventListener("click", () => {
   openDisclaimer();
 });
 
@@ -669,8 +668,8 @@ document.getElementById("open-disclaimer")?.addEventListener("click", (e) => {
 
 const versionEl = document.getElementById("footer-version");
 if (versionEl) {
-  const v = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "";
-  const h = typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__ : "";
+  const v = __APP_VERSION__;
+  const h = __COMMIT_HASH__;
   versionEl.textContent = v && h ? `v${v} (${h})` : v ? `v${v}` : "";
 }
 

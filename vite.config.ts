@@ -5,7 +5,7 @@ import { execSync } from "child_process";
 const version = process.env.npm_package_version ?? "dev";
 let commitHash = "dev";
 try {
-  commitHash = execSync("git rev-parse --short HEAD").toString().trim();
+  commitHash = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
 } catch { /* not in git repo */ }
 
 export default defineConfig({

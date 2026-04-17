@@ -301,8 +301,7 @@ button {
   transition: background 0.2s;
 }
 
-.export-buttons button,
-.wizard-nav button {
+.export-buttons button {
   margin-top: 1rem;
 }
 
@@ -1379,11 +1378,14 @@ footer a:hover {
   color: var(--muted);
 }
 
-/* Top bar legal link */
+/* Top bar legal button */
 .top-bar-legal {
+  background: none;
+  border: none;
   color: var(--muted);
-  text-decoration: none;
+  font-family: inherit;
   font-size: 0.8rem;
+  cursor: pointer;
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
   transition: color 0.2s, background 0.2s;
