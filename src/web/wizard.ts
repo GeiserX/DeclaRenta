@@ -1,16 +1,15 @@
 /**
  * Multi-step wizard navigation for DeclaRenta.
  *
- * Manages 4 steps:
+ * Manages 3 steps within the Renta section:
  *   1. Upload files (select broker + drag/drop)
  *   2. Review parsed data (summary of what was loaded)
- *   3. Configure (year, NIF, options)
- *   4. Results (casillas, tables, charts, exports)
+ *   3. Results (casillas, tables, charts, exports)
  */
 
-export type WizardStep = 1 | 2 | 3 | 4;
+export type WizardStep = 1 | 2 | 3;
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 let currentStep: WizardStep = 1;
 let maxReachedStep: WizardStep = 1;

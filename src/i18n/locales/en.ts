@@ -6,7 +6,7 @@ const en: TranslationKeys = {
   "app.subtitle": "Foreign broker → Spanish tax return",
 
 
-  "upload.title": "1. Upload your broker report",
+  "upload.title": "Upload your broker report",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detect",
   "upload.drop_text": "Drag your file here or click to select",
@@ -17,7 +17,7 @@ const en: TranslationKeys = {
   "config.process_btn": "Process",
   "config.processing": "Processing...",
 
-  "results.title": "3. Results for Modelo 100",
+  "results.title": "Results for Modelo 100",
   "results.operations": "Transactions",
   "results.dividends": "Dividends",
   "results.no_dividends": "No dividends",
@@ -124,6 +124,64 @@ const en: TranslationKeys = {
 
   "status.fetching_rates": "Fetching ECB rates for {{currencies}}...",
   "status.files_processed": "{{count}} file(s) processed — {{brokers}} — {{trades}} transactions",
+
+  // Sidebar navigation
+  "sidebar.profile": "Tax profile",
+  "sidebar.renta": "Modelo 100 (Income tax)",
+  "sidebar.m720": "Modelo 720",
+  "sidebar.d6": "Modelo D-6",
+  "sidebar.toggle": "Toggle menu",
+
+  // Fiscal profile
+  "profile.title": "Tax profile",
+  "profile.description": "This data is used to generate the Modelo 720 and D-6 files.",
+  "profile.nif_label": "NIF/NIE:",
+  "profile.surname_label": "Surname:",
+  "profile.surname_placeholder": "Smith Jones",
+  "profile.name_label": "First name:",
+  "profile.name_placeholder": "John",
+  "profile.ccaa_label": "Autonomous Community:",
+  "profile.phone_label": "Phone:",
+  "profile.phone_placeholder": "600123456",
+  "profile.saved": "Profile saved",
+  "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",
+  "profile.go_to_profile": "Go to profile",
+
+  // Broker guides
+  "guide.title": "How to get the report?",
+  "guide.tip_fifo": "Include the full history — DeclaRenta needs past trades for correct FIFO calculation.",
+
+  // Modelo 720 section
+  "m720.title": "Modelo 720 — Foreign assets declaration",
+  "m720.description": "Informative declaration on assets and rights located abroad.",
+  "m720.threshold_exceeded": "Based on your positions ({{amount}} EUR), you are required to file Modelo 720.",
+  "m720.threshold_not_exceeded": "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
+  "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
+  "m720.positions_title": "Declarable positions",
+  "m720.generate_btn": "Generate Modelo 720 file",
+  "m720.deadline": "Deadline: January 1 – March 31 of the following year",
+  "m720.total_value": "Total value: {{amount}} EUR",
+  "m720.filing_title": "How to file?",
+
+  // Modelo D-6 section
+  "d6.title": "Modelo D-6 — Foreign investments declaration",
+  "d6.description": "Declaration to the Investment Registry of the Ministry of Economy.",
+  "d6.no_minimum": "D-6 is mandatory for ANY amount. There is no minimum threshold.",
+  "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
+  "d6.positions_title": "Positions to declare",
+  "d6.cancellations_title": "Cancellations",
+  "d6.generate_btn": "Generate D-6 guide",
+  "d6.deadline": "Deadline: January 1 – 31 of the following year",
+  "d6.total_value": "Total value: {{amount}} EUR",
+  "d6.aforix_title": "AFORIX step-by-step guide",
+  "d6.copy_btn": "Copy",
+  "d6.copied": "Copied",
+
+  // Badge statuses
+  "badge.complete": "Complete",
+  "badge.pending": "Pending",
+  "badge.not_applicable": "N/A",
+  "badge.generated": "Generated",
 };
 
 export default en;

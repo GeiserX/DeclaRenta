@@ -7,7 +7,7 @@ const ca: TranslationKeys = {
   "app.subtitle": "Broker estranger → Renda espanyola",
 
 
-  "upload.title": "1. Puja el teu informe del broker",
+  "upload.title": "Puja el teu informe del broker",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
@@ -18,7 +18,7 @@ const ca: TranslationKeys = {
   "config.process_btn": "Processar",
   "config.processing": "Processant...",
 
-  "results.title": "3. Resultats per al Model 100",
+  "results.title": "Resultats per al Model 100",
   "results.operations": "Operacions",
   "results.dividends": "Dividends",
   "results.no_dividends": "Sense dividends",
@@ -125,6 +125,58 @@ const ca: TranslationKeys = {
 
   "status.fetching_rates": "Obtenint tipus BCE per a {{currencies}}...",
   "status.files_processed": "{{count}} fitxer(s) processat(s) — {{brokers}} — {{trades}} operacions",
+
+  "sidebar.profile": "Perfil fiscal",
+  "sidebar.renta": "Model 100 (Renda)",
+  "sidebar.m720": "Model 720",
+  "sidebar.d6": "Model D-6",
+  "sidebar.toggle": "Obrir/tancar menú",
+
+  "profile.title": "Perfil fiscal",
+  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6.",
+  "profile.nif_label": "NIF/NIE:",
+  "profile.surname_label": "Cognoms:",
+  "profile.surname_placeholder": "García López",
+  "profile.name_label": "Nom:",
+  "profile.name_placeholder": "Joan",
+  "profile.ccaa_label": "Comunitat Autònoma:",
+  "profile.phone_label": "Telèfon:",
+  "profile.phone_placeholder": "600123456",
+  "profile.saved": "Perfil desat",
+  "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
+  "profile.go_to_profile": "Anar al perfil",
+
+  "guide.title": "Com obtenir l'informe?",
+  "guide.tip_fifo": "Inclou tot l'històric — DeclaRenta necessita operacions anteriors per al càlcul FIFO correcte.",
+
+  "m720.title": "Model 720 — Béns a l'estranger",
+  "m720.description": "Declaració informativa sobre béns i drets situats a l'estranger.",
+  "m720.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 720.",
+  "m720.threshold_not_exceeded": "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
+  "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
+  "m720.positions_title": "Posicions declarables",
+  "m720.generate_btn": "Generar fitxer Model 720",
+  "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
+  "m720.total_value": "Valor total: {{amount}} €",
+  "m720.filing_title": "Com presentar-lo?",
+
+  "d6.title": "Model D-6 — Inversions a l'exterior",
+  "d6.description": "Declaració al Registre d'Inversions del Ministeri d'Economia.",
+  "d6.no_minimum": "El D-6 és obligatori per a QUALSEVOL import. No té llindar mínim.",
+  "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
+  "d6.positions_title": "Posicions a declarar",
+  "d6.cancellations_title": "Cancel·lacions",
+  "d6.generate_btn": "Generar guia D-6",
+  "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
+  "d6.total_value": "Valor total: {{amount}} €",
+  "d6.aforix_title": "Guia AFORIX pas a pas",
+  "d6.copy_btn": "Copiar",
+  "d6.copied": "Copiat",
+
+  "badge.complete": "Complet",
+  "badge.pending": "Pendent",
+  "badge.not_applicable": "No aplica",
+  "badge.generated": "Generat",
 };
 
 export default ca;

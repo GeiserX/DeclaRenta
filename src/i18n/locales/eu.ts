@@ -7,7 +7,7 @@ const eu: TranslationKeys = {
   "app.subtitle": "Atzerriko brokerra → Espainiako errenta",
 
 
-  "upload.title": "1. Igo zure brokerraren txostena",
+  "upload.title": "Igo zure brokerraren txostena",
   "upload.broker_label": "Brokerra:",
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
@@ -18,7 +18,7 @@ const eu: TranslationKeys = {
   "config.process_btn": "Prozesatu",
   "config.processing": "Prozesatzen...",
 
-  "results.title": "3. Emaitzak 100 Eredurako",
+  "results.title": "Emaitzak 100 Eredurako",
   "results.operations": "Eragiketak",
   "results.dividends": "Dibidenduak",
   "results.no_dividends": "Dibidendurik ez",
@@ -125,6 +125,58 @@ const eu: TranslationKeys = {
 
   "status.fetching_rates": "EBZ tasak lortzen {{currencies}} monetetarako...",
   "status.files_processed": "{{count}} fitxategi prozesatu — {{brokers}} — {{trades}} eragiketa",
+
+  "sidebar.profile": "Profil fiskala",
+  "sidebar.renta": "100 Eredua (Errenta)",
+  "sidebar.m720": "720 Eredua",
+  "sidebar.d6": "D-6 Eredua",
+  "sidebar.toggle": "Menua ireki/itxi",
+
+  "profile.title": "Profil fiskala",
+  "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira.",
+  "profile.nif_label": "NIF/NIE:",
+  "profile.surname_label": "Abizenak:",
+  "profile.surname_placeholder": "García López",
+  "profile.name_label": "Izena:",
+  "profile.name_placeholder": "Jon",
+  "profile.ccaa_label": "Autonomia Erkidegoa:",
+  "profile.phone_label": "Telefonoa:",
+  "profile.phone_placeholder": "600123456",
+  "profile.saved": "Profila gordeta",
+  "profile.incomplete_banner": "Osatu zure profil fiskala 720 eta D-6 ereduak sortzeko.",
+  "profile.go_to_profile": "Profilara joan",
+
+  "guide.title": "Nola lortu txostena?",
+  "guide.tip_fifo": "Historial osoa sartu — DeclaRentak aurreko eragiketak behar ditu FIFO kalkulu zuzenera.",
+
+  "m720.title": "720 Eredua — Atzerriko ondasunak",
+  "m720.description": "Atzerrian dauden ondasun eta eskubideei buruzko aitorpen informatiboa.",
+  "m720.threshold_exceeded": "Zure posizioen arabera ({{amount}} €), 720 Eredua aurkeztera behartuta zaude.",
+  "m720.threshold_not_exceeded": "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
+  "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
+  "m720.positions_title": "Aitortu beharreko posizioak",
+  "m720.generate_btn": "720 Ereduaren fitxategia sortu",
+  "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
+  "m720.total_value": "Balio osoa: {{amount}} €",
+  "m720.filing_title": "Nola aurkeztu?",
+
+  "d6.title": "D-6 Eredua — Atzerriko inbertsioak",
+  "d6.description": "Ekonomia Ministerioko Inbertsio Erregistroko aitorpena.",
+  "d6.no_minimum": "D-6 EDOZEIN zenbatekorako da nahitaezkoa. Ez du gutxieneko atalaserik.",
+  "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
+  "d6.positions_title": "Aitortu beharreko posizioak",
+  "d6.cancellations_title": "Baliogabetzeak",
+  "d6.generate_btn": "D-6 gida sortu",
+  "d6.deadline": "Epea: urtarrilaren 1etik 31ra hurrengo urtean",
+  "d6.total_value": "Balio osoa: {{amount}} €",
+  "d6.aforix_title": "AFORIX gida pausoz pauso",
+  "d6.copy_btn": "Kopiatu",
+  "d6.copied": "Kopiatuta",
+
+  "badge.complete": "Osatuta",
+  "badge.pending": "Zain",
+  "badge.not_applicable": "Ez da aplikagarri",
+  "badge.generated": "Sortuta",
 };
 
 export default eu;

@@ -6,7 +6,7 @@ const es = {
 
 
   // Upload
-  "upload.title": "1. Sube tu informe del broker",
+  "upload.title": "Sube tu informe del broker",
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
@@ -19,7 +19,7 @@ const es = {
   "config.processing": "Procesando...",
 
   // Results
-  "results.title": "3. Resultados para Modelo 100",
+  "results.title": "Resultados para Modelo 100",
   "results.operations": "Operaciones",
   "results.dividends": "Dividendos",
   "results.no_dividends": "Sin dividendos",
@@ -135,6 +135,64 @@ const es = {
   // Status
   "status.fetching_rates": "Obteniendo tipos ECB para {{currencies}}...",
   "status.files_processed": "{{count}} fichero(s) procesado(s) — {{brokers}} — {{trades}} operaciones",
+
+  // Sidebar navigation
+  "sidebar.profile": "Perfil fiscal",
+  "sidebar.renta": "Modelo 100 (Renta)",
+  "sidebar.m720": "Modelo 720",
+  "sidebar.d6": "Modelo D-6",
+  "sidebar.toggle": "Abrir/cerrar menú",
+
+  // Fiscal profile
+  "profile.title": "Perfil fiscal",
+  "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.",
+  "profile.nif_label": "NIF/NIE:",
+  "profile.surname_label": "Apellidos:",
+  "profile.surname_placeholder": "García López",
+  "profile.name_label": "Nombre:",
+  "profile.name_placeholder": "Juan",
+  "profile.ccaa_label": "Comunidad Autónoma:",
+  "profile.phone_label": "Teléfono:",
+  "profile.phone_placeholder": "600123456",
+  "profile.saved": "Perfil guardado",
+  "profile.incomplete_banner": "Completa tu perfil fiscal para generar los modelos 720 y D-6.",
+  "profile.go_to_profile": "Ir al perfil",
+
+  // Broker guides
+  "guide.title": "¿Cómo obtener el informe?",
+  "guide.tip_fifo": "Incluye todo el histórico — DeclaRenta necesita operaciones anteriores para el cálculo FIFO correcto.",
+
+  // Modelo 720 section
+  "m720.title": "Modelo 720 — Bienes en el extranjero",
+  "m720.description": "Declaración informativa sobre bienes y derechos situados en el extranjero.",
+  "m720.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 720.",
+  "m720.threshold_not_exceeded": "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
+  "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
+  "m720.positions_title": "Posiciones declarables",
+  "m720.generate_btn": "Generar fichero Modelo 720",
+  "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
+  "m720.total_value": "Valor total: {{amount}} €",
+  "m720.filing_title": "¿Cómo presentarlo?",
+
+  // Modelo D-6 section
+  "d6.title": "Modelo D-6 — Inversiones en el exterior",
+  "d6.description": "Declaración al Registro de Inversiones del Ministerio de Economía.",
+  "d6.no_minimum": "El D-6 es obligatorio para CUALQUIER importe. No tiene umbral mínimo.",
+  "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
+  "d6.positions_title": "Posiciones a declarar",
+  "d6.cancellations_title": "Cancelaciones",
+  "d6.generate_btn": "Generar guía D-6",
+  "d6.deadline": "Plazo: 1 – 31 enero del año siguiente",
+  "d6.total_value": "Valor total: {{amount}} €",
+  "d6.aforix_title": "Guía AFORIX paso a paso",
+  "d6.copy_btn": "Copiar",
+  "d6.copied": "Copiado",
+
+  // Badge statuses
+  "badge.complete": "Completo",
+  "badge.pending": "Pendiente",
+  "badge.not_applicable": "No aplica",
+  "badge.generated": "Generado",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
