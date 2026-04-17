@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.svg" alt="DeclaRenta banner" width="700"/>
+  <img src="docs/images/banner.svg" alt="DeclaRenta banner" width="100%"/>
 </p>
 
 <p align="center">
