@@ -55,9 +55,9 @@ const eu: TranslationKeys = {
   "casilla.net_gain_loss": "Irabazi/Galera garbia",
   "casilla.gross_dividends": "Dibidendu gordinak",
   "casilla.interest_earned": "Jasotako interesak",
-  "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria)",
+  "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria — informatiboa)",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
-  "casilla.blocked_losses": "Anti-churning arauagatik blokeatutako galerak (2 hilabete): {{amount}} EUR",
+  "casilla.blocked_losses": "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",
 
   "chart.asset_distribution": "Aktibo motaren araberako banaketa",

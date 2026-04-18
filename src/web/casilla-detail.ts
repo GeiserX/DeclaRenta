@@ -151,7 +151,7 @@ const CASILLAS: CasillaConfig[] = [
     getDetail: (r) => renderInterestDetail(r.interest.entries, "earned"),
   },
   {
-    code: "0032",
+    code: "",
     i18nKey: "casilla.interest_paid",
     getValue: (r) => r.interest.paid.toFixed(2),
     getClass: () => "",

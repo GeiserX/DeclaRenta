@@ -77,9 +77,9 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 | Modelo | Descripción | Formato |
 |---|---|---|
-| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0032, 0033, 0358, 0588 | JSON, CSV, PDF (con tipos ECB) |
+| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0033, 0358, 0588 | JSON, CSV, PDF (con tipos ECB) |
 | **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR), tipos A/M/C | Fixed-width AEAT (validado contra spec BOE) |
-| **Modelo 721** | Declaración de criptomonedas en el extranjero (>50.000 EUR) | Fixed-width AEAT |
+| **Modelo 721** | Declaración de criptomonedas en el extranjero (>50.000 EUR) | XML (AEAT) |
 | **Modelo D-6** | Inversiones en el exterior (Banco de España / AFORIX) | JSON o guía paso a paso |
 
 ## Casillas del Modelo 100
@@ -89,8 +89,8 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 | 0327 | Valor de transmisión (importe total de ventas) |
 | 0328 | Valor de adquisición (coste total FIFO con tipos ECB) |
 | 0029 | Dividendos brutos de acciones extranjeras |
-| 0032 | Intereses pagados al broker (margen, no deducible) |
 | 0033 | Intereses de cuentas y depósitos |
+| — | Intereses pagados al broker (margen, no deducible — informativo) |
 | 0358 | Pérdidas patrimoniales a compensar (bloqueadas por regla anti-churning) |
 | 0588 | Deducción por doble imposición internacional |
 
