@@ -151,6 +151,12 @@ tests/           Vitest tests mirroring src/ structure
 3. Add tests in `tests/parsers/<broker>.test.ts` with anonymized fixture data
 4. Export from `src/index.ts`
 
+### IBKR Multi-Account Flex Queries
+- When users export a Flex Query covering multiple IBKR accounts, the XML contains multiple `<FlexStatement>` elements inside `<FlexStatements count="N">`
+- The parser merges all accounts' trades, cashTransactions, corporateActions, openPositions, and securitiesInfo into a single combined FlexStatement
+- `accountId` in the merged result is comma-separated (e.g., `"U1111111,U2222222"`)
+- The `isArray` config in fast-xml-parser must include `FlexQueryResponse.FlexStatements.FlexStatement` to handle both single and multi-account XMLs
+
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"
 - We store the inverse: "1 FCY = X EUR" for direct multiplication with broker amounts

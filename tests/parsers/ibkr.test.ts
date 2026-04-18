@@ -352,4 +352,150 @@ describe("parseIbkrFlexXml", () => {
     expect(sec.symbol).toBe("XYZ");
     expect(sec.multiplier).toBe("1");
   });
+
+  it("should merge multiple accounts from multi-account Flex Query", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <FlexQueryResponse queryName="Multi" type="AF">
+      <FlexStatements count="2">
+        <FlexStatement accountId="U1111111" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="A001" accountId="U1111111" symbol="AAPL" description="APPLE INC"
+                   isin="US0378331005" assetCategory="STK" currency="USD"
+                   tradeDate="20250315" settlementDate="20250318"
+                   quantity="10" tradePrice="175.50" tradeMoney="1755.00"
+                   proceeds="1755.00" cost="1500.00" fifoPnlRealized="255.00"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+          </Trades>
+          <CashTransactions>
+            <CashTransaction transactionID="C001" accountId="U1111111"
+                             symbol="AAPL" description="AAPL Dividend"
+                             isin="US0378331005" currency="USD"
+                             dateTime="20250515" settleDate="20250515"
+                             amount="2.50" fxRateToBase="0.93" type="Dividends" />
+          </CashTransactions>
+          <CorporateActions />
+          <OpenPositions>
+            <OpenPosition accountId="U1111111" symbol="AAPL" description="APPLE INC"
+                          isin="US0378331005" currency="USD" assetCategory="STK"
+                          quantity="10" costBasisMoney="1755" costBasisPrice="175.50"
+                          markPrice="195" positionValue="1950" fifoPnlUnrealized="195"
+                          fxRateToBase="0.92" />
+          </OpenPositions>
+          <SecuritiesInfo>
+            <SecurityInfo symbol="AAPL" description="APPLE INC" isin="US0378331005"
+                          cusip="037833100" currency="USD" assetCategory="STK"
+                          multiplier="1" subCategory="COMMON" />
+          </SecuritiesInfo>
+        </FlexStatement>
+        <FlexStatement accountId="U2222222" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="B001" accountId="U2222222" symbol="MSFT" description="MICROSOFT CORP"
+                   isin="US5949181045" assetCategory="STK" currency="USD"
+                   tradeDate="20250420" settlementDate="20250423"
+                   quantity="5" tradePrice="400.00" tradeMoney="2000.00"
+                   proceeds="2000.00" cost="1800.00" fifoPnlRealized="200.00"
+                   fxRateToBase="0.91" buySell="BUY" openCloseIndicator="O"
+                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+            <Trade tradeID="B002" accountId="U2222222" symbol="MSFT" description="MICROSOFT CORP"
+                   isin="US5949181045" assetCategory="STK" currency="USD"
+                   tradeDate="20250920" settlementDate="20250923"
+                   quantity="-5" tradePrice="420.00" tradeMoney="-2100.00"
+                   proceeds="-2100.00" cost="-1800.00" fifoPnlRealized="300.00"
+                   fxRateToBase="0.90" buySell="SELL" openCloseIndicator="C"
+                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+          </Trades>
+          <CashTransactions>
+            <CashTransaction transactionID="C002" accountId="U2222222"
+                             symbol="MSFT" description="MSFT Dividend"
+                             isin="US5949181045" currency="USD"
+                             dateTime="20250610" settleDate="20250610"
+                             amount="3.75" fxRateToBase="0.91" type="Dividends" />
+          </CashTransactions>
+          <CorporateActions />
+          <OpenPositions>
+            <OpenPosition accountId="U2222222" symbol="GOOG" description="ALPHABET INC"
+                          isin="US02079K3059" currency="USD" assetCategory="STK"
+                          quantity="20" costBasisMoney="3000" costBasisPrice="150"
+                          markPrice="170" positionValue="3400" fifoPnlUnrealized="400"
+                          fxRateToBase="0.91" />
+          </OpenPositions>
+          <SecuritiesInfo>
+            <SecurityInfo symbol="MSFT" description="MICROSOFT CORP" isin="US5949181045"
+                          cusip="594918104" currency="USD" assetCategory="STK"
+                          multiplier="1" subCategory="COMMON" />
+          </SecuritiesInfo>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+
+    // accountId combines both
+    expect(result.accountId).toBe("U1111111,U2222222");
+
+    // Trades merged: 1 from account1 + 2 from account2
+    expect(result.trades).toHaveLength(3);
+    expect(result.trades[0]!.symbol).toBe("AAPL");
+    expect(result.trades[0]!.accountId).toBe("U1111111");
+    expect(result.trades[1]!.symbol).toBe("MSFT");
+    expect(result.trades[1]!.accountId).toBe("U2222222");
+    expect(result.trades[2]!.symbol).toBe("MSFT");
+    expect(result.trades[2]!.buySell).toBe("SELL");
+
+    // Cash transactions merged: 1 + 1
+    expect(result.cashTransactions).toHaveLength(2);
+    expect(result.cashTransactions[0]!.amount).toBe("2.50");
+    expect(result.cashTransactions[1]!.amount).toBe("3.75");
+
+    // Open positions merged: 1 + 1
+    expect(result.openPositions).toHaveLength(2);
+    expect(result.openPositions[0]!.symbol).toBe("AAPL");
+    expect(result.openPositions[1]!.symbol).toBe("GOOG");
+
+    // Securities info merged: 1 + 1
+    expect(result.securitiesInfo).toHaveLength(2);
+
+    // Metadata from first statement
+    expect(result.fromDate).toBe("20250101");
+    expect(result.toDate).toBe("20251231");
+  });
+
+  it("should still work with single-account XML (backward compatible)", () => {
+    // The existing MINIMAL_FLEX_XML is single-account — ensure it still works
+    const result = parseIbkrFlexXml(MINIMAL_FLEX_XML);
+    expect(result.accountId).toBe("U1234567");
+    expect(result.trades).toHaveLength(2);
+    expect(result.cashTransactions).toHaveLength(2);
+  });
+
+  it("should handle multi-account with empty sections in some accounts", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Multi" type="AF">
+      <FlexStatements count="2">
+        <FlexStatement accountId="U1111111" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="A001" accountId="U1111111" symbol="AAPL" description="APPLE"
+                   isin="US0378331005" assetCategory="STK" currency="USD"
+                   tradeDate="20250315" settlementDate="20250318"
+                   quantity="10" tradePrice="175" tradeMoney="1750"
+                   proceeds="1750" cost="1500" fifoPnlRealized="250"
+                   fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+                   exchange="NASDAQ" commissionCurrency="USD" commission="-1" taxes="0" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+        <FlexStatement accountId="U2222222" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    expect(result.accountId).toBe("U1111111,U2222222");
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.symbol).toBe("AAPL");
+    expect(result.cashTransactions).toHaveLength(0);
+    expect(result.openPositions).toHaveLength(0);
+  });
 });
