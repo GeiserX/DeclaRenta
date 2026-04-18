@@ -79,7 +79,7 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 | 0327 | Valor de transmisión (importe total de ventas) |
 | 0328 | Valor de adquisición (coste total FIFO con tipos ECB) |
 | 0029 | Dividendos brutos de acciones extranjeras |
-| 0032 | Gastos deducibles (intereses de margen) |
+| 0032 | Intereses pagados al broker (margen, no deducible) |
 | 0033 | Intereses de cuentas y depósitos |
 | 0358 | Pérdidas patrimoniales a compensar (bloqueadas por regla anti-churning) |
 | 0588 | Deducción por doble imposición internacional |

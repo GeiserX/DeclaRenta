@@ -109,8 +109,9 @@ if (splash) {
   document.body.classList.add("splash-visible");
 }
 
-// Logo click → show splash
+// Logo/brand click → show splash (but not hamburger)
 document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
   e.preventDefault();
   showSplash();
 });
