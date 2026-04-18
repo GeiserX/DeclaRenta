@@ -34,14 +34,15 @@ export class FifoEngine {
    * Buys add lots; sells consume lots via FIFO; splits adjust lots.
    */
   processTrades(trades: Trade[], rateMap: EcbRateMap, corporateActions?: CorporateAction[]): FifoDisposal[] {
-    // Process all tradeable asset types (STK, FUND, OPT, FUT, BOND, CASH/forex, CFD, CRYPTO)
-    // Only WAR (warrants) is excluded — insufficient data for fiscal treatment
+    // Process securities: STK, FUND, OPT, FUT, BOND, CFD, CRYPTO
+    // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
+    // gain/loss already embedded in securities trades via ECB rate conversion)
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
           this.warnings.push(`⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`);
         }
-        return t.assetCategory !== "WAR";
+        return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
       })
       .sort((a, b) => normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)));
 
