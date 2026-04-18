@@ -145,6 +145,7 @@ const gl: TranslationKeys = {
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
   "profile.saved": "Perfil gardado",
+  "profile.save_btn": "Gardar perfil",
   "profile.incomplete_banner": "Completa o teu perfil fiscal para xerar os modelos 720 e D-6.",
   "profile.go_to_profile": "Ir ao perfil",
 

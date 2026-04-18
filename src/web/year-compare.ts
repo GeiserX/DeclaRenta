@@ -18,6 +18,9 @@ function esc(s: string): string {
  * Convert a TaxSummary into a StoredReport and save to localStorage.
  */
 export function persistReport(report: TaxSummary, brokers: string[]): void {
+  // Don't persist empty reports (e.g. wrong year selected with no matching data)
+  if (report.capitalGains.disposals.length === 0 && report.dividends.entries.length === 0) return;
+
   const currencies = new Set<string>();
   for (const d of report.capitalGains.disposals) currencies.add(d.currency);
   for (const d of report.dividends.entries) currencies.add(d.currency);

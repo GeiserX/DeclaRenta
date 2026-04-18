@@ -146,6 +146,7 @@ const en: TranslationKeys = {
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
   "profile.saved": "Profile saved",
+  "profile.save_btn": "Save profile",
   "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",
   "profile.go_to_profile": "Go to profile",
 
