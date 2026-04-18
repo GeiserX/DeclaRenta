@@ -95,7 +95,6 @@ function dismissSplash() {
     splash.style.display = "none";
     document.body.classList.remove("splash-visible");
   }, { once: true });
-  try { localStorage.setItem("declarenta_splash_seen", "1"); } catch { /* noop */ }
 }
 
 function showSplash() {
@@ -107,12 +106,7 @@ function showSplash() {
 
 if (splash) {
   splashCta?.addEventListener("click", dismissSplash);
-  const seen = localStorage.getItem("declarenta_splash_seen");
-  if (seen) {
-    splash.style.display = "none";
-  } else {
-    document.body.classList.add("splash-visible");
-  }
+  document.body.classList.add("splash-visible");
 }
 
 // Logo click → show splash
