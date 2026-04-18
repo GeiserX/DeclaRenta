@@ -6,11 +6,14 @@
  * provides safe parsing for both formats.
  */
 
-/** Normalize a date string to YYYY-MM-DD format */
+/** Normalize a date string to YYYY-MM-DD format.
+ *  Handles YYYYMMDD, YYYY-MM-DD, and IBKR's YYYYMMDD;HHMMSS datetime format. */
 export function normalizeDate(date: string): string {
-  return date.length === 8 && !date.includes("-")
-    ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-    : date;
+  // Strip IBKR time component (e.g. "20190916;130630" → "20190916")
+  const dateOnly = date.includes(";") ? date.split(";")[0]! : date;
+  return dateOnly.length === 8 && !dateOnly.includes("-")
+    ? `${dateOnly.slice(0, 4)}-${dateOnly.slice(4, 6)}-${dateOnly.slice(6, 8)}`
+    : dateOnly;
 }
 
 /** Parse a date string in YYYYMMDD or YYYY-MM-DD format */
