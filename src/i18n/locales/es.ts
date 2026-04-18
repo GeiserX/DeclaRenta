@@ -243,7 +243,7 @@ const es = {
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Inversiones en el exterior",
   "d6.description": "Declaración al Registro de Inversiones del Ministerio de Economía.",
-  "d6.no_minimum": "El D-6 es obligatorio para CUALQUIER importe. No tiene umbral mínimo.",
+  "d6.no_minimum": "Desde la Orden ICT/1408/2021, el D-6 solo es obligatorio si tu participación representa el <strong>10% o más</strong> del capital o derechos de voto de una empresa cotizada extranjera. La mayoría de inversores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.cancellations_title": "Cancelaciones",
@@ -273,7 +273,7 @@ const es = {
   "m720.empty_description": "El Modelo 720 es una declaración informativa obligatoria si posees bienes en el extranjero valorados en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral y genere el fichero. Plazo: 1 de enero – 31 de marzo.",
   "m720.empty_cta": "Ir a Modelo 100",
   "d6.empty_title": "No hay posiciones cargadas",
-  "d6.empty_description": "El Modelo D-6 declara tus inversiones en valores extranjeros ante el Ministerio de Economía. Es obligatorio para CUALQUIER importe (sin umbral mínimo). Sube tu informe del broker en la sección Modelo 100 y DeclaRenta generará la guía paso a paso para rellenar el formulario AFORIX. Plazo: 1 – 31 de enero.",
+  "d6.empty_description": "El Modelo D-6 declara inversiones en valores extranjeros ante el Ministerio de Economía. Desde la reforma de 2021 (Orden ICT/1408/2021), solo es obligatorio si tu participación representa el 10% o más del capital o derechos de voto de una empresa cotizada extranjera. Sube tu informe del broker en la sección Modelo 100 y DeclaRenta generará la guía paso a paso. Plazo: 1 – 31 de enero.",
   "d6.empty_cta": "Ir a Modelo 100",
 
   // Profile required warnings

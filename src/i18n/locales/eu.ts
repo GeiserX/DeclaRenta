@@ -212,7 +212,7 @@ const eu: TranslationKeys = {
 
   "d6.title": "D-6 Eredua — Atzerriko inbertsioak",
   "d6.description": "Ekonomia Ministerioko Inbertsio Erregistroko aitorpena.",
-  "d6.no_minimum": "D-6 EDOZEIN zenbatekorako da nahitaezkoa. Ez du gutxieneko atalaserik.",
+  "d6.no_minimum": "ICT/1408/2021 Aginduaz geroztik, D-6 soilik nahitaezkoa da zure partaidetza atzerriko enpresa kotizatu baten kapitalaren edo boto-eskubideen <strong>%10 edo gehiago</strong> bada. Txikizkako inbertitzaile gehienak salbuetsita daude.",
   "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.cancellations_title": "Baliogabetzeak",
@@ -240,7 +240,7 @@ const eu: TranslationKeys = {
   "m720.empty_description": "720 Eredua aitorpen informatibo nahitaezkoa da atzerrian 50.000 € baino gehiagoko ondasunak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun eta fitxategia sortzeko. Epea: urtarrilaren 1etik martxoaren 31ra.",
   "m720.empty_cta": "100 Eredura joan",
   "d6.empty_title": "Ez dago posiziorik kargatuta",
-  "d6.empty_description": "D-6 Ereduak atzerriko baloreetan dituzun inbertsioak aitortzen ditu Ekonomia Ministerioan. EDOZEIN zenbatekorako da nahitaezkoa (gutxieneko atalaserik gabe). Igo zure brokerraren txostena 100 Ereduaren atalean eta DeclaRentak AFORIX formularioa betetzeko pausoz pausoko gida sortuko du. Epea: urtarrilaren 1etik 31ra.",
+  "d6.empty_description": "D-6 Ereduak atzerriko baloreetan dituzun inbertsioak aitortzen ditu Ekonomia Ministerioan. 2021eko erreformatik (ICT/1408/2021 Agindua), soilik nahitaezkoa da zure partaidetza atzerriko enpresa kotizatu baten kapitalaren edo boto-eskubideen %10 edo gehiago bada. Igo zure brokerraren txostena 100 Ereduaren atalean eta DeclaRentak pausoz pausoko gida sortuko du. Epea: urtarrilaren 1etik 31ra.",
   "d6.empty_cta": "100 Eredura joan",
 
   // Profile required warnings

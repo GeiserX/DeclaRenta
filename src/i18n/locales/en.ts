@@ -216,7 +216,7 @@ const en: TranslationKeys = {
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Foreign investments declaration",
   "d6.description": "Declaration to the Investment Registry of the Ministry of Economy.",
-  "d6.no_minimum": "D-6 is mandatory for ANY amount. There is no minimum threshold.",
+  "d6.no_minimum": "Since Orden ICT/1408/2021, the D-6 is only required if your stake represents <strong>10% or more</strong> of the capital or voting rights of a listed foreign company. Most retail investors are exempt.",
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
   "d6.positions_title": "Positions to declare",
   "d6.cancellations_title": "Cancellations",
@@ -244,7 +244,7 @@ const en: TranslationKeys = {
   "m720.empty_description": "Modelo 720 is a mandatory informative declaration if you hold foreign assets valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold and generate the file. Deadline: January 1 – March 31.",
   "m720.empty_cta": "Go to Modelo 100",
   "d6.empty_title": "No positions loaded",
-  "d6.empty_description": "Modelo D-6 declares your foreign securities investments to the Ministry of Economy. It is mandatory for ANY amount (no minimum threshold). Upload your broker report in the Modelo 100 section and DeclaRenta will generate a step-by-step guide to fill in the AFORIX form. Deadline: January 1–31.",
+  "d6.empty_description": "Modelo D-6 declares your foreign securities investments to the Ministry of Economy. Since the 2021 reform (Orden ICT/1408/2021), it is only required if your stake represents 10% or more of the capital or voting rights of a listed foreign company. Upload your broker report in the Modelo 100 section and DeclaRenta will generate a step-by-step guide. Deadline: January 1–31.",
   "d6.empty_cta": "Go to Modelo 100",
 
   // Profile required warnings

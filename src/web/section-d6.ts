@@ -93,8 +93,8 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </div>`;
   }
 
-  // No minimum threshold reminder
-  html += `<div class="banner banner-info">${t("d6.no_minimum")}</div>`;
+  // 10% threshold reminder (Orden ICT/1408/2021)
+  html += `<div class="banner banner-warning">${t("d6.no_minimum")}</div>`;
 
   // Total value
   const totalValue = positions.reduce((sum, p) => {

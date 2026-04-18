@@ -54,7 +54,7 @@ Si inviertes con un broker extranjero, hacer la renta es un infierno:
 - **Regla anti-churning** de 2 meses que nadie detecta automáticamente
 - **Doble imposición** internacional que hay que calcular a mano
 - **Modelo 720** obligatorio si tus activos en el extranjero superan 50.000 EUR
-- **Modelo D-6** para titulares de valores extranjeros a 31 de diciembre (verificar normativa vigente)
+- **Modelo D-6** solo obligatorio si tu participación es ≥10% del capital o derechos de voto (Orden ICT/1408/2021)
 
 DeclaRenta automatiza todo esto.
 
