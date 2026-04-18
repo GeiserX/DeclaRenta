@@ -113,7 +113,13 @@ tests/           Vitest tests mirroring src/ structure
 4. Pull and deploy the new Docker image to prod
 
 ### Docker Tag Format
-- Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.15.6`
+- Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.16.0`
+
+### Production (geiserback)
+- **Server**: geiserback (NOT watchtower)
+- **Container**: `declarenta-web`, standalone (not a Portainer stack)
+- **Port mapping**: 3080:80, restart: unless-stopped, no volumes
+- **Deploy command**: `ssh root@geiserback "docker stop declarenta-web && docker rm declarenta-web && docker run -d --name declarenta-web --restart unless-stopped -p 3080:80 drumsergio/declarenta:<version>"`
 
 ### GitHub Pages (mirror)
 - Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow
@@ -156,6 +162,33 @@ tests/           Vitest tests mirroring src/ structure
 - The parser merges all accounts' trades, cashTransactions, corporateActions, openPositions, and securitiesInfo into a single combined FlexStatement
 - `accountId` in the merged result is comma-separated (e.g., `"U1111111,U2222222"`)
 - The `isArray` config in fast-xml-parser must include `FlexQueryResponse.FlexStatements.FlexStatement` to handle both single and multi-account XMLs
+
+### Adding a New Web Section
+When adding a new section (like 721), follow this checklist:
+1. Create `src/web/section-<name>.ts` with `initSection*()`, `renderSection*()`, `rerenderSection*()` exports
+2. `rerenderSection*()` must call `initSection*()` in the `else` branch (for locale changes on empty state)
+3. Add sidebar entry in `src/web/index.html` (SVG icon + `data-i18n` label + badge span)
+4. Add section container in `src/web/index.html` (`<section id="section-<name>" class="app-section" hidden>`)
+5. Add section ID to `SECTIONS` array in `src/web/sidebar.ts`
+6. Add `initSection*()`, `renderSection*()`, `rerenderSection*()` calls in `src/web/main.ts`
+7. Add all i18n keys in ALL 5 locales (es, en, ca, eu, gl) — never leave any locale behind
+8. Use section-specific `profile_required` key in the profile warning banner, not the generic one
+
+### Modelo 721 Crypto Filtering
+- Only positions with `assetCategory === "CRYPTO"` count for Modelo 721
+- **NEVER** include `CASH` (fiat currency) — fiat on exchanges belongs in Modelo 720, not 721
+- Crypto positions often have no ISIN — handle empty `p.isin` gracefully (fallback to description/symbol)
+- Do NOT derive exchange/country from ISIN prefix for crypto — use fallback values
+
+### Blob Encoding in Web Generators
+- JavaScript `Blob` constructor ALWAYS encodes strings as UTF-8 regardless of `charset` in MIME type
+- Use `charset=utf-8` in MIME type for prototypes/stubs
+- For real AEAT submission (Modelo 720 fixed-width, ISO-8859-15), proper byte encoding would need a TextEncoder or library — current implementation is a known limitation
+
+### CLI Build Gotcha
+- `tsup` config produces both lib and CLI entries to `dist/` — CLI entry `dist/index.js` collides with lib entry
+- `package.json` `bin.declarenta` points to `./dist/cli.js` which doesn't exist
+- **Workaround**: Use `npx tsx src/cli/index.ts` to run CLI directly during development
 
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"
