@@ -10,7 +10,7 @@ import type { CashTransaction } from "../types/ibkr.js";
 import type { DividendEntry } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
-import { parseDate } from "./dates.js";
+import { normalizeDate, parseDate } from "./dates.js";
 
 /**
  * Process IBKR cash transactions to extract dividends with withholdings.
@@ -29,7 +29,7 @@ export function calculateDividends(
   const withholdings = cashTransactions.filter((t) => t.type === "Withholding Tax");
 
   return dividends.map((div) => {
-    const ecbRate = getEcbRate(rateMap, div.dateTime.slice(0, 10), div.currency);
+    const ecbRate = getEcbRate(rateMap, normalizeDate(div.dateTime), div.currency);
     const grossAmount = new Decimal(div.amount);
 
     // Find matching withholding (same ISIN, same or close date)
@@ -38,7 +38,7 @@ export function calculateDividends(
         w.isin === div.isin &&
         w.currency === div.currency &&
         Math.abs(
-          parseDate(w.dateTime.slice(0, 10)).getTime() - parseDate(div.dateTime.slice(0, 10)).getTime(),
+          parseDate(normalizeDate(w.dateTime)).getTime() - parseDate(normalizeDate(div.dateTime)).getTime(),
         ) <= 7 * 24 * 60 * 60 * 1000, // Within 7 days
     );
 
@@ -53,7 +53,7 @@ export function calculateDividends(
       isin: div.isin,
       symbol: div.symbol,
       description: div.description,
-      payDate: div.dateTime.slice(0, 10),
+      payDate: normalizeDate(div.dateTime),
       grossAmountEur: grossAmount.mul(ecbRate),
       withholdingTaxEur: withholdingAmount.mul(ecbRate),
       withholdingCountry: country,

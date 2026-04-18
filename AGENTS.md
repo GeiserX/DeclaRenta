@@ -157,6 +157,14 @@ tests/           Vitest tests mirroring src/ structure
 3. Add tests in `tests/parsers/<broker>.test.ts` with anonymized fixture data
 4. Export from `src/index.ts`
 
+### IBKR DateTime Format (Hard Trace)
+- IBKR Flex Query dateTime fields use `YYYYMMDD;HHMMSS` format (e.g. `"20190916;130630"`), NOT `YYYY-MM-DD` or plain `YYYYMMDD`
+- **Symptom**: `Error: Invalid time value` when processing dividends/interest, or silently wrong ECB rate lookups
+- **Root cause**: Code using `dateTime.slice(0, 10)` gets `"20190916;1"` instead of a valid date — the semicolon is at position 8, not position 10
+- **Fix**: Always use `normalizeDate()` from `dates.ts` which strips the `;HHMMSS` time component. Never use raw `slice()` on dateTime fields.
+- **Safe pattern**: `slice(0, 8)` also works (extracts `"20190916"`) but `normalizeDate()` is preferred as it handles all formats
+- **Files affected**: `dividends.ts`, `report.ts` used `slice(0, 10)` — `fifo.ts` was safe because it used `slice(0, 8)` + `normalizeDate()`
+
 ### IBKR Multi-Account Flex Queries
 - When users export a Flex Query covering multiple IBKR accounts, the XML contains multiple `<FlexStatement>` elements inside `<FlexStatements count="N">`
 - The parser merges all accounts' trades, cashTransactions, corporateActions, openPositions, and securitiesInfo into a single combined FlexStatement

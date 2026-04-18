@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDate, daysBetween } from "../../src/engine/dates.js";
+import { normalizeDate, parseDate, daysBetween } from "../../src/engine/dates.js";
 
 describe("parseDate", () => {
   it("should parse YYYYMMDD format", () => {
@@ -14,6 +14,33 @@ describe("parseDate", () => {
     expect(d.getUTCFullYear()).toBe(2025);
     expect(d.getUTCMonth()).toBe(8); // September
     expect(d.getUTCDate()).toBe(20);
+  });
+});
+
+describe("normalizeDate", () => {
+  it("should normalize YYYYMMDD to YYYY-MM-DD", () => {
+    expect(normalizeDate("20190916")).toBe("2019-09-16");
+  });
+
+  it("should pass through YYYY-MM-DD unchanged", () => {
+    expect(normalizeDate("2019-09-16")).toBe("2019-09-16");
+  });
+
+  it("should strip IBKR semicolon time component", () => {
+    expect(normalizeDate("20190916;130630")).toBe("2019-09-16");
+  });
+
+  it("should handle IBKR datetime with midnight time", () => {
+    expect(normalizeDate("20200101;000000")).toBe("2020-01-01");
+  });
+});
+
+describe("parseDate with IBKR datetime", () => {
+  it("should parse YYYYMMDD;HHMMSS format", () => {
+    const d = parseDate("20190916;130630");
+    expect(d.getUTCFullYear()).toBe(2019);
+    expect(d.getUTCMonth()).toBe(8); // September
+    expect(d.getUTCDate()).toBe(16);
   });
 });
 
