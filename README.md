@@ -103,7 +103,7 @@ La web incluye:
 
 ### Web (recomendado)
 
-Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo.
+Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo. Alternativa: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/).
 
 Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
 
