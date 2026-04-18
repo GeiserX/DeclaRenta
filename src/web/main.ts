@@ -178,6 +178,10 @@ const pendingFiles: File[] = [];
 /** Parsed statement data (available after step 2) */
 let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
+/** Years detected from uploaded data (sorted descending, latest first) */
+let detectedYears: number[] = [];
+/** The active year for processing (auto-detected from data, changeable via dropdown) */
+let activeYear: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Wizard initialization
@@ -269,6 +273,8 @@ function addFiles(files: File[]) {
   // Reset downstream state when files change
   mergedStatement = null;
   currentReport = null;
+  activeYear = null;
+  detectedYears = [];
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
@@ -348,6 +354,20 @@ async function parseFiles(): Promise<void> {
 
     mergedStatement = merged;
     detectedBrokers = [...new Set(brokerNames)];
+
+    // Detect years from trades + cash transactions
+    const yearSet = new Set<number>();
+    for (const tr of merged.trades) yearSet.add(parseInt(tr.tradeDate.slice(0, 4)));
+    for (const ct of merged.cashTransactions) yearSet.add(parseInt(ct.dateTime.slice(0, 4)));
+    detectedYears = [...yearSet].sort((a, b) => b - a); // descending
+    if (detectedYears.length > 0 && !activeYear) {
+      activeYear = detectedYears[0]!;
+      // Sync profile so 720/721/D-6 use the same year
+      const profile = getProfile();
+      profile.year = activeYear;
+      saveProfile(profile);
+    }
+
     renderReview(merged, detectedBrokers);
     unlockStep(3);
   } catch (err) {
@@ -421,7 +441,7 @@ async function processFiles(): Promise<void> {
 
   try {
     const merged = mergedStatement;
-    const year = getProfile().year;
+    const year = activeYear ?? getProfile().year;
     const currencies = new Set<string>();
     for (const tr of merged.trades) currencies.add(tr.currency);
     for (const c of merged.cashTransactions) currencies.add(c.currency);
@@ -541,13 +561,11 @@ function renderResults(report: TaxSummary) {
   const yearHeader = document.getElementById("results-year-header");
   if (yearHeader) {
     const year = report.year;
-    const tradeYears = mergedStatement
-      ? [...new Set(mergedStatement.trades.map((tr) => tr.tradeDate.slice(0, 4)))].sort()
-      : [];
     const hasData = report.capitalGains.disposals.length > 0 || report.dividends.entries.length > 0;
 
-    const yearOptions = [...new Set([...tradeYears, String(year)])].sort()
-      .map((y) => `<option value="${y}"${y === String(year) ? " selected" : ""}>${y}</option>`)
+    const yearOptions = (detectedYears.length > 0 ? detectedYears : [year])
+      .slice().sort((a, b) => a - b)
+      .map((y) => `<option value="${y}"${y === year ? " selected" : ""}>${y}</option>`)
       .join("");
 
     let hdrHtml = `<div class="section-header-bar">
@@ -556,21 +574,23 @@ function renderResults(report: TaxSummary) {
       </span>
     </div>`;
 
-    if (!hasData && tradeYears.length > 0) {
+    if (!hasData && detectedYears.length > 0) {
       hdrHtml += `<div class="banner banner-warning">
-        <span>${t("results.year_mismatch", { year: String(year), available: tradeYears.join(", ") })}</span>
+        <span>${t("results.year_mismatch", { year: String(year), available: detectedYears.join(", ") })}</span>
       </div>`;
     }
     yearHeader.innerHTML = hdrHtml;
 
-    // Bind year selector — change profile year and re-process
+    // Bind year selector — change active year and re-process
     document.getElementById("results-year-select")?.addEventListener("change", (e) => {
       const newYear = parseInt((e.target as HTMLSelectElement).value);
       if (!isNaN(newYear)) {
+        activeYear = newYear;
+        // Sync profile so 720/721/D-6 use the same year
         const profile = getProfile();
         profile.year = newYear;
         saveProfile(profile);
-        initProfile(); // Refresh profile form
+        initProfile();
         void processFiles();
       }
     });
