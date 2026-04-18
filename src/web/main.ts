@@ -23,6 +23,7 @@ import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile } from "./profile.js";
 import { initBrokerGuides } from "./broker-guides.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
+import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import Decimal from "decimal.js";
@@ -75,6 +76,7 @@ document.addEventListener("localechange", () => {
   updateStaticText();
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
+  rerenderSection721();
   rerenderSectionD6();
   initProfile();
 });
@@ -186,6 +188,7 @@ initSidebar();
 initProfile();
 initBrokerGuides();
 initSection720();
+initSection721();
 initSectionD6();
 
 /** Control wizard "Next" behavior per step */
@@ -446,6 +449,7 @@ async function processFiles(): Promise<void> {
 
     // Render 720 and D-6 sections with processed data (non-blocking)
     try { renderSection720(merged, allRates); } catch { /* 720 render failed — section stays in empty state */ }
+    try { renderSection721(merged, allRates); } catch { /* 721 render failed — section stays in empty state */ }
     try { renderSectionD6(merged, allRates); } catch { /* D-6 render failed — section stays in empty state */ }
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {

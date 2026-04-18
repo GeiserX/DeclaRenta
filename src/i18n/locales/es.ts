@@ -140,6 +140,7 @@ const es = {
   "sidebar.profile": "Perfil fiscal",
   "sidebar.renta": "Modelo 100 (Renta)",
   "sidebar.m720": "Modelo 720",
+  "sidebar.m721": "Modelo 721",
   "sidebar.d6": "Modelo D-6",
   "sidebar.toggle": "Abrir/cerrar menú",
 
@@ -257,6 +258,30 @@ const es = {
   "d6.deadline_short": "Plazo: 1 – 31 enero",
   "d6.copy_failed": "Error al copiar",
   "d6.aforix_position_of": "Posición {{index}} de {{total}}",
+
+  // Modelo 721 section
+  "m721.title": "Modelo 721 — Criptomonedas en el extranjero",
+  "m721.description": "Declaración informativa sobre monedas virtuales situadas en el extranjero.",
+  "m721.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 721.",
+  "m721.threshold_not_exceeded": "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
+  "m721.no_positions": "Sube un informe con posiciones de criptomonedas en Modelo 100 para analizar el Modelo 721.",
+  "m721.positions_title": "Posiciones declarables",
+  "m721.generate_btn": "Generar fichero Modelo 721",
+  "m721.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
+  "m721.total_value": "Valor total: {{amount}} €",
+  "m721.filing_title": "¿Cómo presentarlo?",
+  "m721.rates_title": "Tipos de cambio aplicados (BCE)",
+  "m721.deadline_short": "Plazo: 1 enero – 31 marzo",
+  "m721.filing_step1": "Accede a la Sede Electrónica de la AEAT",
+  "m721.filing_step2": "Busca «Modelo 721»",
+  "m721.filing_step3": "Rellena la declaración con los datos de la tabla (formato oficial: XML, Orden HFP/886/2023)",
+  "m721.filing_step4": "Revisa y firma con certificado digital o Cl@ve",
+  "m721.exchange": "Exchange",
+  "m721.format_notice": "El formato oficial de la AEAT es XML (Orden HFP/886/2023). El fichero generado actualmente es un prototipo — verifica antes de presentar.",
+  "m721.empty_title": "No hay posiciones de criptomonedas",
+  "m721.empty_description": "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
+  "m721.empty_cta": "Ir a Modelo 100",
+  "m721.profile_required": "Completa tu perfil fiscal antes de generar el fichero del Modelo 721.",
 
   // Section headers
   "section.year_label": "Ejercicio",

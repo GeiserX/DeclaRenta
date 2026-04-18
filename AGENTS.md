@@ -47,6 +47,7 @@ src/
     profile.ts     Fiscal profile form (NIF, name, CCAA, phone, year → localStorage)
     broker-guides.ts  Visual broker card grid + step-by-step download guides
     section-720.ts    Modelo 720 section (threshold bar, positions, filing guide)
+    section-721.ts    Modelo 721 section (crypto threshold, positions, filing guide)
     section-d6.ts     Modelo D-6 section (positions, AFORIX guide, copy-to-clipboard)
     wizard.ts      3-step wizard within Renta section (Upload → Review → Results)
     charts.ts      Donut, bar, monthly G/L charts (pure SVG, no libs)
@@ -76,8 +77,8 @@ tests/           Vitest tests mirroring src/ structure
 
 ### Layout
 - **Sidebar + content area** grid layout (`grid-template-columns: 260px 1fr`)
-- 4 sections: Perfil fiscal, Modelo 100 (Renta), Modelo 720, Modelo D-6
-- Hash-based routing (`location.hash`): `#perfil`, `#renta`, `#m720`, `#d6`
+- 5 sections: Perfil fiscal, Modelo 100 (Renta), Modelo 720, Modelo 721, Modelo D-6
+- Hash-based routing (`location.hash`): `#perfil`, `#renta`, `#m720`, `#m721`, `#d6`
 - Mobile (≤768px): sidebar collapses, hamburger toggle with backdrop
 
 ### Splash Screen
@@ -149,6 +150,12 @@ tests/           Vitest tests mirroring src/ structure
 2. Implement a function that returns `FlexStatement`-compatible output (reuse the same types)
 3. Add tests in `tests/parsers/<broker>.test.ts` with anonymized fixture data
 4. Export from `src/index.ts`
+
+### IBKR Multi-Account Flex Queries
+- When users export a Flex Query covering multiple IBKR accounts, the XML contains multiple `<FlexStatement>` elements inside `<FlexStatements count="N">`
+- The parser merges all accounts' trades, cashTransactions, corporateActions, openPositions, and securitiesInfo into a single combined FlexStatement
+- `accountId` in the merged result is comma-separated (e.g., `"U1111111,U2222222"`)
+- The `isArray` config in fast-xml-parser must include `FlexQueryResponse.FlexStatements.FlexStatement` to handle both single and multi-account XMLs
 
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"

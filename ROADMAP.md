@@ -372,13 +372,27 @@ Tareas:
 | Foros Bogleheads ES | Post con tutorial | Mar 2027 |
 | dev.to / Medium | Artículo técnico sobre el motor FIFO y tipos ECB | Abr 2027 |
 
+### Más brokers
+
+| Broker | Formato | Prioridad | Notas |
+|--------|---------|-----------|-------|
+| **Trade Republic** | CSV/PDF | Alta | Broker más popular en España; ya reporta a AEAT pero usuarios necesitan verificar datos |
+| **Revolut** | CSV | Alta | Inversiones + crypto; base de usuarios masiva en España |
+| **XTB** | CSV | Media | Entidad española, pero muchos usuarios quieren verificar el borrador |
+| **MyInvestor** | PDF/CSV | Media | Roboadvisor español; fondos indexados con FIFO complejo |
+
 ### Funcionalidades avanzadas
 
+- [ ] **Modelo 100 XML pre-relleno** _(experimental/investigación)_: generar XML conforme al XSD anual (`Renta20XX.xsd`). Renta Web actualmente no soporta importación directa de ficheros — requiere entrada manual de casillas. El objetivo es generar XML para potencial uso futuro o integración con herramientas de terceros. AEAT publica el esquema pero no documenta proceso de importación.
 - [ ] **Complementarias y rectificativas**: detectar errores en declaraciones de años anteriores y generar complementaria
 - [ ] **Doble imposición avanzada**: aplicar convenios bilaterales específicos por país (ej. W-8BEN USA → retención 15% vs 30%)
-- [ ] **Optimizador fiscal**: sugerencias de tax-loss harvesting (qué vender antes de 31/dic para compensar ganancias)
+- [ ] **Optimizador fiscal (tax-loss harvesting)**: alertas proactivas: "Tienes pérdidas latentes en X que compensarían Y ganancias antes del 31/dic, ahorrando Z EUR". Simulador de escenarios.
 - [ ] **Importar borrador AEAT**: comparar datos declarados con datos calculados para detectar discrepancias
-- [ ] **Deducciones autonómicas**: casillas específicas por comunidad autónoma
+- [ ] **Deducciones autonómicas por CCAA**: usar la CCAA del perfil fiscal para mostrar deducciones aplicables (Madrid: inversión en empresas; Cataluña: alquiler; etc.)
+- [ ] **DeFi / staking / yield farming**: clasificación fiscal correcta de staking rewards (¿rendimiento del capital mobiliario o ganancia patrimonial?), liquidity pool income, airdrops. Zona gris regulatoria — guía informativa con referencias a consultas vinculantes de la DGT.
+- [ ] **Modelo 721 XML real**: migrar el stub de fixed-width a XML conforme a Orden HFP/886/2023 con schemas AEAT
+- [ ] **Continuidad FIFO multi-year**: persistir lotes FIFO entre años en localStorage/IndexedDB para que los usuarios no tengan que subir todo el histórico cada vez. Exportar/importar estado FIFO.
+- [ ] **Informe PDF profesional desde web**: versión rica del informe para llevar al asesor fiscal o adjuntar a la declaración — resumen ejecutivo, detalle por operación, tipos ECB, gráficos, normativa. El CLI ya genera PDF básico.
 - [ ] **Modelo 714 (Patrimonio)**: para patrimonios >700.000 € (o umbral según CCAA)
 - [ ] **MCP server**: integración con Claude Code / ChatGPT para consultas fiscales contextuales
 - [ ] **n8n node**: automatización de procesamiento periódico

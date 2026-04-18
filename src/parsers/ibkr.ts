@@ -22,6 +22,7 @@ const parser = new XMLParser({
   parseAttributeValue: false,
   isArray: (_name, jpath) => {
     const arrayPaths = [
+      "FlexQueryResponse.FlexStatements.FlexStatement",
       "FlexQueryResponse.FlexStatements.FlexStatement.Trades.Trade",
       "FlexQueryResponse.FlexStatements.FlexStatement.CashTransactions.CashTransaction",
       "FlexQueryResponse.FlexStatements.FlexStatement.CorporateActions.CorporateAction",
@@ -52,22 +53,37 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     throw new Error("Invalid Flex Query XML: missing FlexQueryResponse root element");
   }
 
-  const statement = response.FlexStatements?.FlexStatement;
-  if (!statement) {
+  const statements = ensureArray(response.FlexStatements?.FlexStatement);
+  if (statements.length === 0) {
     throw new Error("Invalid Flex Query XML: missing FlexStatement");
   }
 
-  const trades = ensureArray(statement.Trades?.Trade).map(mapTrade);
-  const cashTransactions = ensureArray(statement.CashTransactions?.CashTransaction).map(mapCashTransaction);
-  const corporateActions = ensureArray(statement.CorporateActions?.CorporateAction).map(mapCorporateAction);
-  const openPositions = ensureArray(statement.OpenPositions?.OpenPosition).map(mapOpenPosition);
-  const securitiesInfo = ensureArray(statement.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo);
+  // Merge all accounts into a single FlexStatement
+  const trades: ReturnType<typeof mapTrade>[] = [];
+  const cashTransactions: ReturnType<typeof mapCashTransaction>[] = [];
+  const corporateActions: ReturnType<typeof mapCorporateAction>[] = [];
+  const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
+  const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
+
+  for (const stmt of statements) {
+    trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
+    cashTransactions.push(...ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction));
+    corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
+    openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
+    securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
+  }
+
+  // Use first statement's metadata, combine accountIds for multi-account
+  const first = statements[0]!;
+  const accountId = statements.length === 1
+    ? (first.accountId ?? "")
+    : statements.map((s: Record<string, string>) => s.accountId ?? "").filter(Boolean).join(",");
 
   return {
-    accountId: statement.accountId ?? "",
-    fromDate: statement.fromDate ?? "",
-    toDate: statement.toDate ?? "",
-    period: statement.period ?? "",
+    accountId,
+    fromDate: first.fromDate ?? "",
+    toDate: first.toDate ?? "",
+    period: first.period ?? "",
     trades,
     cashTransactions,
     corporateActions,
