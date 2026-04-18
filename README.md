@@ -13,11 +13,16 @@
 </p>
 
 <p align="center">
+  <a href="https://declarenta.com"><img src="https://img.shields.io/badge/DeclaRenta-declarenta.com-DC2626?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik02IDlDMiA5IDAgOCAwIDVWMUMxIDAgMiAxIDMgM1Y2QzMgOCA1IDggOCA4VjlaIi8+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xOCA5QzIyIDkgMjQgOCAyNCA1VjFDMjMgMCAyMiAxIDIxIDNWNkMyMSA4IDE5IDggMTYgOFY5WiIvPjxwYXRoIGZpbGw9IndoaXRlIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01IDhDNSA3IDggNiAxMiA2QzE2IDYgMTkgNyAxOSA4VjE3QzE5IDIxIDE2IDIzIDEyIDIzQzcgMjMgNSAyMSA1IDE3Wk03IDEwSDExVjEzSDdaTTEzIDEwSDE3VjEzSDEzWiIvPjxyZWN0IHg9IjExIiB5PSIxMSIgd2lkdGg9IjIiIGhlaWdodD0iMSIgcng9Ii41IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjEwIiBjeT0iMTkiIHI9Ii44IiBmaWxsPSJ3aGl0ZSIvPjxjaXJjbGUgY3g9IjE0IiBjeT0iMTkiIHI9Ii44IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPgo=&logoColor=white" alt="DeclaRenta"/></a>
   <a href="https://github.com/GeiserX/DeclaRenta/blob/main/LICENSE"><img src="https://img.shields.io/github/license/GeiserX/DeclaRenta?style=flat-square&color=dc2626" alt="License"/></a>
   <a href="https://codecov.io/gh/GeiserX/DeclaRenta"><img src="https://img.shields.io/codecov/c/github/GeiserX/DeclaRenta?style=flat-square&color=f59e0b" alt="Codecov"/></a>
   <a href="https://github.com/GeiserX/DeclaRenta/actions"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/DeclaRenta/ci.yml?style=flat-square&label=CI" alt="CI"/></a>
   <a href="https://github.com/GeiserX/DeclaRenta/stargazers"><img src="https://img.shields.io/github/stars/GeiserX/DeclaRenta?style=flat-square&color=f59e0b" alt="Stars"/></a>
   <a href="https://github.com/GeiserX/awesome-spain#readme"><img src="https://img.shields.io/badge/listed%20on-awesome--spain-c60b1e?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgdmlld0JveD0iMCAwIDIwIDE0Ij48cmVjdCB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIGZpbGw9IiNjNjBiMWUiLz48cmVjdCB5PSIzLjUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3IiBmaWxsPSIjZmZjNDAwIi8+PC9zdmc+&labelColor=ffc400" alt="awesome-spain"/></a>
+</p>
+
+<p align="center">
+  <a href="https://declarenta.com"><strong>declarenta.com</strong></a> — Úsalo gratis, sin registro
 </p>
 
 <p align="center">
@@ -98,7 +103,7 @@ La web incluye:
 
 ### Web (recomendado)
 
-Visita [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/) — arrastra tus ficheros y listo.
+Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo.
 
 Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
 
