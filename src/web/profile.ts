@@ -125,13 +125,13 @@ export function initProfile(): void {
           ${yearOptions}
         </select>
       </label>
+      <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
     </form>
     <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
   `;
 
-  // Auto-save on any input change
-  document.getElementById("profile-form")!.addEventListener("input", () => {
-    const updated: FiscalProfile = {
+  function collectProfile(): FiscalProfile {
+    return {
       nif: (document.getElementById("profile-nif") as HTMLInputElement).value.trim().toUpperCase(),
       apellidos: (document.getElementById("profile-surname") as HTMLInputElement).value.trim(),
       nombre: (document.getElementById("profile-name") as HTMLInputElement).value.trim(),
@@ -139,7 +139,17 @@ export function initProfile(): void {
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
       year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
     };
-    saveProfile(updated);
+  }
+
+  // Auto-save on any input change
+  document.getElementById("profile-form")!.addEventListener("input", () => {
+    saveProfile(collectProfile());
+  });
+
+  // Explicit save button
+  document.getElementById("profile-form")!.addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveProfile(collectProfile());
     showSavedMessage();
   });
 }
