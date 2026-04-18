@@ -101,4 +101,7 @@ export function initBrokerGuides(): void {
   }
 
   update();
+
+  // Re-render when locale changes
+  document.addEventListener("localechange", () => update());
 }
