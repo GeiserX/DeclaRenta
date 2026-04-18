@@ -212,7 +212,7 @@ const ca: TranslationKeys = {
 
   "d6.title": "Model D-6 — Inversions a l'exterior",
   "d6.description": "Declaració al Registre d'Inversions del Ministeri d'Economia.",
-  "d6.no_minimum": "El D-6 és obligatori per a QUALSEVOL import. No té llindar mínim.",
+  "d6.no_minimum": "Des de l'Orden ICT/1408/2021, el D-6 només és obligatori si la teva participació representa el <strong>10% o més</strong> del capital o drets de vot d'una empresa cotitzada estrangera. La majoria d'inversors minoristes estan exempts.",
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
   "d6.positions_title": "Posicions a declarar",
   "d6.cancellations_title": "Cancel·lacions",
@@ -240,7 +240,7 @@ const ca: TranslationKeys = {
   "m720.empty_description": "El Model 720 és una declaració informativa obligatòria si posseeixes béns a l'estranger valorats en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar i generi el fitxer. Termini: 1 de gener – 31 de març.",
   "m720.empty_cta": "Anar a Model 100",
   "d6.empty_title": "No hi ha posicions carregades",
-  "d6.empty_description": "El Model D-6 declara les teves inversions en valors estrangers davant el Ministeri d'Economia. És obligatori per a QUALSEVOL import (sense llindar mínim). Puja el teu informe del broker a la secció Model 100 i DeclaRenta generarà la guia pas a pas per emplenar el formulari AFORIX. Termini: 1 – 31 de gener.",
+  "d6.empty_description": "El Model D-6 declara les teves inversions en valors estrangers davant el Ministeri d'Economia. Des de la reforma de 2021 (Orden ICT/1408/2021), només és obligatori si la teva participació representa el 10% o més del capital o drets de vot d'una empresa cotitzada estrangera. Puja el teu informe del broker a la secció Model 100 i DeclaRenta generarà la guia pas a pas. Termini: 1 – 31 de gener.",
   "d6.empty_cta": "Anar a Model 100",
 
   // Profile required warnings
