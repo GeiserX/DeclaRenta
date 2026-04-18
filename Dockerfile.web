@@ -1,12 +1,15 @@
 FROM node:22-alpine AS builder
 
+ARG APP_VERSION=dev
+ARG COMMIT_HASH=dev
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npx vite build --base=/
+RUN APP_VERSION=${APP_VERSION} COMMIT_HASH=${COMMIT_HASH} npx vite build --base=/
 
 FROM nginx:1.27-alpine
 

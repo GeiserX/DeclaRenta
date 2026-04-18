@@ -32,6 +32,7 @@ const ca: TranslationKeys = {
   "results.export_csv": "Exportar CSV",
   "results.operations_count": "{{count}} operació(ns)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.year_mismatch": "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Canvia'l al teu Perfil fiscal.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbol",
