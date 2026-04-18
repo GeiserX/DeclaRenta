@@ -20,7 +20,7 @@ import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
-import { initProfile, getProfile } from "./profile.js";
+import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides } from "./broker-guides.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
@@ -537,6 +537,45 @@ function formatDate(d: string): string {
 }
 
 function renderResults(report: TaxSummary) {
+  // Year header bar with selector + mismatch warning
+  const yearHeader = document.getElementById("results-year-header");
+  if (yearHeader) {
+    const year = report.year;
+    const tradeYears = mergedStatement
+      ? [...new Set(mergedStatement.trades.map((tr) => tr.tradeDate.slice(0, 4)))].sort()
+      : [];
+    const hasData = report.capitalGains.disposals.length > 0 || report.dividends.entries.length > 0;
+
+    const yearOptions = [...new Set([...tradeYears, String(year)])].sort()
+      .map((y) => `<option value="${y}"${y === String(year) ? " selected" : ""}>${y}</option>`)
+      .join("");
+
+    let hdrHtml = `<div class="section-header-bar">
+      <span class="section-year">${t("section.year_label")}
+        <select id="results-year-select" class="year-select">${yearOptions}</select>
+      </span>
+    </div>`;
+
+    if (!hasData && tradeYears.length > 0) {
+      hdrHtml += `<div class="banner banner-warning">
+        <span>${t("results.year_mismatch", { year: String(year), available: tradeYears.join(", ") })}</span>
+      </div>`;
+    }
+    yearHeader.innerHTML = hdrHtml;
+
+    // Bind year selector — change profile year and re-process
+    document.getElementById("results-year-select")?.addEventListener("change", (e) => {
+      const newYear = parseInt((e.target as HTMLSelectElement).value);
+      if (!isNaN(newYear)) {
+        const profile = getProfile();
+        profile.year = newYear;
+        saveProfile(profile);
+        initProfile(); // Refresh profile form
+        void processFiles();
+      }
+    });
+  }
+
   // Expandable casilla cards (replaces old table)
   renderCasillaCards(casillasDiv, report);
 
