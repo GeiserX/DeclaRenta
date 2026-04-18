@@ -219,10 +219,12 @@ describe("Phase 5 — Bonds (BOND)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Forex / CASH
+// 3. Forex / CASH — excluded from FIFO processing
+// FX gain/loss is already embedded in securities trades via ECB rate conversion.
+// Processing CASH separately would double-count forex movements.
 // ---------------------------------------------------------------------------
 describe("Phase 5 — Forex / CASH", () => {
-  it("should calculate forex gain on GBP position", () => {
+  it("should exclude CASH trades from FIFO (no disposals)", () => {
     const rates = makeRateMap({
       "2025-03-15": { "GBP": "1.15" },
       "2025-09-20": { "GBP": "1.18" },
@@ -246,57 +248,9 @@ describe("Phase 5 — Forex / CASH", () => {
     const engine = new FifoEngine();
     const disposals = engine.processTrades(trades, rates);
 
-    expect(disposals).toHaveLength(1);
-    const d = disposals[0]!;
-
-    // Cost: 10000 * 1 * 1 * 1.15 = 11,500 EUR
-    expect(d.costBasisEur.toFixed(2)).toBe("11500.00");
-    // Proceeds: 10000 * 1 * 1 * 1.18 = 11,800 EUR
-    expect(d.proceedsEur.toFixed(2)).toBe("11800.00");
-    // Gain: 11,800 - 11,500 = 300 EUR (pure FX gain)
-    expect(d.gainLossEur.toFixed(2)).toBe("300.00");
-    expect(d.assetCategory).toBe("CASH");
-  });
-
-  it("should NOT apply anti-churning to forex losses", () => {
-    const rates = makeRateMap({
-      "2025-03-15": { "GBP": "1.15" },
-      "2025-06-15": { "GBP": "1.10" },
-      "2025-07-01": { "GBP": "1.12" },
-    });
-
-    const trades: Trade[] = [
-      makeTrade({
-        tradeID: "1", symbol: "GBP.USD", isin: "", assetCategory: "CASH",
-        currency: "GBP", tradeDate: "2025-03-15",
-        quantity: "10000", tradePrice: "1", multiplier: "1", buySell: "BUY",
-        commissionCurrency: "GBP",
-      }),
-      // Sell at a loss (GBP weakened against EUR)
-      makeTrade({
-        tradeID: "2", symbol: "GBP.USD", isin: "", assetCategory: "CASH",
-        currency: "GBP", tradeDate: "2025-06-15",
-        quantity: "-10000", tradePrice: "1", multiplier: "1", buySell: "SELL",
-        commissionCurrency: "GBP",
-      }),
-      // Repurchase within 2 months
-      makeTrade({
-        tradeID: "3", symbol: "GBP.USD", isin: "", assetCategory: "CASH",
-        currency: "GBP", tradeDate: "2025-07-01",
-        quantity: "10000", tradePrice: "1", multiplier: "1", buySell: "BUY",
-        commissionCurrency: "GBP",
-      }),
-    ];
-
-    const engine = new FifoEngine();
-    const disposals = engine.processTrades(trades, rates);
-    const checked = detectWashSales(disposals, trades);
-
-    expect(checked).toHaveLength(1);
-    // Loss: (1*10000*1.10) - (1*10000*1.15) = 11000 - 11500 = -500 EUR
-    expect(checked[0]!.gainLossEur.toFixed(2)).toBe("-500.00");
-    // Forex is NOT "valores homogeneos" — must NOT block
-    expect(checked[0]!.washSaleBlocked).toBe(false);
+    // CASH trades are filtered out — FX gain/loss is captured via ECB rates on securities
+    expect(disposals).toHaveLength(0);
+    expect(engine.warnings).toHaveLength(0);
   });
 });
 
