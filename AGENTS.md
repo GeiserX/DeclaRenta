@@ -7,7 +7,7 @@ DeclaRenta converts foreign broker reports into Spanish tax declarations (Modelo
 - **Domain**: [declarenta.com](https://declarenta.com) (Cloudflare, Namecheap registrar)
 - **Alt URL**: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/)
 - **Docker**: `drumsergio/declarenta` on Docker Hub
-- **Prod**: geiserback:3080 (manual `docker run`, NOT Portainer)
+- **Prod**: geiserback:3080 → Caddy reverse proxy → declarenta.com (manual `docker run`, NOT Portainer)
 
 ### Supported Brokers (8)
 
@@ -115,9 +115,10 @@ tests/           Vitest tests mirroring src/ structure
 - Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.15.6`
 - Container name on geiserback: `declarenta-web`
 
-### GitHub Pages
+### GitHub Pages (mirror)
 - Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow
-- Serves at geiserx.github.io/DeclaRenta and declarenta.com (Cloudflare CNAME)
+- Serves at geiserx.github.io/DeclaRenta (alternative URL only)
+- declarenta.com does NOT point here — it points to geiserback via Caddy
 
 ## Critical Rules
 
