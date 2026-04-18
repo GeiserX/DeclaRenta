@@ -444,9 +444,9 @@ async function processFiles(): Promise<void> {
     unlockStep(3);
     renderResults(report);
 
-    // Render 720 and D-6 sections with processed data
-    renderSection720(merged, allRates);
-    renderSectionD6(merged, allRates);
+    // Render 720 and D-6 sections with processed data (non-blocking)
+    try { renderSection720(merged, allRates); } catch { /* 720 render failed — section stays in empty state */ }
+    try { renderSectionD6(merged, allRates); } catch { /* D-6 render failed — section stays in empty state */ }
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
