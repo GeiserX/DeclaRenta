@@ -243,7 +243,7 @@ const ca: TranslationKeys = {
   "m721.deadline_short": "Termini: 1 gener – 31 març",
   "m721.filing_step1": "Accedeix a la Seu Electrònica de l'AEAT",
   "m721.filing_step2": "Cerca «Modelo 721»",
-  "m721.filing_step3": "Importa el fitxer generat (format XML, Ordre HFP/886/2023)",
+  "m721.filing_step3": "Omple la declaració amb les dades de la taula (format oficial: XML, Ordre HFP/886/2023)",
   "m721.filing_step4": "Revisa i signa amb certificat digital o Cl@ve",
   "m721.exchange": "Exchange",
   "m721.format_notice": "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). El fitxer generat actualment és un prototip — verifica abans de presentar.",

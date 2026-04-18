@@ -247,7 +247,7 @@ const en: TranslationKeys = {
   "m721.deadline_short": "Deadline: Jan 1 – Mar 31",
   "m721.filing_step1": "Access the AEAT Electronic Office",
   "m721.filing_step2": "Search for «Modelo 721»",
-  "m721.filing_step3": "Import the generated file (XML format, Orden HFP/886/2023)",
+  "m721.filing_step3": "Fill in the declaration using the data from the table (official format: XML, Orden HFP/886/2023)",
   "m721.filing_step4": "Review and sign with digital certificate or Cl@ve",
   "m721.exchange": "Exchange",
   "m721.format_notice": "The official AEAT format is XML (Orden HFP/886/2023). The currently generated file is a prototype — verify before filing.",

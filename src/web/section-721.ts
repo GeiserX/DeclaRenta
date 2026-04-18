@@ -25,7 +25,7 @@ function effectiveYearEnd(year: number): string {
 }
 
 /** Crypto asset categories recognized by DeclaRenta parsers */
-const CRYPTO_CATEGORIES = new Set(["CRYPTO", "CASH"]);
+const CRYPTO_CATEGORIES = new Set(["CRYPTO"]);
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
@@ -88,7 +88,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   // Profile warning
   if (!isProfileComplete()) {
     html += `<div class="banner banner-warning">
-      <span>${t("profile.incomplete_banner")}</span>
+      <span>${t("m721.profile_required")}</span>
       <a href="#perfil">${t("profile.go_to_profile")}</a>
     </div>`;
   }
@@ -127,9 +127,10 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     <tbody>${positions.map((p) => {
       const rate = getEcbRate(rateMap, yearEnd, p.currency);
       const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
+      const exchange = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "—";
       return `<tr>
-        <td class="mono">${esc(p.description || p.isin)}</td>
-        <td>${esc(p.isin.slice(0, 2))}</td>
+        <td class="mono">${esc(p.description || p.isin || p.symbol)}</td>
+        <td>${esc(exchange)}</td>
         <td>${new Decimal(p.quantity).toString()}</td>
         <td>${val}</td>
       </tr>`;
@@ -202,11 +203,12 @@ async function generate721File(): Promise<void> {
 
   const entries = positions.map((p) => {
     const rate = getEcbRate(cachedRateMap!, yearEnd, p.currency);
+    const isinPrefix = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "";
     return {
-      assetId: p.isin || p.description,
+      assetId: p.isin || p.description || p.symbol,
       description: p.description,
-      exchangeName: p.isin.slice(0, 2),
-      countryCode: p.isin.slice(0, 2).toUpperCase(),
+      exchangeName: isinPrefix || "CRYPTO",
+      countryCode: isinPrefix.toUpperCase() || "XX",
       quantity: new Decimal(p.quantity),
       valuationEur: new Decimal(p.positionValue).mul(rate),
       acquisitionCostEur: new Decimal(p.costBasisMoney || 0).mul(rate),
@@ -228,7 +230,7 @@ async function generate721File(): Promise<void> {
   const result = generateModelo721(entries, config);
   if (!result) return;
 
-  const blob = new Blob([result], { type: "text/plain;charset=iso-8859-15" });
+  const blob = new Blob([result], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -241,5 +243,7 @@ async function generate721File(): Promise<void> {
 export function rerenderSection721(): void {
   if (cachedStatement && cachedRateMap) {
     renderSection721(cachedStatement, cachedRateMap);
+  } else {
+    initSection721();
   }
 }

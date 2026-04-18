@@ -383,7 +383,7 @@ Tareas:
 
 ### Funcionalidades avanzadas
 
-- [ ] **Modelo 100 XML pre-relleno**: generar XML importable en Renta Web usando el XSD anual (`Renta20XX.xsd`). Ningún competidor lo ofrece gratis — sería el mayor diferenciador del mercado. AEAT no documenta el proceso de importación pero el esquema es público.
+- [ ] **Modelo 100 XML pre-relleno** _(experimental/investigación)_: generar XML conforme al XSD anual (`Renta20XX.xsd`). Renta Web actualmente no soporta importación directa de ficheros — requiere entrada manual de casillas. El objetivo es generar XML para potencial uso futuro o integración con herramientas de terceros. AEAT publica el esquema pero no documenta proceso de importación.
 - [ ] **Complementarias y rectificativas**: detectar errores en declaraciones de años anteriores y generar complementaria
 - [ ] **Doble imposición avanzada**: aplicar convenios bilaterales específicos por país (ej. W-8BEN USA → retención 15% vs 30%)
 - [ ] **Optimizador fiscal (tax-loss harvesting)**: alertas proactivas: "Tienes pérdidas latentes en X que compensarían Y ganancias antes del 31/dic, ahorrando Z EUR". Simulador de escenarios.

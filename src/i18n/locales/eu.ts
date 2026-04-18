@@ -243,7 +243,7 @@ const eu: TranslationKeys = {
   "m721.deadline_short": "Epea: urtarrilak 1 – martxoak 31",
   "m721.filing_step1": "Sartu AEATen Egoitza Elektronikoan",
   "m721.filing_step2": "Bilatu «Modelo 721»",
-  "m721.filing_step3": "Inportatu sortutako fitxategia (XML formatua, HFP/886/2023 Agindua)",
+  "m721.filing_step3": "Bete aitorpena taulako datuekin (formatu ofiziala: XML, HFP/886/2023 Agindua)",
   "m721.filing_step4": "Berrikusi eta sinatu ziurtagiri digitalarekin edo Cl@ve-rekin",
   "m721.exchange": "Exchange",
   "m721.format_notice": "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). Orain sortutako fitxategia prototipoa da — egiaztatu aurkeztu aurretik.",

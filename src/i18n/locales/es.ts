@@ -274,7 +274,7 @@ const es = {
   "m721.deadline_short": "Plazo: 1 enero – 31 marzo",
   "m721.filing_step1": "Accede a la Sede Electrónica de la AEAT",
   "m721.filing_step2": "Busca «Modelo 721»",
-  "m721.filing_step3": "Importa el fichero generado (formato XML, Orden HFP/886/2023)",
+  "m721.filing_step3": "Rellena la declaración con los datos de la tabla (formato oficial: XML, Orden HFP/886/2023)",
   "m721.filing_step4": "Revisa y firma con certificado digital o Cl@ve",
   "m721.exchange": "Exchange",
   "m721.format_notice": "El formato oficial de la AEAT es XML (Orden HFP/886/2023). El fichero generado actualmente es un prototipo — verifica antes de presentar.",
