@@ -594,6 +594,8 @@ details ul {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .sidebar-toggle {
@@ -1843,8 +1845,23 @@ footer a:hover {
     padding: 1.5rem;
   }
 
+  .splash-cta {
+    padding: 0.8rem 2rem;
+    max-width: 240px;
+    width: auto;
+  }
+
   .splash-features {
     gap: 0.5rem 1rem;
+  }
+
+  .top-bar-brand h1 {
+    display: none;
+  }
+
+  .top-bar-legal {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.4rem;
   }
 
   .sidebar-toggle {

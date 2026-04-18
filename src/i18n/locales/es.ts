@@ -58,7 +58,7 @@ const es = {
   "casilla.net_gain_loss": "Ganancia/Pérdida neta",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Intereses ganados",
-  "casilla.interest_paid": "Intereses pagados (margen)",
+  "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible)",
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.blocked_losses": "Pérdidas bloqueadas por regla anti-churning (2 meses): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",

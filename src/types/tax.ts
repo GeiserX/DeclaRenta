@@ -100,7 +100,7 @@ export interface TaxSummary {
   interest: {
     /** Casilla 0033: Intereses de cuentas y depósitos */
     earned: Decimal;
-    /** Casilla 0032: Gastos deducibles (margin interest) */
+    /** Casilla 0032: Intereses pagados al broker (margen, informativo — no deducible) */
     paid: Decimal;
     entries: InterestEntry[];
   };

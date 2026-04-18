@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"sleep 30 && unset GITHUB_TOKEN && gh pr checks 29 --repo GeiserX/DeclaRenta\",\"description\":\"Wait for CodeRabbit to finish\"}",
+  "error": "Exit code 8\nGitGuardian Security Checks\tpass\t1s\thttps://dashboard.gitguardian.com\t\ncodecov/patch\tpass\t0\thttps://app.codecov.io/gh/GeiserX/DeclaRenta/pull/29\t\ncodecov/project\tpass\t0\thttps://app.codecov.io/gh/GeiserX/DeclaRenta/pull/29\t\ntest (20)\tpass\t27s\thttps://github.com/GeiserX/DeclaRenta/actions/runs/24600202600/job/71937486130\t\ntest (22)\tpass\t32s\thttps://github.com/GeiserX/DeclaRenta/actions/runs/24600202600/job/71937486132\t\nCodeRabbit\tpending\t0\t\tReview in progress",
+  "timestamp": "2026-04-18T07:53:05.063Z",
+  "retry_count": 2
+}
