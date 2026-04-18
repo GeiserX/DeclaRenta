@@ -15,6 +15,7 @@ import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { getEcbRate } from "../engine/ecb.js";
+import { normalizeDate } from "../engine/dates.js";
 
 /**
  * Generate a complete tax report from an IBKR Flex Statement.
@@ -68,7 +69,7 @@ export function generateTaxReport(
   let interestEarned = new Decimal(0);
   let interestPaid = new Decimal(0);
   const interestEntries = interestTransactions.map((t) => {
-    const ecbRate = getEcbRate(rateMap, t.dateTime.slice(0, 10), t.currency);
+    const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
     const amountEur = new Decimal(t.amount).mul(ecbRate);
     const isEarned = t.type.includes("Received");
 
@@ -81,7 +82,7 @@ export function generateTaxReport(
     return {
       type: isEarned ? "earned" as const : "paid" as const,
       description: t.description,
-      date: t.dateTime.slice(0, 10),
+      date: normalizeDate(t.dateTime),
       amountEur: amountEur.abs(),
       currency: t.currency,
       ecbRate,
