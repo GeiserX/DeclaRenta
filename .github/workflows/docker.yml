@@ -35,5 +35,8 @@ jobs:
           platforms: linux/amd64
           tags: |
             drumsergio/declarenta:${{ steps.meta.outputs.version }}
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            COMMIT_HASH=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

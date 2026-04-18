@@ -1503,6 +1503,21 @@ footer a:hover {
   opacity: 0.9;
 }
 
+.year-select {
+  background: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 0.25rem;
+}
+
+.year-select:hover { background: rgba(255, 255, 255, 0.3); }
+.year-select option { color: #1e293b; }
+
 /* Exchange rates display */
 .rates-display {
   margin: 1.5rem 0;

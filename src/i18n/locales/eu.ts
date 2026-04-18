@@ -32,6 +32,7 @@ const eu: TranslationKeys = {
   "results.export_csv": "Esportatu CSV",
   "results.operations_count": "{{count}} eragiketa",
   "results.dividends_count": "{{count}} dibidendu",
+  "results.year_mismatch": "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Aldatu zure Zerga Profilean.",
 
   "table.isin": "ISIN",
   "table.symbol": "Sinboloa",
