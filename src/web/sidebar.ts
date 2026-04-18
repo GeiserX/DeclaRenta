@@ -1,11 +1,11 @@
 /**
  * Sidebar navigation for DeclaRenta.
  *
- * Hash-based routing between sections: #perfil, #renta, #m720, #d6.
+ * Hash-based routing between sections: #perfil, #renta, #m720, #m721, #d6.
  * Mobile: hamburger toggle with backdrop overlay.
  */
 
-const SECTIONS = ["perfil", "renta", "m720", "d6"] as const;
+const SECTIONS = ["perfil", "renta", "m720", "m721", "d6"] as const;
 type Section = (typeof SECTIONS)[number];
 
 function isSection(value: string): value is Section {
