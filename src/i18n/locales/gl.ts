@@ -55,9 +55,9 @@ const gl: TranslationKeys = {
   "casilla.net_gain_loss": "Ganancia/Perda neta",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Xuros gañados",
-  "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible)",
+  "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible — informativo)",
   "casilla.double_taxation": "Dedución dobre imposición",
-  "casilla.blocked_losses": "Perdas bloqueadas pola regra anti-churning (2 meses): {{amount}} EUR",
+  "casilla.blocked_losses": "Perdas bloqueadas pola regra anti-churning (2 meses cotizados / 1 ano non cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
 
   "chart.asset_distribution": "Distribución por tipo de activo",

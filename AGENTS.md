@@ -30,13 +30,14 @@ src/
   engine/        Core calculation modules
     fifo.ts      FIFO cost basis engine (Art. 37.2 LIRPF)
     ecb.ts       ECB exchange rate fetcher (SDMX API)
-    wash-sale.ts Anti-churning rule detector (Art. 33.5.f LIRPF, 2 months)
+    wash-sale.ts Anti-churning rule detector (Art. 33.5.f LIRPF, 2 months listed / 1 year unlisted)
     dividends.ts Dividend + withholding tax processor
     double-taxation.ts  Double taxation deduction (Art. 80 LIRPF, Casilla 0588)
     dates.ts     Date normalization utilities
   generators/    Output generators
     report.ts    Modelo 100 casilla mapper
     modelo720.ts AEAT 720 fixed-width file (500 bytes/record, ISO-8859-15)
+    modelo721.ts Modelo 721 stub (real format is XML per Orden HFP/886/2023)
     d6.ts        D-6 report generator (AFORIX format)
     csv.ts       CSV export
   cli/           CLI entry point (commander)
@@ -131,13 +132,16 @@ tests/           Vitest tests mirroring src/ structure
 
 ### Spanish Tax Law References
 - **Art. 37.2 LIRPF**: FIFO mandatory for homogeneous securities
-- **Art. 33.5.f LIRPF**: Anti-churning rule — losses blocked if same security repurchased within 2 months
+- **Art. 33.5.f LIRPF**: Anti-churning rule — losses blocked if same security repurchased within 2 calendar months (listed on regulated markets) or 1 year (unlisted, including most crypto)
 - **Art. 80 LIRPF**: Double taxation deduction — lesser of foreign tax paid or Spanish tax due
-- **Casillas**: 0327-0328 (capital gains), 0029 (dividends), 0032-0033 (interest), 0588 (double taxation)
+- **Art. 26.1.a LIRPF**: Only custody/administration fees are deductible from capital income. Margin interest is NOT deductible — shown as informational only.
+- **Casillas**: 0327-0328 (capital gains), 0029 (dividends), 0033 (interest income), 0588 (double taxation). Real casilla 0032 = insurance income (Art. 25.3), not broker margin interest.
+- **Savings brackets (2025+, Ley 7/2024)**: 19% (0–6k), 21% (6k–50k), 23% (50k–200k), 27% (200k–300k), 30% (>300k)
 
 ### AEAT Formats
 - **Modelo 100**: No file import in Renta Web. Tool generates casilla values for manual entry. XSD published annually (`Renta20XX.xsd`).
 - **Modelo 720**: Fixed-width text file, 500 bytes/record, ISO-8859-15 encoding. Submitted via TGVI.
+- **Modelo 721**: Real AEAT format is XML with schemas (Orden HFP/886/2023). Current stub uses fixed-width for prototyping only.
 - **Modelo D-6**: Similar fixed-width format. Deadline: January 31.
 
 ### Adding a New Broker Parser

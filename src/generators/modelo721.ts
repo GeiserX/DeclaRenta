@@ -4,9 +4,9 @@
  * Modelo 721 is the declaration of crypto assets held on foreign exchanges
  * when their total value exceeds 50,000 EUR at Dec 31.
  *
- * Format: fixed-width 500 bytes/record (same structure as Modelo 720).
- * This is a stub — no crypto parsers exist yet. Users would need to provide
- * position data manually or wait for Coinbase/Binance parsers.
+ * Format: The real AEAT format is XML (Orden HFP/886/2023, with XML schemas).
+ * This stub currently uses a fixed-width layout for prototyping only —
+ * it must be migrated to XML before production use.
  */
 
 import Decimal from "decimal.js";
@@ -55,7 +55,7 @@ function numPad(value: string, intLen: number, decLen: number): string {
 }
 
 /**
- * Generate Modelo 721 fixed-width text from crypto positions.
+ * Generate Modelo 721 stub (fixed-width prototype — real format is XML per Orden HFP/886/2023).
  *
  * @param entries - Crypto positions at year end
  * @param config - Taxpayer information

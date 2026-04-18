@@ -114,7 +114,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         ["", "Ganancia/Pérdida neta", formatEur(report.capitalGains.netGainLoss)],
         ["Casilla 0029", "Dividendos brutos", formatEur(report.dividends.grossIncome)],
         ["Casilla 0033", "Intereses ganados", formatEur(report.interest.earned)],
-        ["Casilla 0032", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
+        ["Informativo", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
       ];
 

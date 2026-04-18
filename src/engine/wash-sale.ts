@@ -2,8 +2,15 @@
  * Anti-churning rule detector (Art. 33.5.f LIRPF).
  *
  * Spanish tax law blocks capital losses if the same security
- * (or "homogeneous" security) is repurchased within 2 months
- * before or after the sale date.
+ * (or "homogeneous" security) is repurchased within:
+ * - **2 calendar months** before or after the sale — for securities
+ *   admitted to trading on regulated markets (STK, FUND, BOND on MiFID venues).
+ * - **1 year** before or after the sale — for securities NOT admitted
+ *   to trading on regulated markets (most crypto, unlisted shares, etc.).
+ *
+ * Current implementation uses 2 months for all non-exempt categories
+ * and exempts CRYPTO entirely. When crypto parsers are fully integrated,
+ * crypto should use the 1-year window instead of being exempt.
  */
 
 import type { FifoDisposal } from "../types/tax.js";

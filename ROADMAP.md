@@ -32,7 +32,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 |--------|-------------|----------|--------------|
 | **100 (IRPF)** | Renta: ganancias, dividendos, intereses | abr-jun (año siguiente) | XSD (`Renta20XX.xsd`), pero Renta Web NO importa ficheros — entrada manual por casillas |
 | **720** | Bienes y derechos en el extranjero (>50.000 €) | 1 ene - 31 mar | Fixed-width 500 bytes/registro, ISO-8859-15, vía TGVI Online |
-| **721** | Criptomonedas en el extranjero (>50.000 €) | 1 ene - 31 mar | Fixed-width similar a 720 |
+| **721** | Criptomonedas en el extranjero (>50.000 €) | 1 ene - 31 mar | XML (Orden HFP/886/2023) |
 | **D-6** | Inversiones españolas en el exterior | 1-31 ene | Formulario Banco de España (no AEAT) |
 | **714 (Patrimonio)** | Patrimonio neto (>700.000 € o norma CCAA) | abr-jun (con IRPF) | XSD similar a Modelo 100 |
 
@@ -262,7 +262,7 @@ Tareas:
 - [x] Parser Coinbase (CSV)
 - [x] Parser Binance (CSV)
 - [x] Parser Kraken (CSV/ledger)
-- [x] Generador 721: formato fixed-width AEAT (stub — sin parsers crypto aún)
+- [x] Generador 721: stub (formato real es XML per Orden HFP/886/2023 — pendiente de migrar)
 - [x] Umbral 50.000 € en criptomonedas en exchanges extranjeros
 
 #### Multi-year
