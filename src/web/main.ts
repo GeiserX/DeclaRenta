@@ -22,8 +22,8 @@ import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from 
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile } from "./profile.js";
 import { initBrokerGuides } from "./broker-guides.js";
-import { initSection720, renderSection720 } from "./section-720.js";
-import { initSectionD6, renderSectionD6 } from "./section-d6.js";
+import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
+import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import Decimal from "decimal.js";
 
@@ -74,6 +74,9 @@ langSelect.addEventListener("change", () => {
 document.addEventListener("localechange", () => {
   updateStaticText();
   if (currentReport) renderResults(currentReport);
+  rerenderSection720();
+  rerenderSectionD6();
+  initProfile();
 });
 
 updateStaticText();
