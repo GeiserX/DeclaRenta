@@ -2,25 +2,61 @@
 
 ## Project Overview
 
-DeclaRenta converts foreign broker reports (IBKR, Degiro, Trade Republic) into Spanish tax declarations (Modelo 100, 720, D-6). Browser-first, privacy-focused. All financial data stays on the user's machine.
+DeclaRenta converts foreign broker reports into Spanish tax declarations (Modelo 100, 720, 721, D-6). Browser-first, privacy-focused. All financial data stays on the user's machine.
+
+- **Domain**: [declarenta.com](https://declarenta.com) (Cloudflare, Namecheap registrar)
+- **Alt URL**: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/)
+- **Docker**: `drumsergio/declarenta` on Docker Hub
+- **Prod**: geiserback:3080 (manual `docker run`, NOT Portainer)
+
+### Supported Brokers (8)
+
+IBKR (XML), Degiro (CSV), eToro (XLSX), Scalable Capital (CSV), Freedom24 (JSON), Coinbase (CSV), Binance (CSV), Kraken (CSV)
 
 ## Architecture
 
 ```
 src/
-  types/         TypeScript interfaces (IBKR Flex XML, tax types, ECB rates)
-  parsers/       Broker-specific parsers (IBKR Flex Query XML)
+  types/         TypeScript interfaces (broker, tax, ECB, IBKR)
+  parsers/       Broker-specific parsers (8 brokers + auto-detect)
+    index.ts     detectBroker() auto-detection, brokerParsers registry
+    ibkr.ts      IBKR Flex Query XML
+    degiro.ts    Degiro CSV (auto-detect delimiter)
+    etoro.ts     eToro XLSX (6+ header variants)
+    scalable.ts  Scalable Capital CSV
+    freedom24.ts Freedom24 JSON
+    coinbase.ts  Coinbase CSV
+    binance.ts   Binance CSV
+    kraken.ts    Kraken CSV
   engine/        Core calculation modules
     fifo.ts      FIFO cost basis engine (Art. 37.2 LIRPF)
     ecb.ts       ECB exchange rate fetcher (SDMX API)
     wash-sale.ts Anti-churning rule detector (Art. 33.5.f LIRPF, 2 months)
     dividends.ts Dividend + withholding tax processor
     double-taxation.ts  Double taxation deduction (Art. 80 LIRPF, Casilla 0588)
+    dates.ts     Date normalization utilities
   generators/    Output generators
     report.ts    Modelo 100 casilla mapper
     modelo720.ts AEAT 720 fixed-width file (500 bytes/record, ISO-8859-15)
+    d6.ts        D-6 report generator (AFORIX format)
+    csv.ts       CSV export
   cli/           CLI entry point (commander)
   web/           Browser UI (Vite, vanilla TS)
+    main.ts        Entry point, splash screen, wizard orchestration, file upload
+    sidebar.ts     Hash-based routing (#perfil, #renta, #m720, #d6), mobile toggle
+    profile.ts     Fiscal profile form (NIF, name, CCAA, phone, year → localStorage)
+    broker-guides.ts  Visual broker card grid + step-by-step download guides
+    section-720.ts    Modelo 720 section (threshold bar, positions, filing guide)
+    section-d6.ts     Modelo D-6 section (positions, AFORIX guide, copy-to-clipboard)
+    wizard.ts      3-step wizard within Renta section (Upload → Review → Results)
+    charts.ts      Donut, bar, monthly G/L charts (pure SVG, no libs)
+    casilla-detail.ts  Expandable casilla cards with legal references
+    year-compare.ts    Year-over-year comparison (localStorage persistence)
+    disclaimer.ts  Legal disclaimer modal
+    style.css      Full CSS (dark/light themes, sidebar layout, splash, responsive)
+  i18n/          Internationalization
+    index.ts     t() function, locale management, localechange event
+    locales/     es.ts, en.ts, ca.ts, eu.ts, gl.ts (5 languages)
 tests/           Vitest tests mirroring src/ structure
 ```
 
@@ -28,11 +64,60 @@ tests/           Vitest tests mirroring src/ structure
 
 - **Language**: TypeScript (strict mode, ES2022)
 - **XML parsing**: `fast-xml-parser` (IBKR Flex Query XML)
+- **XLSX parsing**: `xlsx` (eToro)
 - **Decimal math**: `decimal.js` (financial precision, never raw Number)
 - **CLI**: `commander`
 - **Build**: `tsup` (library/CLI), `vite` (web)
 - **Test**: `vitest`
 - **CI**: GitHub Actions (Node 20 + 22)
+- **Docker**: Multi-stage Dockerfile.web (node build → nginx:1.27-alpine)
+
+## Web UI Architecture
+
+### Layout
+- **Sidebar + content area** grid layout (`grid-template-columns: 260px 1fr`)
+- 4 sections: Perfil fiscal, Modelo 100 (Renta), Modelo 720, Modelo D-6
+- Hash-based routing (`location.hash`): `#perfil`, `#renta`, `#m720`, `#d6`
+- Mobile (≤768px): sidebar collapses, hamburger toggle with backdrop
+
+### Splash Screen
+- Full-screen landing shown on every page load (no localStorage skip)
+- Positioned below top-bar (`top: var(--topbar-h)`) so language/theme toggles stay accessible
+- **GOTCHA**: `.splash { display: flex }` overrides the `hidden` attribute. Use `splash.style.display = "none"` (inline style), never `splash.hidden = true`
+- Logo click in top-bar returns to splash via `showSplash()`
+
+### i18n System
+- 5 locales: es, en, ca, eu, gl
+- Static text: `data-i18n` attributes updated by `updateStaticText()`
+- Dynamic content (broker guides, profile form, 720/D-6 sections): rendered with `t()` calls, must re-render on `localechange` event
+- **GOTCHA**: Any module that renders HTML with `t()` must listen for `localechange` and re-render, otherwise switching language leaves stale text
+
+### Data Persistence
+- **localStorage only** — no cookies, no server-side storage
+- `declarenta_profile`: fiscal profile (NIF, name, CCAA, phone, year)
+- `declarenta_reports_*`: saved reports for year comparison
+- No data ever leaves the browser (except ECB rate API calls)
+
+### Theming
+- CSS custom properties with `[data-theme="light"]` / `[data-theme="dark"]`
+- `auto` mode: follows `prefers-color-scheme`
+- System font stack (no Google Fonts — privacy policy)
+
+## Deployment
+
+### Release Flow
+1. Merge PR to main
+2. Auto Release workflow creates semver tag (e.g. `v0.15.6`)
+3. Docker workflow does NOT auto-trigger on tags — must manually trigger: `gh workflow run docker.yml --ref <tag>`
+4. Deploy: `ssh root@geiserback.mango-alpha.ts.net "docker pull drumsergio/declarenta:<version> && docker stop declarenta-web && docker rm declarenta-web && docker run -d --name declarenta-web -p 3080:80 --restart unless-stopped drumsergio/declarenta:<version>"`
+
+### Docker Tag Format
+- Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.15.6`
+- Container name on geiserback: `declarenta-web`
+
+### GitHub Pages
+- Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow
+- Serves at geiserx.github.io/DeclaRenta and declarenta.com (Cloudflare CNAME)
 
 ## Critical Rules
 
