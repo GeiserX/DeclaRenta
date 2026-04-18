@@ -35,6 +35,16 @@
 
 ---
 
+## Despliegue rápido
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/GeiserX/DeclaRenta)
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/GeiserX/DeclaRenta)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/from?repoUrl=https://github.com/GeiserX/DeclaRenta)
+
+DeclaRenta es una web estática (Vite) — funciona en cualquier hosting de archivos estáticos. También disponible como imagen Docker: `drumsergio/declarenta:web`.
+
+---
+
 ## El problema
 
 Si inviertes con un broker extranjero, hacer la renta es un infierno:

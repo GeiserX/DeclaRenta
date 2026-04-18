@@ -4,10 +4,9 @@
 
 DeclaRenta converts foreign broker reports into Spanish tax declarations (Modelo 100, 720, 721, D-6). Browser-first, privacy-focused. All financial data stays on the user's machine.
 
-- **Domain**: [declarenta.com](https://declarenta.com) (Cloudflare, Namecheap registrar)
+- **Domain**: [declarenta.com](https://declarenta.com)
 - **Alt URL**: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/)
 - **Docker**: `drumsergio/declarenta` on Docker Hub
-- **Prod**: geiserback:3080 → Caddy reverse proxy → declarenta.com (manual `docker run`, NOT Portainer)
 
 ### Supported Brokers (8)
 
@@ -109,16 +108,14 @@ tests/           Vitest tests mirroring src/ structure
 1. Merge PR to main
 2. Auto Release workflow creates semver tag (e.g. `v0.15.6`)
 3. Docker workflow does NOT auto-trigger on tags — must manually trigger: `gh workflow run docker.yml --ref <tag>`
-4. Deploy: `ssh root@geiserback.mango-alpha.ts.net "docker pull drumsergio/declarenta:<version> && docker stop declarenta-web && docker rm declarenta-web && docker run -d --name declarenta-web -p 3080:80 --restart unless-stopped drumsergio/declarenta:<version>"`
+4. Pull and deploy the new Docker image to prod
 
 ### Docker Tag Format
 - Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.15.6`
-- Container name on geiserback: `declarenta-web`
 
 ### GitHub Pages (mirror)
 - Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow
-- Serves at geiserx.github.io/DeclaRenta (alternative URL only)
-- declarenta.com does NOT point here — it points to geiserback via Caddy
+- Serves at geiserx.github.io/DeclaRenta (alternative/mirror URL)
 
 ## Critical Rules
 
