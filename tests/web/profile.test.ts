@@ -72,7 +72,7 @@ describe("getProfile / saveProfile", () => {
     expect(profile.nombre).toBe("");
     expect(profile.ccaa).toBe("");
     expect(profile.telefono).toBe("");
-    expect(profile.year).toBe(new Date().getFullYear());
+    expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
 
   it("should round-trip via saveProfile then getProfile", () => {
@@ -93,14 +93,14 @@ describe("getProfile / saveProfile", () => {
     const profile = getProfile();
     expect(profile.nif).toBe("12345678Z");
     expect(profile.apellidos).toBe("");
-    expect(profile.year).toBe(new Date().getFullYear());
+    expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
 
   it("should return defaults when stored JSON is corrupted", () => {
     localStorage.setItem("declarenta_profile", "not-json{{{");
     const profile = getProfile();
     expect(profile.nif).toBe("");
-    expect(profile.year).toBe(new Date().getFullYear());
+    expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
 });
 

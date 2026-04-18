@@ -17,6 +17,13 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Return year-end date or today if the year hasn't ended yet */
+function effectiveYearEnd(year: number): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const yearEnd = `${year}-12-31`;
+  return yearEnd <= today ? yearEnd : today;
+}
+
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 
@@ -45,7 +52,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   const profile = getProfile();
   const year = profile.year;
-  const yearEnd = `${year}-12-31`;
+  const yearEnd = effectiveYearEnd(year);
 
   const positions = statement.openPositions.filter(
     (p) =>
@@ -66,6 +73,16 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   html += `<div class="section-header-bar">
     <span class="section-year">${t("section.year_label")} ${year}</span>
     <span class="section-deadline">${t("d6.deadline_short")}</span>
+  </div>`;
+
+  // Profile data source
+  const profileParts = [
+    profile.nif ? `NIF: ${esc(profile.nif)}` : null,
+    profile.apellidos || profile.nombre ? `${esc(profile.apellidos)} ${esc(profile.nombre)}`.trim() : null,
+    profile.telefono ? `Tel: ${esc(profile.telefono)}` : null,
+  ].filter(Boolean);
+  html += `<div class="banner banner-info banner-profile-source">
+    ${t("section.profile_source")} — ${profileParts.length > 0 ? profileParts.join(" · ") : t("profile.go_to_profile")}
   </div>`;
 
   // Profile warning
@@ -162,7 +179,7 @@ function renderAforixGuide(
   year: number,
   profile: { nif: string; nombre: string; apellidos: string },
 ): string {
-  const yearEnd = `${year}-12-31`;
+  const yearEnd = effectiveYearEnd(year);
   let html = `<div class="filing-guide"><h3>${t("d6.aforix_title")}</h3>`;
 
   // Declarant info
