@@ -167,11 +167,12 @@ const es = {
   // IBKR
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sesión en el <strong>Portal del Cliente</strong> de IBKR",
-  "guide.ibkr.step2": "Ve a <strong>Rendimiento e Informes → Flex Queries</strong>",
-  "guide.ibkr.step3": "Crea una nueva <em>Activity Flex Query</em> incluyendo:<ul><li>Trades (obligatorio)</li><li>Cash Transactions — dividendos y retenciones (obligatorio)</li><li>Open Positions — para Modelo 720/D-6 (recomendado)</li><li>Securities Info — ISINs (recomendado)</li></ul>",
-  "guide.ibkr.step4": "Formato de salida: <strong>XML</strong>",
-  "guide.ibkr.step5": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
-  "guide.ibkr.step6": "Ejecuta la query y descarga el fichero <code>.xml</code>",
+  "guide.ibkr.step2": "Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>",
+  "guide.ibkr.step3": "En <strong>Consulta flex de actividad</strong>, haz clic en el <strong>+</strong> para crear una nueva consulta",
+  "guide.ibkr.step4": "En la configuración, activa las secciones:<ul><li>Operaciones / Trades (obligatorio)</li><li>Transacciones de efectivo / Cash Transactions — dividendos y retenciones (obligatorio)</li><li>Posiciones abiertas / Open Positions — para Modelo 720/D-6 (recomendado)</li><li>Información de instrumentos financieros / Securities Info (recomendado)</li></ul>",
+  "guide.ibkr.step5": "Formato de salida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
+  "guide.ibkr.step7": "Guarda la consulta, ejecútala y descarga el fichero <code>.xml</code>",
 
   // Degiro
   "guide.degiro.title": "Degiro (CSV)",
@@ -259,6 +260,7 @@ const es = {
 
   // Section headers
   "section.year_label": "Ejercicio",
+  "section.profile_source": "Datos del <a href=\"#perfil\">Perfil fiscal</a>",
 
   // Badge statuses
   "badge.complete": "Completo",

@@ -17,6 +17,13 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Return year-end date or today if the year hasn't ended yet */
+function effectiveYearEnd(year: number): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const yearEnd = `${year}-12-31`;
+  return yearEnd <= today ? yearEnd : today;
+}
+
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 
@@ -51,12 +58,23 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
     return;
   }
 
+  const dateForRates = effectiveYearEnd(year);
   let html = "";
 
   // Year + deadline header
   html += `<div class="section-header-bar">
     <span class="section-year">${t("section.year_label")} ${year}</span>
     <span class="section-deadline">${t("m720.deadline_short")}</span>
+  </div>`;
+
+  // Profile data source
+  const profileParts = [
+    profile.nif ? `NIF: ${esc(profile.nif)}` : null,
+    profile.apellidos || profile.nombre ? `${esc(profile.apellidos)} ${esc(profile.nombre)}`.trim() : null,
+    profile.telefono ? `Tel: ${esc(profile.telefono)}` : null,
+  ].filter(Boolean);
+  html += `<div class="banner banner-info banner-profile-source">
+    ${t("section.profile_source")} — ${profileParts.length > 0 ? profileParts.join(" · ") : t("profile.go_to_profile")}
   </div>`;
 
   // Profile warning
@@ -104,9 +122,9 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         try {
           rate = p.assetCategory === "STK"
             ? getQ4AverageRate(rateMap, year, p.currency)
-            : getEcbRate(rateMap, `${year}-12-31`, p.currency);
+            : getEcbRate(rateMap, dateForRates, p.currency);
         } catch {
-          rate = getEcbRate(rateMap, `${year}-12-31`, p.currency);
+          rate = getEcbRate(rateMap, dateForRates, p.currency);
         }
         const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(p.isin.slice(0, 2))}</td><td>${val}</td></tr>`;

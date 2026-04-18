@@ -31,7 +31,7 @@ const DEFAULT_PROFILE: FiscalProfile = {
   nombre: "",
   ccaa: "",
   telefono: "",
-  year: new Date().getFullYear(),
+  year: new Date().getFullYear() - 1,
 };
 
 /** Get the current fiscal profile from localStorage */
@@ -90,7 +90,7 @@ export function initProfile(): void {
   ).join("");
 
   const currentYear = new Date().getFullYear();
-  const yearOptions = [currentYear, currentYear - 1, currentYear - 2].map(
+  const yearOptions = [currentYear - 1, currentYear, currentYear - 2].map(
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");
 
