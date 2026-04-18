@@ -145,6 +145,7 @@ const eu: TranslationKeys = {
   "profile.phone_label": "Telefonoa:",
   "profile.phone_placeholder": "600123456",
   "profile.saved": "Profila gordeta",
+  "profile.save_btn": "Profila gorde",
   "profile.incomplete_banner": "Osatu zure profil fiskala 720 eta D-6 ereduak sortzeko.",
   "profile.go_to_profile": "Profilara joan",
 

@@ -1289,6 +1289,12 @@ footer a:hover {
   grid-column: 1 / -1;
 }
 
+.profile-form button[type="submit"] {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 0.5rem;
+}
+
 .profile-saved-msg {
   color: var(--success);
   font-size: 0.85rem;

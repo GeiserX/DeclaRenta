@@ -361,7 +361,7 @@ export class FifoEngine {
     const lots = this.lots.get(key);
     if (!lots || lots.length === 0) {
       // Short sale or missing prior data — warn and record with zero cost basis
-      this.warnings.push(`⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${trade.tradeDate}. Coste base = 0 (posible posición corta o datos previos incompletos).`);
+      this.warnings.push(`⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`);
       const proceedsBaseEur = remaining.mul(pricePerShare).mul(multiplier).minus(taxes).mul(ecbRate);
       const proceedsEur = proceedsBaseEur.minus(commission.mul(commissionEcbRate));
       this.disposals.push({
@@ -438,7 +438,7 @@ export class FifoEngine {
 
     if (remaining.greaterThan(0)) {
       // Remaining shares with no lots — short sale or data gap
-      this.warnings.push(`⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${trade.tradeDate}. Coste base = 0.`);
+      this.warnings.push(`⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0.`);
       const fractionOfSale = remaining.dividedBy(totalSellQuantity);
       const commissionShare = commission.mul(fractionOfSale);
       const taxesShare = taxes.mul(fractionOfSale);

@@ -157,6 +157,7 @@ const es = {
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
   "profile.saved": "Perfil guardado",
+  "profile.save_btn": "Guardar perfil",
   "profile.incomplete_banner": "Completa tu perfil fiscal para generar los modelos 720 y D-6.",
   "profile.go_to_profile": "Ir al perfil",
 

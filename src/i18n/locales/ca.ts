@@ -145,6 +145,7 @@ const ca: TranslationKeys = {
   "profile.phone_label": "Telèfon:",
   "profile.phone_placeholder": "600123456",
   "profile.saved": "Perfil desat",
+  "profile.save_btn": "Desar perfil",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
   "profile.go_to_profile": "Anar al perfil",
 
