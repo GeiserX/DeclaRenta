@@ -383,7 +383,7 @@ program
 
 program
   .command("modelo721")
-  .description("Generate Modelo 721 fixed-width file for crypto assets (stub — no crypto parsers yet)")
+  .description("Generate Modelo 721 file for crypto assets (stub — real format is XML per Orden HFP/886/2023)")
   .requiredOption("-i, --input <file>", "JSON file with crypto positions")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .requiredOption("--nif <nif>", "NIF del declarante")
@@ -410,7 +410,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
     year: report.year,
     casillas: {
       "0029_dividendos_brutos": report.dividends.grossIncome.toFixed(2),
-      "0032_intereses_margen_no_deducible": report.interest.paid.toFixed(2),
+      "intereses_margen_no_deducible_informativo": report.interest.paid.toFixed(2),
       "0033_intereses_cuentas": report.interest.earned.toFixed(2),
       "0327_valor_transmision": report.capitalGains.transmissionValue.toFixed(2),
       "0328_valor_adquisicion": report.capitalGains.acquisitionValue.toFixed(2),
@@ -474,7 +474,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");
   console.error(`    Casilla 0029 (Dividendos brutos):  ${report.dividends.grossIncome.toFixed(2)} EUR`);
   console.error(`    Casilla 0033 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
-  console.error(`    Casilla 0032 (Intereses margen, no deducible):  ${report.interest.paid.toFixed(2)} EUR`);
+  console.error(`    Intereses margen (no deducible, informativo):   ${report.interest.paid.toFixed(2)} EUR`);
   console.error("");
   console.error("  DOBLE IMPOSICIÓN INTERNACIONAL");
   console.error(`    Casilla 0588 (Deducción):          ${report.doubleTaxation.deduction.toFixed(2)} EUR`);

@@ -100,7 +100,7 @@ export interface TaxSummary {
   interest: {
     /** Casilla 0033: Intereses de cuentas y depósitos */
     earned: Decimal;
-    /** Casilla 0032: Intereses pagados al broker (margen, informativo — no deducible) */
+    /** Intereses pagados al broker (margen) — informativo, NO deducible (Art. 26.1.a LIRPF) */
     paid: Decimal;
     entries: InterestEntry[];
   };

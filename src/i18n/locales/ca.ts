@@ -55,9 +55,9 @@ const ca: TranslationKeys = {
   "casilla.net_gain_loss": "Guany/Pèrdua net",
   "casilla.gross_dividends": "Dividends bruts",
   "casilla.interest_earned": "Interessos guanyats",
-  "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble)",
+  "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble — informatiu)",
   "casilla.double_taxation": "Deducció doble imposició",
-  "casilla.blocked_losses": "Pèrdues bloquejades per regla anti-churning (2 mesos): {{amount}} EUR",
+  "casilla.blocked_losses": "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",
 
   "chart.asset_distribution": "Distribució per tipus d'actiu",

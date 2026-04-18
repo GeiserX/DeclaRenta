@@ -20,7 +20,7 @@
 | Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
 |---------|----------|------------------------|------------------|
 | **0029** | Ingresos íntegros (dividendos brutos) | Σ dividendo_bruto × tipo_ECB_fecha_pago | Art. 25.1.a LIRPF |
-| **0032** | Gastos deducibles (intereses de margen) | Σ intereses_pagados_al_broker × tipo_ECB | Art. 26.1.a LIRPF |
+| **—** | Intereses pagados al broker (margen, **no deducible** — informativo) | Σ intereses_pagados_al_broker × tipo_ECB | Art. 26.1.a LIRPF (solo admite gastos de administración y custodia) |
 | **0033** | Intereses de cuentas y depósitos | Σ intereses_recibidos × tipo_ECB | Art. 25.2 LIRPF |
 
 **Notas:**
