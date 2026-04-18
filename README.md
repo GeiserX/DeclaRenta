@@ -51,7 +51,7 @@ Si inviertes con un broker extranjero, hacer la renta es un infierno:
 
 - **Renta Web no importa datos** de brokers extranjeros — todo manual
 - **FIFO obligatorio** con tipos ECB oficiales (no los del broker)
-- **Regla anti-churning** de 2 meses que nadie detecta automáticamente
+- **Regla anti-churning** (2 meses cotizados / 1 año no cotizados) que nadie detecta automáticamente
 - **Doble imposición** internacional que hay que calcular a mano
 - **Modelo 720** obligatorio si tus activos en el extranjero superan 50.000 EUR
 - **Modelo D-6** solo obligatorio si tu participación es ≥10% del capital o derechos de voto (Orden ICT/1408/2021)
@@ -167,7 +167,7 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
-- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (aplica a acciones, fondos y bonos; excluye derivados, forex y crypto)
+- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados). Aplica a acciones, fondos y bonos; excluye derivados, forex y crypto
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
