@@ -165,9 +165,10 @@ const en: TranslationKeys = {
   "guide.ibkr.step7": "Save the query, run it and download the <code>.xml</code> file",
   "guide.degiro.title": "Degiro (CSV)",
   "guide.degiro.step1": "Log in to the <strong>Degiro website</strong> (not the app)",
-  "guide.degiro.step2": "Go to <strong>Activity → Transactions</strong>",
-  "guide.degiro.step3": "Select the desired date range",
-  "guide.degiro.step4": "Click <strong>Export</strong> and download the CSV file",
+  "guide.degiro.step2": "Open the <strong>Inbox</strong> side panel (envelope icon)",
+  "guide.degiro.step3": "Click <strong>Transactions</strong> (transaction history for your products)",
+  "guide.degiro.step4": "Select the desired date range (include <strong>all history</strong> for FIFO)",
+  "guide.degiro.step5": "Click <strong>Export</strong> and download the CSV file",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Log in to <strong>eToro</strong>",
   "guide.etoro.step2": "Go to <strong>Settings → Account Statement</strong>",
@@ -333,6 +334,29 @@ const en: TranslationKeys = {
   "splash.feature_privacy": "Total privacy",
   "splash.feature_opensource": "Open source",
   "splash.cta": "Get Started",
+
+  // Validation
+  "validation.future_date": "Trade for {{symbol}} has a future date ({{date}}). Please verify your data.",
+  "validation.no_cash_transactions": "No cash transactions (dividends/withholdings) found. If using IBKR, enable the Cash Transactions section in your Flex Query.",
+  "validation.no_trades_in_year": "No trades found for tax year {{year}}. Prior trades are used for FIFO calculation.",
+  "validation.very_old_data": "Data includes trades from {{year}} (over 10 years ago). Verify the file is correct.",
+  "validation.duplicate_trades": "{{count}} duplicate trade(s) detected. Check if you uploaded the same file twice.",
+
+  // Operations annex
+  "annex.title": "Operations Annex (Anexo C1)",
+  "annex.subtitle": "Individual operations detail grouped by asset type.",
+  "annex.operations": "operation(s)",
+
+  // Tax bracket estimation
+  "chart.tax_estimate": "Tax estimate (savings tax base)",
+  "tax.bracket_range": "Bracket",
+  "tax.bracket_base": "Base",
+  "tax.bracket_rate": "Rate",
+  "tax.bracket_tax": "Tax",
+  "tax.total_estimated": "Estimated total",
+  "tax.effective_rate": "Effective rate",
+  "tax.double_tax_deduction": "Double taxation deduction",
+  "tax.disclaimer": "Indicative estimate. Brackets correspond to the current Spanish IRPF savings tax base. Consult a tax advisor.",
 };
 
 export default en;

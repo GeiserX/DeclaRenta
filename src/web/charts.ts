@@ -6,6 +6,7 @@
  */
 
 import Decimal from "decimal.js";
+import { t } from "../i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -235,6 +236,104 @@ const ASSET_LABELS: Record<string, string> = {
   CRYPTO: "Crypto",
   BOND: "Bonos",
 };
+
+// ---------------------------------------------------------------------------
+// Tax Bracket Stacked Bar + Estimate Card
+// ---------------------------------------------------------------------------
+
+const BRACKETS = [
+  { limit: 6000, rate: 0.19, label: "0 – 6.000", color: "#22c55e" },
+  { limit: 50000, rate: 0.21, label: "6.000 – 50.000", color: "#84cc16" },
+  { limit: 200000, rate: 0.23, label: "50.000 – 200.000", color: "#f59e0b" },
+  { limit: 300000, rate: 0.27, label: "200.000 – 300.000", color: "#f97316" },
+  { limit: Infinity, rate: 0.28, label: "> 300.000", color: "#ef4444" },
+];
+
+export function renderTaxBracketCard(
+  title: string,
+  taxableBase: number,
+  doubleTaxDeduction: number,
+): string {
+  if (taxableBase <= 0) return "";
+
+  // Calculate tax per bracket
+  let remaining = taxableBase;
+  let prevLimit = 0;
+  const rows: { label: string; amount: number; rate: number; tax: number; color: string }[] = [];
+
+  for (const b of BRACKETS) {
+    if (remaining <= 0) break;
+    const width = b.limit === Infinity ? remaining : b.limit - prevLimit;
+    const amount = Math.min(remaining, width);
+    const tax = amount * b.rate;
+    rows.push({ label: b.label, amount, rate: b.rate, tax, color: b.color });
+    remaining -= amount;
+    prevLimit = b.limit;
+  }
+
+  const totalTax = rows.reduce((s, r) => s + r.tax, 0);
+  const netTax = Math.max(0, totalTax - doubleTaxDeduction);
+  const effectiveRate = taxableBase > 0 ? (netTax / taxableBase) * 100 : 0;
+
+  // SVG stacked horizontal bar
+  const barW = 360, barH = 28, barX = 10, barY = 4;
+  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
+  let offsetX = barX;
+  const segments = rows.map((r) => {
+    const w = totalAmount > 0 ? (r.amount / totalAmount) * barW : 0;
+    const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}" opacity="0.85"/>`;
+    const labelSeg = w > 30
+      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
+      : "";
+    offsetX += w;
+    return seg + labelSeg;
+  }).join("");
+
+  const svg = `<svg viewBox="0 0 ${barW + 20} ${barH + 8}" class="chart-svg" style="max-height:40px">${segments}</svg>`;
+
+  // Breakdown table
+  const tableRows = rows.map((r) =>
+    `<tr>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${escSvg(r.label)}</td>
+      <td style="text-align:right">${r.amount.toFixed(2)} &euro;</td>
+      <td style="text-align:right">${(r.rate * 100).toFixed(0)}%</td>
+      <td style="text-align:right">${r.tax.toFixed(2)} &euro;</td>
+    </tr>`,
+  ).join("");
+
+  const deductionRow = doubleTaxDeduction > 0
+    ? `<tr class="muted">
+        <td colspan="3" style="text-align:right">${escSvg(t("tax.double_tax_deduction"))}</td>
+        <td style="text-align:right">-${doubleTaxDeduction.toFixed(2)} &euro;</td>
+      </tr>`
+    : "";
+
+  return `<div class="chart-card">
+    <h4 class="chart-title">${escSvg(title)}</h4>
+    ${svg}
+    <table class="bracket-table" style="width:100%;margin-top:8px;font-size:0.85rem">
+      <thead><tr>
+        <th style="text-align:left">${escSvg(t("tax.bracket_range"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_base"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_rate"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_tax"))}</th>
+      </tr></thead>
+      <tbody>
+        ${tableRows}
+        ${deductionRow}
+        <tr style="font-weight:700;border-top:2px solid var(--border,#ccc)">
+          <td colspan="3" style="text-align:right">${escSvg(t("tax.total_estimated"))}</td>
+          <td style="text-align:right">${netTax.toFixed(2)} &euro;</td>
+        </tr>
+        <tr class="muted">
+          <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate"))}</td>
+          <td style="text-align:right">${effectiveRate.toFixed(2)}%</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:0.75rem;margin-top:6px">${escSvg(t("tax.disclaimer"))}</p>
+  </div>`;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers

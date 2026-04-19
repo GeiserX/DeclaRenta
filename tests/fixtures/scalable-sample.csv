@@ -1,0 +1,4 @@
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2024-03-15;09:15;Executed;REF001;Acme World ETF;Security;Buy;XX0000000001;10;110,25;-1102,50;-0,99;0;EUR
+2024-06-20;14:30;Executed;REF002;Acme World ETF;Security;Sell;XX0000000001;-5;120,00;600,00;-0,99;0;EUR
+2024-09-01;08:00;Executed;REF003;Acme World ETF;Security;Distribution;XX0000000001;0;0;15,50;0;-2,33;EUR

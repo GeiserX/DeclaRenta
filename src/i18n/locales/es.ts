@@ -180,9 +180,10 @@ const es = {
   // Degiro
   "guide.degiro.title": "Degiro (CSV)",
   "guide.degiro.step1": "Inicia sesión en la <strong>web de Degiro</strong> (no la app)",
-  "guide.degiro.step2": "Ve a <strong>Actividad → Transacciones</strong>",
-  "guide.degiro.step3": "Selecciona el rango de fechas deseado",
-  "guide.degiro.step4": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
+  "guide.degiro.step2": "Abre el panel lateral <strong>Buzón</strong> (icono de sobre)",
+  "guide.degiro.step3": "Haz clic en <strong>Transacciones</strong> (historial de transacciones de tus productos)",
+  "guide.degiro.step4": "Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO)",
+  "guide.degiro.step5": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
 
   // eToro
   "guide.etoro.title": "eToro (XLSX)",
@@ -362,6 +363,29 @@ const es = {
   "splash.feature_privacy": "Privacidad total",
   "splash.feature_opensource": "Open source",
   "splash.cta": "Comenzar",
+
+  // Validation
+  "validation.future_date": "La operación de {{symbol}} tiene fecha futura ({{date}}). Verifica los datos.",
+  "validation.no_cash_transactions": "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si usas IBKR, activa la sección Cash Transactions en tu Flex Query.",
+  "validation.no_trades_in_year": "No hay operaciones en el ejercicio {{year}}. Las operaciones anteriores se usan para el cálculo FIFO.",
+  "validation.very_old_data": "Los datos incluyen operaciones desde {{year}} (más de 10 años). Verifica que el fichero es correcto.",
+  "validation.duplicate_trades": "Se han detectado {{count}} operación(es) duplicada(s). Revisa si has subido el mismo fichero dos veces.",
+
+  // Operations annex
+  "annex.title": "Anexo de operaciones (Anexo C1)",
+  "annex.subtitle": "Detalle individual de operaciones agrupadas por tipo de activo.",
+  "annex.operations": "operación(es)",
+
+  // Tax bracket estimation
+  "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
+  "tax.bracket_range": "Tramo",
+  "tax.bracket_base": "Base",
+  "tax.bracket_rate": "Tipo",
+  "tax.bracket_tax": "Cuota",
+  "tax.total_estimated": "Total estimado",
+  "tax.effective_rate": "Tipo efectivo",
+  "tax.double_tax_deduction": "Deducción doble imposición",
+  "tax.disclaimer": "Estimación orientativa. Los tramos corresponden a la base del ahorro del IRPF vigente. Consulta con un asesor fiscal.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
