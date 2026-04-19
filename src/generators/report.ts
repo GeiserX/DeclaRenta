@@ -92,9 +92,16 @@ export function generateTaxReport(
   // 4. Double taxation
   const doubleTaxation = calculateDoubleTaxation(dividendEntries);
 
+  // Filter warnings to those relevant to the selected year
+  const yearWarnings = fifoEngine.warnings.filter((w) => {
+    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+    if (!dateMatch) return true; // No date in warning → always show
+    return dateMatch[1] === yearStr;
+  });
+
   return {
     year,
-    warnings: fifoEngine.warnings,
+    warnings: yearWarnings,
     capitalGains: {
       transmissionValue,
       acquisitionValue,
