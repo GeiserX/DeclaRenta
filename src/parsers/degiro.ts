@@ -71,6 +71,7 @@ interface TransactionColumns {
   fxRate: number;
   costs: number;
   costsCurrency: number;
+  autoFxCosts: number;
   total: number;
   totalCurrency: number;
   orderId: number;
@@ -110,18 +111,18 @@ function resolveTransactionColumns(headers: string[]): TransactionColumns {
   const localValue = findColumn(headers, ["Valor local", "Local value", "Lokaler Wert", "Lokale waarde"]);
   const localValueCurrency = localValue >= 0 ? localValue + 1 : -1;
 
-  // "Valor" / "Value" — in 19-col format this is the EUR value; in 16-col it's the only value
+  // "Valor" / "Value" / "Valor EUR" — in 19-col format this is the EUR value; in 16-col it's the only value
   // Use findColumn but skip the "Valor local" match by searching after localValue
   let eurValue: number;
   if (localValue >= 0) {
-    // 19-col: find "Valor"/"Value" that comes AFTER "Valor local"
+    // 19-col: find "Valor"/"Value"/"Valor EUR" that comes AFTER "Valor local"
     eurValue = headers.findIndex(
       (h, idx) =>
         idx > localValue &&
-        ["valor", "value", "wert", "waarde"].includes(h.toLowerCase().trim()),
+        ["valor", "valor eur", "value", "value eur", "wert", "waarde"].some((v) => h.toLowerCase().trim().startsWith(v)),
     );
   } else {
-    eurValue = findColumn(headers, ["Valor", "Value", "Wert", "Waarde"]);
+    eurValue = findColumn(headers, ["Valor", "Valor EUR", "Value", "Value EUR", "Wert", "Waarde"]);
   }
   const eurValueCurrency = eurValue >= 0 ? eurValue + 1 : -1;
 
@@ -135,15 +136,24 @@ function resolveTransactionColumns(headers: string[]): TransactionColumns {
 
   const costs = findColumn(headers, [
     "Costes de transacción y/o terceros",
+    "Costes de transacción y/o externos EUR",
+    "Costes de transacción y/o externos",
     "Costes de transacción",
     "Transaction and/or third",
+    "Transaction costs",
     "Transaktionskosten",
     "Transactiekosten en/of",
   ]);
-  const costsCurrency = costs >= 0 ? costs + 1 : -1;
+  // If the header already contains "EUR", there's no separate currency column after it
+  const costsHeader = costs >= 0 ? (headers[costs] ?? "").trim() : "";
+  const costsCurrency = costs >= 0 && !costsHeader.toUpperCase().includes("EUR") ? costs + 1 : -1;
 
-  const total = findColumn(headers, ["Total"]);
-  const totalCurrency = total >= 0 ? total + 1 : -1;
+  // AutoFX commission (newer Degiro format has this as a separate column)
+  const autoFxCosts = findColumn(headers, ["Comisión AutoFX", "AutoFX Commission", "AutoFX Kosten"]);
+
+  const total = findColumn(headers, ["Total", "Total EUR"]);
+  const totalHeader = total >= 0 ? (headers[total] ?? "").trim() : "";
+  const totalCurrency = total >= 0 && !totalHeader.toUpperCase().includes("EUR") ? total + 1 : -1;
 
   const orderId = findColumn(headers, ["ID Orden", "Order ID", "Auftrags-ID"]);
 
@@ -163,6 +173,7 @@ function resolveTransactionColumns(headers: string[]): TransactionColumns {
     fxRate,
     costs,
     costsCurrency,
+    autoFxCosts,
     total,
     totalCurrency,
     orderId,
@@ -193,9 +204,18 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const isin = (fields[cols.isin] ?? "").trim();
     const product = (fields[cols.product] ?? "").trim();
     const exchange = cols.execVenue >= 0 ? (fields[cols.execVenue] ?? "").trim() : "";
-    const orderId = cols.orderId >= 0 ? (fields[cols.orderId] ?? "").trim() : "";
-    const commission = parseNumber(fields[cols.costs] ?? "0");
-    const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "").trim() : currency;
+    // Degiro inconsistently adds an extra empty column before orderId in some rows
+    let orderId = cols.orderId >= 0 ? (fields[cols.orderId] ?? "").trim() : "";
+    if (!orderId && cols.orderId >= 0) {
+      const next = (fields[cols.orderId + 1] ?? "").trim();
+      if (next && /^[0-9a-f]{8}-/.test(next)) orderId = next;
+    }
+    const txCosts = parseFloat(parseNumber(fields[cols.costs] ?? "0"));
+    const autoFx = cols.autoFxCosts >= 0 ? parseFloat(parseNumber(fields[cols.autoFxCosts] ?? "0")) : 0;
+    const rawComm = Math.round((txCosts + autoFx) * 100) / 100;
+    const commission = rawComm === 0 ? "0" : rawComm.toFixed(2);
+    // When header already embeds "EUR" (costsCurrency = -1), default to EUR
+    const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "EUR").trim() : "EUR";
 
     // Use local value (original currency) if available, otherwise EUR value
     const localValue = cols.localValue >= 0 ? parseNumber(fields[cols.localValue] ?? "0") : "";
