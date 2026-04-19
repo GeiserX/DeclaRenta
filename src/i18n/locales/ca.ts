@@ -324,7 +324,7 @@ const ca: TranslationKeys = {
   "footer.verify_source": "Verificar codi font",
 
   // Splash screen
-  "splash.tagline": "Converteix informes de brokers estrangers en la teva declaraci\u00f3 de la renda espanyola",
+  "splash.tagline": "Eina fiscal gratu\u00efta per a inversors amb brokers internacionals",
   "splash.feature_free": "100% gratu\u00eft",
   "splash.feature_selfhosted": "Self-hosted",
   "splash.feature_privacy": "Privacitat total",

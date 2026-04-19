@@ -328,7 +328,7 @@ const en: TranslationKeys = {
   "footer.verify_source": "Verify source code",
 
   // Splash screen
-  "splash.tagline": "Convert foreign broker reports into your Spanish tax declaration",
+  "splash.tagline": "Free tax tool for investors with international brokers",
   "splash.feature_free": "100% free",
   "splash.feature_selfhosted": "Self-hosted",
   "splash.feature_privacy": "Total privacy",

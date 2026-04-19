@@ -357,7 +357,7 @@ const es = {
   "footer.verify_source": "Verificar código fuente",
 
   // Splash screen
-  "splash.tagline": "Convierte reportes de brokers extranjeros en tu declaración de la renta española",
+  "splash.tagline": "Herramienta fiscal gratuita para inversores con brokers internacionales",
   "splash.feature_free": "100% gratuito",
   "splash.feature_selfhosted": "Self-hosted",
   "splash.feature_privacy": "Privacidad total",

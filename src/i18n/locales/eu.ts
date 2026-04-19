@@ -324,7 +324,7 @@ const eu: TranslationKeys = {
   "footer.verify_source": "Iturburu-kodea egiaztatu",
 
   // Splash screen
-  "splash.tagline": "Bihurtu atzerriko broker-en txostenak zure Espainiako errenta aitorpenera",
+  "splash.tagline": "Doako zerga-tresna nazioarteko broker-ekin inbertitzaileentzat",
   "splash.feature_free": "100% doakoa",
   "splash.feature_selfhosted": "Self-hosted",
   "splash.feature_privacy": "Pribatutasun osoa",
