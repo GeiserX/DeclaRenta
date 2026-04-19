@@ -163,9 +163,10 @@ const eu: TranslationKeys = {
   "guide.ibkr.step7": "Gorde kontsulta, exekutatu eta deskargatu <code>.xml</code> fitxategia",
   "guide.degiro.title": "Degiro (CSV)",
   "guide.degiro.step1": "Hasi saioa <strong>Degiroren webean</strong> (ez aplikazioan)",
-  "guide.degiro.step2": "Joan <strong>Jarduera → Transakzioak</strong> atalera",
-  "guide.degiro.step3": "Hautatu nahi duzun data-tartea",
-  "guide.degiro.step4": "Egin klik <strong>Esportatu</strong> botoian eta deskargatu CSV fitxategia",
+  "guide.degiro.step2": "Ireki <strong>Sarrera-ontzia</strong> alboko panela (gutun-azalaren ikonoa)",
+  "guide.degiro.step3": "Egin klik <strong>Transakzioak</strong> (zure produktuen transakzio-historia)",
+  "guide.degiro.step4": "Hautatu nahi duzun data-tartea (<strong>historia osoa</strong> sartu FIFO-rako)",
+  "guide.degiro.step5": "Egin klik <strong>Esportatu</strong> botoian eta deskargatu CSV fitxategia",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Hasi saioa <strong>eToro</strong>-n",
   "guide.etoro.step2": "Joan <strong>Ezarpenak → Kontu-laburpena</strong> atalera",
@@ -329,6 +330,29 @@ const eu: TranslationKeys = {
   "splash.feature_privacy": "Pribatutasun osoa",
   "splash.feature_opensource": "Kode irekia",
   "splash.cta": "Hasi",
+
+  // Validation
+  "validation.future_date": "{{symbol}} eragiketak etorkizuneko data du ({{date}}). Egiaztatu datuak.",
+  "validation.no_cash_transactions": "Ez da eskudiru-transakziorik aurkitu (dibidenduak/atxikipenak). IBKR erabiltzen baduzu, gaitu Cash Transactions atala zure Flex Query-n.",
+  "validation.no_trades_in_year": "Ez dago eragiketarik {{year}} ekitaldian. Aurreko eragiketak FIFO kalkulurako erabiltzen dira.",
+  "validation.very_old_data": "Datuek {{year}}(e)tik aurrerako eragiketak dituzte (10 urte baino gehiago). Egiaztatu fitxategia zuzena dela.",
+  "validation.duplicate_trades": "{{count}} eragiketa bikoiztu detektatu d(ir)a. Egiaztatu fitxategi bera bi aldiz igo duzun.",
+
+  // Operations annex
+  "annex.title": "Eragiketen eranskina (Anexo C1)",
+  "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
+  "annex.operations": "eragiketa",
+
+  // Tax bracket estimation
+  "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",
+  "tax.bracket_range": "Tartea",
+  "tax.bracket_base": "Oinarria",
+  "tax.bracket_rate": "Tasa",
+  "tax.bracket_tax": "Kuota",
+  "tax.total_estimated": "Guztira estimatua",
+  "tax.effective_rate": "Tasa efektiboa",
+  "tax.double_tax_deduction": "Zergapetze bikoitzaren kenkaria",
+  "tax.disclaimer": "Orientazio-estimazioa. Tarteak indarrean dagoen PFEZaren aurrezki-oinarriari dagozkio. Kontsultatu zerga-aholkulari batekin.",
 };
 
 export default eu;

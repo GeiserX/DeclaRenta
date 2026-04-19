@@ -15,7 +15,7 @@ import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
-import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart } from "./charts.js";
+import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
@@ -26,6 +26,8 @@ import { initSection720, renderSection720, rerenderSection720 } from "./section-
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
+import { validateStatement, renderValidationIssues } from "./validation.js";
+import { renderOperationsAnnex } from "./operations-annex.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -427,6 +429,12 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   if (tradeCount === 0 && divCount === 0) {
     reviewContent.innerHTML += `<p class="warning">${t("review.no_data")}</p>`;
   }
+
+  // Validation warnings
+  const validationIssues = validateStatement(merged, activeYear);
+  if (validationIssues.length > 0) {
+    reviewContent.insertAdjacentHTML("beforeend", renderValidationIssues(validationIssues));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -601,17 +609,39 @@ function renderResults(report: TaxSummary) {
 
   // Charts
   const chartData = extractChartData(report);
+  // netGainLoss includes wash-sale-blocked losses — add them back so they
+  // don't reduce the taxable base (they are deferred, not deductible now).
+  const taxableBase = Math.max(0,
+    report.capitalGains.netGainLoss.toNumber()
+    + report.capitalGains.blockedLosses.toNumber()
+    + report.dividends.grossIncome.toNumber()
+    + report.interest.earned.toNumber()
+  );
+  const dtDeduction = report.doubleTaxation.deduction.toNumber();
   const chartsHtml = [
     renderDonutChart(t("chart.asset_distribution"), chartData.assetDistribution),
     renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
+    renderTaxBracketCard(t("chart.tax_estimate"), taxableBase, dtDeduction),
   ].filter(Boolean).join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;
   resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
   if (chartsHtml) {
     casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);
+  }
+
+  // Operations annex (Anexo C1)
+  resultsSection.querySelectorAll(".annex-container").forEach((el) => el.remove());
+  const annexHtml = renderOperationsAnnex(report);
+  if (annexHtml) {
+    const chartsGrid = resultsSection.querySelector(".charts-grid");
+    if (chartsGrid) {
+      chartsGrid.insertAdjacentHTML("afterend", annexHtml);
+    } else {
+      casillasDiv.insertAdjacentHTML("afterend", annexHtml);
+    }
   }
 
   renderOperationsTable();

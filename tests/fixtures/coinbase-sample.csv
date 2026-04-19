@@ -1,0 +1,4 @@
+Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+2024-03-15T10:30:00Z,Buy,BTC,0.05,EUR,42000.00,2100.00,2139.00,39.00,Bought 0.05 BTC
+2024-09-20T14:00:00Z,Sell,BTC,0.05,EUR,48000.00,2400.00,2360.00,40.00,Sold 0.05 BTC
+2024-06-01T08:00:00Z,Staking Income,ETH,0.01,EUR,3200.00,32.00,32.00,0.00,Staking reward

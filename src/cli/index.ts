@@ -35,6 +35,20 @@ const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.ur
 // Configure Decimal.js for financial precision
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
+/** Encode a string to ISO-8859-15 bytes, remapping the 8 codepoints that differ from latin1. */
+function encodeISO885915Buffer(str: string): Buffer {
+  const ISO_REMAP: Record<number, number> = {
+    0x20AC: 0xA4, 0x0160: 0xA6, 0x0161: 0xA8, 0x017D: 0xB4,
+    0x017E: 0xB8, 0x0152: 0xBC, 0x0153: 0xBD, 0x0178: 0xBE,
+  };
+  const bytes = Buffer.alloc(str.length);
+  for (let i = 0; i < str.length; i++) {
+    const cp = str.charCodeAt(i);
+    bytes[i] = ISO_REMAP[cp] ?? (cp <= 0xFF ? cp : 0x3F);
+  }
+  return bytes;
+}
+
 const program = new Command();
 
 program
@@ -300,11 +314,12 @@ program
       }
       console.error(`✓ ${records.length} registro(s) validados correctamente.`);
 
+      const iso885915Buf = encodeISO885915Buffer(output720);
       if (opts.output) {
-        writeFileSync(opts.output, output720, { encoding: "latin1" });
+        writeFileSync(opts.output, iso885915Buf);
         console.error(`Modelo 720 guardado en ${opts.output}`);
       } else {
-        console.log(output720);
+        process.stdout.write(iso885915Buf);
       }
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);

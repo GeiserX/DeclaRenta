@@ -171,6 +171,25 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   });
 }
 
+function encodeISO885915(str: string): Uint8Array {
+  const ISO_MAP: Record<number, number> = {
+    0x20AC: 0xA4, // €
+    0x0160: 0xA6, // Š
+    0x0161: 0xA8, // š
+    0x017D: 0xB4, // Ž
+    0x017E: 0xB8, // ž
+    0x0152: 0xBC, // Œ
+    0x0153: 0xBD, // œ
+    0x0178: 0xBE, // Ÿ
+  };
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) {
+    const cp = str.charCodeAt(i);
+    bytes[i] = ISO_MAP[cp] ?? (cp <= 0xFF ? cp : 0x3F); // '?' for unmappable
+  }
+  return bytes;
+}
+
 async function generate720File(): Promise<void> {
   if (!cachedStatement || !cachedRateMap) return;
   if (!isProfileComplete()) {
@@ -203,7 +222,7 @@ async function generate720File(): Promise<void> {
   const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config);
   if (!result) return; // Below threshold
 
-  const blob = new Blob([result], { type: "text/plain;charset=iso-8859-15" });
+  const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -1,0 +1,49 @@
+{
+  "report": {
+    "trades": {
+      "detailed": [
+        {
+          "date": "2024-03-15 09:30:00",
+          "ticker": "ACME.US",
+          "isin": "XX0000000001",
+          "operation": "buy",
+          "p": "150.00",
+          "q": "10",
+          "curr_c": "USD",
+          "commission": "2.00",
+          "amount": "-1502.00",
+          "exchange": "NYSE"
+        },
+        {
+          "date": "2024-09-20 14:00:00",
+          "ticker": "ACME.US",
+          "isin": "XX0000000001",
+          "operation": "sell",
+          "p": "175.00",
+          "q": "10",
+          "curr_c": "USD",
+          "commission": "2.00",
+          "amount": "1748.00",
+          "exchange": "NYSE"
+        }
+      ]
+    },
+    "corporate_actions": {
+      "detailed": [
+        {
+          "date": "2024-06-15 00:00:00",
+          "ticker": "ACME.US",
+          "isin": "XX0000000001",
+          "type_id": "dividend",
+          "amount": "25.00",
+          "tax_amount": "3.75",
+          "curr_c": "USD",
+          "description": "Q2 2024 Dividend"
+        }
+      ]
+    },
+    "cash_flows": {
+      "detailed": []
+    }
+  }
+}

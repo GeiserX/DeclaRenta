@@ -1,0 +1,3 @@
+"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"
+"TXID001","ORDERID001","XBTEUR","2024-03-15 10:30:00","buy","limit","42000.00","2100.00","5.25","0.05","0.0","","LID001"
+"TXID002","ORDERID002","ETHEUR","2024-09-20 14:00:00","sell","market","3200.00","3200.00","3.50","1.0","0.0","","LID002"
