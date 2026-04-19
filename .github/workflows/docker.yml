@@ -3,6 +3,11 @@ name: Docker Build & Push
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
   workflow_dispatch:
 
 jobs:
@@ -20,10 +25,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract version from tag
+      - name: Extract version
         id: meta
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build and push

@@ -13,6 +13,8 @@ jobs:
     name: Bump version and release
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    outputs:
+      new_tag: ${{ steps.version.outputs.new_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -122,3 +124,12 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build and push Docker image
+    needs: release
+    if: needs.release.outputs.new_tag != ''
+    uses: ./.github/workflows/docker.yml
+    with:
+      version: ${{ needs.release.outputs.new_tag }}
+    secrets: inherit
