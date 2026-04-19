@@ -329,6 +329,29 @@ const gl: TranslationKeys = {
   "splash.feature_privacy": "Privacidade total",
   "splash.feature_opensource": "Código aberto",
   "splash.cta": "Comezar",
+
+  // Validation
+  "validation.future_date": "A operaci\u00f3n de {{symbol}} ten data futura ({{date}}). Verifica os datos.",
+  "validation.no_cash_transactions": "Non se atoparon transacci\u00f3ns de efectivo (dividendos/retenci\u00f3ns). Se usas IBKR, activa a secci\u00f3n Cash Transactions na t\u00faa Flex Query.",
+  "validation.no_trades_in_year": "Non hai operaci\u00f3ns no exercicio {{year}}. As operaci\u00f3ns anteriores \u00fasanse para o c\u00e1lculo FIFO.",
+  "validation.very_old_data": "Os datos incl\u00faen operaci\u00f3ns desde {{year}} (m\u00e1is de 10 anos). Verifica que o ficheiro \u00e9 correcto.",
+  "validation.duplicate_trades": "Detect\u00e1ronse {{count}} operaci\u00f3n(s) duplicada(s). Revisa se subiches o mesmo ficheiro d\u00faas veces.",
+
+  // Operations annex
+  "annex.title": "Anexo de operaci\u00f3ns (Anexo C1)",
+  "annex.subtitle": "Detalle individual de operaci\u00f3ns agrupadas por tipo de activo.",
+  "annex.operations": "operaci\u00f3n(s)",
+
+  // Tax bracket estimation
+  "chart.tax_estimate": "Estimaci\u00f3n fiscal (base do aforro)",
+  "tax.bracket_range": "Tramo",
+  "tax.bracket_base": "Base",
+  "tax.bracket_rate": "Tipo",
+  "tax.bracket_tax": "Cota",
+  "tax.total_estimated": "Total estimado",
+  "tax.effective_rate": "Tipo efectivo",
+  "tax.double_tax_deduction": "Deduci\u00f3n dobre imposici\u00f3n",
+  "tax.disclaimer": "Estimaci\u00f3n orientativa. Os tramos corresponden \u00e1 base do aforro do IRPF vixente. Consulta cun asesor fiscal.",
 };
 
 export default gl;

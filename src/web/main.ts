@@ -15,7 +15,7 @@ import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
-import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart } from "./charts.js";
+import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
@@ -601,11 +601,19 @@ function renderResults(report: TaxSummary) {
 
   // Charts
   const chartData = extractChartData(report);
+  const taxableBase = Math.max(0,
+    report.capitalGains.netGainLoss.toNumber()
+    + report.dividends.grossIncome.toNumber()
+    + report.interest.earned.toNumber()
+    - report.capitalGains.blockedLosses.toNumber()
+  );
+  const dtDeduction = report.doubleTaxation.deduction.toNumber();
   const chartsHtml = [
     renderDonutChart(t("chart.asset_distribution"), chartData.assetDistribution),
     renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
+    renderTaxBracketCard(t("chart.tax_estimate" as Parameters<typeof t>[0]), taxableBase, dtDeduction),
   ].filter(Boolean).join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;

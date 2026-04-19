@@ -301,7 +301,17 @@ program
       console.error(`✓ ${records.length} registro(s) validados correctamente.`);
 
       if (opts.output) {
-        writeFileSync(opts.output, output720, { encoding: "latin1" });
+        const iso885915Buf = Buffer.from(output720, "latin1");
+        // Fix the 8 codepoints where ISO-8859-15 differs from ISO-8859-1
+        const ISO_REMAP: Record<number, number> = {
+          0x20AC: 0xA4, 0x0160: 0xA6, 0x0161: 0xA8, 0x017D: 0xB4,
+          0x017E: 0xB8, 0x0152: 0xBC, 0x0153: 0xBD, 0x0178: 0xBE,
+        };
+        for (let i = 0; i < output720.length; i++) {
+          const mapped = ISO_REMAP[output720.charCodeAt(i)];
+          if (mapped !== undefined) iso885915Buf[i] = mapped;
+        }
+        writeFileSync(opts.output, iso885915Buf);
         console.error(`Modelo 720 guardado en ${opts.output}`);
       } else {
         console.log(output720);

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="TestQuery" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20240101" toDate="20241231" period="LastYear">
+      <Trades>
+        <Trade tradeID="100000001" accountId="U1234567" symbol="ACME" description="ACME CORP"
+               isin="XX0000000001" assetCategory="STK" currency="USD"
+               tradeDate="20240315" settlementDate="20240318"
+               quantity="10" tradePrice="150.00" tradeMoney="1500.00"
+               proceeds="1500.00" cost="0" fifoPnlRealized="0"
+               fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+        <Trade tradeID="100000002" accountId="U1234567" symbol="ACME" description="ACME CORP"
+               isin="XX0000000001" assetCategory="STK" currency="USD"
+               tradeDate="20240920" settlementDate="20240923"
+               quantity="-10" tradePrice="175.00" tradeMoney="-1750.00"
+               proceeds="-1750.00" cost="-1500.00" fifoPnlRealized="250.00"
+               fxRateToBase="0.91" buySell="SELL" openCloseIndicator="C"
+               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+      </Trades>
+      <CashTransactions>
+        <CashTransaction transactionID="200000001" accountId="U1234567"
+                         symbol="ACME" description="ACME(XX0000000001) Cash Dividend USD 0.50"
+                         isin="XX0000000001" currency="USD"
+                         dateTime="20240615" settleDate="20240615"
+                         amount="5.00" fxRateToBase="0.93" type="Dividends" />
+        <CashTransaction transactionID="200000002" accountId="U1234567"
+                         symbol="ACME" description="ACME(XX0000000001) US Tax"
+                         isin="XX0000000001" currency="USD"
+                         dateTime="20240615" settleDate="20240615"
+                         amount="-0.75" fxRateToBase="0.93" type="Withholding Tax" />
+      </CashTransactions>
+      <CorporateActions />
+      <OpenPositions>
+        <OpenPosition accountId="U1234567" symbol="GLOBEX" description="GLOBEX INC"
+                      isin="XX0000000002" currency="USD" assetCategory="STK"
+                      quantity="50" costBasisMoney="5000" costBasisPrice="100"
+                      markPrice="120" positionValue="6000" fifoPnlUnrealized="1000"
+                      fxRateToBase="0.91" />
+      </OpenPositions>
+      <SecuritiesInfo>
+        <SecurityInfo symbol="ACME" description="ACME CORP" isin="XX0000000001"
+                      cusip="000000001" currency="USD" assetCategory="STK"
+                      multiplier="1" subCategory="COMMON" />
+        <SecurityInfo symbol="GLOBEX" description="GLOBEX INC" isin="XX0000000002"
+                      cusip="000000002" currency="USD" assetCategory="STK"
+                      multiplier="1" subCategory="COMMON" />
+      </SecuritiesInfo>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

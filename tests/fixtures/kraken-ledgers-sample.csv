@@ -1,0 +1,3 @@
+"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"
+"LID100","REFID100","2024-06-01 00:00:00","staking","","currency","XETH","0.025","0.0001","5.025"
+"LID101","REFID101","2024-07-15 12:00:00","staking","","currency","DOT","1.5","0.01","100.0"

@@ -329,6 +329,29 @@ const ca: TranslationKeys = {
   "splash.feature_privacy": "Privacitat total",
   "splash.feature_opensource": "Codi obert",
   "splash.cta": "Comen\u00e7ar",
+
+  // Validation
+  "validation.future_date": "L'operaci\u00f3 de {{symbol}} t\u00e9 data futura ({{date}}). Verifica les dades.",
+  "validation.no_cash_transactions": "No s'han trobat transaccions d'efectiu (dividends/retencions). Si fas servir IBKR, activa la secci\u00f3 Cash Transactions a la teva Flex Query.",
+  "validation.no_trades_in_year": "No hi ha operacions a l'exercici {{year}}. Les operacions anteriors s'utilitzen per al c\u00e0lcul FIFO.",
+  "validation.very_old_data": "Les dades inclouen operacions des de {{year}} (m\u00e9s de 10 anys). Verifica que el fitxer \u00e9s correcte.",
+  "validation.duplicate_trades": "S'han detectat {{count}} operaci\u00f3(ns) duplicada(es). Revisa si has pujat el mateix fitxer dues vegades.",
+
+  // Operations annex
+  "annex.title": "Annex d'operacions (Anexo C1)",
+  "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
+  "annex.operations": "operaci\u00f3(ns)",
+
+  // Tax bracket estimation
+  "chart.tax_estimate": "Estimaci\u00f3 fiscal (base de l'estalvi)",
+  "tax.bracket_range": "Tram",
+  "tax.bracket_base": "Base",
+  "tax.bracket_rate": "Tipus",
+  "tax.bracket_tax": "Quota",
+  "tax.total_estimated": "Total estimat",
+  "tax.effective_rate": "Tipus efectiu",
+  "tax.double_tax_deduction": "Deducci\u00f3 doble imposici\u00f3",
+  "tax.disclaimer": "Estimaci\u00f3 orientativa. Els trams corresponen a la base de l'estalvi de l'IRPF vigent. Consulta amb un assessor fiscal.",
 };
 
 export default ca;

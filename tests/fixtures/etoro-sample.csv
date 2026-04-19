@@ -1,0 +1,8 @@
+Closed Positions
+Action,Amount,Units,Open Rate,Close Rate,Profit(USD),Open Date,Close Date,Type,Leverage,ISIN
+Buy ACME,1000.00,5.0,200.00,220.00,100.00,15/03/2024 09:30:00,20/09/2024 14:00:00,Stocks,1,XX0000000001
+Buy GLOBEX,2000.00,10,100.00,90.00,-100.00,01/02/2024 10:00:00,15/06/2024 11:00:00,Stocks,1,XX0000000002
+
+Dividends
+Date of Payment,Instrument Name,Net Dividend Received (USD),Withholding Tax Amount (USD),ISIN
+15/06/2024,ACME,42.50,7.50,XX0000000001
