@@ -97,8 +97,9 @@ export function renderValidationIssues(issues: ValidationIssue[]): string {
   if (issues.length === 0) return "";
 
   const icons: Record<string, string> = { error: "\u26D4", warning: "\u26A0\uFE0F", info: "\u2139\uFE0F" };
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const items = issues
-    .map((i) => `<li class="validation-${i.level}">${icons[i.level]} ${i.message}</li>`)
+    .map((i) => `<li class="validation-${i.level}">${icons[i.level]} ${esc(i.message)}</li>`)
     .join("");
 
   return `<div class="validation-banner"><ul class="validation-list">${items}</ul></div>`;
