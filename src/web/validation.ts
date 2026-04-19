@@ -14,7 +14,7 @@ export interface ValidationIssue {
  * Run sanity checks on parsed statement data.
  * Called after all files are parsed and merged, before processing.
  */
-export function validateStatement(statement: Statement, selectedYear: number | null): ValidationIssue[] {
+export function validateStatement(statement: Statement, selectedYear: number | null, brokers?: string[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const trades = statement.trades;
 
@@ -32,14 +32,19 @@ export function validateStatement(statement: Statement, selectedYear: number | n
     }
   }
 
-  // 2. Missing IBKR Cash Transactions (dividends)
+  // 2. Missing cash transactions (dividends/withholdings)
   const hasTrades = trades.length > 0;
   const hasCash = statement.cashTransactions.length > 0;
   if (hasTrades && !hasCash) {
-    issues.push({
-      level: "warning",
-      message: t("validation.no_cash_transactions"),
-    });
+    const brokerLower = (brokers ?? []).map((b) => b.toLowerCase());
+    const isDegiro = brokerLower.some((b) => b.includes("degiro"));
+    const isIbkr = brokerLower.some((b) => b.includes("ibkr") || b.includes("interactive") || b.includes("mexem"));
+    const key = isDegiro
+      ? "validation.no_cash_degiro"
+      : isIbkr
+        ? "validation.no_cash_transactions"
+        : "validation.no_cash_generic";
+    issues.push({ level: "warning", message: t(key) });
   }
 
   // 3. No trades for selected year

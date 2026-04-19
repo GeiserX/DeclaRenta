@@ -338,6 +338,8 @@ const en: TranslationKeys = {
   // Validation
   "validation.future_date": "Trade for {{symbol}} has a future date ({{date}}). Please verify your data.",
   "validation.no_cash_transactions": "No cash transactions (dividends/withholdings) found. If using IBKR, enable the Cash Transactions section in your Flex Query.",
+  "validation.no_cash_degiro": "No dividends or withholdings found. Degiro includes them in a separate file: also download the Account CSV from the Inbox.",
+  "validation.no_cash_generic": "No cash transactions (dividends/withholdings) found. If your broker exports them separately, upload them as an additional file.",
   "validation.no_trades_in_year": "No trades found for tax year {{year}}. Prior trades are used for FIFO calculation.",
   "validation.very_old_data": "Data includes trades from {{year}} (over 10 years ago). Verify the file is correct.",
   "validation.duplicate_trades": "{{count}} duplicate trade(s) detected. Check if you uploaded the same file twice.",
