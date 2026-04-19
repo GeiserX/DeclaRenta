@@ -180,9 +180,10 @@ const es = {
   // Degiro
   "guide.degiro.title": "Degiro (CSV)",
   "guide.degiro.step1": "Inicia sesión en la <strong>web de Degiro</strong> (no la app)",
-  "guide.degiro.step2": "Ve a <strong>Actividad → Transacciones</strong>",
-  "guide.degiro.step3": "Selecciona el rango de fechas deseado",
-  "guide.degiro.step4": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
+  "guide.degiro.step2": "Abre el panel lateral <strong>Buzón</strong> (icono de sobre)",
+  "guide.degiro.step3": "Haz clic en <strong>Transacciones</strong> (historial de transacciones de tus productos)",
+  "guide.degiro.step4": "Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO)",
+  "guide.degiro.step5": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
 
   // eToro
   "guide.etoro.title": "eToro (XLSX)",
