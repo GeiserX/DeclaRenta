@@ -43,8 +43,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
   }
 
   let html = `<div class="annex-container">
-    <h3 class="annex-title">${t("annex.title")}</h3>
-    <p class="annex-subtitle">${t("annex.subtitle")}</p>`;
+    <h3 class="annex-title">${esc(t("annex.title"))}</h3>
+    <p class="annex-subtitle">${esc(t("annex.subtitle"))}</p>`;
 
   for (const [cat, ops] of groups) {
     const label = ASSET_LABELS[cat] ?? cat;

@@ -61,7 +61,7 @@ export function validateStatement(statement: Statement, selectedYear: number | n
   if (trades.length > 0) {
     const dates = trades.map((tr) => tr.tradeDate.replace(/[-;]/g, "").slice(0, 8)).filter(Boolean).sort();
     const oldest = dates[0];
-    if (oldest && parseInt(oldest.slice(0, 4)) < today.getFullYear() - 10) {
+    if (oldest && parseInt(oldest.slice(0, 4), 10) < today.getFullYear() - 10) {
       issues.push({
         level: "info",
         message: t("validation.very_old_data", { year: oldest.slice(0, 4) }),
