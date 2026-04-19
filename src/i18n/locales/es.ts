@@ -225,6 +225,50 @@ const es = {
   "guide.kraken.step3": "Selecciona <strong>Trades</strong> y el rango de fechas",
   "guide.kraken.step4": "Formato: <strong>CSV</strong>, descarga el fichero",
 
+  // Trade Republic
+  "guide.trade_republic.title": "Trade Republic (CSV)",
+  "guide.trade_republic.step1": "Abre la app de <strong>Trade Republic</strong>",
+  "guide.trade_republic.step2": "Ve a <strong>Perfil → Actividad</strong>",
+  "guide.trade_republic.step3": "Pulsa los tres puntos (⋯) y selecciona <strong>Exportar</strong>",
+  "guide.trade_republic.step4": "Selecciona el rango de fechas y formato <strong>CSV</strong>",
+  "guide.trade_republic.step5": "Descarga el fichero y envíalo a tu ordenador",
+
+  // Revolut
+  "guide.revolut.title": "Revolut (CSV)",
+  "guide.revolut.step1": "Inicia sesión en la <strong>web de Revolut</strong> (business.revolut.com o app)",
+  "guide.revolut.step2": "Ve a <strong>Trading/Cripto → Extractos</strong>",
+  "guide.revolut.step3": "Selecciona <strong>Profit and Loss Statement</strong> del ejercicio fiscal",
+  "guide.revolut.step4": "Descarga en formato <strong>CSV</strong>",
+
+  // Trading 212
+  "guide.trading212.title": "Trading 212 (CSV)",
+  "guide.trading212.step1": "Inicia sesión en la <strong>web de Trading 212</strong>",
+  "guide.trading212.step2": "Ve a <strong>Historial → Transacciones</strong>",
+  "guide.trading212.step3": "Filtra por el rango de fechas deseado",
+  "guide.trading212.step4": "Haz clic en <strong>Descargar CSV</strong>",
+
+  // Lightyear
+  "guide.lightyear.title": "Lightyear (CSV)",
+  "guide.lightyear.step1": "Abre la app de <strong>Lightyear</strong>",
+  "guide.lightyear.step2": "Ve a <strong>Perfil → Informes</strong>",
+  "guide.lightyear.step3": "Selecciona <strong>Transaction report</strong> y el período",
+  "guide.lightyear.step4": "Descarga el fichero CSV y envíalo a tu ordenador",
+
+  // MEXEM
+  "guide.mexem.title": "MEXEM (Flex Query XML)",
+  "guide.mexem.step1": "Inicia sesión en el <strong>Portal del Cliente</strong> de MEXEM (misma interfaz que IBKR)",
+  "guide.mexem.step2": "Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>",
+  "guide.mexem.step3": "Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions",
+  "guide.mexem.step4": "Formato de salida: <strong>XML</strong>",
+  "guide.mexem.step5": "Ejecuta la consulta y descarga el fichero <code>.xml</code>",
+
+  // Swissquote
+  "guide.swissquote.title": "Swissquote (CSV)",
+  "guide.swissquote.step1": "Inicia sesión en <strong>Swissquote eBanking</strong>",
+  "guide.swissquote.step2": "Ve a <strong>Trading → Historial de transacciones</strong>",
+  "guide.swissquote.step3": "Selecciona el rango de fechas del ejercicio fiscal",
+  "guide.swissquote.step4": "Haz clic en <strong>Exportar → CSV</strong>",
+
   // Modelo 720 section
   "m720.title": "Modelo 720 — Bienes en el extranjero",
   "m720.description": "Declaración informativa sobre bienes y derechos situados en el extranjero.",

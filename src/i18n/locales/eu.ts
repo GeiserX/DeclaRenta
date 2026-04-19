@@ -196,6 +196,50 @@ const eu: TranslationKeys = {
   "guide.kraken.step3": "Hautatu <strong>Trades</strong> eta data-tartea",
   "guide.kraken.step4": "Formatua: <strong>CSV</strong>, deskargatu fitxategia",
 
+  // Trade Republic
+  "guide.trade_republic.title": "Trade Republic (CSV)",
+  "guide.trade_republic.step1": "Ireki <strong>Trade Republic</strong> aplikazioa",
+  "guide.trade_republic.step2": "Joan <strong>Profila → Jarduera</strong> atalera",
+  "guide.trade_republic.step3": "Sakatu hiru puntuak (⋯) eta hautatu <strong>Esportatu</strong>",
+  "guide.trade_republic.step4": "Hautatu data-tartea eta <strong>CSV</strong> formatua",
+  "guide.trade_republic.step5": "Deskargatu fitxategia eta bidali zure ordenagailura",
+
+  // Revolut
+  "guide.revolut.title": "Revolut (CSV)",
+  "guide.revolut.step1": "Hasi saioa <strong>Revolut web</strong>ean (business.revolut.com edo app)",
+  "guide.revolut.step2": "Joan <strong>Trading/Kripto → Laburpenak</strong> atalera",
+  "guide.revolut.step3": "Hautatu <strong>Profit and Loss Statement</strong> ekitaldi fiskalerako",
+  "guide.revolut.step4": "Deskargatu <strong>CSV</strong> formatuan",
+
+  // Trading 212
+  "guide.trading212.title": "Trading 212 (CSV)",
+  "guide.trading212.step1": "Hasi saioa <strong>Trading 212 webgunean</strong>",
+  "guide.trading212.step2": "Joan <strong>Historiala → Transakzioak</strong> atalera",
+  "guide.trading212.step3": "Iragazi nahi duzun data-tartearen arabera",
+  "guide.trading212.step4": "Egin klik <strong>CSV deskargatu</strong> botoian",
+
+  // Lightyear
+  "guide.lightyear.title": "Lightyear (CSV)",
+  "guide.lightyear.step1": "Ireki <strong>Lightyear</strong> aplikazioa",
+  "guide.lightyear.step2": "Joan <strong>Profila → Txostenak</strong> atalera",
+  "guide.lightyear.step3": "Hautatu <strong>Transaction report</strong> eta aldia",
+  "guide.lightyear.step4": "Deskargatu CSV fitxategia eta bidali zure ordenagailura",
+
+  // MEXEM
+  "guide.mexem.title": "MEXEM (Flex Query XML)",
+  "guide.mexem.step1": "Hasi saioa <strong>MEXEM Bezero Atarian</strong> (IBKR interfaze berdina)",
+  "guide.mexem.step2": "Joan <strong>Errendimendua eta informeak</strong> → <strong>Flex kontsultak</strong> fitxara",
+  "guide.mexem.step3": "Sortu <strong>Activity Flex Query</strong> bat Trades, Cash Transactions eta Open Positions barne",
+  "guide.mexem.step4": "Irteera-formatua: <strong>XML</strong>",
+  "guide.mexem.step5": "Exekutatu kontsulta eta deskargatu <code>.xml</code> fitxategia",
+
+  // Swissquote
+  "guide.swissquote.title": "Swissquote (CSV)",
+  "guide.swissquote.step1": "Hasi saioa <strong>Swissquote eBanking</strong>-en",
+  "guide.swissquote.step2": "Joan <strong>Trading → Transakzio-historiala</strong> atalera",
+  "guide.swissquote.step3": "Hautatu ekitaldi fiskalaren data-tartea",
+  "guide.swissquote.step4": "Egin klik <strong>Esportatu → CSV</strong> botoian",
+
   "m720.title": "720 Eredua — Atzerriko ondasunak",
   "m720.description": "Atzerrian dauden ondasun eta eskubideei buruzko aitorpen informatiboa.",
   "m720.threshold_exceeded": "Zure posizioen arabera ({{amount}} €), 720 Eredua aurkeztera behartuta zaude.",
