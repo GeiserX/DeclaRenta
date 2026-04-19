@@ -33,7 +33,7 @@ const es = {
   "results.export_csv": "Exportar CSV",
   "results.operations_count": "{{count}} operación(es)",
   "results.dividends_count": "{{count}} dividendo(s)",
-  "results.year_mismatch": "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Cambia el ejercicio en tu Perfil fiscal.",
+  "results.year_mismatch": "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
 
   // Table headers
   "table.isin": "ISIN",
