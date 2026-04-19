@@ -32,7 +32,7 @@ const gl: TranslationKeys = {
   "results.export_csv": "Exportar CSV",
   "results.operations_count": "{{count}} operación(s)",
   "results.dividends_count": "{{count}} dividendo(s)",
-  "results.year_mismatch": "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Cámbiao no teu Perfil fiscal.",
+  "results.year_mismatch": "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",

@@ -31,7 +31,7 @@ const en: TranslationKeys = {
   "results.export_csv": "Export CSV",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
-  "results.year_mismatch": "The file contains data for tax years {{available}}, but the selected year is {{year}}. Change it in your Fiscal Profile.",
+  "results.year_mismatch": "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
 
   "table.isin": "ISIN",
   "table.symbol": "Symbol",

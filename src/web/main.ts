@@ -368,7 +368,7 @@ async function parseFiles(): Promise<void> {
       saveProfile(profile);
     }
 
-    renderReview(merged, detectedBrokers);
+    renderReview(merged, detectedBrokers, brokerNames);
     unlockStep(3);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -376,7 +376,7 @@ async function parseFiles(): Promise<void> {
   }
 }
 
-function renderReview(merged: Statement, brokers: string[]): void {
+function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
   const tradeCount = merged.trades.length;
   const divCount = merged.cashTransactions.filter((c) =>
     c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
@@ -418,7 +418,7 @@ function renderReview(merged: Statement, brokers: string[]): void {
       <table>
         <thead><tr><th>${t("review.file")}</th><th>${t("review.broker")}</th></tr></thead>
         <tbody>${pendingFiles.map((f, i) => `
-          <tr><td>${esc(f.name)}</td><td>${esc(brokers[i] ?? "—")}</td></tr>
+          <tr><td>${esc(f.name)}</td><td>${esc(perFileBrokers[i] ?? "—")}</td></tr>
         `).join("")}</tbody>
       </table>
     </div>
