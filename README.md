@@ -9,7 +9,7 @@
 <h1 align="center">DeclaRenta</h1>
 
 <p align="center">
-  <strong>Convierte reportes de brokers extranjeros en tu declaración de la renta española.</strong>
+  <strong>Herramienta fiscal gratuita para inversores con brokers internacionales.</strong>
 </p>
 
 <p align="center">

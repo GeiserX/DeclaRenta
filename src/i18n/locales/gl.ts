@@ -324,7 +324,7 @@ const gl: TranslationKeys = {
   "footer.verify_source": "Verificar código fonte",
 
   // Splash screen
-  "splash.tagline": "Converte reportes de brokers estranxeiros na túa declaración da renda española",
+  "splash.tagline": "Ferramenta fiscal gratu\u00edta para investidores con brokers internacionais",
   "splash.feature_free": "100% gratuíto",
   "splash.feature_selfhosted": "Self-hosted",
   "splash.feature_privacy": "Privacidade total",
