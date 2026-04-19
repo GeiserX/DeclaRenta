@@ -26,6 +26,8 @@ import { initSection720, renderSection720, rerenderSection720 } from "./section-
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
+import { validateStatement, renderValidationIssues } from "./validation.js";
+import { renderOperationsAnnex } from "./operations-annex.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -427,6 +429,12 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   if (tradeCount === 0 && divCount === 0) {
     reviewContent.innerHTML += `<p class="warning">${t("review.no_data")}</p>`;
   }
+
+  // Validation warnings
+  const validationIssues = validateStatement(merged, activeYear);
+  if (validationIssues.length > 0) {
+    reviewContent.insertAdjacentHTML("beforeend", renderValidationIssues(validationIssues));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -620,6 +628,18 @@ function renderResults(report: TaxSummary) {
   resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
   if (chartsHtml) {
     casillasDiv.insertAdjacentHTML("afterend", `<div class="charts-grid">${chartsHtml}</div>`);
+  }
+
+  // Operations annex (Anexo C1)
+  resultsSection.querySelectorAll(".annex-container").forEach((el) => el.remove());
+  const annexHtml = renderOperationsAnnex(report);
+  if (annexHtml) {
+    const chartsGrid = resultsSection.querySelector(".charts-grid");
+    if (chartsGrid) {
+      chartsGrid.insertAdjacentHTML("afterend", annexHtml);
+    } else {
+      casillasDiv.insertAdjacentHTML("afterend", annexHtml);
+    }
   }
 
   renderOperationsTable();
