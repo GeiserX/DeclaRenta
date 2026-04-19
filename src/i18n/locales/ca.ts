@@ -196,6 +196,50 @@ const ca: TranslationKeys = {
   "guide.kraken.step3": "Selecciona <strong>Trades</strong> i el rang de dates",
   "guide.kraken.step4": "Format: <strong>CSV</strong>, descarrega el fitxer",
 
+  // Trade Republic
+  "guide.trade_republic.title": "Trade Republic (CSV)",
+  "guide.trade_republic.step1": "Obre l'app de <strong>Trade Republic</strong>",
+  "guide.trade_republic.step2": "Ves a <strong>Perfil → Activitat</strong>",
+  "guide.trade_republic.step3": "Toca els tres punts (⋯) i selecciona <strong>Exportar</strong>",
+  "guide.trade_republic.step4": "Selecciona el rang de dates i format <strong>CSV</strong>",
+  "guide.trade_republic.step5": "Descarrega el fitxer i envia'l al teu ordinador",
+
+  // Revolut
+  "guide.revolut.title": "Revolut (CSV)",
+  "guide.revolut.step1": "Inicia sessió a la <strong>web de Revolut</strong> (business.revolut.com o app)",
+  "guide.revolut.step2": "Ves a <strong>Trading/Cripto → Extractes</strong>",
+  "guide.revolut.step3": "Selecciona <strong>Profit and Loss Statement</strong> de l'exercici fiscal",
+  "guide.revolut.step4": "Descarrega en format <strong>CSV</strong>",
+
+  // Trading 212
+  "guide.trading212.title": "Trading 212 (CSV)",
+  "guide.trading212.step1": "Inicia sessió a la <strong>web de Trading 212</strong>",
+  "guide.trading212.step2": "Ves a <strong>Historial → Transaccions</strong>",
+  "guide.trading212.step3": "Filtra pel rang de dates desitjat",
+  "guide.trading212.step4": "Fes clic a <strong>Descarregar CSV</strong>",
+
+  // Lightyear
+  "guide.lightyear.title": "Lightyear (CSV)",
+  "guide.lightyear.step1": "Obre l'app de <strong>Lightyear</strong>",
+  "guide.lightyear.step2": "Ves a <strong>Perfil → Informes</strong>",
+  "guide.lightyear.step3": "Selecciona <strong>Transaction report</strong> i el període",
+  "guide.lightyear.step4": "Descarrega el fitxer CSV i envia'l al teu ordinador",
+
+  // MEXEM
+  "guide.mexem.title": "MEXEM (Flex Query XML)",
+  "guide.mexem.step1": "Inicia sessió al <strong>Portal del Client</strong> de MEXEM (mateixa interfície que IBKR)",
+  "guide.mexem.step2": "Ves a <strong>Rendiment i informes</strong> → pestanya <strong>Consultes Flex</strong>",
+  "guide.mexem.step3": "Crea una <strong>Activity Flex Query</strong> incloent Trades, Cash Transactions i Open Positions",
+  "guide.mexem.step4": "Format de sortida: <strong>XML</strong>",
+  "guide.mexem.step5": "Executa la consulta i descarrega el fitxer <code>.xml</code>",
+
+  // Swissquote
+  "guide.swissquote.title": "Swissquote (CSV)",
+  "guide.swissquote.step1": "Inicia sessió a <strong>Swissquote eBanking</strong>",
+  "guide.swissquote.step2": "Ves a <strong>Trading → Historial de transaccions</strong>",
+  "guide.swissquote.step3": "Selecciona el rang de dates de l'exercici fiscal",
+  "guide.swissquote.step4": "Fes clic a <strong>Exportar → CSV</strong>",
+
   "m720.title": "Model 720 — Béns a l'estranger",
   "m720.description": "Declaració informativa sobre béns i drets situats a l'estranger.",
   "m720.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 720.",
