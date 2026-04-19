@@ -303,7 +303,7 @@ export function renderTaxBracketCard(
 
   const deductionRow = doubleTaxDeduction > 0
     ? `<tr class="muted">
-        <td colspan="3" style="text-align:right">${escSvg(t("tax.double_tax_deduction" as Parameters<typeof t>[0]))}</td>
+        <td colspan="3" style="text-align:right">${escSvg(t("tax.double_tax_deduction"))}</td>
         <td style="text-align:right">-${doubleTaxDeduction.toFixed(2)} &euro;</td>
       </tr>`
     : "";
@@ -313,25 +313,25 @@ export function renderTaxBracketCard(
     ${svg}
     <table class="bracket-table" style="width:100%;margin-top:8px;font-size:0.85rem">
       <thead><tr>
-        <th style="text-align:left">${escSvg(t("tax.bracket_range" as Parameters<typeof t>[0]))}</th>
-        <th style="text-align:right">${escSvg(t("tax.bracket_base" as Parameters<typeof t>[0]))}</th>
-        <th style="text-align:right">${escSvg(t("tax.bracket_rate" as Parameters<typeof t>[0]))}</th>
-        <th style="text-align:right">${escSvg(t("tax.bracket_tax" as Parameters<typeof t>[0]))}</th>
+        <th style="text-align:left">${escSvg(t("tax.bracket_range"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_base"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_rate"))}</th>
+        <th style="text-align:right">${escSvg(t("tax.bracket_tax"))}</th>
       </tr></thead>
       <tbody>
         ${tableRows}
         ${deductionRow}
         <tr style="font-weight:700;border-top:2px solid var(--border,#ccc)">
-          <td colspan="3" style="text-align:right">${escSvg(t("tax.total_estimated" as Parameters<typeof t>[0]))}</td>
+          <td colspan="3" style="text-align:right">${escSvg(t("tax.total_estimated"))}</td>
           <td style="text-align:right">${netTax.toFixed(2)} &euro;</td>
         </tr>
         <tr class="muted">
-          <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate" as Parameters<typeof t>[0]))}</td>
+          <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate"))}</td>
           <td style="text-align:right">${effectiveRate.toFixed(2)}%</td>
         </tr>
       </tbody>
     </table>
-    <p class="muted" style="font-size:0.75rem;margin-top:6px">${escSvg(t("tax.disclaimer" as Parameters<typeof t>[0]))}</p>
+    <p class="muted" style="font-size:0.75rem;margin-top:6px">${escSvg(t("tax.disclaimer"))}</p>
   </div>`;
 }
 

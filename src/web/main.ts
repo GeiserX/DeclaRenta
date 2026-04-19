@@ -609,11 +609,13 @@ function renderResults(report: TaxSummary) {
 
   // Charts
   const chartData = extractChartData(report);
+  // netGainLoss includes wash-sale-blocked losses — add them back so they
+  // don't reduce the taxable base (they are deferred, not deductible now).
   const taxableBase = Math.max(0,
     report.capitalGains.netGainLoss.toNumber()
+    + report.capitalGains.blockedLosses.toNumber()
     + report.dividends.grossIncome.toNumber()
     + report.interest.earned.toNumber()
-    - report.capitalGains.blockedLosses.toNumber()
   );
   const dtDeduction = report.doubleTaxation.deduction.toNumber();
   const chartsHtml = [
@@ -621,7 +623,7 @@ function renderResults(report: TaxSummary) {
     renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
-    renderTaxBracketCard(t("chart.tax_estimate" as Parameters<typeof t>[0]), taxableBase, dtDeduction),
+    renderTaxBracketCard(t("chart.tax_estimate"), taxableBase, dtDeduction),
   ].filter(Boolean).join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;
