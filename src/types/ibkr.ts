@@ -18,6 +18,8 @@ export interface FlexStatement {
 export interface Trade {
   tradeID: string;
   accountId: string;
+  /** IBKR contract ID — stable across ticker renames */
+  conid?: string;
   symbol: string;
   description: string;
   isin: string;
