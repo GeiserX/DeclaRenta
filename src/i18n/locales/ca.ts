@@ -334,6 +334,8 @@ const ca: TranslationKeys = {
   // Validation
   "validation.future_date": "L'operaci\u00f3 de {{symbol}} t\u00e9 data futura ({{date}}). Verifica les dades.",
   "validation.no_cash_transactions": "No s'han trobat transaccions d'efectiu (dividends/retencions). Si fas servir IBKR, activa la secci\u00f3 Cash Transactions a la teva Flex Query.",
+  "validation.no_cash_degiro": "No s'han trobat dividends ni retencions. Degiro els inclou en un fitxer separat: descarrega tamb\u00e9 el CSV de Compte (Account) des de la B\u00fastia.",
+  "validation.no_cash_generic": "No s'han trobat transaccions d'efectiu (dividends/retencions). Si el teu broker les exporta per separat, puja-les com a fitxer addicional.",
   "validation.no_trades_in_year": "No hi ha operacions a l'exercici {{year}}. Les operacions anteriors s'utilitzen per al c\u00e0lcul FIFO.",
   "validation.very_old_data": "Les dades inclouen operacions des de {{year}} (m\u00e9s de 10 anys). Verifica que el fitxer \u00e9s correcte.",
   "validation.duplicate_trades": "S'han detectat {{count}} operaci\u00f3(ns) duplicada(es). Revisa si has pujat el mateix fitxer dues vegades.",

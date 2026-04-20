@@ -431,7 +431,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   }
 
   // Validation warnings
-  const validationIssues = validateStatement(merged, activeYear);
+  const validationIssues = validateStatement(merged, activeYear, brokers);
   if (validationIssues.length > 0) {
     reviewContent.insertAdjacentHTML("beforeend", renderValidationIssues(validationIssues));
   }
@@ -582,7 +582,7 @@ function renderResults(report: TaxSummary) {
       </span>
     </div>`;
 
-    if (!hasData && detectedYears.length > 0) {
+    if (!hasData && detectedYears.length > 0 && !detectedYears.includes(year)) {
       hdrHtml += `<div class="banner banner-warning">
         <span>${t("results.year_mismatch", { year: String(year), available: detectedYears.join(", ") })}</span>
       </div>`;
