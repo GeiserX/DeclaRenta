@@ -169,6 +169,7 @@ const en: TranslationKeys = {
   "guide.degiro.step3": "Click <strong>Transactions</strong> (transaction history for your products)",
   "guide.degiro.step4": "Select the desired date range (include <strong>all history</strong> for FIFO)",
   "guide.degiro.step5": "Click <strong>Export</strong> and download the CSV file",
+  "guide.degiro.step6": "For dividends: go back to <strong>Inbox</strong> → <strong>Account</strong> (account movement history) → same date range → <strong>Export</strong> CSV",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Log in to <strong>eToro</strong>",
   "guide.etoro.step2": "Go to <strong>Settings → Account Statement</strong>",

@@ -167,6 +167,7 @@ const eu: TranslationKeys = {
   "guide.degiro.step3": "Egin klik <strong>Transakzioak</strong> (zure produktuen transakzio-historia)",
   "guide.degiro.step4": "Hautatu nahi duzun data-tartea (<strong>historia osoa</strong> sartu FIFO-rako)",
   "guide.degiro.step5": "Egin klik <strong>Esportatu</strong> botoian eta deskargatu CSV fitxategia",
+  "guide.degiro.step6": "Dibidenduetarako: itzuli <strong>Sarrera-ontzira</strong> \u2192 <strong>Kontua</strong> (kontuaren mugimendu-historia) \u2192 data-tarte bera \u2192 <strong>Esportatu</strong> CSV",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Hasi saioa <strong>eToro</strong>-n",
   "guide.etoro.step2": "Joan <strong>Ezarpenak → Kontu-laburpena</strong> atalera",
