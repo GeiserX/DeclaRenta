@@ -1022,6 +1022,7 @@ footer a:hover {
 
 /* Wizard panels */
 .wizard-panel {
+  position: relative;
   animation: fadeIn 0.25s ease-out;
   background: none;
   border: none;
@@ -1033,6 +1034,41 @@ footer a:hover {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Processing overlay */
+.processing-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  border-radius: var(--radius, 12px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.processing-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.processing-text {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Wizard navigation */
