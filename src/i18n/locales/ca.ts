@@ -167,6 +167,7 @@ const ca: TranslationKeys = {
   "guide.degiro.step3": "Fes clic a <strong>Transaccions</strong> (historial de transaccions dels teus productes)",
   "guide.degiro.step4": "Selecciona el rang de dates desitjat (inclou <strong>tot l'històric</strong> per al FIFO)",
   "guide.degiro.step5": "Fes clic a <strong>Exportar</strong> i descarrega el fitxer CSV",
+  "guide.degiro.step6": "Per a dividends: torna a la <strong>B\u00fastia</strong> \u2192 <strong>Compte</strong> (historial de moviments del teu compte) \u2192 mateix rang de dates \u2192 <strong>Exportar</strong> CSV",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Inicia sessió a <strong>eToro</strong>",
   "guide.etoro.step2": "Ves a <strong>Configuració → Extracte de compte</strong>",
