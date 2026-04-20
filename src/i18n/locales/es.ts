@@ -367,6 +367,8 @@ const es = {
   // Validation
   "validation.future_date": "La operación de {{symbol}} tiene fecha futura ({{date}}). Verifica los datos.",
   "validation.no_cash_transactions": "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si usas IBKR, activa la sección Cash Transactions en tu Flex Query.",
+  "validation.no_cash_degiro": "No se han encontrado dividendos ni retenciones. Degiro los incluye en un fichero separado: descarga también el CSV de Cuenta (Account) desde el Buzón.",
+  "validation.no_cash_generic": "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si tu broker las exporta por separado, súbelas como fichero adicional.",
   "validation.no_trades_in_year": "No hay operaciones en el ejercicio {{year}}. Las operaciones anteriores se usan para el cálculo FIFO.",
   "validation.very_old_data": "Los datos incluyen operaciones desde {{year}} (más de 10 años). Verifica que el fichero es correcto.",
   "validation.duplicate_trades": "Se han detectado {{count}} operación(es) duplicada(s). Revisa si has subido el mismo fichero dos veces.",

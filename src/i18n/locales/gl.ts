@@ -334,6 +334,8 @@ const gl: TranslationKeys = {
   // Validation
   "validation.future_date": "A operaci\u00f3n de {{symbol}} ten data futura ({{date}}). Verifica os datos.",
   "validation.no_cash_transactions": "Non se atoparon transacci\u00f3ns de efectivo (dividendos/retenci\u00f3ns). Se usas IBKR, activa a secci\u00f3n Cash Transactions na t\u00faa Flex Query.",
+  "validation.no_cash_degiro": "Non se atoparon dividendos nin retenci\u00f3ns. Degiro incl\u00faeos nun ficheiro separado: descarga tam\u00e9n o CSV de Conta (Account) desde o Buz\u00f3n.",
+  "validation.no_cash_generic": "Non se atoparon transacci\u00f3ns de efectivo (dividendos/retenci\u00f3ns). Se o teu broker as exporta por separado, s\u00fabeas como ficheiro adicional.",
   "validation.no_trades_in_year": "Non hai operaci\u00f3ns no exercicio {{year}}. As operaci\u00f3ns anteriores \u00fasanse para o c\u00e1lculo FIFO.",
   "validation.very_old_data": "Os datos incl\u00faen operaci\u00f3ns desde {{year}} (m\u00e1is de 10 anos). Verifica que o ficheiro \u00e9 correcto.",
   "validation.duplicate_trades": "Detect\u00e1ronse {{count}} operaci\u00f3n(s) duplicada(s). Revisa se subiches o mesmo ficheiro d\u00faas veces.",

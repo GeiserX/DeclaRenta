@@ -334,6 +334,8 @@ const eu: TranslationKeys = {
   // Validation
   "validation.future_date": "{{symbol}} eragiketak etorkizuneko data du ({{date}}). Egiaztatu datuak.",
   "validation.no_cash_transactions": "Ez da eskudiru-transakziorik aurkitu (dibidenduak/atxikipenak). IBKR erabiltzen baduzu, gaitu Cash Transactions atala zure Flex Query-n.",
+  "validation.no_cash_degiro": "Ez da dibidendurik edo atxikipenik aurkitu. Degirok fitxategi bereizi batean sartzen ditu: deskargatu Kontuaren CSV-a (Account) ere Sarrera-ontzitik.",
+  "validation.no_cash_generic": "Ez da eskudiru-transakziorik aurkitu (dibidenduak/atxikipenak). Zure brokerrak bereizita esportatzen baditu, igo fitxategi gehigarri gisa.",
   "validation.no_trades_in_year": "Ez dago eragiketarik {{year}} ekitaldian. Aurreko eragiketak FIFO kalkulurako erabiltzen dira.",
   "validation.very_old_data": "Datuek {{year}}(e)tik aurrerako eragiketak dituzte (10 urte baino gehiago). Egiaztatu fitxategia zuzena dela.",
   "validation.duplicate_trades": "{{count}} eragiketa bikoiztu detektatu d(ir)a. Egiaztatu fitxategi bera bi aldiz igo duzun.",
