@@ -219,7 +219,15 @@ wizardNext.addEventListener("click", (e) => {
   }
   if (step === 2) {
     e.stopImmediatePropagation();
+    const panel = document.getElementById("wizard-step-2")!;
+    const overlay = document.createElement("div");
+    overlay.className = "processing-overlay";
+    overlay.innerHTML = `<div class="processing-spinner"></div><span class="processing-text">${t("config.processing")}</span>`;
+    panel.appendChild(overlay);
+    wizardNext.setAttribute("disabled", "");
     void processFiles().then(() => {
+      overlay.remove();
+      wizardNext.removeAttribute("disabled");
       if (currentReport) goToStep(3);
     });
     return;
