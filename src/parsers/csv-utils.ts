@@ -55,7 +55,8 @@ export function parseCsvLine(line: string, delimiter: string): string[] {
  * Handles: "1.234,56" -> "1234.56", "-175,50" -> "-175.50", "175.50" -> "175.50"
  */
 export function parseNumber(val: string): string {
-  const trimmed = val.trim();
+  // Strip currency symbols (€, $, £, etc.) from any position before parsing
+  const trimmed = val.trim().replace(/[€$£¥]/g, "").trim();
   if (!trimmed) return "0";
 
   // If it has both dot and comma, the last one is the decimal separator

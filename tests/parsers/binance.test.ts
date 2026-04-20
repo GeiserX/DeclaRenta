@@ -171,4 +171,90 @@ describe("binanceParser", () => {
       expect(() => binanceParser.parse("Foo,Bar\ndata1,data2")).toThrow("formato no reconocido");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Transaction History format (User_ID,UTC_Time,Account,Operation,Coin,Change)
+  // -------------------------------------------------------------------------
+
+  describe("transaction history format", () => {
+    const TX_HEADER = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+
+    it("should detect transaction history CSV", () => {
+      const csv = [TX_HEADER, "123,2025-01-04 11:20:13,Spot,Deposit,USDT,100,"].join("\n");
+      expect(binanceParser.detect(csv)).toBe(true);
+    });
+
+    it("should skip deposits and transfers", () => {
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-04 11:08:17,Spot,Deposit,USDT,500,",
+        "123,2025-01-04 11:27:37,Spot,Transfer Between Main and Funding Wallet,SOL,-10,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should parse Binance Convert pairs", () => {
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+      const sell = result.trades.find((t) => t.buySell === "SELL")!;
+      const buy = result.trades.find((t) => t.buySell === "BUY")!;
+      expect(sell.symbol).toBe("USDT");
+      expect(buy.symbol).toBe("SOL");
+      expect(Number(sell.quantity)).toBeLessThan(0);
+      expect(Number(buy.quantity)).toBeGreaterThan(0);
+    });
+
+    it("should parse Strategy Sold+Revenue trades", () => {
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-13 21:37:46,Strategy,Transaction Revenue,ETH,0.00407900,",
+        "123,2025-01-13 21:37:46,Strategy,Transaction Fee,ETH,-0.00000408,",
+        "123,2025-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const trade = result.trades[0]!;
+      expect(trade.buySell).toBe("SELL");
+      expect(trade.symbol).toBe("XRP");
+      expect(Number(trade.quantity)).toBe(-5);
+      expect(trade.currency).toBe("ETH");
+    });
+
+    it("should parse Strategy Buy+Spend trades", () => {
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-13 21:42:04,Strategy,Transaction Buy,XRP,5.00000000,",
+        "123,2025-01-13 21:42:04,Strategy,Transaction Spend,ETH,-0.00407900,",
+        "123,2025-01-13 21:42:04,Strategy,Transaction Fee,XRP,-0.00500000,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const trade = result.trades[0]!;
+      expect(trade.buySell).toBe("BUY");
+      expect(trade.symbol).toBe("XRP");
+      expect(Number(trade.quantity)).toBe(5);
+      expect(trade.currency).toBe("ETH");
+    });
+
+    it("should handle mixed operations in real-world data", () => {
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-04 11:08:17,Spot,Deposit,USDT,500,",
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+        "123,2025-01-13 21:37:46,Strategy,Transaction Revenue,ETH,0.00407900,",
+        "123,2025-01-13 21:37:46,Strategy,Transaction Fee,ETH,-0.00000408,",
+        "123,2025-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // 2 from Convert + 1 from Sold/Revenue = 3
+      expect(result.trades).toHaveLength(3);
+    });
+  });
 });

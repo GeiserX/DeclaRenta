@@ -210,4 +210,48 @@ describe("coinbaseParser", () => {
       expect(() => coinbaseParser.parse("Foo,Bar\ndata1,data2")).toThrow("formato no reconocido");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // V2 format (Price Currency / Price at Transaction, with preamble)
+  // -------------------------------------------------------------------------
+
+  describe("v2 format", () => {
+    const V2_HEADER = "ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+
+    const V2_CSV_WITH_PREAMBLE = [
+      ",,,,,,,,,,",
+      "Transactions,,,,,,,,,,",
+      "User,John Doe,abc-123,,,,,,,,",
+      V2_HEADER,
+      'tx001,2025-01-03 22:35:59 UTC,Convert,BTC,-0.00000189,EUR,€1.21732403,€8.89999,€1.08178,-€0.814036357017,Converted 0.00000189 BTC to 1.5 SOL',
+      'tx002,2025-01-04 07:12:27 UTC,Buy,SOL,1.5,EUR,€10.3293,€15.49,€15.99,€0.50,Bought SOL',
+    ].join("\n");
+
+    it("should detect v2 format with preamble", () => {
+      expect(coinbaseParser.detect(V2_CSV_WITH_PREAMBLE)).toBe(true);
+    });
+
+    it("should parse v2 format skipping preamble", () => {
+      const result = coinbaseParser.parse(V2_CSV_WITH_PREAMBLE);
+      // Convert produces sell + buy, Buy produces 1 trade
+      expect(result.trades.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("should handle € currency symbols in values", () => {
+      const csv = [
+        V2_HEADER,
+        'tx001,2025-01-04 07:12:27 UTC,Buy,SOL,1.5,EUR,€10.3293,€15.49,€15.99,€0.50,Bought SOL',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const trade = result.trades[0]!;
+      expect(trade.buySell).toBe("BUY");
+      expect(trade.symbol).toBe("SOL");
+      expect(Number(trade.tradePrice)).toBeCloseTo(10.3293, 2);
+    });
+
+    it("should detect v2 header without preamble", () => {
+      expect(coinbaseParser.detect(V2_HEADER)).toBe(true);
+    });
+  });
 });
