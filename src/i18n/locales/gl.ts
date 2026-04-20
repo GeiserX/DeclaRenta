@@ -167,6 +167,7 @@ const gl: TranslationKeys = {
   "guide.degiro.step3": "Fai clic en <strong>Transaccións</strong> (historial de transaccións dos teus produtos)",
   "guide.degiro.step4": "Selecciona o rango de datas desexado (inclúe <strong>todo o histórico</strong> para FIFO)",
   "guide.degiro.step5": "Fai clic en <strong>Exportar</strong> e descarga o ficheiro CSV",
+  "guide.degiro.step6": "Para dividendos: volve ao <strong>Buz\u00f3n</strong> \u2192 <strong>Conta</strong> (historial de movementos da t\u00faa conta) \u2192 mesmo rango de datas \u2192 <strong>Exportar</strong> CSV",
   "guide.etoro.title": "eToro (XLSX)",
   "guide.etoro.step1": "Inicia sesión en <strong>eToro</strong>",
   "guide.etoro.step2": "Vai a <strong>Axustes → Extracto de conta</strong>",

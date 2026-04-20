@@ -184,6 +184,7 @@ const es = {
   "guide.degiro.step3": "Haz clic en <strong>Transacciones</strong> (historial de transacciones de tus productos)",
   "guide.degiro.step4": "Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO)",
   "guide.degiro.step5": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
+  "guide.degiro.step6": "Para dividendos: vuelve al <strong>Buzón</strong> → <strong>Cuenta</strong> (historial de movimientos de tu cuenta) → misma fecha → <strong>Exportar</strong> CSV",
 
   // eToro
   "guide.etoro.title": "eToro (XLSX)",
