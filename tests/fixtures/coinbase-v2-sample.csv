@@ -1,0 +1,10 @@
+,,,,,,,,,,
+Transactions,,,,,,,,,,
+User,Jane Doe,abc-def-1234-5678,,,,,,,,
+ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
+tx001,2025-01-04 07:12:27 UTC,Send,SOL,-1.50000000,EUR,€10.50,-€15.75,-€15.75,€0.00,Sent SOL to external wallet
+tx002,2025-01-03 22:35:59 UTC,Convert,BTC,-0.00500000,EUR,€42000.00,€210.00,€205.00,-€5.00,Converted 0.005 BTC to 50 SOL
+tx003,2025-01-03 22:23:46 UTC,Receive,BTC,0.00500000,EUR,€42000.00,€210.00,€210.00,€0.00,Received BTC from external account
+tx004,2025-01-05 10:00:00 UTC,Buy,ETH,0.50000000,EUR,€3200.00,€1600.00,€1610.00,€10.00,Bought 0.5 ETH
+tx005,2025-01-10 14:00:00 UTC,Sell,ETH,0.25000000,EUR,€3400.00,€850.00,€842.00,-€8.00,Sold 0.25 ETH
+tx006,2025-02-01 08:00:00 UTC,Staking Income,SOL,0.10000000,EUR,€25.00,€2.50,€2.50,€0.00,Staking reward
