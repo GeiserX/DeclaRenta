@@ -64,10 +64,10 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@types/pdfkit": "^0.17.5",
+    "@types/pdfkit": "^0.17.6",
     "commander": "^13.1.0",
     "decimal.js": "^10.5.0",
-    "fast-xml-parser": "^5.5.12",
+    "fast-xml-parser": "^5.7.1",
     "pdfkit": "^0.18.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
@@ -78,7 +78,7 @@
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.58.1",
+    "typescript-eslint": "^8.58.2",
     "vite": "^6.3.0",
     "vitest": "^3.1.0"
   }
