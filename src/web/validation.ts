@@ -39,12 +39,9 @@ export function validateStatement(statement: Statement, selectedYear: number | n
     const brokerLower = (brokers ?? []).map((b) => b.toLowerCase());
     const isDegiro = brokerLower.some((b) => b.includes("degiro"));
     const isIbkr = brokerLower.some((b) => b.includes("ibkr") || b.includes("interactive") || b.includes("mexem"));
-    const key = isDegiro
-      ? "validation.no_cash_degiro"
-      : isIbkr
-        ? "validation.no_cash_transactions"
-        : "validation.no_cash_generic";
-    issues.push({ level: "warning", message: t(key) });
+    if (isDegiro) issues.push({ level: "warning", message: t("validation.no_cash_degiro") });
+    if (isIbkr) issues.push({ level: "warning", message: t("validation.no_cash_transactions") });
+    if (!isDegiro && !isIbkr) issues.push({ level: "warning", message: t("validation.no_cash_generic") });
   }
 
   // 3. No trades for selected year
