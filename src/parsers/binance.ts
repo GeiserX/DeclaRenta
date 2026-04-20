@@ -198,20 +198,22 @@ export const binanceParser: BrokerParser = {
   formats: ["CSV"],
 
   detect(input: string): boolean {
-    const firstLine = stripBom(input).split(/\r?\n/)[0] ?? "";
-    return isBinanceCsv(firstLine);
+    const lines = stripBom(input).split(/\r?\n/);
+    return lines.slice(0, 10).some((l) => isBinanceCsv(l));
   },
 
   parse(input: string): Statement {
     const cleaned = stripBom(input);
-    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
+    const allLines = cleaned.split(/\r?\n/);
+    // Find header line (may be preceded by metadata preamble)
+    const headerIdx = allLines.findIndex((l) => isBinanceCsv(l));
+    if (headerIdx === -1) {
+      const hasContent = allLines.some((l) => l.trim());
+      throw new Error(hasContent ? "Binance CSV: formato no reconocido" : "Binance CSV: fichero vacio o sin datos");
+    }
+    const lines = allLines.slice(headerIdx).filter((l) => l.trim());
     if (lines.length < 2) {
       throw new Error("Binance CSV: fichero vacio o sin datos");
-    }
-
-    const headerLine = lines[0]!;
-    if (!isBinanceCsv(headerLine)) {
-      throw new Error("Binance CSV: formato no reconocido");
     }
 
     return parseBinanceCsv(lines);

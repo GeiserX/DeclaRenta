@@ -268,19 +268,22 @@ export const coinbaseParser: BrokerParser = {
   formats: ["CSV"],
 
   detect(input: string): boolean {
-    const firstLine = stripBom(input).split(/\r?\n/)[0] ?? "";
-    return isCoinbaseCsv(firstLine);
+    const lines = stripBom(input).split(/\r?\n/);
+    return lines.slice(0, 10).some((l) => isCoinbaseCsv(l));
   },
 
   parse(input: string): Statement {
     const cleaned = stripBom(input);
-    const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
+    const allLines = cleaned.split(/\r?\n/);
+    // Find header line (may be preceded by metadata preamble)
+    const headerIdx = allLines.findIndex((l) => isCoinbaseCsv(l));
+    if (headerIdx === -1) {
+      const hasContent = allLines.some((l) => l.trim());
+      throw new Error(hasContent ? "Coinbase CSV: formato no reconocido" : "Coinbase CSV: fichero vacio o sin datos");
+    }
+    const lines = allLines.slice(headerIdx).filter((l) => l.trim());
     if (lines.length < 2) {
       throw new Error("Coinbase CSV: fichero vacio o sin datos");
-    }
-
-    if (!isCoinbaseCsv(lines[0]!)) {
-      throw new Error("Coinbase CSV: formato no reconocido");
     }
 
     return parseCoinbaseCsv(lines);
