@@ -71,11 +71,15 @@ export function validateStatement(statement: Statement, selectedYear: number | n
     }
   }
 
-  // 5. Duplicate trades detection (same ISIN + date + quantity + price)
+  // 5. Duplicate trades detection
+  // Use tradeID when available (IBKR always provides unique IDs per execution).
+  // Fall back to a composite key including symbol for brokers without tradeIDs.
   const seen = new Set<string>();
   let dupeCount = 0;
   for (const tr of trades) {
-    const key = `${tr.isin}|${tr.tradeDate}|${tr.quantity}|${tr.tradePrice}|${tr.buySell}`;
+    const key = tr.tradeID
+      ? tr.tradeID
+      : `${tr.symbol}|${tr.isin}|${tr.tradeDate}|${tr.quantity}|${tr.tradePrice}|${tr.buySell}`;
     if (seen.has(key)) {
       dupeCount++;
     } else {
