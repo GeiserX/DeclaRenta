@@ -96,7 +96,7 @@ function mapTrade(raw: Record<string, string>): Trade {
   return {
     tradeID: raw.tradeID ?? "",
     accountId: raw.accountId ?? "",
-    conid: raw.conid ?? "",
+    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
     symbol: raw.symbol ?? "",
     description: raw.description ?? "",
     isin: raw.isin ?? "",
