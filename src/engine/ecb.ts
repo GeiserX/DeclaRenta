@@ -11,6 +11,36 @@ import type { EcbRateMap } from "../types/ecb.js";
 
 const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
 
+/** Stablecoins pegged 1:1 to USD — use USD rate from ECB */
+const STABLECOIN_TO_FIAT: Record<string, string> = {
+  USDT: "USD", USDC: "USD", BUSD: "USD", DAI: "USD",
+  TUSD: "USD", FDUSD: "USD", USDP: "USD", GUSD: "USD",
+  PYUSD: "USD", EURT: "EUR", EUROC: "EUR",
+};
+
+/** Normalize a currency code: map stablecoins to their fiat equivalent */
+export function normalizeCurrency(currency: string): string {
+  return STABLECOIN_TO_FIAT[currency] ?? currency;
+}
+
+/**
+ * Currencies known to be published by the ECB.
+ * Anything not in this set (and not a stablecoin) is likely crypto and won't resolve.
+ */
+const ECB_CURRENCIES = new Set([
+  "USD", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "SEK", "NOK", "DKK",
+  "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "ISK", "TRY", "ILS", "CNY",
+  "HKD", "SGD", "KRW", "THB", "MXN", "BRL", "ZAR", "INR", "IDR", "MYR",
+  "PHP", "RUB",
+]);
+
+/** Returns true if the currency can be resolved via ECB (fiat or stablecoin) */
+export function isEcbResolvable(currency: string): boolean {
+  if (currency === "EUR") return true;
+  const normalized = normalizeCurrency(currency);
+  return ECB_CURRENCIES.has(normalized);
+}
+
 /**
  * Fetch ECB daily exchange rates for a given year and currency.
  *
@@ -26,12 +56,24 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
   const startDate = `${year}-01-01`;
   const endDate = `${year}-12-31`;
 
-  for (const currency of currencies) {
+  // Deduplicate after normalization (e.g. USDT + USDC both → USD)
+  const seen = new Set<string>();
+  const toFetch: string[] = [];
+  for (const raw of currencies) {
+    const normalized = normalizeCurrency(raw);
+    if (normalized === "EUR" || seen.has(normalized)) continue;
+    if (!ECB_CURRENCIES.has(normalized)) continue; // skip crypto — ECB won't have it
+    seen.add(normalized);
+    toFetch.push(normalized);
+  }
+
+  for (const currency of toFetch) {
     const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata`;
 
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`ECB API error for ${currency}: ${response.status} ${response.statusText}`);
+      console.warn(`ECB: no rate data for ${currency} (${response.status}) — skipping`);
+      continue;
     }
 
     const csv = await response.text();
@@ -75,6 +117,10 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
 export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string): Decimal {
   if (currency === "EUR") return new Decimal(1);
 
+  // Normalize stablecoins to their fiat equivalent
+  const resolved = normalizeCurrency(currency);
+  if (resolved === "EUR") return new Decimal(1);
+
   // Normalize date to YYYY-MM-DD
   const normalizedDate = date.length === 8
     ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
@@ -84,7 +130,7 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const dateStr = d.toISOString().slice(0, 10);
-    const rate = rateMap.get(dateStr)?.get(currency);
+    const rate = rateMap.get(dateStr)?.get(resolved);
 
     if (rate) {
       return new Decimal(rate);
@@ -92,6 +138,11 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 
     // Walk backward one day
     d.setDate(d.getDate() - 1);
+  }
+
+  // For crypto currencies without ECB rate, return 0 (these trades can't be valued in EUR)
+  if (!ECB_CURRENCIES.has(resolved)) {
+    return new Decimal(0);
   }
 
   throw new Error(`No ECB rate found for ${currency} near ${normalizedDate} (searched 10 days back)`);
@@ -113,6 +164,9 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 export function getQ4AverageRate(rateMap: EcbRateMap, year: number, currency: string): Decimal {
   if (currency === "EUR") return new Decimal(1);
 
+  const resolved = normalizeCurrency(currency);
+  if (resolved === "EUR") return new Decimal(1);
+
   const q4Start = `${year}-10-01`;
   const q4End = `${year}-12-31`;
 
@@ -121,7 +175,7 @@ export function getQ4AverageRate(rateMap: EcbRateMap, year: number, currency: st
 
   for (const [date, currencies] of rateMap) {
     if (date >= q4Start && date <= q4End) {
-      const rate = currencies.get(currency);
+      const rate = currencies.get(resolved);
       if (rate) {
         sum = sum.plus(new Decimal(rate));
         count++;
@@ -130,6 +184,7 @@ export function getQ4AverageRate(rateMap: EcbRateMap, year: number, currency: st
   }
 
   if (count === 0) {
+    if (!ECB_CURRENCIES.has(resolved)) return new Decimal(0);
     throw new Error(`No ECB Q4 rates found for ${currency} in ${year} (Oct-Dec)`);
   }
 
