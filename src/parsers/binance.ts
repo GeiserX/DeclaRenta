@@ -19,11 +19,23 @@ import { parseCsvLine, stripBom } from "./csv-utils.js";
 // Header detection
 // ---------------------------------------------------------------------------
 
-const BINANCE_HEADERS = ["date(utc)", "pair", "side", "price"];
+/** Trade History format: Date(UTC),Pair,Side,Price,Executed,Amount,Fee */
+const BINANCE_TRADE_HEADERS = ["date(utc)", "pair", "side", "price"];
+/** Transaction History format: User_ID,UTC_Time,Account,Operation,Coin,Change,Remark */
+const BINANCE_TX_HEADERS = ["utc_time", "operation", "coin", "change"];
+
+function isBinanceTradeCsv(headerLine: string): boolean {
+  const lower = headerLine.toLowerCase();
+  return BINANCE_TRADE_HEADERS.every((h) => lower.includes(h));
+}
+
+function isBinanceTxCsv(headerLine: string): boolean {
+  const lower = headerLine.toLowerCase();
+  return BINANCE_TX_HEADERS.every((h) => lower.includes(h));
+}
 
 function isBinanceCsv(headerLine: string): boolean {
-  const lower = headerLine.toLowerCase();
-  return BINANCE_HEADERS.every((h) => lower.includes(h));
+  return isBinanceTradeCsv(headerLine) || isBinanceTxCsv(headerLine);
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +125,253 @@ function convertBinanceDate(dateStr: string): string {
 
 // ---------------------------------------------------------------------------
 // Parser
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Transaction History parser (User_ID,UTC_Time,Account,Operation,Coin,Change)
+// ---------------------------------------------------------------------------
+
+interface BinanceTxColumns {
+  utcTime: number;
+  account: number;
+  operation: number;
+  coin: number;
+  change: number;
+  remark: number;
+}
+
+function resolveTxColumns(headers: string[]): BinanceTxColumns {
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  return {
+    utcTime: lower.indexOf("utc_time"),
+    account: lower.indexOf("account"),
+    operation: lower.indexOf("operation"),
+    coin: lower.indexOf("coin"),
+    change: lower.indexOf("change"),
+    remark: lower.indexOf("remark"),
+  };
+}
+
+/** Skip these operations — internal transfers, not taxable events */
+const TX_SKIP_OPS = new Set([
+  "deposit", "withdraw",
+  "transfer between main and funding wallet",
+  "transfer between spot and strategy account",
+  "transfer between main and trading account",
+]);
+
+interface TxRow {
+  utcTime: string;
+  tradeDate: string;
+  operation: string;
+  coin: string;
+  change: Decimal;
+  index: number;
+}
+
+function parseBinanceTxCsv(lines: string[]): Statement {
+  const headers = parseCsvLine(lines[0]!, ",");
+  const cols = resolveTxColumns(headers);
+
+  if (cols.utcTime < 0 || cols.operation < 0 || cols.coin < 0 || cols.change < 0) {
+    throw new Error("Binance Transaction History CSV: faltan columnas obligatorias (UTC_Time, Operation, Coin, Change)");
+  }
+
+  const trades: Trade[] = [];
+
+  // Collect all meaningful rows first
+  const rows: TxRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!line) continue;
+
+    const fields = parseCsvLine(line, ",");
+    const utcTime = (fields[cols.utcTime] ?? "").trim();
+    const operation = (fields[cols.operation] ?? "").trim().toLowerCase();
+    const coin = (fields[cols.coin] ?? "").trim().toUpperCase();
+    const changeStr = (fields[cols.change] ?? "").trim();
+
+    if (!utcTime || !coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
+
+    const tradeDate = convertBinanceDate(utcTime);
+    const change = new Decimal(changeStr);
+    if (change.isZero()) continue;
+
+    rows.push({ utcTime, tradeDate, operation, coin, change, index: i });
+  }
+
+  // Group rows by timestamp to pair operations
+  const groups = new Map<string, TxRow[]>();
+  for (const row of rows) {
+    const key = row.utcTime;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+
+  for (const [, group] of groups) {
+    // --- Binance Convert: two rows at same timestamp, one positive, one negative ---
+    if (group.length === 2 && group.every((r) => r.operation === "binance convert")) {
+      const sell = group.find((r) => r.change.isNegative());
+      const buy = group.find((r) => r.change.isPositive());
+      if (sell && buy) {
+        const sellQty = sell.change.abs();
+        const buyQty = buy.change.abs();
+        // Price of sold asset in terms of bought asset
+        const implicitPrice = buyQty.div(sellQty);
+
+        trades.push({
+          tradeID: `binance-tx-sell-${sell.tradeDate}-${sell.coin}-${sell.index}`,
+          accountId: "",
+          symbol: sell.coin,
+          description: `Convert ${sell.coin} to ${buy.coin}`,
+          isin: "",
+          assetCategory: "CRYPTO",
+          currency: buy.coin,
+          tradeDate: sell.tradeDate,
+          settlementDate: sell.tradeDate,
+          quantity: sell.change.toString(),
+          tradePrice: implicitPrice.toString(),
+          tradeMoney: buyQty.toString(),
+          proceeds: buyQty.toString(),
+          cost: "0",
+          fifoPnlRealized: "0",
+          fxRateToBase: "1",
+          buySell: "SELL",
+          openCloseIndicator: "C",
+          exchange: "BINANCE",
+          commissionCurrency: buy.coin,
+          commission: "0",
+          taxes: "0",
+          multiplier: "1",
+          brokerSource: "Binance",
+        });
+        trades.push({
+          tradeID: `binance-tx-buy-${buy.tradeDate}-${buy.coin}-${buy.index}`,
+          accountId: "",
+          symbol: buy.coin,
+          description: `Convert ${sell.coin} to ${buy.coin}`,
+          isin: "",
+          assetCategory: "CRYPTO",
+          currency: sell.coin,
+          tradeDate: buy.tradeDate,
+          settlementDate: buy.tradeDate,
+          quantity: buyQty.toString(),
+          tradePrice: sellQty.div(buyQty).toString(),
+          tradeMoney: sellQty.toString(),
+          proceeds: "0",
+          cost: sellQty.toString(),
+          fifoPnlRealized: "0",
+          fxRateToBase: "1",
+          buySell: "BUY",
+          openCloseIndicator: "O",
+          exchange: "BINANCE",
+          commissionCurrency: sell.coin,
+          commission: "0",
+          taxes: "0",
+          multiplier: "1",
+          brokerSource: "Binance",
+        });
+        continue;
+      }
+    }
+
+    // --- Strategy trades: Transaction Sold/Revenue/Buy/Spend/Fee ---
+    const sold = group.filter((r) => r.operation === "transaction sold");
+    const revenue = group.filter((r) => r.operation === "transaction revenue");
+    const bought = group.filter((r) => r.operation === "transaction buy");
+    const spend = group.filter((r) => r.operation === "transaction spend");
+    const fees = group.filter((r) => r.operation === "transaction fee");
+
+    // Pair Sold + Revenue → SELL trade
+    if (sold.length > 0 && revenue.length > 0) {
+      const soldRow = sold[0]!;
+      const revenueRow = revenue[0]!;
+      const feeRow = fees.find((f) => f.coin === revenueRow.coin);
+      const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
+      const soldQty = soldRow.change.abs();
+      const revenueQty = revenueRow.change.abs();
+
+      trades.push({
+        tradeID: `binance-tx-sell-${soldRow.tradeDate}-${soldRow.coin}-${soldRow.index}`,
+        accountId: "",
+        symbol: soldRow.coin,
+        description: `Sell ${soldRow.coin} for ${revenueRow.coin}`,
+        isin: "",
+        assetCategory: "CRYPTO",
+        currency: revenueRow.coin,
+        tradeDate: soldRow.tradeDate,
+        settlementDate: soldRow.tradeDate,
+        quantity: soldRow.change.toString(),
+        tradePrice: revenueQty.div(soldQty).toString(),
+        tradeMoney: revenueQty.toString(),
+        proceeds: revenueQty.toString(),
+        cost: "0",
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: "SELL",
+        openCloseIndicator: "C",
+        exchange: "BINANCE",
+        commissionCurrency: revenueRow.coin,
+        commission: feeAmount.isZero() ? "0" : feeAmount.neg().toString(),
+        taxes: "0",
+        multiplier: "1",
+        brokerSource: "Binance",
+      });
+    }
+
+    // Pair Buy + Spend → BUY trade
+    if (bought.length > 0 && spend.length > 0) {
+      const buyRow = bought[0]!;
+      const spendRow = spend[0]!;
+      const feeRow = fees.find((f) => f.coin === buyRow.coin);
+      const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
+      const buyQty = buyRow.change.abs();
+      const spendQty = spendRow.change.abs();
+
+      trades.push({
+        tradeID: `binance-tx-buy-${buyRow.tradeDate}-${buyRow.coin}-${buyRow.index}`,
+        accountId: "",
+        symbol: buyRow.coin,
+        description: `Buy ${buyRow.coin} with ${spendRow.coin}`,
+        isin: "",
+        assetCategory: "CRYPTO",
+        currency: spendRow.coin,
+        tradeDate: buyRow.tradeDate,
+        settlementDate: buyRow.tradeDate,
+        quantity: buyQty.toString(),
+        tradePrice: spendQty.div(buyQty).toString(),
+        tradeMoney: spendQty.toString(),
+        proceeds: "0",
+        cost: spendQty.toString(),
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: "BUY",
+        openCloseIndicator: "O",
+        exchange: "BINANCE",
+        commissionCurrency: spendRow.coin,
+        commission: feeAmount.isZero() ? "0" : feeAmount.neg().toString(),
+        taxes: "0",
+        multiplier: "1",
+        brokerSource: "Binance",
+      });
+    }
+  }
+
+  return {
+    accountId: "",
+    fromDate: "",
+    toDate: "",
+    period: "",
+    trades,
+    cashTransactions: [],
+    corporateActions: [],
+    openPositions: [],
+    securitiesInfo: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Trade History parser (Date(UTC),Pair,Side,Price,Executed,Amount,Fee)
 // ---------------------------------------------------------------------------
 
 function parseBinanceCsv(lines: string[]): Statement {
@@ -206,7 +465,9 @@ export const binanceParser: BrokerParser = {
     const cleaned = stripBom(input);
     const allLines = cleaned.split(/\r?\n/);
     // Find header line (may be preceded by metadata preamble)
-    const headerIdx = allLines.findIndex((l) => isBinanceCsv(l));
+    const tradeIdx = allLines.findIndex((l) => isBinanceTradeCsv(l));
+    const txIdx = allLines.findIndex((l) => isBinanceTxCsv(l));
+    const headerIdx = tradeIdx >= 0 ? tradeIdx : txIdx;
     if (headerIdx === -1) {
       const hasContent = allLines.some((l) => l.trim());
       throw new Error(hasContent ? "Binance CSV: formato no reconocido" : "Binance CSV: fichero vacio o sin datos");
@@ -216,6 +477,6 @@ export const binanceParser: BrokerParser = {
       throw new Error("Binance CSV: fichero vacio o sin datos");
     }
 
-    return parseBinanceCsv(lines);
+    return txIdx >= 0 && tradeIdx < 0 ? parseBinanceTxCsv(lines) : parseBinanceCsv(lines);
   },
 };

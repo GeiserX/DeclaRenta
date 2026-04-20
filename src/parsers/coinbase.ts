@@ -22,11 +22,15 @@ import {
 // Header detection
 // ---------------------------------------------------------------------------
 
-const COINBASE_HEADERS = ["transaction type", "spot price", "quantity transacted"];
+/** Old format: "Spot Price Currency", "Spot Price at Transaction" */
+const COINBASE_HEADERS_V1 = ["transaction type", "spot price", "quantity transacted"];
+/** New format: "Price Currency", "Price at Transaction" (no "Spot" prefix), plus "ID" column */
+const COINBASE_HEADERS_V2 = ["transaction type", "price at transaction", "quantity transacted"];
 
 function isCoinbaseCsv(headerLine: string): boolean {
   const lower = headerLine.toLowerCase();
-  return COINBASE_HEADERS.every((h) => lower.includes(h));
+  return COINBASE_HEADERS_V1.every((h) => lower.includes(h)) ||
+         COINBASE_HEADERS_V2.every((h) => lower.includes(h));
 }
 
 // ---------------------------------------------------------------------------
@@ -52,8 +56,8 @@ function resolveColumns(headers: string[]): CoinbaseColumns {
     transactionType: findColumn(headers, ["transaction type"]),
     asset: findColumn(headers, ["asset"]),
     quantity: findColumn(headers, ["quantity transacted"]),
-    spotCurrency: findColumn(headers, ["spot price currency"]),
-    spotPrice: findColumn(headers, ["spot price at transaction"]),
+    spotCurrency: findColumn(headers, ["spot price currency", "price currency"]),
+    spotPrice: findColumn(headers, ["spot price at transaction", "price at transaction"]),
     subtotal: findColumn(headers, ["subtotal"]),
     total: findColumn(headers, ["total (inclusive of fees and/or spread)", "total"]),
     fees: findColumn(headers, ["fees and/or spread", "fees"]),

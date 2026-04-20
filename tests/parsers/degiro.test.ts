@@ -190,15 +190,15 @@ describe("degiroParser", () => {
     });
   });
 
-  describe("real Degiro Account export (12-column format)", () => {
-    const realCsv = readFileSync(new URL("../fixtures/degiro-account-real.csv", import.meta.url), "utf-8");
+  describe("Degiro Account sample (12-column format)", () => {
+    const sampleCsv = readFileSync(new URL("../fixtures/degiro-account-sample.csv", import.meta.url), "utf-8");
 
-    it("should detect the real Account CSV", () => {
-      expect(degiroParser.detect(realCsv)).toBe(true);
+    it("should detect the Account CSV", () => {
+      expect(degiroParser.detect(sampleCsv)).toBe(true);
     });
 
     it("should parse dividends and retenciones", () => {
-      const result = degiroParser.parse(realCsv);
+      const result = degiroParser.parse(sampleCsv);
       // 4 dividends + 4 retenciones = 8, skip cash sweep + STT + deposit
       const dividends = result.cashTransactions.filter((t) => t.type === "Dividends");
       const withholdings = result.cashTransactions.filter((t) => t.type === "Withholding Tax");
@@ -207,39 +207,39 @@ describe("degiroParser", () => {
     });
 
     it("should parse EUR dividend correctly", () => {
-      const result = degiroParser.parse(realCsv);
-      const mapfreDividend = result.cashTransactions.find(
-        (t) => t.isin === "ES0124244E34" && t.type === "Dividends",
+      const result = degiroParser.parse(sampleCsv);
+      const eurDividend = result.cashTransactions.find(
+        (t) => t.isin === "XX0000000004" && t.type === "Dividends",
       )!;
-      expect(mapfreDividend).toBeDefined();
-      expect(mapfreDividend.amount).toBe("62.38");
-      expect(mapfreDividend.currency).toBe("EUR");
-      expect(mapfreDividend.symbol).toBe("MAPFRE");
+      expect(eurDividend).toBeDefined();
+      expect(eurDividend.amount).toBe("62.38");
+      expect(eurDividend.currency).toBe("EUR");
+      expect(eurDividend.symbol).toBe("DELTA INSURANCE SA");
     });
 
     it("should parse USD dividend with withholding", () => {
-      const result = degiroParser.parse(realCsv);
-      const tsmcDiv = result.cashTransactions.find(
-        (t) => t.isin === "US8740391003" && t.type === "Dividends",
+      const result = degiroParser.parse(sampleCsv);
+      const usdDiv = result.cashTransactions.find(
+        (t) => t.isin === "XX0000000001" && t.type === "Dividends",
       )!;
-      const tsmcWht = result.cashTransactions.find(
-        (t) => t.isin === "US8740391003" && t.type === "Withholding Tax",
+      const usdWht = result.cashTransactions.find(
+        (t) => t.isin === "XX0000000001" && t.type === "Withholding Tax",
       )!;
-      expect(tsmcDiv.amount).toBe("2.42");
-      expect(tsmcDiv.currency).toBe("USD");
-      expect(tsmcWht.amount).toBe("-0.51");
-      expect(tsmcWht.currency).toBe("USD");
+      expect(usdDiv.amount).toBe("2.42");
+      expect(usdDiv.currency).toBe("USD");
+      expect(usdWht.amount).toBe("-0.51");
+      expect(usdWht.currency).toBe("USD");
     });
 
     it("should skip Spanish Transaction Tax and non-dividend rows", () => {
-      const result = degiroParser.parse(realCsv);
+      const result = degiroParser.parse(sampleCsv);
       // STT, deposit, and cash sweep should NOT appear
       const all = result.cashTransactions;
       expect(all.every((t) => t.type === "Dividends" || t.type === "Withholding Tax")).toBe(true);
     });
 
     it("should return empty trades from Account CSV", () => {
-      const result = degiroParser.parse(realCsv);
+      const result = degiroParser.parse(sampleCsv);
       expect(result.trades).toHaveLength(0);
     });
   });
@@ -322,67 +322,67 @@ describe("degiroParser", () => {
     });
   });
 
-  describe("real Degiro Transactions export (19-column format)", () => {
-    const realCsv = readFileSync(new URL("../fixtures/degiro-transactions-real.csv", import.meta.url), "utf-8");
+  describe("Degiro Transactions sample (19-column format)", () => {
+    const sampleCsv = readFileSync(new URL("../fixtures/degiro-transactions-sample.csv", import.meta.url), "utf-8");
 
-    it("should detect the real Degiro CSV", () => {
-      expect(degiroParser.detect(realCsv)).toBe(true);
+    it("should detect the Degiro CSV", () => {
+      expect(degiroParser.detect(sampleCsv)).toBe(true);
     });
 
-    it("should parse trades from the real export", () => {
-      const result = degiroParser.parse(realCsv);
+    it("should parse trades from the export", () => {
+      const result = degiroParser.parse(sampleCsv);
       // 13 data rows minus 1 zero-price rights assignment = 12 trades
       expect(result.trades.length).toBe(12);
     });
 
     it("should parse USD buy with FX rate correctly", () => {
-      const result = degiroParser.parse(realCsv);
-      const nuscaleBuy = result.trades.find(
-        (t) => t.isin === "US67079K1007" && t.buySell === "BUY" && t.quantity === "1",
+      const result = degiroParser.parse(sampleCsv);
+      const acmeBuy = result.trades.find(
+        (t) => t.isin === "XX0000000001" && t.buySell === "BUY" && t.quantity === "1",
       )!;
-      expect(nuscaleBuy).toBeDefined();
-      expect(nuscaleBuy.symbol).toBe("NUSCALE POWER CORP");
-      expect(nuscaleBuy.tradePrice).toBe("22.2000");
-      expect(nuscaleBuy.currency).toBe("USD");
-      expect(nuscaleBuy.tradeDate).toBe("20241108");
-      expect(nuscaleBuy.fxRateToBase).toBe("1.0702");
-      expect(nuscaleBuy.tradeMoney).toBe("-22.20");
+      expect(acmeBuy).toBeDefined();
+      expect(acmeBuy.symbol).toBe("ACME ENERGY CORP");
+      expect(acmeBuy.tradePrice).toBe("22.2000");
+      expect(acmeBuy.currency).toBe("USD");
+      expect(acmeBuy.tradeDate).toBe("20241108");
+      expect(acmeBuy.fxRateToBase).toBe("1.0702");
+      expect(acmeBuy.tradeMoney).toBe("-22.20");
     });
 
     it("should parse USD sell with negative quantity", () => {
-      const result = degiroParser.parse(realCsv);
-      const nuscaleSell = result.trades.find(
-        (t) => t.isin === "US67079K1007" && t.buySell === "SELL" && t.quantity === "-58",
+      const result = degiroParser.parse(sampleCsv);
+      const acmeSell = result.trades.find(
+        (t) => t.isin === "XX0000000001" && t.buySell === "SELL" && t.quantity === "-58",
       )!;
-      expect(nuscaleSell).toBeDefined();
-      expect(nuscaleSell.tradePrice).toBe("9.1000");
-      expect(nuscaleSell.fxRateToBase).toBe("1.1094");
-      expect(nuscaleSell.tradeMoney).toBe("527.80");
+      expect(acmeSell).toBeDefined();
+      expect(acmeSell.tradePrice).toBe("9.1000");
+      expect(acmeSell.fxRateToBase).toBe("1.1094");
+      expect(acmeSell.tradeMoney).toBe("527.80");
     });
 
     it("should default FX rate to 1 for EUR trades", () => {
-      const result = degiroParser.parse(realCsv);
+      const result = degiroParser.parse(sampleCsv);
       const eurTrade = result.trades.find((t) => t.currency === "EUR")!;
       expect(eurTrade).toBeDefined();
       expect(eurTrade.fxRateToBase).toBe("1");
     });
 
     it("should skip zero-price rights assignments", () => {
-      const result = degiroParser.parse(realCsv);
+      const result = degiroParser.parse(sampleCsv);
       const rights = result.trades.find((t) => t.symbol.includes("RTS"));
       expect(rights).toBeUndefined();
     });
 
     it("should parse commission correctly", () => {
-      const result = degiroParser.parse(realCsv);
-      // NUSCALE 7-share buy has -2.00 commission
+      const result = degiroParser.parse(sampleCsv);
+      // ACME 7-share buy has -2.00 commission
       const withComm = result.trades.find(
-        (t) => t.isin === "US67079K1007" && t.quantity === "7",
+        (t) => t.isin === "XX0000000001" && t.quantity === "7",
       )!;
       expect(withComm.commission).toBe("-2.00");
-      // NUSCALE 1-share buy has no commission (empty field)
+      // ACME 1-share buy has no commission (empty field)
       const noComm = result.trades.find(
-        (t) => t.isin === "US67079K1007" && t.quantity === "1",
+        (t) => t.isin === "XX0000000001" && t.quantity === "1",
       )!;
       expect(noComm.commission).toBe("0");
     });
