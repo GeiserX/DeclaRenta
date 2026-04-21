@@ -47,14 +47,35 @@ describe("fetchEcbRates", () => {
     expect(rates.get("2025-01-02")!.has("GBP")).toBe(true);
   });
 
-  it("should throw on API error", async () => {
+  it("should throw on API error for fiat currencies", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
       ok: false,
-      status: 404,
-      statusText: "Not Found",
+      status: 500,
+      statusText: "Internal Server Error",
     } as Response);
 
-    await expect(fetchEcbRates(2025, ["XYZ"])).rejects.toThrow("ECB API error");
+    await expect(fetchEcbRates(2025, ["USD"])).rejects.toThrow("ECB API error");
+  });
+
+  it("should skip crypto currencies without calling ECB", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const rates = await fetchEcbRates(2025, ["ETH", "BTC", "SOL"]);
+    expect(rates.size).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("should map stablecoins to USD and deduplicate", async () => {
+    const usdCsv =
+      "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n";
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(usdCsv));
+
+    const rates = await fetchEcbRates(2025, ["USDT", "USDC", "USD"]);
+    // All three map to USD → only one fetch call
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(rates.get("2025-01-02")!.has("USD")).toBe(true);
   });
 
   it("should return empty map for empty currencies array", async () => {
