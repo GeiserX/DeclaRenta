@@ -72,8 +72,7 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
 
     const response = await fetch(url);
     if (!response.ok) {
-      console.warn(`ECB: no rate data for ${currency} (${response.status}) — skipping`);
-      continue;
+      throw new Error(`ECB API error for ${currency}: ${response.status} ${response.statusText}`);
     }
 
     const csv = await response.text();
