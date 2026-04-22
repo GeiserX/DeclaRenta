@@ -7,6 +7,7 @@
 
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
+import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -323,6 +324,18 @@ async function parseFiles(): Promise<void> {
     for (const file of pendingFiles) {
       const arrayBuf = await file.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuf);
+      if (await detectRevolutXlsx(uint8)) {
+        const statement = await parseRevolutXlsx(uint8);
+        merged.accountId = merged.accountId || statement.accountId;
+        merged.trades.push(...statement.trades);
+        merged.cashTransactions.push(...statement.cashTransactions);
+        merged.corporateActions.push(...statement.corporateActions);
+        merged.openPositions.push(...statement.openPositions);
+        merged.securitiesInfo.push(...statement.securitiesInfo);
+        brokerNames.push("Revolut");
+        continue;
+      }
+
       if (detectEtoroXlsx(uint8)) {
         const statement = await parseEtoroXlsx(uint8);
         merged.accountId = merged.accountId || statement.accountId;

@@ -19,7 +19,7 @@ const BROKERS: BrokerInfo[] = [
   { id: "etoro", format: "XLSX" },
   { id: "freedom24", format: "JSON" },
   { id: "trade_republic", format: "CSV" },
-  { id: "revolut", format: "CSV" },
+  { id: "revolut", format: "XLSX" },
   { id: "trading212", format: "CSV" },
   { id: "lightyear", format: "CSV" },
   { id: "mexem", format: "XML" },
