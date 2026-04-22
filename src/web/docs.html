@@ -478,6 +478,19 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p><strong>Datos extraídos:</strong> Posiciones cerradas con precios de apertura y cierre, dividendos.</p>
         <p><strong>Limitaciones:</strong> eToro no proporciona ISINs directamente; DeclaRenta solo los utiliza si están presentes en el extracto exportado (no se infieren desde el nombre del activo). Los CFDs de acciones e índices se procesan; los CFDs de criptomonedas no están soportados.</p>
 
+        <h3>Revolut</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en <strong>app.revolut.com</strong> o la app móvil.</li>
+          <li>Ve a <em>Inversiones &gt; Más opciones (···) &gt; Extractos</em>.</li>
+          <li>Selecciona <strong>Trading Account Statement</strong>.</li>
+          <li>Elige el rango de fechas que cubra los ejercicios necesarios.</li>
+          <li>Descarga el fichero <code>.xlsx</code>.</li>
+        </ol>
+        <p><strong>Formato:</strong> XLSX (Excel) con columnas Date acquired, Date sold, Symbol, Quantity, Cost basis, Gross proceeds, Fees, etc.</p>
+        <p><strong>Datos extraídos:</strong> Posiciones cerradas (compra + venta) con PnL y comisiones. Soporta acciones y criptomonedas.</p>
+        <p><strong>Limitaciones:</strong> Revolut no incluye ISINs, dividendos ni posiciones abiertas en este extracto. Para dividendos se necesita el Account Statement (no soportado aún). Para posiciones abiertas (Modelo 720/D-6), se necesita información adicional.</p>
+
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">

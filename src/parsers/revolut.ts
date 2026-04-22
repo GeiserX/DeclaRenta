@@ -119,7 +119,10 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
   const feesCol = findColumn(headers, FEES_HEADERS);
   const currencyCol = findColumn(headers, CURRENCY_HEADERS);
 
-  if (dateAcqCol < 0 || dateSoldCol < 0 || symbolCol < 0 || quantityCol < 0) return [];
+  if (
+    dateAcqCol < 0 || dateSoldCol < 0 || symbolCol < 0 || quantityCol < 0 ||
+    costBasisCol < 0 || grossProceedsCol < 0 || currencyCol < 0
+  ) return [];
 
   const trades: Trade[] = [];
 
@@ -263,7 +266,7 @@ export async function detectRevolutXlsx(data: Buffer | Uint8Array): Promise<bool
     if (!sheet) return false;
     const rows = xlsx.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: "" });
     if (!rows.length) return false;
-    const headers = rows[0]!.map(h => String(h).toLowerCase().trim());
+    const headers = rows[0]!.map((h) => h.toLowerCase().trim());
     const hasDateAcq = headers.some(h => DATE_ACQUIRED_HEADERS.some(p => h.includes(p)));
     const hasCostOrProceeds = headers.some(h =>
       [...COST_BASIS_HEADERS, ...GROSS_PROCEEDS_HEADERS].some(p => h.includes(p)),
@@ -293,17 +296,6 @@ export const revolutParser: BrokerParser = {
     if (!input.trim()) {
       throw new Error("Revolut: fichero vacío o sin datos");
     }
-    // Fallback text-mode: not primary path (use parseRevolutXlsx for binary XLSX)
-    return {
-      accountId: "",
-      fromDate: "",
-      toDate: "",
-      period: "",
-      trades: [],
-      cashTransactions: [],
-      corporateActions: [],
-      openPositions: [],
-      securitiesInfo: [],
-    };
+    throw new Error("Revolut: solo se aceptan ficheros XLSX. Exporta el Trading Account Statement en formato Excel desde la app de Revolut.");
   },
 };

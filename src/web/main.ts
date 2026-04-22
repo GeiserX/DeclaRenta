@@ -330,7 +330,7 @@ async function parseFiles(): Promise<void> {
         merged.trades.push(...statement.trades);
         merged.cashTransactions.push(...statement.cashTransactions);
         merged.corporateActions.push(...statement.corporateActions);
-        merged.openPositions = statement.openPositions;
+        merged.openPositions.push(...statement.openPositions);
         merged.securitiesInfo.push(...statement.securitiesInfo);
         brokerNames.push("Revolut");
         continue;

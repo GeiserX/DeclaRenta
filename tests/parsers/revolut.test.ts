@@ -92,10 +92,8 @@ describe("revolutParser", () => {
       expect(() => revolutParser.parse("   \n  ")).toThrow(/vacío/);
     });
 
-    it("should return empty statement for non-empty text (fallback)", () => {
-      const result = revolutParser.parse("Date acquired\tDate sold\tSymbol");
-      expect(result.trades).toEqual([]);
-      expect(result.cashTransactions).toEqual([]);
+    it("should throw for non-empty text (XLSX-only format)", () => {
+      expect(() => revolutParser.parse("Date acquired\tDate sold\tSymbol")).toThrow(/XLSX/);
     });
   });
 
