@@ -203,6 +203,7 @@ When adding a new section (like 721), follow this checklist:
 - We store the inverse: "1 FCY = X EUR" for direct multiplication with broker amounts
 - Weekends/holidays: walk backward up to 10 business days
 - Rate source: `https://data-api.ecb.europa.eu/service/data/EXR`
+- **Early-January lookback (Hard Trace)**: `fetchEcbRates(year)` only fetches rates for that calendar year. Trades on Jan 1-2 trigger a 10-day lookback into late December of the *previous* year, but those rates won't exist in the map unless `year - 1` is also fetched. **Both `main.ts` and `cli/index.ts` must add `minYear - 1` to the years set** before the fetch loop. This bug surfaces every time a new parser is added with sample data containing early-January trades.
 
 ## Development
 

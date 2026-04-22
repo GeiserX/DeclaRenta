@@ -158,6 +158,10 @@ program
 
       const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
       years.add(opts.year);
+      // Fetch previous year for the earliest trade year so the 10-day lookback
+      // can find late-December rates for early-January trades (e.g. Jan 1-2).
+      const minYear = Math.min(...years);
+      years.add(minYear - 1);
       const allRates: EcbRateMap = new Map();
       for (const yr of years) {
         const rates = await fetchEcbRates(yr, [...currencies]);
