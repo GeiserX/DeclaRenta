@@ -13,7 +13,7 @@ const gl: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
 
   "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",
@@ -207,11 +207,11 @@ const gl: TranslationKeys = {
   "guide.trade_republic.step5": "Descarga o ficheiro e envíao ao teu ordenador",
 
   // Revolut
-  "guide.revolut.title": "Revolut (CSV)",
-  "guide.revolut.step1": "Inicia sesión na <strong>web de Revolut</strong> (business.revolut.com ou app)",
+  "guide.revolut.title": "Revolut (XLSX)",
+  "guide.revolut.step1": "Inicia sesión na <strong>web de Revolut</strong> (app.revolut.com ou app móbil)",
   "guide.revolut.step2": "Vai a <strong>Trading/Cripto → Extractos</strong>",
-  "guide.revolut.step3": "Selecciona <strong>Profit and Loss Statement</strong> do exercicio fiscal",
-  "guide.revolut.step4": "Descarga en formato <strong>CSV</strong>",
+  "guide.revolut.step3": "Selecciona <strong>Trading Account Statement</strong> do exercicio fiscal",
+  "guide.revolut.step4": "Descarga en formato <strong>XLSX</strong> (Excel)",
 
   // Trading 212
   "guide.trading212.title": "Trading 212 (CSV)",
