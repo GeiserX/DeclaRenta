@@ -13,7 +13,7 @@ const eu: TranslationKeys = {
   "upload.broker_label": "Brokerra:",
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
-  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro)",
+  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Scalable, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
 
   "config.title": "Konfiguratu",
   "config.year_label": "Ekitaldi fiskala:",
@@ -207,11 +207,11 @@ const eu: TranslationKeys = {
   "guide.trade_republic.step5": "Deskargatu fitxategia eta bidali zure ordenagailura",
 
   // Revolut
-  "guide.revolut.title": "Revolut (CSV)",
-  "guide.revolut.step1": "Hasi saioa <strong>Revolut web</strong>ean (business.revolut.com edo app)",
+  "guide.revolut.title": "Revolut (XLSX)",
+  "guide.revolut.step1": "Hasi saioa <strong>Revolut web</strong>ean (app.revolut.com edo app mugikorra)",
   "guide.revolut.step2": "Joan <strong>Trading/Kripto → Laburpenak</strong> atalera",
-  "guide.revolut.step3": "Hautatu <strong>Profit and Loss Statement</strong> ekitaldi fiskalerako",
-  "guide.revolut.step4": "Deskargatu <strong>CSV</strong> formatuan",
+  "guide.revolut.step3": "Hautatu <strong>Trading Account Statement</strong> ekitaldi fiskalerako",
+  "guide.revolut.step4": "Deskargatu <strong>XLSX</strong> (Excel) formatuan",
 
   // Trading 212
   "guide.trading212.title": "Trading 212 (CSV)",

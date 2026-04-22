@@ -14,6 +14,7 @@ import { scalableParser } from "./scalable.js";
 import { binanceParser } from "./binance.js";
 import { coinbaseParser } from "./coinbase.js";
 import { krakenParser } from "./kraken.js";
+import { revolutParser } from "./revolut.js";
 
 /**
  * All registered broker parsers, checked in order for auto-detection.
@@ -22,6 +23,7 @@ import { krakenParser } from "./kraken.js";
 export const brokerParsers: BrokerParser[] = [
   ibkrParser,       // XML with <FlexQueryResponse>
   freedom24Parser,  // JSON with trades/corporate_actions/cash_flows
+  revolutParser,    // XLSX with "Date acquired" + "Cost basis"
   etoroParser,      // XLSX/CSV with "Closed Positions"
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
