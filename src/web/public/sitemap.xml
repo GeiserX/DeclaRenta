@@ -2,12 +2,10 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://declarenta.com/</loc>
-    <changefreq>monthly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-04-23</lastmod>
   </url>
   <url>
     <loc>https://declarenta.com/docs.html</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <lastmod>2026-04-23</lastmod>
   </url>
 </urlset>
