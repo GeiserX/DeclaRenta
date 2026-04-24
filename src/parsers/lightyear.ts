@@ -96,7 +96,7 @@ function convertLightyearDate(dateStr: string): string {
   // Fallback: YYYY-MM-DD
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}${isoMatch[2]}${isoMatch[3]}`;
-  throw new Error(`Lightyear CSV: formato de fecha no reconocido: "${trimmed}"`);
+  return trimmed.replace(/[-/]/g, "").slice(0, 8);
 }
 
 // ---------------------------------------------------------------------------
