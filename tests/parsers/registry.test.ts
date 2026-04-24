@@ -44,4 +44,12 @@ describe("broker registry", () => {
     expect(statement.accountId).toBe("U1234567");
     expect(statement.trades).toHaveLength(0);
   });
+
+  it("should detect Lightyear CSV before Degiro (both share ISIN/Quantity/Price headers)", () => {
+    const lightyearHeader = "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.";
+    const lightyearCsv = lightyearHeader + "\n16/12/2025 06:02:35,DD-0000000001,GOOG,US02079K1079,Dividend,,USD,,14.09,,,11.98,2.11";
+    const parser = detectBroker(lightyearCsv);
+    expect(parser).toBeDefined();
+    expect(parser!.name).toBe("Lightyear");
+  });
 });
