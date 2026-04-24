@@ -414,6 +414,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
               <tr><td>Scalable Capital</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>eToro</td><td>Account Statement XLSX</td><td>.xlsx</td></tr>
               <tr><td>Revolut</td><td>Trading Account Statement XLSX</td><td>.xlsx</td></tr>
+              <tr><td>Lightyear</td><td>Transaction Report CSV</td><td>.csv</td></tr>
               <tr><td>Freedom24</td><td>JSON</td><td>.json</td></tr>
               <tr><td>Coinbase</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>Binance</td><td>CSV</td><td>.csv</td></tr>
@@ -490,6 +491,18 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p><strong>Formato:</strong> XLSX (Excel) con columnas Date acquired, Date sold, Symbol, Quantity, Cost basis, Gross proceeds, Fees, etc.</p>
         <p><strong>Datos extraídos:</strong> Posiciones cerradas (compra + venta) con PnL y comisiones. Soporta acciones y criptomonedas.</p>
         <p><strong>Limitaciones:</strong> Revolut no incluye ISINs, dividendos ni posiciones abiertas en este extracto. Para dividendos se necesita el Account Statement (no soportado aún). Para posiciones abiertas (Modelo 720/D-6), se necesita información adicional.</p>
+
+        <h3>Lightyear</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Abre la app de <strong>Lightyear</strong> o inicia sesión en la web.</li>
+          <li>Ve a <em>Perfil &gt; Informes</em> (o <em>Profile &gt; Reports</em>).</li>
+          <li>Selecciona <strong>Transaction report</strong> y el período deseado.</li>
+          <li>Descarga el fichero <code>.csv</code>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras <code>Date, Reference, Ticker, ISIN, Type, Quantity, CCY, Price/share, Gross Amount, FX Rate, Fee, Net Amt., Tax Amt.</code></p>
+        <p><strong>Datos extraídos:</strong> Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.</p>
+        <p><strong>Limitaciones:</strong> Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) se ignoran (no son hechos imponibles).</p>
 
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
