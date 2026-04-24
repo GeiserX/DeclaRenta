@@ -356,7 +356,7 @@ describe("lightyearParser", () => {
 
     it("should set fxRateToBase to '1' (ECB fetched independently)", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
-      result.trades.forEach((t) => expect(t.fxRateToBase).toBe("1"));
+      result.trades.forEach((t) => { expect(t.fxRateToBase).toBe("1"); });
     });
   });
 
