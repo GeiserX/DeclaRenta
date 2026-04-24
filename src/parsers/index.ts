@@ -26,10 +26,10 @@ export const brokerParsers: BrokerParser[] = [
   freedom24Parser,  // JSON with trades/corporate_actions/cash_flows
   revolutParser,    // XLSX with "Date acquired" + "Cost basis"
   etoroParser,      // XLSX/CSV with "Closed Positions"
+  lightyearParser,  // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
   binanceParser,    // CSV with Date(UTC),Pair,Side,Price headers
-  lightyearParser,  // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
   coinbaseParser,   // CSV with Transaction Type + Spot Price headers
   krakenParser,     // CSV with txid + pair/ordertxid or refid/aclass headers
 ];
