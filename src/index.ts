@@ -14,6 +14,8 @@ export { etoroParser, parseEtoroXlsx, detectEtoroXlsx } from "./parsers/etoro.js
 export { coinbaseParser } from "./parsers/coinbase.js";
 export { binanceParser } from "./parsers/binance.js";
 export { krakenParser } from "./parsers/kraken.js";
+export { revolutParser } from "./parsers/revolut.js";
+export { lightyearParser } from "./parsers/lightyear.js";
 export { detectBroker, getBroker, brokerParsers } from "./parsers/index.js";
 
 // CSV utilities
