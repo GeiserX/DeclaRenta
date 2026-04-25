@@ -16,6 +16,8 @@ export interface Lot {
   costInEur: Decimal;
   currency: string;
   ecbRate: Decimal;
+  /** True for short lots (opened via SELL+O) */
+  isShort?: boolean;
 }
 
 /** Result of consuming lots via FIFO for a sale */
@@ -40,6 +42,8 @@ export interface FifoDisposal {
   assetCategory: string;
   /** True if loss is blocked by the anti-churning rule (Art. 33.5.f LIRPF) */
   washSaleBlocked: boolean;
+  /** True for short position disposals (SELL+O → BUY+C) */
+  isShort?: boolean;
 }
 
 /** Dividend received from a foreign security */

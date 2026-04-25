@@ -52,6 +52,7 @@ const es = {
   "table.casilla": "Casilla",
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
+  "table.currency": "Divisa",
 
   // Casillas
   "casilla.transmission_value": "Valor de transmisión",
@@ -278,6 +279,7 @@ const es = {
   "m720.threshold_not_exceeded": "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
   "m720.positions_title": "Posiciones declarables",
+  "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",

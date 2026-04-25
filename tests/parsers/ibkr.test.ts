@@ -469,6 +469,36 @@ describe("parseIbkrFlexXml", () => {
     expect(result.cashTransactions).toHaveLength(2);
   });
 
+  it("should parse CashReport cash balances", () => {
+    const xml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <CashReport>
+            <CashReportCurrency accountId="U1234567" currency="USD"
+                                endingCash="14523.45" endingSettledCash="14523.45" />
+            <CashReportCurrency accountId="U1234567" currency="EUR"
+                                endingCash="1200.00" endingSettledCash="1200.00" />
+          </CashReport>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+
+    const result = parseIbkrFlexXml(xml);
+    expect(result.cashBalances).toHaveLength(2);
+    expect(result.cashBalances![0]!.currency).toBe("USD");
+    expect(result.cashBalances![0]!.endingCash).toBe("14523.45");
+    expect(result.cashBalances![0]!.accountId).toBe("U1234567");
+    expect(result.cashBalances![1]!.currency).toBe("EUR");
+    expect(result.cashBalances![1]!.endingCash).toBe("1200.00");
+  });
+
+  it("should return undefined cashBalances when no CashReport section", () => {
+    const result = parseIbkrFlexXml(MINIMAL_FLEX_XML);
+    expect(result.cashBalances).toBeUndefined();
+  });
+
   it("should handle multi-account with empty sections in some accounts", () => {
     const xml = `<?xml version="1.0"?>
     <FlexQueryResponse queryName="Multi" type="AF">

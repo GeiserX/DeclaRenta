@@ -11,7 +11,7 @@ function makeTrade(overrides: Partial<Trade>): Trade {
     tradeDate: "2025-03-15", settlementDate: "2025-03-18",
     quantity: "10", tradePrice: "100", tradeMoney: "1000",
     proceeds: "1000", cost: "1000", fifoPnlRealized: "0",
-    fxRateToBase: "0.92", buySell: "BUY", openCloseIndicator: "O",
+    fxRateToBase: "0.92", buySell: "BUY", openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O",
     exchange: "NASDAQ", commissionCurrency: "USD", commission: "0",
     taxes: "0", multiplier: "1", ...overrides,
   };

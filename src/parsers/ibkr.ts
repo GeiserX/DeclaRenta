@@ -13,6 +13,7 @@ import type {
   CorporateAction,
   OpenPosition,
   SecurityInfo,
+  CashBalance,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 
@@ -28,6 +29,7 @@ const parser = new XMLParser({
       "FlexQueryResponse.FlexStatements.FlexStatement.CorporateActions.CorporateAction",
       "FlexQueryResponse.FlexStatements.FlexStatement.OpenPositions.OpenPosition",
       "FlexQueryResponse.FlexStatements.FlexStatement.SecuritiesInfo.SecurityInfo",
+      "FlexQueryResponse.FlexStatements.FlexStatement.CashReport.CashReportCurrency",
     ];
     return arrayPaths.some((p) => jpath === p);
   },
@@ -64,6 +66,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const corporateActions: ReturnType<typeof mapCorporateAction>[] = [];
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
+  const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
 
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
@@ -71,6 +74,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
+    cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
   }
 
   // Use first statement's metadata, combine accountIds for multi-account
@@ -89,6 +93,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     corporateActions,
     openPositions,
     securitiesInfo,
+    cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
   };
 }
 
@@ -187,6 +192,15 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     assetCategory: (raw.assetCategory ?? "STK") as SecurityInfo["assetCategory"],
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
+  };
+}
+
+function mapCashBalance(raw: Record<string, string>): CashBalance {
+  return {
+    accountId: raw.accountId ?? "",
+    currency: raw.currency ?? "",
+    endingCash: raw.endingCash ?? "0",
+    endingSettledCash: raw.endingSettledCash ?? "0",
   };
 }
 

@@ -50,6 +50,7 @@ const eu: TranslationKeys = {
   "table.casilla": "Laukia",
   "table.concept": "Kontzeptua",
   "table.amount_eur": "Zenbatekoa (EUR)",
+  "table.currency": "Moneta",
 
   "casilla.transmission_value": "Transmisio-balioa",
   "casilla.acquisition_value": "Eskuratze-balioa",
@@ -248,6 +249,7 @@ const eu: TranslationKeys = {
   "m720.threshold_not_exceeded": "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
   "m720.positions_title": "Aitortu beharreko posizioak",
+  "m720.cash_title": "Eskudiruzko saldoak (Kontuak)",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
