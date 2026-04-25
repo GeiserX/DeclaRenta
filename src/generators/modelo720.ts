@@ -6,7 +6,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { OpenPosition } from "../types/ibkr.js";
+import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, getQ4AverageRate } from "../engine/ecb.js";
@@ -54,6 +54,7 @@ export function checkModelo720Thresholds(
   positions: OpenPosition[],
   rateMap: EcbRateMap,
   year: number,
+  cashBalances?: CashBalance[],
 ): Modelo720ThresholdResult {
   const THRESHOLD = new Decimal(50000);
 
@@ -65,9 +66,18 @@ export function checkModelo720Thresholds(
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
-  // Accounts and real estate are not derived from broker positions —
-  // they would come from separate data sources. Return zero for now.
-  const accountsTotal = new Decimal(0);
+  // Category C: cash balances at foreign brokers
+  const yearEnd = `${year}-12-31`;
+  const accountsTotal = (cashBalances ?? [])
+    .filter((cb) => {
+      const cash = new Decimal(cb.endingCash);
+      return !cash.isZero();
+    })
+    .reduce((sum, cb) => {
+      const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
+      return sum.plus(new Decimal(cb.endingCash).abs().mul(ecbRate));
+    }, new Decimal(0));
+
   const realEstateTotal = new Decimal(0);
 
   return {

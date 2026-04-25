@@ -50,6 +50,7 @@ const ca: TranslationKeys = {
   "table.casilla": "Casella",
   "table.concept": "Concepte",
   "table.amount_eur": "Import (EUR)",
+  "table.currency": "Divisa",
 
   "casilla.transmission_value": "Valor de transmissió",
   "casilla.acquisition_value": "Valor d'adquisició",
@@ -248,6 +249,7 @@ const ca: TranslationKeys = {
   "m720.threshold_not_exceeded": "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
   "m720.positions_title": "Posicions declarables",
+  "m720.cash_title": "Saldos en efectiu (Comptes)",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",

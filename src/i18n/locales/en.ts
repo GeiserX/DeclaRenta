@@ -49,6 +49,7 @@ const en: TranslationKeys = {
   "table.casilla": "Box",
   "table.concept": "Concept",
   "table.amount_eur": "Amount (EUR)",
+  "table.currency": "Currency",
 
   "casilla.transmission_value": "Transmission value",
   "casilla.acquisition_value": "Acquisition value",
@@ -251,6 +252,7 @@ const en: TranslationKeys = {
   "m720.threshold_not_exceeded": "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
   "m720.positions_title": "Declarable positions",
+  "m720.cash_title": "Cash balances (Accounts)",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
