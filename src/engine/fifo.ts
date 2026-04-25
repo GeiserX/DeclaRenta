@@ -24,8 +24,10 @@ function lotKey(trade: { isin: string; symbol: string; assetCategory: string; co
 }
 
 export class FifoEngine {
-  /** FIFO queue per security (ISIN or symbol) */
+  /** FIFO queue per security (ISIN or symbol) — long positions */
   private lots: Map<string, Lot[]> = new Map();
+  /** FIFO queue per security — short positions (opened via SELL+O) */
+  private shortLots: Map<string, Lot[]> = new Map();
   private disposals: FifoDisposal[] = [];
   private nextLotId = 1;
   /** Warnings for issues that don't block execution */
@@ -170,7 +172,12 @@ export class FifoEngine {
         spinOffIdx++;
       }
 
-      if (trade.buySell === "BUY") {
+      const oci = trade.openCloseIndicator;
+      if (trade.buySell === "SELL" && oci === "O") {
+        this.addShortLot(trade, rateMap);
+      } else if (trade.buySell === "BUY" && oci === "C") {
+        this.consumeShortLots(trade, rateMap);
+      } else if (trade.buySell === "BUY") {
         this.addLot(trade, rateMap);
       } else {
         this.consumeLots(trade, rateMap);
@@ -463,6 +470,110 @@ export class FifoEngine {
         assetCategory: trade.assetCategory,
         washSaleBlocked: false,
       });
+    }
+  }
+
+  private addShortLot(trade: Trade, rateMap: EcbRateMap): void {
+    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
+    const quantity = new Decimal(trade.quantity).abs();
+    const pricePerShare = new Decimal(trade.tradePrice);
+    const multiplier = new Decimal(trade.multiplier || "1");
+    const commission = new Decimal(trade.commission).abs();
+    const taxes = new Decimal(trade.taxes || "0").abs();
+    const baseAmount = quantity.mul(pricePerShare).mul(multiplier).minus(taxes);
+    const commissionEcbRate = !commission.isZero() && trade.commissionCurrency && trade.commissionCurrency !== trade.currency
+      ? getEcbRate(rateMap, trade.tradeDate, trade.commissionCurrency)
+      : ecbRate;
+    const proceedsInEur = baseAmount.mul(ecbRate).minus(commission.mul(commissionEcbRate));
+
+    const lot: Lot = {
+      id: `LOT-${this.nextLotId++}`,
+      isin: trade.isin,
+      symbol: trade.symbol,
+      description: trade.description,
+      acquireDate: trade.tradeDate,
+      quantity,
+      pricePerShare,
+      costInEur: proceedsInEur,
+      currency: trade.currency,
+      ecbRate,
+      isShort: true,
+    };
+
+    const key = lotKey(trade);
+    if (!this.shortLots.has(key)) {
+      this.shortLots.set(key, []);
+    }
+    this.shortLots.get(key)!.push(lot);
+  }
+
+  private consumeShortLots(trade: Trade, rateMap: EcbRateMap): void {
+    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
+    let remaining = new Decimal(trade.quantity).abs();
+    const commission = new Decimal(trade.commission).abs();
+    const taxes = new Decimal(trade.taxes || "0").abs();
+    const pricePerShare = new Decimal(trade.tradePrice);
+    const multiplier = new Decimal(trade.multiplier || "1");
+    const commissionEcbRate = !commission.isZero() && trade.commissionCurrency && trade.commissionCurrency !== trade.currency
+      ? getEcbRate(rateMap, trade.tradeDate, trade.commissionCurrency)
+      : ecbRate;
+
+    const key = lotKey(trade);
+    const lots = this.shortLots.get(key);
+    if (!lots || lots.length === 0) {
+      this.addLot(trade, rateMap);
+      return;
+    }
+
+    const totalBuyQuantity = remaining;
+
+    while (remaining.greaterThan(0) && lots.length > 0) {
+      const lot = lots[0]!;
+      const consumed = Decimal.min(remaining, lot.quantity);
+      const fractionOfBuy = consumed.dividedBy(totalBuyQuantity);
+      const commissionShare = commission.mul(fractionOfBuy);
+      const taxesShare = taxes.mul(fractionOfBuy);
+
+      const closeCostBaseEur = consumed.mul(pricePerShare).mul(multiplier).plus(taxesShare).mul(ecbRate);
+      const closeCostEur = closeCostBaseEur.plus(commissionShare.mul(commissionEcbRate));
+
+      const lotProceedsPerUnit = lot.costInEur.dividedBy(lot.quantity);
+      const openProceedsEur = lotProceedsPerUnit.mul(consumed);
+
+      const acquireDate = lot.acquireDate;
+      const holdingDays = daysBetween(acquireDate, trade.tradeDate);
+
+      this.disposals.push({
+        isin: trade.isin,
+        symbol: trade.symbol,
+        description: trade.description,
+        sellDate: trade.tradeDate,
+        acquireDate,
+        quantity: consumed,
+        proceedsEur: openProceedsEur,
+        costBasisEur: closeCostEur,
+        gainLossEur: openProceedsEur.minus(closeCostEur),
+        holdingPeriodDays: holdingDays,
+        currency: trade.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: lot.ecbRate,
+        assetCategory: trade.assetCategory,
+        washSaleBlocked: false,
+        isShort: true,
+      });
+
+      lot.quantity = lot.quantity.minus(consumed);
+      lot.costInEur = lot.costInEur.minus(openProceedsEur);
+
+      if (lot.quantity.isZero()) {
+        lots.shift();
+      }
+
+      remaining = remaining.minus(consumed);
+    }
+
+    if (remaining.greaterThan(0)) {
+      this.addLot({ ...trade, quantity: remaining.toString(), openCloseIndicator: "O", commission: "0", taxes: "0" }, rateMap);
     }
   }
 

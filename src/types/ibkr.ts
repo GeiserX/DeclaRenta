@@ -13,6 +13,7 @@ export interface FlexStatement {
   corporateActions: CorporateAction[];
   openPositions: OpenPosition[];
   securitiesInfo: SecurityInfo[];
+  cashBalances?: CashBalance[];
 }
 
 export interface Trade {
@@ -121,6 +122,14 @@ export interface SecurityInfo {
   assetCategory: AssetCategory;
   multiplier: string;
   subCategory: string;
+}
+
+/** Cash balance at a foreign broker (for Modelo 720, category C — Cuentas) */
+export interface CashBalance {
+  accountId: string;
+  currency: string;
+  endingCash: string;
+  endingSettledCash: string;
 }
 
 export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";

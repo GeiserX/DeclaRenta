@@ -31,7 +31,7 @@ function makeTrade(overrides: Partial<Trade>): Trade {
     fifoPnlRealized: "0",
     fxRateToBase: "0.92",
     buySell: "BUY",
-    openCloseIndicator: "O",
+    openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O",
     exchange: "NASDAQ",
     commissionCurrency: "USD",
     commission: "0",
@@ -882,6 +882,162 @@ describe("FifoEngine", () => {
       expect(disposals[0]!.costBasisEur.greaterThan(0)).toBe(true);
       // Check spin-off warning
       expect(engine.warnings.some((w) => w.includes("Spin-off"))).toBe(true);
+    });
+  });
+
+  describe("Short positions (SELL+O → BUY+C)", () => {
+    it("should handle basic short sale lifecycle", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", quantity: "-10", tradePrice: "150",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-15", quantity: "10", tradePrice: "140",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+      expect(d.isShort).toBe(true);
+      // proceeds = premium received = 10 * 150 * 0.92 = 1380
+      expect(d.proceedsEur.toFixed(2)).toBe("1380.00");
+      // cost = buy-to-close = 10 * 140 * 0.91 = 1274
+      expect(d.costBasisEur.toFixed(2)).toBe("1274.00");
+      // gain = 1380 - 1274 = 106
+      expect(d.gainLossEur.toFixed(2)).toBe("106.00");
+    });
+
+    it("should handle short sale at a loss", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", quantity: "-10", tradePrice: "100",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-15", quantity: "10", tradePrice: "130",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+      expect(d.isShort).toBe(true);
+      // proceeds = 10 * 100 * 0.92 = 920
+      expect(d.proceedsEur.toFixed(2)).toBe("920.00");
+      // cost = 10 * 130 * 0.91 = 1183
+      expect(d.costBasisEur.toFixed(2)).toBe("1183.00");
+      // loss = 920 - 1183 = -263
+      expect(d.gainLossEur.toFixed(2)).toBe("-263.00");
+    });
+
+    it("should consume short lots in FIFO order", () => {
+      const rates = makeRateMap({
+        "2025-01-10": "0.9000", "2025-03-15": "0.9200", "2025-06-15": "0.9100",
+      });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-01-10", quantity: "-5", tradePrice: "100",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-03-15", quantity: "-5", tradePrice: "110",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "3", tradeDate: "2025-06-15", quantity: "10", tradePrice: "90",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(2);
+      // First disposal consumes the Jan short lot
+      expect(disposals[0]!.acquireDate).toBe("2025-01-10");
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("450.00"); // 5*100*0.90
+      // Second disposal consumes the Mar short lot
+      expect(disposals[1]!.acquireDate).toBe("2025-03-15");
+      expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("506.00"); // 5*110*0.92
+    });
+
+    it("should fall back to addLot when BUY+C has no short lots", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-15", quantity: "-10", tradePrice: "120",
+          buySell: "SELL", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.isShort).toBeUndefined();
+    });
+
+    it("should handle partial close of short position", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", quantity: "-10", tradePrice: "100",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-15", quantity: "4", tradePrice: "90",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.quantity.toNumber()).toBe(4);
+      expect(disposals[0]!.isShort).toBe(true);
+    });
+
+    it("should handle short option with multiplier", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", assetCategory: "OPT",
+          quantity: "-1", tradePrice: "5", multiplier: "100",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-15", assetCategory: "OPT",
+          quantity: "1", tradePrice: "2", multiplier: "100",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+      expect(d.isShort).toBe(true);
+      // proceeds = 1 * 5 * 100 * 0.92 = 460
+      expect(d.proceedsEur.toFixed(2)).toBe("460.00");
+      // cost = 1 * 2 * 100 * 0.91 = 182
+      expect(d.costBasisEur.toFixed(2)).toBe("182.00");
+      expect(d.gainLossEur.toFixed(2)).toBe("278.00");
     });
   });
 });

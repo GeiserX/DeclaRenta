@@ -53,7 +53,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   const profile = getProfile();
   const year = profile.year;
 
-  if (statement.openPositions.length === 0) {
+  const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
+  if (statement.openPositions.length === 0 && !hasCashBalances) {
     container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
     return;
   }
@@ -86,9 +87,9 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   }
 
   // Threshold check
-  const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year);
-  const totalValue = thresholds.values.total;
-  const exceeds = thresholds.values.exceeds;
+  const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
+  const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
+  const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
   const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
 
   html += `<div class="threshold-bar">
@@ -142,6 +143,22 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         }).join("")}</div>
       </div>`;
     }
+  }
+
+  // Cash balances table (Category C — Cuentas)
+  const cashBalances = (statement.cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0));
+  if (cashBalances.length > 0) {
+    html += `<h3>${t("m720.cash_title")}</h3>
+    <div class="table-wrapper"><table>
+      <thead><tr>
+        <th>${t("table.currency")}</th><th>${t("table.amount_eur")}</th>
+      </tr></thead>
+      <tbody>${cashBalances.map((cb) => {
+        const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, dateForRates, cb.currency);
+        const val = new Decimal(cb.endingCash).mul(ecbRate).toFixed(2);
+        return `<tr><td>${esc(cb.currency)}</td><td>${val}</td></tr>`;
+      }).join("")}</tbody>
+    </table></div>`;
   }
 
   // Generate button

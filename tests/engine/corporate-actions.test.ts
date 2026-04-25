@@ -32,7 +32,7 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     fifoPnlRealized: "0",
     fxRateToBase: "1",
     buySell: "BUY",
-    openCloseIndicator: "O",
+    openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O",
     exchange: "NYSE",
     commissionCurrency: "USD",
     commission: "-1",

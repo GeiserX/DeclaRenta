@@ -50,6 +50,7 @@ const gl: TranslationKeys = {
   "table.casilla": "Casilla",
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
+  "table.currency": "Divisa",
 
   "casilla.transmission_value": "Valor de transmisión",
   "casilla.acquisition_value": "Valor de adquisición",
@@ -248,6 +249,7 @@ const gl: TranslationKeys = {
   "m720.threshold_not_exceeded": "Non superas o limiar de 50.000 € (total: {{amount}} €). Non estás obrigado a presentar.",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
   "m720.positions_title": "Posicións declarables",
+  "m720.cash_title": "Saldos en efectivo (Contas)",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",
