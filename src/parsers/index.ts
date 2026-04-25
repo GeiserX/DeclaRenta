@@ -30,7 +30,6 @@ export const brokerParsers: BrokerParser[] = [
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
   binanceParser,    // CSV with Date(UTC),Pair,Side,Price headers
-  lightyearParser,  // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
   coinbaseParser,   // CSV with Transaction Type + Spot Price headers
   krakenParser,     // CSV with txid + pair/ordertxid or refid/aclass headers
 ];
