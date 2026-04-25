@@ -53,7 +53,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   const profile = getProfile();
   const year = profile.year;
 
-  const hasCashBalances = (statement.cashBalances ?? []).some((cb) => parseFloat(cb.endingCash) !== 0);
+  const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (statement.openPositions.length === 0 && !hasCashBalances) {
     container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
     return;
@@ -146,7 +146,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   }
 
   // Cash balances table (Category C — Cuentas)
-  const cashBalances = (statement.cashBalances ?? []).filter((cb) => parseFloat(cb.endingCash) !== 0);
+  const cashBalances = (statement.cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (cashBalances.length > 0) {
     html += `<h3>${t("m720.cash_title")}</h3>
     <div class="table-wrapper"><table>
@@ -162,7 +162,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   }
 
   // Generate button
-  if (exceeds || positions.length > 0 || cashBalances.length > 0) {
+  if (exceeds || positions.length > 0) {
     html += `<button id="m720-generate-btn">${t("m720.generate_btn")}</button>`;
   }
 

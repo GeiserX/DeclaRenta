@@ -573,7 +573,7 @@ export class FifoEngine {
     }
 
     if (remaining.greaterThan(0)) {
-      this.addLot({ ...trade, quantity: remaining.toString(), openCloseIndicator: "O" }, rateMap);
+      this.addLot({ ...trade, quantity: remaining.toString(), openCloseIndicator: "O", commission: "0", taxes: "0" }, rateMap);
     }
   }
 

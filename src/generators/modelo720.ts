@@ -69,13 +69,10 @@ export function checkModelo720Thresholds(
   // Category C: cash balances at foreign brokers
   const yearEnd = `${year}-12-31`;
   const accountsTotal = (cashBalances ?? [])
-    .filter((cb) => {
-      const cash = new Decimal(cb.endingCash);
-      return !cash.isZero();
-    })
+    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
     .reduce((sum, cb) => {
       const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
-      return sum.plus(new Decimal(cb.endingCash).abs().mul(ecbRate));
+      return sum.plus(new Decimal(cb.endingCash).mul(ecbRate));
     }, new Decimal(0));
 
   const realEstateTotal = new Decimal(0);
