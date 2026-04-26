@@ -1039,5 +1039,34 @@ describe("FifoEngine", () => {
       expect(d.costBasisEur.toFixed(2)).toBe("182.00");
       expect(d.gainLossEur.toFixed(2)).toBe("278.00");
     });
+
+    it("should handle short option expiring worthless (BUY+C at price 0)", () => {
+      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-20": "0.9100" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-03-15", assetCategory: "OPT",
+          quantity: "-1", tradePrice: "3.50", multiplier: "100",
+          buySell: "SELL", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "2", tradeDate: "2025-06-20", assetCategory: "OPT",
+          quantity: "1", tradePrice: "0", multiplier: "100",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(1);
+      const d = disposals[0]!;
+      expect(d.isShort).toBe(true);
+      // proceeds = 1 * 3.50 * 100 * 0.92 = 322.00
+      expect(d.proceedsEur.toFixed(2)).toBe("322.00");
+      // cost = 1 * 0 * 100 * 0.91 = 0
+      expect(d.costBasisEur.toFixed(2)).toBe("0.00");
+      // gain = full premium
+      expect(d.gainLossEur.toFixed(2)).toBe("322.00");
+    });
   });
 });

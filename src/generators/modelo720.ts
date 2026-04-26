@@ -115,6 +115,7 @@ export function generateModelo720(
   config: Modelo720Config,
   /** Optional: remaining lots from FIFO engine, used to extract first acquisition date */
   remainingLots?: Map<string, Lot[]>,
+  cashBalances?: CashBalance[],
 ): string {
   const previousIsins = new Set(config.previousYearIsins ?? []);
 
@@ -153,23 +154,51 @@ export function generateModelo720(
     declType: "C" as const,
   }));
 
-  // Check 50,000 EUR threshold for values category (only current positions count)
-  const totalValue = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  if (totalValue.lessThan(50000) && cancelledEntries.length === 0) {
-    return ""; // Below threshold and no cancellations needed
+  // Category C: cash balances at foreign brokers
+  const yearEnd = `${config.year}-12-31`;
+  const cashEntries = (cashBalances ?? [])
+    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
+    .map((cb) => {
+      const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
+      const valueEur = new Decimal(cb.endingCash).mul(ecbRate);
+      return { cashBalance: cb, valueEur };
+    });
+
+  // Check 50,000 EUR threshold per category independently
+  const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
+  const totalValueC = cashEntries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
+  const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelledEntries.length > 0;
+  const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
+
+  if (!hasValuesRecords && !hasCashRecords) {
+    return "";
   }
 
   // Build records
-  const detailRecords = entries.map((e) =>
-    buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate, e.declType),
-  );
+  const detailRecords: string[] = [];
 
-  // Add cancelled records
-  for (const c of cancelledEntries) {
-    detailRecords.push(buildCancelledRecord(c.isin, config));
+  // Category V records (securities)
+  if (hasValuesRecords) {
+    for (const e of entries) {
+      detailRecords.push(buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate, e.declType));
+    }
+    for (const c of cancelledEntries) {
+      detailRecords.push(buildCancelledRecord(c.isin, config));
+    }
   }
 
-  const summaryRecord = buildSummaryRecord(config, detailRecords.length, entries);
+  // Category C records (cash accounts)
+  if (hasCashRecords) {
+    for (const e of cashEntries) {
+      detailRecords.push(buildCashAccountRecord(e.cashBalance, e.valueEur, config));
+    }
+  }
+
+  const allEntries = [
+    ...(hasValuesRecords ? entries : []),
+    ...(hasCashRecords ? cashEntries.map((e) => ({ valueEur: e.valueEur, costEur: e.valueEur })) : []),
+  ];
+  const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
   return [summaryRecord, ...detailRecords].join("\n");
 }
@@ -299,6 +328,52 @@ function buildCancelledRecord(isin: string, config: Modelo720Config): string {
   record += numPad("0", 13, 2);                               // 449-463: Valuation value (0)
   record += "A";                                              // 464: Stock representation
   record += numPad("0", 9, 3);                                // 465-476: Quantity (0)
+  record += pad("", 1);                                       // 477: Reserved
+  record += numPad("100", 3, 2);                              // 478-482: Ownership %
+  record += pad("", 18);                                      // 483-500: Blank
+
+  return record;
+}
+
+/**
+ * Build a Category C (Cuentas) detail record for a cash balance
+ * at a foreign broker.
+ */
+function buildCashAccountRecord(
+  cb: CashBalance,
+  valueEur: Decimal,
+  config: Modelo720Config,
+): string {
+  const brokerName = "INTERACTIVE BROKERS";
+  const countryCode = "IE";
+
+  let record = "";
+  record += "2";                                              // 1: Register type
+  record += "720";                                            // 2-4: Model
+  record += config.year.toString();                           // 5-8: Year
+  record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
+  record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
+  record += pad("", 9);                                       // 27-35: Proxy NIF
+  record += pad(brokerName, 40);                              // 36-75: Entity name
+  record += "1";                                              // 76: Declaration type (owner)
+  record += pad("", 25);                                      // 77-101: Reserved
+  record += "C";                                              // 102: Asset type (accounts)
+  record += pad("", 26);                                      // 103-128: Reserved
+  record += pad(countryCode, 2);                              // 129-130: Country code
+  record += "5";                                              // 131: ID type (other)
+  record += pad(cb.accountId || config.nif, 12);              // 132-143: Account identifier
+  record += pad("", 46);                                      // 144-189: Reserved
+  record += pad(brokerName, 41);                              // 190-230: Entity name
+  record += pad("", 184);                                     // 231-414: Reserved
+  record += pad("", 8);                                       // 415-422: Opening date (unknown)
+  record += "A";                                              // 423: Type (A=new)
+  record += pad("", 8);                                       // 424-431: Close date
+  record += " ";                                              // 432: Balance 1 sign
+  record += numPad(valueEur.toString(), 13, 2);               // 433-447: Balance at Dec 31
+  record += " ";                                              // 448: Balance 2 sign
+  record += numPad(valueEur.toString(), 13, 2);               // 449-463: Average balance Q4
+  record += pad("", 1);                                       // 464: Reserved
+  record += pad("", 12);                                      // 465-476: Reserved
   record += pad("", 1);                                       // 477: Reserved
   record += numPad("100", 3, 2);                              // 478-482: Ownership %
   record += pad("", 18);                                      // 483-500: Blank

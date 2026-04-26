@@ -118,6 +118,12 @@ export class FifoEngine {
     }
     const sortedSpinOffs = spinOffs.sort((a, b) => a.date.localeCompare(b.date));
 
+    // Warn on exercise/assignment events (EX) — not yet automated
+    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "EX")) {
+      const date = normalizeDate(ca.dateTime.slice(0, 8));
+      this.warnings.push(`⚠ Ejercicio/asignación de opción: ${ca.symbol} (${ca.isin}) el ${date}. El coste de la prima debe integrarse manualmente en el coste de adquisición de las acciones.`);
+    }
+
     // Parse scrip dividends into timeline events (applied chronologically, not upfront)
     const scripDivs: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SD")) {
@@ -177,6 +183,13 @@ export class FifoEngine {
         this.addShortLot(trade, rateMap);
       } else if (trade.buySell === "BUY" && oci === "C") {
         this.consumeShortLots(trade, rateMap);
+      } else if (oci === "C;O") {
+        this.warnings.push(`⚠ Operación C;O (roll): ${trade.symbol} el ${normalizeDate(trade.tradeDate)}. Se procesa como cierre + apertura.`);
+        if (trade.buySell === "BUY") {
+          this.consumeShortLots(trade, rateMap);
+        } else {
+          this.consumeLots(trade, rateMap);
+        }
       } else if (trade.buySell === "BUY") {
         this.addLot(trade, rateMap);
       } else {
@@ -583,5 +596,9 @@ export class FifoEngine {
 
   getRemainingLots(): Map<string, Lot[]> {
     return this.lots;
+  }
+
+  getRemainingShortLots(): Map<string, Lot[]> {
+    return this.shortLots;
   }
 }

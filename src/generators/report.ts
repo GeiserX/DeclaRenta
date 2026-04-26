@@ -99,9 +99,12 @@ export function generateTaxReport(
     return dateMatch[1] === yearStr;
   });
 
+  // Prepend parser warnings (unparsed sections, etc.)
+  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings];
+
   return {
     year,
-    warnings: yearWarnings,
+    warnings: allWarnings,
     capitalGains: {
       transmissionValue,
       acquisitionValue,

@@ -466,7 +466,7 @@ Referencia rápida de las casillas que DeclaRenta calcula:
 |---------|----------|-----------------|
 | **0029** | Dividendos íntegros | Suma bruta de dividendos × tipo_ECB |
 | **0033** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
-| **0032** | Gastos deducibles | Intereses de margen pagados al broker × tipo_ECB |
+| **0032** | ~~Gastos deducibles~~ | Intereses de margen pagados al broker — **NO deducible** en base del ahorro (Art. 26.1.a LIRPF). Se muestra como valor informativo. |
 
 ### Deducciones
 
