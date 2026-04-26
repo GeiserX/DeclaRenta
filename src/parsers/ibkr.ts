@@ -77,6 +77,24 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
   }
 
+  // Detect important sections present in XML but not parsed
+  const parserWarnings: string[] = [];
+  const importantUnparsed: Record<string, string> = {
+    FXTransactions: "operaciones forex (FX P&L standalone)",
+    OptionEAE: "ejercicios y asignaciones de opciones",
+    TransfersInTransit: "transferencias en tránsito",
+    UnbookedTrades: "operaciones no liquidadas",
+    RoutingCommissions: "comisiones de routing",
+    ComplexPositions: "posiciones complejas (spreads)",
+  };
+  for (const stmt of statements) {
+    for (const [section, desc] of Object.entries(importantUnparsed)) {
+      if (stmt[section] !== undefined && stmt[section] !== null) {
+        parserWarnings.push(`⚠ Sección "${section}" encontrada en el Flex Query pero no procesada (${desc}). Revisa manualmente.`);
+      }
+    }
+  }
+
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
   const accountId = statements.length === 1
@@ -94,6 +112,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions,
     securitiesInfo,
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
+    parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
   };
 }
 

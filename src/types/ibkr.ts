@@ -14,6 +14,7 @@ export interface FlexStatement {
   openPositions: OpenPosition[];
   securitiesInfo: SecurityInfo[];
   cashBalances?: CashBalance[];
+  parserWarnings?: string[];
 }
 
 export interface Trade {

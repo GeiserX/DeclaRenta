@@ -187,7 +187,7 @@ program
         }));
 
         const netGains = report.capitalGains.netGainLoss;
-        const netIncome = report.dividends.grossIncome.minus(report.interest.paid).plus(report.interest.earned);
+        const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
         const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
 
         // Log carryforward details
@@ -296,7 +296,7 @@ program
         isComplementary: false,
         isReplacement: false,
         previousYearIsins,
-      });
+      }, undefined, statement.cashBalances);
 
       if (!output720) {
         console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
