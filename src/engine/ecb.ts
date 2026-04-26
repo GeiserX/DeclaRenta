@@ -10,6 +10,8 @@ import Decimal from "decimal.js";
 import type { EcbRateMap } from "../types/ecb.js";
 
 const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
 
 /** Stablecoins pegged 1:1 to USD — use USD rate from ECB */
 const STABLECOIN_TO_FIAT: Record<string, string> = {
@@ -70,12 +72,22 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
   for (const currency of toFetch) {
     const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata`;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`ECB API error for ${currency}: ${response.status} ${response.statusText}`);
+    let response: Response | undefined;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      response = await fetch(url);
+      if (response.ok || (response.status !== 503 && response.status !== 429)) break;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * 2 ** attempt));
+      }
+    }
+    if (!response!.ok) {
+      const retryHint = response!.status === 503 || response!.status === 429
+        ? " (ECB service temporarily unavailable — please try again in a few minutes)"
+        : "";
+      throw new Error(`ECB API error for ${currency}: ${response!.status} ${response!.statusText}${retryHint}`);
     }
 
-    const csv = await response.text();
+    const csv = await response!.text();
     const lines = csv.split("\n");
 
     // Skip header line

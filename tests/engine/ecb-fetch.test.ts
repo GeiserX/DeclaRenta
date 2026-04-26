@@ -57,6 +57,68 @@ describe("fetchEcbRates", () => {
     await expect(fetchEcbRates(2025, ["USD"])).rejects.toThrow("ECB API error");
   });
 
+  it("should retry on 503 and succeed", async () => {
+    vi.useFakeTimers();
+    const csvData =
+      "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n";
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({ ok: false, status: 503, statusText: "Service Unavailable" } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 503, statusText: "Service Unavailable" } as Response)
+      .mockResolvedValueOnce(mockFetchOk(csvData));
+
+    const promise = fetchEcbRates(2025, ["USD"]);
+    await vi.runAllTimersAsync();
+    const rates = await promise;
+    expect(rates.has("2025-01-02")).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("should retry on 429 rate limit and succeed", async () => {
+    vi.useFakeTimers();
+    const csvData =
+      "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n";
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({ ok: false, status: 429, statusText: "Too Many Requests" } as Response)
+      .mockResolvedValueOnce(mockFetchOk(csvData));
+
+    const promise = fetchEcbRates(2025, ["USD"]);
+    await vi.runAllTimersAsync();
+    const rates = await promise;
+    expect(rates.has("2025-01-02")).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("should throw after exhausting retries on 503", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+    } as Response);
+
+    const promise = fetchEcbRates(2025, ["USD"]).catch((e: Error) => e);
+    await vi.runAllTimersAsync();
+    const err = await promise;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch("ECB API error for USD: 503");
+    vi.useRealTimers();
+  });
+
+  it("should not retry on 4xx errors other than 429", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+    } as Response);
+
+    await expect(fetchEcbRates(2025, ["USD"])).rejects.toThrow("ECB API error for USD: 404");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("should skip crypto currencies without calling ECB", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
