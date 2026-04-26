@@ -73,21 +73,30 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
     const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata`;
 
     let response: Response | undefined;
+    let lastError: unknown;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      response = await fetch(url);
-      if (response.ok || (response.status !== 503 && response.status !== 429)) break;
+      try {
+        response = await fetch(url);
+        if (response.ok || (response.status !== 503 && response.status !== 429)) break;
+      } catch (err: unknown) {
+        lastError = err;
+        response = undefined;
+      }
       if (attempt < MAX_RETRIES) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * 2 ** attempt));
       }
     }
-    if (!response!.ok) {
-      const retryHint = response!.status === 503 || response!.status === 429
+    if (!response) {
+      throw new Error(`ECB API network error for ${currency}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+    }
+    if (!response.ok) {
+      const retryHint = response.status === 503 || response.status === 429
         ? " (ECB service temporarily unavailable — please try again in a few minutes)"
         : "";
-      throw new Error(`ECB API error for ${currency}: ${response!.status} ${response!.statusText}${retryHint}`);
+      throw new Error(`ECB API error for ${currency}: ${response.status} ${response.statusText}${retryHint}`);
     }
 
-    const csv = await response!.text();
+    const csv = await response.text();
     const lines = csv.split("\n");
 
     // Skip header line

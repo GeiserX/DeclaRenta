@@ -100,11 +100,41 @@ describe("fetchEcbRates", () => {
       statusText: "Service Unavailable",
     } as Response);
 
-    const promise = fetchEcbRates(2025, ["USD"]).catch((e: Error) => e);
+    const promise = fetchEcbRates(2025, ["USD"]).catch((e: unknown) => e);
     await vi.runAllTimersAsync();
     const err = await promise;
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toMatch("ECB API error for USD: 503");
+    vi.useRealTimers();
+  });
+
+  it("should retry on network errors (fetch rejection)", async () => {
+    vi.useFakeTimers();
+    const csvData =
+      "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,1.0350\n";
+
+    vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("ECONNRESET"))
+      .mockRejectedValueOnce(new Error("ETIMEDOUT"))
+      .mockResolvedValueOnce(mockFetchOk(csvData));
+
+    const promise = fetchEcbRates(2025, ["USD"]);
+    await vi.runAllTimersAsync();
+    const rates = await promise;
+    expect(rates.has("2025-01-02")).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("should throw network error after exhausting retries", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const promise = fetchEcbRates(2025, ["USD"]).catch((e: unknown) => e);
+    await vi.runAllTimersAsync();
+    const err = await promise;
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch("ECB API network error for USD: ECONNREFUSED");
     vi.useRealTimers();
   });
 
