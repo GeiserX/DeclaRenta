@@ -241,7 +241,7 @@ describe("Modelo 720 Generator", () => {
       expect(result.values.total.toFixed(2)).toBe("55200.00");
     });
 
-    it("should return zero for accounts and realEstate (not from broker data)", () => {
+    it("should return zero for accounts when no cash balances provided", () => {
       const positions = [makePosition({ currency: "EUR", positionValue: "100000" })];
       const result = checkModelo720Thresholds(positions, rateMap, 2025);
 
@@ -249,6 +249,125 @@ describe("Modelo 720 Generator", () => {
       expect(result.accounts.total.toFixed(2)).toBe("0.00");
       expect(result.realEstate.exceeds).toBe(false);
       expect(result.realEstate.total.toFixed(2)).toBe("0.00");
+    });
+
+    it("should calculate accounts category from cash balances", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
+
+      // 60000 * 0.92 = 55200 EUR
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("55200.00");
+      expect(result.values.total.toFixed(2)).toBe("0.00");
+    });
+
+    it("should handle mixed V+C categories independently", () => {
+      const positions = [makePosition({ currency: "EUR", positionValue: "40000" })];
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
+
+      expect(result.values.exceeds).toBe(false);
+      expect(result.values.total.toFixed(2)).toBe("40000.00");
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("55000.00");
+    });
+
+    it("should sum multi-currency cash balances", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1", currency: "USD", endingCash: "30000", endingSettledCash: "30000" },
+        { accountId: "U1", currency: "GBP", endingCash: "20000", endingSettledCash: "20000" },
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
+
+      // USD: 30000 * 0.92 = 27600, GBP: 20000 * 1.15 = 23000, total = 50600
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("50600.00");
+    });
+
+    it("should filter out negative cash balances", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
+        { accountId: "U1", currency: "EUR", endingCash: "-5000", endingSettledCash: "-5000" },
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
+
+      // Only USD counts: 60000 * 0.92 = 55200, negative EUR excluded
+      expect(result.accounts.total.toFixed(2)).toBe("55200.00");
+    });
+
+    it("should use rate 1.0 for EUR cash balances", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
+
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("55000.00");
+    });
+  });
+
+  describe("Category C — cash account records", () => {
+    it("should generate Category C records when cash exceeds 50K", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
+      ];
+      const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
+
+      expect(result).not.toBe("");
+      const lines = result.split("\n");
+      expect(lines).toHaveLength(2); // 1 summary + 1 cash detail
+      expect(lines[0]![0]).toBe("1"); // summary
+      expect(lines[1]![0]).toBe("2"); // detail
+      // Asset type at position 102 (0-indexed: 101) should be "C"
+      expect(lines[1]![101]).toBe("C");
+    });
+
+    it("should not generate Category C records when cash is below 50K", () => {
+      const positions: OpenPosition[] = [];
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "40000", endingSettledCash: "40000" },
+      ];
+      const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
+
+      expect(result).toBe("");
+    });
+
+    it("should generate both V and C records when both exceed 50K", () => {
+      const positions = [makePosition()]; // 60000 * 0.92 = 55200 EUR
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+      ];
+      const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
+
+      expect(result).not.toBe("");
+      const lines = result.split("\n");
+      expect(lines).toHaveLength(3); // 1 summary + 1 V detail + 1 C detail
+      // First detail should be V (securities)
+      expect(lines[1]![101]).toBe("V");
+      // Second detail should be C (accounts)
+      expect(lines[2]![101]).toBe("C");
+    });
+
+    it("should only generate C records when V is below threshold but C exceeds", () => {
+      const positions = [makePosition({ positionValue: "10000" })]; // 9200 EUR < 50K
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+      ];
+      const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
+
+      expect(result).not.toBe("");
+      const lines = result.split("\n");
+      expect(lines).toHaveLength(2); // 1 summary + 1 C detail (no V)
+      expect(lines[1]![101]).toBe("C");
     });
   });
 

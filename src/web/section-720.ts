@@ -86,26 +86,37 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
-  // Threshold check
+  // Per-category threshold checks (720 has independent 50K thresholds)
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
-  const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
-  const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
 
-  html += `<div class="threshold-bar">
-    <div class="threshold-track">
-      <div class="threshold-fill ${exceeds ? "over" : "under"}" style="width: ${pct}%"></div>
-    </div>
-    <div class="threshold-labels">
-      <span>${t("m720.total_value", { amount: totalValue.toFixed(2) })}</span>
-      <span>50.000 €</span>
-    </div>
-  </div>
-  <p class="${exceeds ? "warning" : "muted"}">
-    ${exceeds
-      ? t("m720.threshold_exceeded", { amount: totalValue.toFixed(2) })
-      : t("m720.threshold_not_exceeded", { amount: totalValue.toFixed(2) })}
-  </p>`;
+  const categories: { label: string; total: Decimal; exceeds: boolean }[] = [];
+  if (thresholds.values.total.greaterThan(0)) {
+    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds });
+  }
+  if (thresholds.accounts.total.greaterThan(0)) {
+    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds });
+  }
+
+  for (const cat of categories) {
+    const pct = Math.min(cat.total.div(50000).mul(100).toNumber(), 100);
+    html += `<div class="threshold-bar">
+      <div class="threshold-label-row"><strong>${esc(cat.label)}</strong></div>
+      <div class="threshold-track">
+        <div class="threshold-fill ${cat.exceeds ? "over" : "under"}" style="width: ${pct}%"></div>
+      </div>
+      <div class="threshold-labels">
+        <span>${t("m720.total_value", { amount: cat.total.toFixed(2) })}</span>
+        <span>50.000 €</span>
+      </div>
+      <p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>
+    </div>`;
+  }
+
+  if (exceeds) {
+    const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
+    html += `<p class="warning">${t("m720.threshold_exceeded", { amount: totalValue.toFixed(2) })}</p>`;
+  }
 
   // Positions table
   const positions = statement.openPositions.filter(
@@ -236,7 +247,7 @@ async function generate720File(): Promise<void> {
     isReplacement: false,
   };
 
-  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config);
+  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, undefined, cachedStatement.cashBalances);
   if (!result) return; // Below threshold
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });

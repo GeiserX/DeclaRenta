@@ -502,7 +502,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>Date, Reference, Ticker, ISIN, Type, Quantity, CCY, Price/share, Gross Amount, FX Rate, Fee, Net Amt., Tax Amt.</code></p>
         <p><strong>Datos extraídos:</strong> Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.</p>
-        <p><strong>Limitaciones:</strong> Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) se ignoran (no son hechos imponibles).</p>
+        <p><strong>Limitaciones:</strong> Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 37.1.l LIRPF); actualmente DeclaRenta no las calcula automáticamente.</p>
 
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
@@ -899,8 +899,8 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p class="muted">La regla anti-churning no se aplica a futuros.</p>
 
         <h3>Forex (CASH)</h3>
-        <p>Las operaciones de compraventa de divisas (forex spot) tributan como ganancias y pérdidas patrimoniales. DeclaRenta las procesa con FIFO por par de divisas (símbolo). Los tipos de cambio ECB se aplican tanto a la compra como a la venta.</p>
-        <p>Las conversiones de divisa en IBKR (cambiar USD a EUR para depositar) se registran como operaciones CASH. Actualmente, DeclaRenta no distingue entre conversiones de divisa (FXCONV) y operaciones de trading de forex; todas se procesan con FIFO. Si generas ganancia o pérdida por la fluctuación del tipo de cambio entre la compra y la venta de la divisa, esta se declara como ganancia patrimonial.</p>
+        <p>Las operaciones de compraventa de divisas (forex spot) tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 37.1.l LIRPF). Actualmente, DeclaRenta <strong>excluye</strong> la categoría CASH del motor FIFO porque las ganancias/pérdidas por tipo de cambio ya están implícitas en la conversión EUR de cada operación de valores.</p>
+        <p>Las conversiones de divisa standalone (comprar USD para depositar y venderlos meses después) generan su propia ganancia o pérdida patrimonial que debe declararse en las casillas 1626/1631. Esta funcionalidad está pendiente de implementación: distinguir entre FXCONV (conversiones automáticas del broker) y operaciones de trading FX independientes.</p>
         <p class="muted">La regla anti-churning no se aplica a operaciones forex.</p>
 
         <h3>Bonos y renta fija (BOND)</h3>
