@@ -61,7 +61,7 @@
     "url": "https://github.com/GeiserX/DeclaRenta/issues"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@types/pdfkit": "^0.17.6",
