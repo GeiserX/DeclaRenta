@@ -200,39 +200,49 @@ describe("FxFifoEngine", () => {
     });
 
     it("should extract stock BUY as negative FX event (spending FCY) + commission", () => {
-      const trades = [makeTrade({
-        assetCategory: "STK",
-        symbol: "AAPL",
-        isin: "US0378331005",
-        buySell: "BUY",
-        tradeMoney: "5000",
-        currency: "USD",
-      })];
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "10000", currency: "USD" }),
+        makeTrade({
+          assetCategory: "STK",
+          symbol: "AAPL",
+          isin: "US0378331005",
+          buySell: "BUY",
+          tradeMoney: "5000",
+          currency: "USD",
+        }),
+      ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
-      expect(events).toHaveLength(2);
-      expect(events[0]!.quantity.toString()).toBe("-5000");
-      expect(events[0]!.trigger).toBe("stock_purchase");
-      expect(events[1]!.quantity.toString()).toBe("-2");
-      expect(events[1]!.trigger).toBe("commission");
+      // Manual CASH conversion + stock BUY (negative) + commission
+      expect(events).toHaveLength(3);
+      expect(events[0]!.trigger).toBe("conversion");
+      expect(events[1]!.quantity.toString()).toBe("-5000");
+      expect(events[1]!.trigger).toBe("stock_purchase");
+      expect(events[2]!.quantity.toString()).toBe("-2");
+      expect(events[2]!.trigger).toBe("commission");
     });
 
     it("should extract stock SELL as positive FX event (receiving FCY) + commission", () => {
-      const trades = [makeTrade({
-        assetCategory: "STK",
-        symbol: "AAPL",
-        isin: "US0378331005",
-        buySell: "SELL",
-        tradeMoney: "6000",
-        currency: "USD",
-      })];
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "10000", currency: "USD" }),
+        makeTrade({
+          assetCategory: "STK",
+          symbol: "AAPL",
+          isin: "US0378331005",
+          buySell: "SELL",
+          tradeMoney: "6000",
+          currency: "USD",
+        }),
+      ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
-      expect(events).toHaveLength(2);
-      expect(events[0]!.quantity.toString()).toBe("6000");
-      expect(events[0]!.trigger).toBe("stock_sale");
-      expect(events[1]!.quantity.toString()).toBe("-2");
-      expect(events[1]!.trigger).toBe("commission");
+      // Manual CASH conversion + stock SELL (positive) + commission
+      expect(events).toHaveLength(3);
+      expect(events[0]!.trigger).toBe("conversion");
+      expect(events[1]!.quantity.toString()).toBe("6000");
+      expect(events[1]!.trigger).toBe("stock_sale");
+      expect(events[2]!.quantity.toString()).toBe("-2");
+      expect(events[2]!.trigger).toBe("commission");
     });
 
     it("should skip EUR trades", () => {
@@ -401,13 +411,23 @@ describe("FxFifoEngine", () => {
       expect(events).toHaveLength(0);
     });
 
-    it("should generate stock FX events in multi-currency mode (no FXCONV)", () => {
+    it("should generate stock FX events in multi-currency mode (manual CASH trade present)", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "10000", currency: "USD" }),
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      const stockEvents = events.filter((e) => e.trigger === "stock_purchase");
+      expect(stockEvents.length).toBeGreaterThan(0);
+      expect(stockEvents[0]!.trigger).toBe("stock_purchase");
+    });
+
+    it("should NOT generate stock FX events when no CASH trades (auto-convert heuristic)", () => {
       const trades = [
         makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      expect(events.length).toBeGreaterThan(0);
-      expect(events[0]!.trigger).toBe("stock_purchase");
+      expect(events).toHaveLength(0);
     });
 
     it("should return empty cash events in auto-convert mode", () => {
