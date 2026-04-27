@@ -113,7 +113,7 @@ export function renderYearComparison(container: HTMLElement): void {
 
   // Data rows
   const rows = COMPARISON_ROWS.map((row) => {
-    const values = sorted.map((r) => r.casillas[row.key]);
+    const values = sorted.map((r) => r.casillas[row.key] ?? 0);
     const valueCells = values.map((v) => `<td>${v.toFixed(2)}</td>`).join("");
 
     const varCells = values.length >= 2

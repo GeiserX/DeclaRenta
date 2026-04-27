@@ -53,15 +53,30 @@ export function saveReport(report: StoredReport): void {
   }
 }
 
-/** Load all stored reports */
+/** Load all stored reports, migrating older schemas to current */
 export function loadAllReports(): StoredReport[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as StoredReport[];
+    const reports = JSON.parse(raw) as StoredReport[];
+    return reports.map(migrateReport);
   } catch {
     return [];
   }
+}
+
+function migrateReport(r: StoredReport): StoredReport {
+  const c = r.casillas;
+  c.fxNetGainLoss ??= 0;
+  c.blockedLosses ??= 0;
+  c.interestEarned ??= 0;
+  c.interestPaid ??= 0;
+  c.doubleTaxation ??= 0;
+  const s = r.stats;
+  s.fxDisposalsCount ??= 0;
+  s.warningsCount ??= 0;
+  s.currencies ??= [];
+  return r;
 }
 
 /** Load a single report by year */
