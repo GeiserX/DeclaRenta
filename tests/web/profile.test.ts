@@ -12,7 +12,7 @@ beforeEach(() => {
     clear: () => { Object.keys(store).forEach((k) => { delete store[k]; }); },
     get length() { return Object.keys(store).length; },
     key: (i: number) => Object.keys(store)[i] ?? null,
-  } as Storage;
+  };
 });
 
 describe("validateNif", () => {

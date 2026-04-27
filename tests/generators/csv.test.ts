@@ -115,23 +115,25 @@ describe("formatCsv", () => {
     const headerCols = header.split(",");
     expect(headerCols[0]).toBe("ISIN");
     expect(headerCols[1]).toBe("Simbolo");
-    expect(headerCols[10]).toBe("Divisa");
-    expect(headerCols[11]).toBe("Tipo_ECB_Compra");
-    expect(headerCols[12]).toBe("Tipo_ECB_Venta");
-    expect(headerCols[13]).toBe("Bloqueada_Antichurning");
+    expect(headerCols[3]).toBe("Categoria");
+    expect(headerCols[11]).toBe("Divisa");
+    expect(headerCols[12]).toBe("Tipo_ECB_Compra");
+    expect(headerCols[13]).toBe("Tipo_ECB_Venta");
+    expect(headerCols[14]).toBe("Bloqueada_Antichurning");
+    expect(headerCols[15]).toBe("Opcion_Escenario");
 
     const dataLine = lines.find((l) => l.startsWith("US0378331005,AAPL"))!;
     const dataCols = dataLine.split(",");
     expect(dataCols[0]).toBe("US0378331005"); // ISIN
     expect(dataCols[1]).toBe("AAPL"); // symbol
-    expect(dataCols[6]).toBe("800.00"); // cost
-    expect(dataCols[7]).toBe("1000.00"); // proceeds
-    expect(dataCols[8]).toBe("200.00"); // gain
-    expect(dataCols[9]).toBe("189"); // holding days
-    expect(dataCols[10]).toBe("USD"); // currency
-    expect(dataCols[11]).toBe("0.920000"); // acquire ECB rate
-    expect(dataCols[12]).toBe("0.910000"); // sell ECB rate
-    expect(dataCols[13]).toBe("NO"); // not blocked
+    expect(dataCols[7]).toBe("800.00"); // cost
+    expect(dataCols[8]).toBe("1000.00"); // proceeds
+    expect(dataCols[9]).toBe("200.00"); // gain
+    expect(dataCols[10]).toBe("189"); // holding days
+    expect(dataCols[11]).toBe("USD"); // currency
+    expect(dataCols[12]).toBe("0.920000"); // acquire ECB rate
+    expect(dataCols[13]).toBe("0.910000"); // sell ECB rate
+    expect(dataCols[14]).toBe("NO"); // not blocked
   });
 
   it("should include dividend rows", () => {
@@ -167,7 +169,8 @@ describe("formatCsv", () => {
 
     const lines = csv.split("\n");
     const dataLine = lines.find((l) => l.startsWith("US0378331005"))!;
-    expect(dataLine.endsWith("SI")).toBe(true);
+    const cols = dataLine.split(",");
+    expect(cols[14]).toBe("SI");
   });
 
   it("should handle empty disposals and dividends", () => {
