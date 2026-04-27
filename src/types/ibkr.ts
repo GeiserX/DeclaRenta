@@ -136,7 +136,7 @@ export interface CashBalance {
   endingSettledCash: string;
 }
 
-export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";
+export type AssetCategory = "STK" | "OPT" | "FUT" | "FOP" | "FSFOP" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";
 
 /** Option exercise/assignment/expiry event from OptionEAE section */
 export interface OptionExercise {
