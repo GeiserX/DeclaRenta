@@ -239,6 +239,7 @@ function mapOptionExercise(raw: Record<string, string>): OptionExercise | null {
   return {
     transactionID: raw.transactionID ?? "",
     accountId: raw.accountId ?? "",
+    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
     symbol: raw.symbol ?? "",
     description: raw.description ?? "",
     isin: raw.isin ?? "",

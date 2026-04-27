@@ -614,26 +614,60 @@ export class FifoEngine {
    *    the option premium is a SEPARATE taxable event, not added to share cost.
    */
   processOptionExercises(exercises: OptionExercise[], rateMap: EcbRateMap): void {
-    for (const ex of exercises) {
+    const sorted = [...exercises].sort((a, b) =>
+      normalizeDate(a.date).localeCompare(normalizeDate(b.date)),
+    );
+
+    for (const ex of sorted) {
+      if (!ex.date || ex.date.length < 8) {
+        this.warnings.push(`⚠ Evento OptionEAE sin fecha válida para ${ex.symbol}. Omitido.`);
+        continue;
+      }
       const date = normalizeDate(ex.date);
       const ecbRate = getEcbRate(rateMap, date, ex.currency);
       const quantity = new Decimal(ex.quantity).abs();
+      if (quantity.isZero()) {
+        this.warnings.push(`⚠ Evento OptionEAE con cantidad 0 para ${ex.symbol} el ${date}. Omitido.`);
+        continue;
+      }
       const multiplier = new Decimal(ex.multiplier || "100");
 
       if (ex.action === "Expiration") {
         this.processOptionExpiration(ex, date, ecbRate, quantity);
       } else {
-        // Exercise or Assignment — both produce same tax treatment
+        if (!ex.strike || !/^-?\d+(\.\d+)?$/.test(ex.strike.trim())) {
+          this.warnings.push(`⚠ Strike inválido "${ex.strike}" para ${ex.symbol} el ${date}. Omitiendo ejercicio.`);
+          continue;
+        }
         this.processOptionExercise(ex, date, ecbRate, quantity, multiplier);
       }
     }
+  }
+
+  /** Resolve option lot key using same logic as lotKey() to avoid mismatches */
+  private optionLotKey(ex: OptionExercise): string {
+    if (ex.isin) return ex.isin;
+    if (ex.conid) return `OPT:conid:${ex.conid}`;
+    return `OPT:${ex.symbol}`;
+  }
+
+  /** Resolve underlying key: find existing lots by symbol when ISIN is unknown */
+  private resolveUnderlyingKey(ex: OptionExercise): string {
+    if (ex.underlyingIsin) return ex.underlyingIsin;
+    // Scan existing lots for a matching symbol (trades processed first, so ISIN-keyed lots exist)
+    for (const [key, lots] of this.lots) {
+      if (lots.length > 0 && lots[0]!.symbol === ex.underlyingSymbol && key !== `OPT:${ex.symbol}`) {
+        return key;
+      }
+    }
+    return `STK:${ex.underlyingSymbol}`;
   }
 
   private processOptionExpiration(
     ex: OptionExercise, date: string, ecbRate: Decimal,
     quantity: Decimal,
   ): void {
-    const optionKey = ex.isin || `OPT:${ex.symbol}`;
+    const optionKey = this.optionLotKey(ex);
 
     // Check if we hold long lots (buyer)
     const longLots = this.lots.get(optionKey);
@@ -731,11 +765,11 @@ export class FifoEngine {
     ex: OptionExercise, date: string, ecbRate: Decimal,
     quantity: Decimal, multiplier: Decimal,
   ): void {
-    const optionKey = ex.isin || `OPT:${ex.symbol}`;
+    const optionKey = this.optionLotKey(ex);
     const strike = new Decimal(ex.strike);
     const sharesPerContract = multiplier;
     const totalShares = quantity.mul(sharesPerContract);
-    const underlyingKey = ex.underlyingIsin || ex.underlyingSymbol;
+    const underlyingKey = this.resolveUnderlyingKey(ex);
 
     // Determine if we're the buyer (long lots) or writer (short lots)
     const longLots = this.lots.get(optionKey);
@@ -878,8 +912,9 @@ export class FifoEngine {
 
     } else {
       this.warnings.push(`⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`);
-      // Still create underlying position even without option lot data
+      // Still process underlying position even without option lot data
       if ((ex.action === "Exercise" && ex.putCall === "C") || (ex.action === "Assignment" && ex.putCall === "P")) {
+        // Call exercise / Put assignment: acquire shares at strike
         const shareCost = strike.mul(quantity).mul(sharesPerContract).mul(ecbRate);
         const underlyingLot: Lot = {
           id: `LOT-${this.nextLotId++}`,
@@ -895,6 +930,10 @@ export class FifoEngine {
         };
         if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
         this.lots.get(underlyingKey)!.push(underlyingLot);
+      } else {
+        // Put exercise / Call assignment: sell shares at strike
+        const shareProceeds = strike.mul(quantity).mul(sharesPerContract).mul(ecbRate);
+        this.consumeLotsForExercise(underlyingKey, totalShares, shareProceeds, date, ecbRate, ex);
       }
     }
   }
@@ -957,6 +996,29 @@ export class FifoEngine {
       lot.costInEur = lot.costInEur.minus(costBasis);
       if (lot.quantity.isZero()) lots.shift();
       remaining = remaining.minus(consumed);
+    }
+
+    if (remaining.greaterThan(0)) {
+      this.warnings.push(`⚠ Lotes insuficientes del subyacente: ${ex.underlyingSymbol} × ${remaining} el ${date}. Coste base = 0.`);
+      const fraction = remaining.dividedBy(shares);
+      const partialProceeds = proceedsEur.mul(fraction);
+      this.disposals.push({
+        isin: ex.underlyingIsin,
+        symbol: ex.underlyingSymbol,
+        description: `${ex.underlyingSymbol} [entrega por ejercicio ${ex.symbol}]`,
+        sellDate: date,
+        acquireDate: date,
+        quantity: remaining,
+        proceedsEur: partialProceeds,
+        costBasisEur: new Decimal(0),
+        gainLossEur: partialProceeds,
+        holdingPeriodDays: 0,
+        currency: ex.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: ecbRate,
+        assetCategory: "STK",
+        washSaleBlocked: false,
+      });
     }
   }
 

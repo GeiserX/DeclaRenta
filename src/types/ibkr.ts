@@ -140,6 +140,8 @@ export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "
 export interface OptionExercise {
   transactionID: string;
   accountId: string;
+  /** IBKR contract ID — matches Trade.conid for lot key consistency */
+  conid?: string;
   symbol: string;
   description: string;
   isin: string;
