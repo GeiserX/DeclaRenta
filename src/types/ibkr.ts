@@ -14,6 +14,7 @@ export interface FlexStatement {
   openPositions: OpenPosition[];
   securitiesInfo: SecurityInfo[];
   cashBalances?: CashBalance[];
+  optionExercises?: OptionExercise[];
   parserWarnings?: string[];
 }
 
@@ -134,3 +135,25 @@ export interface CashBalance {
 }
 
 export type AssetCategory = "STK" | "OPT" | "FUT" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";
+
+/** Option exercise/assignment/expiry event from OptionEAE section */
+export interface OptionExercise {
+  transactionID: string;
+  accountId: string;
+  symbol: string;
+  description: string;
+  isin: string;
+  currency: string;
+  date: string;
+  /** "Exercise" | "Assignment" | "Expiration" */
+  action: "Exercise" | "Assignment" | "Expiration";
+  putCall: "P" | "C";
+  strike: string;
+  expiry: string;
+  quantity: string;
+  /** Proceeds from exercise/assignment (premium received or paid) */
+  proceeds: string;
+  underlyingSymbol: string;
+  underlyingIsin: string;
+  multiplier: string;
+}

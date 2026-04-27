@@ -7,8 +7,8 @@
  */
 
 import Decimal from "decimal.js";
-import type { Lot, FifoDisposal } from "../types/tax.js";
-import type { Trade, CorporateAction } from "../types/ibkr.js";
+import type { Lot, FifoDisposal, OptionScenario } from "../types/tax.js";
+import type { Trade, CorporateAction, OptionExercise } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
@@ -118,11 +118,7 @@ export class FifoEngine {
     }
     const sortedSpinOffs = spinOffs.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Warn on exercise/assignment events (EX) — not yet automated
-    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "EX")) {
-      const date = normalizeDate(ca.dateTime.slice(0, 8));
-      this.warnings.push(`⚠ Ejercicio/asignación de opción: ${ca.symbol} (${ca.isin}) el ${date}. El coste de la prima debe integrarse manualmente en el coste de adquisición de las acciones.`);
-    }
+    // EX corporate actions are now handled via processOptionExercises() below
 
     // Parse scrip dividends into timeline events (applied chronologically, not upfront)
     const scripDivs: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }[] = [];
@@ -358,6 +354,13 @@ export class FifoEngine {
       costInEur,
       currency: trade.currency,
       ecbRate,
+      ...(trade.assetCategory === "OPT" ? {
+        putCall: trade.putCall,
+        strike: trade.strike,
+        expiry: trade.expiry,
+        underlyingSymbol: trade.underlyingSymbol,
+        underlyingIsin: trade.underlyingIsin,
+      } : {}),
     };
 
     const key = lotKey(trade);
@@ -445,6 +448,14 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: trade.assetCategory,
         washSaleBlocked: false, // Set later by wash sale detection
+        ...(trade.assetCategory === "OPT" ? {
+          optionScenario: "close" as OptionScenario,
+          putCall: trade.putCall ?? lot.putCall,
+          strike: trade.strike ?? lot.strike,
+          expiry: trade.expiry ?? lot.expiry,
+          underlyingSymbol: trade.underlyingSymbol ?? lot.underlyingSymbol,
+          underlyingIsin: trade.underlyingIsin ?? lot.underlyingIsin,
+        } : {}),
       });
 
       // Reduce lot
@@ -587,6 +598,365 @@ export class FifoEngine {
 
     if (remaining.greaterThan(0)) {
       this.addLot({ ...trade, quantity: remaining.toString(), openCloseIndicator: "O", commission: "0", taxes: "0" }, rateMap);
+    }
+  }
+
+  /**
+   * Process option exercises/assignments/expirations (DGT V0137-23, Art. 37.1.m LIRPF).
+   *
+   * Three scenarios:
+   * 1. **Expiration**: Option expires worthless → full premium is gain (writer) or loss (buyer).
+   *    Lot consumed with zero proceeds (buyer) or zero cost (writer/short).
+   * 2. **Close**: Already handled by normal FIFO (BUY to close / SELL to close).
+   * 3. **Exercise/Assignment**: Option exercised → premium P&L recorded as option disposal,
+   *    AND underlying shares acquired at market value (strike × multiplier).
+   *    The underlying cost basis = market value at exercise (Art. 37.1.m):
+   *    the option premium is a SEPARATE taxable event, not added to share cost.
+   */
+  processOptionExercises(exercises: OptionExercise[], rateMap: EcbRateMap): void {
+    for (const ex of exercises) {
+      const date = normalizeDate(ex.date);
+      const ecbRate = getEcbRate(rateMap, date, ex.currency);
+      const quantity = new Decimal(ex.quantity).abs();
+      const multiplier = new Decimal(ex.multiplier || "100");
+
+      if (ex.action === "Expiration") {
+        this.processOptionExpiration(ex, date, ecbRate, quantity, multiplier);
+      } else {
+        // Exercise or Assignment — both produce same tax treatment
+        this.processOptionExercise(ex, date, ecbRate, quantity, multiplier, rateMap);
+      }
+    }
+  }
+
+  private processOptionExpiration(
+    ex: OptionExercise, date: string, ecbRate: Decimal,
+    quantity: Decimal, _multiplier: Decimal,
+  ): void {
+    const optionKey = ex.isin || `OPT:${ex.symbol}`;
+
+    // Check if we hold long lots (buyer)
+    const longLots = this.lots.get(optionKey);
+    if (longLots && longLots.length > 0) {
+      // Buyer: option expires worthless → loss = full premium paid
+      let remaining = quantity;
+      while (remaining.greaterThan(0) && longLots.length > 0) {
+        const lot = longLots[0]!;
+        const consumed = Decimal.min(remaining, lot.quantity);
+        const costPerUnit = lot.costInEur.dividedBy(lot.quantity);
+        const costBasis = costPerUnit.mul(consumed);
+
+        this.disposals.push({
+          isin: ex.isin,
+          symbol: ex.symbol,
+          description: ex.description,
+          sellDate: date,
+          acquireDate: lot.acquireDate,
+          quantity: consumed,
+          proceedsEur: new Decimal(0),
+          costBasisEur: costBasis,
+          gainLossEur: costBasis.negated(),
+          holdingPeriodDays: daysBetween(lot.acquireDate, date),
+          currency: ex.currency,
+          sellEcbRate: ecbRate,
+          acquireEcbRate: lot.ecbRate,
+          assetCategory: "OPT",
+          washSaleBlocked: false,
+          optionScenario: "expiration",
+          putCall: ex.putCall,
+          strike: ex.strike,
+          expiry: ex.expiry,
+          underlyingSymbol: ex.underlyingSymbol,
+          underlyingIsin: ex.underlyingIsin,
+        });
+
+        lot.quantity = lot.quantity.minus(consumed);
+        lot.costInEur = lot.costInEur.minus(costBasis);
+        if (lot.quantity.isZero()) longLots.shift();
+        remaining = remaining.minus(consumed);
+      }
+      if (longLots.length === 0) this.lots.delete(optionKey);
+      return;
+    }
+
+    // Check if we hold short lots (writer)
+    const shortLots = this.shortLots.get(optionKey);
+    if (shortLots && shortLots.length > 0) {
+      // Writer: option expires worthless → gain = full premium received
+      let remaining = quantity;
+      while (remaining.greaterThan(0) && shortLots.length > 0) {
+        const lot = shortLots[0]!;
+        const consumed = Decimal.min(remaining, lot.quantity);
+        const proceedsPerUnit = lot.costInEur.dividedBy(lot.quantity);
+        const proceedsEur = proceedsPerUnit.mul(consumed);
+
+        this.disposals.push({
+          isin: ex.isin,
+          symbol: ex.symbol,
+          description: ex.description,
+          sellDate: date,
+          acquireDate: lot.acquireDate,
+          quantity: consumed,
+          proceedsEur,
+          costBasisEur: new Decimal(0),
+          gainLossEur: proceedsEur,
+          holdingPeriodDays: daysBetween(lot.acquireDate, date),
+          currency: ex.currency,
+          sellEcbRate: ecbRate,
+          acquireEcbRate: lot.ecbRate,
+          assetCategory: "OPT",
+          washSaleBlocked: false,
+          isShort: true,
+          optionScenario: "expiration",
+          putCall: ex.putCall,
+          strike: ex.strike,
+          expiry: ex.expiry,
+          underlyingSymbol: ex.underlyingSymbol,
+          underlyingIsin: ex.underlyingIsin,
+        });
+
+        lot.quantity = lot.quantity.minus(consumed);
+        lot.costInEur = lot.costInEur.minus(proceedsEur);
+        if (lot.quantity.isZero()) shortLots.shift();
+        remaining = remaining.minus(consumed);
+      }
+      if (shortLots.length === 0) this.shortLots.delete(optionKey);
+      return;
+    }
+
+    this.warnings.push(`⚠ Expiración de opción sin lotes: ${ex.symbol} × ${quantity} el ${date}.`);
+  }
+
+  private processOptionExercise(
+    ex: OptionExercise, date: string, ecbRate: Decimal,
+    quantity: Decimal, multiplier: Decimal, _rateMap: EcbRateMap,
+  ): void {
+    const optionKey = ex.isin || `OPT:${ex.symbol}`;
+    const strike = new Decimal(ex.strike);
+    const sharesPerContract = multiplier;
+    const totalShares = quantity.mul(sharesPerContract);
+    const underlyingKey = ex.underlyingIsin || ex.underlyingSymbol;
+
+    // Determine if we're the buyer (long lots) or writer (short lots)
+    const longLots = this.lots.get(optionKey);
+    const shortLots = this.shortLots.get(optionKey);
+
+    if (longLots && longLots.length > 0) {
+      // BUYER exercising: consume option lots, record option P&L, create underlying lots
+      let remaining = quantity;
+      while (remaining.greaterThan(0) && longLots.length > 0) {
+        const lot = longLots[0]!;
+        const consumed = Decimal.min(remaining, lot.quantity);
+        const costPerUnit = lot.costInEur.dividedBy(lot.quantity);
+        const optionCostBasis = costPerUnit.mul(consumed);
+
+        // Option disposal: premium paid is cost, exercise settles at intrinsic value
+        // Per V0137-23: the option gain/loss is the difference between premium paid
+        // and the value obtained through exercise. But for tax simplicity,
+        // the option premium is recorded as a separate capital gain/loss event.
+        // Proceeds = 0 for the option itself (value transfers to underlying position)
+        this.disposals.push({
+          isin: ex.isin,
+          symbol: ex.symbol,
+          description: `${ex.description} [Ejercicio Art. 37.1.m]`,
+          sellDate: date,
+          acquireDate: lot.acquireDate,
+          quantity: consumed,
+          proceedsEur: new Decimal(0),
+          costBasisEur: optionCostBasis,
+          gainLossEur: optionCostBasis.negated(),
+          holdingPeriodDays: daysBetween(lot.acquireDate, date),
+          currency: ex.currency,
+          sellEcbRate: ecbRate,
+          acquireEcbRate: lot.ecbRate,
+          assetCategory: "OPT",
+          washSaleBlocked: false,
+          optionScenario: "exercise",
+          putCall: ex.putCall,
+          strike: ex.strike,
+          expiry: ex.expiry,
+          underlyingSymbol: ex.underlyingSymbol,
+          underlyingIsin: ex.underlyingIsin,
+        });
+
+        // Create underlying lots: acquired at strike price (market value at exercise per Art. 37.1.m)
+        // Call exercise: BUY shares at strike. Put exercise: SELL shares at strike.
+        if (ex.putCall === "C") {
+          const shareCost = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const underlyingLot: Lot = {
+            id: `LOT-${this.nextLotId++}`,
+            isin: ex.underlyingIsin,
+            symbol: ex.underlyingSymbol,
+            description: `${ex.underlyingSymbol} [via ejercicio ${ex.symbol}]`,
+            acquireDate: date,
+            quantity: consumed.mul(sharesPerContract),
+            pricePerShare: strike,
+            costInEur: shareCost,
+            currency: ex.currency,
+            ecbRate,
+          };
+          if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
+          this.lots.get(underlyingKey)!.push(underlyingLot);
+        } else {
+          // Put exercise: we sell underlying shares at strike price
+          // Synthesize a sale of the underlying
+          const shareProceeds = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), shareProceeds, date, ecbRate, ex);
+        }
+
+        lot.quantity = lot.quantity.minus(consumed);
+        lot.costInEur = lot.costInEur.minus(optionCostBasis);
+        if (lot.quantity.isZero()) longLots.shift();
+        remaining = remaining.minus(consumed);
+      }
+      if (longLots.length === 0) this.lots.delete(optionKey);
+
+    } else if (shortLots && shortLots.length > 0) {
+      // WRITER assigned: consume short option lots, record option P&L, deliver/receive shares
+      let remaining = quantity;
+      while (remaining.greaterThan(0) && shortLots.length > 0) {
+        const lot = shortLots[0]!;
+        const consumed = Decimal.min(remaining, lot.quantity);
+        const proceedsPerUnit = lot.costInEur.dividedBy(lot.quantity);
+        const optionProceeds = proceedsPerUnit.mul(consumed);
+
+        // Writer's option disposal: premium received is proceeds, cost = 0 (obligation extinguished)
+        this.disposals.push({
+          isin: ex.isin,
+          symbol: ex.symbol,
+          description: `${ex.description} [Asignación Art. 37.1.m]`,
+          sellDate: date,
+          acquireDate: lot.acquireDate,
+          quantity: consumed,
+          proceedsEur: optionProceeds,
+          costBasisEur: new Decimal(0),
+          gainLossEur: optionProceeds,
+          holdingPeriodDays: daysBetween(lot.acquireDate, date),
+          currency: ex.currency,
+          sellEcbRate: ecbRate,
+          acquireEcbRate: lot.ecbRate,
+          assetCategory: "OPT",
+          washSaleBlocked: false,
+          isShort: true,
+          optionScenario: "exercise",
+          putCall: ex.putCall,
+          strike: ex.strike,
+          expiry: ex.expiry,
+          underlyingSymbol: ex.underlyingSymbol,
+          underlyingIsin: ex.underlyingIsin,
+        });
+
+        // Call writer assigned: must SELL shares at strike (deliver)
+        // Put writer assigned: must BUY shares at strike (receive)
+        if (ex.putCall === "C") {
+          const shareProceeds = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), shareProceeds, date, ecbRate, ex);
+        } else {
+          const shareCost = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const underlyingLot: Lot = {
+            id: `LOT-${this.nextLotId++}`,
+            isin: ex.underlyingIsin,
+            symbol: ex.underlyingSymbol,
+            description: `${ex.underlyingSymbol} [via asignación ${ex.symbol}]`,
+            acquireDate: date,
+            quantity: consumed.mul(sharesPerContract),
+            pricePerShare: strike,
+            costInEur: shareCost,
+            currency: ex.currency,
+            ecbRate,
+          };
+          if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
+          this.lots.get(underlyingKey)!.push(underlyingLot);
+        }
+
+        lot.quantity = lot.quantity.minus(consumed);
+        lot.costInEur = lot.costInEur.minus(optionProceeds);
+        if (lot.quantity.isZero()) shortLots.shift();
+        remaining = remaining.minus(consumed);
+      }
+      if (shortLots.length === 0) this.shortLots.delete(optionKey);
+
+    } else {
+      this.warnings.push(`⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`);
+      // Still create underlying position even without option lot data
+      if ((ex.action === "Exercise" && ex.putCall === "C") || (ex.action === "Assignment" && ex.putCall === "P")) {
+        const shareCost = strike.mul(quantity).mul(sharesPerContract).mul(ecbRate);
+        const underlyingLot: Lot = {
+          id: `LOT-${this.nextLotId++}`,
+          isin: ex.underlyingIsin,
+          symbol: ex.underlyingSymbol,
+          description: `${ex.underlyingSymbol} [via ${ex.action.toLowerCase()} ${ex.symbol}]`,
+          acquireDate: date,
+          quantity: totalShares,
+          pricePerShare: strike,
+          costInEur: shareCost,
+          currency: ex.currency,
+          ecbRate,
+        };
+        if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
+        this.lots.get(underlyingKey)!.push(underlyingLot);
+      }
+    }
+  }
+
+  private consumeLotsForExercise(
+    underlyingKey: string, shares: Decimal, proceedsEur: Decimal,
+    date: string, ecbRate: Decimal, ex: OptionExercise,
+  ): void {
+    const lots = this.lots.get(underlyingKey);
+    if (!lots || lots.length === 0) {
+      this.warnings.push(`⚠ Ejercicio de opción sin lotes del subyacente: ${ex.underlyingSymbol} × ${shares} el ${date}. Coste base = 0.`);
+      this.disposals.push({
+        isin: ex.underlyingIsin,
+        symbol: ex.underlyingSymbol,
+        description: `${ex.underlyingSymbol} [entrega por ejercicio ${ex.symbol}]`,
+        sellDate: date,
+        acquireDate: date,
+        quantity: shares,
+        proceedsEur,
+        costBasisEur: new Decimal(0),
+        gainLossEur: proceedsEur,
+        holdingPeriodDays: 0,
+        currency: ex.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: ecbRate,
+        assetCategory: "STK",
+        washSaleBlocked: false,
+      });
+      return;
+    }
+
+    let remaining = shares;
+    while (remaining.greaterThan(0) && lots.length > 0) {
+      const lot = lots[0]!;
+      const consumed = Decimal.min(remaining, lot.quantity);
+      const fraction = consumed.dividedBy(shares);
+      const partialProceeds = proceedsEur.mul(fraction);
+      const costPerUnit = lot.costInEur.dividedBy(lot.quantity);
+      const costBasis = costPerUnit.mul(consumed);
+
+      this.disposals.push({
+        isin: ex.underlyingIsin,
+        symbol: ex.underlyingSymbol,
+        description: `${ex.underlyingSymbol} [entrega por ejercicio ${ex.symbol}]`,
+        sellDate: date,
+        acquireDate: lot.acquireDate,
+        quantity: consumed,
+        proceedsEur: partialProceeds,
+        costBasisEur: costBasis,
+        gainLossEur: partialProceeds.minus(costBasis),
+        holdingPeriodDays: daysBetween(lot.acquireDate, date),
+        currency: ex.currency,
+        sellEcbRate: ecbRate,
+        acquireEcbRate: lot.ecbRate,
+        assetCategory: "STK",
+        washSaleBlocked: false,
+      });
+
+      lot.quantity = lot.quantity.minus(consumed);
+      lot.costInEur = lot.costInEur.minus(costBasis);
+      if (lot.quantity.isZero()) lots.shift();
+      remaining = remaining.minus(consumed);
     }
   }
 

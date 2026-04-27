@@ -4,6 +4,9 @@ import type Decimal from "decimal.js";
  * Core tax calculation types for Spanish IRPF (Modelo 100).
  */
 
+/** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
+export type OptionScenario = "expiration" | "close" | "exercise";
+
 /** A single lot in the FIFO queue */
 export interface Lot {
   id: string;
@@ -18,6 +21,16 @@ export interface Lot {
   ecbRate: Decimal;
   /** True for short lots (opened via SELL+O) */
   isShort?: boolean;
+  /** Option put/call indicator */
+  putCall?: "P" | "C";
+  /** Option strike price */
+  strike?: string;
+  /** Option expiry date (YYYYMMDD) */
+  expiry?: string;
+  /** Underlying symbol for derivatives */
+  underlyingSymbol?: string;
+  /** Underlying ISIN for derivatives */
+  underlyingIsin?: string;
 }
 
 /** Result of consuming lots via FIFO for a sale */
@@ -44,6 +57,18 @@ export interface FifoDisposal {
   washSaleBlocked: boolean;
   /** True for short position disposals (SELL+O → BUY+C) */
   isShort?: boolean;
+  /** Option scenario per DGT V0137-23 */
+  optionScenario?: OptionScenario;
+  /** Option put/call indicator */
+  putCall?: "P" | "C";
+  /** Option strike price */
+  strike?: string;
+  /** Option expiry date */
+  expiry?: string;
+  /** Underlying symbol */
+  underlyingSymbol?: string;
+  /** Underlying ISIN */
+  underlyingIsin?: string;
 }
 
 /** Dividend received from a foreign security */

@@ -10,9 +10,15 @@ import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 const ASSET_LABELS: Record<string, string> = {
   STK: "Acciones cotizadas",
   FUND: "Fondos / ETFs",
-  OPT: "Opciones",
+  OPT: "Opciones (Art. 37.1.m LIRPF)",
   CRYPTO: "Criptomonedas",
   BOND: "Bonos",
+};
+
+const OPTION_SCENARIO_LABELS: Record<string, string> = {
+  expiration: "Expiración",
+  close: "Cierre anticipado",
+  exercise: "Ejercicio/Asignación",
 };
 
 function esc(s: string): string {
@@ -80,11 +86,14 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     ops.forEach((d, i) => {
       const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = d.washSaleBlocked ? ' class="wash-sale-blocked"' : "";
+      const optionInfo = d.optionScenario
+        ? ` <span class="option-badge">${esc(OPTION_SCENARIO_LABELS[d.optionScenario] ?? d.optionScenario)}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${d.strike}` : ""}</span>`
+        : "";
       html += `
             <tr${blocked}>
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
-              <td>${esc(d.symbol)}</td>
+              <td>${esc(d.symbol)}${optionInfo}</td>
               <td>${fmtDate(d.acquireDate)}</td>
               <td>${fmtDate(d.sellDate)}</td>
               <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>
