@@ -48,7 +48,17 @@ export class FifoEngine {
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
       })
-      .sort((a, b) => normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)));
+      .sort((a, b) => {
+        const cmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+        if (cmp !== 0) return cmp;
+        // Same date: opens before closes (handles both longs and shorts correctly)
+        const phase = (t: Trade): number => t.openCloseIndicator === "O" ? 0 : t.openCloseIndicator === "C" ? 1 : 0;
+        const phaseCmp = phase(a) - phase(b);
+        if (phaseCmp !== 0) return phaseCmp;
+        // Within same phase: BUYs before SELLs to avoid "sell without lots" on longs
+        if (a.buySell !== b.buySell) return a.buySell === "BUY" ? -1 : 1;
+        return 0;
+      });
 
     // Parse splits from corporate actions (deduplicate by ISIN+date)
     const splitMap = new Map<string, { isin: string; date: string; ratio: number }>();

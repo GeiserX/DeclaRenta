@@ -53,15 +53,51 @@ export function saveReport(report: StoredReport): void {
   }
 }
 
-/** Load all stored reports */
+/** Load all stored reports, migrating older schemas to current */
 export function loadAllReports(): StoredReport[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as StoredReport[];
+    const parsed: unknown[] = JSON.parse(raw) as unknown[];
+    return parsed.flatMap((item) => {
+      try {
+        return [migrateReport(item as Record<string, unknown>)];
+      } catch {
+        return [];
+      }
+    });
   } catch {
     return [];
   }
+}
+
+function migrateReport(r: Record<string, unknown>): StoredReport {
+  const c = (r.casillas ?? {}) as Record<string, unknown>;
+  const s = (r.stats ?? {}) as Record<string, unknown>;
+  return {
+    year: Number(r.year ?? 0),
+    processedAt: typeof r.processedAt === "string" ? r.processedAt : "",
+    brokers: Array.isArray(r.brokers) ? (r.brokers as string[]) : [],
+    tradesCount: Number(r.tradesCount ?? 0),
+    casillas: {
+      transmissionValue: Number(c.transmissionValue ?? 0),
+      acquisitionValue: Number(c.acquisitionValue ?? 0),
+      netGainLoss: Number(c.netGainLoss ?? 0),
+      blockedLosses: Number(c.blockedLosses ?? 0),
+      fxNetGainLoss: Number(c.fxNetGainLoss ?? 0),
+      grossDividends: Number(c.grossDividends ?? 0),
+      interestEarned: Number(c.interestEarned ?? 0),
+      interestPaid: Number(c.interestPaid ?? 0),
+      doubleTaxation: Number(c.doubleTaxation ?? 0),
+    },
+    stats: {
+      disposalsCount: Number(s.disposalsCount ?? 0),
+      fxDisposalsCount: Number(s.fxDisposalsCount ?? 0),
+      dividendsCount: Number(s.dividendsCount ?? 0),
+      warningsCount: Number(s.warningsCount ?? 0),
+      currencies: Array.isArray(s.currencies) ? (s.currencies as string[]) : [],
+    },
+  };
 }
 
 /** Load a single report by year */
