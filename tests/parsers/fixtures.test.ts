@@ -235,7 +235,7 @@ describe("fixture file integration", () => {
     it("should parse OptionEAE entries with strike/expiry metadata", () => {
       const r = parseIbkrFlexXml(xml);
       expect(r.optionExercises!.length).toBe(7);
-      expect(r.optionExercises!.every((e) => e.strike !== undefined)).toBe(true);
+      expect(r.optionExercises!.every((e) => e.strike.length > 0)).toBe(true);
       expect(r.optionExercises!.every((e) => e.putCall === "C")).toBe(true);
     });
 
