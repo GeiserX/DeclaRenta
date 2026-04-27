@@ -218,38 +218,49 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
     });
   });
 
-  describe("Scenario 3: Exercise with physical delivery", () => {
-    it("call buyer exercises → option premium loss + shares acquired at strike", () => {
+  describe("Scenario 3: Exercise with physical delivery (V0137-23)", () => {
+    it("call buyer exercises → no separate OPT disposal, premium integrates into share cost", () => {
       const engine = new FifoEngine();
-      // Buy call option
       engine.processTrades([makeOptionTrade()], rateMap);
 
-      // Exercise: acquire 100 shares at $200 strike
       engine.processOptionExercises([makeExercise()], rateMap);
 
       const disposals = engine.getDisposals();
-      // Only the option disposal (premium loss), no share sale
-      expect(disposals).toHaveLength(1);
-      expect(disposals[0]!.optionScenario).toBe("exercise");
-      expect(disposals[0]!.assetCategory).toBe("OPT");
-      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("0.00");
-      expect(disposals[0]!.gainLossEur.lessThan(0)).toBe(true);
+      // V0137-23: no separate option disposal on exercise
+      expect(disposals).toHaveLength(0);
 
-      // Shares should be in the lot queue at strike price
+      // Shares acquired with cost = strike × shares × ecbRate + premium
       const lots = engine.getRemainingLots().get("US0378331005");
       expect(lots).toHaveLength(1);
       expect(lots![0]!.quantity.toString()).toBe("100");
       expect(lots![0]!.pricePerShare.toString()).toBe("200");
-      // Cost in EUR: 100 shares × $200 × 0.94 = 18800
-      expect(lots![0]!.costInEur.toFixed(2)).toBe("18800.00");
+      // Cost > bare strike cost (18800) because premium is integrated
+      const bareStrikeCost = new Decimal("18800");
+      expect(lots![0]!.costInEur.greaterThan(bareStrikeCost)).toBe(true);
     });
 
-    it("put buyer exercises → option premium loss + shares sold at strike", () => {
+    it("call buyer exercises with marketPrice → uses market price, not strike", () => {
       const engine = new FifoEngine();
-      // First buy 100 shares at $180
+      engine.processTrades([makeOptionTrade()], rateMap);
+
+      // Market price $220 (higher than $200 strike)
+      engine.processOptionExercises([makeExercise({ marketPrice: "220" })], rateMap);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(0);
+
+      const lots = engine.getRemainingLots().get("US0378331005");
+      expect(lots).toHaveLength(1);
+      expect(lots![0]!.pricePerShare.toString()).toBe("220");
+      // Base cost: 100 × $220 × 0.94 = 20680, plus premium
+      const bareMarketCost = new Decimal("20680");
+      expect(lots![0]!.costInEur.greaterThan(bareMarketCost)).toBe(true);
+    });
+
+    it("put buyer exercises → no OPT disposal, premium reduces sale proceeds", () => {
+      const engine = new FifoEngine();
       engine.processTrades([
         makeStockTrade(),
-        // Buy put option
         makeOptionTrade({
           tradeID: "5",
           symbol: "AAPL 250321P00200000",
@@ -259,7 +270,6 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
         }),
       ], rateMap);
 
-      // Exercise put: sell 100 shares at $200 strike
       engine.processOptionExercises([
         makeExercise({
           action: "Exercise",
@@ -270,28 +280,19 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       ], rateMap);
 
       const disposals = engine.getDisposals();
-      // Option disposal + underlying share sale
-      expect(disposals).toHaveLength(2);
-
-      // Option disposal (premium loss)
-      const optDisposal = disposals.find((d) => d.assetCategory === "OPT")!;
-      expect(optDisposal.optionScenario).toBe("exercise");
-      expect(optDisposal.putCall).toBe("P");
-
-      // Share sale at strike
-      const stkDisposal = disposals.find((d) => d.assetCategory === "STK")!;
-      expect(stkDisposal.symbol).toBe("AAPL");
-      expect(stkDisposal.quantity.toString()).toBe("100");
-      // Proceeds: 100 × $200 × 0.94 = 18800
-      expect(stkDisposal.proceedsEur.toFixed(2)).toBe("18800.00");
-      // Cost: 100 × $180 × 0.92 + $1 commission × 0.92 = 16560 + 0.92 = 16560.92
-      expect(stkDisposal.costBasisEur.toFixed(2)).toBe("16560.92");
-      expect(stkDisposal.gainLossEur.greaterThan(0)).toBe(true);
+      // Only STK disposal (share sale), no separate OPT disposal
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.assetCategory).toBe("STK");
+      expect(disposals[0]!.symbol).toBe("AAPL");
+      expect(disposals[0]!.quantity.toString()).toBe("100");
+      // Proceeds < bare strike proceeds (18800) because premium is subtracted
+      const bareStrikeProceeds = new Decimal("18800");
+      expect(disposals[0]!.proceedsEur.lessThan(bareStrikeProceeds)).toBe(true);
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("16560.92");
     });
 
-    it("call writer assigned → premium gain + shares delivered (sold) at strike", () => {
+    it("call writer assigned → no OPT disposal, premium adds to sale proceeds", () => {
       const engine = new FifoEngine();
-      // Own 100 shares, then write a covered call
       engine.processTrades([
         makeStockTrade(),
         makeOptionTrade({
@@ -302,30 +303,23 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
         }),
       ], rateMap);
 
-      // Assigned: must deliver 100 shares at $200
       engine.processOptionExercises([
         makeExercise({ action: "Assignment", quantity: "1" }),
       ], rateMap);
 
       const disposals = engine.getDisposals();
-      // Option disposal (premium gain) + stock disposal (share delivery)
-      expect(disposals).toHaveLength(2);
-
-      const optDisposal = disposals.find((d) => d.assetCategory === "OPT")!;
-      expect(optDisposal.optionScenario).toBe("exercise");
-      expect(optDisposal.isShort).toBe(true);
-      expect(optDisposal.proceedsEur.greaterThan(0)).toBe(true);
-
-      const stkDisposal = disposals.find((d) => d.assetCategory === "STK")!;
-      expect(stkDisposal.symbol).toBe("AAPL");
-      expect(stkDisposal.quantity.toString()).toBe("100");
-      // Delivered at $200 strike: proceeds = 100 × 200 × 0.94 = 18800
-      expect(stkDisposal.proceedsEur.toFixed(2)).toBe("18800.00");
+      // Only STK disposal (share delivery), no separate OPT disposal
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.assetCategory).toBe("STK");
+      expect(disposals[0]!.symbol).toBe("AAPL");
+      expect(disposals[0]!.quantity.toString()).toBe("100");
+      // Proceeds > bare strike proceeds (18800) because premium is added
+      const bareStrikeProceeds = new Decimal("18800");
+      expect(disposals[0]!.proceedsEur.greaterThan(bareStrikeProceeds)).toBe(true);
     });
 
-    it("put writer assigned → premium gain + shares received (bought) at strike", () => {
+    it("put writer assigned → no OPT disposal, premium reduces share cost", () => {
       const engine = new FifoEngine();
-      // Write a put option
       engine.processTrades([
         makeOptionTrade({
           tradeID: "7",
@@ -338,7 +332,6 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
         }),
       ], rateMap);
 
-      // Assigned: must buy 100 shares at $200
       engine.processOptionExercises([
         makeExercise({
           action: "Assignment",
@@ -349,17 +342,17 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       ], rateMap);
 
       const disposals = engine.getDisposals();
-      // Only option disposal (premium gain), shares are received into lots
-      expect(disposals).toHaveLength(1);
-      expect(disposals[0]!.assetCategory).toBe("OPT");
-      expect(disposals[0]!.isShort).toBe(true);
-      expect(disposals[0]!.optionScenario).toBe("exercise");
+      // No disposals — shares are acquired into lots
+      expect(disposals).toHaveLength(0);
 
-      // 100 shares acquired at $200 strike
+      // Shares acquired with cost = strike × shares × rate - premium
       const lots = engine.getRemainingLots().get("US0378331005");
       expect(lots).toHaveLength(1);
       expect(lots![0]!.quantity.toString()).toBe("100");
       expect(lots![0]!.pricePerShare.toString()).toBe("200");
+      // Cost < bare strike cost (18800) because writer's premium reduces it
+      const bareStrikeCost = new Decimal("18800");
+      expect(lots![0]!.costInEur.lessThan(bareStrikeCost)).toBe(true);
     });
   });
 

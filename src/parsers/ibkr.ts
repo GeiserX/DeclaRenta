@@ -78,7 +78,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
-    optionExercises.push(...ensureArray(stmt.OptionEAE?.OptionEAE).map(mapOptionExercise).filter((e): e is OptionExercise => e !== null));
+    optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE)));
   }
 
   // Detect important sections present in XML but not parsed
@@ -227,36 +227,69 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
   };
 }
 
-function mapOptionExercise(raw: Record<string, string>): OptionExercise | null {
-  // IBKR OptionEAE has paired rows: option removal (negative qty, has strike)
-  // + underlying delivery (positive qty, no strike). Skip delivery rows.
-  if (!raw.strike?.trim()) return null;
-
-  const action = (raw.action ?? raw.type ?? "").toLowerCase();
-  let mappedAction: OptionExercise["action"] = "Exercise";
-  if (action.includes("assign")) mappedAction = "Assignment";
-  else if (action.includes("expir") || action.includes("lapse")) mappedAction = "Expiration";
-
-  return {
-    transactionID: raw.transactionID ?? "",
-    accountId: raw.accountId ?? "",
-    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
-    symbol: raw.symbol ?? "",
-    description: raw.description ?? "",
-    isin: raw.isin ?? "",
-    currency: raw.currency ?? "",
-    date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
-    action: mappedAction,
-    putCall: raw.putCall?.toUpperCase() === "P" ? "P" : raw.putCall?.toUpperCase() === "C" ? "C" : "C",
-    strike: raw.strike,
-    expiry: raw.expiry ?? "",
-    quantity: raw.quantity ?? "0",
-    proceeds: raw.proceeds ?? raw.amount ?? "0",
-    underlyingSymbol: raw.underlyingSymbol ?? "",
-    underlyingIsin: raw.underlyingIsin ?? "",
-    multiplier: raw.multiplier ?? "100",
-  };
+interface OptionEaeDelivery {
+  date: string;
+  symbol: string;
+  underlyingSymbol: string;
+  tradePrice: string;
+  action: string;
 }
+
+function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[] {
+  const optionRows: OptionExercise[] = [];
+  const deliveryRows: OptionEaeDelivery[] = [];
+
+  for (const raw of rawRows) {
+    if (raw.strike?.trim()) {
+      const action = (raw.action ?? raw.type ?? "").toLowerCase();
+      let mappedAction: OptionExercise["action"] = "Exercise";
+      if (action.includes("assign")) mappedAction = "Assignment";
+      else if (action.includes("expir") || action.includes("lapse")) mappedAction = "Expiration";
+
+      optionRows.push({
+        transactionID: raw.transactionID ?? "",
+        accountId: raw.accountId ?? "",
+        ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+        symbol: raw.symbol ?? "",
+        description: raw.description ?? "",
+        isin: raw.isin ?? "",
+        currency: raw.currency ?? "",
+        date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
+        action: mappedAction,
+        putCall: raw.putCall?.toUpperCase() === "P" ? "P" : raw.putCall?.toUpperCase() === "C" ? "C" : "C",
+        strike: raw.strike,
+        expiry: raw.expiry ?? "",
+        quantity: raw.quantity ?? "0",
+        proceeds: raw.proceeds ?? raw.amount ?? "0",
+        underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
+        underlyingIsin: raw.underlyingIsin ?? "",
+        multiplier: raw.multiplier ?? "100",
+      });
+    } else if (raw.tradePrice?.trim()) {
+      deliveryRows.push({
+        date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
+        symbol: raw.symbol ?? "",
+        underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
+        tradePrice: raw.tradePrice,
+        action: (raw.action ?? raw.type ?? "").toLowerCase(),
+      });
+    }
+  }
+
+  for (const opt of optionRows) {
+    if (opt.action === "Expiration") continue;
+    const delivery = deliveryRows.find(
+      (d) => d.date === opt.date &&
+        (d.symbol === opt.underlyingSymbol || d.underlyingSymbol === opt.underlyingSymbol),
+    );
+    if (delivery) {
+      opt.marketPrice = delivery.tradePrice;
+    }
+  }
+
+  return optionRows;
+}
+
 
 /** IBKR Flex Query XML parser implementing BrokerParser interface */
 export const ibkrParser: BrokerParser = {
