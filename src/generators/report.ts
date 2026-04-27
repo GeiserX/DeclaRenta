@@ -92,8 +92,9 @@ export function generateTaxReport(
 
   // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
   const fxEngine = new FxFifoEngine();
-  const fxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
-  const allFxDisposals = fxEngine.processEvents(fxEvents);
+  const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
+  const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
+  const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
   const fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
 
   const fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));

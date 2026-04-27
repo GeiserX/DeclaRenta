@@ -7,8 +7,8 @@
  */
 
 import Decimal from "decimal.js";
-import type { FxLot, FxDisposal } from "../types/tax.js";
-import type { Trade } from "../types/ibkr.js";
+import type { FxLot, FxDisposal, FxTrigger } from "../types/tax.js";
+import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
@@ -20,7 +20,7 @@ export interface FxEvent {
   quantity: Decimal;
   /** EUR rate at event time (EUR per 1 FCY) */
   ecbRate: Decimal;
-  trigger: "conversion" | "stock_purchase" | "stock_sale";
+  trigger: FxTrigger;
 }
 
 export class FxFifoEngine {
@@ -96,6 +96,56 @@ export class FxFifoEngine {
           // Selling stock = receiving FCY
           events.push({ date, currency: trade.currency, quantity: tradeMoney, ecbRate, trigger: "stock_sale" });
         }
+
+        // Commission also consumes FCY (paid in commissionCurrency)
+        const commission = new Decimal(trade.commission).abs();
+        if (commission.greaterThan(0) && trade.commissionCurrency !== "EUR") {
+          const commRate = getEcbRate(rateMap, date, trade.commissionCurrency);
+          events.push({ date, currency: trade.commissionCurrency, quantity: commission.negated(), ecbRate: commRate, trigger: "commission" });
+        }
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * Extract FX events from cash transactions (dividends, interest).
+   *
+   * Receiving dividends/interest in FCY = acquiring FCY (creates lot).
+   * Paying interest/fees in FCY = disposing FCY (consumes lots).
+   */
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
+    const events: FxEvent[] = [];
+
+    for (const tx of cashTransactions) {
+      if (tx.currency === "EUR") continue;
+
+      const amount = new Decimal(tx.amount);
+      if (amount.isZero()) continue;
+
+      const date = normalizeDate(tx.dateTime);
+      const ecbRate = getEcbRate(rateMap, date, tx.currency);
+
+      if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
+        // Receiving dividend in FCY = acquiring FCY
+        events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "dividend" });
+      } else if (tx.type === "Withholding Tax") {
+        // WHT reduces FCY balance (negative amount in IBKR) = disposing FCY
+        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "dividend" });
+      } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
+        // Interest received in FCY = acquiring FCY
+        events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "interest" });
+      } else if (tx.type === "Broker Interest Paid" || tx.type === "Bond Interest Paid") {
+        // Interest paid in FCY = disposing FCY
+        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest" });
+      } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
+        // Fees paid in FCY = disposing FCY
+        if (amount.lessThan(0)) {
+          events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "commission" });
+        } else {
+          events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "commission" });
+        }
       }
     }
 
@@ -129,8 +179,6 @@ export class FxFifoEngine {
     const lots = this.lots.get(event.currency);
 
     if (!lots || lots.length === 0) {
-      // No lots to consume — FCY was acquired before our data window
-      // Add a synthetic lot at the current rate (gain = 0) and warn
       this.warnings.push(`⚠ Venta de ${event.currency} sin lotes previos el ${event.date}. Posible adquisición anterior al período declarado.`);
       return;
     }
@@ -153,6 +201,7 @@ export class FxFifoEngine {
         gainLossEur: proceedsEur.minus(costBasisEur),
         trigger: event.trigger,
         holdingPeriodDays: holdingDays,
+        lotId: lot.id,
       });
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -178,6 +227,7 @@ export class FxFifoEngine {
         gainLossEur: proceedsEur,
         trigger: event.trigger,
         holdingPeriodDays: 0,
+        lotId: "UNKNOWN",
       });
     }
   }

@@ -142,6 +142,9 @@ export interface FxLot {
   costInEur: Decimal;
 }
 
+/** What triggered an FX disposal */
+export type FxTrigger = "conversion" | "stock_purchase" | "stock_sale" | "dividend" | "interest" | "commission";
+
 /** Result of consuming FX lots via FIFO for a currency disposal */
 export interface FxDisposal {
   currency: string;
@@ -151,9 +154,10 @@ export interface FxDisposal {
   proceedsEur: Decimal;
   costBasisEur: Decimal;
   gainLossEur: Decimal;
-  /** What triggered the disposal: "conversion" | "stock_purchase" | "stock_sale" */
-  trigger: "conversion" | "stock_purchase" | "stock_sale";
+  trigger: FxTrigger;
   holdingPeriodDays: number;
+  /** FIFO lot ID consumed (for audit traceability) */
+  lotId: string;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */

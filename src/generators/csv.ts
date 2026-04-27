@@ -49,13 +49,13 @@ export function formatCsv(report: TaxSummary): string {
   // FX gains section
   if (report.fxGains.disposals.length > 0) {
     lines.push("# GANANCIAS FX (Art. 37.1.l LIRPF)");
-    lines.push("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen");
+    lines.push("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen,Lote_FIFO");
     for (const d of report.fxGains.disposals) {
       lines.push([
         escapeCsv(d.currency), d.acquireDate, d.disposeDate,
         d.quantity.toFixed(2), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
         d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
-        escapeCsv(d.trigger),
+        escapeCsv(d.trigger), escapeCsv(d.lotId),
       ].join(","));
     }
     lines.push("");

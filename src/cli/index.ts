@@ -479,6 +479,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       ganancia_eur: d.gainLossEur.toFixed(2),
       dias_tenencia: d.holdingPeriodDays,
       origen: d.trigger,
+      lote_fifo: d.lotId,
     })),
     dividendos: report.dividends.entries.map((d) => ({
       isin: d.isin,
