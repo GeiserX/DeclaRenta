@@ -14,7 +14,7 @@ import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
 /** Known asset categories — warn on unknown values to catch future IBKR additions */
-const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "CASH", "BOND", "FUND", "WAR", "CRYPTO", "CFD"]);
+const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "FOP", "FSFOP", "CASH", "BOND", "FUND", "WAR", "CRYPTO", "CFD"]);
 
 /** Lot grouping key: ISIN when available; conid for IBKR instruments without ISIN (survives ticker renames); otherwise asset category + symbol */
 function lotKey(trade: { isin: string; symbol: string; assetCategory: string; conid?: string }): string {
@@ -354,7 +354,7 @@ export class FifoEngine {
       costInEur,
       currency: trade.currency,
       ecbRate,
-      ...(trade.assetCategory === "OPT" ? {
+      ...(trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP" ? {
         putCall: trade.putCall,
         strike: trade.strike,
         expiry: trade.expiry,
@@ -448,7 +448,7 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: trade.assetCategory,
         washSaleBlocked: false, // Set later by wash sale detection
-        ...(trade.assetCategory === "OPT" ? {
+        ...(trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP" ? {
           optionScenario: "close",
           putCall: trade.putCall ?? lot.putCall,
           strike: trade.strike ?? lot.strike,
