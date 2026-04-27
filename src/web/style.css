@@ -1793,6 +1793,8 @@ footer a:hover {
 
 .splash-broker-tag {
   padding: 0.3rem 0.75rem;
+  min-width: 5.5rem;
+  text-align: center;
   background: var(--accent-subtle);
   border: 1px solid var(--tag-border);
   border-radius: 20px;
@@ -2071,6 +2073,7 @@ footer a:hover {
   .splash-broker-tag {
     font-size: 0.65rem;
     padding: 0.2rem 0.45rem;
+    min-width: 4.5rem;
   }
 
   .splash-features {
