@@ -46,11 +46,28 @@ export function formatCsv(report: TaxSummary): string {
 
   lines.push("");
 
+  // FX gains section
+  if (report.fxGains.disposals.length > 0) {
+    lines.push("# GANANCIAS FX (Art. 37.1.l LIRPF)");
+    lines.push("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen");
+    for (const d of report.fxGains.disposals) {
+      lines.push([
+        escapeCsv(d.currency), d.acquireDate, d.disposeDate,
+        d.quantity.toFixed(2), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
+        d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
+        escapeCsv(d.trigger),
+      ].join(","));
+    }
+    lines.push("");
+  }
+
   // Summary section
   lines.push("# RESUMEN CASILLAS");
   lines.push("Casilla,Concepto,Valor_EUR");
   lines.push(`0327,Valor de transmision,${report.capitalGains.transmissionValue.toFixed(2)}`);
   lines.push(`0328,Valor de adquisicion,${report.capitalGains.acquisitionValue.toFixed(2)}`);
+  lines.push(`1626,Valor de transmision FX,${report.fxGains.transmissionValue.toFixed(2)}`);
+  lines.push(`1631,Valor de adquisicion FX,${report.fxGains.acquisitionValue.toFixed(2)}`);
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
   lines.push(`0033,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);

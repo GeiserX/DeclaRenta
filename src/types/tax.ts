@@ -116,6 +116,44 @@ export interface TaxSummary {
     /** Breakdown by country */
     byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>;
   };
+
+  /** FX gains: Ganancias/pérdidas por transmisión de moneda extranjera (Casillas 1626/1631) */
+  fxGains: {
+    /** Casilla 1626: Valor de transmisión (FX) */
+    transmissionValue: Decimal;
+    /** Casilla 1631: Valor de adquisición (FX) */
+    acquisitionValue: Decimal;
+    /** Net gain/loss (1626 - 1631) */
+    netGainLoss: Decimal;
+    /** Individual FX disposals */
+    disposals: FxDisposal[];
+  };
+}
+
+/** A single lot in the FX FIFO queue (Art. 37.1.l LIRPF) */
+export interface FxLot {
+  id: string;
+  currency: string;
+  acquireDate: string;
+  quantity: Decimal;
+  /** EUR cost per unit of foreign currency at acquisition */
+  costPerUnit: Decimal;
+  /** Total EUR cost for this lot */
+  costInEur: Decimal;
+}
+
+/** Result of consuming FX lots via FIFO for a currency disposal */
+export interface FxDisposal {
+  currency: string;
+  disposeDate: string;
+  acquireDate: string;
+  quantity: Decimal;
+  proceedsEur: Decimal;
+  costBasisEur: Decimal;
+  gainLossEur: Decimal;
+  /** What triggered the disposal: "conversion" | "stock_purchase" | "stock_sale" */
+  trigger: "conversion" | "stock_purchase" | "stock_sale";
+  holdingPeriodDays: number;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */

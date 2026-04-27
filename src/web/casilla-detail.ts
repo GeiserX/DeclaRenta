@@ -5,7 +5,7 @@
  * operations (disposals, dividends, interest entries) that compose it.
  */
 
-import type { TaxSummary, FifoDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
+import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 
 /** Escape HTML special characters to prevent XSS in rendered strings. */
@@ -114,6 +114,28 @@ function renderDoubleTaxDetail(report: TaxSummary): string {
     </table>`;
 }
 
+/** Render a detail table of FX disposals for casilla 1626/1631 drill-down. */
+function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string {
+  if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  return `
+    <p class="detail-label">${esc(label)} (${disposals.length})</p>
+    <table class="detail-table">
+      <thead><tr>
+        <th>${t("table.currency")}</th><th>${t("table.sell_date")}</th><th>${t("table.buy_date")}</th>
+        <th>${t("table.units")}</th><th>EUR</th>
+      </tr></thead>
+      <tbody>${disposals.map((d) => `
+        <tr>
+          <td>${esc(d.currency)}</td>
+          <td>${formatDate(d.disposeDate)}</td>
+          <td>${formatDate(d.acquireDate)}</td>
+          <td>${d.quantity.toFixed(2)}</td>
+          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${d.gainLossEur.toFixed(2)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
 const CASILLAS: CasillaConfig[] = [
   {
     code: "0327",
@@ -130,10 +152,24 @@ const CASILLAS: CasillaConfig[] = [
     getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.acquisition_value")),
   },
   {
+    code: "1626",
+    i18nKey: "casilla.fx_transmission_value",
+    getValue: (r) => r.fxGains.transmissionValue.toFixed(2),
+    getClass: () => "",
+    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value" as Parameters<typeof t>[0])),
+  },
+  {
+    code: "1631",
+    i18nKey: "casilla.fx_acquisition_value",
+    getValue: (r) => r.fxGains.acquisitionValue.toFixed(2),
+    getClass: () => "",
+    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value" as Parameters<typeof t>[0])),
+  },
+  {
     code: "",
     i18nKey: "casilla.net_gain_loss",
-    getValue: (r) => r.capitalGains.netGainLoss.toFixed(2),
-    getClass: (r) => r.capitalGains.netGainLoss.greaterThanOrEqualTo(0) ? "gain" : "loss",
+    getValue: (r) => r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).toFixed(2),
+    getClass: (r) => r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).greaterThanOrEqualTo(0) ? "gain" : "loss",
     getDetail: () => "",
   },
   {
