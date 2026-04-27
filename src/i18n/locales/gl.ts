@@ -368,7 +368,7 @@ const gl: TranslationKeys = {
   "tax.breakdown_capital_gains": "Ganancias patrimoniais",
   "tax.breakdown_fx_gains": "Ganancias por tipo de cambio",
   "tax.breakdown_dividends": "Dividendos",
-  "tax.breakdown_interest": "Intereses",
+  "tax.breakdown_interest": "Xuros",
   "tax.breakdown_blocked_losses": "Perdas bloqueadas (diferidas)",
 };
 

@@ -56,7 +56,7 @@ const en: TranslationKeys = {
   "casilla.fx_transmission_value": "FX transmission value (foreign currency)",
   "casilla.fx_acquisition_value": "FX acquisition value (foreign currency)",
   "casilla.fx_net_gain_loss": "FX net gain/loss (foreign currency)",
-  "casilla.net_gain_loss": "Net gain/loss (transmissions)",
+  "casilla.net_gain_loss": "Net gain/loss (asset disposals)",
   "casilla.gross_dividends": "Gross dividends",
   "casilla.interest_earned": "Interest earned",
   "casilla.interest_paid": "Interest paid to broker (margin, not deductible — informational)",

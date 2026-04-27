@@ -353,9 +353,9 @@ function renderBreakdown(b: TaxBaseBreakdown): string {
   if (b.fxGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_fx_gains"))}: <strong>${b.fxGains.toFixed(2)} &euro;</strong></span>`);
   if (b.dividends !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_dividends"))}: <strong>${b.dividends.toFixed(2)} &euro;</strong></span>`);
   if (b.interest !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_interest"))}: <strong>${b.interest.toFixed(2)} &euro;</strong></span>`);
-  if (b.blockedLosses !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${b.blockedLosses.toFixed(2)} &euro;</strong></span>`);
+  if (b.blockedLosses > 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${b.blockedLosses.toFixed(2)} &euro;</strong></span>`);
   if (lines.length === 0) return "";
-  return `<div class="bracket-breakdown" style="font-size:0.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 12px;opacity:0.85">${lines.join("")}</div>`;
+  return `<div class="bracket-breakdown muted" style="font-size:0.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 12px">${lines.join("")}</div>`;
 }
 
 // ---------------------------------------------------------------------------
