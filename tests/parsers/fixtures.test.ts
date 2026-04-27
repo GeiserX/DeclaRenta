@@ -9,6 +9,7 @@ import { krakenParser } from "../../src/parsers/kraken.js";
 import { scalableParser } from "../../src/parsers/scalable.js";
 import { freedom24Parser } from "../../src/parsers/freedom24.js";
 import { etoroParser } from "../../src/parsers/etoro.js";
+import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -355,6 +356,63 @@ describe("fixture file integration", () => {
     it("should skip Send and Receive (non-taxable transfers)", () => {
       const r = coinbaseParser.parse(csv);
       expect(r.trades.every((t) => t.symbol !== "SOL" || t.buySell !== "SELL")).toBe(true);
+    });
+  });
+
+  describe("trade-republic-sample.csv", () => {
+    const csv = fixture("trade-republic-sample.csv");
+
+    it("should detect as Trade Republic format", () => {
+      expect(tradeRepublicParser.detect(csv)).toBe(true);
+    });
+
+    it("should parse all trades (BUY + SELL, stocks + crypto + fund)", () => {
+      const r = tradeRepublicParser.parse(csv);
+      expect(r.trades).toHaveLength(10);
+      const buys = r.trades.filter((t) => t.buySell === "BUY");
+      const sells = r.trades.filter((t) => t.buySell === "SELL");
+      expect(buys).toHaveLength(5);
+      expect(sells).toHaveLength(5);
+    });
+
+    it("should map asset categories correctly", () => {
+      const r = tradeRepublicParser.parse(csv);
+      const crypto = r.trades.filter((t) => t.assetCategory === "CRYPTO");
+      const fund = r.trades.filter((t) => t.assetCategory === "FUND");
+      expect(crypto).toHaveLength(2);
+      expect(fund).toHaveLength(1);
+    });
+
+    it("should parse dividends with withholding tax", () => {
+      const r = tradeRepublicParser.parse(csv);
+      const divs = r.cashTransactions.filter((t) => t.type === "Dividends");
+      const whts = r.cashTransactions.filter((t) => t.type === "Withholding Tax");
+      expect(divs).toHaveLength(2);
+      expect(whts).toHaveLength(1); // only one dividend has tax
+    });
+
+    it("should parse interest payments", () => {
+      const r = tradeRepublicParser.parse(csv);
+      const interest = r.cashTransactions.filter((t) => t.type === "Broker Interest Received");
+      expect(interest).toHaveLength(5); // 4 interest + 1 tax optimization
+    });
+
+    it("should skip deposits, transfers, corporate actions, and deliveries", () => {
+      const r = tradeRepublicParser.parse(csv);
+      const allDescs = [
+        ...r.trades.map((t) => t.description),
+        ...r.cashTransactions.map((t) => t.description),
+      ];
+      expect(allDescs.every((d) => !d.includes("Transfer from bank"))).toBe(true);
+      expect(allDescs.every((d) => !d.includes("MERGER"))).toBe(true);
+      expect(allDescs.every((d) => !d.includes("Free share"))).toBe(true);
+    });
+
+    it("should handle Spanish tax (ITF) on trades", () => {
+      const r = tradeRepublicParser.parse(csv);
+      const taxedTrade = r.trades.find((t) => t.isin === "ES0000003001" && t.buySell === "BUY");
+      expect(taxedTrade).toBeDefined();
+      expect(taxedTrade!.taxes).toBe("-5");
     });
   });
 });
