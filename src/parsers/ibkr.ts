@@ -69,7 +69,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
-  const optionExercises: ReturnType<typeof mapOptionExercise>[] = [];
+  const optionExercises: OptionExercise[] = [];
 
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
@@ -78,7 +78,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
-    optionExercises.push(...ensureArray(stmt.OptionEAE?.OptionEAE).map(mapOptionExercise));
+    optionExercises.push(...ensureArray(stmt.OptionEAE?.OptionEAE).map(mapOptionExercise).filter((e): e is OptionExercise => e !== null));
   }
 
   // Detect important sections present in XML but not parsed
@@ -226,7 +226,11 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
   };
 }
 
-function mapOptionExercise(raw: Record<string, string>): OptionExercise {
+function mapOptionExercise(raw: Record<string, string>): OptionExercise | null {
+  // IBKR OptionEAE has paired rows: option removal (negative qty, has strike)
+  // + underlying delivery (positive qty, no strike). Skip delivery rows.
+  if (!raw.strike?.trim()) return null;
+
   const action = (raw.action ?? raw.type ?? "").toLowerCase();
   let mappedAction: OptionExercise["action"] = "Exercise";
   if (action.includes("assign")) mappedAction = "Assignment";
@@ -242,7 +246,7 @@ function mapOptionExercise(raw: Record<string, string>): OptionExercise {
     date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
     action: mappedAction,
     putCall: raw.putCall === "P" ? "P" : "C",
-    strike: raw.strike ?? "0",
+    strike: raw.strike,
     expiry: raw.expiry ?? "",
     quantity: raw.quantity ?? "0",
     proceeds: raw.proceeds ?? raw.amount ?? "0",
