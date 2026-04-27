@@ -288,7 +288,7 @@ describe("FxFifoEngine", () => {
         isin: "US0378331005", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "100", fxRateToBase: "0.92", type: "Dividends" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("100");
       expect(events[0]!.trigger).toBe("dividend");
@@ -300,7 +300,7 @@ describe("FxFifoEngine", () => {
         isin: "US0378331005", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "-15", fxRateToBase: "0.92", type: "Withholding Tax" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("-15");
       expect(events[0]!.trigger).toBe("dividend");
@@ -312,7 +312,7 @@ describe("FxFifoEngine", () => {
         isin: "", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "25", fxRateToBase: "0.92", type: "Broker Interest Received" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("25");
       expect(events[0]!.trigger).toBe("interest");
@@ -324,7 +324,7 @@ describe("FxFifoEngine", () => {
         isin: "", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "-10", fxRateToBase: "0.92", type: "Broker Interest Paid" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("-10");
       expect(events[0]!.trigger).toBe("interest");
@@ -336,7 +336,7 @@ describe("FxFifoEngine", () => {
         isin: "IE00BK5BQT80", currency: "EUR", dateTime: "20250315",
         settleDate: "20250317", amount: "50", fxRateToBase: "1", type: "Dividends" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(0);
     });
 
@@ -346,7 +346,7 @@ describe("FxFifoEngine", () => {
         isin: "", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "-5", fxRateToBase: "0.92", type: "Other Fees" as const,
       }];
-      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("-5");
       expect(events[0]!.trigger).toBe("commission");
@@ -365,6 +365,71 @@ describe("FxFifoEngine", () => {
       const disposals = engine.getDisposals();
       expect(disposals[0]!.lotId).toBe("FX-1");
       expect(disposals[1]!.lotId).toBe("FX-2");
+    });
+  });
+
+  describe("auto-convert detection", () => {
+    it("should detect auto-convert when FXCONV trades exist", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should detect auto-convert when CASH RECEIPTS trades exist", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "CASH RECEIPTS / DISBURSEMENTS", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should NOT detect auto-convert when only manual CASH trades exist", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
+    it("should skip stock FX events in auto-convert mode", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      // Only the FXCONV is detected (and skipped) — no stock event generated
+      expect(events).toHaveLength(0);
+    });
+
+    it("should generate stock FX events in multi-currency mode (no FXCONV)", () => {
+      const trades = [
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events.length).toBeGreaterThan(0);
+      expect(events[0]!.trigger).toBe("stock_purchase");
+    });
+
+    it("should return empty cash events in auto-convert mode", () => {
+      const txs = [{
+        transactionID: "1", accountId: "U1", symbol: "AAPL", description: "AAPL dividend",
+        isin: "US0378331005", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "100", fxRateToBase: "0.92", type: "Dividends" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap, true);
+      expect(events).toHaveLength(0);
+    });
+
+    it("should still allow manual conversions in auto-convert accounts", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      // FXCONV skipped, manual conversion preserved
+      expect(events).toHaveLength(1);
+      expect(events[0]!.trigger).toBe("conversion");
+      expect(events[0]!.quantity.toString()).toBe("1000");
     });
   });
 });

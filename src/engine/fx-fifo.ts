@@ -51,21 +51,31 @@ export class FxFifoEngine {
   }
 
   /**
+   * Detect whether the account uses automatic currency conversion.
+   * If FXCONV trades exist, the broker converts FCY instantly on each trade —
+   * the user never holds FCY between operations, so securities trades
+   * don't generate independent FX exposure.
+   */
+  static detectAutoConvert(trades: Trade[]): boolean {
+    return trades.some((t) => t.assetCategory === "CASH" && FxFifoEngine.isFxconv(t));
+  }
+
+  /**
    * Extract FX events from trades.
    *
    * Two sources of FX events:
    * 1. CASH trades (assetCategory=CASH): direct forex conversions
    *    - BUY CASH in USD = acquiring USD (add lot)
    *    - SELL CASH in USD = disposing USD (consume lots)
-   * 2. Securities trades in non-EUR: implicit currency disposal/acquisition
+   * 2. Securities trades in non-EUR (ONLY in multi-currency accounts):
    *    - BUY stock in USD = spending USD (dispose FCY lots)
    *    - SELL stock in USD = receiving USD (add FCY lot)
    *
-   * We skip FXCONV (automatic broker conversions for settlement) since those
-   * are not independent trading decisions. Detection: notes field contains
-   * "FXCONV" or description contains "CASH RECEIPTS / DISBURSEMENTS".
+   * Auto-convert accounts: only manual CASH conversions generate FX events.
+   * Stock trades are settled instantly via FXCONV — no FX exposure.
    */
   static extractFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
+    const autoConvert = FxFifoEngine.detectAutoConvert(trades);
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
@@ -84,16 +94,14 @@ export class FxFifoEngine {
         } else {
           events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion" });
         }
-      } else if (trade.assetCategory !== "WAR") {
-        // Securities trade in foreign currency — implicit FX event
+      } else if (!autoConvert && trade.assetCategory !== "WAR") {
+        // Multi-currency account: securities trade = implicit FX event
         const tradeMoney = new Decimal(trade.tradeMoney).abs();
         if (tradeMoney.isZero()) continue;
 
         if (trade.buySell === "BUY") {
-          // Buying stock = spending FCY
           events.push({ date, currency: trade.currency, quantity: tradeMoney.negated(), ecbRate, trigger: "stock_purchase" });
         } else {
-          // Selling stock = receiving FCY
           events.push({ date, currency: trade.currency, quantity: tradeMoney, ecbRate, trigger: "stock_sale" });
         }
 
@@ -112,10 +120,13 @@ export class FxFifoEngine {
   /**
    * Extract FX events from cash transactions (dividends, interest).
    *
-   * Receiving dividends/interest in FCY = acquiring FCY (creates lot).
-   * Paying interest/fees in FCY = disposing FCY (consumes lots).
+   * Only relevant for multi-currency accounts where FCY is held.
+   * Auto-convert accounts don't hold FCY — dividends/interest are
+   * converted instantly, so no FX lots are created.
    */
-  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap, autoConvert: boolean): FxEvent[] {
+    if (autoConvert) return [];
+
     const events: FxEvent[] = [];
 
     for (const tx of cashTransactions) {
@@ -128,19 +139,14 @@ export class FxFifoEngine {
       const ecbRate = getEcbRate(rateMap, date, tx.currency);
 
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
-        // Receiving dividend in FCY = acquiring FCY
         events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "dividend" });
       } else if (tx.type === "Withholding Tax") {
-        // WHT reduces FCY balance (negative amount in IBKR) = disposing FCY
         events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "dividend" });
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
-        // Interest received in FCY = acquiring FCY
         events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "interest" });
       } else if (tx.type === "Broker Interest Paid" || tx.type === "Bond Interest Paid") {
-        // Interest paid in FCY = disposing FCY
         events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest" });
       } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
-        // Fees paid in FCY = disposing FCY
         if (amount.lessThan(0)) {
           events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "commission" });
         } else {
