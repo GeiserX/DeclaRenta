@@ -7,7 +7,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { Lot, FifoDisposal, OptionScenario } from "../types/tax.js";
+import type { Lot, FifoDisposal } from "../types/tax.js";
 import type { Trade, CorporateAction, OptionExercise } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
@@ -449,7 +449,7 @@ export class FifoEngine {
         assetCategory: trade.assetCategory,
         washSaleBlocked: false, // Set later by wash sale detection
         ...(trade.assetCategory === "OPT" ? {
-          optionScenario: "close" as OptionScenario,
+          optionScenario: "close",
           putCall: trade.putCall ?? lot.putCall,
           strike: trade.strike ?? lot.strike,
           expiry: trade.expiry ?? lot.expiry,
