@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Bump version and release
@@ -73,7 +77,13 @@ jobs:
             npm version "$VERSION" --no-git-tag-version
             git add package.json package-lock.json
             git commit -m "chore: bump version to $VERSION [skip ci]"
-            git push origin HEAD:main
+
+            # Retry push with rebase to handle concurrent merges
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push origin HEAD:main && break
+              echo "Push attempt $i failed, retrying..."
+              sleep 5
+            done
           fi
 
           git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
