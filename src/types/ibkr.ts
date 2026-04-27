@@ -160,4 +160,6 @@ export interface OptionExercise {
   underlyingSymbol: string;
   underlyingIsin: string;
   multiplier: string;
+  /** Market price of underlying at exercise (from paired delivery row, DGT V0137-23) */
+  marketPrice?: string;
 }
