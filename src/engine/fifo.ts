@@ -776,47 +776,22 @@ export class FifoEngine {
     const shortLots = this.shortLots.get(optionKey);
 
     if (longLots && longLots.length > 0) {
-      // BUYER exercising: consume option lots, record option P&L, create underlying lots
+      // BUYER exercising: consume option lots, integrate premium into underlying cost basis
+      // Per DGT V0137-23: no separate option disposal — premium integrates into stock cost
+      const useMarketPrice = ex.marketPrice && /^-?\d+(\.\d+)?$/.test(ex.marketPrice.trim());
+      const priceForUnderlying = useMarketPrice ? new Decimal(ex.marketPrice!) : strike;
+
       let remaining = quantity;
       while (remaining.greaterThan(0) && longLots.length > 0) {
         const lot = longLots[0]!;
         const consumed = Decimal.min(remaining, lot.quantity);
         const costPerUnit = lot.costInEur.dividedBy(lot.quantity);
-        const optionCostBasis = costPerUnit.mul(consumed);
+        const optionPremiumEur = costPerUnit.mul(consumed);
 
-        // Option disposal: premium paid is cost, exercise settles at intrinsic value
-        // Per V0137-23: the option gain/loss is the difference between premium paid
-        // and the value obtained through exercise. But for tax simplicity,
-        // the option premium is recorded as a separate capital gain/loss event.
-        // Proceeds = 0 for the option itself (value transfers to underlying position)
-        this.disposals.push({
-          isin: ex.isin,
-          symbol: ex.symbol,
-          description: `${ex.description} [Ejercicio Art. 37.1.m]`,
-          sellDate: date,
-          acquireDate: lot.acquireDate,
-          quantity: consumed,
-          proceedsEur: new Decimal(0),
-          costBasisEur: optionCostBasis,
-          gainLossEur: optionCostBasis.negated(),
-          holdingPeriodDays: daysBetween(lot.acquireDate, date),
-          currency: ex.currency,
-          sellEcbRate: ecbRate,
-          acquireEcbRate: lot.ecbRate,
-          assetCategory: "OPT",
-          washSaleBlocked: false,
-          optionScenario: "exercise",
-          putCall: ex.putCall,
-          strike: ex.strike,
-          expiry: ex.expiry,
-          underlyingSymbol: ex.underlyingSymbol,
-          underlyingIsin: ex.underlyingIsin,
-        });
-
-        // Create underlying lots: acquired at strike price (market value at exercise per Art. 37.1.m)
-        // Call exercise: BUY shares at strike. Put exercise: SELL shares at strike.
         if (ex.putCall === "C") {
-          const shareCost = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          // Call buyer: acquires shares at market price + premium (DGT V0137-23)
+          const baseShareCost = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const totalCost = baseShareCost.plus(optionPremiumEur);
           const underlyingLot: Lot = {
             id: `LOT-${this.nextLotId++}`,
             isin: ex.underlyingIsin,
@@ -824,69 +799,49 @@ export class FifoEngine {
             description: `${ex.underlyingSymbol} [via ejercicio ${ex.symbol}]`,
             acquireDate: date,
             quantity: consumed.mul(sharesPerContract),
-            pricePerShare: strike,
-            costInEur: shareCost,
+            pricePerShare: priceForUnderlying,
+            costInEur: totalCost,
             currency: ex.currency,
             ecbRate,
           };
           if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
           this.lots.get(underlyingKey)!.push(underlyingLot);
         } else {
-          // Put exercise: we sell underlying shares at strike price
-          // Synthesize a sale of the underlying
-          const shareProceeds = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
-          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), shareProceeds, date, ecbRate, ex);
+          // Put buyer exercising: sells shares at market price, premium reduces proceeds
+          const shareProceeds = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const netProceeds = shareProceeds.minus(optionPremiumEur);
+          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceeds, date, ecbRate, ex);
         }
 
         lot.quantity = lot.quantity.minus(consumed);
-        lot.costInEur = lot.costInEur.minus(optionCostBasis);
+        lot.costInEur = lot.costInEur.minus(optionPremiumEur);
         if (lot.quantity.isZero()) longLots.shift();
         remaining = remaining.minus(consumed);
       }
       if (longLots.length === 0) this.lots.delete(optionKey);
 
     } else if (shortLots && shortLots.length > 0) {
-      // WRITER assigned: consume short option lots, record option P&L, deliver/receive shares
+      // WRITER assigned: consume short option lots, integrate premium into underlying event
+      // Per DGT V0137-23: no separate option disposal — premium integrates into stock event
+      const useMarketPrice = ex.marketPrice && /^-?\d+(\.\d+)?$/.test(ex.marketPrice.trim());
+      const priceForUnderlying = useMarketPrice ? new Decimal(ex.marketPrice!) : strike;
+
       let remaining = quantity;
       while (remaining.greaterThan(0) && shortLots.length > 0) {
         const lot = shortLots[0]!;
         const consumed = Decimal.min(remaining, lot.quantity);
         const proceedsPerUnit = lot.costInEur.dividedBy(lot.quantity);
-        const optionProceeds = proceedsPerUnit.mul(consumed);
+        const optionPremiumEur = proceedsPerUnit.mul(consumed);
 
-        // Writer's option disposal: premium received is proceeds, cost = 0 (obligation extinguished)
-        this.disposals.push({
-          isin: ex.isin,
-          symbol: ex.symbol,
-          description: `${ex.description} [Asignación Art. 37.1.m]`,
-          sellDate: date,
-          acquireDate: lot.acquireDate,
-          quantity: consumed,
-          proceedsEur: optionProceeds,
-          costBasisEur: new Decimal(0),
-          gainLossEur: optionProceeds,
-          holdingPeriodDays: daysBetween(lot.acquireDate, date),
-          currency: ex.currency,
-          sellEcbRate: ecbRate,
-          acquireEcbRate: lot.ecbRate,
-          assetCategory: "OPT",
-          washSaleBlocked: false,
-          isShort: true,
-          optionScenario: "exercise",
-          putCall: ex.putCall,
-          strike: ex.strike,
-          expiry: ex.expiry,
-          underlyingSymbol: ex.underlyingSymbol,
-          underlyingIsin: ex.underlyingIsin,
-        });
-
-        // Call writer assigned: must SELL shares at strike (deliver)
-        // Put writer assigned: must BUY shares at strike (receive)
+        // Call writer assigned: SELL shares at market price, premium adds to proceeds
+        // Put writer assigned: BUY shares at market price, premium reduces cost
         if (ex.putCall === "C") {
-          const shareProceeds = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
-          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), shareProceeds, date, ecbRate, ex);
+          const shareProceeds = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const netProceeds = shareProceeds.plus(optionPremiumEur);
+          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceeds, date, ecbRate, ex);
         } else {
-          const shareCost = strike.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const baseShareCost = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
+          const totalCost = baseShareCost.minus(optionPremiumEur);
           const underlyingLot: Lot = {
             id: `LOT-${this.nextLotId++}`,
             isin: ex.underlyingIsin,
@@ -894,8 +849,8 @@ export class FifoEngine {
             description: `${ex.underlyingSymbol} [via asignación ${ex.symbol}]`,
             acquireDate: date,
             quantity: consumed.mul(sharesPerContract),
-            pricePerShare: strike,
-            costInEur: shareCost,
+            pricePerShare: priceForUnderlying,
+            costInEur: totalCost,
             currency: ex.currency,
             ecbRate,
           };
@@ -904,7 +859,7 @@ export class FifoEngine {
         }
 
         lot.quantity = lot.quantity.minus(consumed);
-        lot.costInEur = lot.costInEur.minus(optionProceeds);
+        lot.costInEur = lot.costInEur.minus(optionPremiumEur);
         if (lot.quantity.isZero()) shortLots.shift();
         remaining = remaining.minus(consumed);
       }
