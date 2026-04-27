@@ -1785,7 +1785,7 @@ footer a:hover {
 
 .splash-brokers {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
   margin-bottom: 2rem;
@@ -1793,6 +1793,8 @@ footer a:hover {
 
 .splash-broker-tag {
   padding: 0.3rem 0.75rem;
+  min-width: 5.5rem;
+  text-align: center;
   background: var(--accent-subtle);
   border: 1px solid var(--tag-border);
   border-radius: 20px;
@@ -1899,7 +1901,19 @@ footer a:hover {
   }
 
   .splash-content {
-    padding: 1.5rem;
+    padding: 1.5rem 1rem;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  .splash-brokers {
+    gap: 0.4rem;
+    padding: 0 0.25rem;
+  }
+
+  .splash-broker-tag {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.55rem;
   }
 
   .splash-cta {
@@ -1909,7 +1923,12 @@ footer a:hover {
   }
 
   .splash-features {
-    gap: 0.5rem 1rem;
+    gap: 0.4rem 0.75rem;
+    padding: 0 0.5rem;
+  }
+
+  .splash-feature {
+    font-size: 0.8rem;
   }
 
   .top-bar-brand h1 {
@@ -2029,5 +2048,43 @@ footer a:hover {
 
   th.sortable {
     padding-right: 1rem;
+  }
+
+  .splash-title {
+    font-size: 2rem;
+  }
+
+  .splash-logo {
+    width: 110px;
+    height: 110px;
+    border-radius: 22px;
+  }
+
+  .splash-tagline {
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .splash-brokers {
+    gap: 0.35rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .splash-broker-tag {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.45rem;
+    min-width: 4.5rem;
+  }
+
+  .splash-features {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .splash-cta {
+    width: 100%;
+    max-width: 100%;
   }
 }
