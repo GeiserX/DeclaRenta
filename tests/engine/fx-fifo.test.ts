@@ -518,29 +518,6 @@ describe("FxFifoEngine", () => {
       expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
     });
 
-    it("should detect auto-convert via Signal 4: negligible non-EUR cash balances", () => {
-      const trades = [
-        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
-      ];
-      const cashBalances = [
-        { accountId: "U1", currency: "USD", endingCash: "0.50", endingSettledCash: "0.50" },
-        { accountId: "U1", currency: "EUR", endingCash: "10000", endingSettledCash: "10000" },
-      ];
-      expect(FxFifoEngine.detectAutoConvert(trades, cashBalances)).toBe(true);
-    });
-
-    it("should NOT trigger Signal 4 when non-EUR cash balances are significant", () => {
-      const trades = [
-        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
-        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "5000", currency: "USD" }),
-      ];
-      const cashBalances = [
-        { accountId: "U1", currency: "USD", endingCash: "5000", endingSettledCash: "5000" },
-      ];
-      // Manual CASH trade exists, so not auto-convert. Also balance > 10.
-      expect(FxFifoEngine.detectAutoConvert(trades, cashBalances)).toBe(false);
-    });
-
     it("should handle mixed scenario: AFx trades and manual trades in same account", () => {
       const trades = [
         // Auto FX conversion (AFx note)

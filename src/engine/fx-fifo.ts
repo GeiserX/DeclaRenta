@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { FxLot, FxDisposal, FxTrigger } from "../types/tax.js";
-import type { Trade, CashTransaction, CashBalance } from "../types/ibkr.js";
+import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
@@ -62,7 +62,7 @@ export class FxFifoEngine {
    * 3. Heuristic: non-EUR securities trades exist but zero manual CASH trades
    *    (user never converted manually → broker does it automatically)
    */
-  static detectAutoConvert(trades: Trade[], cashBalances?: CashBalance[]): boolean {
+  static detectAutoConvert(trades: Trade[]): boolean {
     // Signal 1+2: Explicit FXCONV markers in trade data
     if (trades.some((t) => t.assetCategory === "CASH" && FxFifoEngine.isFxconv(t))) {
       return true;
@@ -78,17 +78,6 @@ export class FxFifoEngine {
 
     if (hasNonEurSecurities && !hasManualCashTrades) {
       return true;
-    }
-
-    // Signal 4: CashBalance shows negligible non-EUR holdings at period end
-    // Only applies when no manual CASH trades exist (otherwise user holds real FCY)
-    if (cashBalances && cashBalances.length > 0 && hasNonEurSecurities && !hasManualCashTrades) {
-      const nonEurBalance = cashBalances
-        .filter((b) => b.currency !== "EUR" && b.currency !== "BASE_SUMMARY")
-        .reduce((sum, b) => sum.plus(new Decimal(b.endingCash).abs()), new Decimal(0));
-      if (nonEurBalance.lessThan(10)) {
-        return true;
-      }
     }
 
     return false;
@@ -108,8 +97,8 @@ export class FxFifoEngine {
    * Auto-convert accounts: only manual CASH conversions generate FX events.
    * Stock trades are settled instantly via FXCONV — no FX exposure.
    */
-  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap, cashBalances?: CashBalance[]): FxEvent[] {
-    const autoConvert = FxFifoEngine.detectAutoConvert(trades, cashBalances);
+  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
+    const autoConvert = FxFifoEngine.detectAutoConvert(trades);
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
