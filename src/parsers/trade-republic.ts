@@ -14,6 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import { parseCsvLine, stripBom } from "./csv-utils.js";
+import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
 
@@ -78,8 +79,8 @@ function num(fields: string[], col: number): number {
 }
 
 function dateToCompact(dateStr: string): string {
-  // "2025-05-15" → "20250515"
-  return dateStr.replace(/-/g, "");
+  // normalizeDate returns YYYY-MM-DD; we need YYYYMMDD for internal format
+  return normalizeDate(dateStr).replace(/-/g, "");
 }
 
 function mapAssetCategory(assetClass: string): string {
@@ -95,6 +96,16 @@ function mapAssetCategory(assetClass: string): string {
 function parseTrCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
   const cols = resolveColumns(headers);
+
+  const required: Array<[keyof TrColumns, string]> = [
+    ["date", "date"], ["category", "category"], ["type", "type"],
+    ["symbol", "symbol"], ["amount", "amount"], ["transactionId", "transaction_id"],
+  ];
+  for (const [key, label] of required) {
+    if (cols[key] === -1) {
+      throw new Error(`Trade Republic CSV: columna requerida "${label}" no encontrada`);
+    }
+  }
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
@@ -185,7 +196,7 @@ function parseTrCsv(lines: string[]): Statement {
       // Withholding tax (if present)
       if (tax !== 0) {
         cashTransactions.push({
-          transactionID: `${txId}-wht`,
+          transactionID: txId ? `${txId}-wht` : `tr-div-wht-${tradeDate}-${symbol}-${i}`,
           accountId: "",
           symbol: name,
           description: `${isinCountry} WHT - ${name}`,

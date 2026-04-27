@@ -13,7 +13,7 @@ const eu: TranslationKeys = {
   "upload.broker_label": "Brokerra:",
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
-  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
 
   "config.title": "Konfiguratu",
   "config.year_label": "Ekitaldi fiskala:",

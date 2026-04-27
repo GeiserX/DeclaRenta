@@ -12,7 +12,7 @@ const es = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
 
   // Config
   "config.title": "Configura",
