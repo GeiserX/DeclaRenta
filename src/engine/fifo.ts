@@ -51,7 +51,11 @@ export class FifoEngine {
       .sort((a, b) => {
         const cmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
         if (cmp !== 0) return cmp;
-        // Same date: process BUYs before SELLs so lots exist when sells consume them
+        // Same date: opens before closes (handles both longs and shorts correctly)
+        const phase = (t: Trade): number => t.openCloseIndicator === "O" ? 0 : t.openCloseIndicator === "C" ? 1 : 0;
+        const phaseCmp = phase(a) - phase(b);
+        if (phaseCmp !== 0) return phaseCmp;
+        // Within same phase: BUYs before SELLs to avoid "sell without lots" on longs
         if (a.buySell !== b.buySell) return a.buySell === "BUY" ? -1 : 1;
         return 0;
       });
