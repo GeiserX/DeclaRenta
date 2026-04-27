@@ -22,7 +22,7 @@ import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile } from "./profile.js";
-import { initBrokerGuides } from "./broker-guides.js";
+import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -350,9 +350,29 @@ async function parseFiles(): Promise<void> {
 
       const content = new TextDecoder("utf-8").decode(uint8);
       const selectedBroker = brokerSelect.value;
-      const parser = selectedBroker !== "auto"
+      let parser = selectedBroker !== "auto"
         ? getBroker(selectedBroker)
         : detectBroker(content);
+
+      // Fallback: if auto-detection failed, try parsers for brokers the user selected in the card grid
+      if (!parser) {
+        const selectedIds = getSelectedBrokerIds();
+        const alreadyParsed = new Set(brokerNames);
+        for (const id of selectedIds) {
+          const parserName = BROKER_ID_TO_PARSER[id];
+          if (!parserName || alreadyParsed.has(parserName)) continue;
+          const candidate = getBroker(parserName);
+          if (candidate) {
+            try {
+              candidate.parse(content);
+              parser = candidate;
+              break;
+            } catch {
+              // Parser threw — not this broker
+            }
+          }
+        }
+      }
 
       if (!parser) {
         throw new Error(

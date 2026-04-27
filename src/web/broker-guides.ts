@@ -82,6 +82,26 @@ function renderGuides(container: HTMLElement): void {
   container.innerHTML = guides;
 }
 
+/** Get the set of broker IDs currently selected by the user */
+export function getSelectedBrokerIds(): ReadonlySet<string> {
+  return selected;
+}
+
+/** Map card IDs to parser names for fallback detection */
+export const BROKER_ID_TO_PARSER: Record<string, string> = {
+  ibkr: "Interactive Brokers",
+  degiro: "Degiro",
+  scalable: "Scalable Capital",
+  etoro: "eToro",
+  freedom24: "Freedom24",
+  trade_republic: "Trade Republic",
+  revolut: "Revolut",
+  lightyear: "Lightyear",
+  coinbase: "Coinbase",
+  binance: "Binance",
+  kraken: "Kraken",
+};
+
 /** Initialize broker card grid + guides */
 export function initBrokerGuides(): void {
   const grid = document.getElementById("broker-card-grid");

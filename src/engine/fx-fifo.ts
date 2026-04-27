@@ -61,6 +61,9 @@ export class FxFifoEngine {
    * 2. exchange="FXCONV" on CASH-category trades
    * 3. Heuristic: non-EUR securities trades exist but zero manual CASH trades
    *    (user never converted manually → broker does it automatically)
+   * 4. Amount-correlation: all CASH trades on IDEALFX with amounts matching
+   *    same-day securities tradeMoney within 2% (broker converts exact amounts
+   *    needed for settlement). Requires ≥3 CASH trades and 90%+ matches.
    */
   static detectAutoConvert(trades: Trade[]): boolean {
     // Signal 1+2: Explicit FXCONV markers in trade data
@@ -78,6 +81,50 @@ export class FxFifoEngine {
 
     if (hasNonEurSecurities && !hasManualCashTrades) {
       return true;
+    }
+
+    // Signal 4: Amount-correlation heuristic for missing Notes/AFx marker.
+    // Auto-convert CASH trades have amounts that closely match same-day
+    // securities tradeMoney (broker converts exactly what's needed).
+    // Manual conversions are typically bulk round amounts unrelated to trades.
+    if (hasNonEurSecurities && hasManualCashTrades) {
+      const cashTrades = trades.filter(
+        (t) => t.assetCategory === "CASH" && !FxFifoEngine.isFxconv(t) && t.currency !== "EUR",
+      );
+      const allOnIdealfx = cashTrades.every(
+        (t) => (t.exchange || "").toUpperCase() === "IDEALFX",
+      );
+
+      if (allOnIdealfx && cashTrades.length >= 3) {
+        const nonEurStk = trades.filter(
+          (t) => t.assetCategory !== "CASH" && t.assetCategory !== "WAR" && t.currency !== "EUR",
+        );
+        let matchedCount = 0;
+        const usedStkIds = new Set<string>();
+
+        for (const cash of cashTrades) {
+          const cashDate = normalizeDate(cash.tradeDate);
+          const cashQty = new Decimal(cash.quantity).abs();
+
+          for (const stk of nonEurStk) {
+            if (usedStkIds.has(stk.tradeID)) continue;
+            if (normalizeDate(stk.tradeDate) !== cashDate) continue;
+            const stkMoney = new Decimal(stk.tradeMoney).abs();
+            if (stkMoney.isZero()) continue;
+
+            const ratio = cashQty.div(stkMoney);
+            if (ratio.gte("0.98") && ratio.lte("1.02")) {
+              matchedCount++;
+              usedStkIds.add(stk.tradeID);
+              break;
+            }
+          }
+        }
+
+        if (matchedCount / cashTrades.length >= 0.90) {
+          return true;
+        }
+      }
     }
 
     return false;
