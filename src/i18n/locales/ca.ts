@@ -57,7 +57,7 @@ const ca: TranslationKeys = {
   "casilla.fx_transmission_value": "Valor de transmissió FX (moneda estrangera)",
   "casilla.fx_acquisition_value": "Valor d'adquisició FX (moneda estrangera)",
   "casilla.fx_net_gain_loss": "Guany/Pèrdua net FX (moneda estrangera)",
-  "casilla.net_gain_loss": "Guany/Pèrdua net (total)",
+  "casilla.net_gain_loss": "Guany/Pèrdua net (transmissions)",
   "casilla.gross_dividends": "Dividends bruts",
   "casilla.interest_earned": "Interessos guanyats",
   "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble — informatiu)",
@@ -365,6 +365,11 @@ const ca: TranslationKeys = {
   "tax.effective_rate": "Tipus efectiu",
   "tax.double_tax_deduction": "Deducci\u00f3 doble imposici\u00f3",
   "tax.disclaimer": "Estimaci\u00f3 orientativa. Els trams corresponen a la base de l'estalvi de l'IRPF vigent. Consulta amb un assessor fiscal.",
+  "tax.breakdown_capital_gains": "Guanys patrimonials",
+  "tax.breakdown_fx_gains": "Guanys per tipus de canvi",
+  "tax.breakdown_dividends": "Dividends",
+  "tax.breakdown_interest": "Interessos",
+  "tax.breakdown_blocked_losses": "Pèrdues bloquejades (diferides)",
 };
 
 export default ca;

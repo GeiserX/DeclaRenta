@@ -16,7 +16,7 @@ import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
-import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
+import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard, type TaxBaseBreakdown } from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
@@ -636,12 +636,19 @@ function renderResults(report: TaxSummary) {
   const chartData = extractChartData(report);
   // netGainLoss includes wash-sale-blocked losses — add them back so they
   // don't reduce the taxable base (they are deferred, not deductible now).
+  const taxBaseBreakdown: TaxBaseBreakdown = {
+    capitalGains: report.capitalGains.netGainLoss.toNumber(),
+    fxGains: report.fxGains.netGainLoss.toNumber(),
+    dividends: report.dividends.grossIncome.toNumber(),
+    interest: report.interest.earned.toNumber(),
+    blockedLosses: report.capitalGains.blockedLosses.toNumber(),
+  };
   const taxableBase = Math.max(0,
-    report.capitalGains.netGainLoss.toNumber()
-    + report.capitalGains.blockedLosses.toNumber()
-    + report.fxGains.netGainLoss.toNumber()
-    + report.dividends.grossIncome.toNumber()
-    + report.interest.earned.toNumber()
+    taxBaseBreakdown.capitalGains
+    + taxBaseBreakdown.blockedLosses
+    + taxBaseBreakdown.fxGains
+    + taxBaseBreakdown.dividends
+    + taxBaseBreakdown.interest
   );
   const dtDeduction = report.doubleTaxation.deduction.toNumber();
   const chartsHtml = [
@@ -649,7 +656,7 @@ function renderResults(report: TaxSummary) {
     renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
-    renderTaxBracketCard(t("chart.tax_estimate"), taxableBase, dtDeduction),
+    renderTaxBracketCard(t("chart.tax_estimate"), taxableBase, dtDeduction, taxBaseBreakdown),
   ].filter(Boolean).join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;

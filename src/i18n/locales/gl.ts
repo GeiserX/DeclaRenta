@@ -57,7 +57,7 @@ const gl: TranslationKeys = {
   "casilla.fx_transmission_value": "Valor de transmisión FX (moeda estranxeira)",
   "casilla.fx_acquisition_value": "Valor de adquisición FX (moeda estranxeira)",
   "casilla.fx_net_gain_loss": "Ganancia/Perda neta FX (moeda estranxeira)",
-  "casilla.net_gain_loss": "Ganancia/Perda neta (total)",
+  "casilla.net_gain_loss": "Ganancia/Perda neta (transmisións)",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Xuros gañados",
   "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible — informativo)",
@@ -365,6 +365,11 @@ const gl: TranslationKeys = {
   "tax.effective_rate": "Tipo efectivo",
   "tax.double_tax_deduction": "Deduci\u00f3n dobre imposici\u00f3n",
   "tax.disclaimer": "Estimaci\u00f3n orientativa. Os tramos corresponden \u00e1 base do aforro do IRPF vixente. Consulta cun asesor fiscal.",
+  "tax.breakdown_capital_gains": "Ganancias patrimoniais",
+  "tax.breakdown_fx_gains": "Ganancias por tipo de cambio",
+  "tax.breakdown_dividends": "Dividendos",
+  "tax.breakdown_interest": "Xuros",
+  "tax.breakdown_blocked_losses": "Perdas bloqueadas (diferidas)",
 };
 
 export default gl;
