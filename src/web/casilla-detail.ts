@@ -158,14 +158,14 @@ const CASILLAS: CasillaConfig[] = [
     i18nKey: "casilla.fx_transmission_value",
     getValue: (r) => r.fxGains.transmissionValue.toFixed(2),
     getClass: () => "",
-    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value" as Parameters<typeof t>[0])),
+    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
   },
   {
     code: "1631",
     i18nKey: "casilla.fx_acquisition_value",
     getValue: (r) => r.fxGains.acquisitionValue.toFixed(2),
     getClass: () => "",
-    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value" as Parameters<typeof t>[0])),
+    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value")),
   },
   {
     code: "",

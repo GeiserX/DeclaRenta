@@ -20,14 +20,20 @@ export function formatCsv(report: TaxSummary): string {
 
   // Capital gains section
   lines.push("# GANANCIAS PATRIMONIALES");
-  lines.push("ISIN,Simbolo,Descripcion,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning");
+  lines.push("ISIN,Simbolo,Descripcion,Categoria,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning,Opcion_Escenario,Put_Call,Strike,Vencimiento,Subyacente");
   for (const d of report.capitalGains.disposals) {
     lines.push([
-      escapeCsv(d.isin), escapeCsv(d.symbol), escapeCsv(d.description), d.acquireDate, d.sellDate,
+      escapeCsv(d.isin), escapeCsv(d.symbol), escapeCsv(d.description),
+      escapeCsv(d.assetCategory), d.acquireDate, d.sellDate,
       d.quantity.toString(), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
       d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
       escapeCsv(d.currency), d.acquireEcbRate.toFixed(6), d.sellEcbRate.toFixed(6),
       d.washSaleBlocked ? "SI" : "NO",
+      escapeCsv(d.optionScenario ?? ""),
+      escapeCsv(d.putCall ?? ""),
+      escapeCsv(d.strike ?? ""),
+      escapeCsv(d.expiry ?? ""),
+      escapeCsv(d.underlyingSymbol ?? ""),
     ].join(","));
   }
 
