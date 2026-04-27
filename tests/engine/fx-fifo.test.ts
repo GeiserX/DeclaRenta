@@ -451,5 +451,132 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.trigger).toBe("conversion");
       expect(events[0]!.quantity.toString()).toBe("1000");
     });
+
+    it("should detect auto-convert when notes contains AFx", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should detect auto-convert when notes contains AFx in semicolon-separated values", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx;P", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should detect auto-convert when notes contains AFx with mixed case", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "afx", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should skip AFx-noted CASH trades in extractFxEvents", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "1000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      // AFx trade is recognized as FXCONV, skipped; also triggers auto-convert so no stock events
+      expect(events).toHaveLength(0);
+    });
+
+    it("should skip AFx;P-noted CASH trades in extractFxEvents", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx;P", buySell: "BUY", quantity: "500", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("should detect auto-convert when exchange is FXCONV", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", exchange: "FXCONV", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should NOT detect auto-convert when notes field is undefined", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", notes: undefined, currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
+    it("should NOT detect auto-convert when notes is empty string", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", notes: "", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
+    it("should NOT detect auto-convert when notes contains unrelated values like P", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", notes: "P", currency: "USD" }),
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
+    it("should detect auto-convert via Signal 4: negligible non-EUR cash balances", () => {
+      const trades = [
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
+      ];
+      const cashBalances = [
+        { accountId: "U1", currency: "USD", endingCash: "0.50", endingSettledCash: "0.50" },
+        { accountId: "U1", currency: "EUR", endingCash: "10000", endingSettledCash: "10000" },
+      ];
+      expect(FxFifoEngine.detectAutoConvert(trades, cashBalances)).toBe(true);
+    });
+
+    it("should NOT trigger Signal 4 when non-EUR cash balances are significant", () => {
+      const trades = [
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "5000", currency: "USD" }),
+      ];
+      const cashBalances = [
+        { accountId: "U1", currency: "USD", endingCash: "5000", endingSettledCash: "5000" },
+      ];
+      // Manual CASH trade exists, so not auto-convert. Also balance > 10.
+      expect(FxFifoEngine.detectAutoConvert(trades, cashBalances)).toBe(false);
+    });
+
+    it("should handle mixed scenario: AFx trades and manual trades in same account", () => {
+      const trades = [
+        // Auto FX conversion (AFx note)
+        makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "500", currency: "USD" }),
+        // Manual conversion (no AFx)
+        makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
+        // Stock trade
+        makeTrade({ tradeID: "3", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "800", currency: "USD" }),
+      ];
+      // AFx triggers auto-convert -> stock events suppressed, AFx CASH skipped, manual CASH preserved
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      // Only the manual conversion (trade 2) should generate an event
+      expect(events).toHaveLength(1);
+      expect(events[0]!.trigger).toBe("conversion");
+      expect(events[0]!.quantity.toString()).toBe("1000");
+    });
+
+    it("should produce zero FX gains when auto-convert account has only AFx trades", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "5000", currency: "USD" }),
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "3000", currency: "USD" }),
+        makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "SELL", tradeMoney: "3500", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      // All CASH trades are AFx (skipped), auto-convert detected so stock events suppressed
+      expect(events).toHaveLength(0);
+
+      const engine = new FxFifoEngine();
+      engine.processEvents(events);
+      expect(engine.getDisposals()).toHaveLength(0);
+      // Net FX gain = 0
+      const totalGain = engine.getDisposals().reduce(
+        (sum, d) => sum.plus(d.gainLossEur), new Decimal(0),
+      );
+      expect(totalGain.toFixed(2)).toBe("0.00");
+    });
   });
 });

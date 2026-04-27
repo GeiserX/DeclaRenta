@@ -81,7 +81,8 @@ export class FxFifoEngine {
     }
 
     // Signal 4: CashBalance shows negligible non-EUR holdings at period end
-    if (cashBalances && cashBalances.length > 0 && hasNonEurSecurities) {
+    // Only applies when no manual CASH trades exist (otherwise user holds real FCY)
+    if (cashBalances && cashBalances.length > 0 && hasNonEurSecurities && !hasManualCashTrades) {
       const nonEurBalance = cashBalances
         .filter((b) => b.currency !== "EUR" && b.currency !== "BASE_SUMMARY")
         .reduce((sum, b) => sum.plus(new Decimal(b.endingCash).abs()), new Decimal(0));
@@ -195,7 +196,9 @@ export class FxFifoEngine {
   private static isFxconv(trade: Trade): boolean {
     const desc = (trade.description || "").toUpperCase();
     const exch = (trade.exchange || "").toUpperCase();
-    return desc.includes("FXCONV") || desc.includes("CASH RECEIPTS") || desc.includes("CASH DISBURSEMENTS") || exch === "FXCONV";
+    const notes = (trade.notes || "").toUpperCase().split(";");
+    return desc.includes("FXCONV") || desc.includes("CASH RECEIPTS") || desc.includes("CASH DISBURSEMENTS")
+      || exch === "FXCONV" || notes.includes("AFX");
   }
 
   private addLot(event: FxEvent): void {

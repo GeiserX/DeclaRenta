@@ -46,6 +46,8 @@ export interface Trade {
   multiplier: string;
   /** Optional: which broker produced this trade (for cross-broker reports) */
   brokerSource?: string;
+  /** IBKR notes field (e.g. "AFx" = Automatic FX, "P" = partial) */
+  notes?: string;
   /** Option put/call indicator */
   putCall?: "P" | "C";
   /** Option/future strike price */
