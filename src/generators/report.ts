@@ -99,8 +99,8 @@ export function generateTaxReport(
   // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
   // Auto-convert accounts (FXCONV present) don't hold FCY — no implicit FX events from trades
   const fxEngine = new FxFifoEngine();
-  const autoConvert = FxFifoEngine.detectAutoConvert(statement.trades);
-  const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
+  const autoConvert = FxFifoEngine.detectAutoConvert(statement.trades, statement.cashBalances);
+  const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, statement.cashBalances);
   const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap, autoConvert);
   const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
   const fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
