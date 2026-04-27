@@ -195,6 +195,11 @@ npm run typecheck     # TypeScript
 node dist/cli.js convert --input test.xml --year 2025
 ```
 
+## Comunidad y soporte
+
+- [**GitHub Issues**](https://github.com/GeiserX/DeclaRenta/issues) — bugs, feature requests, preguntas técnicas (preferido)
+- [**Telegram @declarenta**](https://t.me/declarenta) — canal de novedades y discusión
+
 ## Contribuir
 
 Las contribuciones son bienvenidas. Áreas donde más ayuda se necesita:
