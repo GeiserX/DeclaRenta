@@ -621,17 +621,17 @@ export class FifoEngine {
       const multiplier = new Decimal(ex.multiplier || "100");
 
       if (ex.action === "Expiration") {
-        this.processOptionExpiration(ex, date, ecbRate, quantity, multiplier);
+        this.processOptionExpiration(ex, date, ecbRate, quantity);
       } else {
         // Exercise or Assignment — both produce same tax treatment
-        this.processOptionExercise(ex, date, ecbRate, quantity, multiplier, rateMap);
+        this.processOptionExercise(ex, date, ecbRate, quantity, multiplier);
       }
     }
   }
 
   private processOptionExpiration(
     ex: OptionExercise, date: string, ecbRate: Decimal,
-    quantity: Decimal, _multiplier: Decimal,
+    quantity: Decimal,
   ): void {
     const optionKey = ex.isin || `OPT:${ex.symbol}`;
 
@@ -729,7 +729,7 @@ export class FifoEngine {
 
   private processOptionExercise(
     ex: OptionExercise, date: string, ecbRate: Decimal,
-    quantity: Decimal, multiplier: Decimal, _rateMap: EcbRateMap,
+    quantity: Decimal, multiplier: Decimal,
   ): void {
     const optionKey = ex.isin || `OPT:${ex.symbol}`;
     const strike = new Decimal(ex.strike);
