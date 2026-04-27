@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { FxLot, FxDisposal, FxTrigger } from "../types/tax.js";
-import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { Trade, CashTransaction, CashBalance } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
@@ -55,9 +55,42 @@ export class FxFifoEngine {
    * If FXCONV trades exist, the broker converts FCY instantly on each trade —
    * the user never holds FCY between operations, so securities trades
    * don't generate independent FX exposure.
+   *
+   * Detection uses multiple signals (any one triggers auto-convert):
+   * 1. FXCONV/CASH RECEIPTS/DISBURSEMENTS in trade descriptions
+   * 2. exchange="FXCONV" on CASH-category trades
+   * 3. Heuristic: non-EUR securities trades exist but zero manual CASH trades
+   *    (user never converted manually → broker does it automatically)
    */
-  static detectAutoConvert(trades: Trade[]): boolean {
-    return trades.some((t) => t.assetCategory === "CASH" && FxFifoEngine.isFxconv(t));
+  static detectAutoConvert(trades: Trade[], cashBalances?: CashBalance[]): boolean {
+    // Signal 1+2: Explicit FXCONV markers in trade data
+    if (trades.some((t) => t.assetCategory === "CASH" && FxFifoEngine.isFxconv(t))) {
+      return true;
+    }
+
+    // Signal 3: Heuristic — non-EUR stock trades exist but no manual CASH trades at all
+    const hasNonEurSecurities = trades.some(
+      (t) => t.currency !== "EUR" && t.assetCategory !== "CASH" && t.assetCategory !== "WAR",
+    );
+    const hasManualCashTrades = trades.some(
+      (t) => t.assetCategory === "CASH" && !FxFifoEngine.isFxconv(t),
+    );
+
+    if (hasNonEurSecurities && !hasManualCashTrades) {
+      return true;
+    }
+
+    // Signal 4: CashBalance shows negligible non-EUR holdings at period end
+    if (cashBalances && cashBalances.length > 0 && hasNonEurSecurities) {
+      const nonEurBalance = cashBalances
+        .filter((b) => b.currency !== "EUR" && b.currency !== "BASE_SUMMARY")
+        .reduce((sum, b) => sum.plus(new Decimal(b.endingCash).abs()), new Decimal(0));
+      if (nonEurBalance.lessThan(10)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -74,8 +107,8 @@ export class FxFifoEngine {
    * Auto-convert accounts: only manual CASH conversions generate FX events.
    * Stock trades are settled instantly via FXCONV — no FX exposure.
    */
-  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
-    const autoConvert = FxFifoEngine.detectAutoConvert(trades);
+  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap, cashBalances?: CashBalance[]): FxEvent[] {
+    const autoConvert = FxFifoEngine.detectAutoConvert(trades, cashBalances);
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
@@ -161,7 +194,8 @@ export class FxFifoEngine {
   /** Detect FXCONV (automatic broker conversions for settlement) */
   private static isFxconv(trade: Trade): boolean {
     const desc = (trade.description || "").toUpperCase();
-    return desc.includes("FXCONV") || desc.includes("CASH RECEIPTS") || desc.includes("CASH DISBURSEMENTS");
+    const exch = (trade.exchange || "").toUpperCase();
+    return desc.includes("FXCONV") || desc.includes("CASH RECEIPTS") || desc.includes("CASH DISBURSEMENTS") || exch === "FXCONV";
   }
 
   private addLot(event: FxEvent): void {
