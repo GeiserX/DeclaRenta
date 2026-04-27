@@ -12,7 +12,7 @@
  */
 
 import type { BrokerParser, Statement } from "../types/broker.js";
-import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import { parseCsvLine, stripBom } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
@@ -83,7 +83,7 @@ function dateToCompact(dateStr: string): string {
   return normalizeDate(dateStr).replace(/-/g, "");
 }
 
-function mapAssetCategory(assetClass: string): string {
+function mapAssetCategory(assetClass: string): AssetCategory {
   switch (assetClass.toUpperCase()) {
     case "STOCK": return "STK";
     case "FUND": return "FUND";
