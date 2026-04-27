@@ -13,7 +13,7 @@ const gl: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
 
   "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",

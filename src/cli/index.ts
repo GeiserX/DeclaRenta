@@ -53,7 +53,7 @@ const program = new Command();
 
 program
   .name("declarenta")
-  .description("Convert foreign broker reports (IBKR, Degiro, Scalable Capital, eToro, Freedom24) into Spanish tax declarations (Modelo 100, 720, D-6)")
+  .description("Convert foreign broker reports (IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken) into Spanish tax declarations (Modelo 100, 720, D-6)")
   .version(pkg.version);
 
 // ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ async function parseAndMerge(
 
 program
   .command("convert")
-  .description("Convert broker reports to Modelo 100 casilla values. Supports: IBKR, Degiro, Scalable Capital, eToro, Freedom24")
+  .description("Convert broker reports to Modelo 100 casilla values. Supports: IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken")
   .requiredOption("-i, --input <files...>", "Broker report file(s). Pass multiple for cross-year FIFO or cross-broker")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .option("-o, --output <file>", "Output file. Defaults to stdout")
