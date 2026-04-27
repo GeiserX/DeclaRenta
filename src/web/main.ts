@@ -594,7 +594,7 @@ function renderResults(report: TaxSummary) {
   const yearHeader = document.getElementById("results-year-header");
   if (yearHeader) {
     const year = report.year;
-    const hasData = report.capitalGains.disposals.length > 0 || report.dividends.entries.length > 0;
+    const hasData = report.capitalGains.disposals.length > 0 || report.fxGains.disposals.length > 0 || report.dividends.entries.length > 0;
 
     const yearOptions = (detectedYears.length > 0 ? detectedYears : [year])
       .slice().sort((a, b) => a - b)
@@ -639,6 +639,7 @@ function renderResults(report: TaxSummary) {
   const taxableBase = Math.max(0,
     report.capitalGains.netGainLoss.toNumber()
     + report.capitalGains.blockedLosses.toNumber()
+    + report.fxGains.netGainLoss.toNumber()
     + report.dividends.grossIncome.toNumber()
     + report.interest.earned.toNumber()
   );

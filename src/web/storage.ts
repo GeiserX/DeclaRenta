@@ -19,6 +19,7 @@ export interface StoredReport {
     acquisitionValue: number;
     netGainLoss: number;
     blockedLosses: number;
+    fxNetGainLoss: number;
     grossDividends: number;
     interestEarned: number;
     interestPaid: number;
@@ -27,6 +28,7 @@ export interface StoredReport {
   /** Summary stats */
   stats: {
     disposalsCount: number;
+    fxDisposalsCount: number;
     dividendsCount: number;
     warningsCount: number;
     currencies: string[];

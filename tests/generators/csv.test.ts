@@ -88,6 +88,12 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
       deduction: new Decimal(7.5),
       byCountry: {},
     },
+    fxGains: {
+      transmissionValue: new Decimal(0),
+      acquisitionValue: new Decimal(0),
+      netGainLoss: new Decimal(0),
+      disposals: [],
+    },
     ...overrides,
   };
 }

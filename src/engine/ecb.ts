@@ -2,8 +2,8 @@
  * ECB exchange rate fetcher.
  *
  * Fetches official ECB daily reference rates via the SDMX REST API.
- * Spanish tax law requires using official exchange rates (Art. 47 LGT,
- * DGT consultas vinculantes), not broker-provided rates.
+ * DGT consultas vinculantes (V2324-10, V0583-16) require "tipo de cambio
+ * vigente" — ECB daily rates serve as the safe-harbor official source.
  */
 
 import Decimal from "decimal.js";

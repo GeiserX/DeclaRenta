@@ -11,6 +11,7 @@ import type { FlexStatement } from "../types/ibkr.js";
 import type { TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
+import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
@@ -89,7 +90,16 @@ export function generateTaxReport(
     };
   });
 
-  // 4. Double taxation
+  // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
+  const fxEngine = new FxFifoEngine();
+  const fxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
+  const allFxDisposals = fxEngine.processEvents(fxEvents);
+  const fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
+
+  const fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
+  const fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+
+  // 5. Double taxation
   const doubleTaxation = calculateDoubleTaxation(dividendEntries);
 
   // Filter warnings to those relevant to the selected year
@@ -99,8 +109,14 @@ export function generateTaxReport(
     return dateMatch[1] === yearStr;
   });
 
+  const fxWarnings = fxEngine.warnings.filter((w) => {
+    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+    if (!dateMatch) return true;
+    return dateMatch[1] === yearStr;
+  });
+
   // Prepend parser warnings (unparsed sections, etc.)
-  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings];
+  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarnings];
 
   return {
     year,
@@ -125,6 +141,12 @@ export function generateTaxReport(
     doubleTaxation: {
       deduction: doubleTaxation.total,
       byCountry: doubleTaxation.byCountry,
+    },
+    fxGains: {
+      transmissionValue: fxTransmissionValue,
+      acquisitionValue: fxAcquisitionValue,
+      netGainLoss: fxTransmissionValue.minus(fxAcquisitionValue),
+      disposals: fxDisposals,
     },
   };
 }

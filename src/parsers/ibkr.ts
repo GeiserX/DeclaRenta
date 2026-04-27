@@ -80,7 +80,6 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
   const importantUnparsed: Record<string, string> = {
-    FXTransactions: "operaciones forex (FX P&L standalone)",
     OptionEAE: "ejercicios y asignaciones de opciones",
     TransfersInTransit: "transferencias en tránsito",
     UnbookedTrades: "operaciones no liquidadas",

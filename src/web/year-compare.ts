@@ -35,6 +35,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
       acquisitionValue: report.capitalGains.acquisitionValue.toNumber(),
       netGainLoss: report.capitalGains.netGainLoss.toNumber(),
       blockedLosses: report.capitalGains.blockedLosses.toNumber(),
+      fxNetGainLoss: report.fxGains.netGainLoss.toNumber(),
       grossDividends: report.dividends.grossIncome.toNumber(),
       interestEarned: report.interest.earned.toNumber(),
       interestPaid: report.interest.paid.toNumber(),
@@ -42,6 +43,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
     },
     stats: {
       disposalsCount: report.capitalGains.disposals.length,
+      fxDisposalsCount: report.fxGains.disposals.length,
       dividendsCount: report.dividends.entries.length,
       warningsCount: report.warnings.length,
       currencies: [...currencies],
@@ -81,6 +83,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   { label: "casilla.transmission_value", key: "transmissionValue" },
   { label: "casilla.acquisition_value", key: "acquisitionValue" },
   { label: "casilla.net_gain_loss", key: "netGainLoss" },
+  { label: "casilla.fx_net_gain_loss", key: "fxNetGainLoss" },
   { label: "casilla.gross_dividends", key: "grossDividends" },
   { label: "casilla.interest_earned", key: "interestEarned" },
   { label: "casilla.interest_paid", key: "interestPaid" },

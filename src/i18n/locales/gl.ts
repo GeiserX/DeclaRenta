@@ -54,7 +54,10 @@ const gl: TranslationKeys = {
 
   "casilla.transmission_value": "Valor de transmisión",
   "casilla.acquisition_value": "Valor de adquisición",
-  "casilla.net_gain_loss": "Ganancia/Perda neta",
+  "casilla.fx_transmission_value": "Valor de transmisión FX (moeda estranxeira)",
+  "casilla.fx_acquisition_value": "Valor de adquisición FX (moeda estranxeira)",
+  "casilla.fx_net_gain_loss": "Ganancia/Perda neta FX (moeda estranxeira)",
+  "casilla.net_gain_loss": "Ganancia/Perda neta (total)",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Xuros gañados",
   "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible — informativo)",

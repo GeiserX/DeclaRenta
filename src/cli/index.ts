@@ -433,12 +433,16 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       "0033_intereses_cuentas": report.interest.earned.toFixed(2),
       "0327_valor_transmision": report.capitalGains.transmissionValue.toFixed(2),
       "0328_valor_adquisicion": report.capitalGains.acquisitionValue.toFixed(2),
+      "1626_valor_transmision_fx": report.fxGains.transmissionValue.toFixed(2),
+      "1631_valor_adquisicion_fx": report.fxGains.acquisitionValue.toFixed(2),
       "0588_deduccion_doble_imposicion": report.doubleTaxation.deduction.toFixed(2),
     },
     resumen: {
       ganancia_neta: report.capitalGains.netGainLoss.toFixed(2),
       perdidas_bloqueadas_antichurning: report.capitalGains.blockedLosses.toFixed(2),
+      ganancia_neta_fx: report.fxGains.netGainLoss.toFixed(2),
       num_operaciones: report.capitalGains.disposals.length,
+      num_operaciones_fx: report.fxGains.disposals.length,
       num_dividendos: report.dividends.entries.length,
     },
     doble_imposicion_por_pais: Object.fromEntries(
@@ -465,6 +469,17 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       tipo_ecb_venta: d.sellEcbRate.toFixed(6),
       bloqueada_antichurning: d.washSaleBlocked,
     })),
+    operaciones_fx: report.fxGains.disposals.map((d) => ({
+      divisa: d.currency,
+      fecha_venta: d.disposeDate,
+      fecha_compra: d.acquireDate,
+      cantidad: d.quantity.toString(),
+      importe_venta_eur: d.proceedsEur.toFixed(2),
+      coste_eur: d.costBasisEur.toFixed(2),
+      ganancia_eur: d.gainLossEur.toFixed(2),
+      dias_tenencia: d.holdingPeriodDays,
+      origen: d.trigger,
+    })),
     dividendos: report.dividends.entries.map((d) => ({
       isin: d.isin,
       simbolo: d.symbol,
@@ -488,6 +503,13 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error(`    Ganancia/Pérdida neta:             ${report.capitalGains.netGainLoss.toFixed(2)} EUR`);
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
+  }
+  if (report.fxGains.disposals.length > 0) {
+    console.error("");
+    console.error("  GANANCIAS FX — MONEDA EXTRANJERA (Art. 37.1.l)");
+    console.error(`    Casilla 1626 (Valor transmisión):  ${report.fxGains.transmissionValue.toFixed(2)} EUR`);
+    console.error(`    Casilla 1631 (Valor adquisición):  ${report.fxGains.acquisitionValue.toFixed(2)} EUR`);
+    console.error(`    Ganancia/Pérdida neta FX:          ${report.fxGains.netGainLoss.toFixed(2)} EUR`);
   }
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");

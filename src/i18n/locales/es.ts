@@ -57,7 +57,10 @@ const es = {
   // Casillas
   "casilla.transmission_value": "Valor de transmisión",
   "casilla.acquisition_value": "Valor de adquisición",
-  "casilla.net_gain_loss": "Ganancia/Pérdida neta",
+  "casilla.fx_transmission_value": "Valor de transmisión FX (moneda extranjera)",
+  "casilla.fx_acquisition_value": "Valor de adquisición FX (moneda extranjera)",
+  "casilla.fx_net_gain_loss": "Ganancia/Pérdida neta FX (moneda extranjera)",
+  "casilla.net_gain_loss": "Ganancia/Pérdida neta (total)",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Intereses ganados",
   "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible — informativo)",
