@@ -354,7 +354,7 @@ export class FifoEngine {
       costInEur,
       currency: trade.currency,
       ecbRate,
-      ...(trade.assetCategory === "OPT" ? {
+      ...(trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP" ? {
         putCall: trade.putCall,
         strike: trade.strike,
         expiry: trade.expiry,
@@ -448,7 +448,7 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: trade.assetCategory,
         washSaleBlocked: false, // Set later by wash sale detection
-        ...(trade.assetCategory === "OPT" ? {
+        ...(trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP" ? {
           optionScenario: "close",
           putCall: trade.putCall ?? lot.putCall,
           strike: trade.strike ?? lot.strike,

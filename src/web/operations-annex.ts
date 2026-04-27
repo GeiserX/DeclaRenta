@@ -11,6 +11,8 @@ const ASSET_LABELS: Record<string, string> = {
   STK: "Acciones cotizadas",
   FUND: "Fondos / ETFs",
   OPT: "Opciones (Art. 37.1.m LIRPF)",
+  FOP: "Opciones sobre futuros",
+  FSFOP: "Opciones sobre futuros",
   CRYPTO: "Criptomonedas",
   BOND: "Bonos",
 };
