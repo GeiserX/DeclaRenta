@@ -961,6 +961,12 @@ export class FifoEngine {
         acquireEcbRate: ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        optionScenario: "exercise",
+        putCall: ex.putCall,
+        strike: ex.strike,
+        expiry: ex.expiry,
+        underlyingSymbol: ex.underlyingSymbol,
+        underlyingIsin: ex.underlyingIsin,
       });
       return;
     }
@@ -990,6 +996,12 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        optionScenario: "exercise",
+        putCall: ex.putCall,
+        strike: ex.strike,
+        expiry: ex.expiry,
+        underlyingSymbol: ex.underlyingSymbol,
+        underlyingIsin: ex.underlyingIsin,
       });
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -1018,6 +1030,12 @@ export class FifoEngine {
         acquireEcbRate: ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        optionScenario: "exercise",
+        putCall: ex.putCall,
+        strike: ex.strike,
+        expiry: ex.expiry,
+        underlyingSymbol: ex.underlyingSymbol,
+        underlyingIsin: ex.underlyingIsin,
       });
     }
   }

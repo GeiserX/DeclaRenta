@@ -246,7 +246,7 @@ function mapOptionExercise(raw: Record<string, string>): OptionExercise | null {
     currency: raw.currency ?? "",
     date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
     action: mappedAction,
-    putCall: raw.putCall === "P" ? "P" : "C",
+    putCall: raw.putCall?.toUpperCase() === "P" ? "P" : raw.putCall?.toUpperCase() === "C" ? "C" : "C",
     strike: raw.strike,
     expiry: raw.expiry ?? "",
     quantity: raw.quantity ?? "0",

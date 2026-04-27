@@ -178,8 +178,9 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
 
           doc.fontSize(FONT_SIZE.small).fillColor(COLORS.text);
           doc.text(d.isin, cols[0]!.x, rowY + 2, { width: cols[0]!.w });
+          const scenarioTag = d.optionScenario === "expiration" ? "EXP" : d.optionScenario === "exercise" ? "EJ" : "CL";
           const symbolLabel = d.optionScenario
-            ? `${d.symbol.slice(0, 7)} [${d.optionScenario === "expiration" ? "EXP" : d.optionScenario === "exercise" ? "EJ" : "CL"}]`
+            ? `${(d.underlyingSymbol ?? d.symbol).slice(0, 6)}${d.putCall ?? ""} [${scenarioTag}]`
             : d.symbol.slice(0, 10);
           doc.text(symbolLabel, cols[1]!.x, rowY + 2, { width: cols[1]!.w });
           doc.text(formatDate(d.acquireDate), cols[2]!.x, rowY + 2, { width: cols[2]!.w });
