@@ -102,12 +102,13 @@ export function renderMonthlyGainLossChart(title: string, monthly: MonthlyBar[])
     1,
   );
 
-  const chartW = 380, chartH = 160, barW = 26;
+  const chartW = 400, chartH = 160, barW = 24, gap = 4;
   const baseY = chartH / 2;
   const scale = (baseY - 10) / maxAbs;
+  const offsetX = (chartW - monthly.length * (barW + gap)) / 2;
 
   const bars = monthly.map((m, i) => {
-    const x = 30 + i * (barW + 4);
+    const x = offsetX + i * (barW + gap);
     const gainH = m.gain * scale;
     const lossH = Math.abs(m.loss) * scale;
     return `
@@ -223,8 +224,7 @@ export function extractChartData(report: {
     else entry.loss += gl;
   }
   const monthlyGainLoss = MONTHS
-    .filter((m) => monthMap.has(m))
-    .map((month) => ({ month, ...monthMap.get(month)! }));
+    .map((month) => ({ month, ...(monthMap.get(month) ?? { gain: 0, loss: 0 }) }));
 
   return { assetDistribution, currencyComposition, withholdingsByCountry, monthlyGainLoss };
 }
