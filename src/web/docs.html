@@ -434,7 +434,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
           <li>Inicia sesión en <strong>Client Portal</strong> o <strong>Account Management</strong>.</li>
           <li>Ve a <em>Informes &gt; Flex Queries</em> (o <em>Reports &gt; Flex Queries</em>).</li>
           <li>Crea una nueva Flex Query de tipo <strong>Activity Flex Query</strong>.</li>
-          <li>En las secciones, activa: <strong>Trades</strong>, <strong>Cash Transactions</strong>, <strong>Corporate Actions</strong>, <strong>Open Positions</strong> y <strong>Securities Info</strong>.</li>
+          <li>En las secciones, activa <strong>todas las disponibles</strong> (recomendado). Como mínimo: <strong>Trades</strong>, <strong>Cash Transactions</strong>, <strong>Corporate Actions</strong>, <strong>Open Positions</strong>, <strong>Securities Info</strong> y <strong>Cash Report</strong>. Activar todas las secciones permite a DeclaRenta procesar operaciones forex, ejercicios de opciones y saldos en cuenta.</li>
           <li>Selecciona el período que cubra todos los ejercicios necesarios (incluye ejercicios anteriores si tienes posiciones abiertas de años previos, para que FIFO funcione correctamente).</li>
           <li>Formato de salida: <strong>XML</strong>.</li>
           <li>Ejecuta la query y descarga el fichero <code>.xml</code>.</li>
@@ -898,9 +898,14 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>Los contratos de futuros se procesan con FIFO por símbolo, aplicando el multiplicador del contrato. Las ganancias y pérdidas tributan como ganancias patrimoniales en la base del ahorro.</p>
         <p class="muted">La regla anti-churning no se aplica a futuros.</p>
 
-        <h3>Forex (CASH)</h3>
-        <p>Las operaciones de compraventa de divisas (forex spot) tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 37.1.l LIRPF). Actualmente, DeclaRenta <strong>excluye</strong> la categoría CASH del motor FIFO porque las ganancias/pérdidas por tipo de cambio ya están implícitas en la conversión EUR de cada operación de valores.</p>
-        <p>Las conversiones de divisa standalone (comprar USD para depositar y venderlos meses después) generan su propia ganancia o pérdida patrimonial que debe declararse en las casillas 1626/1631. Esta funcionalidad está pendiente de implementación: distinguir entre FXCONV (conversiones automáticas del broker) y operaciones de trading FX independientes.</p>
+        <h3>Forex (CASH) — Art. 37.1.l LIRPF</h3>
+        <p>Las operaciones de compraventa de divisas tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 37.1.l LIRPF). DeclaRenta implementa un <strong>motor FX FIFO independiente</strong> que genera dos eventos fiscales al operar en divisa extranjera:</p>
+        <ol>
+          <li><strong>Ganancia/pérdida del valor</strong> (casillas 0327/0328): calculada sobre el precio del activo × tipo ECB en cada fecha.</li>
+          <li><strong>Ganancia/pérdida FX</strong> (casillas 1626/1631): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.</li>
+        </ol>
+        <p>Cada adquisición de divisa extranjera (depósito EUR→USD, venta de acciones que genera USD) crea un lote en la cola FIFO de esa divisa. Cada disposición (conversión USD→EUR, compra de acciones en USD) consume lotes por orden cronológico.</p>
+        <p>Las conversiones automáticas del broker para liquidación (FXCONV) se excluyen automáticamente — solo las operaciones de forex deliberadas generan eventos fiscales.</p>
         <p class="muted">La regla anti-churning no se aplica a operaciones forex.</p>
 
         <h3>Bonos y renta fija (BOND)</h3>
@@ -1074,8 +1079,8 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
                 <td>Deducción por doble imposición internacional: menor entre impuesto pagado en origen y cuota española.</td>
               </tr>
               <tr>
-                <td>Art. 47 LGT</td>
-                <td>Tipos de cambio: obligación de usar tipos oficiales (BCE) para la conversión de moneda extranjera.</td>
+                <td>PGC NRV 11a / DGT V0583-16</td>
+                <td>Tipos de cambio: el BCE constituye la referencia oficial para la conversión de moneda extranjera (safe harbor).</td>
               </tr>
               <tr>
                 <td>Ley 7/2024</td>

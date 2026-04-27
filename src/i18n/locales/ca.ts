@@ -54,7 +54,10 @@ const ca: TranslationKeys = {
 
   "casilla.transmission_value": "Valor de transmissió",
   "casilla.acquisition_value": "Valor d'adquisició",
-  "casilla.net_gain_loss": "Guany/Pèrdua net",
+  "casilla.fx_transmission_value": "Valor de transmissió FX (moneda estrangera)",
+  "casilla.fx_acquisition_value": "Valor d'adquisició FX (moneda estrangera)",
+  "casilla.fx_net_gain_loss": "Guany/Pèrdua net FX (moneda estrangera)",
+  "casilla.net_gain_loss": "Guany/Pèrdua net (total)",
   "casilla.gross_dividends": "Dividends bruts",
   "casilla.interest_earned": "Interessos guanyats",
   "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble — informatiu)",

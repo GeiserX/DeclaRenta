@@ -75,6 +75,12 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
         US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
       },
     },
+    fxGains: {
+      transmissionValue: new Decimal(0),
+      acquisitionValue: new Decimal(0),
+      netGainLoss: new Decimal(0),
+      disposals: [],
+    },
     ...overrides,
   };
 }

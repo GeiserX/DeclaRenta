@@ -54,7 +54,10 @@ const eu: TranslationKeys = {
 
   "casilla.transmission_value": "Transmisio-balioa",
   "casilla.acquisition_value": "Eskuratze-balioa",
-  "casilla.net_gain_loss": "Irabazi/Galera garbia",
+  "casilla.fx_transmission_value": "FX transmisio-balioa (atzerriko moneta)",
+  "casilla.fx_acquisition_value": "FX eskuratze-balioa (atzerriko moneta)",
+  "casilla.fx_net_gain_loss": "FX irabazi/galera garbia (atzerriko moneta)",
+  "casilla.net_gain_loss": "Irabazi/Galera garbia (guztira)",
   "casilla.gross_dividends": "Dibidendu gordinak",
   "casilla.interest_earned": "Jasotako interesak",
   "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria — informatiboa)",

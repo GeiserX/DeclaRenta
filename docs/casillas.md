@@ -15,6 +15,20 @@
 - Las pérdidas bloqueadas por la regla anti-churning (Art. 33.5.f LIRPF) se reportan por separado y no se incluyen en 0358 hasta que se vendan los valores recomprados.
 - Los impuestos de transacción (STT, FTT, SEC fees) se incluyen en el coste de adquisición (compras) y se deducen del valor de transmisión (ventas).
 
+## Base del ahorro — Ganancias por transmisión de moneda extranjera
+
+| Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
+|---------|----------|------------------------|------------------|
+| **1626** | Valor de transmisión (FX) | Σ cantidad_divisa_vendida × tipo_ECB_fecha_venta | Art. 37.1.l LIRPF |
+| **1631** | Valor de adquisición (FX) | Σ cantidad_divisa × tipo_ECB_fecha_adquisición, consumiendo lotes FIFO | Art. 37.1.l LIRPF |
+
+**Notas:**
+- Cada conversión EUR→FCY crea un lote en la cola FIFO de esa divisa (DGT V2324-10).
+- Cada disposición de divisa (FCY→EUR, o compra de valores en FCY) consume lotes por FIFO.
+- Las conversiones automáticas del broker (FXCONV) se excluyen: solo las operaciones deliberadas generan eventos fiscales.
+- No existe umbral mínimo (de minimis) — toda conversión es declarable.
+- La regla anti-churning (Art. 33.5.f) NO se aplica a divisas.
+
 ## Base del ahorro — Rendimientos del capital mobiliario
 
 | Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
@@ -26,7 +40,7 @@
 **Notas:**
 - Los dividendos incluyen tanto dividendos ordinarios como "Payment In Lieu of Dividends" (dividendos sustitutivos en operaciones de préstamo de valores).
 - Las retenciones extranjeras NO se deducen aquí — se declaran en la casilla 0588.
-- La conversión a EUR usa el tipo de cambio ECB oficial del día de pago (Art. 47 LGT).
+- La conversión a EUR usa el tipo de cambio ECB oficial del día de pago (DGT V0583-16, PGC NRV 11a).
 
 ## Deducciones
 
@@ -58,7 +72,7 @@ Las pérdidas bloqueadas se integran cuando se transmiten los valores que perman
 
 DeclaRenta usa exclusivamente los **tipos de cambio diarios del BCE** (European Central Bank), publicados a las 16:00 CET cada día TARGET. Para fines de semana y festivos, se utiliza el último tipo disponible (día hábil anterior).
 
-**Base legal:** Art. 47 LGT (Ley General Tributaria) y consultas vinculantes de la DGT (Dirección General de Tributos).
+**Base legal:** PGC NRV 11a (partidas monetarias en moneda extranjera) y consultas vinculantes de la DGT (V2324-10, V0583-16). No existe ningún artículo en la LGT que prescriba una fuente concreta de tipos de cambio; el BCE constituye un safe harbor por su carácter institucional.
 
 ## Método FIFO (Art. 37.2 LIRPF)
 
