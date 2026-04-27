@@ -122,7 +122,7 @@ function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string
     <table class="detail-table">
       <thead><tr>
         <th>${t("table.currency")}</th><th>${t("table.sell_date")}</th><th>${t("table.buy_date")}</th>
-        <th>${t("table.units")}</th><th>EUR</th>
+        <th>${t("table.units")}</th><th>EUR</th><th>Origen</th><th>Lote FIFO</th>
       </tr></thead>
       <tbody>${disposals.map((d) => `
         <tr>
@@ -131,6 +131,8 @@ function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string
           <td>${formatDate(d.acquireDate)}</td>
           <td>${d.quantity.toFixed(2)}</td>
           <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${d.gainLossEur.toFixed(2)}</td>
+          <td>${esc(d.trigger)}</td>
+          <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;

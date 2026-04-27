@@ -199,7 +199,7 @@ describe("FxFifoEngine", () => {
       expect(events).toHaveLength(0);
     });
 
-    it("should extract stock BUY as negative FX event (spending FCY)", () => {
+    it("should extract stock BUY as negative FX event (spending FCY) + commission", () => {
       const trades = [makeTrade({
         assetCategory: "STK",
         symbol: "AAPL",
@@ -210,12 +210,14 @@ describe("FxFifoEngine", () => {
       })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
-      expect(events).toHaveLength(1);
+      expect(events).toHaveLength(2);
       expect(events[0]!.quantity.toString()).toBe("-5000");
       expect(events[0]!.trigger).toBe("stock_purchase");
+      expect(events[1]!.quantity.toString()).toBe("-2");
+      expect(events[1]!.trigger).toBe("commission");
     });
 
-    it("should extract stock SELL as positive FX event (receiving FCY)", () => {
+    it("should extract stock SELL as positive FX event (receiving FCY) + commission", () => {
       const trades = [makeTrade({
         assetCategory: "STK",
         symbol: "AAPL",
@@ -226,9 +228,11 @@ describe("FxFifoEngine", () => {
       })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
-      expect(events).toHaveLength(1);
+      expect(events).toHaveLength(2);
       expect(events[0]!.quantity.toString()).toBe("6000");
       expect(events[0]!.trigger).toBe("stock_sale");
+      expect(events[1]!.quantity.toString()).toBe("-2");
+      expect(events[1]!.trigger).toBe("commission");
     });
 
     it("should skip EUR trades", () => {
@@ -271,6 +275,96 @@ describe("FxFifoEngine", () => {
       expect(remaining).toHaveLength(1);
       expect(remaining![0]!.quantity.toString()).toBe("1200");
       expect(remaining![0]!.costPerUnit.toString()).toBe("0.9");
+
+      // Verify lotId traceability
+      expect(disposals[0]!.lotId).toBe("FX-1");
+    });
+  });
+
+  describe("extractCashFxEvents", () => {
+    it("should extract dividend as positive FX event (acquiring FCY)", () => {
+      const txs = [{
+        transactionID: "1", accountId: "U1", symbol: "AAPL", description: "AAPL dividend",
+        isin: "US0378331005", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "100", fxRateToBase: "0.92", type: "Dividends" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("100");
+      expect(events[0]!.trigger).toBe("dividend");
+    });
+
+    it("should extract withholding tax as negative FX event (disposing FCY)", () => {
+      const txs = [{
+        transactionID: "2", accountId: "U1", symbol: "AAPL", description: "US WHT",
+        isin: "US0378331005", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "-15", fxRateToBase: "0.92", type: "Withholding Tax" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("-15");
+      expect(events[0]!.trigger).toBe("dividend");
+    });
+
+    it("should extract interest received as positive FX event", () => {
+      const txs = [{
+        transactionID: "3", accountId: "U1", symbol: "", description: "USD Interest",
+        isin: "", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "25", fxRateToBase: "0.92", type: "Broker Interest Received" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("25");
+      expect(events[0]!.trigger).toBe("interest");
+    });
+
+    it("should extract interest paid as negative FX event", () => {
+      const txs = [{
+        transactionID: "4", accountId: "U1", symbol: "", description: "USD Margin Interest",
+        isin: "", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "-10", fxRateToBase: "0.92", type: "Broker Interest Paid" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("-10");
+      expect(events[0]!.trigger).toBe("interest");
+    });
+
+    it("should skip EUR transactions", () => {
+      const txs = [{
+        transactionID: "5", accountId: "U1", symbol: "VWCE", description: "VWCE dividend",
+        isin: "IE00BK5BQT80", currency: "EUR", dateTime: "20250315",
+        settleDate: "20250317", amount: "50", fxRateToBase: "1", type: "Dividends" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("should extract fees as negative FX event", () => {
+      const txs = [{
+        transactionID: "6", accountId: "U1", symbol: "", description: "Other fee",
+        isin: "", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "-5", fxRateToBase: "0.92", type: "Other Fees" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("-5");
+      expect(events[0]!.trigger).toBe("commission");
+    });
+  });
+
+  describe("lotId traceability", () => {
+    it("should assign unique lot IDs and reference them in disposals", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        makeEvent({ date: "2025-03-15", quantity: new Decimal(1000), ecbRate: new Decimal("0.92") }),
+        makeEvent({ date: "2025-06-15", quantity: new Decimal(500), ecbRate: new Decimal("0.95") }),
+        makeEvent({ date: "2025-09-01", quantity: new Decimal(-1200), ecbRate: new Decimal("0.90") }),
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals[0]!.lotId).toBe("FX-1");
+      expect(disposals[1]!.lotId).toBe("FX-2");
     });
   });
 });
