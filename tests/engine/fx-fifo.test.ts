@@ -536,6 +536,46 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.quantity.toString()).toBe("1000");
     });
 
+    it("should detect auto-convert via amount correlation (Signal 4, missing Notes field)", () => {
+      // Simulates Armando's case: EUR-base account, Notes not exported, but CASH amounts
+      // closely match securities tradeMoney on the same date
+      const trades = [
+        makeTrade({ tradeID: "c1", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "5002", tradeMoney: "5002", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "c2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "3251", tradeMoney: "3251", currency: "USD", tradeDate: "20250411" }),
+        makeTrade({ tradeID: "c3", assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "6001", tradeMoney: "6001", currency: "USD", tradeDate: "20250415" }),
+        makeTrade({ tradeID: "s1", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "s2", assetCategory: "STK", symbol: "MSFT", buySell: "BUY", tradeMoney: "3250", currency: "USD", tradeDate: "20250411" }),
+        makeTrade({ tradeID: "s3", assetCategory: "STK", symbol: "AAPL", buySell: "SELL", tradeMoney: "6000", currency: "USD", tradeDate: "20250415" }),
+      ];
+      // All CASH on IDEALFX (default), amounts within 2% of STK tradeMoney → auto-convert
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
+    });
+
+    it("should NOT detect auto-convert when CASH amounts don't correlate with securities", () => {
+      // Manual bulk conversion: user converts 20000 USD, then trades over multiple days
+      const trades = [
+        makeTrade({ tradeID: "c1", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "20000", tradeMoney: "20000", currency: "USD", tradeDate: "20250401" }),
+        makeTrade({ tradeID: "c2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "15000", tradeMoney: "15000", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "c3", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "10000", tradeMoney: "10000", currency: "USD", tradeDate: "20250420" }),
+        makeTrade({ tradeID: "s1", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD", tradeDate: "20250401" }),
+        makeTrade({ tradeID: "s2", assetCategory: "STK", symbol: "MSFT", buySell: "BUY", tradeMoney: "3000", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "s3", assetCategory: "STK", symbol: "GOOG", buySell: "BUY", tradeMoney: "4000", currency: "USD", tradeDate: "20250420" }),
+      ];
+      // CASH amounts are 4x, 5x, 2.5x the stock amounts → NOT auto-convert
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
+    it("should NOT trigger Signal 4 with fewer than 3 CASH trades", () => {
+      const trades = [
+        makeTrade({ tradeID: "c1", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "5000", tradeMoney: "5000", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "c2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "3250", tradeMoney: "3250", currency: "USD", tradeDate: "20250411" }),
+        makeTrade({ tradeID: "s1", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD", tradeDate: "20250410" }),
+        makeTrade({ tradeID: "s2", assetCategory: "STK", symbol: "MSFT", buySell: "BUY", tradeMoney: "3250", currency: "USD", tradeDate: "20250411" }),
+      ];
+      // Only 2 CASH trades — below minimum 3 threshold
+      expect(FxFifoEngine.detectAutoConvert(trades)).toBe(false);
+    });
+
     it("should produce zero FX gains when auto-convert account has only AFx trades", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "5000", currency: "USD" }),
