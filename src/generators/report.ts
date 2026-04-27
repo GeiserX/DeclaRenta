@@ -33,9 +33,15 @@ export function generateTaxReport(
 ): TaxSummary {
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
-  const allDisposals = fifoEngine.processTrades(statement.trades, rateMap, statement.corporateActions);
+  fifoEngine.processTrades(statement.trades, rateMap, statement.corporateActions);
+
+  // Process option exercises/assignments/expirations (DGT V0137-23)
+  if (statement.optionExercises && statement.optionExercises.length > 0) {
+    fifoEngine.processOptionExercises(statement.optionExercises, rateMap);
+  }
+
   const yearStr = year.toString();
-  let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
+  let disposals = fifoEngine.getDisposals().filter((d) => d.sellDate.startsWith(yearStr));
   disposals = detectWashSales(disposals, statement.trades);
 
   const transmissionValue = disposals.reduce(

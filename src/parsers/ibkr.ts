@@ -14,6 +14,7 @@ import type {
   OpenPosition,
   SecurityInfo,
   CashBalance,
+  OptionExercise,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 
@@ -30,6 +31,7 @@ const parser = new XMLParser({
       "FlexQueryResponse.FlexStatements.FlexStatement.OpenPositions.OpenPosition",
       "FlexQueryResponse.FlexStatements.FlexStatement.SecuritiesInfo.SecurityInfo",
       "FlexQueryResponse.FlexStatements.FlexStatement.CashReport.CashReportCurrency",
+      "FlexQueryResponse.FlexStatements.FlexStatement.OptionEAE.OptionEAE",
     ];
     return arrayPaths.some((p) => jpath === p);
   },
@@ -67,6 +69,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
+  const optionExercises: OptionExercise[] = [];
 
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
@@ -75,12 +78,12 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
+    optionExercises.push(...ensureArray(stmt.OptionEAE?.OptionEAE).map(mapOptionExercise).filter((e): e is OptionExercise => e !== null));
   }
 
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
   const importantUnparsed: Record<string, string> = {
-    OptionEAE: "ejercicios y asignaciones de opciones",
     TransfersInTransit: "transferencias en tránsito",
     UnbookedTrades: "operaciones no liquidadas",
     RoutingCommissions: "comisiones de routing",
@@ -111,6 +114,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions,
     securitiesInfo,
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
+    optionExercises: optionExercises.length > 0 ? optionExercises : undefined,
     parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
   };
 }
@@ -219,6 +223,37 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
     currency: raw.currency ?? "",
     endingCash: raw.endingCash ?? "0",
     endingSettledCash: raw.endingSettledCash ?? "0",
+  };
+}
+
+function mapOptionExercise(raw: Record<string, string>): OptionExercise | null {
+  // IBKR OptionEAE has paired rows: option removal (negative qty, has strike)
+  // + underlying delivery (positive qty, no strike). Skip delivery rows.
+  if (!raw.strike?.trim()) return null;
+
+  const action = (raw.action ?? raw.type ?? "").toLowerCase();
+  let mappedAction: OptionExercise["action"] = "Exercise";
+  if (action.includes("assign")) mappedAction = "Assignment";
+  else if (action.includes("expir") || action.includes("lapse")) mappedAction = "Expiration";
+
+  return {
+    transactionID: raw.transactionID ?? "",
+    accountId: raw.accountId ?? "",
+    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+    symbol: raw.symbol ?? "",
+    description: raw.description ?? "",
+    isin: raw.isin ?? "",
+    currency: raw.currency ?? "",
+    date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
+    action: mappedAction,
+    putCall: raw.putCall?.toUpperCase() === "P" ? "P" : raw.putCall?.toUpperCase() === "C" ? "C" : "C",
+    strike: raw.strike,
+    expiry: raw.expiry ?? "",
+    quantity: raw.quantity ?? "0",
+    proceeds: raw.proceeds ?? raw.amount ?? "0",
+    underlyingSymbol: raw.underlyingSymbol ?? "",
+    underlyingIsin: raw.underlyingIsin ?? "",
+    multiplier: raw.multiplier ?? "100",
   };
 }
 
