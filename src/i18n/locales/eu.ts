@@ -57,7 +57,7 @@ const eu: TranslationKeys = {
   "casilla.fx_transmission_value": "FX transmisio-balioa (atzerriko moneta)",
   "casilla.fx_acquisition_value": "FX eskuratze-balioa (atzerriko moneta)",
   "casilla.fx_net_gain_loss": "FX irabazi/galera garbia (atzerriko moneta)",
-  "casilla.net_gain_loss": "Irabazi/Galera garbia (guztira)",
+  "casilla.net_gain_loss": "Irabazi/Galera garbia (transmisioak)",
   "casilla.gross_dividends": "Dibidendu gordinak",
   "casilla.interest_earned": "Jasotako interesak",
   "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria — informatiboa)",
@@ -365,6 +365,11 @@ const eu: TranslationKeys = {
   "tax.effective_rate": "Tasa efektiboa",
   "tax.double_tax_deduction": "Zergapetze bikoitzaren kenkaria",
   "tax.disclaimer": "Orientazio-estimazioa. Tarteak indarrean dagoen PFEZaren aurrezki-oinarriari dagozkio. Kontsultatu zerga-aholkulari batekin.",
+  "tax.breakdown_capital_gains": "Ondare-irabaziak",
+  "tax.breakdown_fx_gains": "FX irabaziak (kanbio-mota)",
+  "tax.breakdown_dividends": "Dibidenduak",
+  "tax.breakdown_interest": "Interesak",
+  "tax.breakdown_blocked_losses": "Blokeatutako galerak (atzeratuak)",
 };
 
 export default eu;

@@ -249,10 +249,19 @@ const BRACKETS = [
   { limit: Infinity, rate: 0.28, label: "> 300.000", color: "#ef4444" },
 ];
 
+export interface TaxBaseBreakdown {
+  capitalGains: number;
+  fxGains: number;
+  dividends: number;
+  interest: number;
+  blockedLosses: number;
+}
+
 export function renderTaxBracketCard(
   title: string,
   taxableBase: number,
   doubleTaxDeduction: number,
+  breakdown?: TaxBaseBreakdown,
 ): string {
   if (taxableBase <= 0) return "";
 
@@ -308,8 +317,11 @@ export function renderTaxBracketCard(
       </tr>`
     : "";
 
+  const breakdownHtml = breakdown ? renderBreakdown(breakdown) : "";
+
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
+    ${breakdownHtml}
     ${svg}
     <table class="bracket-table" style="width:100%;margin-top:8px;font-size:0.85rem">
       <thead><tr>
@@ -333,6 +345,17 @@ export function renderTaxBracketCard(
     </table>
     <p class="muted" style="font-size:0.75rem;margin-top:6px">${escSvg(t("tax.disclaimer"))}</p>
   </div>`;
+}
+
+function renderBreakdown(b: TaxBaseBreakdown): string {
+  const lines: string[] = [];
+  if (b.capitalGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_capital_gains"))}: <strong>${b.capitalGains.toFixed(2)} &euro;</strong></span>`);
+  if (b.fxGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_fx_gains"))}: <strong>${b.fxGains.toFixed(2)} &euro;</strong></span>`);
+  if (b.dividends !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_dividends"))}: <strong>${b.dividends.toFixed(2)} &euro;</strong></span>`);
+  if (b.interest !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_interest"))}: <strong>${b.interest.toFixed(2)} &euro;</strong></span>`);
+  if (b.blockedLosses !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${b.blockedLosses.toFixed(2)} &euro;</strong></span>`);
+  if (lines.length === 0) return "";
+  return `<div class="bracket-breakdown" style="font-size:0.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 12px;opacity:0.85">${lines.join("")}</div>`;
 }
 
 // ---------------------------------------------------------------------------

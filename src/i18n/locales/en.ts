@@ -56,7 +56,7 @@ const en: TranslationKeys = {
   "casilla.fx_transmission_value": "FX transmission value (foreign currency)",
   "casilla.fx_acquisition_value": "FX acquisition value (foreign currency)",
   "casilla.fx_net_gain_loss": "FX net gain/loss (foreign currency)",
-  "casilla.net_gain_loss": "Net gain/loss (total)",
+  "casilla.net_gain_loss": "Net gain/loss (transmissions)",
   "casilla.gross_dividends": "Gross dividends",
   "casilla.interest_earned": "Interest earned",
   "casilla.interest_paid": "Interest paid to broker (margin, not deductible — informational)",
@@ -369,6 +369,11 @@ const en: TranslationKeys = {
   "tax.effective_rate": "Effective rate",
   "tax.double_tax_deduction": "Double taxation deduction",
   "tax.disclaimer": "Indicative estimate. Brackets correspond to the current Spanish IRPF savings tax base. Consult a tax advisor.",
+  "tax.breakdown_capital_gains": "Capital gains",
+  "tax.breakdown_fx_gains": "FX gains (currency exchange)",
+  "tax.breakdown_dividends": "Dividends",
+  "tax.breakdown_interest": "Interest",
+  "tax.breakdown_blocked_losses": "Blocked losses (deferred)",
 };
 
 export default en;

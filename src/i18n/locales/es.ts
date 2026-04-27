@@ -60,7 +60,7 @@ const es = {
   "casilla.fx_transmission_value": "Valor de transmisión FX (moneda extranjera)",
   "casilla.fx_acquisition_value": "Valor de adquisición FX (moneda extranjera)",
   "casilla.fx_net_gain_loss": "Ganancia/Pérdida neta FX (moneda extranjera)",
-  "casilla.net_gain_loss": "Ganancia/Pérdida neta (total)",
+  "casilla.net_gain_loss": "Ganancia/Pérdida neta (transmisiones)",
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Intereses ganados",
   "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible — informativo)",
@@ -398,6 +398,11 @@ const es = {
   "tax.effective_rate": "Tipo efectivo",
   "tax.double_tax_deduction": "Deducción doble imposición",
   "tax.disclaimer": "Estimación orientativa. Los tramos corresponden a la base del ahorro del IRPF vigente. Consulta con un asesor fiscal.",
+  "tax.breakdown_capital_gains": "Ganancias patrimoniales",
+  "tax.breakdown_fx_gains": "Ganancias por tipo de cambio",
+  "tax.breakdown_dividends": "Dividendos",
+  "tax.breakdown_interest": "Intereses",
+  "tax.breakdown_blocked_losses": "Pérdidas bloqueadas (diferidas)",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
