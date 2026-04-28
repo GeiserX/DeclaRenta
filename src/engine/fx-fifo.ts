@@ -28,6 +28,7 @@ export class FxFifoEngine {
   private disposals: FxDisposal[] = [];
   private nextLotId = 1;
   warnings: string[] = [];
+  private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
   /**
    * Process FX events extracted from trades.
@@ -35,7 +36,14 @@ export class FxFifoEngine {
    * (not automatic FXCONV) generate FX lots and disposals.
    */
   processEvents(events: FxEvent[]): FxDisposal[] {
-    const sorted = [...events].sort((a, b) => a.date.localeCompare(b.date));
+    const sorted = [...events].sort((a, b) => {
+      const cmp = a.date.localeCompare(b.date);
+      if (cmp !== 0) return cmp;
+      // Same date: acquisitions (positive qty) before disposals (negative qty)
+      const aPhase = a.quantity.greaterThan(0) ? 0 : 1;
+      const bPhase = b.quantity.greaterThan(0) ? 0 : 1;
+      return aPhase - bPhase;
+    });
 
     for (const event of sorted) {
       if (event.currency === "EUR") continue;
@@ -45,6 +53,10 @@ export class FxFifoEngine {
       } else if (event.quantity.lessThan(0)) {
         this.consumeLots(event);
       }
+    }
+
+    for (const [currency, { count, totalQty }] of this.fxMissing) {
+      this.warnings.push(`⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`);
     }
 
     return this.disposals;
@@ -258,7 +270,10 @@ export class FxFifoEngine {
     const lots = this.lots.get(event.currency);
 
     if (!lots || lots.length === 0) {
-      this.warnings.push(`⚠ Venta de ${event.currency} sin lotes previos el ${event.date}. Posible adquisición anterior al período declarado.`);
+      const entry = this.fxMissing.get(event.currency) ?? { count: 0, totalQty: new Decimal(0) };
+      entry.count++;
+      entry.totalQty = entry.totalQty.plus(remaining);
+      this.fxMissing.set(event.currency, entry);
       // No lots = prior-year acquisition. Record with zero gain (cost = proceeds)
       // to avoid fabricating phantom profits from missing historical data.
       const proceedsEur = remaining.mul(event.ecbRate);
@@ -309,7 +324,10 @@ export class FxFifoEngine {
     }
 
     if (remaining.greaterThan(0)) {
-      this.warnings.push(`⚠ Lotes FX insuficientes: ${event.currency} × ${remaining} el ${event.date}. Coste = 0.`);
+      const entry = this.fxMissing.get(event.currency) ?? { count: 0, totalQty: new Decimal(0) };
+      entry.count++;
+      entry.totalQty = entry.totalQty.plus(remaining);
+      this.fxMissing.set(event.currency, entry);
       // Without prior-year lots we cannot determine cost basis.
       // Use current rate as cost (zero gain) to avoid fabricating phantom profits.
       const proceedsEur = remaining.mul(event.ecbRate);
