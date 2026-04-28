@@ -30,6 +30,7 @@ const eu: TranslationKeys = {
   "results.filter_losses": "Galerak",
   "results.export_json": "Esportatu JSON",
   "results.export_csv": "Esportatu CSV",
+  "results.export_pdf": "Esportatu PDF",
   "results.operations_count": "{{count}} eragiketa",
   "results.dividends_count": "{{count}} dibidendu",
   "results.year_mismatch": "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
@@ -373,6 +374,22 @@ const eu: TranslationKeys = {
   "tax.breakdown_dividends": "Dibidenduak",
   "tax.breakdown_interest": "Interesak",
   "tax.breakdown_blocked_losses": "Blokeatutako galerak (atzeratuak)",
+
+  // PDF report
+  "pdf.subtitle": "Zerga txostena — Ekitaldia",
+  "pdf.generated": "Sortua",
+  "pdf.informative": "Informatibo",
+  "pdf.blocked_losses": "Anti-churning blokatutako galerak (0358 laukia)",
+  "pdf.interest_margin": "Marjina interesak (kengarria ez)",
+  "pdf.section_casillas": "1. Laukien Laburpena — 100 Eredua",
+  "pdf.section_operations": "2. Eragiketen Xehetasuna",
+  "pdf.section_dividends": "3. Dibidenduak",
+  "pdf.section_dt": "4. Nazioarteko Zerga Bikoitzaren Kenkaria",
+  "pdf.section_warnings": "Abisuak",
+  "pdf.dt_paid": "Ordaindutako zerga",
+  "pdf.dt_allowed": "Baimendutako kenkaria",
+  "pdf.ecb_note": "ECB tasa: Europako Banku Zentralaren truke-tasa ofiziala (EUR 1 atzerriko moneta-unitate bakoitzeko) eragiketa-datan. Iturria: ECB SDMX API.",
+  "pdf.footer": "DeclaRenta — https://declarenta.es — Txosten hau informatiboa da eta ez du zerga-aholkularitza profesionala ordezten.",
 };
 
 export default eu;

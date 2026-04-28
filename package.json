@@ -75,6 +75,8 @@
     "commander": "^13.1.0",
     "decimal.js": "^10.5.0",
     "fast-xml-parser": "^5.7.2",
+    "jspdf": "2.5.2",
+    "jspdf-autotable": "5.0.7",
     "pdfkit": "^0.18.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
@@ -82,6 +84,7 @@
     "@types/node": "^22.15.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.25.0",
+    "jsdom": "^29.1.0",
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
