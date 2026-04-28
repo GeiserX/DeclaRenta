@@ -38,6 +38,7 @@ DeclaRenta is designed so that **no financial data ever leaves your machine**:
 - **CLI mode**: Runs entirely on your local machine. Network calls only for ECB rates (cacheable).
 - **No analytics, no tracking, no telemetry**.
 - **No user accounts, no authentication**.
+- **Browser storage**: fiscal profile and inter-year report summaries are kept in `localStorage` on the user's device only. They are never uploaded.
 
 ### Data Flow
 
@@ -50,7 +51,7 @@ IBKR XML file → [your browser/CLI] → Tax report (local)
 ### What We Do NOT Do
 
 - Upload your broker data to any server
-- Store any financial information
+- Store financial information on DeclaRenta servers
 - Track usage or collect analytics
 - Require authentication or accounts
 

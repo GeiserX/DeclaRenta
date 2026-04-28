@@ -18,6 +18,7 @@ const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "FOP
 
 /** Lot grouping key: ISIN when available; conid for IBKR instruments without ISIN (survives ticker renames); otherwise asset category + symbol */
 function lotKey(trade: { isin: string; symbol: string; assetCategory: string; conid?: string }): string {
+  if (trade.assetCategory === "CRYPTO") return `CRYPTO:${trade.symbol.toUpperCase()}`;
   if (trade.isin) return trade.isin;
   if (trade.conid) return `${trade.assetCategory}:conid:${trade.conid}`;
   return `${trade.assetCategory}:${trade.symbol}`;
@@ -37,7 +38,12 @@ export class FifoEngine {
    * Process trades and corporate actions together, sorted chronologically.
    * Buys add lots; sells consume lots via FIFO; splits adjust lots.
    */
-  processTrades(trades: Trade[], rateMap: EcbRateMap, corporateActions?: CorporateAction[]): FifoDisposal[] {
+  processTrades(
+    trades: Trade[],
+    rateMap: EcbRateMap,
+    corporateActions?: CorporateAction[],
+    optionExercises?: OptionExercise[],
+  ): FifoDisposal[] {
     // Process securities: STK, FUND, OPT, FUT, BOND, CFD, CRYPTO
     // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
     // gain/loss already embedded in securities trades via ECB rate conversion)
@@ -128,7 +134,9 @@ export class FifoEngine {
     }
     const sortedSpinOffs = spinOffs.sort((a, b) => a.date.localeCompare(b.date));
 
-    // EX corporate actions are now handled via processOptionExercises() below
+    const sortedOptionExercises = [...(optionExercises ?? [])].sort((a, b) =>
+      normalizeDate(a.date).localeCompare(normalizeDate(b.date)),
+    );
 
     // Parse scrip dividends into timeline events (applied chronologically, not upfront)
     const scripDivs: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }[] = [];
@@ -160,6 +168,7 @@ export class FifoEngine {
     let sdIdx = 0;
     let mergerIdx = 0;
     let spinOffIdx = 0;
+    let optionIdx = 0;
 
     for (const trade of sorted) {
       const tradeDate = normalizeDate(trade.tradeDate);
@@ -182,6 +191,12 @@ export class FifoEngine {
       while (spinOffIdx < sortedSpinOffs.length && sortedSpinOffs[spinOffIdx]!.date <= tradeDate) {
         this.applySpinOff(sortedSpinOffs[spinOffIdx]!);
         spinOffIdx++;
+      }
+      // Apply option exercises/assignments before later trades on the same day,
+      // so exercised shares are available for subsequent disposals.
+      while (optionIdx < sortedOptionExercises.length && normalizeDate(sortedOptionExercises[optionIdx]!.date) <= tradeDate) {
+        this.processOptionExercises([sortedOptionExercises[optionIdx]!], rateMap);
+        optionIdx++;
       }
 
       const oci = trade.openCloseIndicator;
@@ -219,6 +234,10 @@ export class FifoEngine {
     while (spinOffIdx < sortedSpinOffs.length) {
       this.applySpinOff(sortedSpinOffs[spinOffIdx]!);
       spinOffIdx++;
+    }
+    while (optionIdx < sortedOptionExercises.length) {
+      this.processOptionExercises([sortedOptionExercises[optionIdx]!], rateMap);
+      optionIdx++;
     }
 
     return this.disposals;
@@ -618,10 +637,9 @@ export class FifoEngine {
    * 1. **Expiration**: Option expires worthless → full premium is gain (writer) or loss (buyer).
    *    Lot consumed with zero proceeds (buyer) or zero cost (writer/short).
    * 2. **Close**: Already handled by normal FIFO (BUY to close / SELL to close).
-   * 3. **Exercise/Assignment**: Option exercised → premium P&L recorded as option disposal,
-   *    AND underlying shares acquired at market value (strike × multiplier).
-   *    The underlying cost basis = market value at exercise (Art. 37.1.m):
-   *    the option premium is a SEPARATE taxable event, not added to share cost.
+   * 3. **Exercise/Assignment**: Option exercise is integrated into the
+   *    underlying transaction: premium adjusts the acquisition value or
+   *    transmission value of the delivered shares.
    */
   processOptionExercises(exercises: OptionExercise[], rateMap: EcbRateMap): void {
     const sorted = [...exercises].sort((a, b) =>

@@ -441,7 +441,7 @@ describe("Phase 5 — Options (OPT)", () => {
     expect(checked[0]!.washSaleBlocked).toBe(false);
   });
 
-  it("should NOT apply anti-churning to crypto losses", () => {
+  it("should apply the one-year anti-churning window to crypto losses", () => {
     const rates = makeRateMap({
       "2025-03-01": { "USD": "0.92" },
       "2025-06-01": { "USD": "0.91" },
@@ -472,8 +472,7 @@ describe("Phase 5 — Options (OPT)", () => {
     const checked = detectWashSales(disposals, trades);
 
     expect(checked).toHaveLength(1);
-    // Crypto is NOT "valores homogeneos" — must NOT block
-    expect(checked[0]!.washSaleBlocked).toBe(false);
+    expect(checked[0]!.washSaleBlocked).toBe(true);
   });
 });
 

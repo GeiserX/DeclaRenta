@@ -26,6 +26,14 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const url = new URL(event.request.url);
+  const isSameOriginAsset = url.origin === self.location.origin
+    && !url.pathname.startsWith("/api/")
+    && !url.pathname.startsWith("/auth/")
+    && !url.pathname.startsWith("/download/");
+  const isEcbRateRequest = url.origin === "https://data-api.ecb.europa.eu";
+  if (!isSameOriginAsset && !isEcbRateRequest) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

@@ -160,9 +160,8 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
     d.setDate(d.getDate() - 1);
   }
 
-  // For crypto currencies without ECB rate, return 0 (these trades can't be valued in EUR)
   if (!ECB_CURRENCIES.has(resolved)) {
-    return new Decimal(0);
+    throw new Error(`No ECB rate available for non-fiat currency ${currency}. Provide EUR-valued transactions or a supported fiat/stablecoin quote currency.`);
   }
 
   throw new Error(`No ECB rate found for ${currency} near ${normalizedDate} (searched 10 days back)`);
@@ -204,7 +203,9 @@ export function getQ4AverageRate(rateMap: EcbRateMap, year: number, currency: st
   }
 
   if (count === 0) {
-    if (!ECB_CURRENCIES.has(resolved)) return new Decimal(0);
+    if (!ECB_CURRENCIES.has(resolved)) {
+      throw new Error(`No ECB Q4 rate available for non-fiat currency ${currency}.`);
+    }
     throw new Error(`No ECB Q4 rates found for ${currency} in ${year} (Oct-Dec)`);
   }
 

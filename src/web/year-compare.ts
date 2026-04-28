@@ -92,13 +92,16 @@ const COMPARISON_ROWS: ComparisonRow[] = [
 
 /**
  * Render the year comparison view into a container.
- * Shows nothing if fewer than 2 reports are stored.
+ * Shows a clear-local-data control even when only one report is stored.
  */
 export function renderYearComparison(container: HTMLElement): void {
   const reports = loadAllReports();
 
   if (reports.length < 2) {
-    container.innerHTML = `<p class="muted">${t("compare.no_data")}</p>`;
+    container.innerHTML = reports.length === 0
+      ? `<p class="muted">${t("compare.no_data")}</p>`
+      : `<div class="year-compare"><div class="compare-header"><h3>${t("compare.title")}</h3><button id="clear-history-btn" class="btn-small btn-danger">${t("compare.clear_history")}</button></div><p class="muted">${t("compare.no_data")}</p></div>`;
+    bindClearHistory(container);
     return;
   }
 
@@ -169,7 +172,10 @@ export function renderYearComparison(container: HTMLElement): void {
       <p class="compare-meta">${t("compare.saved_reports")}: ${sorted.map((r) => r.year).join(", ")}</p>
     </div>`;
 
-  // Clear history button
+  bindClearHistory(container);
+}
+
+function bindClearHistory(container: HTMLElement): void {
   container.querySelector("#clear-history-btn")?.addEventListener("click", () => {
     if (confirm(t("compare.clear_confirm"))) {
       clearAllReports();

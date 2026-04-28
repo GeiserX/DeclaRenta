@@ -11,7 +11,9 @@ on:
 
 jobs:
   test:
-    runs-on: [self-hosted, linux, x64]
+    # Public fork PRs run arbitrary dependency scripts and test code. Keep this
+    # validation on GitHub-hosted infrastructure, not private self-hosted runners.
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -41,4 +43,10 @@ jobs:
           fail_ci_if_error: false
 
       - name: Build
-        run: npm run build:lib
+        run: npm run build
+
+      - name: Smoke test CLI package
+        run: |
+          test -f dist/cli.js
+          node dist/cli.js --version
+          npm pack --dry-run

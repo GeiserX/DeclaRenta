@@ -53,5 +53,7 @@ jobs:
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
             COMMIT_HASH=${{ github.sha }}
+          sbom: true
+          provenance: true
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min

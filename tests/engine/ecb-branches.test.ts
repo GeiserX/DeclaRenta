@@ -69,10 +69,9 @@ describe("normalizeCurrency", () => {
 });
 
 describe("getEcbRate - crypto fallback", () => {
-  it("should return Decimal(0) for non-ECB crypto currency with no rates", () => {
+  it("should fail loudly for non-ECB crypto currency with no rates", () => {
     const rates = makeRateMap({ "2025-03-15": { USD: "0.92" } });
-    const result = getEcbRate(rates, "2025-03-15", "BTC");
-    expect(result.toNumber()).toBe(0);
+    expect(() => getEcbRate(rates, "2025-03-15", "BTC")).toThrow("No ECB rate available");
   });
 
   it("should return Decimal(1) for EURT stablecoin (maps to EUR)", () => {
@@ -92,10 +91,9 @@ describe("getEcbRate - crypto fallback", () => {
 });
 
 describe("getQ4AverageRate - crypto fallback", () => {
-  it("should return Decimal(0) for non-ECB crypto with no Q4 rates", () => {
+  it("should fail loudly for non-ECB crypto with no Q4 rates", () => {
     const rates = makeRateMap({ "2025-10-01": { USD: "0.92" } });
-    const result = getQ4AverageRate(rates, 2025, "BTC");
-    expect(result.toNumber()).toBe(0);
+    expect(() => getQ4AverageRate(rates, 2025, "BTC")).toThrow("No ECB Q4 rate available");
   });
 
   it("should return Decimal(1) for EUR-mapped stablecoins", () => {

@@ -27,20 +27,24 @@ export function calculateDividends(
   );
 
   const withholdings = cashTransactions.filter((t) => t.type === "Withholding Tax");
+  const consumedWithholdings = new Set<number>();
 
   return dividends.map((div) => {
     const ecbRate = getEcbRate(rateMap, normalizeDate(div.dateTime), div.currency);
     const grossAmount = new Decimal(div.amount);
 
     // Find matching withholding (same ISIN, same or close date)
-    const matching = withholdings.find(
-      (w) =>
+    const matchingIndex = withholdings.findIndex(
+      (w, index) =>
+        !consumedWithholdings.has(index) &&
         w.isin === div.isin &&
         w.currency === div.currency &&
         Math.abs(
           parseDate(normalizeDate(w.dateTime)).getTime() - parseDate(normalizeDate(div.dateTime)).getTime(),
         ) <= 7 * 24 * 60 * 60 * 1000, // Within 7 days
     );
+    if (matchingIndex >= 0) consumedWithholdings.add(matchingIndex);
+    const matching = matchingIndex >= 0 ? withholdings[matchingIndex] : undefined;
 
     const withholdingAmount = matching ? new Decimal(matching.amount).abs() : new Decimal(0);
 

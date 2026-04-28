@@ -25,12 +25,15 @@ import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
-import { normalizeDate } from "../engine/dates.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
 import type { LossCarryforward } from "../types/tax.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 
-// Read version from package.json (single source of truth)
-const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8")) as { version: string };
+declare const __PACKAGE_VERSION__: string | undefined;
+
+// In built CLI bundles, tsup injects the package version so the executable does
+// not depend on a fragile relative package.json path.
+const pkg = { version: typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev" };
 
 // Configure Decimal.js for financial precision
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -64,17 +67,7 @@ async function parseAndMerge(
   inputFiles: string[],
   brokerName?: string,
 ): Promise<{ merged: Statement; brokerNames: string[] }> {
-  const merged: Statement = {
-    accountId: "",
-    fromDate: "",
-    toDate: "",
-    period: "",
-    trades: [],
-    cashTransactions: [],
-    corporateActions: [],
-    openPositions: [],
-    securitiesInfo: [],
-  };
+  const merged = createEmptyStatement();
   const brokerNames: string[] = [];
 
   for (const file of inputFiles) {
@@ -82,12 +75,7 @@ async function parseAndMerge(
     const buf = readFileSync(file);
     if (detectEtoroXlsx(buf)) {
       const statement = await parseEtoroXlsx(buf);
-      merged.accountId = merged.accountId || statement.accountId;
-      merged.trades.push(...statement.trades);
-      merged.cashTransactions.push(...statement.cashTransactions);
-      merged.corporateActions.push(...statement.corporateActions);
-      merged.openPositions = statement.openPositions;
-      merged.securitiesInfo.push(...statement.securitiesInfo);
+      mergeStatement(merged, statement);
       brokerNames.push("eToro");
       console.error(`  [eToro XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
       continue;
@@ -105,23 +93,13 @@ async function parseAndMerge(
     }
 
     const statement = parser.parse(content);
-    merged.accountId = merged.accountId || statement.accountId;
-    merged.trades.push(...statement.trades);
-    merged.cashTransactions.push(...statement.cashTransactions);
-    merged.corporateActions.push(...statement.corporateActions);
-    merged.openPositions = statement.openPositions;
-    merged.securitiesInfo.push(...statement.securitiesInfo);
+    mergeStatement(merged, statement);
     brokerNames.push(parser.name);
 
     console.error(`  [${parser.name}] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
   }
 
-  // Sort trades chronologically for cross-broker FIFO
-  merged.trades.sort((a, b) =>
-    normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
-  );
-
-  return { merged, brokerNames };
+  return { merged: finalizeMergedStatement(merged), brokerNames };
 }
 
 // ---------------------------------------------------------------------------

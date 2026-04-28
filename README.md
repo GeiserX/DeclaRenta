@@ -79,8 +79,8 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 |---|---|---|
 | **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0033, 0358, 0588 | JSON, CSV, PDF (con tipos ECB) |
 | **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR), tipos A/M/C | Fixed-width AEAT (validado contra spec BOE) |
-| **Modelo 721** | Declaración de criptomonedas en el extranjero (>50.000 EUR) | XML (AEAT) |
-| **Modelo D-6** | Inversiones en el exterior (Banco de España / AFORIX) | JSON o guía paso a paso |
+| **Modelo 721** | Revisión orientativa de criptomonedas en el extranjero (>50.000 EUR) | Generación oficial pendiente: AEAT exige XML |
+| **Modelo D-6** | Guía orientativa para participaciones significativas (Banco de España / AFORIX) | JSON o guía paso a paso |
 
 ## Casillas del Modelo 100
 
@@ -113,7 +113,7 @@ La web incluye:
 
 ### Web (recomendado)
 
-Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo. Alternativa: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/).
+Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo.
 
 Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
 
@@ -167,7 +167,7 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
-- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados). Aplica a acciones, fondos y bonos; excluye derivados, forex y crypto
+- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto). Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
@@ -176,8 +176,9 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 
 ## Privacidad
 
-- **Self-hosted**: los datos se procesan en tu equipo. La única conexión externa es al API del BCE para tipos de cambio (datos públicos).
+- **Self-hosted**: los datos se procesan en tu equipo. La única conexión externa de la app es al API del BCE para tipos de cambio (datos públicos).
 - Sin analytics, sin tracking, sin telemetría.
+- La web guarda perfil fiscal y resúmenes interanuales en `localStorage` del navegador para evitar subir datos a servidores. Puedes borrarlos desde la comparativa interanual o limpiando los datos del sitio.
 - La interfaz web muestra la versión y commit exacto desplegado — puedes verificar que coincide con el código fuente en GitHub.
 
 ## Desarrollo

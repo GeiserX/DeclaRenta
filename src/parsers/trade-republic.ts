@@ -13,7 +13,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
-import { parseCsvLine, stripBom } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, stripBom } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -75,7 +75,7 @@ function field(fields: string[], col: number): string {
 function num(fields: string[], col: number): number {
   const v = field(fields, col);
   if (!v) return 0;
-  return parseFloat(v) || 0;
+  return parseFloat(parseNumber(v)) || 0;
 }
 
 function dateToCompact(dateStr: string): string {

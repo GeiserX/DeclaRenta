@@ -8,7 +8,9 @@
  * This generator creates a structured cheat sheet showing exactly what to
  * type into each AFORIX form field, plus a step-by-step guide.
  *
- * Who must file: Any resident holding foreign securities as of Dec 31.
+ * Who must file: Since Orden ICT/1408/2021, generally only significant
+ * holdings (10% or more of capital/voting rights) in listed foreign companies.
+ * Retail portfolio holders are usually outside scope; this is an advisory guide.
  * Deadline: January 31 of the following year.
  */
 
@@ -179,8 +181,9 @@ export function generateD6Report(
   guide.push(`  Total cancelaciones:       ${cancelled.length}`);
   guide.push(`  Valor total:               ${totalValue.toFixed(2)} EUR`);
   guide.push(``);
-  guide.push(`NOTA: El D-6 es obligatorio para CUALQUIER importe de valores`);
-  guide.push(`extranjeros. No tiene umbral mínimo (a diferencia del Modelo 720).`);
+  guide.push(`NOTA: desde la Orden ICT/1408/2021, el D-6 suele limitarse`);
+  guide.push(`a participaciones del 10% o más en sociedades cotizadas extranjeras.`);
+  guide.push(`Esta guía no determina por sí sola obligación de presentación.`);
 
   return {
     year,

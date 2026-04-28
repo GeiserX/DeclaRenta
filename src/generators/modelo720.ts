@@ -34,6 +34,16 @@ export interface Modelo720ThresholdResult {
   realEstate: { exceeds: boolean; total: Decimal };
 }
 
+function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal } | undefined {
+  if (!cb.averageQ4Cash) return undefined;
+  const yearEnd = `${year}-12-31`;
+  const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
+  return {
+    ending: new Decimal(cb.endingCash).mul(ecbRate),
+    averageQ4: new Decimal(cb.averageQ4Cash).mul(ecbRate),
+  };
+}
+
 /**
  * Check per-category 50,000 EUR thresholds for Modelo 720.
  *
@@ -66,13 +76,11 @@ export function checkModelo720Thresholds(
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
-  // Category C: cash balances at foreign brokers
-  const yearEnd = `${year}-12-31`;
   const accountsTotal = (cashBalances ?? [])
     .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
     .reduce((sum, cb) => {
-      const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
-      return sum.plus(new Decimal(cb.endingCash).mul(ecbRate));
+      const values = cashValuesEur(cb, rateMap, year);
+      return values ? sum.plus(Decimal.max(values.ending, values.averageQ4)) : sum;
     }, new Decimal(0));
 
   const realEstateTotal = new Decimal(0);
@@ -155,13 +163,11 @@ export function generateModelo720(
   }));
 
   // Category C: cash balances at foreign brokers
-  const yearEnd = `${config.year}-12-31`;
   const cashEntries = (cashBalances ?? [])
     .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
-    .map((cb) => {
-      const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
-      const valueEur = new Decimal(cb.endingCash).mul(ecbRate);
-      return { cashBalance: cb, valueEur };
+    .flatMap((cb) => {
+      const values = cashValuesEur(cb, rateMap, config.year);
+      return values ? [{ cashBalance: cb, valueEur: values.ending, averageQ4Eur: values.averageQ4 }] : [];
     });
 
   // Check 50,000 EUR threshold per category independently
@@ -190,7 +196,7 @@ export function generateModelo720(
   // Category C records (cash accounts)
   if (hasCashRecords) {
     for (const e of cashEntries) {
-      detailRecords.push(buildCashAccountRecord(e.cashBalance, e.valueEur, config));
+      detailRecords.push(buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config));
     }
   }
 
@@ -342,10 +348,11 @@ function buildCancelledRecord(isin: string, config: Modelo720Config): string {
 function buildCashAccountRecord(
   cb: CashBalance,
   valueEur: Decimal,
+  averageQ4Eur: Decimal,
   config: Modelo720Config,
 ): string {
-  const brokerName = "INTERACTIVE BROKERS";
-  const countryCode = "IE";
+  const brokerName = cb.institutionName ?? "FOREIGN BROKER";
+  const countryCode = cb.countryCode ?? "XX";
 
   let record = "";
   record += "2";                                              // 1: Register type
@@ -365,13 +372,13 @@ function buildCashAccountRecord(
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad(brokerName, 41);                              // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
-  record += pad("", 8);                                       // 415-422: Opening date (unknown)
+  record += pad((cb.openedDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: Opening date
   record += "A";                                              // 423: Type (A=new)
   record += pad("", 8);                                       // 424-431: Close date
   record += " ";                                              // 432: Balance 1 sign
   record += numPad(valueEur.toString(), 13, 2);               // 433-447: Balance at Dec 31
   record += " ";                                              // 448: Balance 2 sign
-  record += numPad(valueEur.toString(), 13, 2);               // 449-463: Average balance Q4
+  record += numPad(averageQ4Eur.toString(), 13, 2);           // 449-463: Average balance Q4
   record += pad("", 1);                                       // 464: Reserved
   record += pad("", 12);                                      // 465-476: Reserved
   record += pad("", 1);                                       // 477: Reserved

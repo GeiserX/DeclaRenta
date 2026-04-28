@@ -38,6 +38,8 @@ interface Modelo721Config {
   isComplementary: boolean;
   isReplacement: boolean;
   previousDeclarationId?: string;
+  /** Internal/test-only escape hatch for the legacy fixed-width prototype. */
+  allowPrototypeOutput?: boolean;
 }
 
 function pad(value: string, length: number, char = " ", alignRight = false): string {
@@ -65,6 +67,10 @@ export function generateModelo721(
   entries: Modelo721Entry[],
   config: Modelo721Config,
 ): string {
+  if (!config.allowPrototypeOutput) {
+    throw new Error("Modelo 721 official output is not implemented yet. AEAT external-program submission requires XML per Orden HFP/886/2023; the old fixed-width prototype is disabled.");
+  }
+
   // Check 50,000 EUR threshold
   const totalValue = entries.reduce((s, e) => s.plus(e.valuationEur), new Decimal(0));
   if (totalValue.lessThan(50000)) {

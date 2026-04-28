@@ -6,9 +6,8 @@
   <title>DeclaRenta - Documentación</title>
   <meta name="description" content="Documentación completa de DeclaRenta: brokers soportados, casillas del Modelo 100, FIFO, doble imposición, Modelo 720, D-6 y más." />
   <meta name="theme-color" content="#3b82f6" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://data-api.ecb.europa.eu; img-src 'self' data:" />
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
   <link rel="stylesheet" href="./style.css" />
   <style>
     /* Docs-specific layout */
@@ -375,8 +374,8 @@
         <ol class="steps">
           <li><strong>Subir ficheros</strong> &mdash; Arrastra o selecciona los informes de tu broker. Puedes subir varios ficheros de distintos brokers a la vez. El formato se auto-detecta, aunque también puedes forzar el broker en el desplegable.</li>
           <li><strong>Revisar datos</strong> &mdash; DeclaRenta muestra un resumen de lo que ha detectado: número de operaciones, dividendos, acciones corporativas y posiciones abiertas. Comprueba que todo cuadra antes de continuar.</li>
-          <li><strong>Configurar</strong> &mdash; Selecciona el ejercicio fiscal (2023, 2024 o 2025) e introduce tu NIF si necesitas generar el Modelo 720 o D-6.</li>
-          <li><strong>Resultados</strong> &mdash; Obtienes los valores de cada casilla del Modelo 100, la tabla de operaciones con ganancias y pérdidas, los dividendos desglosados y la opción de exportar en JSON, CSV o generar los ficheros del Modelo 720 y la guía D-6.</li>
+          <li><strong>Configurar</strong> &mdash; Selecciona el ejercicio fiscal e introduce tu NIF si necesitas revisar Modelo 720, 721 o D-6.</li>
+          <li><strong>Resultados</strong> &mdash; Obtienes los valores de cada casilla del Modelo 100, la tabla de operaciones con ganancias y pérdidas, los dividendos desglosados y la opción de exportar en JSON, CSV o generar el fichero del Modelo 720 y guías orientativas para D-6/721.</li>
         </ol>
 
         <h3>Uso de la línea de comandos (CLI)</h3>
@@ -655,7 +654,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <ul>
           <li>Ventana anterior: desde el 15 de enero.</li>
           <li>Ventana posterior: hasta el 15 de mayo.</li>
-          <li>Si has comprado el mismo ISIN en cualquier momento dentro de esa ventana, la pérdida queda <strong>bloqueada</strong>.</li>
+          <li>Si has recomprado valores homogéneos dentro de la ventana aplicable, la pérdida puede quedar <strong>bloqueada</strong>. Para no cotizados/cripto se usa la ventana de 1 año.</li>
         </ul>
 
         <h3>Qué ocurre con las pérdidas bloqueadas</h3>
@@ -793,7 +792,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>El Modelo D-6 es la declaración de inversiones españolas en el exterior, regulada por el Banco de España. Es independiente del Modelo 720 y se presenta ante la Dirección General de Comercio Internacional e Inversiones.</p>
 
         <h3>Quién debe presentarlo</h3>
-        <p><strong>Cualquier residente</strong> que mantenga valores negociables depositados en entidades no residentes (brokers extranjeros) a 31 de diciembre. <strong>No tiene umbral mínimo</strong>: si tienes una sola acción en un broker extranjero, debes presentarlo.</p>
+        <p>Desde la Orden ICT/1408/2021, el D-6 suele quedar limitado a participaciones que representen el <strong>10% o más</strong> del capital o derechos de voto de una sociedad cotizada extranjera. La mayoría de carteras minoristas están fuera de este supuesto.</p>
 
         <h3>Plazo de presentación</h3>
         <p>Del <strong>1 al 31 de enero</strong> del ejercicio siguiente.</p>
@@ -802,7 +801,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>A diferencia del Modelo 720, el D-6 <strong>no admite carga de fichero</strong>. Se cumplimenta manualmente en el formulario web AFORIX del Banco de España, posición por posición.</p>
 
         <h3>Qué genera DeclaRenta</h3>
-        <p>Una <strong>guía de cumplimentación</strong> con los valores exactos que debes introducir en cada campo de AFORIX para cada posición:</p>
+        <p>Una <strong>guía orientativa de cumplimentación</strong> con los datos que necesitarías introducir en AFORIX si confirmas que existe obligación de presentar:</p>
         <ul>
           <li>ISIN, denominación y país emisor.</li>
           <li>Código de mercado (NYSE, Xetra, LSE, etc.).</li>
@@ -835,8 +834,8 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>Cualquier exchange con sede fuera de España. Los más comunes son Coinbase, Binance y Kraken. Si el exchange tiene sede en España (como Bit2Me), no es necesario declararlo en el 721.</p>
 
         <h3>Qué genera DeclaRenta</h3>
-        <p>DeclaRenta genera un fichero de ancho fijo similar al Modelo 720 (500 bytes por registro) con los datos de cada criptoactivo: identificador, exchange, país, cantidad, valoración en EUR y coste de adquisición.</p>
-        <p class="warning">El soporte de Modelo 721 está actualmente en fase inicial. Los parsers de Coinbase, Binance y Kraken extraen operaciones pero la generación del fichero 721 requiere que proporciones las posiciones a 31 de diciembre manualmente en formato JSON.</p>
+        <p>La presentación oficial para programas externos se hace en XML según la Orden HFP/886/2023.</p>
+        <p class="warning">DeclaRenta muestra una revisión orientativa de posiciones cripto, pero la generación oficial del Modelo 721 está desactivada hasta implementar y validar el XML AEAT.</p>
       </section>
 
       <!-- 11. Acciones corporativas -->
@@ -1001,7 +1000,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
 
           <div class="faq-item">
             <dt>¿Necesito declarar si mis posiciones no superan 50.000 EUR?</dt>
-            <dd>Depende del modelo. El Modelo 720 y 721 requieren superar 50.000 EUR por categoría. Sin embargo, el Modelo D-6 es obligatorio con <strong>cualquier importe</strong> de valores extranjeros. Y el IRPF (Modelo 100) se declara siempre, independientemente del importe.</dd>
+            <dd>Depende del modelo. El Modelo 720 y 721 requieren superar 50.000 EUR por categoría. El Modelo D-6, desde la Orden ICT/1408/2021, suele limitarse a participaciones del 10% o más en sociedades cotizadas extranjeras. El IRPF (Modelo 100) se declara siempre, independientemente del importe.</dd>
           </div>
 
           <div class="faq-item">

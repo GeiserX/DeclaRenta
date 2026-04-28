@@ -136,7 +136,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       });
 
       // If there's a tax amount, add withholding
-      const taxNum = parseFloat(tax);
+      const taxNum = parseFloat(parseNumber(tax));
       if (taxNum !== 0) {
         cashTransactions.push({
           transactionID: `scalable-tax-${tradeDate}-${isin}-${i}`,
@@ -156,7 +156,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     }
 
     // Trades
-    const sharesNum = parseFloat(shares);
+    const sharesNum = parseFloat(parseNumber(shares));
     if (sharesNum === 0) continue;
 
     const isSell = SELL_TYPES.some((s) => type.includes(s));
@@ -164,7 +164,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     if (!isSell && !isBuy) continue;
 
     const absShares = Math.abs(sharesNum);
-    const feeNum = parseFloat(fee);
+    const feeNum = parseFloat(parseNumber(fee));
 
     trades.push({
       tradeID: reference || `scalable-${tradeDate}-${isin}-${i}`,
