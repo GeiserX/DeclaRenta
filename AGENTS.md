@@ -195,6 +195,28 @@ When adding a new section (like 721), follow this checklist:
 - Use `charset=utf-8` in MIME type for prototypes/stubs
 - For real AEAT submission (Modelo 720 fixed-width, ISO-8859-15), proper byte encoding would need a TextEncoder or library — current implementation is a known limitation
 
+### FOP/FSFOP Asset Category (Hard Trace)
+- IBKR reports futures options on MEFF (Spanish derivatives exchange) as `assetCategory="FOP"` or `"FSFOP"`
+- These must be added to `KNOWN_CATEGORIES` in fifo.ts, `WASH_SALE_EXEMPT` in wash-sale.ts, and `ASSET_LABELS` in charts.ts/operations-annex.ts
+- FOP/FSFOP are derivatives → exempt from anti-churning (Art. 33.5.f only applies to homogeneous securities)
+- They share option-like metadata (strike, expiry, putCall) — extend OPT spreads in fifo.ts to also match FOP/FSFOP
+- **Symptom**: massive false blocked losses (~22K EUR) and 75+ "categoría desconocida" warnings
+- **ISIN guard**: FOP trades on MEFF often have empty ISIN. The wash-sale matcher must skip disposals with empty ISIN to avoid false matches against unrelated securities
+
+### FX Phantom Gains from Missing Prior-Year Lots (Hard Trace)
+- Multi-currency accounts (no auto-convert) generate implicit FX events when trading non-EUR securities
+- If the user's Flex Query only covers the declaration year, prior-year FCY acquisitions are missing → no lots exist when the engine tries to consume them
+- **Old behavior**: `costBasisEur = 0` → fabricated huge phantom profits (e.g. 48K EUR)
+- **Fix**: When lots are missing (both "sin lotes previos" and "insuficientes" paths in fx-fifo.ts), set `costBasisEur = proceedsEur` → zero gain. The warning still fires so users know data is incomplete.
+- **Detection**: `detectAutoConvert()` uses 4 signals (FXCONV markers, absence of manual CASH trades, amount-correlation heuristic). If it returns false, securities trades generate FX events.
+- **User impact**: Users with auto-convert accounts (FXCONV/AFx markers) are unaffected. Only manual multi-currency accounts with incomplete history trigger this.
+
+### Logo vs Favicon (Hard Trace)
+- `src/web/public/logo.png` = the realistic bull app logo (1.9MB, 1024×1024). Used for splash screen and top-bar branding.
+- `src/web/public/favicon.svg` / `favicon-16.png` / `favicon-32.png` = small icon for browser tabs only.
+- **NEVER** use `favicon.svg` as the `src` for `.splash-logo` or `.brand-logo` in index.html. Those must reference `logo.png`.
+- `docs/images/logo.png` and `src/web/assets/logo.png` are copies of the same logo for docs/README.
+
 ### CLI Build Gotcha
 - `tsup` config produces both lib and CLI entries to `dist/` — CLI entry `dist/index.js` collides with lib entry
 - `package.json` `bin.declarenta` points to `./dist/cli.js` which doesn't exist
