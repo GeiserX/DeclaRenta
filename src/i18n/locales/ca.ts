@@ -30,6 +30,7 @@ const ca: TranslationKeys = {
   "results.filter_losses": "Pèrdues",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operació(ns)",
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch": "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
@@ -371,6 +372,22 @@ const ca: TranslationKeys = {
   "tax.breakdown_dividends": "Dividends",
   "tax.breakdown_interest": "Interessos",
   "tax.breakdown_blocked_losses": "Pèrdues bloquejades (diferides)",
+
+  // PDF report
+  "pdf.subtitle": "Informe fiscal — Exercici",
+  "pdf.generated": "Generat el",
+  "pdf.informative": "Informatiu",
+  "pdf.blocked_losses": "Pèrdues bloquejades anti-churning (Casella 0358)",
+  "pdf.interest_margin": "Interessos marge (no deduïble)",
+  "pdf.section_casillas": "1. Resum de Caselles — Model 100",
+  "pdf.section_operations": "2. Detall d'Operacions",
+  "pdf.section_dividends": "3. Dividends",
+  "pdf.section_dt": "4. Deducció per Doble Imposició Internacional",
+  "pdf.section_warnings": "Advertències",
+  "pdf.dt_paid": "Impost pagat",
+  "pdf.dt_allowed": "Deducció permesa",
+  "pdf.ecb_note": "Tipus ECB: tipus de canvi oficial del Banc Central Europeu (EUR per 1 unitat de divisa estrangera) en la data de l'operació. Font: ECB SDMX API.",
+  "pdf.footer": "DeclaRenta — https://declarenta.es — Aquest informe és orientatiu i no substitueix l'assessorament fiscal professional.",
 };
 
 export default ca;
