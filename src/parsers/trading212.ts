@@ -232,8 +232,12 @@ function parseTrading212Csv(lines: string[]): Statement {
     if (qtyDec.isZero()) continue;
 
     const priceDec = new Decimal(priceStr);
+    const totalDec = new Decimal(totalStr).abs();
+    if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
+      continue;
+    }
     const grossDec = priceDec.isZero()
-      ? new Decimal(totalStr).abs()
+      ? totalDec
       : qtyDec.times(priceDec);
 
     trades.push({
