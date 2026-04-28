@@ -36,6 +36,7 @@ export class FxFifoEngine {
    * (not automatic FXCONV) generate FX lots and disposals.
    */
   processEvents(events: FxEvent[]): FxDisposal[] {
+    this.fxMissing.clear();
     const sorted = [...events].sort((a, b) => {
       const cmp = a.date.localeCompare(b.date);
       if (cmp !== 0) return cmp;

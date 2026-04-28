@@ -47,17 +47,22 @@ export class FifoEngine {
     // Process securities: STK, FUND, OPT, FUT, BOND, CFD, CRYPTO, CMDTY
     // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
     // gain/loss already embedded in securities trades via ECB rate conversion)
-    const hasOptionExercises = (optionExercises ?? []).length > 0;
+    const optionEaeKeys = new Set(
+      (optionExercises ?? []).map((ex) => ex.conid ? `conid:${ex.conid}` : ex.symbol),
+    );
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
           this.warnings.push(`⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`);
         }
-        // Skip option BookTrades for exercises/expirations when OptionEAE data is present
+        // Skip option BookTrades for exercises/expirations only when a matching OptionEAE exists
         // (IBKR generates both a BookTrade with notes="Ep"/"Ex" and an OptionEAE event)
-        if (hasOptionExercises && (t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP")) {
+        if (optionEaeKeys.size > 0 && (t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP")) {
           const notes = (t.notes || "").split(";");
-          if (notes.includes("Ep") || notes.includes("Ex")) return false;
+          if (notes.includes("Ep") || notes.includes("Ex")) {
+            const tradeKey = t.conid ? `conid:${t.conid}` : t.symbol;
+            if (optionEaeKeys.has(tradeKey)) return false;
+          }
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
       })
