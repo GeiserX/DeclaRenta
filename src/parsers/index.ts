@@ -17,6 +17,7 @@ import { krakenParser } from "./kraken.js";
 import { revolutParser } from "./revolut.js";
 import { lightyearParser } from "./lightyear.js";
 import { tradeRepublicParser } from "./trade-republic.js";
+import { trading212Parser } from "./trading212.js";
 
 /**
  * All registered broker parsers, checked in order for auto-detection.
@@ -31,6 +32,7 @@ export const brokerParsers: BrokerParser[] = [
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
   tradeRepublicParser, // CSV with transaction_id + asset_class + counterparty_name
+  trading212Parser, // CSV with Action + Time + No. of shares + Price / share
   binanceParser,    // CSV with Date(UTC),Pair,Side,Price headers
   coinbaseParser,   // CSV with Transaction Type + Spot Price headers
   krakenParser,     // CSV with txid + pair/ordertxid or refid/aclass headers

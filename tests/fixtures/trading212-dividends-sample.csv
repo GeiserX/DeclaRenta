@@ -1,0 +1,14 @@
+Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Currency conversion fee,Currency (Currency conversion fee),Merchant name,Merchant category
+Market buy,2025-01-10 09:00:00,XX0000000101,ORIO,"Orion Foods Inc",,div-ord-001,18.0000000000,41.2000000000,USD,1.09115000,,,679.35,EUR,0.10,EUR,,
+Dividend (Ordinary),2025-03-15 00:00:00,XX0000000101,ORIO,"Orion Foods Inc",Quarterly cash dividend,div-001,,,USD,1.08650000,,,9.71,USD,,USD,,
+Dividend (Dividend tax),2025-03-15 00:00:00,XX0000000101,ORIO,"Orion Foods Inc",US withholding tax,divtax-001,,,USD,1.08650000,,,-1.46,USD,,USD,,
+Market buy,2025-02-12 09:30:00,XX0000000102,NOVA,"Nova Medical Devices SA",,div-ord-002,25.0000000000,12.8000000000,EUR,1.00000000,,,320.00,EUR,,EUR,,
+Dividend (Ordinary),2025-04-03 00:00:00,XX0000000102,NOVA,"Nova Medical Devices SA",Semi-annual dividend (no WHT),div-002,,,EUR,1.00000000,,,5.50,EUR,,EUR,,
+Market buy,2025-02-20 15:45:17,XX0000000103,HELI,"Helios Industrials AG",,div-ord-003,14.4000000000,28.5000000000,EUR,1.00000000,,,410.40,EUR,,EUR,,
+Dividend (Ordinary),2025-05-08 00:00:00,XX0000000103,HELI,"Helios Industrials AG",German source dividend,div-003,,,EUR,1.00000000,,,11.20,EUR,,EUR,,
+Dividend (Dividend tax),2025-05-08 00:00:00,XX0000000103,HELI,"Helios Industrials AG",German withholding tax,divtax-003,,,EUR,1.00000000,,,-2.95,EUR,,EUR,,
+Market buy,2025-03-18 13:05:44,XX0000000104,VEGA,"Vega Retail Holdings",,div-ord-004,3.7500000000,96.0000000000,USD,1.08250000,,,332.56,EUR,0.05,EUR,,
+Dividend (Ordinary),2025-06-20 00:00:00,XX0000000104,VEGA,"Vega Retail Holdings",Fractional-share dividend,div-004,,,USD,1.07840000,,,1.53,USD,,USD,,
+Dividend (Dividend tax),2025-06-20 00:00:00,XX0000000104,VEGA,"Vega Retail Holdings",US withholding tax,divtax-004,,,USD,1.07840000,,,-0.23,USD,,USD,,
+Dividend (Ordinary),2025-07-05 00:00:00,XX0000000101,ORIO,"Orion Foods Inc",Special dividend no WHT,div-005,,,USD,1.07150000,,,12.98,USD,,USD,,
+
