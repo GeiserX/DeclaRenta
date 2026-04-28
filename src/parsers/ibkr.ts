@@ -224,6 +224,10 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
     currency: raw.currency ?? "",
     endingCash: raw.endingCash ?? "0",
     endingSettledCash: raw.endingSettledCash ?? "0",
+    averageQ4Cash: raw.averageQ4Cash ?? raw.averageCash ?? raw.averageCashBalance,
+    openedDate: raw.openedDate ?? raw.openDate,
+    institutionName: raw.institutionName ?? raw.brokerName,
+    countryCode: raw.countryCode ?? raw.country,
   };
 }
 

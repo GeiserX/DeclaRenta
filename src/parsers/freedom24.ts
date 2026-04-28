@@ -12,6 +12,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import { parseNumber } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // JSON structure types
@@ -117,10 +118,10 @@ function parseFreedom24(input: string): Statement {
     const operation = t.operation.toLowerCase();
     const isSell = operation === "sell";
 
-    const qtyNum = Math.abs(parseFloat(quantity));
+    const qtyNum = Math.abs(parseFloat(parseNumber(quantity)));
     if (qtyNum === 0) continue;
 
-    const commNum = parseFloat(commission);
+    const commNum = parseFloat(parseNumber(commission));
 
     trades.push({
       tradeID: `freedom24-${tradeDate}-${i}`,
@@ -181,7 +182,7 @@ function parseFreedom24(input: string): Statement {
     });
 
     // Withholding tax (if present)
-    const taxNum = parseFloat(taxAmount);
+    const taxNum = parseFloat(parseNumber(taxAmount));
     if (taxNum !== 0) {
       cashTransactions.push({
         transactionID: `freedom24-wht-${tradeDate}-${isin}-${i}`,

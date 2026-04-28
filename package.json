@@ -8,6 +8,13 @@
   "bin": {
     "declarenta": "./dist/cli.js"
   },
+  "files": [
+    "dist/index.js",
+    "dist/cli.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",

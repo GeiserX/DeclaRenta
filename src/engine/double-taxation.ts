@@ -27,6 +27,7 @@ const SAVINGS_TAX_BRACKETS = [
  */
 export function calculateDoubleTaxation(
   dividends: DividendEntry[],
+  totalSavingsBase?: Decimal,
 ): { total: Decimal; byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> } {
   const byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal }> = {};
 
@@ -41,12 +42,16 @@ export function calculateDoubleTaxation(
 
   let total = new Decimal(0);
   const result: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> = {};
+  const effectiveSavingsRate = totalSavingsBase && totalSavingsBase.greaterThan(0)
+    ? calculateSavingsTax(totalSavingsBase).dividedBy(totalSavingsBase)
+    : undefined;
 
   for (const [country, data] of Object.entries(byCountry)) {
     if (data.taxPaid.isZero()) continue;
 
-    // Calculate Spanish tax on this income using marginal savings rate
-    const spanishTax = calculateSavingsTax(data.grossIncome);
+    const spanishTax = effectiveSavingsRate
+      ? data.grossIncome.mul(effectiveSavingsRate)
+      : calculateSavingsTax(data.grossIncome);
 
     // Deduction = lesser of foreign tax paid or Spanish tax due
     const deduction = Decimal.min(data.taxPaid, spanishTax);

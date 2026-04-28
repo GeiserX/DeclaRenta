@@ -31,6 +31,19 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release artifacts before tagging
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build
+          test -f dist/cli.js
+          node dist/cli.js --version
+          npm pack --dry-run
+
       - name: Determine version bump
         id: version
         run: |

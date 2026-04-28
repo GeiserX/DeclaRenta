@@ -29,6 +29,7 @@ import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -313,11 +314,7 @@ function renderFileList() {
 async function parseFiles(): Promise<void> {
   if (pendingFiles.length === 0) return;
 
-  const merged: Statement = {
-    accountId: "", fromDate: "", toDate: "", period: "",
-    trades: [], cashTransactions: [], corporateActions: [],
-    openPositions: [], securitiesInfo: [],
-  };
+  const merged = createEmptyStatement();
   const brokerNames: string[] = [];
 
   try {
@@ -326,24 +323,14 @@ async function parseFiles(): Promise<void> {
       const uint8 = new Uint8Array(arrayBuf);
       if (await detectRevolutXlsx(uint8)) {
         const statement = await parseRevolutXlsx(uint8);
-        merged.accountId = merged.accountId || statement.accountId;
-        merged.trades.push(...statement.trades);
-        merged.cashTransactions.push(...statement.cashTransactions);
-        merged.corporateActions.push(...statement.corporateActions);
-        merged.openPositions.push(...statement.openPositions);
-        merged.securitiesInfo.push(...statement.securitiesInfo);
+        mergeStatement(merged, statement);
         brokerNames.push("Revolut");
         continue;
       }
 
       if (detectEtoroXlsx(uint8)) {
         const statement = await parseEtoroXlsx(uint8);
-        merged.accountId = merged.accountId || statement.accountId;
-        merged.trades.push(...statement.trades);
-        merged.cashTransactions.push(...statement.cashTransactions);
-        merged.corporateActions.push(...statement.corporateActions);
-        merged.openPositions = statement.openPositions;
-        merged.securitiesInfo.push(...statement.securitiesInfo);
+        mergeStatement(merged, statement);
         brokerNames.push("eToro");
         continue;
       }
@@ -381,21 +368,11 @@ async function parseFiles(): Promise<void> {
       }
 
       const statement = parser.parse(content);
-      merged.accountId = merged.accountId || statement.accountId;
-      merged.trades.push(...statement.trades);
-      merged.cashTransactions.push(...statement.cashTransactions);
-      merged.corporateActions.push(...statement.corporateActions);
-      merged.openPositions = statement.openPositions;
-      merged.securitiesInfo.push(...statement.securitiesInfo);
+      mergeStatement(merged, statement);
       brokerNames.push(parser.name);
     }
 
-    // Sort trades chronologically for cross-broker FIFO
-    merged.trades.sort((a, b) =>
-      normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
-    );
-
-    mergedStatement = merged;
+    mergedStatement = finalizeMergedStatement(merged);
     detectedBrokers = [...new Set(brokerNames)];
 
     // Detect years from trades + cash transactions

@@ -33,12 +33,12 @@ export function generateTaxReport(
 ): TaxSummary {
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
-  fifoEngine.processTrades(statement.trades, rateMap, statement.corporateActions);
-
-  // Process option exercises/assignments/expirations (DGT V0137-23)
-  if (statement.optionExercises && statement.optionExercises.length > 0) {
-    fifoEngine.processOptionExercises(statement.optionExercises, rateMap);
-  }
+  fifoEngine.processTrades(
+    statement.trades,
+    rateMap,
+    statement.corporateActions,
+    statement.optionExercises,
+  );
 
   const yearStr = year.toString();
   let disposals = fifoEngine.getDisposals().filter((d) => d.sellDate.startsWith(yearStr));
@@ -108,8 +108,14 @@ export function generateTaxReport(
   const fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
   const fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
 
-  // 5. Double taxation
-  const doubleTaxation = calculateDoubleTaxation(dividendEntries);
+  // 5. Double taxation. Art. 80 caps the deduction by the effective average
+  // Spanish rate on the relevant savings-tax base, not by standalone country
+  // brackets computed in isolation.
+  const totalSavingsBase = Decimal.max(transmissionValue.minus(acquisitionValue), 0)
+    .plus(Decimal.max(fxTransmissionValue.minus(fxAcquisitionValue), 0))
+    .plus(grossDividends)
+    .plus(interestEarned);
+  const doubleTaxation = calculateDoubleTaxation(dividendEntries, totalSavingsBase);
 
   // Filter warnings to those relevant to the selected year
   const yearWarnings = fifoEngine.warnings.filter((w) => {

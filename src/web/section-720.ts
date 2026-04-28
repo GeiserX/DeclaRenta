@@ -159,15 +159,18 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   // Cash balances table (Category C — Cuentas)
   const cashBalances = (statement.cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (cashBalances.length > 0) {
+    const missingAverage = cashBalances.some((cb) => !cb.averageQ4Cash);
     html += `<h3>${t("m720.cash_title")}</h3>
+    ${missingAverage ? `<div class="banner banner-warning">${t("m720.cash_missing_average")}</div>` : ""}
     <div class="table-wrapper"><table>
       <thead><tr>
-        <th>${t("table.currency")}</th><th>${t("table.amount_eur")}</th>
+        <th>${t("table.currency")}</th><th>${t("table.amount_eur")}</th><th>${t("m720.q4_average")}</th>
       </tr></thead>
       <tbody>${cashBalances.map((cb) => {
         const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, dateForRates, cb.currency);
         const val = new Decimal(cb.endingCash).mul(ecbRate).toFixed(2);
-        return `<tr><td>${esc(cb.currency)}</td><td>${val}</td></tr>`;
+        const avg = cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate).toFixed(2) : "—";
+        return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
   }

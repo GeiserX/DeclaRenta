@@ -104,11 +104,11 @@ describe("D-6 Guide Generator", () => {
     expect(report.positions[1]!.exchangeCode).toBe("XETR");
   });
 
-  it("should state no minimum threshold in guide", () => {
+  it("should state the current 10 percent participation scope in guide", () => {
     const positions = [makePosition({ positionValue: "100", currency: "USD" })];
     const report = generateD6Report(positions, rateMap, 2025, "Test", "12345678A");
 
-    expect(report.guide.some((l) => l.includes("CUALQUIER importe"))).toBe(true);
+    expect(report.guide.some((l) => l.includes("10% o más"))).toBe(true);
   });
 
   describe("D-6 cancellations (declaración negativa)", () => {

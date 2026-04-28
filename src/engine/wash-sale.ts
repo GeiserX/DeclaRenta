@@ -8,9 +8,8 @@
  * - **1 year** before or after the sale — for securities NOT admitted
  *   to trading on regulated markets (most crypto, unlisted shares, etc.).
  *
- * Current implementation uses 2 months for all non-exempt categories
- * and exempts CRYPTO entirely. When crypto parsers are fully integrated,
- * crypto should use the 1-year window instead of being exempt.
+ * Crypto and other non-listed assets use the 1-year window. Listed securities
+ * use the 2-month window.
  */
 
 import type { FifoDisposal } from "../types/tax.js";
@@ -18,7 +17,7 @@ import type { Trade } from "../types/ibkr.js";
 import { parseDate } from "./dates.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f) */
-const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH", "CRYPTO"]);
+const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
 
 /** Add/subtract calendar months (Art. 33.5.f says "dos meses", not 60 days). */
 function addMonths(date: Date, months: number): Date {
@@ -39,17 +38,17 @@ function addMonths(date: Date, months: number): Date {
  * @returns Disposals with washSaleBlocked flag set
  */
 export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): FifoDisposal[] {
-  const buysByIsin = new Map<string, Date[]>();
+  const buysByAsset = new Map<string, Date[]>();
 
-  // Index all buy dates by ISIN
+  // Index all buy dates by homogeneous-asset key.
   for (const trade of allTrades) {
-    // Anti-churning applies to STK, FUND, and BOND (homogeneous securities)
-    // Excluded: OPT, FUT, CFD, CASH, CRYPTO (derivatives, forex, and crypto are not "valores homogéneos")
-    if (trade.buySell === "BUY" && !WASH_SALE_EXEMPT.has(trade.assetCategory) && trade.isin !== "") {
-      if (!buysByIsin.has(trade.isin)) {
-        buysByIsin.set(trade.isin, []);
+    if (trade.buySell === "BUY" && !WASH_SALE_EXEMPT.has(trade.assetCategory)) {
+      const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
+      if (!key) continue;
+      if (!buysByAsset.has(key)) {
+        buysByAsset.set(key, []);
       }
-      buysByIsin.get(trade.isin)!.push(parseDate(trade.tradeDate));
+      buysByAsset.get(key)!.push(parseDate(trade.tradeDate));
     }
   }
 
@@ -59,21 +58,22 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       return disposal;
     }
 
-    // Anti-churning does NOT apply to derivatives, forex, CFDs, or crypto
+    // Anti-churning does NOT apply to derivatives, forex, or CFDs.
     if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) {
       return disposal;
     }
 
-    // Cannot match without ISIN — skip to avoid grouping unrelated trades
-    if (disposal.isin === "") {
+    const key = homogeneousKey(disposal.isin, disposal.symbol, disposal.assetCategory);
+    if (!key) {
       return disposal;
     }
 
     const sellDate = parseDate(disposal.sellDate);
-    const windowStart = addMonths(sellDate, -2);
-    const windowEnd = addMonths(sellDate, 2);
+    const months = disposal.assetCategory === "CRYPTO" ? 12 : 2;
+    const windowStart = addMonths(sellDate, -months);
+    const windowEnd = addMonths(sellDate, months);
 
-    const buys = buysByIsin.get(disposal.isin) ?? [];
+    const buys = buysByAsset.get(key) ?? [];
     const hasRepurchase = buys.some((buyDate) => {
       // Exclude buys that are BEFORE the sell (those are the lots being sold)
       // We only care about repurchases: buys that happen in the 2-month window
@@ -86,4 +86,10 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
       washSaleBlocked: hasRepurchase,
     };
   });
+}
+
+function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {
+  if (assetCategory === "CRYPTO") return `CRYPTO:${symbol.toUpperCase()}`;
+  if (isin) return isin;
+  return "";
 }

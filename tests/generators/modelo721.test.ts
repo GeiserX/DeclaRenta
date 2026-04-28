@@ -26,6 +26,7 @@ const baseConfig = {
   declarationId: "0000000000001",
   isComplementary: false,
   isReplacement: false,
+  allowPrototypeOutput: true,
 };
 
 describe("Modelo 721 Generator", () => {

@@ -20,7 +20,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, AssetCategory } from "../types/ibkr.js";
-import { findColumn } from "./csv-utils.js";
+import { findColumn, parseNumber } from "./csv-utils.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
 
@@ -142,15 +142,15 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
     const fees = feesCol >= 0 ? (row[feesCol] ?? "0").trim() : "0";
     const currency = currencyCol >= 0 ? (row[currencyCol] ?? "USD").trim() : "USD";
 
-    const qty = parseFloat(quantity);
+    const qty = parseFloat(parseNumber(quantity));
     if (qty === 0 || isNaN(qty)) continue;
 
     const absQty = Math.abs(qty);
     const assetCategory = detectAssetCategory(symbol);
-    const costNum = parseFloat(costBasis);
-    const proceedsNum = parseFloat(grossProceeds);
-    const pnlNum = parseFloat(grossPnl);
-    const feesNum = parseFloat(fees);
+    const costNum = parseFloat(parseNumber(costBasis));
+    const proceedsNum = parseFloat(parseNumber(grossProceeds));
+    const pnlNum = parseFloat(parseNumber(grossPnl));
+    const feesNum = parseFloat(parseNumber(fees));
 
     // Use absolute values to avoid double-negative if input is already negative
     const absCost = isNaN(costNum) ? 0 : Math.abs(costNum);

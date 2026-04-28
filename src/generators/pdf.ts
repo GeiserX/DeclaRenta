@@ -11,9 +11,8 @@ import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
 
-import { createRequire } from "module";
-const _require = createRequire(import.meta.url);
-const VERSION: string = (_require("../../package.json") as { version: string }).version;
+declare const __PACKAGE_VERSION__: string | undefined;
+const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
 
 // ---------------------------------------------------------------------------
 // PDF layout constants

@@ -19,7 +19,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
-import { findColumn } from "./csv-utils.js";
+import { findColumn, parseNumber } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
 type WorkBook = import("xlsx").WorkBook;
@@ -154,7 +154,7 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     const openDate = openDateCol >= 0 ? parseEtoroDate(row[openDateCol] ?? "") : "";
     const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
 
-    const unitsNum = parseFloat(units);
+    const unitsNum = parseFloat(parseNumber(units));
     if (unitsNum === 0 || isNaN(unitsNum)) continue;
 
     // eToro closed positions represent a round-trip: buy then sell
@@ -189,8 +189,8 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     });
 
     // Sell leg (closing)
-    const amountNum = parseFloat(amount);
-    const profitNum = parseFloat(profit);
+    const amountNum = parseFloat(parseNumber(amount));
+    const profitNum = parseFloat(parseNumber(profit));
     const proceeds = isNaN(amountNum) || isNaN(profitNum) ? "0" : `${amountNum + profitNum}`;
 
     trades.push({
@@ -255,11 +255,11 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
     const whtAmount = whtCol >= 0 ? (row[whtCol] ?? "0").trim() : "0";
     const isin = isinCol >= 0 ? (row[isinCol] ?? "").trim() : "";
 
-    const netNum = parseFloat(netAmount);
+    const netNum = parseFloat(parseNumber(netAmount));
     if (isNaN(netNum) || netNum === 0) continue;
 
     // Compute gross dividend and withholding tax
-    const whtNum = parseFloat(whtAmount);
+    const whtNum = parseFloat(parseNumber(whtAmount));
     let grossAmount = netAmount;
     let taxAmount = "0";
     if (!isNaN(whtNum) && whtNum !== 0) {

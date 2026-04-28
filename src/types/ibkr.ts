@@ -134,6 +134,14 @@ export interface CashBalance {
   currency: string;
   endingCash: string;
   endingSettledCash: string;
+  /** Q4 average cash balance in the same currency, required for Modelo 720 Category C. */
+  averageQ4Cash?: string;
+  /** Account opening date in YYYYMMDD/ISO format when known. */
+  openedDate?: string;
+  /** Foreign financial institution name when known. */
+  institutionName?: string;
+  /** Country code of the foreign account/institution when known. */
+  countryCode?: string;
 }
 
 export type AssetCategory = "STK" | "OPT" | "FUT" | "FOP" | "FSFOP" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";

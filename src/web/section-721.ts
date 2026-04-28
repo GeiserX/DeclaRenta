@@ -2,8 +2,7 @@
  * Modelo 721 section — foreign crypto assets declaration.
  *
  * Displays threshold indicator, crypto position table, filing guide,
- * and generates the fixed-width stub file.
- * Real AEAT format is XML (Orden HFP/886/2023) — stub only for now.
+ * and explains that official XML generation is not implemented yet.
  */
 
 import { t } from "../i18n/index.js";
@@ -149,13 +148,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
-  // Generate button
-  if (exceeds) {
-    html += `<button id="m721-generate-btn">${t("m721.generate_btn")}</button>`;
-  }
-
-  // XML format notice
-  html += `<div class="banner banner-info">${t("m721.format_notice")}</div>`;
+  html += `<div class="banner banner-warning">${t("m721.format_notice")}</div>`;
 
   // Filing guide
   html += `<div class="filing-guide">
@@ -173,70 +166,6 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
 
   container.innerHTML = html;
 
-  // Bind generate button
-  document.getElementById("m721-generate-btn")?.addEventListener("click", () => {
-    void generate721File();
-  });
-}
-
-async function generate721File(): Promise<void> {
-  if (!cachedStatement || !cachedRateMap) return;
-  if (!isProfileComplete()) {
-    const container = document.getElementById("m721-content");
-    if (container && !container.querySelector(".profile-required")) {
-      const banner = document.createElement("div");
-      banner.className = "banner banner-warning profile-required";
-      banner.innerHTML = `<span>${t("m721.profile_required")}</span> <a href="#perfil">${t("profile.go_to_profile")}</a>`;
-      container.prepend(banner);
-    }
-    return;
-  }
-
-  const { generateModelo721 } = await import("../generators/modelo721.js");
-  const profile = getProfile();
-  const fullName = `${profile.apellidos} ${profile.nombre}`.trim();
-  const yearEnd = effectiveYearEnd(profile.year);
-
-  const positions = cachedStatement.openPositions.filter(
-    (p) => CRYPTO_CATEGORIES.has(p.assetCategory) && new Decimal(p.positionValue).greaterThan(0),
-  );
-
-  const entries = positions.map((p) => {
-    const rate = getEcbRate(cachedRateMap!, yearEnd, p.currency);
-    const isinPrefix = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "";
-    return {
-      assetId: p.isin || p.description || p.symbol,
-      description: p.description,
-      exchangeName: isinPrefix || "CRYPTO",
-      countryCode: isinPrefix.toUpperCase() || "XX",
-      quantity: new Decimal(p.quantity),
-      valuationEur: new Decimal(p.positionValue).mul(rate),
-      acquisitionCostEur: new Decimal(p.costBasisMoney || 0).mul(rate),
-    };
-  });
-
-  const config = {
-    nif: profile.nif,
-    surname: profile.apellidos,
-    name: profile.nombre,
-    year: profile.year,
-    phone: profile.telefono,
-    contactName: fullName || "CONTRIBUYENTE",
-    declarationId: "",
-    isComplementary: false,
-    isReplacement: false,
-  };
-
-  const result = generateModelo721(entries, config);
-  if (!result) return;
-
-  const blob = new Blob([result], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `modelo721_${profile.year}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /** Re-render if data was previously cached (for locale changes) */

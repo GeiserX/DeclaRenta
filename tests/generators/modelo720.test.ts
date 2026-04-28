@@ -254,7 +254,7 @@ describe("Modelo 720 Generator", () => {
     it("should calculate accounts category from cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
+        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
       ];
       const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
 
@@ -267,7 +267,7 @@ describe("Modelo 720 Generator", () => {
     it("should handle mixed V+C categories independently", () => {
       const positions = [makePosition({ currency: "EUR", positionValue: "40000" })];
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
       ];
       const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
 
@@ -280,8 +280,8 @@ describe("Modelo 720 Generator", () => {
     it("should sum multi-currency cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1", currency: "USD", endingCash: "30000", endingSettledCash: "30000" },
-        { accountId: "U1", currency: "GBP", endingCash: "20000", endingSettledCash: "20000" },
+        { accountId: "U1", currency: "USD", endingCash: "30000", endingSettledCash: "30000", averageQ4Cash: "30000" },
+        { accountId: "U1", currency: "GBP", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "20000" },
       ];
       const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
 
@@ -293,8 +293,8 @@ describe("Modelo 720 Generator", () => {
     it("should filter out negative cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
-        { accountId: "U1", currency: "EUR", endingCash: "-5000", endingSettledCash: "-5000" },
+        { accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
+        { accountId: "U1", currency: "EUR", endingCash: "-5000", endingSettledCash: "-5000", averageQ4Cash: "-5000" },
       ];
       const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
 
@@ -305,7 +305,7 @@ describe("Modelo 720 Generator", () => {
     it("should use rate 1.0 for EUR cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
       ];
       const result = checkModelo720Thresholds(positions, rateMap, 2025, cashBalances);
 
@@ -318,7 +318,7 @@ describe("Modelo 720 Generator", () => {
     it("should generate Category C records when cash exceeds 50K", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000" },
+        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -334,7 +334,7 @@ describe("Modelo 720 Generator", () => {
     it("should not generate Category C records when cash is below 50K", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "40000", endingSettledCash: "40000" },
+        { accountId: "U1", currency: "EUR", endingCash: "40000", endingSettledCash: "40000", averageQ4Cash: "40000" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -344,7 +344,7 @@ describe("Modelo 720 Generator", () => {
     it("should generate both V and C records when both exceed 50K", () => {
       const positions = [makePosition()]; // 60000 * 0.92 = 55200 EUR
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -360,7 +360,7 @@ describe("Modelo 720 Generator", () => {
     it("should only generate C records when V is below threshold but C exceeds", () => {
       const positions = [makePosition({ positionValue: "10000" })]; // 9200 EUR < 50K
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
