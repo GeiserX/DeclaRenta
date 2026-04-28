@@ -12,6 +12,7 @@ function makeRateMap(rates: Record<string, string>): EcbRateMap {
 }
 
 function makeTrade(overrides: Partial<Trade>): Trade {
+  const tradeDate = overrides.tradeDate ?? "2025-03-15";
   return {
     tradeID: "1",
     accountId: "U1",
@@ -20,8 +21,8 @@ function makeTrade(overrides: Partial<Trade>): Trade {
     isin: "US0378331005",
     assetCategory: "STK",
     currency: "USD",
-    tradeDate: "2025-03-15",
-    settlementDate: "2025-03-18",
+    tradeDate,
+    settlementDate: tradeDate,
     quantity: "10",
     tradePrice: "100",
     tradeMoney: "1000",
@@ -41,6 +42,7 @@ function makeTrade(overrides: Partial<Trade>): Trade {
 }
 
 function makeCashTx(overrides: Partial<CashTransaction>): CashTransaction {
+  const dateTime = overrides.dateTime ?? "20250601";
   return {
     transactionID: "1",
     accountId: "U1",
@@ -48,8 +50,8 @@ function makeCashTx(overrides: Partial<CashTransaction>): CashTransaction {
     description: "APPLE INC",
     isin: "US0378331005",
     currency: "USD",
-    dateTime: "20250601",
-    settleDate: "20250603",
+    dateTime,
+    settleDate: dateTime,
     amount: "100",
     fxRateToBase: "0.92",
     type: "Dividends",
