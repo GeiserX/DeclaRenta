@@ -164,7 +164,10 @@ export class FxFifoEngine {
     for (const trade of trades) {
       if (trade.currency === "EUR") continue;
 
-      const date = normalizeDate(trade.tradeDate);
+      // Use settlement date for FX events: stock purchases and their corresponding
+      // forex conversions settle on the same date (T+2/T+1), eliminating false
+      // "missing lots" warnings caused by trade-date ordering mismatches.
+      const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
 
       if (trade.assetCategory === "CASH") {
@@ -218,7 +221,7 @@ export class FxFifoEngine {
       const amount = new Decimal(tx.amount);
       if (amount.isZero()) continue;
 
-      const date = normalizeDate(tx.dateTime);
+      const date = normalizeDate(tx.settleDate || tx.dateTime);
       const ecbRate = getEcbRate(rateMap, date, tx.currency);
 
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
