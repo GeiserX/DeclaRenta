@@ -149,7 +149,7 @@ describe("FxFifoEngine", () => {
       expect(disposals[1]!.costBasisEur.toFixed(2)).toBe("190.00");
       expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("190.00");
       expect(disposals[1]!.gainLossEur.toFixed(2)).toBe("0.00");
-      expect(engine.warnings.some((w) => w.includes("insuficientes"))).toBe(true);
+      expect(engine.warnings.some((w) => w.includes("sin lotes previos suficientes"))).toBe(true);
     });
 
     it("should calculate holding period days correctly", () => {

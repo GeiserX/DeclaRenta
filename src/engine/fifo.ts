@@ -14,7 +14,7 @@ import { getEcbRate } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
 /** Known asset categories — warn on unknown values to catch future IBKR additions */
-const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "FOP", "FSFOP", "CASH", "BOND", "FUND", "WAR", "CRYPTO", "CFD"]);
+const KNOWN_CATEGORIES: ReadonlySet<string> = new Set(["STK", "OPT", "FUT", "FOP", "FSFOP", "CASH", "BOND", "FUND", "WAR", "CRYPTO", "CFD", "CMDTY"]);
 
 /** Lot grouping key: ISIN when available; conid for IBKR instruments without ISIN (survives ticker renames); otherwise asset category + symbol */
 function lotKey(trade: { isin: string; symbol: string; assetCategory: string; conid?: string }): string {
@@ -44,13 +44,25 @@ export class FifoEngine {
     corporateActions?: CorporateAction[],
     optionExercises?: OptionExercise[],
   ): FifoDisposal[] {
-    // Process securities: STK, FUND, OPT, FUT, BOND, CFD, CRYPTO
+    // Process securities: STK, FUND, OPT, FUT, BOND, CFD, CRYPTO, CMDTY
     // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
     // gain/loss already embedded in securities trades via ECB rate conversion)
+    const optionEaeKeys = new Set(
+      (optionExercises ?? []).map((ex) => ex.conid ? `conid:${ex.conid}` : ex.symbol),
+    );
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
           this.warnings.push(`⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`);
+        }
+        // Skip option BookTrades for exercises/expirations only when a matching OptionEAE exists
+        // (IBKR generates both a BookTrade with notes="Ep"/"Ex" and an OptionEAE event)
+        if (optionEaeKeys.size > 0 && (t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP")) {
+          const notes = (t.notes || "").split(";");
+          if (notes.includes("Ep") || notes.includes("Ex")) {
+            const tradeKey = t.conid ? `conid:${t.conid}` : t.symbol;
+            if (optionEaeKeys.has(tradeKey)) return false;
+          }
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
       })
