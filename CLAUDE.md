@@ -1,4 +1,4 @@
-# AGENTS.md - DeclaRenta
+# CLAUDE.md - DeclaRenta
 
 ## Project Overview
 
