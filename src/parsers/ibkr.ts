@@ -78,7 +78,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
-    optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE)));
+    optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
 
   // Detect important sections present in XML but not parsed
