@@ -259,6 +259,21 @@ export class FxFifoEngine {
 
     if (!lots || lots.length === 0) {
       this.warnings.push(`⚠ Venta de ${event.currency} sin lotes previos el ${event.date}. Posible adquisición anterior al período declarado.`);
+      // No lots = prior-year acquisition. Record with zero gain (cost = proceeds)
+      // to avoid fabricating phantom profits from missing historical data.
+      const proceedsEur = remaining.mul(event.ecbRate);
+      this.disposals.push({
+        currency: event.currency,
+        disposeDate: event.date,
+        acquireDate: event.date,
+        quantity: remaining,
+        proceedsEur,
+        costBasisEur: proceedsEur,
+        gainLossEur: new Decimal(0),
+        trigger: event.trigger,
+        holdingPeriodDays: 0,
+        lotId: "UNKNOWN",
+      });
       return;
     }
 
@@ -295,6 +310,8 @@ export class FxFifoEngine {
 
     if (remaining.greaterThan(0)) {
       this.warnings.push(`⚠ Lotes FX insuficientes: ${event.currency} × ${remaining} el ${event.date}. Coste = 0.`);
+      // Without prior-year lots we cannot determine cost basis.
+      // Use current rate as cost (zero gain) to avoid fabricating phantom profits.
       const proceedsEur = remaining.mul(event.ecbRate);
       this.disposals.push({
         currency: event.currency,
@@ -302,8 +319,8 @@ export class FxFifoEngine {
         acquireDate: event.date,
         quantity: remaining,
         proceedsEur,
-        costBasisEur: new Decimal(0),
-        gainLossEur: proceedsEur,
+        costBasisEur: proceedsEur,
+        gainLossEur: new Decimal(0),
         trigger: event.trigger,
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",

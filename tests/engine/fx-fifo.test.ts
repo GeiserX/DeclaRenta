@@ -116,17 +116,22 @@ describe("FxFifoEngine", () => {
       expect(engine.getDisposals()).toHaveLength(0);
     });
 
-    it("should warn when disposing without prior lots", () => {
+    it("should warn when disposing without prior lots and record zero-gain disposal", () => {
       const engine = new FxFifoEngine();
       engine.processEvents([
-        makeEvent({ quantity: new Decimal(-500) }),
+        makeEvent({ quantity: new Decimal(-500), ecbRate: new Decimal("0.95") }),
       ]);
 
       expect(engine.warnings).toHaveLength(1);
       expect(engine.warnings[0]).toMatch(/sin lotes previos/);
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("0.00");
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("475.00");
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("475.00");
     });
 
-    it("should warn and record zero-cost disposal for insufficient lots", () => {
+    it("should warn and record zero-gain disposal for insufficient lots", () => {
       const engine = new FxFifoEngine();
       engine.processEvents([
         makeEvent({ quantity: new Decimal(300), ecbRate: new Decimal("0.92") }),
@@ -135,11 +140,15 @@ describe("FxFifoEngine", () => {
 
       const disposals = engine.getDisposals();
       expect(disposals).toHaveLength(2);
-      // First: 300 from lot
+      // First: 300 from lot (real gain/loss)
       expect(disposals[0]!.quantity.toString()).toBe("300");
-      // Second: 200 with zero cost (overflow)
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("276.00");
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("285.00");
+      // Second: 200 overflow — zero gain (cost = proceeds, no phantom profit)
       expect(disposals[1]!.quantity.toString()).toBe("200");
-      expect(disposals[1]!.costBasisEur.toFixed(2)).toBe("0.00");
+      expect(disposals[1]!.costBasisEur.toFixed(2)).toBe("190.00");
+      expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("190.00");
+      expect(disposals[1]!.gainLossEur.toFixed(2)).toBe("0.00");
       expect(engine.warnings.some((w) => w.includes("insuficientes"))).toBe(true);
     });
 
