@@ -16,6 +16,7 @@ export { binanceParser } from "./parsers/binance.js";
 export { krakenParser } from "./parsers/kraken.js";
 export { revolutParser } from "./parsers/revolut.js";
 export { lightyearParser } from "./parsers/lightyear.js";
+export { trading212Parser } from "./parsers/trading212.js";
 export { detectBroker, getBroker, brokerParsers } from "./parsers/index.js";
 
 // CSV utilities

@@ -10,6 +10,7 @@ import { scalableParser } from "../../src/parsers/scalable.js";
 import { freedom24Parser } from "../../src/parsers/freedom24.js";
 import { etoroParser } from "../../src/parsers/etoro.js";
 import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
+import { trading212Parser } from "../../src/parsers/trading212.js";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -413,6 +414,85 @@ describe("fixture file integration", () => {
       const taxedTrade = r.trades.find((t) => t.isin === "ES0000003001" && t.buySell === "BUY");
       expect(taxedTrade).toBeDefined();
       expect(taxedTrade!.taxes).toBe("-5");
+    });
+  });
+
+  describe("trading212-v2-sample.csv (extended header, trades + noise)", () => {
+    const csv = fixture("trading212-v2-sample.csv");
+
+    it("should detect the extended-header format", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse trades and ignore card/cashback/deposit noise", () => {
+      const r = trading212Parser.parse(csv);
+      expect(r.trades).toHaveLength(9);
+      expect(r.cashTransactions).toHaveLength(2);
+      expect(r.trades.some((t) => t.buySell === "BUY" && t.symbol === "CYGN")).toBe(true);
+    });
+
+    it("should cover stop orders and partial closes", () => {
+      const r = trading212Parser.parse(csv);
+      const stops = r.trades.filter((t) => t.description.toLowerCase().includes("cygn"));
+      expect(stops.length).toBeGreaterThan(0);
+      const bravSells = r.trades.filter((t) => t.symbol === "BRAV" && t.buySell === "SELL");
+      expect(bravSells).toHaveLength(2);
+    });
+  });
+
+  describe("trading212-dividends-sample.csv (dividends + withholding)", () => {
+    const csv = fixture("trading212-dividends-sample.csv");
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse dividends and withholding tax with extended header", () => {
+      const r = trading212Parser.parse(csv);
+      const divs = r.cashTransactions.filter((t) => t.type === "Dividends");
+      const whts = r.cashTransactions.filter((t) => t.type === "Withholding Tax");
+      expect(r.trades).toHaveLength(4);
+      expect(divs).toHaveLength(5);
+      expect(whts).toHaveLength(3);
+    });
+
+    it("should store dividend currency from Currency (Total) column", () => {
+      const r = trading212Parser.parse(csv);
+      const orioDivs = r.cashTransactions.filter((t) => t.symbol === "ORIO" && t.type === "Dividends");
+      expect(orioDivs.every((d) => d.currency === "USD")).toBe(true);
+      const novaDivs = r.cashTransactions.filter((t) => t.symbol === "NOVA" && t.type === "Dividends");
+      expect(novaDivs.every((d) => d.currency === "EUR")).toBe(true);
+    });
+  });
+
+  describe("trading212-cash-sample.csv (interest + cash noise)", () => {
+    const csv = fixture("trading212-cash-sample.csv");
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should extract only interest on cash from mixed cash rows", () => {
+      const r = trading212Parser.parse(csv);
+      expect(r.trades).toHaveLength(0);
+      expect(r.cashTransactions).toHaveLength(5);
+      expect(r.cashTransactions.every((t) => t.type === "Broker Interest Received")).toBe(true);
+    });
+  });
+
+  describe("trading212-extended-sample.csv (fractions, quoted names, partial closes)", () => {
+    const csv = fixture("trading212-extended-sample.csv");
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should handle quotes, blank IDs, fractions, and partial closes", () => {
+      const r = trading212Parser.parse(csv);
+      expect(r.trades).toHaveLength(7);
+      expect(r.cashTransactions).toHaveLength(3);
+      expect(r.trades.some((t) => t.description.includes("Quoted \"Special\" Holdings, Inc."))).toBe(true);
+      expect(r.cashTransactions.some((t) => t.transactionID.includes("20250915-PAIR"))).toBe(true);
     });
   });
 });

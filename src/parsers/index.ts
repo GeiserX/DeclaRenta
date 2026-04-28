@@ -17,23 +17,25 @@ import { krakenParser } from "./kraken.js";
 import { revolutParser } from "./revolut.js";
 import { lightyearParser } from "./lightyear.js";
 import { tradeRepublicParser } from "./trade-republic.js";
+import { trading212Parser } from "./trading212.js";
 
 /**
  * All registered broker parsers, checked in order for auto-detection.
  * Order matters: more specific formats (XML, JSON, XLSX) before generic CSV.
  */
 export const brokerParsers: BrokerParser[] = [
-  ibkrParser,       // XML with <FlexQueryResponse>
-  freedom24Parser,  // JSON with trades/corporate_actions/cash_flows
-  revolutParser,    // XLSX with "Date acquired" + "Cost basis"
-  etoroParser,      // XLSX/CSV with "Closed Positions"
-  lightyearParser,  // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
-  degiroParser,     // CSV with ISIN + quantity + price headers
-  scalableParser,   // CSV with date;time;status;reference headers
+  ibkrParser,          // XML with <FlexQueryResponse>
+  freedom24Parser,     // JSON with trades/corporate_actions/cash_flows
+  revolutParser,       // XLSX with "Date acquired" + "Cost basis"
+  etoroParser,         // XLSX/CSV with "Closed Positions"
+  lightyearParser,     // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
+  trading212Parser,    // CSV with Action + "No. of shares" + "Price / share"
+  degiroParser,        // CSV with ISIN + quantity + price headers
+  scalableParser,      // CSV with date;time;status;reference headers
   tradeRepublicParser, // CSV with transaction_id + asset_class + counterparty_name
-  binanceParser,    // CSV with Date(UTC),Pair,Side,Price headers
-  coinbaseParser,   // CSV with Transaction Type + Spot Price headers
-  krakenParser,     // CSV with txid + pair/ordertxid or refid/aclass headers
+  binanceParser,       // CSV with Date(UTC),Pair,Side,Price headers
+  coinbaseParser,      // CSV with Transaction Type + Spot Price headers
+  krakenParser,        // CSV with txid + pair/ordertxid or refid/aclass headers
 ];
 
 /**

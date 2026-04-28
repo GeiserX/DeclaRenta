@@ -1,0 +1,11 @@
+Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Currency conversion fee,Currency (Currency conversion fee),Merchant name,Merchant category
+Market buy,2025-09-01 09:00:00,XX0000000201,QUOT,"Quoted ""Special"" Holdings, Inc.",,edge-001,1.2500000000,80.0000000000,USD,1.11250000,,,89.89,EUR,0.01,EUR,,
+Market sell,2025-09-02 09:05:00,XX0000000201,QUOT,"Quoted ""Special"" Holdings, Inc.",,edge-002,0.5000000000,82.4000000000,USD,1.11020000,0.79,EUR,37.11,EUR,0.01,EUR,,
+Market sell,2025-09-02 16:41:00,XX0000000201,QUOT,"Quoted ""Special"" Holdings, Inc.",Partial close,edge-003,0.7500000000,81.8000000000,USD,1.10940000,0.92,EUR,55.29,EUR,,EUR,,
+Limit buy,2025-09-08 10:11:18,XX0000000202,MICR,"Micro Grid Networks",,edge-004,0.1234567890,19.7500000000,EUR,1.00000000,,,2.44,EUR,,EUR,,
+Limit sell,2025-09-09 15:59:59,XX0000000202,MICR,"Micro Grid Networks",,edge-005,0.1234567890,20.1000000000,EUR,1.00000000,0.04,EUR,2.48,EUR,,EUR,,
+Stop buy,2025-09-20 09:00:00,XX0000000204,NORD,"Nordic Air Logistics",,edge-006,6.0000000000,14.2500000000,USD,1.09700000,,,77.94,EUR,0.01,EUR,,
+Stop sell,2025-09-24 13:37:42,XX0000000204,NORD,"Nordic Air Logistics",,edge-007,6.0000000000,13.9500000000,USD,1.10400000,-2.55,EUR,75.82,EUR,0.01,EUR,,
+Dividend (Ordinary),2025-09-15 00:00:00,XX0000000203,PAIR,"Paired Income Trust",Ordinary dividend,,,,USD,1.10100000,,,3.93,USD,,USD,,
+Dividend (Dividend tax),2025-09-15 00:00:00,XX0000000203,PAIR,"Paired Income Trust",Dividend tax with blank ID,,,,USD,1.10100000,,,-0.59,USD,,USD,,
+Interest on cash,2025-09-16 01:15:00,,,,Rounded carry release,,,,,,,,0.01,EUR,,,,

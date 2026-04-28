@@ -1,0 +1,20 @@
+Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Notes,ID
+Market buy,2024-01-15 09:30:00,US0378331005,AAPL,Apple Inc,10,185.50,USD,0.92,,,1706.60,EUR,,trade001
+Market buy,2024-02-10 10:15:00,US5949181045,MSFT,Microsoft Corp,5,415.00,USD,0.93,,,1929.75,EUR,,trade002
+Market sell,2024-06-20 14:22:00,US0378331005,AAPL,Apple Inc,10,210.30,USD,0.93,283.00,USD,1955.79,EUR,,trade003
+Limit buy,2024-03-05 11:00:00,IE00B4L5Y983,IWDA,iShares Core MSCI World ETF,3,95.20,EUR,1.00,,,285.60,EUR,,trade004
+Limit sell,2024-09-12 15:30:00,IE00B4L5Y983,IWDA,iShares Core MSCI World ETF,3,102.50,EUR,1.00,21.90,EUR,307.50,EUR,,trade005
+Stop buy,2024-04-10 09:00:00,XX0000000301,DELT,Delta Pharma Inc,2.5,48.00,USD,0.92,,,110.40,EUR,,trade006
+Stop sell,2024-05-15 16:00:00,XX0000000301,DELT,Delta Pharma Inc,2.5,51.20,USD,0.93,8.00,USD,134.18,EUR,,trade007
+Market buy,2024-07-01 09:15:00,XX0000000302,ECHO,"Echo Digital, Inc.",1.75,120.00,USD,0.92,,,193.04,EUR,,trade008
+Market buy,2024-08-20 14:00:00,XX0000000302,ECHO,"Echo Digital, Inc.",0.50,118.50,USD,0.93,,,55.11,EUR,,
+Dividend (Ordinary),2024-03-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.92,,,2.35,USD,,div001
+Dividend (Dividend tax),2024-03-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.92,,,-0.47,USD,,divtax001
+Dividend (Ordinary),2024-06-15 00:00:00,US5949181045,MSFT,Microsoft Corp,,,USD,0.93,,,3.12,USD,,div002
+Dividend (Ordinary),2024-09-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.91,,,2.50,USD,,div003
+Dividend (Dividend tax),2024-09-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.91,,,-0.50,USD,,divtax003
+Interest on cash,2024-01-31 00:00:00,,,,,,,1.00,,,0.48,EUR,,int001
+Interest on cash,2024-02-29 00:00:00,,,,,,,1.00,,,0.37,EUR,,int002
+Deposit,2024-01-10 08:00:00,,,,,,,1.00,,,1000.00,EUR,,dep001
+Withdrawal,2024-12-01 09:00:00,,,,,,,1.00,,,-500.00,EUR,,wit001
+Currency conversion,2024-04-01 10:00:00,,,,,,USD,0.92,,,460.00,USD,,conv001

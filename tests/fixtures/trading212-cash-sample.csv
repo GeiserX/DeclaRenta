@@ -1,0 +1,11 @@
+Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Currency conversion fee,Currency (Currency conversion fee),Merchant name,Merchant category
+Deposit,2025-08-01 08:00:00,,,,Transaction ID: CASH-DEP-001,cash-001,,,,,,,500.00,EUR,,,,
+Interest on cash,2025-08-02 01:15:00,,,,Daily interest payment,int-001,,,,,,,0.07,EUR,,,,
+Interest on cash,2025-08-03 01:16:00,,,,Daily interest payment,int-002,,,,,,,0.07,EUR,,,,
+Spending cashback,2025-08-03 02:01:00,,,,Card cashback,cb-101,,,,,,,0.02,EUR,,,,
+Currency conversion,2025-08-03 10:05:00,,,,Manual FX conversion,fx-001,,,,,,,150.00,USD,0.23,EUR,,
+Interest on cash,2025-08-04 01:15:00,,,,Daily interest payment,int-003,,,,,,,0.06,EUR,,,,
+Withdrawal,2025-08-04 12:30:00,,,,Bank withdrawal,wd-001,,,,,,,-100.00,EUR,,,,
+Interest on cash,2025-08-05 01:15:00,,,,Daily interest payment,int-004,,,,,,,0.08,EUR,,,,
+Card debit,2025-08-05 18:42:21,,,,Card purchase,card-101,,,,,,,-18.45,EUR,,,CAFE DEL PORT,RETAIL_STORES
+Interest on cash,2025-08-06 01:15:00,,,,Daily interest payment,int-005,,,,,,,0.09,EUR,,,,

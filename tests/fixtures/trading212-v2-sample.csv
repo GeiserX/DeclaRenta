@@ -1,0 +1,21 @@
+Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Currency conversion fee,Currency (Currency conversion fee),Merchant name,Merchant category
+Spending cashback,2025-04-30 01:07:59,,,,,cb-001,,,,,,,0.41,EUR,,,,
+Card debit,2025-04-30 07:11:18,,,,,card-001,,,,,,,-32.79,EUR,,,Grover Group GmbH,BUSINESS_SERVICES
+Card debit,2025-04-30 08:56:51,,,,,card-002,,,,,,,-10.19,EUR,,,CORP ALIM GUISSONA T44,RETAIL_STORES
+Interest on cash,2025-04-30 01:15:00,,,,Daily interest,int-v2-001,,,,,,,0.11,EUR,,,,
+Deposit,2025-05-05 07:34:12,,,,Transaction ID: DEP-001,dep-001,,,,,,,34.00,EUR,,,,
+Market buy,2025-05-05 08:00:00,XX0000000001,ALFA,"Alpha Battery Systems",,ord-001,30.9760400000,1.2400000000,USD,1.13137819,,,34.00,EUR,0.05,EUR,,
+Market sell,2025-05-06 17:57:46,XX0000000001,ALFA,"Alpha Battery Systems",,ord-002,30.9760400000,1.0800000000,USD,1.13634929,-4.51,EUR,29.40,EUR,0.04,EUR,,
+Card debit,2025-05-06 18:07:51,,,,,card-003,,,,,,,-22.99,EUR,,,APPLE.COM/BILL,MISCELLANEOUS
+Spending cashback,2025-05-08 01:09:49,,,,,cb-002,,,,,,,0.12,EUR,,,,
+Deposit,2025-05-23 08:20:13,,,,Transaction ID: DEP-002,dep-002,,,,,,,131.00,EUR,,,,
+Market buy,2025-05-23 08:27:53,XX0000000001,ALFA,"Alpha Battery Systems",,ord-003,126.7577700000,1.1700000000,USD,1.13384243,,,131.00,EUR,0.20,EUR,,
+Market sell,2025-05-27 08:00:29,XX0000000001,ALFA,"Alpha Battery Systems",,ord-004,28.3955800000,1.2000000000,USD,1.13393331,0.75,EUR,30.00,EUR,0.05,EUR,,
+Limit buy,2025-06-03 10:15:11,XX0000000002,BRAV,"Bravo Water Utilities",,ord-005,12.5000000000,48.0000000000,EUR,1.00000000,,,600.00,EUR,,EUR,,
+Limit sell,2025-06-10 14:46:42,XX0000000002,BRAV,"Bravo Water Utilities",,ord-006,4.0000000000,51.5000000000,EUR,1.00000000,14.00,EUR,206.00,EUR,,EUR,,
+Card debit,2025-06-11 09:12:02,,,,,card-004,,,,,,,-4.40,EUR,,,SUPERMERCADO ST ESTEVE,RETAIL_STORES
+Interest on cash,2025-06-11 01:15:00,,,,Daily interest,int-v2-002,,,,,,,0.09,EUR,,,,
+Deposit,2025-06-12 07:00:00,,,,Transaction ID: DEP-003,dep-003,,,,,,,200.00,EUR,,,,
+Stop buy,2025-06-12 09:00:00,XX0000000003,CYGN,"Cygnus Robotics PLC",,ord-007,8.2500000000,22.0000000000,USD,1.14968152,,,158.00,EUR,0.24,EUR,,
+Stop sell,2025-06-18 16:31:10,XX0000000003,CYGN,"Cygnus Robotics PLC",,ord-008,3.0000000000,24.3000000000,USD,1.15284810,7.05,EUR,63.23,EUR,0.10,EUR,,
+Limit sell,2025-06-20 09:30:00,XX0000000002,BRAV,"Bravo Water Utilities",,ord-009,4.0000000000,52.0000000000,EUR,1.00000000,16.00,EUR,208.00,EUR,,EUR,,
