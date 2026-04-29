@@ -13,6 +13,16 @@ const es = {
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
   "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.autodetect_note": "El broker se detecta automáticamente en la mayoría de los casos.",
+  "upload.detecting": "Analizando fichero...",
+  "upload.detected": "Broker detectado:",
+  "upload.detection_failed": "No se pudo detectar el broker. Selecciónalo manualmente.",
+  "upload.broker_not_detected": "¿No se detectó tu broker?",
+  "upload.guide_how": "¿Cómo descargar mi informe del broker?",
+  "upload.guide_select_broker": "Selecciona tu broker:",
+  "upload.choose_broker": "— elige broker —",
+  "upload.guide_unavailable": "Guía no disponible todavía para este broker.",
+  "upload.chip_group_label": "Selección manual de broker",
 
   // Config
   "config.title": "Configura",

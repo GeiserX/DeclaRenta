@@ -26,17 +26,18 @@
       <p class="splash-tagline" data-i18n="splash.tagline">Herramienta fiscal gratuita para inversores con brokers internacionales</p>
 
       <div class="splash-brokers">
-        <span class="splash-broker-tag">IBKR</span>
-        <span class="splash-broker-tag">Trade Republic</span>
-        <span class="splash-broker-tag">Degiro</span>
-        <span class="splash-broker-tag">eToro</span>
-        <span class="splash-broker-tag">Scalable</span>
-        <span class="splash-broker-tag">Freedom24</span>
-        <span class="splash-broker-tag">Revolut</span>
-        <span class="splash-broker-tag">Lightyear</span>
-        <span class="splash-broker-tag">Coinbase</span>
-        <span class="splash-broker-tag">Binance</span>
-        <span class="splash-broker-tag">Kraken</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/interactive-brokers.ico" alt="" /></span>IBKR</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/trade-republic.ico" alt="" /></span>Trade Republic</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/degiro.ico" alt="" /></span>Degiro</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/etoro.ico" alt="" /></span>eToro</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/scalable-capital.png" alt="" /></span>Scalable</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/freedom24.png" alt="" /></span>Freedom24</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/Revolut.svg" alt="" /></span>Revolut</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/lightyear.ico" alt="" /></span>Lightyear</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/coinbase.png" alt="" /></span>Coinbase</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/binance.ico" alt="" /></span>Binance</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/kraken.ico" alt="" /></span>Kraken</span>
+        <span class="splash-broker-tag"><span class="splash-broker-logo-wrap"><img src="./broker-logos/trading-212.ico" alt="" /></span>Trading 212</span>
       </div>
 
       <div class="splash-features">
@@ -140,24 +141,33 @@
             </button>
           </div>
 
-          <!-- Step 1: Select brokers + Upload -->
+          <!-- Step 1: Upload + optional broker selector -->
           <section id="wizard-step-1" class="wizard-panel">
-            <!-- Hidden select for backwards compatibility -->
+            <!-- Hidden select for backwards compat with parseFiles() -->
             <select id="broker-select" hidden>
               <option value="auto" selected>Auto-detectar</option>
             </select>
 
-            <h2 data-i18n="upload.broker_question">¿Qué broker(s) utilizas?</h2>
-            <p class="section-description" data-i18n="upload.broker_hint">Selecciona uno o varios. Te guiaremos paso a paso.</p>
-
-            <!-- Broker card grid (rendered by broker-guides.ts) -->
-            <div id="broker-card-grid" class="broker-card-grid"></div>
-
-            <!-- Guides for selected brokers (rendered by broker-guides.ts) -->
-            <div id="broker-guide-container" class="broker-guide-container"></div>
-
-            <!-- Upload zone -->
-            <h3 class="upload-heading" data-i18n="upload.title">Sube tu informe del broker</h3>
+            <!-- Primary action: drop zone -->
+            <h2 data-i18n="upload.title">Sube tu informe del broker</h2>
+            <p class="upload-autodetect-note">
+              <span class="badge-auto" aria-hidden="true">Auto</span>
+              <span data-i18n="upload.autodetect_note">El broker se detecta automáticamente en la mayoría de los casos.</span>
+            </p>
+            <div class="upload-broker-strip" aria-hidden="true">
+              <span class="upload-broker-logo-item"><img src="./broker-logos/interactive-brokers.ico" alt="IBKR" title="Interactive Brokers" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/degiro.ico" alt="Degiro" title="Degiro" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/scalable-capital.png" alt="Scalable Capital" title="Scalable Capital" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/etoro.ico" alt="eToro" title="eToro" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/freedom24.png" alt="Freedom24" title="Freedom24" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/trade-republic.ico" alt="Trade Republic" title="Trade Republic" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/Revolut.svg" alt="Revolut" title="Revolut" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/trading-212.ico" alt="Trading 212" title="Trading 212" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/lightyear.ico" alt="Lightyear" title="Lightyear" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/coinbase.png" alt="Coinbase" title="Coinbase" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/binance.ico" alt="Binance" title="Binance" /></span>
+              <span class="upload-broker-logo-item"><img src="./broker-logos/kraken.ico" alt="Kraken" title="Kraken" /></span>
+            </div>
             <div id="drop-zone" role="button" tabindex="0" data-i18n-aria="a11y.drop_zone" aria-label="Zona de carga de ficheros">
               <div class="drop-icon" aria-hidden="true">&#8683;</div>
               <p data-i18n="upload.drop_text">Arrastra tu fichero aquí o haz clic para seleccionar</p>
@@ -165,6 +175,42 @@
             </div>
             <p class="help" data-i18n="upload.formats_help">Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)</p>
             <div id="file-list" aria-live="polite"></div>
+            <div id="detection-status" aria-live="polite"></div>
+
+            <!-- Secondary: manual broker override (collapsible) -->
+            <details class="broker-selector-accordion" id="broker-selector-details">
+              <summary class="broker-selector-summary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <span class="broker-selector-summary-text">
+                  <span data-i18n="upload.broker_not_detected">¿No se detectó tu broker?</span>
+                  <span class="broker-selector-hint" data-i18n="upload.broker_hint">Selecciona uno o varios para ayudar a la detección</span>
+                </span>
+                <span class="accordion-arrow" aria-hidden="true">&#8964;</span>
+              </summary>
+              <div class="broker-selector-body">
+                <!-- Broker chip grid (rendered by broker-guides.ts) -->
+                <div id="broker-card-grid" class="broker-chip-grid"></div>
+              </div>
+            </details>
+
+            <!-- Tertiary: download guide (collapsible) -->
+            <details class="guide-accordion" id="guide-accordion">
+              <summary class="guide-accordion-summary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span data-i18n="upload.guide_how">¿Cómo descargar mi informe del broker?</span>
+                <span class="accordion-arrow" aria-hidden="true">&#8964;</span>
+              </summary>
+              <div class="guide-accordion-body">
+                <div class="guide-broker-select-row">
+                  <label for="guide-broker-select" data-i18n="upload.guide_select_broker">Selecciona tu broker:</label>
+                  <select id="guide-broker-select" class="guide-broker-select">
+                    <option value="" data-i18n="upload.choose_broker"></option>
+                  </select>
+                </div>
+                <!-- Guide content rendered by broker-guides.ts -->
+                <div id="broker-guide-container" class="broker-guide-container"></div>
+              </div>
+            </details>
           </section>
 
           <!-- Step 2: Review -->

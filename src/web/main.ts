@@ -23,6 +23,8 @@ import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from 
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
+import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
+import { esc } from "./esc.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -83,6 +85,7 @@ document.addEventListener("localechange", () => {
   rerenderSection721();
   rerenderSectionD6();
   initProfile();
+  renderDetectionStatus();
 });
 
 updateStaticText();
@@ -152,10 +155,6 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
   applyTheme(next);
 });
 
-/** Escape HTML to prevent XSS from user-derived content */
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -289,6 +288,7 @@ function addFiles(files: File[]) {
   activeYear = null;
   detectedYears = [];
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
+  void updateDetectionStatus();
 }
 
 function renderFileList() {
@@ -299,13 +299,105 @@ function renderFileList() {
   fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
+      const removed = pendingFiles[idx]!;
+      detectionCache.delete(fileKey(removed));
+      fileBytesCache.delete(removed);
       pendingFiles.splice(idx, 1);
       renderFileList();
       mergedStatement = null;
       currentReport = null;
+      void updateDetectionStatus();
     });
   });
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
+}
+
+// key: "filename:size" → broker name | null (ran, not found) | DETECTION_ERROR (threw)
+const detectionCache = new Map<string, string | null>();
+const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
+
+// Caches the raw bytes Promise per File object to avoid reading the same file twice
+// (once during pre-detection, once during parse). WeakMap keys on the File identity
+// so entries are eligible for GC as soon as the File is no longer referenced.
+const fileBytesCache = new WeakMap<File, Promise<Uint8Array>>();
+function getFileBytes(file: File): Promise<Uint8Array> {
+  let p = fileBytesCache.get(file);
+  if (!p) {
+    p = file.arrayBuffer().then((buf) => new Uint8Array(buf));
+    fileBytesCache.set(file, p);
+  }
+  return p;
+}
+
+async function previewDetectBroker(file: File): Promise<string | null> {
+  const key = fileKey(file);
+  const cached = detectionCache.get(key);
+  if (cached !== undefined) return cached === DETECTION_ERROR ? null : cached;
+  try {
+    const uint8 = await getFileBytes(file);
+    let result: string | null = null;
+    if (await detectRevolutXlsx(uint8)) result = "Revolut";
+    else if (detectEtoroXlsx(uint8)) result = "eToro";
+    else result = detectBroker(new TextDecoder("utf-8").decode(uint8))?.name ?? null;
+    detectionCache.set(key, result);
+    return result;
+  } catch {
+    detectionCache.set(key, DETECTION_ERROR);
+    return null;
+  }
+}
+
+function renderDetectionStatus(): void {
+  const statusEl = document.getElementById("detection-status");
+  if (!statusEl) return;
+  if (pendingFiles.length === 0) { statusEl.innerHTML = ""; return; }
+  statusEl.innerHTML = pendingFiles.map((f) => {
+    const cached = detectionCache.get(fileKey(f));
+    if (cached === undefined) return `<span class="detection-loading">${t("upload.detecting")}</span>`;
+    return cached && cached !== DETECTION_ERROR
+      ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(cached)}</strong></span>`
+      : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`;
+  }).join("");
+}
+
+async function updateDetectionStatus(): Promise<void> {
+  const statusEl = document.getElementById("detection-status");
+  if (!statusEl) return;
+
+  if (pendingFiles.length === 0) {
+    statusEl.innerHTML = "";
+    return;
+  }
+
+  // Snapshot file names before async work to detect stale results
+  const snapshot = pendingFiles.map((f) => fileKey(f)).join("|");
+
+  statusEl.innerHTML = `<span class="detection-loading">${t("upload.detecting")}</span>`;
+
+  const results = await Promise.all(
+    pendingFiles.map(async (f) => ({ name: f.name, broker: await previewDetectBroker(f) })),
+  );
+
+  // Abort if pendingFiles changed while we were awaiting
+  if (pendingFiles.map((f) => fileKey(f)).join("|") !== snapshot) return;
+
+  const anyFailed = results.some((r) => r.broker === null);
+
+  if (anyFailed) {
+    const details = document.getElementById("broker-selector-details") as HTMLDetailsElement | null;
+    if (details) {
+      details.open = true;
+      details.querySelector<HTMLElement>("summary")?.focus();
+    }
+  }
+
+  statusEl.innerHTML = results
+    .map((r) =>
+      r.broker
+        ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(r.broker)}</strong></span>`
+        : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`,
+    )
+    .join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -320,8 +412,7 @@ async function parseFiles(): Promise<void> {
 
   try {
     for (const file of pendingFiles) {
-      const arrayBuf = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuf);
+      const uint8 = await getFileBytes(file);
       if (await detectRevolutXlsx(uint8)) {
         const statement = await parseRevolutXlsx(uint8);
         mergeStatement(merged, statement);
@@ -340,12 +431,12 @@ async function parseFiles(): Promise<void> {
       const selectedBroker = brokerSelect.value;
       let parser = selectedBroker !== "auto"
         ? getBroker(selectedBroker)
-        : detectBroker(content);
+        : resolveDetection(detectionCache.get(fileKey(file)), content, detectBroker, getBroker);
 
       // Fallback: if auto-detection failed, try parsers for brokers the user selected in the card grid
       if (!parser) {
         const selectedIds = getSelectedBrokerIds();
-        const alreadyParsed = new Set(brokerNames);
+        const alreadyParsed = new Set<string>();
         for (const id of selectedIds) {
           const parserName = BROKER_ID_TO_PARSER[id];
           if (!parserName || alreadyParsed.has(parserName)) continue;
