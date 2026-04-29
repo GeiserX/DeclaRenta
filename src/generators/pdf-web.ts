@@ -272,14 +272,15 @@ export async function generatePdfWebReport(
     doc.setFontSize(7);
     doc.setTextColor(C.danger);
     let wy = y5 + 6;
-    for (const w of report.warnings.slice(0, 20)) {
+    for (const w of report.warnings) {
       const lines = doc.splitTextToSize(w, CONTENT_W) as string[];
-      doc.text(lines, MARGIN, wy);
-      wy += lines.length * 4;
-      if (wy > PAGE_H - MARGIN - 20) {
+      const blockH = lines.length * 4;
+      if (wy + blockH > PAGE_H - MARGIN - 20) {
         doc.addPage();
         wy = MARGIN + 10;
       }
+      doc.text(lines, MARGIN, wy);
+      wy += blockH;
     }
 
     // Warnings use manual text — update contentEndY from the text cursor, not lastAutoTable

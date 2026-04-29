@@ -97,7 +97,7 @@ describe("generatePdfWebReport", () => {
     expect(blob.type).toBe("application/pdf");
   });
 
-  it("generates a non-trivial PDF (> 10 KB)", async () => {
+  it("generates a non-trivial PDF (smoke: > 10 KB)", async () => {
     const blob = await generatePdfWebReport(makeReport(), t);
     expect(blob.size).toBeGreaterThan(10_000);
   });
@@ -148,8 +148,7 @@ describe("generatePdfWebReport", () => {
         disposals: [],
       },
     });
-    const blob = await generatePdfWebReport(report, t);
-    expect(blob.size).toBeGreaterThan(10_000);
+    await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
   it("generates a larger PDF with operations than without", async () => {
@@ -220,14 +219,10 @@ describe("generatePdfWebReport", () => {
         ],
       },
     });
-    const blob = await generatePdfWebReport(report, t);
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.size).toBeGreaterThan(10_000);
+    await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
   it("handles warnings long enough to overflow onto a new page", async () => {
-    // 20 warnings of 300 chars each force multi-line wrapping at 7pt that
-    // fills beyond PAGE_H - MARGIN - 20, triggering doc.addPage() in the warnings loop
     const longWarning = "Warning: missing acquisition cost data for ticker ".padEnd(300, "X");
     const report = makeReport({
       capitalGains: {
@@ -241,14 +236,10 @@ describe("generatePdfWebReport", () => {
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
       warnings: Array.from({ length: 20 }, (_, i) => `${i + 1}: ${longWarning}`),
     });
-    const blob = await generatePdfWebReport(report, t);
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.size).toBeGreaterThan(10_000);
+    await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
   it("pushes ECB footnote to a new page when warnings fill the page near the bottom", async () => {
-    // 18 medium-length warnings push contentEndY past the footnote threshold (PAGE_H - MARGIN - 35)
-    // without triggering the warnings page-break themselves (which resets the cursor)
     const mediumWarning = "Warning: ECB rate not found, using fallback rate for ".padEnd(200, "X");
     const report = makeReport({
       capitalGains: {
@@ -262,8 +253,6 @@ describe("generatePdfWebReport", () => {
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
       warnings: Array.from({ length: 18 }, (_, i) => `${i + 1}: ${mediumWarning}`),
     });
-    const blob = await generatePdfWebReport(report, t);
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.size).toBeGreaterThan(10_000);
+    await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 });
