@@ -14,6 +14,13 @@ const ca: TranslationKeys = {
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
   "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.autodetect_note": "El broker es detecta automàticament en la majoria dels casos.",
+  "upload.detecting": "Analitzant fitxer...",
+  "upload.detected": "Broker detectat:",
+  "upload.detection_failed": "No s'ha pogut detectar el broker. Selecciona'l manualment.",
+  "upload.broker_not_detected": "No s'ha detectat el teu broker?",
+  "upload.guide_how": "Com descarregar el meu informe del broker?",
+  "upload.guide_select_broker": "Selecciona el teu broker:",
 
   "config.title": "Configura",
   "config.year_label": "Exercici fiscal:",

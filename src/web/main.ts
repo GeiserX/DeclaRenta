@@ -23,6 +23,7 @@ import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from 
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
+import { resolveDetection } from "./detection-cache.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -289,6 +290,7 @@ function addFiles(files: File[]) {
   activeYear = null;
   detectedYears = [];
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
+  void updateDetectionStatus();
 }
 
 function renderFileList() {
@@ -299,13 +301,69 @@ function renderFileList() {
   fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
+      detectionCache.delete(fileKey(pendingFiles[idx]!));
       pendingFiles.splice(idx, 1);
       renderFileList();
       mergedStatement = null;
       currentReport = null;
+      void updateDetectionStatus();
     });
   });
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
+}
+
+// key: "filename:size" → broker name | null (ran, not found) | "__error__" (threw)
+const detectionCache = new Map<string, string | null>();
+const fileKey = (f: File) => `${f.name}:${f.size}`;
+
+async function previewDetectBroker(file: File): Promise<string | null> {
+  const key = fileKey(file);
+  const cached = detectionCache.get(key);
+  if (cached !== undefined) return cached === "__error__" ? null : cached;
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuf);
+    let result: string | null = null;
+    if (await detectRevolutXlsx(uint8)) result = "Revolut";
+    else if (detectEtoroXlsx(uint8)) result = "eToro";
+    else result = detectBroker(new TextDecoder("utf-8").decode(uint8))?.name ?? null;
+    detectionCache.set(key, result);
+    return result;
+  } catch {
+    detectionCache.set(key, "__error__");
+    return null;
+  }
+}
+
+async function updateDetectionStatus(): Promise<void> {
+  const statusEl = document.getElementById("detection-status");
+  if (!statusEl) return;
+
+  if (pendingFiles.length === 0) {
+    statusEl.innerHTML = "";
+    return;
+  }
+
+  statusEl.innerHTML = `<span class="detection-loading">${t("upload.detecting")}</span>`;
+
+  const results = await Promise.all(
+    pendingFiles.map(async (f) => ({ name: f.name, broker: await previewDetectBroker(f) })),
+  );
+
+  const anyFailed = results.some((r) => r.broker === null);
+
+  if (anyFailed) {
+    const details = document.getElementById("broker-selector-details") as HTMLDetailsElement | null;
+    if (details) details.open = true;
+  }
+
+  statusEl.innerHTML = results
+    .map((r) =>
+      r.broker
+        ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(r.broker)}</strong></span>`
+        : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`,
+    )
+    .join("");
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +398,7 @@ async function parseFiles(): Promise<void> {
       const selectedBroker = brokerSelect.value;
       let parser = selectedBroker !== "auto"
         ? getBroker(selectedBroker)
-        : detectBroker(content);
+        : resolveDetection(detectionCache.get(fileKey(file)), content, detectBroker, getBroker);
 
       // Fallback: if auto-detection failed, try parsers for brokers the user selected in the card grid
       if (!parser) {

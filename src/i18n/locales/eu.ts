@@ -14,6 +14,13 @@ const eu: TranslationKeys = {
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
   "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.autodetect_note": "Brokerra automatikoki detektatzen da kasu gehienetan.",
+  "upload.detecting": "Fitxategia aztertzen...",
+  "upload.detected": "Brokerra detektatu da:",
+  "upload.detection_failed": "Ezin izan da brokerra detektatu. Hautatu eskuz.",
+  "upload.broker_not_detected": "Ez al da zure brokerra detektatu?",
+  "upload.guide_how": "Nola deskargatu nire brokerraren txostena?",
+  "upload.guide_select_broker": "Hautatu zure brokerra:",
 
   "config.title": "Konfiguratu",
   "config.year_label": "Ekitaldi fiskala:",

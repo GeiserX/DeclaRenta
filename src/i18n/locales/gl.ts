@@ -14,6 +14,13 @@ const gl: TranslationKeys = {
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
   "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.autodetect_note": "O broker detéctase automaticamente na maioría dos casos.",
+  "upload.detecting": "Analizando ficheiro...",
+  "upload.detected": "Broker detectado:",
+  "upload.detection_failed": "Non se puido detectar o broker. Selecciónao manualmente.",
+  "upload.broker_not_detected": "Non se detectou o teu broker?",
+  "upload.guide_how": "Como descargar o meu informe do broker?",
+  "upload.guide_select_broker": "Selecciona o teu broker:",
 
   "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",
