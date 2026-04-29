@@ -379,7 +379,7 @@ const gl: TranslationKeys = {
   "pdf.subtitle": "Informe fiscal — Exercicio",
   "pdf.generated": "Xerado o",
   "pdf.informative": "Informativo",
-  "pdf.blocked_losses": "Perdas bloqueadas anti-churning (Caixa 0358)",
+  "pdf.blocked_losses": "Perdas bloqueadas anti-churning",
   "pdf.interest_margin": "Xuros marxe (non deducible)",
   "pdf.section_casillas": "1. Resumo de Caixas — Modelo 100",
   "pdf.section_operations": "2. Detalle de Operacións",
@@ -389,7 +389,7 @@ const gl: TranslationKeys = {
   "pdf.dt_paid": "Imposto pagado",
   "pdf.dt_allowed": "Dedución permitida",
   "pdf.ecb_note": "Tipo ECB: tipo de cambio oficial do Banco Central Europeo (EUR por 1 unidade de divisa estranxeira) na data da operación. Fonte: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.es — Este informe é orientativo e non substitúe o asesoramento fiscal profesional.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — Este informe é orientativo e non substitúe o asesoramento fiscal profesional.",
 };
 
 export default gl;

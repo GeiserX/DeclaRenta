@@ -1,6 +1,9 @@
 import type { TaxSummary } from "../types/tax.js";
+import type Decimal from "decimal.js";
+import type { CellHookData } from "jspdf-autotable";
+import type { TranslationKey } from "../i18n/index.js";
 
-export type TranslationFn = (key: string) => string;
+export type TranslationFn = (key: TranslationKey) => string;
 
 // Injected by Vite at build time; vitest.config.ts provides "dev" fallback
 declare const __APP_VERSION__: string;
@@ -36,7 +39,7 @@ function formatDate(d: string): string {
   return d;
 }
 
-function eur(d: { toFixed: (n: number) => string }): string {
+function eur(d: Decimal): string {
   return d.toFixed(2) + " EUR";
 }
 
@@ -94,13 +97,22 @@ export async function generatePdfWebReport(
     ["0328", t("casilla.acquisition_value"),  eur(report.capitalGains.acquisitionValue)],
     ["",     t("casilla.net_gain_loss"),       eur(report.capitalGains.netGainLoss)],
     ["0029", t("casilla.gross_dividends"),     eur(report.dividends.grossIncome)],
-    ["0033", t("casilla.interest_earned"),     eur(report.interest.earned)],
+    // Casilla 0027: Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF)
+    ["0027", t("casilla.interest_earned"),     eur(report.interest.earned)],
     [t("pdf.informative"), t("pdf.interest_margin"), eur(report.interest.paid)],
     ["0588", t("casilla.double_taxation"),     eur(report.doubleTaxation.deduction)],
   ];
 
+  // FX gains (Casillas 1626/1631) — only shown when multi-currency FX events exist
+  if (report.fxGains.disposals.length > 0) {
+    casillasBody.push(["1626", t("casilla.fx_transmission_value"), eur(report.fxGains.transmissionValue)]);
+    casillasBody.push(["1631", t("casilla.fx_acquisition_value"),  eur(report.fxGains.acquisitionValue)]);
+    casillasBody.push(["",     t("casilla.fx_net_gain_loss"),       eur(report.fxGains.netGainLoss)]);
+  }
+
+  // Blocked losses: informative only — Renta Web handles Art. 33.5.f per-disposal, no aggregate casilla
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
-    casillasBody.push(["0358", t("pdf.blocked_losses"), eur(report.capitalGains.blockedLosses)]);
+    casillasBody.push([t("pdf.informative"), t("pdf.blocked_losses"), eur(report.capitalGains.blockedLosses)]);
   }
 
   autoTable(doc, {
@@ -140,6 +152,7 @@ export async function generatePdfWebReport(
       const scenarioTag =
         d.optionScenario === "expiration" ? "EXP"
         : d.optionScenario === "exercise" ? "EJ"
+        : d.optionScenario === "close" ? "CL"
         : null;
       const symbol = scenarioTag
         ? `${(d.underlyingSymbol ?? d.symbol).slice(0, 6)}${d.putCall ?? ""} [${scenarioTag}]`
@@ -184,10 +197,9 @@ export async function generatePdfWebReport(
         8: { cellWidth: 26, halign: "right" },
       },
       margin: { left: MARGIN, right: MARGIN },
-      didParseCell: (data: unknown) => {
-        const d = data as { section: string; column: { index: number }; row: { index: number }; cell: { styles: { textColor: unknown } } };
-        if (d.section === "body" && d.column.index === 7) {
-          d.cell.styles.textColor = opsColors[d.row.index] ?? C.textRgb;
+      didParseCell: (data: CellHookData) => {
+        if (data.section === "body" && data.column.index === 7) {
+          data.cell.styles.textColor = opsColors[data.row.index] ?? C.textRgb;
         }
       },
     });

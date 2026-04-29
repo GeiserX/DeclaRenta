@@ -168,7 +168,7 @@ describe("generatePdfWebReport", () => {
     expect(withOps.size).toBeGreaterThan(withoutOps.size);
   });
 
-  it("renders option disposals with expiration and exercise scenarios", async () => {
+  it("renders option disposals with expiration, exercise, and close scenarios", async () => {
     const report = makeReport({
       capitalGains: {
         transmissionValue: new Decimal("500"),
@@ -216,10 +216,72 @@ describe("generatePdfWebReport", () => {
             underlyingSymbol: "AAPL",
             putCall: "C",
           },
+          {
+            isin: "US0231351067",
+            symbol: "AAPL250320C00180000",
+            description: "AAPL Mar 2025 180C",
+            sellDate: "20250320",
+            acquireDate: "20250101",
+            quantity: new Decimal("3"),
+            proceedsEur: new Decimal("600"),
+            costBasisEur: new Decimal("400"),
+            gainLossEur: new Decimal("200"),
+            holdingPeriodDays: 78,
+            currency: "USD",
+            sellEcbRate: new Decimal("0.91"),
+            acquireEcbRate: new Decimal("0.90"),
+            washSaleBlocked: false,
+            assetCategory: "OPT",
+            optionScenario: "close",
+            underlyingSymbol: "AAPL",
+            putCall: "C",
+          },
         ],
       },
     });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("includes key casilla numbers in PDF content", async () => {
+    const blob = await generatePdfWebReport(makeReport(), t);
+    const buf = await blob.arrayBuffer();
+    const text = new TextDecoder("latin1").decode(new Uint8Array(buf));
+    expect(text).toContain("0327");
+    expect(text).toContain("0029");
+    expect(text).toContain("0027");
+    expect(text).toContain("0588");
+  });
+
+  it("handles 50+ disposals without throwing (pagination stress)", async () => {
+    const disposals = Array.from({ length: 55 }, (_, i) => ({
+      isin: `US${String(i).padStart(10, "0")}`,
+      symbol: `SYM${i}`,
+      description: `Security ${i}`,
+      sellDate: "20251201",
+      acquireDate: "20240101",
+      quantity: new Decimal("10"),
+      proceedsEur: new Decimal("1000"),
+      costBasisEur: new Decimal("800"),
+      gainLossEur: new Decimal("200"),
+      holdingPeriodDays: 334,
+      currency: "USD",
+      sellEcbRate: new Decimal("0.92"),
+      acquireEcbRate: new Decimal("0.91"),
+      washSaleBlocked: false,
+      assetCategory: "STK",
+    }));
+    const report = makeReport({
+      capitalGains: {
+        transmissionValue: new Decimal("55000"),
+        acquisitionValue: new Decimal("44000"),
+        netGainLoss: new Decimal("11000"),
+        blockedLosses: new Decimal(0),
+        disposals,
+      },
+    });
+    const blob = await generatePdfWebReport(report, t);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(20_000);
   });
 
   it("handles warnings long enough to overflow onto a new page", async () => {

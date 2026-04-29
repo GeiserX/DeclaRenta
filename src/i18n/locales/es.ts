@@ -412,7 +412,7 @@ const es = {
   "pdf.subtitle": "Informe fiscal — Ejercicio",
   "pdf.generated": "Generado el",
   "pdf.informative": "Informativo",
-  "pdf.blocked_losses": "Pérdidas bloqueadas anti-churning (Casilla 0358)",
+  "pdf.blocked_losses": "Pérdidas bloqueadas anti-churning",
   "pdf.interest_margin": "Intereses margen (no deducible)",
   "pdf.section_casillas": "1. Resumen de Casillas — Modelo 100",
   "pdf.section_operations": "2. Detalle de Operaciones",
@@ -422,7 +422,7 @@ const es = {
   "pdf.dt_paid": "Impuesto pagado",
   "pdf.dt_allowed": "Deducción permitida",
   "pdf.ecb_note": "Tipo ECB: tipo de cambio oficial del Banco Central Europeo (EUR por 1 unidad de divisa extranjera) en la fecha de la operación. Fuente: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.es — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

@@ -379,8 +379,8 @@ const eu: TranslationKeys = {
   "pdf.subtitle": "Zerga txostena — Ekitaldia",
   "pdf.generated": "Sortua",
   "pdf.informative": "Informatibo",
-  "pdf.blocked_losses": "Anti-churning blokatutako galerak (0358 laukia)",
-  "pdf.interest_margin": "Marjina interesak (kengarria ez)",
+  "pdf.blocked_losses": "Anti-churning blokeatutako galerak",
+  "pdf.interest_margin": "Marjina interesak (ez kengarria)",
   "pdf.section_casillas": "1. Laukien Laburpena — 100 Eredua",
   "pdf.section_operations": "2. Eragiketen Xehetasuna",
   "pdf.section_dividends": "3. Dibidenduak",
@@ -389,7 +389,7 @@ const eu: TranslationKeys = {
   "pdf.dt_paid": "Ordaindutako zerga",
   "pdf.dt_allowed": "Baimendutako kenkaria",
   "pdf.ecb_note": "ECB tasa: Europako Banku Zentralaren truke-tasa ofiziala (EUR 1 atzerriko moneta-unitate bakoitzeko) eragiketa-datan. Iturria: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.es — Txosten hau informatiboa da eta ez du zerga-aholkularitza profesionala ordezten.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — Txosten hau informatiboa da eta ez du zerga-aholkularitza profesionala ordezten.",
 };
 
 export default eu;

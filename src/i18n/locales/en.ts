@@ -383,7 +383,7 @@ const en: TranslationKeys = {
   "pdf.subtitle": "Tax report — Year",
   "pdf.generated": "Generated on",
   "pdf.informative": "Info",
-  "pdf.blocked_losses": "Anti-churning blocked losses (Box 0358)",
+  "pdf.blocked_losses": "Anti-churning blocked losses",
   "pdf.interest_margin": "Margin interest (non-deductible)",
   "pdf.section_casillas": "1. Tax Boxes Summary — Modelo 100",
   "pdf.section_operations": "2. Transactions Detail",
@@ -393,7 +393,7 @@ const en: TranslationKeys = {
   "pdf.dt_paid": "Tax paid",
   "pdf.dt_allowed": "Deduction allowed",
   "pdf.ecb_note": "ECB rate: official European Central Bank exchange rate (EUR per 1 unit of foreign currency) on the transaction date. Source: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.es — This report is informational only and does not replace professional tax advice.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — This report is informational only and does not replace professional tax advice.",
 };
 
 export default en;

@@ -379,7 +379,7 @@ const ca: TranslationKeys = {
   "pdf.subtitle": "Informe fiscal — Exercici",
   "pdf.generated": "Generat el",
   "pdf.informative": "Informatiu",
-  "pdf.blocked_losses": "Pèrdues bloquejades anti-churning (Casella 0358)",
+  "pdf.blocked_losses": "Pèrdues bloquejades anti-churning",
   "pdf.interest_margin": "Interessos marge (no deduïble)",
   "pdf.section_casillas": "1. Resum de Caselles — Model 100",
   "pdf.section_operations": "2. Detall d'Operacions",
@@ -389,7 +389,7 @@ const ca: TranslationKeys = {
   "pdf.dt_paid": "Impost pagat",
   "pdf.dt_allowed": "Deducció permesa",
   "pdf.ecb_note": "Tipus ECB: tipus de canvi oficial del Banc Central Europeu (EUR per 1 unitat de divisa estrangera) en la data de l'operació. Font: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.es — Aquest informe és orientatiu i no substitueix l'assessorament fiscal professional.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — Aquest informe és orientatiu i no substitueix l'assessorament fiscal professional.",
 };
 
 export default ca;
