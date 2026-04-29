@@ -23,6 +23,7 @@ const ca: TranslationKeys = {
   "upload.guide_select_broker": "Selecciona el teu broker:",
   "upload.choose_broker": "— tria broker —",
   "upload.guide_unavailable": "Guia no disponible encara per a aquest broker.",
+  "upload.chip_group_label": "Selecció manual de broker",
 
   "config.title": "Configura",
   "config.year_label": "Exercici fiscal:",

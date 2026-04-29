@@ -23,7 +23,8 @@ import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from 
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
-import { resolveDetection } from "./detection-cache.js";
+import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
+import { esc } from "./esc.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -84,7 +85,7 @@ document.addEventListener("localechange", () => {
   rerenderSection721();
   rerenderSectionD6();
   initProfile();
-  void updateDetectionStatus();
+  renderDetectionStatus();
 });
 
 updateStaticText();
@@ -154,10 +155,6 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
   applyTheme(next);
 });
 
-/** Escape HTML to prevent XSS from user-derived content */
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -302,7 +299,9 @@ function renderFileList() {
   fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const idx = parseInt((e.target as HTMLElement).dataset.idx!);
-      detectionCache.delete(fileKey(pendingFiles[idx]!));
+      const removed = pendingFiles[idx]!;
+      detectionCache.delete(fileKey(removed));
+      fileBytesCache.delete(removed);
       pendingFiles.splice(idx, 1);
       renderFileList();
       mergedStatement = null;
@@ -313,17 +312,29 @@ function renderFileList() {
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
 }
 
-// key: "filename:size" → broker name | null (ran, not found) | "__error__" (threw)
+// key: "filename:size" → broker name | null (ran, not found) | DETECTION_ERROR (threw)
 const detectionCache = new Map<string, string | null>();
 const fileKey = (f: File) => `${f.name}:${f.size}`;
+
+// Caches the raw bytes Promise per File object to avoid reading the same file twice
+// (once during pre-detection, once during parse). WeakMap keys on the File identity
+// so entries are eligible for GC as soon as the File is no longer referenced.
+const fileBytesCache = new WeakMap<File, Promise<Uint8Array>>();
+function getFileBytes(file: File): Promise<Uint8Array> {
+  let p = fileBytesCache.get(file);
+  if (!p) {
+    p = file.arrayBuffer().then((buf) => new Uint8Array(buf));
+    fileBytesCache.set(file, p);
+  }
+  return p;
+}
 
 async function previewDetectBroker(file: File): Promise<string | null> {
   const key = fileKey(file);
   const cached = detectionCache.get(key);
-  if (cached !== undefined) return cached === "__error__" ? null : cached;
+  if (cached !== undefined) return cached === DETECTION_ERROR ? null : cached;
   try {
-    const arrayBuf = await file.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuf);
+    const uint8 = await getFileBytes(file);
     let result: string | null = null;
     if (await detectRevolutXlsx(uint8)) result = "Revolut";
     else if (detectEtoroXlsx(uint8)) result = "eToro";
@@ -331,9 +342,22 @@ async function previewDetectBroker(file: File): Promise<string | null> {
     detectionCache.set(key, result);
     return result;
   } catch {
-    detectionCache.set(key, "__error__");
+    detectionCache.set(key, DETECTION_ERROR);
     return null;
   }
+}
+
+function renderDetectionStatus(): void {
+  const statusEl = document.getElementById("detection-status");
+  if (!statusEl) return;
+  if (pendingFiles.length === 0) { statusEl.innerHTML = ""; return; }
+  statusEl.innerHTML = pendingFiles.map((f) => {
+    const cached = detectionCache.get(fileKey(f));
+    if (cached === undefined) return `<span class="detection-loading">${t("upload.detecting")}</span>`;
+    return cached && cached !== DETECTION_ERROR
+      ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(cached)}</strong></span>`
+      : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`;
+  }).join("");
 }
 
 async function updateDetectionStatus(): Promise<void> {
@@ -361,7 +385,10 @@ async function updateDetectionStatus(): Promise<void> {
 
   if (anyFailed) {
     const details = document.getElementById("broker-selector-details") as HTMLDetailsElement | null;
-    if (details) details.open = true;
+    if (details) {
+      details.open = true;
+      (details.querySelector("summary") as HTMLElement | null)?.focus();
+    }
   }
 
   statusEl.innerHTML = results
@@ -385,8 +412,7 @@ async function parseFiles(): Promise<void> {
 
   try {
     for (const file of pendingFiles) {
-      const arrayBuf = await file.arrayBuffer();
-      const uint8 = new Uint8Array(arrayBuf);
+      const uint8 = await getFileBytes(file);
       if (await detectRevolutXlsx(uint8)) {
         const statement = await parseRevolutXlsx(uint8);
         mergeStatement(merged, statement);

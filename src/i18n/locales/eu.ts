@@ -23,6 +23,7 @@ const eu: TranslationKeys = {
   "upload.guide_select_broker": "Hautatu zure brokerra:",
   "upload.choose_broker": "— hautatu brokerra —",
   "upload.guide_unavailable": "Gida oraindik ez dago erabilgarri broker honetarako.",
+  "upload.chip_group_label": "Broker eskuzko hautapena",
 
   "config.title": "Konfiguratu",
   "config.year_label": "Ekitaldi fiskala:",

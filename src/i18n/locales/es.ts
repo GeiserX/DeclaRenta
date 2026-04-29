@@ -22,6 +22,7 @@ const es = {
   "upload.guide_select_broker": "Selecciona tu broker:",
   "upload.choose_broker": "— elige broker —",
   "upload.guide_unavailable": "Guía no disponible todavía para este broker.",
+  "upload.chip_group_label": "Selección manual de broker",
 
   // Config
   "config.title": "Configura",

@@ -371,6 +371,14 @@ h3 {
   padding: 0.25rem 0 0.5rem;
 }
 
+@media (max-width: 768px) {
+  .broker-chip-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .broker-chip-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 .broker-chip {
   display: flex;
   align-items: center;
@@ -566,6 +574,12 @@ h3 {
   border-color: var(--accent);
 }
 
+.guide-broker-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
 .guide-empty {
   font-size: 0.85rem;
   color: var(--muted);
@@ -621,6 +635,12 @@ h3 {
   background: rgba(229, 62, 62, 0.12);
   color: #fc8181;
   border-color: rgba(229, 62, 62, 0.35);
+}
+
+[data-theme="dark"] .broker-chip-logo,
+[data-theme="dark"] .upload-broker-logo-item,
+[data-theme="dark"] .splash-broker-logo-wrap {
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .detection-icon {
@@ -942,7 +962,7 @@ details ul {
 /* App layout grid */
 .app-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 260px 1fr;
   min-height: calc(100vh - var(--topbar-h));
 }
 
@@ -1042,6 +1062,7 @@ details ul {
 
 /* App content */
 .app-content {
+  min-width: 0;
   padding: 2rem 2rem;
   max-width: 1100px;
   margin-inline: auto;

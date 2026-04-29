@@ -1,4 +1,5 @@
 import { t } from "../i18n/index.js";
+import { esc } from "./esc.js";
 
 interface BrokerInfo {
   id: string;
@@ -63,9 +64,9 @@ function renderChips(grid: HTMLElement): void {
     const shortName = title.replace(/\s*\([^)]*\)\s*$/, "").trim();
     const isSelected = selected.has(b.id);
     return `
-      <button class="broker-chip${isSelected ? " selected" : ""}" data-broker="${b.id}" type="button" aria-pressed="${isSelected}" title="${title}">
+      <button class="broker-chip${isSelected ? " selected" : ""}" data-broker="${b.id}" type="button" aria-pressed="${isSelected}" title="${esc(title)}">
         ${chipLogoHtml(b.id)}
-        <span class="broker-chip-name">${shortName}</span>
+        <span class="broker-chip-name">${esc(shortName)}</span>
         <span class="broker-chip-format">${b.format}</span>
       </button>
     `;
@@ -99,7 +100,7 @@ function populateGuideSelect(select: HTMLSelectElement): void {
     .filter((b) => getGuideSteps(b.id).length > 0)
     .map((b) => {
       const title = t(`guide.${b.id}.title` as Parameters<typeof t>[0]);
-      return `<option value="${b.id}"${current === b.id ? " selected" : ""}>${title}</option>`;
+      return `<option value="${b.id}"${current === b.id ? " selected" : ""}>${esc(title)}</option>`;
     })
     .join("");
   select.innerHTML = `<option value="">${t("upload.choose_broker")}</option>${options}`;
@@ -135,6 +136,9 @@ export function initBrokerGuides(): void {
 
   if (!grid) return;
 
+  grid.setAttribute("role", "group");
+  grid.setAttribute("aria-label", t("upload.chip_group_label"));
+
   function updateChips(): void {
     renderChips(grid!);
     grid!.querySelectorAll<HTMLButtonElement>(".broker-chip").forEach((chip) => {
@@ -160,6 +164,7 @@ export function initBrokerGuides(): void {
   }
 
   document.addEventListener("localechange", () => {
+    grid!.setAttribute("aria-label", t("upload.chip_group_label"));
     updateChips();
     if (guideSelect && guideContainer) {
       populateGuideSelect(guideSelect);

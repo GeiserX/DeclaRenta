@@ -23,6 +23,7 @@ const gl: TranslationKeys = {
   "upload.guide_select_broker": "Selecciona o teu broker:",
   "upload.choose_broker": "— escolle broker —",
   "upload.guide_unavailable": "Guía non dispoñible aínda para este broker.",
+  "upload.chip_group_label": "Selección manual de broker",
 
   "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",

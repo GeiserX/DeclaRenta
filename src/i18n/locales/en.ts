@@ -22,6 +22,7 @@ const en: TranslationKeys = {
   "upload.guide_select_broker": "Select your broker:",
   "upload.choose_broker": "— choose broker —",
   "upload.guide_unavailable": "Guide not yet available for this broker.",
+  "upload.chip_group_label": "Manual broker selection",
 
   "config.title": "Configure",
   "config.year_label": "Tax year:",
