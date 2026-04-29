@@ -643,6 +643,14 @@ h3 {
   background: rgba(255, 255, 255, 0.88);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .broker-chip-logo,
+  :root:not([data-theme="light"]) .upload-broker-logo-item,
+  :root:not([data-theme="light"]) .splash-broker-logo-wrap {
+    background: rgba(255, 255, 255, 0.88);
+  }
+}
+
 .detection-icon {
   font-size: 0.8rem;
   flex-shrink: 0;

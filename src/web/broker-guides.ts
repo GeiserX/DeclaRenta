@@ -81,7 +81,7 @@ function renderGuideForBroker(container: HTMLElement, brokerId: string): void {
   const title = t(`guide.${brokerId}.title` as Parameters<typeof t>[0]);
   const steps = getGuideSteps(brokerId);
   if (steps.length === 0) {
-    container.innerHTML = `<p class="guide-empty">${title} — ${t("upload.guide_unavailable")}</p>`;
+    container.innerHTML = `<p class="guide-empty">${esc(title)} — ${t("upload.guide_unavailable")}</p>`;
     return;
   }
   container.innerHTML = `

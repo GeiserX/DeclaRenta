@@ -314,7 +314,7 @@ function renderFileList() {
 
 // key: "filename:size" → broker name | null (ran, not found) | DETECTION_ERROR (threw)
 const detectionCache = new Map<string, string | null>();
-const fileKey = (f: File) => `${f.name}:${f.size}`;
+const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
 
 // Caches the raw bytes Promise per File object to avoid reading the same file twice
 // (once during pre-detection, once during parse). WeakMap keys on the File identity
@@ -436,7 +436,7 @@ async function parseFiles(): Promise<void> {
       // Fallback: if auto-detection failed, try parsers for brokers the user selected in the card grid
       if (!parser) {
         const selectedIds = getSelectedBrokerIds();
-        const alreadyParsed = new Set(brokerNames);
+        const alreadyParsed = new Set<string>();
         for (const id of selectedIds) {
           const parserName = BROKER_ID_TO_PARSER[id];
           if (!parserName || alreadyParsed.has(parserName)) continue;
