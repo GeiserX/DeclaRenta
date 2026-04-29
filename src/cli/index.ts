@@ -408,7 +408,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
     casillas: {
       "0029_dividendos_brutos": report.dividends.grossIncome.toFixed(2),
       "intereses_margen_no_deducible_informativo": report.interest.paid.toFixed(2),
-      "0033_intereses_cuentas": report.interest.earned.toFixed(2),
+      "0027_intereses_cuentas": report.interest.earned.toFixed(2),
       "0327_valor_transmision": report.capitalGains.transmissionValue.toFixed(2),
       "0328_valor_adquisicion": report.capitalGains.acquisitionValue.toFixed(2),
       "1626_valor_transmision_fx": report.fxGains.transmissionValue.toFixed(2),
@@ -493,7 +493,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");
   console.error(`    Casilla 0029 (Dividendos brutos):  ${report.dividends.grossIncome.toFixed(2)} EUR`);
-  console.error(`    Casilla 0033 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
+  console.error(`    Casilla 0027 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
   console.error(`    Intereses margen (no deducible, informativo):   ${report.interest.paid.toFixed(2)} EUR`);
   console.error("");
   console.error("  DOBLE IMPOSICIÓN INTERNACIONAL");

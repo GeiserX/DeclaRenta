@@ -182,7 +182,7 @@ const CASILLAS: CasillaConfig[] = [
     getDetail: (r) => renderDividendsDetail(r.dividends.entries),
   },
   {
-    code: "0033",
+    code: "0027",
     i18nKey: "casilla.interest_earned",
     getValue: (r) => r.interest.earned.toFixed(2),
     getClass: () => "",
