@@ -75,7 +75,7 @@
     "commander": "^13.1.0",
     "decimal.js": "^10.5.0",
     "fast-xml-parser": "^5.7.2",
-    "jspdf": "2.5.2",
+    "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.7",
     "pdfkit": "^0.18.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
