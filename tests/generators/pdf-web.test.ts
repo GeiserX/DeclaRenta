@@ -168,4 +168,102 @@ describe("generatePdfWebReport", () => {
     );
     expect(withOps.size).toBeGreaterThan(withoutOps.size);
   });
+
+  it("renders option disposals with expiration and exercise scenarios", async () => {
+    const report = makeReport({
+      capitalGains: {
+        transmissionValue: new Decimal("500"),
+        acquisitionValue: new Decimal("600"),
+        netGainLoss: new Decimal("-100"),
+        blockedLosses: new Decimal(0),
+        disposals: [
+          {
+            isin: "US0231351067",
+            symbol: "AAPL250117P00150000",
+            description: "AAPL Jan 2025 150P",
+            sellDate: "20250117",
+            acquireDate: "20241201",
+            quantity: new Decimal("1"),
+            proceedsEur: new Decimal("0"),
+            costBasisEur: new Decimal("300"),
+            gainLossEur: new Decimal("-300"),
+            holdingPeriodDays: 47,
+            currency: "USD",
+            sellEcbRate: new Decimal("0.92"),
+            acquireEcbRate: new Decimal("0.91"),
+            washSaleBlocked: false,
+            assetCategory: "OPT",
+            optionScenario: "expiration",
+            underlyingSymbol: "AAPL",
+            putCall: "P",
+          },
+          {
+            isin: "US0231351067",
+            symbol: "AAPL250117C00200000",
+            description: "AAPL Jan 2025 200C",
+            sellDate: "20250117",
+            acquireDate: "20241101",
+            quantity: new Decimal("2"),
+            proceedsEur: new Decimal("500"),
+            costBasisEur: new Decimal("300"),
+            gainLossEur: new Decimal("200"),
+            holdingPeriodDays: 77,
+            currency: "USD",
+            sellEcbRate: new Decimal("0.92"),
+            acquireEcbRate: new Decimal("0.91"),
+            washSaleBlocked: false,
+            assetCategory: "OPT",
+            optionScenario: "exercise",
+            underlyingSymbol: "AAPL",
+            putCall: "C",
+          },
+        ],
+      },
+    });
+    const blob = await generatePdfWebReport(report, t);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(10_000);
+  });
+
+  it("handles warnings long enough to overflow onto a new page", async () => {
+    // 20 warnings of 300 chars each force multi-line wrapping at 7pt that
+    // fills beyond PAGE_H - MARGIN - 20, triggering doc.addPage() in the warnings loop
+    const longWarning = "Warning: missing acquisition cost data for ticker ".padEnd(300, "X");
+    const report = makeReport({
+      capitalGains: {
+        transmissionValue: new Decimal(0),
+        acquisitionValue: new Decimal(0),
+        netGainLoss: new Decimal(0),
+        blockedLosses: new Decimal(0),
+        disposals: [],
+      },
+      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
+      doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
+      warnings: Array.from({ length: 20 }, (_, i) => `${i + 1}: ${longWarning}`),
+    });
+    const blob = await generatePdfWebReport(report, t);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(10_000);
+  });
+
+  it("pushes ECB footnote to a new page when warnings fill the page near the bottom", async () => {
+    // 18 medium-length warnings push contentEndY past the footnote threshold (PAGE_H - MARGIN - 35)
+    // without triggering the warnings page-break themselves (which resets the cursor)
+    const mediumWarning = "Warning: ECB rate not found, using fallback rate for ".padEnd(200, "X");
+    const report = makeReport({
+      capitalGains: {
+        transmissionValue: new Decimal(0),
+        acquisitionValue: new Decimal(0),
+        netGainLoss: new Decimal(0),
+        blockedLosses: new Decimal(0),
+        disposals: [],
+      },
+      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
+      doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
+      warnings: Array.from({ length: 18 }, (_, i) => `${i + 1}: ${mediumWarning}`),
+    });
+    const blob = await generatePdfWebReport(report, t);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(10_000);
+  });
 });
