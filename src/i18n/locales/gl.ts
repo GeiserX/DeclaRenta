@@ -30,6 +30,7 @@ const gl: TranslationKeys = {
   "results.filter_losses": "Perdas",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(s)",
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch": "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
@@ -373,6 +374,22 @@ const gl: TranslationKeys = {
   "tax.breakdown_dividends": "Dividendos",
   "tax.breakdown_interest": "Xuros",
   "tax.breakdown_blocked_losses": "Perdas bloqueadas (diferidas)",
+
+  // PDF report
+  "pdf.subtitle": "Informe fiscal — Exercicio",
+  "pdf.generated": "Xerado o",
+  "pdf.informative": "Informativo",
+  "pdf.blocked_losses": "Perdas bloqueadas anti-churning",
+  "pdf.interest_margin": "Xuros marxe (non deducible)",
+  "pdf.section_casillas": "1. Resumo de Caixas — Modelo 100",
+  "pdf.section_operations": "2. Detalle de Operacións",
+  "pdf.section_dividends": "3. Dividendos",
+  "pdf.section_dt": "4. Dedución por Dobre Imposición Internacional",
+  "pdf.section_warnings": "Advertencias",
+  "pdf.dt_paid": "Imposto pagado",
+  "pdf.dt_allowed": "Dedución permitida",
+  "pdf.ecb_note": "Tipo ECB: tipo de cambio oficial do Banco Central Europeo (EUR por 1 unidade de divisa estranxeira) na data da operación. Fonte: ECB SDMX API.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — Este informe é orientativo e non substitúe o asesoramento fiscal profesional.",
 };
 
 export default gl;

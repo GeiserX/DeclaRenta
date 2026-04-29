@@ -168,6 +168,7 @@ const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
+const exportPdfBtn = document.getElementById("export-pdf-btn") as HTMLButtonElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
 const fileListDiv = document.getElementById("file-list")!;
 const opsSearch = document.getElementById("ops-search") as HTMLInputElement;
@@ -524,6 +525,22 @@ exportCsvBtn.addEventListener("click", () => {
   const csv = formatCsv(currentReport);
   const blob = new Blob([csv], { type: "text/csv" });
   downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+});
+
+exportPdfBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  exportPdfBtn.disabled = true;
+  const report = currentReport;
+  void import("../generators/pdf-web.js").then(({ generatePdfWebReport }) =>
+    generatePdfWebReport(report, t as (key: string) => string, getCurrentLocale())
+  ).then((blob) => {
+    downloadBlob(blob, `declarenta_${report.year}.pdf`);
+  }).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+  }).finally(() => {
+    exportPdfBtn.disabled = false;
+  });
 });
 
 function downloadBlob(blob: Blob, filename: string) {

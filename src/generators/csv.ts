@@ -76,7 +76,7 @@ export function formatCsv(report: TaxSummary): string {
   lines.push(`1631,Valor de adquisicion FX,${report.fxGains.acquisitionValue.toFixed(2)}`);
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
-  lines.push(`0033,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);
+  lines.push(`0027,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);
   lines.push(`0588,Deduccion doble imposicion,${report.doubleTaxation.deduction.toFixed(2)}`);
 
   return lines.join("\n") + "\n";

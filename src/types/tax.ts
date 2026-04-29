@@ -127,7 +127,7 @@ export interface TaxSummary {
 
   /** Interest income */
   interest: {
-    /** Casilla 0033: Intereses de cuentas y depósitos */
+    /** Casilla 0027: Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF) */
     earned: Decimal;
     /** Intereses pagados al broker (margen) — informativo, NO deducible (Art. 26.1.a LIRPF) */
     paid: Decimal;

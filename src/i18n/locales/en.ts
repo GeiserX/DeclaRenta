@@ -29,6 +29,7 @@ const en: TranslationKeys = {
   "results.filter_losses": "Losses",
   "results.export_json": "Export JSON",
   "results.export_csv": "Export CSV",
+  "results.export_pdf": "Export PDF",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch": "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
@@ -377,6 +378,22 @@ const en: TranslationKeys = {
   "tax.breakdown_dividends": "Dividends",
   "tax.breakdown_interest": "Interest",
   "tax.breakdown_blocked_losses": "Blocked losses (deferred)",
+
+  // PDF report
+  "pdf.subtitle": "Tax report — Year",
+  "pdf.generated": "Generated on",
+  "pdf.informative": "Info",
+  "pdf.blocked_losses": "Anti-churning blocked losses",
+  "pdf.interest_margin": "Margin interest (non-deductible)",
+  "pdf.section_casillas": "1. Tax Boxes Summary — Modelo 100",
+  "pdf.section_operations": "2. Transactions Detail",
+  "pdf.section_dividends": "3. Dividends",
+  "pdf.section_dt": "4. International Double Taxation Deduction",
+  "pdf.section_warnings": "Warnings",
+  "pdf.dt_paid": "Tax paid",
+  "pdf.dt_allowed": "Deduction allowed",
+  "pdf.ecb_note": "ECB rate: official European Central Bank exchange rate (EUR per 1 unit of foreign currency) on the transaction date. Source: ECB SDMX API.",
+  "pdf.footer": "DeclaRenta — https://declarenta.com — This report is informational only and does not replace professional tax advice.",
 };
 
 export default en;

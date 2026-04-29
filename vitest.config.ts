@@ -5,6 +5,10 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     globals: false,
+    define: {
+      __APP_VERSION__: JSON.stringify("test"),
+      __COMMIT_HASH__: JSON.stringify("test"),
+    },
     coverage: {
       provider: "v8",
       include: ["src/engine/**", "src/generators/**", "src/parsers/**", "src/i18n/**"],

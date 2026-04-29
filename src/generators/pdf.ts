@@ -112,7 +112,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         ["Casilla 0328", "Valor de adquisición", formatEur(report.capitalGains.acquisitionValue)],
         ["", "Ganancia/Pérdida neta", formatEur(report.capitalGains.netGainLoss)],
         ["Casilla 0029", "Dividendos brutos", formatEur(report.dividends.grossIncome)],
-        ["Casilla 0033", "Intereses ganados", formatEur(report.interest.earned)],
+        ["Casilla 0027", "Intereses ganados", formatEur(report.interest.earned)],
         ["Informativo", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
       ];
@@ -258,7 +258,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
       // --- Footer ---
       doc.fontSize(FONT_SIZE.small).fillColor(COLORS.muted)
         .text(
-          `DeclaRenta v${VERSION} — https://declarenta.es — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.`,
+          `DeclaRenta v${VERSION} — https://declarenta.com — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.`,
           MARGIN,
           doc.page.height - MARGIN - 20,
           { width: CONTENT_WIDTH, align: "center" },
