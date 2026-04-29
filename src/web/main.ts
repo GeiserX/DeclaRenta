@@ -387,7 +387,7 @@ async function updateDetectionStatus(): Promise<void> {
     const details = document.getElementById("broker-selector-details") as HTMLDetailsElement | null;
     if (details) {
       details.open = true;
-      (details.querySelector("summary") as HTMLElement | null)?.focus();
+      details.querySelector<HTMLElement>("summary")?.focus();
     }
   }
 

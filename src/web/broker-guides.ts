@@ -164,7 +164,7 @@ export function initBrokerGuides(): void {
   }
 
   document.addEventListener("localechange", () => {
-    grid!.setAttribute("aria-label", t("upload.chip_group_label"));
+    grid.setAttribute("aria-label", t("upload.chip_group_label"));
     updateChips();
     if (guideSelect && guideContainer) {
       populateGuideSelect(guideSelect);
