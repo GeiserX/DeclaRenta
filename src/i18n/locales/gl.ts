@@ -21,6 +21,8 @@ const gl: TranslationKeys = {
   "upload.broker_not_detected": "Non se detectou o teu broker?",
   "upload.guide_how": "Como descargar o meu informe do broker?",
   "upload.guide_select_broker": "Selecciona o teu broker:",
+  "upload.choose_broker": "— escolle broker —",
+  "upload.guide_unavailable": "Guía non dispoñible aínda para este broker.",
 
   "config.title": "Configura",
   "config.year_label": "Exercicio fiscal:",

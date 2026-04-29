@@ -84,6 +84,7 @@ document.addEventListener("localechange", () => {
   rerenderSection721();
   rerenderSectionD6();
   initProfile();
+  void updateDetectionStatus();
 });
 
 updateStaticText();
@@ -344,11 +345,17 @@ async function updateDetectionStatus(): Promise<void> {
     return;
   }
 
+  // Snapshot file names before async work to detect stale results
+  const snapshot = pendingFiles.map((f) => fileKey(f)).join("|");
+
   statusEl.innerHTML = `<span class="detection-loading">${t("upload.detecting")}</span>`;
 
   const results = await Promise.all(
     pendingFiles.map(async (f) => ({ name: f.name, broker: await previewDetectBroker(f) })),
   );
+
+  // Abort if pendingFiles changed while we were awaiting
+  if (pendingFiles.map((f) => fileKey(f)).join("|") !== snapshot) return;
 
   const anyFailed = results.some((r) => r.broker === null);
 

@@ -80,7 +80,7 @@ function renderGuideForBroker(container: HTMLElement, brokerId: string): void {
   const title = t(`guide.${brokerId}.title` as Parameters<typeof t>[0]);
   const steps = getGuideSteps(brokerId);
   if (steps.length === 0) {
-    container.innerHTML = `<p class="guide-empty">${title} — guía no disponible todavía.</p>`;
+    container.innerHTML = `<p class="guide-empty">${title} — ${t("upload.guide_unavailable")}</p>`;
     return;
   }
   container.innerHTML = `
@@ -102,7 +102,7 @@ function populateGuideSelect(select: HTMLSelectElement): void {
       return `<option value="${b.id}"${current === b.id ? " selected" : ""}>${title}</option>`;
     })
     .join("");
-  select.innerHTML = `<option value="">— elige broker —</option>${options}`;
+  select.innerHTML = `<option value="">${t("upload.choose_broker")}</option>${options}`;
   if (current) select.value = current;
 }
 

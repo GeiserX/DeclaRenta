@@ -21,6 +21,8 @@ const ca: TranslationKeys = {
   "upload.broker_not_detected": "No s'ha detectat el teu broker?",
   "upload.guide_how": "Com descarregar el meu informe del broker?",
   "upload.guide_select_broker": "Selecciona el teu broker:",
+  "upload.choose_broker": "— tria broker —",
+  "upload.guide_unavailable": "Guia no disponible encara per a aquest broker.",
 
   "config.title": "Configura",
   "config.year_label": "Exercici fiscal:",

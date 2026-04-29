@@ -20,6 +20,8 @@ const es = {
   "upload.broker_not_detected": "¿No se detectó tu broker?",
   "upload.guide_how": "¿Cómo descargar mi informe del broker?",
   "upload.guide_select_broker": "Selecciona tu broker:",
+  "upload.choose_broker": "— elige broker —",
+  "upload.guide_unavailable": "Guía no disponible todavía para este broker.",
 
   // Config
   "config.title": "Configura",

@@ -20,6 +20,8 @@ const en: TranslationKeys = {
   "upload.broker_not_detected": "Broker not detected?",
   "upload.guide_how": "How to download my broker report?",
   "upload.guide_select_broker": "Select your broker:",
+  "upload.choose_broker": "— choose broker —",
+  "upload.guide_unavailable": "Guide not yet available for this broker.",
 
   "config.title": "Configure",
   "config.year_label": "Tax year:",
