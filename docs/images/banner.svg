@@ -1,71 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f172a"/>
-      <stop offset="50%" style="stop-color:#1e293b"/>
-      <stop offset="100%" style="stop-color:#0f172a"/>
-    </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#dc2626"/>
-      <stop offset="50%" style="stop-color:#f59e0b"/>
-      <stop offset="100%" style="stop-color:#dc2626"/>
-    </linearGradient>
-    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:0.2"/>
-      <stop offset="50%" style="stop-color:#f59e0b;stop-opacity:0.4"/>
-      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:0.2"/>
-    </linearGradient>
-    <linearGradient id="chart" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" style="stop-color:#22c55e;stop-opacity:0.1"/>
-      <stop offset="100%" style="stop-color:#22c55e;stop-opacity:0.4"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Background -->
-  <rect width="900" height="300" fill="url(#bg)" rx="16"/>
-
-  <!-- Decorative grid lines (spreadsheet/tax form feel) -->
-  <line x1="100" y1="60" x2="100" y2="240" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
-  <line x1="200" y1="60" x2="200" y2="240" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
-  <line x1="700" y1="60" x2="700" y2="240" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
-  <line x1="800" y1="60" x2="800" y2="240" stroke="#334155" stroke-width="0.5" opacity="0.3"/>
-
-  <!-- Mini chart (gains) on left -->
-  <polyline points="60,210 90,195 120,200 150,180 180,165 210,175 240,155"
-    fill="none" stroke="#22c55e" stroke-width="2" opacity="0.6"/>
-  <polyline points="60,210 90,195 120,200 150,180 180,165 210,175 240,155 240,210 60,210"
-    fill="url(#chart)" stroke="none"/>
-
-  <!-- Mini chart (losses) on right -->
-  <polyline points="660,170 690,180 720,175 750,195 780,200 810,190 840,205"
-    fill="none" stroke="#ef4444" stroke-width="2" opacity="0.6"/>
-
-  <!-- Casilla boxes decoration -->
-  <rect x="70" y="220" width="40" height="18" rx="2" fill="none" stroke="#475569" stroke-width="1" opacity="0.4"/>
-  <text x="90" y="233" text-anchor="middle" font-family="monospace" font-size="8" fill="#64748b" opacity="0.5">0327</text>
-  <rect x="120" y="220" width="40" height="18" rx="2" fill="none" stroke="#475569" stroke-width="1" opacity="0.4"/>
-  <text x="140" y="233" text-anchor="middle" font-family="monospace" font-size="8" fill="#64748b" opacity="0.5">0328</text>
-  <rect x="740" y="220" width="40" height="18" rx="2" fill="none" stroke="#475569" stroke-width="1" opacity="0.4"/>
-  <text x="760" y="233" text-anchor="middle" font-family="monospace" font-size="8" fill="#64748b" opacity="0.5">0588</text>
-  <rect x="790" y="220" width="40" height="18" rx="2" fill="none" stroke="#475569" stroke-width="1" opacity="0.4"/>
-  <text x="810" y="233" text-anchor="middle" font-family="monospace" font-size="8" fill="#64748b" opacity="0.5">0029</text>
-
-  <!-- EUR symbols floating -->
-  <text x="155" y="95" font-family="system-ui" font-size="24" fill="#f59e0b" opacity="0.15" transform="rotate(-15 155 95)">EUR</text>
-  <text x="730" y="110" font-family="system-ui" font-size="20" fill="#f59e0b" opacity="0.12" transform="rotate(10 730 110)">USD</text>
-
-  <!-- Top accent line -->
-  <rect x="275" y="40" width="350" height="3" rx="1.5" fill="url(#accent)" opacity="0.8"/>
-
-  <!-- Title -->
-  <text x="450" y="112" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="56" font-weight="700" fill="white" letter-spacing="-1">DeclaRenta</text>
-
-  <!-- Subtitle -->
-  <text x="450" y="142" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#94a3b8" letter-spacing="4" font-weight="400">DECLARACIONES FISCALES OPEN SOURCE</text>
-
-  <!-- Bottom accent line -->
-  <rect x="275" y="235" width="350" height="3" rx="1.5" fill="url(#accent)" opacity="0.8"/>
-
-  <!-- Tagline -->
-  <text x="450" y="262" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="13" fill="#64748b">Broker extranjero &#x2192; Modelo 100 + 720 + D-6 | Privacidad total, todo en tu navegador</text>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 630">
+  <!-- Hard split: black left, yellow right -->
+  <rect width="600" height="630" fill="#000"/>
+  <rect x="600" width="600" height="630" fill="#f59e0b"/>
+  <!-- Logo on black side -->
+  <image href="logo.png" x="100" y="115" width="400" height="400" opacity="1"/>
+  <!-- White frame around logo -->
+  <rect x="100" y="115" width="400" height="400" fill="none" stroke="white" stroke-width="4"/>
+  <!-- Title on yellow side, stacked huge -->
+  <text x="630" y="180" font-family="'Impact', 'Haettenschweiler', sans-serif" font-size="120" font-weight="900" fill="#000" letter-spacing="-5">DECLA</text>
+  <text x="630" y="310" font-family="'Impact', 'Haettenschweiler', sans-serif" font-size="120" font-weight="900" fill="#000" letter-spacing="-5">RENTA</text>
+  <!-- Hard line -->
+  <rect x="630" y="330" width="540" height="6" fill="#000"/>
+  <!-- Features stacked -->
+  <text x="630" y="380" font-family="'Helvetica Neue', Helvetica, sans-serif" font-size="20" font-weight="700" fill="#000">BROKER → RENTA</text>
+  <text x="630" y="415" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">12 BROKERS INTERNACIONALES</text>
+  <text x="630" y="445" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MODELO 100 · 720 · 721 · D-6</text>
+  <text x="630" y="475" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MOTOR FIFO · TIPOS BCE</text>
+  <text x="630" y="505" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">PRIVACIDAD TOTAL · GPL-3.0</text>
+  <!-- URL -->
+  <text x="630" y="565" font-family="'Courier New', monospace" font-size="18" font-weight="700" fill="#000">declarenta.com</text>
+  <!-- Diagonal yellow bleed into black side -->
+  <polygon points="580,0 620,0 600,630 560,630" fill="#f59e0b" opacity="0.3"/>
 </svg>

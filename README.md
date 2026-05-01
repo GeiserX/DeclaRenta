@@ -1,9 +1,5 @@
 <p align="center">
-  <img src="docs/images/banner.svg" alt="DeclaRenta banner" width="100%"/>
-</p>
-
-<p align="center">
-  <img src="docs/images/logo.png" alt="DeclaRenta logo" width="200"/>
+  <img src="docs/images/banner.png" alt="DeclaRenta banner" width="100%"/>
 </p>
 
 <h1 align="center">DeclaRenta</h1>
@@ -26,7 +22,7 @@
 </p>
 
 <p align="center">
-  IBKR · Degiro · Scalable Capital · eToro · Freedom24 · Coinbase · Binance · Kraken → Modelo 100 · Modelo 720 · Modelo 721 · D-6
+  IBKR · Degiro · Scalable Capital · eToro · Freedom24 · Trade Republic · Revolut · Lightyear · Coinbase · Binance · Kraken · Trading 212 → Modelo 100 · Modelo 720 · Modelo 721 · D-6
 </p>
 
 <p align="center">
