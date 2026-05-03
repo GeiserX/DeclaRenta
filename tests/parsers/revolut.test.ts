@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import * as XLSX from "xlsx";
 import { revolutParser } from "../../src/parsers/revolut.js";
 import { parseRevolutXlsx, detectRevolutXlsx, parseRevolutDate } from "../../src/parsers/revolut.js";
@@ -390,6 +390,393 @@ describe("revolutParser", () => {
       const statement = await parseRevolutXlsx(data);
       expect(statement.trades[0]!.isin).toBe("");
       expect(statement.trades[1]!.isin).toBe("");
+    });
+  });
+});
+
+// ===========================================================================
+// Transaction-log format tests
+// ===========================================================================
+
+const TXN_LOG_HEADER = [
+  "Date", "Ticker", "Type", "Quantity", "Price per share",
+  "Total Amount", "Currency", "FX Rate",
+];
+
+function buildTxnLogWorkbook(rows: (string | number)[][]): Uint8Array {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([TXN_LOG_HEADER, ...rows]);
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+}
+
+const TXN_LOG_FIXTURE_PATH = new URL("../fixtures/revolut-txnlog-sample.xlsx", import.meta.url);
+const TXN_LOG_XLSX = existsSync(TXN_LOG_FIXTURE_PATH)
+  ? readFileSync(TXN_LOG_FIXTURE_PATH)
+  : null;
+
+describe("revolutParser — transaction-log format", () => {
+  // -----------------------------------------------------------------------
+  // Detection
+  // -----------------------------------------------------------------------
+  describe("detectRevolutXlsx (transaction-log)", () => {
+    it("should detect a transaction-log XLSX", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:02.425Z", "AAPL", "BUY - MARKET", "1", "USD 180", "USD 180", "USD", "1.08"],
+      ]);
+      expect(await detectRevolutXlsx(data)).toBe(true);
+    });
+
+    it("should detect the transaction-log fixture", async () => {
+      if (!TXN_LOG_XLSX) return;
+      expect(await detectRevolutXlsx(TXN_LOG_XLSX)).toBe(true);
+    });
+
+    it("should not false-positive on a non-Revolut XLSX with 'Date' header", async () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["Date", "Action", "No. of shares", "Price / share"],
+        ["2025-01-01", "Buy", "10", "100"],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      expect(await detectRevolutXlsx(data)).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Text-based detect (transaction-log)
+  // -----------------------------------------------------------------------
+  describe("detect (text, transaction-log)", () => {
+    it("should detect transaction-log headers", () => {
+      const header = "Date\tTicker\tType\tQuantity\tPrice per share\tTotal Amount\tCurrency\tFX Rate";
+      expect(revolutParser.detect(header)).toBe(true);
+    });
+
+    it("should not false-positive on Trading 212 headers", () => {
+      const header = "Action\tTime\tISIN\tTicker\tName\tNo. of shares\tPrice / share\tCurrency\tTotal Amount";
+      expect(revolutParser.detect(header)).toBe(false);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // parseRevolutDate — ISO 8601 timestamps
+  // -----------------------------------------------------------------------
+  describe("parseRevolutDate (ISO 8601 timestamps)", () => {
+    it("should parse ISO 8601 with milliseconds", () => {
+      expect(parseRevolutDate("2025-10-20T06:00:02.425Z")).toBe("20251020");
+    });
+
+    it("should parse ISO 8601 with microseconds", () => {
+      expect(parseRevolutDate("2025-10-19T00:02:32.169239Z")).toBe("20251019");
+    });
+
+    it("should parse ISO 8601 without fractional seconds", () => {
+      expect(parseRevolutDate("2025-12-30T00:08:20Z")).toBe("20251230");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Full parsing — programmatic fixtures
+  // -----------------------------------------------------------------------
+  describe("parseRevolutXlsx (transaction-log, programmatic)", () => {
+    it("should parse BUY - MARKET trades", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:02.425Z", "AAPL", "BUY - MARKET", "3.19", "USD 156.10", "USD 498", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(1);
+      const buy = stmt.trades[0]!;
+      expect(buy.buySell).toBe("BUY");
+      expect(buy.symbol).toBe("AAPL");
+      expect(parseFloat(buy.quantity)).toBeCloseTo(3.19, 2);
+      expect(parseFloat(buy.tradePrice)).toBeCloseTo(156.1, 1);
+      expect(buy.currency).toBe("USD");
+      expect(buy.tradeDate).toBe("20251020");
+      expect(buy.exchange).toBe("REVOLUT");
+      expect(buy.openCloseIndicator).toBe("O");
+      expect(buy.assetCategory).toBe("STK");
+    });
+
+    it("should parse SELL - MARKET trades", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "5", "USD 150", "USD 750", "USD", "1.08"],
+        ["2025-11-10T15:33:15.722Z", "AAPL", "SELL - MARKET", "5", "USD 177.75", "USD 888.75", "USD", "1.158"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(2);
+      const sell = stmt.trades[1]!;
+      expect(sell.buySell).toBe("SELL");
+      expect(sell.symbol).toBe("AAPL");
+      expect(parseFloat(sell.quantity)).toBeLessThan(0);
+      expect(sell.proceeds).toBe("888.75");
+      expect(sell.openCloseIndicator).toBe("C");
+      expect(sell.tradeDate).toBe("20251110");
+    });
+
+    it("should parse SELL - LIMIT trades", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "GZMO", "BUY - MARKET", "5", "USD 30", "USD 150", "USD", "1.08"],
+        ["2025-11-10T20:57:52.676Z", "GZMO", "SELL - LIMIT", "5", "USD 30", "USD 149.99", "USD", "1.159"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      const sell = stmt.trades[1]!;
+      expect(sell.buySell).toBe("SELL");
+      expect(sell.proceeds).toBe("149.99");
+    });
+
+    it("should parse EUR trades with FX Rate 1", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:02.425Z", "SAP", "BUY - MARKET", "3.19", "EUR 15.61", "EUR 50", "EUR", "1"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      const buy = stmt.trades[0]!;
+      expect(buy.currency).toBe("EUR");
+      expect(parseFloat(buy.tradePrice)).toBeCloseTo(15.61, 2);
+    });
+
+    it("should extract CASH TOP-UP as Deposits/Withdrawals", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-19T00:02:32.169239Z", "", "CASH TOP-UP", "", "", "EUR 250", "EUR", "1"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+      expect(stmt.cashTransactions.length).toBe(1);
+      const cash = stmt.cashTransactions[0]!;
+      expect(cash.type).toBe("Deposits/Withdrawals");
+      expect(cash.description).toBe("CASH TOP-UP");
+      expect(parseFloat(cash.amount)).toBe(250);
+      expect(cash.currency).toBe("EUR");
+    });
+
+    it("should extract CASH WITHDRAWAL as Deposits/Withdrawals with negative amount", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-12-30T00:08:20.679435Z", "", "CASH WITHDRAWAL", "", "", "EUR -160.80", "EUR", "1"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.cashTransactions.length).toBe(1);
+      const cash = stmt.cashTransactions[0]!;
+      expect(cash.type).toBe("Deposits/Withdrawals");
+      expect(parseFloat(cash.amount)).toBe(-160.8);
+    });
+
+    it("should skip REWARD rows (no ticker)", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-12-19T17:16:01.651593Z", "", "REWARD", "", "", "USD 0.75", "USD", "1.1743"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+      expect(stmt.cashTransactions.length).toBe(0);
+    });
+
+    it("should infer open positions from unmatched buys", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "MELI", "BUY - MARKET", "0.07138129", "USD 2085", "USD 148.83", "USD", "1.082"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(1);
+      expect(stmt.openPositions.length).toBe(1);
+      const pos = stmt.openPositions[0]!;
+      expect(pos.symbol).toBe("MELI");
+      expect(parseFloat(pos.quantity)).toBeCloseTo(0.07138129, 6);
+      expect(parseFloat(pos.costBasisMoney)).toBeCloseTo(148.83, 2);
+      expect(pos.currency).toBe("USD");
+      expect(pos.assetCategory).toBe("STK");
+    });
+
+    it("should reduce open position when partially sold", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "10", "USD 150", "USD 1500", "USD", "1.08"],
+        ["2025-11-10T15:00:00Z", "AAPL", "SELL - MARKET", "6", "USD 160", "USD 960", "USD", "1.15"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(2);
+      expect(stmt.openPositions.length).toBe(1);
+      const pos = stmt.openPositions[0]!;
+      expect(pos.symbol).toBe("AAPL");
+      expect(parseFloat(pos.quantity)).toBeCloseTo(4, 0);
+    });
+
+    it("should not create open position when fully sold", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "10", "USD 150", "USD 1500", "USD", "1.08"],
+        ["2025-11-10T15:00:00Z", "AAPL", "SELL - MARKET", "10", "USD 160", "USD 1600", "USD", "1.15"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.openPositions.length).toBe(0);
+    });
+
+    it("should handle fractional shares (up to 8 decimals)", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "BRK.B", "BUY - MARKET", "1.43231884", "USD 69", "USD 98.83", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(parseFloat(stmt.trades[0]!.quantity)).toBeCloseTo(1.43231884, 6);
+    });
+
+    it("should detect crypto symbols (BTC)", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-12-15T12:00:00Z", "BTC", "BUY - MARKET", "0.001", "USD 42000", "USD 42", "USD", "1.05"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades[0]!.assetCategory).toBe("CRYPTO");
+    });
+
+    it("should handle multiple buys of same symbol", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "ACME", "BUY - MARKET", "3", "EUR 15.61", "EUR 46.83", "EUR", "1"],
+        ["2025-11-07T10:00:00Z", "ACME", "BUY - MARKET", "7", "EUR 14.35", "EUR 100.45", "EUR", "1"],
+        ["2025-12-22T16:56:00Z", "ACME", "SELL - LIMIT", "10", "EUR 16.08", "EUR 160.80", "EUR", "1"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(3);
+      expect(stmt.openPositions.length).toBe(0);
+    });
+
+    it("should skip blank rows", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "5", "USD 150", "USD 750", "USD", "1.08"],
+        ["", "", "", "", "", "", "", ""],
+        ["2025-11-10T15:00:00Z", "AAPL", "SELL - MARKET", "5", "USD 160", "USD 800", "USD", "1.15"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(2);
+    });
+
+    it("should skip rows with zero quantity", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "0", "USD 150", "USD 0", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+    });
+
+    it("should return empty arrays for empty sheet", async () => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([TXN_LOG_HEADER]);
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+      expect(stmt.cashTransactions.length).toBe(0);
+      expect(stmt.openPositions.length).toBe(0);
+    });
+
+    it("should set fxRateToBase to '1' (ECB engine handles FX)", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "5", "USD 150", "USD 750", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades[0]!.fxRateToBase).toBe("1");
+    });
+
+    it("should set isin to empty string", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "5", "USD 150", "USD 750", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades[0]!.isin).toBe("");
+    });
+
+    it("should set fxRateToBase on cash transactions for non-EUR currencies", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-19T00:00:00Z", "", "CASH TOP-UP", "", "", "USD 200", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      const cash = stmt.cashTransactions[0]!;
+      expect(parseFloat(cash.fxRateToBase)).toBeCloseTo(1 / 1.08, 4);
+    });
+
+    it("should set fxRateToBase to '1' on EUR cash transactions", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-19T00:00:00Z", "", "CASH TOP-UP", "", "", "EUR 250", "EUR", "1"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.cashTransactions[0]!.fxRateToBase).toBe("1");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Real fixture (transaction-log)
+  // -----------------------------------------------------------------------
+  describe("parseRevolutXlsx (transaction-log fixture)", () => {
+    it("should parse the fixture with correct counts", async () => {
+      if (!TXN_LOG_XLSX) return;
+      const stmt = await parseRevolutXlsx(TXN_LOG_XLSX);
+      // 5 BUY + 4 SELL = 9 trade rows in the fixture (some symbols bought multiple times)
+      const buys = stmt.trades.filter(t => t.buySell === "BUY");
+      const sells = stmt.trades.filter(t => t.buySell === "SELL");
+      expect(buys.length).toBeGreaterThan(0);
+      expect(sells.length).toBeGreaterThan(0);
+      expect(stmt.trades.length).toBe(buys.length + sells.length);
+    });
+
+    it("should extract cash transactions from fixture", async () => {
+      if (!TXN_LOG_XLSX) return;
+      const stmt = await parseRevolutXlsx(TXN_LOG_XLSX);
+      expect(stmt.cashTransactions.length).toBeGreaterThan(0);
+      const topups = stmt.cashTransactions.filter(c => c.description === "CASH TOP-UP");
+      const withdrawals = stmt.cashTransactions.filter(c => c.description === "CASH WITHDRAWAL");
+      expect(topups.length).toBeGreaterThan(0);
+      expect(withdrawals.length).toBeGreaterThan(0);
+    });
+
+    it("should infer open positions from fixture", async () => {
+      if (!TXN_LOG_XLSX) return;
+      const stmt = await parseRevolutXlsx(TXN_LOG_XLSX);
+      // BTC is bought but never sold in the fixture
+      const btcPos = stmt.openPositions.find(p => p.symbol === "BTC");
+      expect(btcPos).toBeDefined();
+      expect(btcPos!.assetCategory).toBe("CRYPTO");
+    });
+
+    it("should not have ACME as open position (fully sold in fixture)", async () => {
+      if (!TXN_LOG_XLSX) return;
+      const stmt = await parseRevolutXlsx(TXN_LOG_XLSX);
+      const acmePos = stmt.openPositions.find(p => p.symbol === "ACME");
+      expect(acmePos).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Format coexistence: both formats still detected and parsed
+  // -----------------------------------------------------------------------
+  describe("format coexistence", () => {
+    it("should still detect closed-positions format", async () => {
+      const data = buildRevolutWorkbook([
+        ["2020-01-01", "2020-02-10", "AAPL", "5", "1000", "1100", "100", "0", "100", "USD"],
+      ]);
+      expect(await detectRevolutXlsx(data)).toBe(true);
+    });
+
+    it("should still parse closed-positions format correctly", async () => {
+      const data = buildRevolutWorkbook([
+        ["2020-01-01", "2020-02-10", "AAPL", "5", "1000", "1100", "100", "0", "100", "USD"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(2);
+      expect(stmt.trades[0]!.buySell).toBe("BUY");
+      expect(stmt.trades[1]!.buySell).toBe("SELL");
+    });
+
+    it("should route transaction-log to new parser and closed-positions to old", async () => {
+      const txnData = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "5", "USD 150", "USD 750", "USD", "1.08"],
+      ]);
+      const closedData = buildRevolutWorkbook([
+        ["2020-01-01", "2020-02-10", "AAPL", "5", "1000", "1100", "100", "0", "100", "USD"],
+      ]);
+      const txnStmt = await parseRevolutXlsx(txnData);
+      const closedStmt = await parseRevolutXlsx(closedData);
+      // Transaction-log has cash transaction support
+      expect(txnStmt.trades.length).toBe(1);
+      expect(txnStmt.trades[0]!.tradeID).toMatch(/^revolut-buy-/);
+      // Closed-positions has paired buy/sell legs
+      expect(closedStmt.trades.length).toBe(2);
+      expect(closedStmt.trades[0]!.tradeID).toMatch(/^revolut-open-/);
     });
   });
 });
