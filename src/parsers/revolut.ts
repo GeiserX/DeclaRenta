@@ -356,8 +356,8 @@ function parseTransactionLog(
     const priceStr = (row[cols.price] ?? "0").trim();
 
     const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
-    const qty = parseFloat(qtyAmountStr) || 0;
-    if (qty === 0) continue;
+    const qty = Math.abs(parseFloat(qtyAmountStr) || 0);
+    if (qty === 0 || !isFinite(qty)) continue;
 
     const { amount: priceAmountStr } = parseCcyAmount(priceStr);
     const pricePerShare = parseFloat(priceAmountStr) || 0;
@@ -426,10 +426,11 @@ function parseTransactionLog(
       });
 
       const pos = positions.get(ticker);
-      if (pos) {
-        const costPerUnit = pos.netQty > 0 ? pos.totalCost / pos.netQty : 0;
-        pos.totalCost -= costPerUnit * qty;
-        pos.netQty -= qty;
+      if (pos && pos.netQty > 0) {
+        const sellQty = Math.min(qty, pos.netQty);
+        const costPerUnit = pos.totalCost / pos.netQty;
+        pos.totalCost -= costPerUnit * sellQty;
+        pos.netQty -= sellQty;
       }
     }
   }
@@ -470,7 +471,8 @@ function hasTxnLogHeaders(headers: string[]): boolean {
   const hasTicker = lower.some(h => TXN_TICKER_HEADERS.includes(h));
   const hasType = lower.some(h => TXN_TYPE_HEADERS.includes(h));
   const hasTotal = lower.some(h => TXN_TOTAL_HEADERS.some(p => h.includes(p)));
-  return hasDate && hasTicker && hasType && hasTotal;
+  const hasPrice = lower.some(h => TXN_PRICE_HEADERS.some(p => h.includes(p)));
+  return hasDate && hasTicker && hasType && hasTotal && hasPrice;
 }
 
 function hasClosedPositionHeaders(headers: string[]): boolean {

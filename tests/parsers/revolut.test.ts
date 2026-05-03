@@ -433,6 +433,12 @@ describe("revolutParser — transaction-log format", () => {
       expect(await detectRevolutXlsx(TXN_LOG_XLSX)).toBe(true);
     });
 
+    it("should return false for corrupted XLSX (valid ZIP magic but bad content)", async () => {
+      // PK\x03\x04 magic bytes followed by garbage
+      const corrupted = Buffer.from([0x50, 0x4B, 0x03, 0x04, 0xFF, 0xFF, 0xFF, 0xFF]);
+      expect(await detectRevolutXlsx(corrupted)).toBe(false);
+    });
+
     it("should not false-positive on a non-Revolut XLSX with 'Date' header", async () => {
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([
@@ -697,6 +703,45 @@ describe("revolutParser — transaction-log format", () => {
       const stmt = await parseRevolutXlsx(data);
       expect(stmt.cashTransactions[0]!.fxRateToBase).toBe("1");
     });
+
+    it("should parse BUY - LIMIT trades", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "MSFT", "BUY - LIMIT", "2", "USD 400", "USD 800", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(1);
+      expect(stmt.trades[0]!.buySell).toBe("BUY");
+      expect(stmt.trades[0]!.symbol).toBe("MSFT");
+      expect(parseFloat(stmt.trades[0]!.quantity)).toBe(2);
+    });
+
+    it("should handle negative quantity by taking absolute value", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "-5", "USD 150", "USD 750", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(1);
+      expect(parseFloat(stmt.trades[0]!.quantity)).toBe(5);
+    });
+
+    it("should cap sell at net position (sell exceeding buys)", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "3", "USD 150", "USD 450", "USD", "1.08"],
+        ["2025-11-10T15:00:00Z", "AAPL", "SELL - MARKET", "10", "USD 160", "USD 1600", "USD", "1.15"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(2);
+      // Position should not go negative — open positions should be empty (capped at 0)
+      expect(stmt.openPositions.length).toBe(0);
+    });
+
+    it("should skip rows with Infinity quantity", async () => {
+      const data = buildTxnLogWorkbook([
+        ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "Infinity", "USD 150", "USD 750", "USD", "1.08"],
+      ]);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -760,6 +805,20 @@ describe("revolutParser — transaction-log format", () => {
       expect(stmt.trades.length).toBe(2);
       expect(stmt.trades[0]!.buySell).toBe("BUY");
       expect(stmt.trades[1]!.buySell).toBe("SELL");
+    });
+
+    it("should return empty statement for sheet with no content", async () => {
+      // Build a workbook with a sheet that has absolutely no cells
+      const xlsx = await import("xlsx");
+      const wb = xlsx.utils.book_new();
+      const ws: import("xlsx").WorkSheet = {};
+      xlsx.utils.book_append_sheet(wb, ws, "Empty");
+      const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      const stmt = await parseRevolutXlsx(data);
+      expect(stmt.trades.length).toBe(0);
+      expect(stmt.cashTransactions.length).toBe(0);
+      expect(stmt.openPositions.length).toBe(0);
     });
 
     it("should route transaction-log to new parser and closed-positions to old", async () => {

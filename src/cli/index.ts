@@ -16,6 +16,7 @@ import { Command } from "commander";
 import Decimal from "decimal.js";
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
+import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
@@ -71,8 +72,15 @@ async function parseAndMerge(
   const brokerNames: string[] = [];
 
   for (const file of inputFiles) {
-    // Check for binary XLSX (eToro) first
+    // Check for binary XLSX (Revolut, eToro) first
     const buf = readFileSync(file);
+    if (await detectRevolutXlsx(buf)) {
+      const statement = await parseRevolutXlsx(buf);
+      mergeStatement(merged, statement);
+      brokerNames.push("Revolut");
+      console.error(`  [Revolut XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
+      continue;
+    }
     if (detectEtoroXlsx(buf)) {
       const statement = await parseEtoroXlsx(buf);
       mergeStatement(merged, statement);
