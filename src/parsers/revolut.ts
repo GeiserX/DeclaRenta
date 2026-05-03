@@ -1,25 +1,31 @@
 /**
  * Revolut XLSX parser.
  *
- * Parses Revolut's Trading Account Statement XLSX export into a normalized Statement.
- * The workbook contains a single sheet with completed (round-trip) trades:
+ * Supports two Revolut Trading Account Statement formats:
+ *
+ * Format A — Closed-positions summary:
  *   Date acquired | Date sold | Symbol | Quantity | Cost basis | Gross proceeds |
  *   Gross PnL | Fees | Net PnL | Currency
+ *   Each row = one round-trip → parser creates BUY + SELL legs.
  *
- * Each row represents a closed position: the parser creates both a BUY (opening)
- * and a SELL (closing) trade for the FIFO engine.
+ * Format B — Transaction log (what users actually get from the Revolut app):
+ *   Date | Ticker | Type | Quantity | Price per share | Total Amount | Currency | FX Rate
+ *   Each row = one event (BUY, SELL, CASH TOP-UP, CASH WITHDRAWAL, REWARD).
+ *   Parser creates individual trades, extracts cash transactions, and infers
+ *   open positions from unmatched buys.
  *
  * Revolut only offers XLSX or PDF exports (no CSV).
  *
  * Limitations:
- * - No ISIN codes in Revolut exports — cross-broker FIFO matching uses symbol fallback.
- * - No dividends/withholdings — Revolut's Trading Statement only has closed positions.
- *   Users need a separate Account Statement export for dividends (not yet supported).
- * - No open positions — Modelo 720/D-6 cannot be generated from this data alone.
+ * - No ISIN codes in either format — cross-broker FIFO matching uses symbol fallback.
+ * - No dividends/withholdings in either format. Users need a separate Account Statement.
+ * - FX rates in format B are EUR/FCY. The parser stores fxRateToBase="1" and lets
+ *   the FIFO engine fetch official ECB rates independently.
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
-import type { Trade, AssetCategory } from "../types/ibkr.js";
+import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import { findColumn, parseNumber } from "./csv-utils.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -38,6 +44,25 @@ const GROSS_PROCEEDS_HEADERS = ["gross proceeds", "ingresos brutos"];
 const GROSS_PNL_HEADERS = ["gross pnl", "pnl bruto"];
 const FEES_HEADERS = ["fees", "comisiones", "tasas"];
 const CURRENCY_HEADERS = ["currency", "divisa", "moneda"];
+
+// ---------------------------------------------------------------------------
+// Transaction-log format column headers (the format users actually get from
+// the Revolut app's Trading Account Statement export)
+// ---------------------------------------------------------------------------
+
+const TXN_DATE_HEADERS = ["date", "fecha"];
+const TXN_TICKER_HEADERS = ["ticker"];
+const TXN_TYPE_HEADERS = ["type", "tipo"];
+const TXN_QUANTITY_HEADERS = ["quantity", "cantidad"];
+const TXN_PRICE_HEADERS = ["price per share", "precio por acción", "precio por accion"];
+const TXN_TOTAL_HEADERS = ["total amount", "importe total", "cantidad total"];
+const TXN_CURRENCY_HEADERS = ["currency", "divisa", "moneda"];
+const TXN_FX_RATE_HEADERS = ["fx rate", "tipo de cambio", "tasa de cambio"];
+
+const TXN_TYPE_BUY = /^BUY\s*-\s*(MARKET|LIMIT)$/i;
+const TXN_TYPE_SELL = /^SELL\s*-\s*(MARKET|LIMIT)$/i;
+const TXN_TYPE_CASH_IN = /^CASH\s*TOP[- ]?UP$/i;
+const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 
 // ---------------------------------------------------------------------------
 // Crypto detection — Revolut mixes stocks and crypto in the same sheet.
@@ -80,7 +105,10 @@ function detectAssetCategory(symbol: string): AssetCategory {
 
 export function parseRevolutDate(dateStr: string): string {
   const trimmed = dateStr.trim();
-  // YYYY-MM-DD (primary Revolut format)
+  // ISO 8601 timestamp: 2025-10-20T06:00:02.425Z or 2025-10-19T00:02:32.169239Z
+  const isoTsMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoTsMatch) return `${isoTsMatch[1]}${isoTsMatch[2]}${isoTsMatch[3]}`;
+  // YYYY-MM-DD (primary Revolut closed-positions format)
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}${isoMatch[2]}${isoMatch[3]}`;
   // DD/MM/YYYY (EU format fallback)
@@ -223,30 +251,283 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
 }
 
 // ---------------------------------------------------------------------------
+// Transaction-log amount parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse Revolut "CCY amount" strings like "EUR 15.61" or "USD -217.14".
+ * Returns { currency, amount } where amount is the raw numeric string.
+ */
+function parseCcyAmount(raw: string): { currency: string; amount: string } {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/^([A-Z]{3})\s+(-?[\d.,]+)$/);
+  if (match) return { currency: match[1]!, amount: parseNumber(match[2]!) };
+  return { currency: "", amount: parseNumber(trimmed) };
+}
+
+// ---------------------------------------------------------------------------
+// Transaction-log parser (the format users actually get from the Revolut app)
+// ---------------------------------------------------------------------------
+
+interface TxnLogColumns {
+  date: number;
+  ticker: number;
+  type: number;
+  quantity: number;
+  price: number;
+  total: number;
+  currency: number;
+  fxRate: number;
+}
+
+function findTxnLogColumns(headers: string[]): TxnLogColumns | null {
+  const date = findColumn(headers, TXN_DATE_HEADERS);
+  const ticker = findColumn(headers, TXN_TICKER_HEADERS);
+  const type = findColumn(headers, TXN_TYPE_HEADERS);
+  const quantity = findColumn(headers, TXN_QUANTITY_HEADERS);
+  const price = findColumn(headers, TXN_PRICE_HEADERS);
+  const total = findColumn(headers, TXN_TOTAL_HEADERS);
+  const currency = findColumn(headers, TXN_CURRENCY_HEADERS);
+  const fxRate = findColumn(headers, TXN_FX_RATE_HEADERS);
+
+  if (date < 0 || type < 0 || total < 0 || currency < 0) return null;
+  return { date, ticker, type, quantity, price, total, currency, fxRate };
+}
+
+function parseTransactionLog(
+  xlsx: typeof import("xlsx"),
+  sheet: WorkSheet,
+): { trades: Trade[]; cashTransactions: CashTransaction[]; openPositions: OpenPosition[] } {
+  const rows = sheetToRows(xlsx, sheet);
+  if (rows.length < 2) return { trades: [], cashTransactions: [], openPositions: [] };
+
+  const headers = rows[0]!;
+  const cols = findTxnLogColumns(headers);
+  if (!cols) return { trades: [], cashTransactions: [], openPositions: [] };
+
+  const trades: Trade[] = [];
+  const cashTransactions: CashTransaction[] = [];
+
+  // Track net positions per symbol for open-position inference
+  const positions = new Map<string, {
+    symbol: string; currency: string; assetCategory: AssetCategory;
+    netQty: Decimal; totalCost: Decimal;
+  }>();
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (!row.length || row.every((c) => !c.trim())) continue;
+
+    const dateStr = (row[cols.date] ?? "").trim();
+    if (!dateStr) continue;
+    const tradeDate = parseRevolutDate(dateStr);
+
+    const type = (row[cols.type] ?? "").trim();
+    const ticker = (row[cols.ticker] ?? "").trim();
+    const currencyRaw = (row[cols.currency] ?? "").trim();
+    const fxRateStr = (row[cols.fxRate] ?? "1").trim();
+    const fxRate = parseFloat(parseNumber(fxRateStr)) || 1;
+
+    const totalRaw = (row[cols.total] ?? "").trim();
+    const { amount: totalAmountStr } = parseCcyAmount(totalRaw);
+    const totalAmount = parseFloat(totalAmountStr) || 0;
+
+    // Cash flows: CASH TOP-UP, CASH WITHDRAWAL, REWARD
+    if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
+      cashTransactions.push({
+        transactionID: `revolut-cash-${tradeDate}-${i}`,
+        accountId: "",
+        symbol: "",
+        description: type,
+        isin: "",
+        currency: currencyRaw,
+        dateTime: tradeDate,
+        settleDate: tradeDate,
+        amount: `${totalAmount}`,
+        fxRateToBase: currencyRaw === "EUR" ? "1" : `${1 / fxRate}`,
+        type: "Deposits/Withdrawals",
+      });
+      continue;
+    }
+
+    // Skip non-trade rows without a ticker (e.g. REWARD)
+    if (!ticker) continue;
+
+    const quantityStr = (row[cols.quantity] ?? "0").trim();
+    const priceStr = (row[cols.price] ?? "0").trim();
+
+    const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
+    const qty = Math.abs(parseFloat(qtyAmountStr) || 0);
+    if (qty === 0 || !isFinite(qty)) continue;
+
+    const { amount: priceAmountStr } = parseCcyAmount(priceStr);
+    const pricePerShare = parseFloat(priceAmountStr) || 0;
+
+    const assetCategory = detectAssetCategory(ticker);
+    const absTotalAmount = Math.abs(totalAmount);
+
+    if (TXN_TYPE_BUY.test(type)) {
+      trades.push({
+        tradeID: `revolut-buy-${tradeDate}-${ticker}-${i}`,
+        accountId: "",
+        symbol: ticker,
+        description: ticker,
+        isin: "",
+        assetCategory,
+        currency: currencyRaw,
+        tradeDate,
+        settlementDate: tradeDate,
+        quantity: `${qty}`,
+        tradePrice: `${pricePerShare}`,
+        tradeMoney: `-${absTotalAmount}`,
+        proceeds: "0",
+        cost: `-${absTotalAmount}`,
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: "BUY",
+        openCloseIndicator: "O",
+        exchange: "REVOLUT",
+        commissionCurrency: currencyRaw,
+        commission: "0",
+        taxes: "0",
+        multiplier: "1",
+      });
+
+      const pos = positions.get(ticker) ?? {
+        symbol: ticker, currency: currencyRaw, assetCategory,
+        netQty: new Decimal(0), totalCost: new Decimal(0),
+      };
+      pos.netQty = pos.netQty.plus(qty);
+      pos.totalCost = pos.totalCost.plus(absTotalAmount);
+      positions.set(ticker, pos);
+    } else if (TXN_TYPE_SELL.test(type)) {
+      trades.push({
+        tradeID: `revolut-sell-${tradeDate}-${ticker}-${i}`,
+        accountId: "",
+        symbol: ticker,
+        description: ticker,
+        isin: "",
+        assetCategory,
+        currency: currencyRaw,
+        tradeDate,
+        settlementDate: tradeDate,
+        quantity: `-${qty}`,
+        tradePrice: `${pricePerShare}`,
+        tradeMoney: `${absTotalAmount}`,
+        proceeds: `${absTotalAmount}`,
+        cost: "0",
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: "SELL",
+        openCloseIndicator: "C",
+        exchange: "REVOLUT",
+        commissionCurrency: currencyRaw,
+        commission: "0",
+        taxes: "0",
+        multiplier: "1",
+      });
+
+      const pos = positions.get(ticker);
+      if (pos && pos.netQty.greaterThan(0)) {
+        const sellQty = Decimal.min(qty, pos.netQty);
+        const costPerUnit = pos.totalCost.div(pos.netQty);
+        pos.totalCost = pos.totalCost.minus(costPerUnit.times(sellQty));
+        pos.netQty = pos.netQty.minus(sellQty);
+      }
+    }
+  }
+
+  // Build open positions from symbols with remaining shares
+  const openPositions: OpenPosition[] = [];
+  for (const pos of Array.from(positions.values())) {
+    if (pos.netQty.greaterThan(0.00000001)) {
+      const costPerUnit = pos.netQty.greaterThan(0) ? pos.totalCost.div(pos.netQty) : new Decimal(0);
+      openPositions.push({
+        accountId: "",
+        symbol: pos.symbol,
+        description: pos.symbol,
+        isin: "",
+        currency: pos.currency,
+        assetCategory: pos.assetCategory,
+        quantity: pos.netQty.toString(),
+        costBasisMoney: pos.totalCost.toFixed(2),
+        costBasisPrice: costPerUnit.toFixed(8),
+        markPrice: "0",
+        positionValue: "0",
+        fifoPnlUnrealized: "0",
+        fxRateToBase: "1",
+      });
+    }
+  }
+
+  return { trades, cashTransactions, openPositions };
+}
+
+// ---------------------------------------------------------------------------
+// Transaction-log detection
+// ---------------------------------------------------------------------------
+
+function hasTxnLogHeaders(headers: string[]): boolean {
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  const hasDate = lower.some(h => TXN_DATE_HEADERS.includes(h));
+  const hasTicker = lower.some(h => TXN_TICKER_HEADERS.includes(h));
+  const hasType = lower.some(h => TXN_TYPE_HEADERS.includes(h));
+  const hasTotal = lower.some(h => TXN_TOTAL_HEADERS.some(p => h.includes(p)));
+  const hasPrice = lower.some(h => TXN_PRICE_HEADERS.some(p => h.includes(p)));
+  return hasDate && hasTicker && hasType && hasTotal && hasPrice;
+}
+
+function hasClosedPositionHeaders(headers: string[]): boolean {
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  const hasDateAcq = lower.some(h => DATE_ACQUIRED_HEADERS.some(p => h.includes(p)));
+  const hasCostOrProceeds = lower.some(h =>
+    [...COST_BASIS_HEADERS, ...GROSS_PROCEEDS_HEADERS].some(p => h.includes(p)),
+  );
+  return hasDateAcq && hasCostOrProceeds;
+}
+
+// ---------------------------------------------------------------------------
 // XLSX detection and parsing
 // ---------------------------------------------------------------------------
 
 /**
  * Parse Revolut XLSX workbook using the xlsx library.
+ * Supports two formats:
+ *   1. Closed-positions summary (Date acquired | Date sold | Symbol | ...)
+ *   2. Transaction log (Date | Ticker | Type | Quantity | Price per share | ...)
  */
 export async function parseRevolutXlsx(data: Buffer | Uint8Array): Promise<Statement> {
   const xlsx = await import("xlsx");
   const wb = xlsx.read(data, { type: "buffer" });
 
-  // Revolut uses a single sheet (typically "Sheet1")
   const sheet = wb.Sheets[wb.SheetNames[0]!];
-  const trades = sheet ? parseTrades(xlsx, sheet) : [];
+  if (!sheet) {
+    return {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades: [], cashTransactions: [], corporateActions: [],
+      openPositions: [], securitiesInfo: [],
+    };
+  }
 
+  // Detect format from first row
+  const headerRows = sheetToRows(xlsx, sheet);
+  const headers = headerRows[0] ?? [];
+
+  if (hasTxnLogHeaders(headers)) {
+    const { trades, cashTransactions, openPositions } = parseTransactionLog(xlsx, sheet);
+    return {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades, cashTransactions, corporateActions: [],
+      openPositions, securitiesInfo: [],
+    };
+  }
+
+  // Fall back to closed-positions format
+  const trades = parseTrades(xlsx, sheet);
   return {
-    accountId: "",
-    fromDate: "",
-    toDate: "",
-    period: "",
-    trades,
-    cashTransactions: [],
-    corporateActions: [],
-    openPositions: [],
-    securitiesInfo: [],
+    accountId: "", fromDate: "", toDate: "", period: "",
+    trades, cashTransactions: [], corporateActions: [],
+    openPositions: [], securitiesInfo: [],
   };
 }
 
@@ -266,12 +547,8 @@ export async function detectRevolutXlsx(data: Buffer | Uint8Array): Promise<bool
     if (!sheet) return false;
     const rows = xlsx.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: "" });
     if (!rows.length) return false;
-    const headers = rows[0]!.map((h) => h.toLowerCase().trim());
-    const hasDateAcq = headers.some(h => DATE_ACQUIRED_HEADERS.some(p => h.includes(p)));
-    const hasCostOrProceeds = headers.some(h =>
-      [...COST_BASIS_HEADERS, ...GROSS_PROCEEDS_HEADERS].some(p => h.includes(p)),
-    );
-    return hasDateAcq && hasCostOrProceeds;
+    const headers = rows[0]!;
+    return hasClosedPositionHeaders(headers) || hasTxnLogHeaders(headers);
   } catch {
     return false;
   }
@@ -287,9 +564,15 @@ export const revolutParser: BrokerParser = {
 
   detect(input: string): boolean {
     const lower = input.toLowerCase();
-    return (lower.includes("date acquired") || lower.includes("fecha de adquisición")) &&
+    // Closed-positions format
+    const closedPos = (lower.includes("date acquired") || lower.includes("fecha de adquisición")) &&
            (lower.includes("cost basis") || lower.includes("gross proceeds") || lower.includes("base de coste") || lower.includes("ingresos brutos")) &&
            !lower.includes("closed position") && !lower.includes("posiciones cerradas");
+    if (closedPos) return true;
+    // Transaction-log format: "Date" + "Ticker" + "Type" + "Total Amount"
+    // (must NOT match Trading 212 which also has "Type" but uses "No. of shares")
+    return lower.includes("ticker") && lower.includes("total amount") &&
+           lower.includes("price per share") && !lower.includes("no. of shares");
   },
 
   parse(input: string): Statement {

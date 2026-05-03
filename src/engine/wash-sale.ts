@@ -91,5 +91,6 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
 function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {
   if (assetCategory === "CRYPTO") return `CRYPTO:${symbol.toUpperCase()}`;
   if (isin) return isin;
+  if (symbol) return `${assetCategory}:${symbol.toUpperCase()}`;
   return "";
 }

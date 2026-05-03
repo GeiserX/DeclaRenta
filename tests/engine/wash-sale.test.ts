@@ -94,6 +94,55 @@ describe("detectWashSales", () => {
     expect(result[0]!.washSaleBlocked).toBe(false);
   });
 
+  it("should block loss for empty-ISIN trades using symbol fallback", () => {
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol: "AAPL",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL"), symbol: "AAPL", isin: "" },
+      { ...makeTrade("", "2025-07-01", "BUY"), symbol: "AAPL", isin: "" },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("should NOT match empty-ISIN trades with different symbols", () => {
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol: "AAPL",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL"), symbol: "AAPL", isin: "" },
+      { ...makeTrade("", "2025-07-01", "BUY"), symbol: "MSFT", isin: "" },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("should use 1-year window for CRYPTO asset category", () => {
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol: "BTC",
+      assetCategory: "CRYPTO",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-500),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL"), symbol: "BTC", isin: "", assetCategory: "CRYPTO" as const },
+      { ...makeTrade("", "2026-03-01", "BUY"), symbol: "BTC", isin: "", assetCategory: "CRYPTO" as const },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
   it("should NOT block loss for options (OPT assetCategory)", () => {
     const disposals = [makeDisposal({
       sellDate: "2025-06-15",
