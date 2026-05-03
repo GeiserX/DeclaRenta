@@ -23,6 +23,7 @@
  *   the FIFO engine fetch official ECB rates independently.
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import { findColumn, parseNumber } from "./csv-utils.js";
@@ -310,7 +311,7 @@ function parseTransactionLog(
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
     symbol: string; currency: string; assetCategory: AssetCategory;
-    netQty: number; totalCost: number;
+    netQty: Decimal; totalCost: Decimal;
   }>();
 
   for (let i = 1; i < rows.length; i++) {
@@ -393,10 +394,11 @@ function parseTransactionLog(
       });
 
       const pos = positions.get(ticker) ?? {
-        symbol: ticker, currency: currencyRaw, assetCategory, netQty: 0, totalCost: 0,
+        symbol: ticker, currency: currencyRaw, assetCategory,
+        netQty: new Decimal(0), totalCost: new Decimal(0),
       };
-      pos.netQty += qty;
-      pos.totalCost += absTotalAmount;
+      pos.netQty = pos.netQty.plus(qty);
+      pos.totalCost = pos.totalCost.plus(absTotalAmount);
       positions.set(ticker, pos);
     } else if (TXN_TYPE_SELL.test(type)) {
       trades.push({
@@ -426,11 +428,11 @@ function parseTransactionLog(
       });
 
       const pos = positions.get(ticker);
-      if (pos && pos.netQty > 0) {
-        const sellQty = Math.min(qty, pos.netQty);
-        const costPerUnit = pos.totalCost / pos.netQty;
-        pos.totalCost -= costPerUnit * sellQty;
-        pos.netQty -= sellQty;
+      if (pos && pos.netQty.greaterThan(0)) {
+        const sellQty = Decimal.min(qty, pos.netQty);
+        const costPerUnit = pos.totalCost.div(pos.netQty);
+        pos.totalCost = pos.totalCost.minus(costPerUnit.times(sellQty));
+        pos.netQty = pos.netQty.minus(sellQty);
       }
     }
   }
@@ -438,8 +440,8 @@ function parseTransactionLog(
   // Build open positions from symbols with remaining shares
   const openPositions: OpenPosition[] = [];
   for (const pos of Array.from(positions.values())) {
-    if (pos.netQty > 0.00000001) {
-      const costPerUnit = pos.netQty > 0 ? pos.totalCost / pos.netQty : 0;
+    if (pos.netQty.greaterThan(0.00000001)) {
+      const costPerUnit = pos.netQty.greaterThan(0) ? pos.totalCost.div(pos.netQty) : new Decimal(0);
       openPositions.push({
         accountId: "",
         symbol: pos.symbol,
@@ -447,7 +449,7 @@ function parseTransactionLog(
         isin: "",
         currency: pos.currency,
         assetCategory: pos.assetCategory,
-        quantity: `${pos.netQty}`,
+        quantity: pos.netQty.toString(),
         costBasisMoney: pos.totalCost.toFixed(2),
         costBasisPrice: costPerUnit.toFixed(8),
         markPrice: "0",
