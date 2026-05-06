@@ -73,12 +73,26 @@ const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 // ---------------------------------------------------------------------------
 
 const KNOWN_CRYPTO = new Set([
-  "BTC", "ETH", "XRP", "SOL", "ADA", "DOGE", "DOT", "AVAX", "MATIC", "LINK",
-  "LTC", "BCH", "XLM", "ATOM", "UNI", "SHIB", "FIL", "APT", "ARB", "NEAR",
-  "OP", "ICP", "ALGO", "SAND", "MANA", "AXS", "ENJ", "1INCH", "COMP", "AAVE",
-  "CRV", "GRT", "SNX", "MKR", "LDO", "PEPE", "FLOKI", "BONK", "WIF", "JUP",
-  "SUI", "SEI", "TIA", "WLD", "RENDER", "FET", "TAO", "PENDLE", "TON", "TRX",
-  "HBAR", "VET", "EOS", "XTZ", "THETA", "ZIL", "IOTA", "EGLD", "FLOW", "ROSE",
+  // Top coins
+  "BTC", "ETH", "XRP", "SOL", "ADA", "DOGE", "DOT", "AVAX", "LINK", "LTC",
+  "BCH", "XLM", "ATOM", "UNI", "SHIB", "FIL", "APT", "ARB", "NEAR", "OP",
+  "ICP", "ALGO", "SAND", "MANA", "AXS", "ENJ", "COMP", "AAVE", "CRV", "GRT",
+  "SNX", "MKR", "LDO", "PEPE", "FLOKI", "BONK", "WIF", "JUP", "SUI", "SEI",
+  "TIA", "WLD", "RENDER", "FET", "TAO", "PENDLE", "TON", "TRX", "HBAR", "VET",
+  "EOS", "XTZ", "THETA", "ZIL", "IOTA", "EGLD", "FLOW", "ROSE", "INJ", "QNT",
+  // DeFi & infrastructure
+  "1INCH", "ACH", "AMP", "ANKR", "BAL", "BAND", "BAT", "BICO", "BLZ", "BNT",
+  "BOND", "CELO", "CHZ", "CLV", "COTI", "CRO", "CTSI", "ENS", "ETC", "FIDA",
+  "FORTH", "FTM", "GALA", "GMT", "GODS", "GST", "IDEX", "IMX", "JASMY", "KNC",
+  "LPT", "LRC", "MASK", "MINA", "MLN", "NKN", "NMR", "OGN", "OMG", "OXT",
+  "PERP", "RAD", "REN", "REQ", "RLC", "SKL", "SPELL", "STORJ", "SUPER", "SUSHI",
+  "TRB", "UMA", "UNFI", "YFI", "ZRX",
+  // Stablecoins (appear in Revolut crypto statements)
+  "USDC", "USDT",
+  // Rebrands — keep old + new for backward compat with older exports
+  "MATIC", "POL", "RNDR",
+  // Possibly delisted but needed for historical data
+  "DASH", "KEEP", "MIR", "NU", "APE",
 ]);
 
 /** Common short stock tickers that could be confused with crypto */
