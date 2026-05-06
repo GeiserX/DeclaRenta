@@ -27,6 +27,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import { findColumn, parseNumber } from "./csv-utils.js";
+import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
 
@@ -66,46 +67,14 @@ const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 
 // ---------------------------------------------------------------------------
 // Crypto detection — Revolut mixes stocks and crypto in the same sheet.
-// Uses a known-crypto set plus a heuristic for unlisted tokens: symbols
-// that are all-uppercase without dots and 1-5 chars that aren't in the
-// known-stock set are flagged as crypto. This isn't perfect but covers
-// the vast majority of Revolut's tradeable assets.
+// Uses KNOWN_CRYPTO_SYMBOLS (auto-generated from CoinGecko top 500 by market
+// cap, refreshed via `npx tsx scripts/update-crypto-symbols.ts`).
+// Stock ticker conflicts (A, B, T, etc.) are excluded at generation time.
 // ---------------------------------------------------------------------------
-
-const KNOWN_CRYPTO = new Set([
-  // Top coins
-  "BTC", "ETH", "XRP", "SOL", "ADA", "DOGE", "DOT", "AVAX", "LINK", "LTC",
-  "BCH", "XLM", "ATOM", "UNI", "SHIB", "FIL", "APT", "ARB", "NEAR", "OP",
-  "ICP", "ALGO", "SAND", "MANA", "AXS", "ENJ", "COMP", "AAVE", "CRV", "GRT",
-  "SNX", "MKR", "LDO", "PEPE", "FLOKI", "BONK", "WIF", "JUP", "SUI", "SEI",
-  "TIA", "WLD", "RENDER", "FET", "TAO", "PENDLE", "TON", "TRX", "HBAR", "VET",
-  "EOS", "XTZ", "THETA", "ZIL", "IOTA", "EGLD", "FLOW", "ROSE", "INJ", "QNT",
-  // DeFi & infrastructure
-  "1INCH", "ACH", "AMP", "ANKR", "BAL", "BAND", "BAT", "BICO", "BLZ", "BNT",
-  "BOND", "CELO", "CHZ", "CLV", "COTI", "CRO", "CTSI", "ENS", "ETC", "FIDA",
-  "FORTH", "FTM", "GALA", "GMT", "GODS", "GST", "IDEX", "IMX", "JASMY", "KNC",
-  "LPT", "LRC", "MASK", "MINA", "MLN", "NKN", "NMR", "OGN", "OMG", "OXT",
-  "PERP", "RAD", "REN", "REQ", "RLC", "SKL", "SPELL", "STORJ", "SUPER", "SUSHI",
-  "TRB", "UMA", "UNFI", "YFI", "ZRX",
-  // Stablecoins (appear in Revolut crypto statements)
-  "USDC", "USDT",
-  // Rebrands — keep old + new for backward compat with older exports
-  "MATIC", "POL", "RNDR",
-  // Possibly delisted but needed for historical data
-  "DASH", "KEEP", "MIR", "NU", "APE",
-]);
-
-/** Common short stock tickers that could be confused with crypto */
-const KNOWN_SHORT_STOCKS = new Set([
-  "A", "B", "C", "D", "F", "G", "K", "T", "V", "X",
-  "AA", "AI", "BA", "BP", "BT", "DB", "GE", "GM", "HP",
-  "AB", "AG", "AL", "AM", "AN", "AR", "AS", "AT", "AU", "AV",
-]);
 
 function detectAssetCategory(symbol: string): AssetCategory {
   const upper = symbol.toUpperCase();
-  if (KNOWN_CRYPTO.has(upper)) return "CRYPTO";
-  if (KNOWN_SHORT_STOCKS.has(upper)) return "STK";
+  if (KNOWN_CRYPTO_SYMBOLS.has(upper)) return "CRYPTO";
   return "STK";
 }
 
