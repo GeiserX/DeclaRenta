@@ -92,10 +92,6 @@ function detectAssetCategory(symbol: string): AssetCategory {
   const upper = symbol.toUpperCase();
   if (KNOWN_CRYPTO.has(upper)) return "CRYPTO";
   if (KNOWN_SHORT_STOCKS.has(upper)) return "STK";
-  // Heuristic: stock tickers on Revolut typically have dots (BRK.B) or are
-  // well-known 1-5 letter tickers. Crypto symbols on Revolut never have dots.
-  // Symbols starting with digits (like 1INCH) are always crypto.
-  if (/^\d/.test(upper)) return "CRYPTO";
   return "STK";
 }
 

@@ -342,12 +342,20 @@ describe("revolutParser", () => {
       expect(statement.trades.length).toBe(0);
     });
 
-    it("should detect crypto symbols starting with digits", async () => {
+    it("should detect known crypto symbols starting with digits (1INCH)", async () => {
       const data = buildRevolutWorkbook([
         ["2025-01-01", "2025-06-01", "1INCH", "100", "50", "60", "10", "0", "10", "USD"],
       ]);
       const statement = await parseRevolutXlsx(data);
       expect(statement.trades[0]!.assetCategory).toBe("CRYPTO");
+    });
+
+    it("should NOT classify digit-starting stock tickers as crypto (65C)", async () => {
+      const data = buildRevolutWorkbook([
+        ["2025-01-01", "2025-06-01", "65C", "10", "100", "110", "10", "0", "10", "EUR"],
+      ]);
+      const statement = await parseRevolutXlsx(data);
+      expect(statement.trades[0]!.assetCategory).toBe("STK");
     });
 
     it("should detect well-known short stock tickers as STK", async () => {
