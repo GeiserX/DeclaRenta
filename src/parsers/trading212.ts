@@ -116,6 +116,26 @@ function isSkippedAction(action: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Fractional currency normalization
+// Trading 212 reports GBX (pence), ZAc (South African cents), ILA (Israeli
+// agorot) as-is. ECB only publishes GBP/ZAR/ILS so we normalize and ÷100.
+// ---------------------------------------------------------------------------
+
+const FRACTIONAL_CURRENCIES: Record<string, { base: string; divisor: Decimal }> = {
+  GBX: { base: "GBP", divisor: new Decimal(100) },
+  ZAC: { base: "ZAR", divisor: new Decimal(100) },
+  ILA: { base: "ILS", divisor: new Decimal(100) },
+};
+
+function normalizeCurrency(code: string): { currency: string; divisor: Decimal } {
+  const entry = FRACTIONAL_CURRENCIES[code.toUpperCase()];
+  if (entry && code.toUpperCase() !== entry.base) {
+    return { currency: entry.base, divisor: entry.divisor };
+  }
+  return { currency: code, divisor: new Decimal(1) };
+}
+
+// ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
 
@@ -143,10 +163,13 @@ function parseTrading212Csv(lines: string[]): Statement {
     const name = (fields[cols.name] ?? "").trim();
     const sharesStr = parseNumber(fields[cols.shares] ?? "0");
     const priceStr = parseNumber(fields[cols.pricePerShare] ?? "0");
-    const currency = (fields[cols.priceCurrency] ?? "").trim() || "EUR";
+    const rawCurrency = (fields[cols.priceCurrency] ?? "").trim() || "EUR";
+    const { currency: priceCurrency, divisor: priceDivisor } = normalizeCurrency(rawCurrency);
+    const currency = priceCurrency;
     // Currency (Total) is authoritative for cash transaction amounts: in EUR-primary accounts
     // the Total column holds the credited EUR amount, not the instrument's native currency.
-    const cashCurrency = (fields[cols.totalCurrency] ?? "").trim() || currency;
+    const rawCashCurrency = (fields[cols.totalCurrency] ?? "").trim() || rawCurrency;
+    const { currency: cashCurrency, divisor: cashDivisor } = normalizeCurrency(rawCashCurrency);
     const totalStr = parseNumber(fields[cols.total] ?? "0");
     const txId = (fields[cols.id] ?? "").trim();
 
@@ -160,7 +183,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
       if (!ticker) continue;
-      const amountDec = new Decimal(totalStr).abs();
+      const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
 
       cashTransactions.push({
@@ -182,7 +205,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     // Dividends
     if (isDividendAction(action)) {
       if (!ticker) continue;
-      const amountDec = new Decimal(totalStr).abs();
+      const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
 
       cashTransactions.push({
@@ -203,7 +226,7 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     // Interest on cash
     if (isInterestAction(action)) {
-      const amountDec = new Decimal(totalStr).abs();
+      const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
 
       cashTransactions.push({
@@ -231,8 +254,8 @@ function parseTrading212Csv(lines: string[]): Statement {
     const qtyDec = new Decimal(sharesStr).abs();
     if (qtyDec.isZero()) continue;
 
-    const priceDec = new Decimal(priceStr);
-    const totalDec = new Decimal(totalStr).abs();
+    const priceDec = new Decimal(priceStr).div(priceDivisor);
+    const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
     if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
       continue;
     }
