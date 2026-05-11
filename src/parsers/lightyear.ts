@@ -103,7 +103,7 @@ function convertLightyearDate(dateStr: string): string {
 // Transaction type classification
 // ---------------------------------------------------------------------------
 
-const SKIP_TYPES = new Set(["deposit", "withdrawal", "conversion"]);
+const SKIP_TYPES = new Set(["deposit", "withdrawal"]);
 const DIVIDEND_TYPES = new Set(["dividend", "distribution"]);
 const INCOME_TYPES = new Set(["interest", "reward"]);
 
@@ -203,6 +203,44 @@ function parseLightyearCsv(lines: string[]): Statement {
         amount: amountDec.toString(),
         fxRateToBase: "1",
         type: "Broker Interest Received",
+      });
+      continue;
+    }
+
+    // FX conversions → CASH trades for the FX FIFO engine (Art. 37.1.l LIRPF)
+    // Lightyear emits a pair: one leg per currency (e.g. USD +64.50, EUR -59.24).
+    // Positive gross = acquiring that currency (BUY), negative = spending it (SELL).
+    if (txType === "conversion") {
+      const grossDec = new Decimal(grossAmount);
+      if (grossDec.isZero() || currency === "EUR") continue;
+
+      const absDec = grossDec.abs();
+      const isFxBuy = grossDec.greaterThan(0);
+
+      trades.push({
+        tradeID: `lightyear-fx-${reference || `${tradeDate}-${currency}-${i}`}`,
+        accountId: "",
+        symbol: `${currency}.EUR`,
+        description: `FX Conversion ${isFxBuy ? "EUR→" : "→EUR "}${currency}`,
+        isin: "",
+        assetCategory: "CASH",
+        currency,
+        tradeDate,
+        settlementDate: tradeDate,
+        quantity: isFxBuy ? absDec.toString() : absDec.neg().toString(),
+        tradePrice: "1",
+        tradeMoney: isFxBuy ? absDec.neg().toString() : absDec.toString(),
+        proceeds: isFxBuy ? "0" : absDec.toString(),
+        cost: isFxBuy ? absDec.neg().toString() : "0",
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: isFxBuy ? "BUY" : "SELL",
+        openCloseIndicator: isFxBuy ? "O" : "C",
+        exchange: "LIGHTYEAR",
+        commissionCurrency: currency,
+        commission: "0",
+        taxes: "0",
+        multiplier: "1",
       });
       continue;
     }

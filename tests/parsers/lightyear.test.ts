@@ -289,10 +289,14 @@ describe("lightyearParser", () => {
       expect(allIds.some((id) => id.includes("withdrawal"))).toBe(false);
     });
 
-    it("should skip Conversion rows", () => {
+    it("should parse Conversion rows as CASH trades (FX FIFO)", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
-      const allIds = [...result.trades.map((t) => t.tradeID), ...result.cashTransactions.map((c) => c.transactionID)];
-      expect(allIds.some((id) => id.includes("conversion"))).toBe(false);
+      const fxTrades = result.trades.filter((t) => t.assetCategory === "CASH");
+      // Only the non-EUR leg (USD +64.50) becomes a CASH trade; EUR leg is skipped
+      expect(fxTrades).toHaveLength(1);
+      expect(fxTrades[0]!.currency).toBe("USD");
+      expect(fxTrades[0]!.buySell).toBe("BUY");
+      expect(fxTrades[0]!.quantity).toBe("64.5");
     });
   });
 
@@ -303,8 +307,8 @@ describe("lightyearParser", () => {
   describe("overall counts", () => {
     it("should produce correct number of trades", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
-      // AAPL Buy, AAPL Sell, BRICEKSP Buy, ICSUSSDP Buy, ICSUSSDP Sell = 5
-      expect(result.trades).toHaveLength(5);
+      // AAPL Buy, AAPL Sell, BRICEKSP Buy, ICSUSSDP Buy, ICSUSSDP Sell + USD Conversion = 6
+      expect(result.trades).toHaveLength(6);
     });
 
     it("should produce correct number of cash transactions", () => {
@@ -357,6 +361,50 @@ describe("lightyearParser", () => {
     it("should set fxRateToBase to '1' (ECB fetched independently)", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
       result.trades.forEach((t) => { expect(t.fxRateToBase).toBe("1"); });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // FX Conversions (Art. 37.1.l LIRPF)
+  // -------------------------------------------------------------------------
+
+  describe("FX conversions", () => {
+    it("should emit CASH trade for non-EUR conversion leg", () => {
+      const result = lightyearParser.parse(LIGHTYEAR_CSV);
+      const fxTrades = result.trades.filter((t) => t.assetCategory === "CASH");
+      expect(fxTrades).toHaveLength(1);
+      const fx = fxTrades[0]!;
+      expect(fx.currency).toBe("USD");
+      expect(fx.buySell).toBe("BUY");
+      expect(fx.quantity).toBe("64.5");
+      expect(fx.symbol).toBe("USD.EUR");
+    });
+
+    it("should skip EUR leg of conversion pair", () => {
+      const result = lightyearParser.parse(LIGHTYEAR_CSV);
+      const eurCash = result.trades.filter((t) => t.assetCategory === "CASH" && t.currency === "EUR");
+      expect(eurCash).toHaveLength(0);
+    });
+
+    it("should emit SELL CASH for FCY→EUR conversion", () => {
+      const csv = [
+        "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.",
+        "10/05/2025 12:00:00,CN-0000000099,USD,,Conversion,,USD,,-500.00,0.92,,,-500.00,",
+      ].join("\n");
+      const result = lightyearParser.parse(csv);
+      const fx = result.trades[0]!;
+      expect(fx.assetCategory).toBe("CASH");
+      expect(fx.buySell).toBe("SELL");
+      expect(fx.currency).toBe("USD");
+      expect(fx.quantity).toBe("-500");
+    });
+
+    it("should enable FX FIFO detection (autoConvert=false when CASH trades exist)", () => {
+      const result = lightyearParser.parse(LIGHTYEAR_CSV);
+      const hasCash = result.trades.some((t) => t.assetCategory === "CASH");
+      const hasNonEurStk = result.trades.some((t) => t.assetCategory === "STK" && t.currency !== "EUR");
+      expect(hasCash).toBe(true);
+      expect(hasNonEurStk).toBe(true);
     });
   });
 
