@@ -335,5 +335,65 @@ describe("trading212Parser", () => {
       expect(fractional).toBeDefined();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Fractional currency normalization (GBX → GBP ÷100)
+  // -------------------------------------------------------------------------
+
+  describe("fractional currency (GBX)", () => {
+    const GBX_CSV = [
+      HEADER,
+      "Market buy,2024-05-10 10:00:00,GB0031215220,BARC,Barclays PLC,100,185.50,GBX,0.86,,,18550.00,GBX,,gbx001",
+      "Market sell,2024-08-15 14:00:00,GB0031215220,BARC,Barclays PLC,100,210.00,GBX,0.85,,,21000.00,GBX,,gbx002",
+      "Dividend (Ordinary),2024-06-01 00:00:00,GB0031215220,BARC,Barclays PLC,,,GBX,0.86,,,450.00,GBX,,gbxdiv001",
+      "Dividend (Dividend tax),2024-06-01 00:00:00,GB0031215220,BARC,Barclays PLC,,,GBX,0.86,,,-45.00,GBX,,gbxtax001",
+    ].join("\n");
+
+    it("should normalize GBX price to GBP (÷100)", () => {
+      const result = trading212Parser.parse(GBX_CSV);
+      const buy = result.trades.find((t) => t.buySell === "BUY");
+      expect(buy).toBeDefined();
+      expect(buy!.currency).toBe("GBP");
+      expect(buy!.tradePrice).toBe("1.855");
+      expect(buy!.cost).toBe("-185.5");
+    });
+
+    it("should normalize GBX sell proceeds to GBP (÷100)", () => {
+      const result = trading212Parser.parse(GBX_CSV);
+      const sell = result.trades.find((t) => t.buySell === "SELL");
+      expect(sell).toBeDefined();
+      expect(sell!.currency).toBe("GBP");
+      expect(sell!.tradePrice).toBe("2.1");
+      expect(sell!.proceeds).toBe("210");
+    });
+
+    it("should normalize GBX dividends to GBP (÷100)", () => {
+      const result = trading212Parser.parse(GBX_CSV);
+      const div = result.cashTransactions.find((c) => c.type === "Dividends");
+      expect(div).toBeDefined();
+      expect(div!.currency).toBe("GBP");
+      expect(div!.amount).toBe("4.5");
+    });
+
+    it("should normalize GBX withholding tax to GBP (÷100)", () => {
+      const result = trading212Parser.parse(GBX_CSV);
+      const wht = result.cashTransactions.find((c) => c.type === "Withholding Tax");
+      expect(wht).toBeDefined();
+      expect(wht!.currency).toBe("GBP");
+      expect(wht!.amount).toBe("-0.45");
+    });
+
+    it("should NOT divide when currency is already GBP", () => {
+      const GBP_CSV = [
+        HEADER,
+        "Market buy,2024-05-10 10:00:00,GB0031215220,BARC,Barclays PLC,100,1.855,GBP,0.86,,,185.50,GBP,,gbp001",
+      ].join("\n");
+      const result = trading212Parser.parse(GBP_CSV);
+      const buy = result.trades[0]!;
+      expect(buy.currency).toBe("GBP");
+      expect(buy.tradePrice).toBe("1.855");
+      expect(buy.cost).toBe("-185.5");
+    });
+  });
 });
 
