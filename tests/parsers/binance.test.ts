@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
 import { binanceParser } from "../../src/parsers/binance.js";
 
 // ---------------------------------------------------------------------------
@@ -254,6 +255,144 @@ describe("binanceParser", () => {
       ].join("\n");
       const result = binanceParser.parse(csv);
       // 2 from Convert + 1 from Sold/Revenue = 3
+      expect(result.trades).toHaveLength(3);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Spanish headers (Historial de operaciones de spot)
+  // -------------------------------------------------------------------------
+
+  describe("Spanish spot CSV (Tiempo,Par,Lado,Precio,Ejecutado,Cantidad,Tarifa)", () => {
+    const ES_SPOT_HEADER = "Tiempo,Par,Lado,Precio,Ejecutado,Cantidad,Tarifa";
+
+    const ES_SPOT_CSV = [
+      ES_SPOT_HEADER,
+      "25-12-31 01:00:45,CTKBTC,SELL,0.000003,285.7CTK,0.0008571BTC,0.00006618BNB",
+      "25-03-15 10:30:00,AAVEBTC,BUY,0.003,0.13AAVE,0.00039BTC,0.0000312BNB",
+      "25-06-20 14:22:11,LINKBTC,SELL,0.0002,50LINK,0.01BTC,0.0008BNB",
+    ].join("\n");
+
+    it("should detect Spanish spot header", () => {
+      expect(binanceParser.detect(ES_SPOT_CSV)).toBe(true);
+    });
+
+    it("should detect Spanish spot header with BOM", () => {
+      expect(binanceParser.detect("﻿" + ES_SPOT_CSV)).toBe(true);
+    });
+
+    it("should parse 2-digit year dates correctly", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      expect(result.trades[0]!.tradeDate).toBe("20251231");
+      expect(result.trades[1]!.tradeDate).toBe("20250315");
+      expect(result.trades[2]!.tradeDate).toBe("20250620");
+    });
+
+    it("should parse Ejecutado column with asset suffix", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      const sell = result.trades.find((t) => t.symbol === "CTK")!;
+      expect(sell.quantity).toBe("-285.7");
+      expect(sell.buySell).toBe("SELL");
+    });
+
+    it("should parse Cantidad column with asset suffix", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      const sell = result.trades.find((t) => t.symbol === "CTK")!;
+      expect(sell.tradeMoney).toBe("0.0008571");
+    });
+
+    it("should parse Tarifa (fee) with asset suffix", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      const sell = result.trades.find((t) => t.symbol === "CTK")!;
+      expect(sell.commission).toBe("-0.00006618");
+      expect(sell.commissionCurrency).toBe("BNB");
+    });
+
+    it("should parse BUY trades from Spanish CSV", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      const buy = result.trades.find((t) => t.symbol === "AAVE")!;
+      expect(buy.buySell).toBe("BUY");
+      expect(buy.quantity).toBe("0.13");
+      expect(buy.currency).toBe("BTC");
+    });
+
+    it("should parse correct trade count", () => {
+      const result = binanceParser.parse(ES_SPOT_CSV);
+      expect(result.trades).toHaveLength(3);
+    });
+
+    it("should parse real fixture file", () => {
+      const fixture = readFileSync(
+        new URL("../fixtures/binance-spot-es-sample.csv", import.meta.url),
+        "utf-8",
+      );
+      expect(binanceParser.detect(fixture)).toBe(true);
+      const result = binanceParser.parse(fixture);
+      expect(result.trades).toHaveLength(5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Spanish transaction history (ID de usuario,Tiempo,Cuenta,Operación,...)
+  // -------------------------------------------------------------------------
+
+  describe("Spanish transaction history CSV (Operación,Moneda,Cambio)", () => {
+    const ES_TX_HEADER = "ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación";
+
+    const ES_TX_CSV = [
+      ES_TX_HEADER,
+      "123456789,25-01-04 11:08:17,Spot,Deposit,USDT,500,",
+      "123456789,25-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+      "123456789,25-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+      "123456789,25-01-13 21:37:46,Strategy,Transaction Revenue,ETH,0.00407900,",
+      "123456789,25-01-13 21:37:46,Strategy,Transaction Fee,ETH,-0.00000408,",
+      "123456789,25-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,",
+    ].join("\n");
+
+    it("should detect Spanish transaction history header", () => {
+      expect(binanceParser.detect(ES_TX_CSV)).toBe(true);
+    });
+
+    it("should detect with BOM", () => {
+      expect(binanceParser.detect("﻿" + ES_TX_CSV)).toBe(true);
+    });
+
+    it("should skip deposits", () => {
+      const result = binanceParser.parse(ES_TX_CSV);
+      const deposits = result.trades.filter((t) => t.tradeID.includes("deposit"));
+      expect(deposits).toHaveLength(0);
+    });
+
+    it("should parse Binance Convert pairs with 2-digit year", () => {
+      const result = binanceParser.parse(ES_TX_CSV);
+      const sell = result.trades.find((t) => t.buySell === "SELL" && t.symbol === "USDT");
+      const buy = result.trades.find((t) => t.buySell === "BUY" && t.symbol === "SOL");
+      expect(sell).toBeDefined();
+      expect(buy).toBeDefined();
+      expect(sell!.tradeDate).toBe("20250104");
+      expect(buy!.tradeDate).toBe("20250104");
+    });
+
+    it("should parse Strategy Sold+Revenue trades", () => {
+      const result = binanceParser.parse(ES_TX_CSV);
+      const trade = result.trades.find((t) => t.symbol === "XRP");
+      expect(trade).toBeDefined();
+      expect(trade!.buySell).toBe("SELL");
+      expect(trade!.tradeDate).toBe("20250113");
+    });
+
+    it("should produce 3 trades total (2 Convert + 1 Strategy)", () => {
+      const result = binanceParser.parse(ES_TX_CSV);
+      expect(result.trades).toHaveLength(3);
+    });
+
+    it("should parse real fixture file", () => {
+      const fixture = readFileSync(
+        new URL("../fixtures/binance-tx-es-sample.csv", import.meta.url),
+        "utf-8",
+      );
+      expect(binanceParser.detect(fixture)).toBe(true);
+      const result = binanceParser.parse(fixture);
       expect(result.trades).toHaveLength(3);
     });
   });

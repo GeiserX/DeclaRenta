@@ -232,9 +232,9 @@ const es = {
   // Binance
   "guide.binance.title": "Binance (CSV)",
   "guide.binance.step1": "Inicia sesión en <strong>Binance</strong>",
-  "guide.binance.step2": "Ve a <strong>Pedidos → Historial de operaciones</strong>",
-  "guide.binance.step3": "Haz clic en <strong>Exportar historial de operaciones</strong>",
-  "guide.binance.step4": "Selecciona el rango de fechas y formato <strong>CSV</strong>",
+  "guide.binance.step2": "<strong>Historial de operaciones spot:</strong> Órdenes → Orden spot → Exportar historial de operaciones (↑) → Spot - Historial de Operaciones → Personalizar tiempo (UTC+1) → CSV",
+  "guide.binance.step3": "<strong>Historial de transacciones:</strong> Órdenes → Historial de Activos → Exportar registros de transacciones (↑) → Historial de Transacciones → Personalizar tiempo (UTC+1) → CSV",
+  "guide.binance.step4": "Puedes subir uno o ambos ficheros — se aceptan tanto en español como en inglés",
 
   // Kraken
   "guide.kraken.title": "Kraken (CSV)",

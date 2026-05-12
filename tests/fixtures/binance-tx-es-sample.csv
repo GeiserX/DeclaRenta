@@ -1,0 +1,8 @@
+﻿ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación
+123456789,25-01-04 11:08:17,Spot,Deposit,USDT,500,
+123456789,25-01-04 11:20:13,Spot,Binance Convert,SOL,10,
+123456789,25-01-04 11:20:13,Spot,Binance Convert,USDT,-200,
+123456789,25-01-13 21:37:46,Strategy,Transaction Revenue,ETH,0.00407900,
+123456789,25-01-13 21:37:46,Strategy,Transaction Fee,ETH,-0.00000408,
+123456789,25-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,
+123456789,25-02-10 08:00:00,Spot,Simple Earn Flexible Interest,BTC,0.00000002,Binance Earn

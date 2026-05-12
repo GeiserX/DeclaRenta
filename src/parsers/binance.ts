@@ -20,18 +20,25 @@ import { parseCsvLine, stripBom } from "./csv-utils.js";
 // ---------------------------------------------------------------------------
 
 /** Trade History format: Date(UTC),Pair,Side,Price,Executed,Amount,Fee */
-const BINANCE_TRADE_HEADERS = ["date(utc)", "pair", "side", "price"];
+const BINANCE_TRADE_HEADERS_EN = ["date(utc)", "pair", "side", "price"];
+/** Spanish variant: Tiempo,Par,Lado,Precio,Ejecutado,Cantidad,Tarifa */
+const BINANCE_TRADE_HEADERS_ES = ["tiempo", "par", "lado", "precio"];
 /** Transaction History format: User_ID,UTC_Time,Account,Operation,Coin,Change,Remark */
-const BINANCE_TX_HEADERS = ["utc_time", "operation", "coin", "change"];
+const BINANCE_TX_HEADERS_EN = ["utc_time", "operation", "coin", "change"];
+/** Spanish variant: ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación */
+const BINANCE_TX_HEADERS_ES = ["tiempo", "moneda", "cambio"];
 
 function isBinanceTradeCsv(headerLine: string): boolean {
   const lower = headerLine.toLowerCase();
-  return BINANCE_TRADE_HEADERS.every((h) => lower.includes(h));
+  return BINANCE_TRADE_HEADERS_EN.every((h) => lower.includes(h))
+    || BINANCE_TRADE_HEADERS_ES.every((h) => lower.includes(h));
 }
 
 function isBinanceTxCsv(headerLine: string): boolean {
   const lower = headerLine.toLowerCase();
-  return BINANCE_TX_HEADERS.every((h) => lower.includes(h));
+  if (BINANCE_TX_HEADERS_EN.every((h) => lower.includes(h))) return true;
+  if (BINANCE_TX_HEADERS_ES.every((h) => lower.includes(h)) && lower.includes("operaci")) return true;
+  return false;
 }
 
 function isBinanceCsv(headerLine: string): boolean {
@@ -52,16 +59,24 @@ interface BinanceColumns {
   fee: number;
 }
 
+function findCol(lower: string[], ...names: string[]): number {
+  for (const n of names) {
+    const idx = lower.indexOf(n);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
 function resolveColumns(headers: string[]): BinanceColumns {
   const lower = headers.map((h) => h.toLowerCase().trim());
   return {
-    date: lower.indexOf("date(utc)"),
-    pair: lower.indexOf("pair"),
-    side: lower.indexOf("side"),
-    price: lower.indexOf("price"),
-    executed: lower.indexOf("executed"),
-    amount: lower.indexOf("amount"),
-    fee: lower.indexOf("fee"),
+    date: findCol(lower, "date(utc)", "tiempo"),
+    pair: findCol(lower, "pair", "par"),
+    side: findCol(lower, "side", "lado"),
+    price: findCol(lower, "price", "precio"),
+    executed: findCol(lower, "executed", "ejecutado"),
+    amount: findCol(lower, "amount", "cantidad"),
+    fee: findCol(lower, "fee", "tarifa"),
   };
 }
 
@@ -92,8 +107,9 @@ function parsePair(pair: string): { symbol: string; currency: string } {
 // Fee parsing: "0.001BTC" -> { amount: "0.001", asset: "BTC" }
 // ---------------------------------------------------------------------------
 
-function parseFee(feeStr: string): { amount: string; asset: string } {
-  const trimmed = feeStr.trim();
+/** Extract numeric value from strings like "285.7CTK" or "0.001BTC" or plain "42000.00" */
+function parseAmountWithSuffix(str: string): { amount: string; asset: string } {
+  const trimmed = str.trim();
   if (!trimmed) return { amount: "0", asset: "" };
 
   const match = trimmed.match(/^([0-9.]+)([A-Za-z]+)$/);
@@ -101,7 +117,6 @@ function parseFee(feeStr: string): { amount: string; asset: string } {
     return { amount: match[1]!, asset: match[2]!.toUpperCase() };
   }
 
-  // Try pure numeric
   const numMatch = trimmed.match(/^[0-9.]+$/);
   if (numMatch) {
     return { amount: trimmed, asset: "" };
@@ -110,16 +125,22 @@ function parseFee(feeStr: string): { amount: string; asset: string } {
   return { amount: "0", asset: "" };
 }
 
+function parseFee(feeStr: string): { amount: string; asset: string } {
+  return parseAmountWithSuffix(feeStr);
+}
+
 // ---------------------------------------------------------------------------
 // Date conversion: "2025-01-15 10:30:00" -> "20250115"
 // ---------------------------------------------------------------------------
 
 function convertBinanceDate(dateStr: string): string {
   const trimmed = dateStr.trim();
-  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    return `${match[1]}${match[2]}${match[3]}`;
-  }
+  // YYYY-MM-DD (4-digit year)
+  const match4 = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match4) return `${match4[1]}${match4[2]}${match4[3]}`;
+  // YY-MM-DD (2-digit year, Spanish exports)
+  const match2 = trimmed.match(/^(\d{2})-(\d{2})-(\d{2})/);
+  if (match2) return `20${match2[1]}${match2[2]}${match2[3]}`;
   return trimmed.replace(/-/g, "").slice(0, 8);
 }
 
@@ -143,12 +164,12 @@ interface BinanceTxColumns {
 function resolveTxColumns(headers: string[]): BinanceTxColumns {
   const lower = headers.map((h) => h.toLowerCase().trim());
   return {
-    utcTime: lower.indexOf("utc_time"),
-    account: lower.indexOf("account"),
-    operation: lower.indexOf("operation"),
-    coin: lower.indexOf("coin"),
-    change: lower.indexOf("change"),
-    remark: lower.indexOf("remark"),
+    utcTime: findCol(lower, "utc_time", "tiempo"),
+    account: findCol(lower, "account", "cuenta"),
+    operation: findCol(lower, "operation", "operación", "operacion"),
+    coin: findCol(lower, "coin", "moneda"),
+    change: findCol(lower, "change", "cambio"),
+    remark: findCol(lower, "remark", "observación", "observacion"),
   };
 }
 
@@ -401,8 +422,8 @@ function parseBinanceCsv(lines: string[]): Statement {
     const isBuy = sideLower === "buy";
 
     const price = new Decimal((fields[cols.price] ?? "0").trim() || "0");
-    const executed = new Decimal((fields[cols.executed] ?? "0").trim() || "0");
-    const amount = new Decimal((fields[cols.amount] ?? "0").trim() || "0");
+    const executed = new Decimal(parseAmountWithSuffix((fields[cols.executed] ?? "0").trim()).amount || "0");
+    const amount = new Decimal(parseAmountWithSuffix((fields[cols.amount] ?? "0").trim()).amount || "0");
 
     const fee = parseFee((fields[cols.fee] ?? "").trim());
     const feeAmount = new Decimal(fee.amount || "0");
