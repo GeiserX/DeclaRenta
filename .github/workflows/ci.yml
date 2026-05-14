@@ -13,7 +13,7 @@ jobs:
   test:
     # Public fork PRs run arbitrary dependency scripts and test code. Keep this
     # validation on GitHub-hosted infrastructure, not private self-hosted runners.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
 
     steps:
       - uses: actions/checkout@v4
