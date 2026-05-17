@@ -32,6 +32,7 @@ import {
   findColumn,
   stripBom,
 } from "./csv-utils.js";
+import { freedom24Parser } from "./freedom24.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -185,11 +186,12 @@ function parseLightyearCsv(lines: string[]): Statement {
         });
       }
       continue;
+
     }
 
     // Interest and Reward → cash transactions (income)
     if (INCOME_TYPES.has(txType)) {
-      const amountDec = new Decimal(netAmount || grossAmount).abs();
+      const amountDec = new Decimal(netAmount).abs();
       if (amountDec.isZero()) continue;
       cashTransactions.push({
         transactionID: `lightyear-${txType}-${reference || `${tradeDate}-${i}`}`,
@@ -211,11 +213,11 @@ function parseLightyearCsv(lines: string[]): Statement {
     // Lightyear emits a pair: one leg per currency (e.g. USD +64.50, EUR -59.24).
     // Positive gross = acquiring that currency (BUY), negative = spending it (SELL).
     if (txType === "conversion") {
-      const grossDec = new Decimal(grossAmount);
-      if (grossDec.isZero() || currency === "EUR") continue;
+      const netDec = new Decimal(netAmount);
+      if (netDec.isZero() || currency === "EUR") continue;
 
-      const absDec = grossDec.abs();
-      const isFxBuy = grossDec.greaterThan(0);
+      const absDec = netDec.abs();
+      const isFxBuy = netDec.greaterThan(0);
 
       trades.push({
         tradeID: `lightyear-fx-${reference || `${tradeDate}-${currency}-${i}`}`,
@@ -254,9 +256,9 @@ function parseLightyearCsv(lines: string[]): Statement {
     const qtyDec = new Decimal(quantityStr).abs();
     if (qtyDec.isZero()) continue;
 
-    const feeDec = new Decimal(fee);
-    const grossDec = new Decimal(grossAmount).abs();
-    const price = pricePerShare || (qtyDec.isZero() ? "0" : grossDec.div(qtyDec).toString());
+    const feeDec = new Decimal(fee).abs();
+    const netDec = new Decimal(netAmount).abs();
+    const price = pricePerShare || (qtyDec.isZero() ? "0" : netDec.div(qtyDec).toString());
 
     trades.push({
       tradeID: `lightyear-${txType}-${reference || `${tradeDate}-${ticker}-${i}`}`,
@@ -270,16 +272,16 @@ function parseLightyearCsv(lines: string[]): Statement {
       settlementDate: tradeDate,
       quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: price,
-      tradeMoney: isSell ? grossDec.toString() : grossDec.neg().toString(),
-      proceeds: isSell ? grossDec.toString() : "0",
-      cost: isSell ? "0" : grossDec.neg().toString(),
+      tradeMoney: isSell ? netDec.toString() : netDec.neg().toString(),
+      proceeds: isSell ? netDec.toString() : "0",
+      cost: isSell ? "0" : netDec.neg().toString(),
       fifoPnlRealized: "0",
       fxRateToBase: "1",
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "LIGHTYEAR",
       commissionCurrency: currency,
-      commission: feeDec.isZero() ? "0" : feeDec.abs().neg().toString(),
+      commission: (feeDec.isZero() || isSell) ? "0" : feeDec.neg().toString(),
       taxes: "0",
       multiplier: "1",
     });
