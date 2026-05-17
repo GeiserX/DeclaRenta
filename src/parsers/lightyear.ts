@@ -32,7 +32,7 @@ import {
   findColumn,
   stripBom,
 } from "./csv-utils.js";
-import { freedom24Parser } from "./freedom24.js";
+
 
 // ---------------------------------------------------------------------------
 // Header detection
