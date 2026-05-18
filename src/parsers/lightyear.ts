@@ -257,8 +257,9 @@ function parseLightyearCsv(lines: string[]): Statement {
     if (qtyDec.isZero()) continue;
 
     const feeDec = new Decimal(fee).abs();
+    const grossDec = new Decimal(grossAmount).abs();
     const netDec = new Decimal(netAmount).abs();
-    const price = pricePerShare || (qtyDec.isZero() ? "0" : netDec.div(qtyDec).toString());
+    const price = pricePerShare || (qtyDec.isZero() ? "0" : grossDec.div(qtyDec).toString());
 
     trades.push({
       tradeID: `lightyear-${txType}-${reference || `${tradeDate}-${ticker}-${i}`}`,
