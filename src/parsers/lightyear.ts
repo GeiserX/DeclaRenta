@@ -191,7 +191,7 @@ function parseLightyearCsv(lines: string[]): Statement {
 
     // Interest and Reward → cash transactions (income)
     if (INCOME_TYPES.has(txType)) {
-      const amountDec = new Decimal(netAmount).abs();
+      const amountDec = new Decimal(netAmount || grossAmount).abs();
       if (amountDec.isZero()) continue;
       cashTransactions.push({
         transactionID: `lightyear-${txType}-${reference || `${tradeDate}-${i}`}`,
@@ -213,7 +213,7 @@ function parseLightyearCsv(lines: string[]): Statement {
     // Lightyear emits a pair: one leg per currency (e.g. USD +64.50, EUR -59.24).
     // Positive gross = acquiring that currency (BUY), negative = spending it (SELL).
     if (txType === "conversion") {
-      const netDec = new Decimal(netAmount);
+      const netDec = new Decimal(netAmount || grossAmount);
       if (netDec.isZero() || currency === "EUR") continue;
 
       const absDec = netDec.abs();
