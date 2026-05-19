@@ -192,8 +192,8 @@ function parseLightyearCsv(lines: string[]): Statement {
     // Interest and Reward → cash transactions (income)
     if (INCOME_TYPES.has(txType)) {
 
-      const amuntRaw = new Decimal(netAmount);
-      const amountDec = amuntRaw.isZero() ? new Decimal(grossAmount) : amuntRaw;
+      const amountRaw = new Decimal(netAmount);
+      const amountDec = amountRaw.isZero() ? new Decimal(grossAmount) : amountRaw;
 
       if (amountDec.isZero()) continue;
       cashTransactions.push({
