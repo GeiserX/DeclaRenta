@@ -27,3 +27,12 @@ export function daysBetween(from: string, to: string): number {
     (parseDate(to).getTime() - parseDate(from).getTime()) / (1000 * 60 * 60 * 24),
   );
 }
+
+/** Calculate day of year (1-366) for a date string (YYYYMMDD or YYYY-MM-DD) */
+export function getDayOfYear(date: string): number {
+  const parsed = parseDate(date);
+  const year = parsed.getFullYear();
+  const start = new Date(year, 0, 1);
+  const diff = parsed.getTime() - start.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+}

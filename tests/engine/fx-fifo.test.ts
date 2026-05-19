@@ -295,8 +295,8 @@ describe("FxFifoEngine", () => {
       expect(remaining![0]!.quantity.toString()).toBe("1200");
       expect(remaining![0]!.costPerUnit.toString()).toBe("0.9");
 
-      // Verify lotId traceability
-      expect(disposals[0]!.lotId).toBe("FX-1");
+      // Verify lotId traceability (FX + YY + DayOfYear: 2025-01-01 = day 1)
+      expect(disposals[0]!.lotId).toBe("FX25001");
     });
   });
 
@@ -382,8 +382,8 @@ describe("FxFifoEngine", () => {
       ]);
 
       const disposals = engine.getDisposals();
-      expect(disposals[0]!.lotId).toBe("FX-1");
-      expect(disposals[1]!.lotId).toBe("FX-2");
+      expect(disposals[0]!.lotId).toBe("FX25074"); // 2025-03-15 = day 74
+      expect(disposals[1]!.lotId).toBe("FX25166"); // 2025-06-15 = day 166
     });
   });
 

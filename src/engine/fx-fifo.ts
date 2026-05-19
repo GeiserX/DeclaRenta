@@ -11,7 +11,7 @@ import type { FxLot, FxDisposal, FxTrigger } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
-import { daysBetween, normalizeDate } from "./dates.js";
+import { daysBetween, normalizeDate, getDayOfYear } from "./dates.js";
 
 export interface FxEvent {
   date: string;
@@ -26,7 +26,6 @@ export interface FxEvent {
 export class FxFifoEngine {
   private lots: Map<string, FxLot[]> = new Map();
   private disposals: FxDisposal[] = [];
-  private nextLotId = 1;
   warnings: string[] = [];
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
@@ -254,8 +253,11 @@ export class FxFifoEngine {
   }
 
   private addLot(event: FxEvent): void {
+    const date = new Date(normalizeDate(event.date));
+    const yearYY = String(date.getFullYear() % 100).padStart(2, "0");
+    const dayOfYear = String(getDayOfYear(event.date)).padStart(3, "0");
     const lot: FxLot = {
-      id: `FX-${this.nextLotId++}`,
+      id: `FX${yearYY}${dayOfYear}`,
       currency: event.currency,
       acquireDate: event.date,
       quantity: event.quantity,
