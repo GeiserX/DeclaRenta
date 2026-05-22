@@ -251,6 +251,30 @@ describe("generateTaxReport", () => {
     expect(reportDefault.fxGains.netGainLoss.toFixed(2)).toBe(reportExplicit.fxGains.netGainLoss.toFixed(2));
   });
 
+  it("should suppress FX warnings when no FX disposals exist in target year", () => {
+    const rates = makeRateMap({
+      "2025-03-28": "0.9234",
+      "2025-04-01": "0.9234",
+    });
+
+    // Manual USD SELL in 2025 with no prior lots → engine produces warning
+    // But target year is 2026 → no disposals in 2026 → warning suppressed
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "fx1", tradeDate: "2025-03-28", settlementDate: "2025-04-01",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "-998", tradePrice: "1.0824", tradeMoney: "-1080.24",
+          proceeds: "1080.24", buySell: "SELL", exchange: "IDEALFX",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2026);
+    expect(report.fxGains.disposals).toHaveLength(0);
+    expect(report.warnings).toHaveLength(0);
+  });
+
   it("should not include FX warnings when skipFx is true", () => {
     const rates = makeRateMap({ "2025-09-20": "0.91" });
 

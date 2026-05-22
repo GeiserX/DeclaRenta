@@ -121,11 +121,16 @@ export function generateTaxReport(
     fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
     fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
 
-    fxWarningsList = fxEngine.warnings.filter((w) => {
-      const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-      if (!dateMatch) return true;
-      return dateMatch[1] === yearStr;
-    });
+    // Only show FX warnings when there are FX disposals in the target year.
+    // Undated warnings (missing lots summaries) refer to events across all years —
+    // showing them when the target year has zero FX activity is misleading noise.
+    if (fxDisposals.length > 0) {
+      fxWarningsList = fxEngine.warnings.filter((w) => {
+        const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+        if (!dateMatch) return true;
+        return dateMatch[1] === yearStr;
+      });
+    }
   }
 
   // 5. Double taxation. Art. 80 caps the deduction by the effective average
