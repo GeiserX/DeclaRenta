@@ -449,16 +449,14 @@ describe("FxFifoEngine", () => {
       expect(events).toHaveLength(0);
     });
 
-    it("should still allow manual conversions in auto-convert accounts", () => {
+    it("should skip all CASH trades (including manual) in auto-convert accounts", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      // FXCONV skipped, manual conversion preserved
-      expect(events).toHaveLength(1);
-      expect(events[0]!.trigger).toBe("conversion");
-      expect(events[0]!.quantity.toString()).toBe("1000");
+      // Auto-convert detected (FXCONV) → all CASH trades skipped, no orphan disposals
+      expect(events).toHaveLength(0);
     });
 
     it("should detect auto-convert when notes contains AFx", () => {
@@ -531,18 +529,16 @@ describe("FxFifoEngine", () => {
       const trades = [
         // Auto FX conversion (AFx note)
         makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "500", currency: "USD" }),
-        // Manual conversion (no AFx)
+        // Manual conversion (no AFx) — still skipped because account is auto-convert
         makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
         // Stock trade
         makeTrade({ tradeID: "3", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "800", currency: "USD" }),
       ];
-      // AFx triggers auto-convert -> stock events suppressed, AFx CASH skipped, manual CASH preserved
+      // AFx triggers auto-convert → all CASH and stock events suppressed
       expect(FxFifoEngine.detectAutoConvert(trades)).toBe(true);
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      // Only the manual conversion (trade 2) should generate an event
-      expect(events).toHaveLength(1);
-      expect(events[0]!.trigger).toBe("conversion");
-      expect(events[0]!.quantity.toString()).toBe("1000");
+      // All CASH skipped in auto-convert mode, stock also skipped → zero events
+      expect(events).toHaveLength(0);
     });
 
     it("should detect auto-convert via amount correlation (Signal 4, missing Notes field)", () => {
