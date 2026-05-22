@@ -203,9 +203,28 @@ describe("FxFifoEngine", () => {
       const trades = [
         makeTrade({ description: "FXCONV" }),
         makeTrade({ description: "CASH RECEIPTS / DISBURSEMENTS" }),
+        makeTrade({ description: "CASH DISBURSEMENTS" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
       expect(events).toHaveLength(0);
+    });
+
+    it("should fall back to tradeDate when settlementDate is empty", () => {
+      const trades = [
+        makeTrade({ buySell: "BUY", quantity: "1000", settlementDate: "", tradeDate: "20250315" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.date).toBe("2025-03-15");
+    });
+
+    it("should handle negative quantity on BUY via .abs() normalization", () => {
+      const trades = [
+        makeTrade({ buySell: "BUY", quantity: "-500" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("500");
     });
 
     it("should only extract CASH trades, ignoring STK trades entirely", () => {
