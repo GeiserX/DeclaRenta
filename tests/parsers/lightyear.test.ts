@@ -399,7 +399,7 @@ describe("lightyearParser", () => {
       expect(fx.quantity).toBe("-500");
     });
 
-    it("should enable FX FIFO detection (autoConvert=false when CASH trades exist)", () => {
+    it("should have CASH trades that generate FX events alongside STK trades", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
       const hasCash = result.trades.some((t) => t.assetCategory === "CASH");
       const hasNonEurStk = result.trades.some((t) => t.assetCategory === "STK" && t.currency !== "EUR");

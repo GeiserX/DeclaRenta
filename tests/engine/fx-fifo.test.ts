@@ -237,29 +237,29 @@ describe("FxFifoEngine", () => {
     });
   });
 
-  describe("integration: two-event model", () => {
-    it("should produce correct FX gain for a stock round-trip in USD", () => {
-      // Day 1: Convert EUR 1000 → USD 1100 (rate 0.92 EUR/USD)
-      // Day 30: Buy 10 AAPL @ $110 using USD 1100 (rate 0.95 EUR/USD)
-      // Day 60: Sell 10 AAPL @ $120 = USD 1200 (rate 0.90 EUR/USD)
+  describe("integration: acquire and dispose", () => {
+    it("should produce correct FX gain for a conversion round-trip in USD", () => {
+      // Day 1: Convert EUR → USD 1100 (rate 0.92 EUR/USD)
+      // Day 30: Convert USD 1100 back (rate 0.95 EUR/USD) — FX gain
+      // Day 60: Convert EUR → USD 1200 (rate 0.90 EUR/USD) — new lot
       const engine = new FxFifoEngine();
       engine.processEvents([
         { date: "2025-01-01", currency: "USD", quantity: new Decimal(1100), ecbRate: new Decimal("0.92"), trigger: "conversion" },
-        { date: "2025-01-31", currency: "USD", quantity: new Decimal(-1100), ecbRate: new Decimal("0.95"), trigger: "stock_purchase" },
-        { date: "2025-03-01", currency: "USD", quantity: new Decimal(1200), ecbRate: new Decimal("0.90"), trigger: "stock_sale" },
+        { date: "2025-01-31", currency: "USD", quantity: new Decimal(-1100), ecbRate: new Decimal("0.95"), trigger: "conversion" },
+        { date: "2025-03-01", currency: "USD", quantity: new Decimal(1200), ecbRate: new Decimal("0.90"), trigger: "conversion" },
       ]);
 
       const disposals = engine.getDisposals();
       expect(disposals).toHaveLength(1);
 
-      // FX gain on the stock purchase:
+      // FX gain on the disposal:
       // Acquired 1100 USD at 0.92 = cost 1012 EUR
       // Disposed at 0.95 = proceeds 1045 EUR
       // FX gain = 1045 - 1012 = 33 EUR
       expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("33.00");
-      expect(disposals[0]!.trigger).toBe("stock_purchase");
+      expect(disposals[0]!.trigger).toBe("conversion");
 
-      // Remaining: 1200 USD lot from stock_sale at rate 0.90
+      // Remaining: 1200 USD lot from second acquisition at rate 0.90
       const remaining = engine.getRemainingLots().get("USD");
       expect(remaining).toHaveLength(1);
       expect(remaining![0]!.quantity.toString()).toBe("1200");
