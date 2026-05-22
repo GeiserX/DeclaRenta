@@ -161,7 +161,7 @@ const ca: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Mode simplificat (monodivisa EUR)",
   "profile.monodivisa_detail": "No calcula guanys per tipus de canvi de forma separada (caselles 1626/1631). Compatible amb Autodeclaro, Taxdown i altres serveis que tracten totes les operacions com a moneda única EUR.",
-  "profile.monodivisa_warning": "⚠ Aquest mode pot infraestimar els guanys patrimonials declarats. El mode complet (per defecte) és més rigorós segons l'Art. 37.1.l LIRPF i les consultes vinculants de la DGT.",
+  "profile.monodivisa_warning": "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 37.1.l LIRPF (DGT V2324-10).",
   "profile.saved": "Perfil desat",
   "profile.save_btn": "Desar perfil",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",

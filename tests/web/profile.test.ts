@@ -112,6 +112,15 @@ describe("getProfile / saveProfile", () => {
     expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
 
+  it("should default monodivisa to false for pre-existing profiles without the key", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({
+      nif: "12345678Z", apellidos: "Garcia", nombre: "Juan",
+      ccaa: "Madrid", telefono: "600123456", year: 2024,
+    }));
+    const profile = getProfile();
+    expect(profile.monodivisa).toBe(false);
+  });
+
   it("should return defaults when stored JSON is corrupted", () => {
     localStorage.setItem("declarenta_profile", "not-json{{{");
     const profile = getProfile();

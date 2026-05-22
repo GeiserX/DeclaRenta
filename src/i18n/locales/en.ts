@@ -162,7 +162,7 @@ const en: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
   "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1626/1631). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
-  "profile.monodivisa_warning": "⚠ This mode may understate reported capital gains. The full mode (default) is more rigorous per Art. 37.1.l LIRPF and binding DGT rulings.",
+  "profile.monodivisa_warning": "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 37.1.l LIRPF (DGT V2324-10).",
   "profile.saved": "Profile saved",
   "profile.save_btn": "Save profile",
   "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",

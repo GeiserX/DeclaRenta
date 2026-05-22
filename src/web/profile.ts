@@ -129,13 +129,13 @@ export function initProfile(): void {
       </label>
       <div class="monodivisa-callout">
         <label class="monodivisa-toggle">
-          <input type="checkbox" id="profile-monodivisa" ${profile.monodivisa ? "checked" : ""} />
+          <input type="checkbox" id="profile-monodivisa" aria-describedby="monodivisa-detail monodivisa-warning" ${profile.monodivisa ? "checked" : ""} />
           <span class="monodivisa-label">
             <strong>${t("profile.monodivisa_label")}</strong>
           </span>
         </label>
-        <p class="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
-        <p class="monodivisa-warning" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
+        <p class="monodivisa-detail" id="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
+        <p class="monodivisa-warning" id="monodivisa-warning" role="alert" aria-live="polite" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
       </div>
       <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
     </form>
@@ -157,7 +157,7 @@ export function initProfile(): void {
   // Toggle warning visibility when monodivisa checkbox changes
   document.getElementById("profile-monodivisa")!.addEventListener("change", () => {
     const checked = (document.getElementById("profile-monodivisa") as HTMLInputElement).checked;
-    (document.querySelector(".monodivisa-warning") as HTMLElement).hidden = !checked;
+    (document.getElementById("monodivisa-warning") as HTMLElement).hidden = !checked;
   });
 
   // Auto-save on any input change

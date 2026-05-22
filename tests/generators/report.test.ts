@@ -230,25 +230,41 @@ describe("generateTaxReport", () => {
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
   });
 
-  it("should produce FX gains when skipFx is false (default)", () => {
+  it("should produce non-zero FX gains when skipFx is false with manual CASH trades", () => {
     const rates = makeRateMap({
       "2025-01-10": "0.9200",
       "2025-06-15": "0.9500",
     });
 
+    // Include a manual CASH BUY (acquire USD) and CASH SELL (dispose USD)
+    // to bypass auto-convert detection and produce real FX disposals
     const statement = makeStatement({
       trades: [
-        makeTrade({ tradeID: "1", tradeDate: "2025-01-10", quantity: "100", tradePrice: "50", tradeMoney: "-5000", buySell: "BUY", currency: "USD" }),
-        makeTrade({ tradeID: "2", tradeDate: "2025-06-15", quantity: "-100", tradePrice: "55", tradeMoney: "5500", proceeds: "5500", buySell: "SELL", currency: "USD" }),
+        makeTrade({
+          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
+          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+        }),
+        makeTrade({
+          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
+          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+        }),
       ],
     });
 
-    const reportDefault = generateTaxReport(statement, rates, 2025);
+    const report = generateTaxReport(statement, rates, 2025);
     const reportExplicit = generateTaxReport(statement, rates, 2025, { skipFx: false });
 
     // Both should be identical — default is no skip
-    expect(reportDefault.fxGains.disposals.length).toBe(reportExplicit.fxGains.disposals.length);
-    expect(reportDefault.fxGains.netGainLoss.toFixed(2)).toBe(reportExplicit.fxGains.netGainLoss.toFixed(2));
+    expect(report.fxGains.disposals.length).toBe(reportExplicit.fxGains.disposals.length);
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe(reportExplicit.fxGains.netGainLoss.toFixed(2));
+
+    // Must produce non-zero FX gains (USD appreciated from 0.92 to 0.95 EUR per USD)
+    expect(report.fxGains.disposals.length).toBeGreaterThan(0);
+    expect(report.fxGains.netGainLoss.toNumber()).not.toBe(0);
   });
 
   it("should suppress FX warnings when no FX disposals exist in target year", () => {

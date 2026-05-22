@@ -161,7 +161,7 @@ const gl: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
   "profile.monodivisa_detail": "Non calcula ganancias por tipo de cambio de forma separada (casillas 1626/1631). Compatible con Autodeclaro, Taxdown e outros servizos que tratan todas as operacións como moeda única EUR.",
-  "profile.monodivisa_warning": "⚠ Este modo pode infraestimar as ganancias patrimoniais declaradas. O modo completo (por defecto) é máis rigoroso segundo o Art. 37.1.l LIRPF e as consultas vinculantes da DGT.",
+  "profile.monodivisa_warning": "⚠ Este modo pode distorsionar as ganancias patrimoniais declaradas (infraestimar ou sobreestimar). O modo completo (por defecto) é máis rigoroso segundo o Art. 37.1.l LIRPF (DGT V2324-10).",
   "profile.saved": "Perfil gardado",
   "profile.save_btn": "Gardar perfil",
   "profile.incomplete_banner": "Completa o teu perfil fiscal para xerar os modelos 720 e D-6.",
