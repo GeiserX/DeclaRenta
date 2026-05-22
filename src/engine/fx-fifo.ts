@@ -179,7 +179,10 @@ export class FxFifoEngine {
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
 
       if (trade.assetCategory === "CASH") {
-        // Direct forex trade — skip FXCONV (automatic conversions)
+        // Skip all CASH trades in auto-convert accounts: the underlying FCY was
+        // created/consumed by the auto-convert mechanism (AFx), so manual
+        // conversions are just cleanup moves with no independent FX exposure.
+        if (autoConvert) continue;
         if (FxFifoEngine.isFxconv(trade)) continue;
 
         const quantity = new Decimal(trade.quantity).abs();
