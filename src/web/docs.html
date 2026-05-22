@@ -419,6 +419,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
               <tr><td>Coinbase</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>Binance</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>Kraken</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Trade Republic</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Trading 212</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>MEXEM</td><td>Flex Query XML</td><td>.xml</td></tr>
+              <tr><td>Swissquote</td><td>CSV</td><td>.csv</td></tr>
             </tbody>
           </table>
         </div>
@@ -431,13 +435,21 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Interactive Brokers (IBKR)</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en <strong>Client Portal</strong> o <strong>Account Management</strong>.</li>
-          <li>Ve a <em>Informes &gt; Flex Queries</em> (o <em>Reports &gt; Flex Queries</em>).</li>
-          <li>Crea una nueva Flex Query de tipo <strong>Activity Flex Query</strong>.</li>
-          <li>En las secciones, activa <strong>todas las disponibles</strong> (recomendado). Como mínimo: <strong>Trades</strong>, <strong>Cash Transactions</strong>, <strong>Corporate Actions</strong>, <strong>Open Positions</strong>, <strong>Securities Info</strong> y <strong>Cash Report</strong>. Activar todas las secciones permite a DeclaRenta procesar operaciones forex, ejercicios de opciones y saldos en cuenta.</li>
-          <li>Selecciona el período que cubra todos los ejercicios necesarios (incluye ejercicios anteriores si tienes posiciones abiertas de años previos, para que FIFO funcione correctamente).</li>
+          <li>Inicia sesión en el <strong>Portal del Cliente</strong> de IBKR.</li>
+          <li>Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>.</li>
+          <li>En <strong>Consulta flex de actividad</strong>, haz clic en el <strong>+</strong> para crear una nueva consulta.</li>
+          <li>En la configuración, activa las secciones:
+            <ul>
+              <li><strong>Trades</strong> (obligatorio)</li>
+              <li><strong>Cash Transactions</strong> — dividendos y retenciones (obligatorio)</li>
+              <li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li>
+              <li><strong>Financial Instrument Information</strong> (recomendado)</li>
+            </ul>
+          </li>
+          <li>En cada sección, <strong>selecciona todos los campos disponibles</strong> (marca todas las casillas). Cuantos más datos incluyas, más preciso será el cálculo. Como mínimo asegúrate de incluir el campo <strong>Notes</strong> en Trades — es necesario para detectar conversiones automáticas de divisa.</li>
           <li>Formato de salida: <strong>XML</strong>.</li>
-          <li>Ejecuta la query y descarga el fichero <code>.xml</code>.</li>
+          <li>Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto.</li>
+          <li>Guarda la consulta, ejecútala y descarga el fichero <code>.xml</code>.</li>
         </ol>
         <p><strong>Formato:</strong> XML con estructura <code>&lt;FlexQueryResponse&gt;</code>.</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa (STK, FUND, OPT), dividendos, intereses, retenciones, acciones corporativas (splits, fusiones, spin-offs, scrip dividends) y posiciones abiertas.</p>
@@ -446,11 +458,12 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Degiro</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en la web de Degiro.</li>
-          <li>Ve a <em>Actividad &gt; Transacciones</em>.</li>
-          <li>Selecciona el período deseado.</li>
-          <li>Pulsa el botón <strong>Exportar</strong> y elige formato <strong>CSV</strong>.</li>
-          <li>Repite con la sección <em>Cuenta &gt; Extracto</em> si necesitas dividendos.</li>
+          <li>Inicia sesión en la <strong>web de Degiro</strong> (no la app).</li>
+          <li>Abre el panel lateral <strong>Buzón</strong> (icono de sobre).</li>
+          <li>Haz clic en <strong>Transacciones</strong> (historial de transacciones de tus productos).</li>
+          <li>Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO).</li>
+          <li>Haz clic en <strong>Exportar</strong> y descarga el fichero CSV.</li>
+          <li>Para dividendos: vuelve al <strong>Buzón</strong> → <strong>Cuenta</strong> (historial de movimientos de tu cuenta) → misma fecha → <strong>Exportar</strong> CSV.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras que incluyen ISIN, cantidad y precio.</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa, dividendos y posiciones.</p>
@@ -459,9 +472,9 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Scalable Capital</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en la web de Scalable Capital.</li>
-          <li>Ve a tu perfil y busca la opción <em>Transacciones</em> o <em>Historial</em>.</li>
-          <li>Exporta en formato <strong>CSV</strong>.</li>
+          <li>Inicia sesión en <strong>Scalable Capital</strong>.</li>
+          <li>Ve a <strong>Perfil → Documentos fiscales</strong>.</li>
+          <li>Descarga el informe de transacciones en formato <strong>CSV</strong>.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>date;time;status;reference</code> (separador punto y coma).</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa y dividendos.</p>
@@ -470,10 +483,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>eToro</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en eToro.</li>
-          <li>Ve a <em>Portafolio &gt; Historial</em> o a <em>Configuración &gt; Cuenta &gt; Extracto de cuenta</em>.</li>
-          <li>Selecciona el período y pulsa <strong>Descargar</strong>.</li>
-          <li>El fichero descargado es un <strong>XLSX</strong> (Excel) con varias pestañas.</li>
+          <li>Inicia sesión en <strong>eToro</strong>.</li>
+          <li>Ve a <strong>Ajustes → Extracto de cuenta</strong>.</li>
+          <li>Selecciona el período del ejercicio fiscal.</li>
+          <li>Descarga el fichero <strong>XLSX</strong> (Excel).</li>
         </ol>
         <p><strong>Formato:</strong> XLSX (Excel) con pestaña "Closed Positions".</p>
         <p><strong>Datos extraídos:</strong> Posiciones cerradas con precios de apertura y cierre, dividendos.</p>
@@ -482,11 +495,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Revolut</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en <strong>app.revolut.com</strong> o la app móvil.</li>
-          <li>Ve a <em>Inversiones &gt; Más opciones (···) &gt; Extractos</em>.</li>
-          <li>Selecciona <strong>Trading Account Statement</strong>.</li>
-          <li>Elige el rango de fechas que cubra los ejercicios necesarios.</li>
-          <li>Descarga el fichero <code>.xlsx</code>.</li>
+          <li>Inicia sesión en la <strong>web de Revolut</strong> (app.revolut.com o app móvil).</li>
+          <li>Ve a <strong>Trading/Cripto → Extractos</strong>.</li>
+          <li>Selecciona <strong>Trading Account Statement</strong> del ejercicio fiscal.</li>
+          <li>Descarga en formato <strong>XLSX</strong> (Excel).</li>
         </ol>
         <p><strong>Formato:</strong> XLSX (Excel) con columnas Date acquired, Date sold, Symbol, Quantity, Cost basis, Gross proceeds, Fees, etc.</p>
         <p><strong>Datos extraídos:</strong> Posiciones cerradas (compra + venta) con PnL y comisiones. Soporta acciones y criptomonedas.</p>
@@ -495,10 +507,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Lightyear</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Abre la app de <strong>Lightyear</strong> o inicia sesión en la web.</li>
-          <li>Ve a <em>Perfil &gt; Informes</em> (o <em>Profile &gt; Reports</em>).</li>
-          <li>Selecciona <strong>Transaction report</strong> y el período deseado.</li>
-          <li>Descarga el fichero <code>.csv</code>.</li>
+          <li>Abre la app de <strong>Lightyear</strong>.</li>
+          <li>Ve a <strong>Perfil → Informes</strong>.</li>
+          <li>Selecciona <strong>Transaction report</strong> y el período.</li>
+          <li>Descarga el fichero CSV y envíalo a tu ordenador.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>Date, Reference, Ticker, ISIN, Type, Quantity, CCY, Price/share, Gross Amount, FX Rate, Fee, Net Amt., Tax Amt.</code></p>
         <p><strong>Datos extraídos:</strong> Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.</p>
@@ -507,10 +519,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en la web de Freedom24.</li>
-          <li>Ve a <em>Informes</em> o <em>Reports</em>.</li>
-          <li>Genera un informe de actividad para el período deseado.</li>
-          <li>Descarga en formato <strong>JSON</strong>.</li>
+          <li>Inicia sesión en la <strong>plataforma web de Freedom24</strong>.</li>
+          <li>Ve a <strong>Informes → Informe de operaciones</strong>.</li>
+          <li>Selecciona el período y formato <strong>JSON</strong>.</li>
+          <li>Descarga el fichero.</li>
         </ol>
         <p><strong>Formato:</strong> JSON con arrays de <code>trades</code>, <code>corporate_actions</code> y <code>cash_flows</code>.</p>
         <p><strong>Datos extraídos:</strong> Operaciones, dividendos, acciones corporativas y flujos de caja.</p>
@@ -519,10 +531,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Coinbase</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en Coinbase.</li>
-          <li>Ve a <em>Configuración &gt; Informes</em> (o <em>Settings &gt; Reports</em>).</li>
-          <li>Selecciona <strong>Transaction history</strong> y el período.</li>
-          <li>Descarga en formato <strong>CSV</strong>.</li>
+          <li>Inicia sesión en <strong>Coinbase</strong>.</li>
+          <li>Ve a <strong>Impuestos → Documentos</strong>.</li>
+          <li>Haz clic en <strong>Generar informe</strong>.</li>
+          <li>Descarga el historial de transacciones en formato CSV.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>Transaction Type</code> y <code>Spot Price</code>.</p>
         <p><strong>Datos extraídos:</strong> Compras, ventas, conversiones y posiciones de criptomonedas.</p>
@@ -531,10 +543,10 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Binance</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en Binance.</li>
-          <li>Ve a <em>Órdenes &gt; Historial de spot</em> (o <em>Orders &gt; Spot Order History</em>).</li>
-          <li>Selecciona el período y pulsa <strong>Exportar</strong>.</li>
-          <li>Descarga en formato <strong>CSV</strong>.</li>
+          <li>Inicia sesión en <strong>Binance</strong>.</li>
+          <li><strong>Historial de operaciones spot:</strong> Órdenes → Orden spot → Exportar historial de operaciones (↑) → Spot - Historial de Operaciones → Personalizar tiempo (UTC+1) → CSV.</li>
+          <li><strong>Historial de transacciones:</strong> Órdenes → Historial de Activos → Exportar registros de transacciones (↑) → Historial de Transacciones → Personalizar tiempo (UTC+1) → CSV.</li>
+          <li>Puedes subir uno o ambos ficheros — se aceptan tanto en español como en inglés.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>Date(UTC),Pair,Side,Price</code>.</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa en mercado spot.</p>
@@ -543,14 +555,60 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Kraken</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
-          <li>Inicia sesión en Kraken.</li>
-          <li>Ve a <em>History &gt; Export</em>.</li>
-          <li>Selecciona <strong>Trades</strong> o <strong>Ledger</strong> y el período.</li>
-          <li>Descarga en formato <strong>CSV</strong>.</li>
+          <li>Inicia sesión en <strong>Kraken</strong>.</li>
+          <li>Ve a <strong>History → Export</strong>.</li>
+          <li>Selecciona <strong>Trades</strong> y el rango de fechas.</li>
+          <li>Formato: <strong>CSV</strong>, descarga el fichero.</li>
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>txid</code>, <code>pair</code>/<code>ordertxid</code> o <code>refid</code>/<code>aclass</code>.</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa y movimientos de fondos.</p>
         <p><strong>Limitaciones:</strong> Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente.</p>
+
+        <h3>Trade Republic</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Abre la app de <strong>Trade Republic</strong>.</li>
+          <li>Ve a <strong>Perfil → Actividad</strong>.</li>
+          <li>Pulsa los tres puntos (⋯) y selecciona <strong>Exportar</strong>.</li>
+          <li>Selecciona el rango de fechas y formato <strong>CSV</strong>.</li>
+          <li>Descarga el fichero y envíalo a tu ordenador.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras de transacción.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa y dividendos.</p>
+
+        <h3>Trading 212</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en la <strong>web de Trading 212</strong>.</li>
+          <li>Ve a <strong>Historial → Transacciones</strong>.</li>
+          <li>Filtra por el rango de fechas deseado.</li>
+          <li>Haz clic en <strong>Descargar CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras de transacción.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa y dividendos.</p>
+
+        <h3>MEXEM</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en el <strong>Portal del Cliente</strong> de MEXEM (misma interfaz que IBKR).</li>
+          <li>Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>.</li>
+          <li>Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions.</li>
+          <li>Formato de salida: <strong>XML</strong>.</li>
+          <li>Ejecuta la consulta y descarga el fichero <code>.xml</code>.</li>
+        </ol>
+        <p><strong>Formato:</strong> XML con estructura <code>&lt;FlexQueryResponse&gt;</code> (idéntico a IBKR).</p>
+        <p><strong>Datos extraídos:</strong> Los mismos que Interactive Brokers — MEXEM usa la misma plataforma.</p>
+
+        <h3>Swissquote</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en <strong>Swissquote eBanking</strong>.</li>
+          <li>Ve a <strong>Trading → Historial de transacciones</strong>.</li>
+          <li>Selecciona el rango de fechas del ejercicio fiscal.</li>
+          <li>Haz clic en <strong>Exportar → CSV</strong>.</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV con cabeceras de transacción.</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa.</p>
       </section>
 
       <!-- 3. Casillas del Modelo 100 -->
