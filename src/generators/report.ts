@@ -108,9 +108,10 @@ export function generateTaxReport(
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
   let fxAcquisitionValue = new Decimal(0);
-  const fxEngine = new FxFifoEngine();
+  let fxWarningsList: string[] = [];
 
   if (!options?.skipFx) {
+    const fxEngine = new FxFifoEngine();
     const autoConvert = FxFifoEngine.detectAutoConvert(statement.trades);
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap, autoConvert);
@@ -119,6 +120,12 @@ export function generateTaxReport(
 
     fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
     fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+
+    fxWarningsList = fxEngine.warnings.filter((w) => {
+      const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+      if (!dateMatch) return true;
+      return dateMatch[1] === yearStr;
+    });
   }
 
   // 5. Double taxation. Art. 80 caps the deduction by the effective average
@@ -137,14 +144,8 @@ export function generateTaxReport(
     return dateMatch[1] === yearStr;
   });
 
-  const fxWarnings = fxEngine.warnings.filter((w) => {
-    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-    if (!dateMatch) return true;
-    return dateMatch[1] === yearStr;
-  });
-
   // Prepend parser warnings (unparsed sections, etc.)
-  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarnings];
+  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarningsList];
 
   return {
     year,

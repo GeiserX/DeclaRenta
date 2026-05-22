@@ -123,7 +123,8 @@ program
   .option("-f, --format <format>", "Output format: json, csv, or pdf", "json")
   .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`)
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string }) => {
+  .option("--monodivisa", "Disable FX FIFO engine — treat all as EUR (like Autodeclaro/Taxdown)")
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
@@ -158,7 +159,7 @@ program
       console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...years].sort().join(", ")})`);
 
       // 3. Generate tax report
-      const report = generateTaxReport(merged, allRates, opts.year);
+      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa });
 
       // 3b. Apply loss carryforward if prior losses provided
       if (opts.priorLosses) {

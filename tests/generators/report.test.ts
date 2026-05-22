@@ -205,4 +205,66 @@ describe("generateTaxReport", () => {
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(report.dividends.grossIncome.toFixed(2)).toBe("0.00");
   });
+
+  it("should skip FX engine when skipFx is true (monodivisa mode)", () => {
+    const rates = makeRateMap({
+      "2025-03-15": "0.9200",
+      "2025-09-20": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, { skipFx: true });
+
+    expect(report.fxGains.disposals).toHaveLength(0);
+    expect(report.fxGains.transmissionValue.toFixed(2)).toBe("0.00");
+    expect(report.fxGains.acquisitionValue.toFixed(2)).toBe("0.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+    // Capital gains still computed normally
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+  });
+
+  it("should produce FX gains when skipFx is false (default)", () => {
+    const rates = makeRateMap({
+      "2025-01-10": "0.9200",
+      "2025-06-15": "0.9500",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-01-10", quantity: "100", tradePrice: "50", tradeMoney: "-5000", buySell: "BUY", currency: "USD" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-06-15", quantity: "-100", tradePrice: "55", tradeMoney: "5500", proceeds: "5500", buySell: "SELL", currency: "USD" }),
+      ],
+    });
+
+    const reportDefault = generateTaxReport(statement, rates, 2025);
+    const reportExplicit = generateTaxReport(statement, rates, 2025, { skipFx: false });
+
+    // Both should be identical — default is no skip
+    expect(reportDefault.fxGains.disposals.length).toBe(reportExplicit.fxGains.disposals.length);
+    expect(reportDefault.fxGains.netGainLoss.toFixed(2)).toBe(reportExplicit.fxGains.netGainLoss.toFixed(2));
+  });
+
+  it("should not include FX warnings when skipFx is true", () => {
+    const rates = makeRateMap({ "2025-09-20": "0.91" });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, { skipFx: true });
+
+    // FIFO warning still present (sell without prior buy)
+    expect(report.warnings.some((w) => w.includes("Venta sin lotes"))).toBe(true);
+    // But no FX-related warnings (no FX engine ran)
+    expect(report.warnings.some((w) => w.includes("sin lotes previos de USD"))).toBe(false);
+  });
 });
