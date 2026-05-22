@@ -242,7 +242,8 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         sectionHeader(doc, "Mensajes");
         for (const m of report.messages.slice(0, 20)) {
           const prefix = m.severity === "error" ? "⛔ " : m.severity === "warning" ? "⚠ " : "ℹ ";
-          doc.fontSize(FONT_SIZE.small).fillColor(COLORS.accent).text(prefix + m.message, MARGIN);
+          const color = m.severity === "error" ? COLORS.accent : COLORS.muted;
+          doc.fontSize(FONT_SIZE.small).fillColor(color).text(prefix + m.message, MARGIN);
           doc.moveDown(0.2);
         }
       }

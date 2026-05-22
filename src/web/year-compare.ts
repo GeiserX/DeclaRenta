@@ -45,7 +45,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
       disposalsCount: report.capitalGains.disposals.length,
       fxDisposalsCount: report.fxGains.disposals.length,
       dividendsCount: report.dividends.entries.length,
-      warningsCount: report.messages.length,
+      warningsCount: report.messages.filter((m) => m.severity !== "info").length,
       currencies: [...currencies],
     },
   };

@@ -15,6 +15,7 @@ export function createEmptyStatement(): Statement {
     cashBalances: [],
     optionExercises: [],
     parserWarnings: [],
+    parserMessages: [],
   };
 }
 
@@ -32,6 +33,7 @@ export function mergeStatement(target: Statement, source: Statement): Statement 
   target.cashBalances = [...(target.cashBalances ?? []), ...(source.cashBalances ?? [])];
   target.optionExercises = [...(target.optionExercises ?? []), ...(source.optionExercises ?? [])];
   target.parserWarnings = [...(target.parserWarnings ?? []), ...(source.parserWarnings ?? [])];
+  target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
 
   return target;
 }

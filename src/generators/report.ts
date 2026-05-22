@@ -167,8 +167,8 @@ export function generateTaxReport(
   // Aggregate structured messages from all sources
   const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList];
 
-  // Reconciliation hint: explain why other tools may show different amounts
-  if (!options?.skipFx && (transmissionValue.greaterThan(0) || fxTransmissionValue.greaterThan(0))) {
+  // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)
+  if (!options?.skipFx && fxDisposals.length > 0) {
     allMessages.push({
       id: "report.competitor_reconciliation",
       severity: "info",

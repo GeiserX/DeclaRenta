@@ -2557,7 +2557,6 @@ footer a:hover {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.8rem;
-  opacity: 0.75;
   font-style: italic;
 }
 
@@ -2594,18 +2593,45 @@ footer a:hover {
   color: var(--text-muted, #9ca3af);
 }
 
-/* Light theme overrides */
+/* Light theme overrides — explicit */
 [data-theme="light"] .msg-error {
   background: rgba(239, 68, 68, 0.06);
-  color: #dc2626;
+  color: #b91c1c;
 }
+
+[data-theme="light"] .msg-error .msg-hint { color: #b91c1c; }
 
 [data-theme="light"] .msg-warning {
   background: rgba(245, 158, 11, 0.06);
-  color: #d97706;
+  color: #92400e;
 }
+
+[data-theme="light"] .msg-warning .msg-hint { color: #92400e; }
 
 [data-theme="light"] .msg-info {
   background: rgba(99, 102, 241, 0.04);
-  color: #6b7280;
+  color: #4b5563;
+}
+
+[data-theme="light"] .msg-info .msg-hint { color: #4b5563; }
+
+/* Light theme overrides — auto (system prefers-color-scheme) */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .msg-error {
+    background: rgba(239, 68, 68, 0.06);
+    color: #b91c1c;
+  }
+  :root:not([data-theme="dark"]) .msg-error .msg-hint { color: #b91c1c; }
+
+  :root:not([data-theme="dark"]) .msg-warning {
+    background: rgba(245, 158, 11, 0.06);
+    color: #92400e;
+  }
+  :root:not([data-theme="dark"]) .msg-warning .msg-hint { color: #92400e; }
+
+  :root:not([data-theme="dark"]) .msg-info {
+    background: rgba(99, 102, 241, 0.04);
+    color: #4b5563;
+  }
+  :root:not([data-theme="dark"]) .msg-info .msg-hint { color: #4b5563; }
 }

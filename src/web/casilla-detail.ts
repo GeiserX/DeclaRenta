@@ -221,7 +221,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     const isNetRow = c.code === "";
 
     return `
-      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}">
+      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}"${hasDetail ? ` tabindex="0" role="button" aria-expanded="false"` : ""}>
         <div class="casilla-header">
           ${c.code ? `<span class="casilla-code">${c.code}</span>` : ""}
           <span class="casilla-concept">${isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0])}</span>
@@ -244,8 +244,8 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
   let messagesHtml = "";
 
   if (errors.length > 0) {
-    messagesHtml += `<div class="msg-section msg-error">
-      <div class="msg-header"><span class="msg-icon">⛔</span> ${t("messages.errors_title", { count: String(errors.length) })}</div>
+    messagesHtml += `<div class="msg-section msg-error" role="alert">
+      <div class="msg-header"><span class="msg-icon" role="img" aria-label="${esc(t("messages.errors_title", { count: String(errors.length) }))}">⛔</span> ${t("messages.errors_title", { count: String(errors.length) })}</div>
       <ul>${errors.map((e) => `<li>${esc(e.message)}${e.hint ? `<span class="msg-hint">${esc(e.hint)}</span>` : ""}</li>`).join("")}</ul>
     </div>`;
   }
@@ -266,16 +266,24 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
 
   container.innerHTML = `<div class="casilla-cards">${cards}</div>${blockedWarning}${messagesHtml}`;
 
-  // Toggle expansion on click
+  // Toggle expansion on click/keyboard
   container.querySelectorAll<HTMLElement>(".casilla-card.expandable").forEach((card) => {
-    card.addEventListener("click", () => {
+    const toggle = () => {
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
-      const toggle = card.querySelector<HTMLElement>(".casilla-toggle");
+      const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);
-        if (toggle) toggle.innerHTML = isOpen ? "&#9656;" : "&#9662;";
+        card.setAttribute("aria-expanded", String(!isOpen));
+        if (arrow) arrow.innerHTML = isOpen ? "&#9656;" : "&#9662;";
+      }
+    };
+    card.addEventListener("click", toggle);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
       }
     });
   });
