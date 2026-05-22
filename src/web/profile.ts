@@ -157,8 +157,7 @@ export function initProfile(): void {
   // Toggle warning visibility when monodivisa checkbox changes
   document.getElementById("profile-monodivisa")!.addEventListener("change", () => {
     const checked = (document.getElementById("profile-monodivisa") as HTMLInputElement).checked;
-    const warning = document.querySelector(".monodivisa-warning") as HTMLElement;
-    if (warning) warning.hidden = !checked;
+    (document.querySelector(".monodivisa-warning") as HTMLElement).hidden = !checked;
   });
 
   // Auto-save on any input change
