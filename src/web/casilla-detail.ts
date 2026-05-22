@@ -232,16 +232,39 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       </div>`;
   }).join("");
 
-  const warnings = [
-    report.capitalGains.blockedLosses.greaterThan(0)
-      ? `<p class="warning">${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>`
-      : "",
-    report.warnings.length > 0
-      ? `<details><summary>${t("casilla.warnings_count", { count: String(report.warnings.length) })}</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>`
-      : "",
-  ].filter(Boolean).join("");
+  const blockedWarning = report.capitalGains.blockedLosses.greaterThan(0)
+    ? `<p class="warning">${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>`
+    : "";
 
-  container.innerHTML = `<div class="casilla-cards">${cards}</div>${warnings}`;
+  const msgs = report.messages;
+  const errors = msgs.filter((m) => m.severity === "error");
+  const warns = msgs.filter((m) => m.severity === "warning");
+  const infos = msgs.filter((m) => m.severity === "info");
+
+  let messagesHtml = "";
+
+  if (errors.length > 0) {
+    messagesHtml += `<div class="msg-section msg-error">
+      <div class="msg-header"><span class="msg-icon">⛔</span> ${t("messages.errors_title", { count: String(errors.length) })}</div>
+      <ul>${errors.map((e) => `<li>${esc(e.message)}${e.hint ? `<span class="msg-hint">${esc(e.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </div>`;
+  }
+
+  if (warns.length > 0) {
+    messagesHtml += `<details class="msg-section msg-warning" open>
+      <summary><span class="msg-icon">⚠️</span> ${t("messages.warnings_title", { count: String(warns.length) })}</summary>
+      <ul>${warns.map((w) => `<li>${esc(w.message)}${w.hint ? `<span class="msg-hint">${esc(w.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </details>`;
+  }
+
+  if (infos.length > 0) {
+    messagesHtml += `<details class="msg-section msg-info">
+      <summary><span class="msg-icon">ℹ️</span> ${t("messages.info_title", { count: String(infos.length) })}</summary>
+      <ul>${infos.map((i) => `<li>${esc(i.message)}${i.hint ? `<span class="msg-hint">${esc(i.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </details>`;
+  }
+
+  container.innerHTML = `<div class="casilla-cards">${cards}</div>${blockedWarning}${messagesHtml}`;
 
   // Toggle expansion on click
   container.querySelectorAll<HTMLElement>(".casilla-card.expandable").forEach((card) => {

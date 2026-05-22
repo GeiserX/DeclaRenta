@@ -75,6 +75,10 @@ const gl: TranslationKeys = {
   "casilla.double_taxation": "Dedución dobre imposición",
   "casilla.blocked_losses": "Perdas bloqueadas pola regra anti-churning (2 meses cotizados / 1 ano non cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
+  "messages.errors_title": "{{count}} erro(s) — require atención",
+  "messages.warnings_title": "{{count}} aviso(s) — revisa",
+  "messages.info_title": "{{count}} nota(s) informativa(s)",
+  "pdf.section_messages": "Mensaxes",
 
   "chart.asset_distribution": "Distribución por tipo de activo",
   "chart.monthly_gl": "Ganancia/Perda por mes",

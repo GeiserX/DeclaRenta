@@ -7,7 +7,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { Lot, FifoDisposal } from "../types/tax.js";
+import type { Lot, FifoDisposal, TaxMessage } from "../types/tax.js";
 import type { Trade, CorporateAction, OptionExercise } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
@@ -33,6 +33,13 @@ export class FifoEngine {
   private nextLotId = 1;
   /** Warnings for issues that don't block execution */
   warnings: string[] = [];
+  /** Structured messages with severity, hint, and context */
+  messages: TaxMessage[] = [];
+
+  private emit(msg: TaxMessage): void {
+    this.messages.push(msg);
+    this.warnings.push(msg.message);
+  }
 
   /**
    * Process trades and corporate actions together, sorted chronologically.
@@ -53,7 +60,7 @@ export class FifoEngine {
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
-          this.warnings.push(`⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`);
+          this.emit({ id: "fifo.unknown_category", severity: "info", message: `⚠ Categoría de activo desconocida: "${t.assetCategory}" para ${t.symbol}. Se procesará con FIFO genérico.`, hint: "Se procesa igualmente con FIFO genérico. Si es un activo nuevo de IBKR, puede que se añada en futuras versiones.", context: { symbol: t.symbol, assetCategory: t.assetCategory } });
         }
         // Skip option BookTrades for exercises/expirations only when a matching OptionEAE exists
         // (IBKR generates both a BookTrade with notes="Ep"/"Ex" and an OptionEAE event)
@@ -171,7 +178,7 @@ export class FifoEngine {
         currency: ca.currency,
         ecbRate,
       });
-      this.warnings.push(`📈 Scrip dividend: ${ca.symbol} +${qty.abs()} acciones el ${date}`);
+      this.emit({ id: "fifo.scrip_dividend", severity: "info", message: `📈 Scrip dividend: ${ca.symbol} +${qty.abs()} acciones el ${date}`, hint: "El scrip dividend se ha añadido como lote con coste igual al valor del dividendo.", context: { symbol: ca.symbol, date, quantity: qty.abs().toString() } });
     }
     const sortedScripDivs = scripDivs.sort((a, b) => a.date.localeCompare(b.date));
 
@@ -217,7 +224,7 @@ export class FifoEngine {
       } else if (trade.buySell === "BUY" && oci === "C") {
         this.consumeShortLots(trade, rateMap);
       } else if (oci === "C;O") {
-        this.warnings.push(`⚠ Operación C;O (roll): ${trade.symbol} el ${normalizeDate(trade.tradeDate)}. Se procesa como cierre + apertura.`);
+        this.emit({ id: "fifo.roll_operation", severity: "info", message: `⚠ Operación C;O (roll): ${trade.symbol} el ${normalizeDate(trade.tradeDate)}. Se procesa como cierre + apertura.`, hint: "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.", context: { symbol: trade.symbol, date: normalizeDate(trade.tradeDate) } });
         if (trade.buySell === "BUY") {
           this.consumeShortLots(trade, rateMap);
         } else {
@@ -274,7 +281,7 @@ export class FifoEngine {
     }
 
     const direction = split.ratio >= 1 ? "forward" : "reverse";
-    this.warnings.push(`⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`);
+    this.emit({ id: "fifo.split_applied", severity: "info", message: `⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`, hint: "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.", context: { isin: split.isin, date: split.date, ratio: `${split.ratio}:1`, direction } });
   }
 
   private addScripDividendLot(sd: { key: string; isin: string; symbol: string; description: string; date: string; quantity: Decimal; pricePerShare: Decimal; costInEur: Decimal; currency: string; ecbRate: Decimal }): void {
@@ -326,7 +333,7 @@ export class FifoEngine {
     }
     this.lots.get(merger.newIsin)!.push(...newLots);
 
-    this.warnings.push(`🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`);
+    this.emit({ id: "fifo.merger_applied", severity: "info", message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`, hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.", context: { oldIsin: merger.oldIsin, newIsin: merger.newIsin, date: merger.date, ratio: `${merger.ratio}:1` } });
   }
 
   private applySpinOff(spinOff: { date: string; parentIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number; costFraction: number }): void {
@@ -367,7 +374,7 @@ export class FifoEngine {
     }
     this.lots.get(spinOff.newIsin)!.push(...newLots);
 
-    this.warnings.push(`🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`);
+    this.emit({ id: "fifo.spinoff_applied", severity: "info", message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`, hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.", context: { parentIsin: spinOff.parentIsin, newIsin: spinOff.newIsin, date: spinOff.date, ratio: `${spinOff.ratio}:1` } });
   }
 
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
@@ -427,7 +434,7 @@ export class FifoEngine {
     const lots = this.lots.get(key);
     if (!lots || lots.length === 0) {
       // Short sale or missing prior data — warn and record with zero cost basis
-      this.warnings.push(`⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`);
+      this.emit({ id: "fifo.sell_without_lots", severity: "error", message: `⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`, hint: "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.", context: { symbol: trade.symbol, isin: trade.isin, date: normalizeDate(trade.tradeDate), quantity: remaining.toString() } });
       const proceedsBaseEur = remaining.mul(pricePerShare).mul(multiplier).minus(taxes).mul(ecbRate);
       const proceedsEur = proceedsBaseEur.minus(commission.mul(commissionEcbRate));
       this.disposals.push({
@@ -512,7 +519,7 @@ export class FifoEngine {
 
     if (remaining.greaterThan(0)) {
       // Remaining shares with no lots — short sale or data gap
-      this.warnings.push(`⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0.`);
+      this.emit({ id: "fifo.insufficient_lots", severity: "error", message: `⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0.`, hint: "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.", context: { symbol: trade.symbol, isin: trade.isin, date: normalizeDate(trade.tradeDate), quantity: remaining.toString() } });
       const fractionOfSale = remaining.dividedBy(totalSellQuantity);
       const commissionShare = commission.mul(fractionOfSale);
       const taxesShare = taxes.mul(fractionOfSale);
@@ -660,14 +667,14 @@ export class FifoEngine {
 
     for (const ex of sorted) {
       if (!ex.date || ex.date.length < 8) {
-        this.warnings.push(`⚠ Evento OptionEAE sin fecha válida para ${ex.symbol}. Omitido.`);
+        this.emit({ id: "fifo.option_invalid_date", severity: "warning", message: `⚠ Evento OptionEAE sin fecha válida para ${ex.symbol}. Omitido.`, hint: "Evento de opción omitido por fecha inválida. Revisa que el Flex Query incluye la sección 'Option Exercises, Assignments & Expirations'.", context: { symbol: ex.symbol } });
         continue;
       }
       const date = normalizeDate(ex.date);
       const ecbRate = getEcbRate(rateMap, date, ex.currency);
       const quantity = new Decimal(ex.quantity).abs();
       if (quantity.isZero()) {
-        this.warnings.push(`⚠ Evento OptionEAE con cantidad 0 para ${ex.symbol} el ${date}. Omitido.`);
+        this.emit({ id: "fifo.option_zero_quantity", severity: "warning", message: `⚠ Evento OptionEAE con cantidad 0 para ${ex.symbol} el ${date}. Omitido.`, hint: "Evento de opción con cantidad 0 — probablemente un registro duplicado de IBKR.", context: { symbol: ex.symbol, date } });
         continue;
       }
       const multiplier = new Decimal(ex.multiplier || "100");
@@ -676,7 +683,7 @@ export class FifoEngine {
         this.processOptionExpiration(ex, date, ecbRate, quantity);
       } else {
         if (!ex.strike || !/^-?\d+(\.\d+)?$/.test(ex.strike.trim())) {
-          this.warnings.push(`⚠ Strike inválido "${ex.strike}" para ${ex.symbol} el ${date}. Omitiendo ejercicio.`);
+          this.emit({ id: "fifo.option_invalid_strike", severity: "warning", message: `⚠ Strike inválido "${ex.strike}" para ${ex.symbol} el ${date}. Omitiendo ejercicio.`, hint: "No se pudo calcular el ejercicio de esta opción. El coste del subyacente no incluirá la prima.", context: { symbol: ex.symbol, date, strike: ex.strike } });
           continue;
         }
         this.processOptionExercise(ex, date, ecbRate, quantity, multiplier);
@@ -798,7 +805,7 @@ export class FifoEngine {
       return;
     }
 
-    this.warnings.push(`⚠ Expiración de opción sin lotes: ${ex.symbol} × ${quantity} el ${date}.`);
+    this.emit({ id: "fifo.option_expiry_no_lots", severity: "warning", message: `⚠ Expiración de opción sin lotes: ${ex.symbol} × ${quantity} el ${date}.`, hint: "La opción expiró pero no se encontraron lotes de compra. ¿Incluiste el año de compra en el Flex Query?", context: { symbol: ex.symbol, date, quantity: quantity.toString() } });
   }
 
   private processOptionExercise(
@@ -906,7 +913,7 @@ export class FifoEngine {
       if (shortLots.length === 0) this.shortLots.delete(optionKey);
 
     } else {
-      this.warnings.push(`⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`);
+      this.emit({ id: "fifo.option_exercise_no_lots", severity: "warning", message: `⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`, hint: "Ejercicio registrado con prima = 0 porque no se encontró la compra de la opción. Amplía el periodo del Flex Query.", context: { symbol: ex.symbol, date, quantity: quantity.toString() } });
       // Still process underlying position even without option lot data
       if ((ex.action === "Exercise" && ex.putCall === "C") || (ex.action === "Assignment" && ex.putCall === "P")) {
         // Call exercise / Put assignment: acquire shares at strike
@@ -939,7 +946,7 @@ export class FifoEngine {
   ): void {
     const lots = this.lots.get(underlyingKey);
     if (!lots || lots.length === 0) {
-      this.warnings.push(`⚠ Ejercicio de opción sin lotes del subyacente: ${ex.underlyingSymbol} × ${shares} el ${date}. Coste base = 0.`);
+      this.emit({ id: "fifo.exercise_no_underlying_lots", severity: "warning", message: `⚠ Ejercicio de opción sin lotes del subyacente: ${ex.underlyingSymbol} × ${shares} el ${date}. Coste base = 0.`, hint: "Asignación de PUT registrada con coste base = 0 del subyacente. El Flex Query puede no cubrir la adquisición original.", context: { symbol: ex.underlyingSymbol, date, quantity: shares.toString() } });
       this.disposals.push({
         isin: ex.underlyingIsin,
         symbol: ex.underlyingSymbol,
@@ -1006,7 +1013,7 @@ export class FifoEngine {
     }
 
     if (remaining.greaterThan(0)) {
-      this.warnings.push(`⚠ Lotes insuficientes del subyacente: ${ex.underlyingSymbol} × ${remaining} el ${date}. Coste base = 0.`);
+      this.emit({ id: "fifo.insufficient_underlying_lots", severity: "warning", message: `⚠ Lotes insuficientes del subyacente: ${ex.underlyingSymbol} × ${remaining} el ${date}. Coste base = 0.`, hint: "No hay suficientes lotes del subyacente para cubrir la asignación completa.", context: { symbol: ex.underlyingSymbol, date, quantity: remaining.toString() } });
       const fraction = remaining.dividedBy(shares);
       const partialProceeds = proceedsEur.mul(fraction);
       this.disposals.push({

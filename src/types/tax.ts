@@ -4,6 +4,16 @@ import type Decimal from "decimal.js";
  * Core tax calculation types for Spanish IRPF (Modelo 100).
  */
 
+export type MessageSeverity = "error" | "warning" | "info";
+
+export interface TaxMessage {
+  id: string;
+  severity: MessageSeverity;
+  message: string;
+  hint?: string;
+  context?: Record<string, string>;
+}
+
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
 export type OptionScenario = "expiration" | "close" | "exercise";
 
@@ -98,8 +108,10 @@ export interface InterestEntry {
 export interface TaxSummary {
   /** Tax year */
   year: number;
-  /** Non-fatal warnings (short sales, missing lots, etc.) */
+  /** @deprecated Use `messages` for severity-aware rendering */
   warnings: string[];
+  /** Structured three-tier messages (error/warning/info) */
+  messages: TaxMessage[];
 
   /** Capital gains: Ganancias y pérdidas patrimoniales (Casillas 0327-0340) */
   capitalGains: {

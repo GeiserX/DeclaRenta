@@ -189,8 +189,10 @@ describe("generateTaxReport", () => {
     });
 
     const report = generateTaxReport(statement, rates, 2025);
-    expect(report.warnings).toHaveLength(1);
-    expect(report.warnings[0]).toContain("Venta sin lotes");
+    const fifoErrors = report.messages.filter((m) => m.id === "fifo.sell_without_lots");
+    expect(fifoErrors).toHaveLength(1);
+    expect(fifoErrors[0]!.message).toContain("Venta sin lotes");
+    expect(fifoErrors[0]!.severity).toBe("error");
   });
 
   it("should handle empty statement", () => {
@@ -288,7 +290,7 @@ describe("generateTaxReport", () => {
 
     const report = generateTaxReport(statement, rates, 2026);
     expect(report.fxGains.disposals).toHaveLength(0);
-    expect(report.warnings).toHaveLength(0);
+    expect(report.messages).toHaveLength(0);
   });
 
   it("should not include FX warnings when skipFx is true", () => {
@@ -302,9 +304,9 @@ describe("generateTaxReport", () => {
 
     const report = generateTaxReport(statement, rates, 2025, { skipFx: true });
 
-    // FIFO warning still present (sell without prior buy)
-    expect(report.warnings.some((w) => w.includes("Venta sin lotes"))).toBe(true);
-    // But no FX-related warnings (no FX engine ran)
-    expect(report.warnings.some((w) => w.includes("sin lotes previos de USD"))).toBe(false);
+    // FIFO error still present (sell without prior buy)
+    expect(report.messages.some((m) => m.message.includes("Venta sin lotes"))).toBe(true);
+    // But no FX-related messages (no FX engine ran)
+    expect(report.messages.some((m) => m.message.includes("sin lotes previos de USD"))).toBe(false);
   });
 });

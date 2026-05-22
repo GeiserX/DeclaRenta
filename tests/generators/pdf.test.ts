@@ -7,6 +7,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
   return {
     year: 2025,
     warnings: [],
+    messages: [],
     capitalGains: {
       transmissionValue: new Decimal("10000"),
       acquisitionValue: new Decimal("8000"),
@@ -156,12 +157,15 @@ describe("PDF Report Generator", () => {
     expect(buffer).toBeInstanceOf(Buffer);
   });
 
-  it("should produce a larger PDF with warnings than without", async () => {
-    const withWarnings = await generatePdfReport(
-      makeReport({ warnings: ["Short sale detected for XYZ", "Missing ISIN for ABC"] }),
+  it("should produce a larger PDF with messages than without", async () => {
+    const withMessages = await generatePdfReport(
+      makeReport({ messages: [
+        { id: "fifo.sell_without_lots", severity: "error", message: "Short sale detected for XYZ" },
+        { id: "parser.unparsed_section", severity: "info", message: "Missing ISIN for ABC" },
+      ] }),
     );
-    const withoutWarnings = await generatePdfReport(makeReport());
-    expect(withWarnings.length).toBeGreaterThan(withoutWarnings.length);
+    const withoutMessages = await generatePdfReport(makeReport());
+    expect(withMessages.length).toBeGreaterThan(withoutMessages.length);
   });
 
   it("should handle report with many disposals (pagination)", async () => {

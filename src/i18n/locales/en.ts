@@ -74,6 +74,10 @@ const en: TranslationKeys = {
   "casilla.double_taxation": "Double taxation deduction",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} warning(s)",
+  "messages.errors_title": "{{count}} error(s) — action required",
+  "messages.warnings_title": "{{count}} warning(s) — please review",
+  "messages.info_title": "{{count}} informational note(s)",
+  "pdf.section_messages": "Messages",
 
   "chart.asset_distribution": "Asset distribution",
   "chart.monthly_gl": "Monthly gain/loss",

@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { FlexStatement } from "../types/ibkr.js";
-import type { TaxSummary } from "../types/tax.js";
+import type { TaxSummary, TaxMessage } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
@@ -109,6 +109,7 @@ export function generateTaxReport(
   let fxTransmissionValue = new Decimal(0);
   let fxAcquisitionValue = new Decimal(0);
   let fxWarningsList: string[] = [];
+  let fxMessagesList: TaxMessage[] = [];
 
   if (!options?.skipFx) {
     const fxEngine = new FxFifoEngine();
@@ -127,6 +128,11 @@ export function generateTaxReport(
     if (fxDisposals.length > 0) {
       fxWarningsList = fxEngine.warnings.filter((w) => {
         const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+        if (!dateMatch) return true;
+        return dateMatch[1] === yearStr;
+      });
+      fxMessagesList = fxEngine.messages.filter((m) => {
+        const dateMatch = m.message.match(/\b(\d{4})-\d{2}-\d{2}\b/);
         if (!dateMatch) return true;
         return dateMatch[1] === yearStr;
       });
@@ -149,12 +155,32 @@ export function generateTaxReport(
     return dateMatch[1] === yearStr;
   });
 
+  const yearMessages = fifoEngine.messages.filter((m) => {
+    const dateMatch = m.message.match(/\b(\d{4})-\d{2}-\d{2}\b/);
+    if (!dateMatch) return true;
+    return dateMatch[1] === yearStr;
+  });
+
   // Prepend parser warnings (unparsed sections, etc.)
   const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarningsList];
+
+  // Aggregate structured messages from all sources
+  const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList];
+
+  // Reconciliation hint: explain why other tools may show different amounts
+  if (!options?.skipFx && (transmissionValue.greaterThan(0) || fxTransmissionValue.greaterThan(0))) {
+    allMessages.push({
+      id: "report.competitor_reconciliation",
+      severity: "info",
+      message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 37.1.l LIRPF).",
+      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+    });
+  }
 
   return {
     year,
     warnings: allWarnings,
+    messages: allMessages,
     capitalGains: {
       transmissionValue,
       acquisitionValue,

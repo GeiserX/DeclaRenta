@@ -16,6 +16,7 @@ export interface FlexStatement {
   cashBalances?: CashBalance[];
   optionExercises?: OptionExercise[];
   parserWarnings?: string[];
+  parserMessages?: import("./tax.js").TaxMessage[];
 }
 
 export interface Trade {

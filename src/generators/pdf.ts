@@ -236,12 +236,13 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         doc.moveDown(1);
       }
 
-      // --- Warnings ---
-      if (report.warnings.length > 0) {
+      // --- Messages (three-tier) ---
+      if (report.messages.length > 0) {
         checkPageBreak(doc);
-        sectionHeader(doc, "Advertencias");
-        for (const w of report.warnings.slice(0, 20)) {
-          doc.fontSize(FONT_SIZE.small).fillColor(COLORS.accent).text(w, MARGIN);
+        sectionHeader(doc, "Mensajes");
+        for (const m of report.messages.slice(0, 20)) {
+          const prefix = m.severity === "error" ? "⛔ " : m.severity === "warning" ? "⚠ " : "ℹ ";
+          doc.fontSize(FONT_SIZE.small).fillColor(COLORS.accent).text(prefix + m.message, MARGIN);
           doc.moveDown(0.2);
         }
       }

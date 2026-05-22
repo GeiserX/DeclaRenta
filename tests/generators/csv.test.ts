@@ -38,6 +38,7 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
   return {
     year: 2025,
     warnings: [],
+    messages: [],
     capitalGains: {
       transmissionValue: new Decimal(1000),
       acquisitionValue: new Decimal(800),

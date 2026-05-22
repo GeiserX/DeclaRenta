@@ -75,6 +75,10 @@ const eu: TranslationKeys = {
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
   "casilla.blocked_losses": "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",
+  "messages.errors_title": "{{count}} errore — arreta behar du",
+  "messages.warnings_title": "{{count}} abisu — berrikusi",
+  "messages.info_title": "{{count}} ohar informatibo",
+  "pdf.section_messages": "Mezuak",
 
   "chart.asset_distribution": "Aktibo motaren araberako banaketa",
   "chart.monthly_gl": "Hileko irabazi/galera",

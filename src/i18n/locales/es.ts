@@ -78,6 +78,10 @@ const es = {
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.blocked_losses": "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
+  "messages.errors_title": "{{count}} error(es) — requiere atención",
+  "messages.warnings_title": "{{count}} aviso(s) — revisa",
+  "messages.info_title": "{{count}} nota(s) informativa(s)",
+  "pdf.section_messages": "Mensajes",
 
   // Charts
   "chart.asset_distribution": "Distribución por tipo de activo",

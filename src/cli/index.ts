@@ -213,11 +213,30 @@ program
         }
       }
 
-      // 5. Print warnings
-      if (report.warnings.length > 0) {
-        console.error(`\n⚠ ${report.warnings.length} advertencia(s):`);
-        for (const w of report.warnings) {
-          console.error(`  ${w}`);
+      // 5. Print messages (three-tier)
+      const msgs = report.messages;
+      const errors = msgs.filter((m) => m.severity === "error");
+      const warnings = msgs.filter((m) => m.severity === "warning");
+      const infos = msgs.filter((m) => m.severity === "info");
+
+      if (errors.length > 0) {
+        console.error(`\n⛔ ${errors.length} error(es):`);
+        for (const e of errors) {
+          console.error(`  ${e.message}`);
+          if (e.hint) console.error(`    → ${e.hint}`);
+        }
+      }
+      if (warnings.length > 0) {
+        console.error(`\n⚠ ${warnings.length} aviso(s):`);
+        for (const w of warnings) {
+          console.error(`  ${w.message}`);
+          if (w.hint) console.error(`    → ${w.hint}`);
+        }
+      }
+      if (infos.length > 0) {
+        console.error(`\nℹ ${infos.length} nota(s) informativas:`);
+        for (const i of infos) {
+          console.error(`  ${i.message}`);
         }
       }
 

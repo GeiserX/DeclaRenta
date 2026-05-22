@@ -2507,3 +2507,105 @@ footer a:hover {
     max-width: 100%;
   }
 }
+
+/* Three-tier message system */
+.msg-section {
+  margin-top: 1rem;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.msg-section ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  list-style: none;
+}
+
+.msg-section li {
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+
+.msg-section li::before {
+  content: "•";
+  position: absolute;
+  left: -1rem;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.msg-header,
+.msg-section summary {
+  font-weight: 600;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.msg-section summary {
+  cursor: pointer;
+}
+
+.msg-icon {
+  font-size: 1rem;
+}
+
+.msg-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+/* Error tier — always visible, red */
+.msg-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger, #ef4444);
+}
+
+.msg-error .msg-hint {
+  color: var(--danger, #ef4444);
+}
+
+/* Warning tier — amber, open by default */
+.msg-warning {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--warning-text, #f59e0b);
+}
+
+.msg-warning .msg-hint {
+  color: var(--warning-text, #f59e0b);
+}
+
+/* Info tier — neutral, collapsed by default */
+.msg-info {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: var(--text-muted, #9ca3af);
+}
+
+.msg-info .msg-hint {
+  color: var(--text-muted, #9ca3af);
+}
+
+/* Light theme overrides */
+[data-theme="light"] .msg-error {
+  background: rgba(239, 68, 68, 0.06);
+  color: #dc2626;
+}
+
+[data-theme="light"] .msg-warning {
+  background: rgba(245, 158, 11, 0.06);
+  color: #d97706;
+}
+
+[data-theme="light"] .msg-info {
+  background: rgba(99, 102, 241, 0.04);
+  color: #6b7280;
+}

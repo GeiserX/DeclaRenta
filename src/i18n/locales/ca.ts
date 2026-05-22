@@ -75,6 +75,10 @@ const ca: TranslationKeys = {
   "casilla.double_taxation": "Deducció doble imposició",
   "casilla.blocked_losses": "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",
+  "messages.errors_title": "{{count}} error(s) — requereix atenció",
+  "messages.warnings_title": "{{count}} avís(os) — revisa",
+  "messages.info_title": "{{count}} nota/es informativa/es",
+  "pdf.section_messages": "Missatges",
 
   "chart.asset_distribution": "Distribució per tipus d'actiu",
   "chart.monthly_gl": "Guany/Pèrdua per mes",
