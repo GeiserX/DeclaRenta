@@ -96,7 +96,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       if (stmt[section] !== undefined && stmt[section] !== null) {
         parserWarnings.push(`⚠ Sección "${section}" encontrada en el Flex Query pero no procesada (${desc}). Revisa manualmente.`);
         parserMessages.push({
-          id: "parser.unparsed_section",
+          id: `parser.unparsed_section.${section}`,
           severity: "info",
           message: `⚠ Sección "${section}" encontrada en el Flex Query pero no procesada (${desc}). Revisa manualmente.`,
           hint: "Esta sección no afecta al cálculo fiscal. Si crees que debería incluirse, contacta con soporte.",

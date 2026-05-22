@@ -18,6 +18,18 @@ import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { getEcbRate } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 
+const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
+
+function filterByYear<T>(items: T[], yearStr: string, getText: (item: T) => string, getContext?: (item: T) => Record<string, string> | undefined): T[] {
+  return items.filter((item) => {
+    const ctx = getContext?.(item);
+    if (ctx?.date) return ctx.date.startsWith(yearStr);
+    const dateMatch = getText(item).match(DATE_RE);
+    if (!dateMatch) return true;
+    return dateMatch[1] === yearStr;
+  });
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
 }
@@ -126,16 +138,8 @@ export function generateTaxReport(
     // Undated warnings (missing lots summaries) refer to events across all years —
     // showing them when the target year has zero FX activity is misleading noise.
     if (fxDisposals.length > 0) {
-      fxWarningsList = fxEngine.warnings.filter((w) => {
-        const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-        if (!dateMatch) return true;
-        return dateMatch[1] === yearStr;
-      });
-      fxMessagesList = fxEngine.messages.filter((m) => {
-        const dateMatch = m.message.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-        if (!dateMatch) return true;
-        return dateMatch[1] === yearStr;
-      });
+      fxWarningsList = filterByYear(fxEngine.warnings, yearStr, (w) => w);
+      fxMessagesList = filterByYear(fxEngine.messages, yearStr, (m) => m.message, (m) => m.context);
     }
   }
 
@@ -149,17 +153,8 @@ export function generateTaxReport(
   const doubleTaxation = calculateDoubleTaxation(dividendEntries, totalSavingsBase);
 
   // Filter warnings to those relevant to the selected year
-  const yearWarnings = fifoEngine.warnings.filter((w) => {
-    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-    if (!dateMatch) return true; // No date in warning → always show
-    return dateMatch[1] === yearStr;
-  });
-
-  const yearMessages = fifoEngine.messages.filter((m) => {
-    const dateMatch = m.message.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-    if (!dateMatch) return true;
-    return dateMatch[1] === yearStr;
-  });
+  const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
+  const yearMessages = filterByYear(fifoEngine.messages, yearStr, (m) => m.message, (m) => m.context);
 
   // Prepend parser warnings (unparsed sections, etc.)
   const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarningsList];

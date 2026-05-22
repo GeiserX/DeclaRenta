@@ -237,6 +237,7 @@ program
         console.error(`\nℹ ${infos.length} nota(s) informativas:`);
         for (const i of infos) {
           console.error(`  ${i.message}`);
+          if (i.hint) console.error(`    → ${i.hint}`);
         }
       }
 

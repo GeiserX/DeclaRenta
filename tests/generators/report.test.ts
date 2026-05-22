@@ -309,4 +309,129 @@ describe("generateTaxReport", () => {
     // But no FX-related messages (no FX engine ran)
     expect(report.messages.some((m) => m.message.includes("sin lotes previos de USD"))).toBe(false);
   });
+
+  it("should classify sell_without_lots as error with hint", () => {
+    const rates = makeRateMap({ "2025-09-20": "0.91" });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+    const msg = report.messages.find((m) => m.id === "fifo.sell_without_lots");
+    expect(msg).toBeDefined();
+    expect(msg!.severity).toBe("error");
+    expect(msg!.hint).toBeTruthy();
+  });
+
+  it("should classify insufficient_lots as error with hint", () => {
+    const rates = makeRateMap({
+      "2025-03-15": "0.9200",
+      "2025-09-20": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "5", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+    const msg = report.messages.find((m) => m.id === "fifo.insufficient_lots");
+    expect(msg).toBeDefined();
+    expect(msg!.severity).toBe("error");
+    expect(msg!.hint).toBeTruthy();
+  });
+
+  it("should show reconciliation hint only when FX disposals exist", () => {
+    const rates = makeRateMap({
+      "2025-01-10": "0.9200",
+      "2025-06-15": "0.9500",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
+          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+        }),
+        makeTrade({
+          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
+          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+    const hint = report.messages.find((m) => m.id === "report.competitor_reconciliation");
+    expect(hint).toBeDefined();
+    expect(hint!.severity).toBe("info");
+  });
+
+  it("should NOT show reconciliation hint when skipFx is true", () => {
+    const rates = makeRateMap({
+      "2025-01-10": "0.9200",
+      "2025-06-15": "0.9500",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
+          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+        }),
+        makeTrade({
+          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
+          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, { skipFx: true });
+    const hint = report.messages.find((m) => m.id === "report.competitor_reconciliation");
+    expect(hint).toBeUndefined();
+  });
+
+  it("should NOT show reconciliation hint for EUR-only trades (no FX disposals)", () => {
+    const rates = makeRateMap({
+      "2025-03-15": "0.9200",
+      "2025-09-20": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+    const hint = report.messages.find((m) => m.id === "report.competitor_reconciliation");
+    expect(hint).toBeUndefined();
+  });
+
+  it("should keep warnings and messages in sync", () => {
+    const rates = makeRateMap({ "2025-09-20": "0.91" });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+    const nonHintMessages = report.messages.filter((m) => m.id !== "report.competitor_reconciliation");
+    expect(report.warnings.length).toBe(nonHintMessages.length);
+  });
 });
