@@ -204,12 +204,11 @@ When adding a new section (like 721), follow this checklist:
 - **ISIN guard**: FOP trades on MEFF often have empty ISIN. The wash-sale matcher must skip disposals with empty ISIN to avoid false matches against unrelated securities
 
 ### FX Phantom Gains from Missing Prior-Year Lots (Hard Trace)
-- Multi-currency accounts (no auto-convert) generate implicit FX events when trading non-EUR securities
-- If the user's Flex Query only covers the declaration year, prior-year FCY acquisitions are missing → no lots exist when the engine tries to consume them
+- If a user's Flex Query only covers the declaration year, prior-year FCY acquisitions are missing → no lots exist when the engine tries to consume them
 - **Old behavior**: `costBasisEur = 0` → fabricated huge phantom profits (e.g. 48K EUR)
 - **Fix**: When lots are missing (both "sin lotes previos" and "insuficientes" paths in fx-fifo.ts), set `costBasisEur = proceedsEur` → zero gain. The warning still fires so users know data is incomplete.
-- **Detection**: `detectAutoConvert()` uses 4 signals (FXCONV markers, absence of manual CASH trades, amount-correlation heuristic). If it returns false, securities trades generate FX events.
-- **User impact**: Users with auto-convert accounts (FXCONV/AFx markers) are unaffected. Only manual multi-currency accounts with incomplete history trigger this.
+- **FX event sources**: Only explicit CASH trades (non-FXCONV/AFx) generate FX events. Securities trades do NOT generate implicit FX events — this avoids double-counting and phantom gains entirely.
+- FXCONV/AFx trades are filtered per-trade by `isFxconv()`. No global auto-convert detection.
 
 ### Logo vs Favicon (Hard Trace)
 - `src/web/public/logo.png` = the realistic bull app logo (1.9MB, 1024×1024). Used for splash screen and top-bar branding.
@@ -238,11 +237,13 @@ When adding a new section (like 721), follow this checklist:
 - Art. 80 double taxation deduction is subtly affected (lower `totalSavingsBase` when FX gains are skipped) — accepted known limitation matching competitors
 - DGT V2324-10 is the specific consulta vinculante confirming FIFO for currency — cite specifically, not generic "consultas vinculantes"
 
-### Auto-Convert Detection Limitations
-- `detectAutoConvert()` returns true when AFx markers exist, preventing securities trades from generating implicit FX events
-- **USD deposits** (`type="Deposits/Withdrawals"` in cashTransactions) do NOT create FX acquisition lots in auto-convert accounts because `extractCashFxEvents()` returns `[]` when `autoConvert=true`
-- This means a user who deposits USD directly, then converts it manually, will get "UNKNOWN" lot IDs with gain=0 — correct conservative treatment but confusing UX
-- **Future enhancement**: USD deposits should always create FX acquisition lots regardless of auto-convert status
+### FX Engine Simplification (Hard Trace — v0.39.2)
+- `detectAutoConvert()` was REMOVED — it produced false positives on hybrid accounts (mix of manual + AFx trades), causing ALL operations to disappear
+- **Root cause**: A binary global flag can't represent accounts that mix manual conversions and auto-convert. One AFx trade anywhere → entire account classified as auto-convert → all manual CASH trades skipped
+- **New approach**: Per-trade filtering only. `isFxconv()` skips FXCONV/AFx-marked trades individually. Manual CASH trades always generate FX events regardless of what other trades exist.
+- Securities trades (STK, OPT, etc.) NEVER generate implicit FX events — this matches competitor behavior and avoids phantom gains from missing prior-year lots
+- `extractCashFxEvents()` always processes dividends/interest (no `autoConvert` param) — FCY income creates acquisition lots
+- **Impact**: Pure auto-convert accounts still correct (all CASH trades have AFx → all skipped). Hybrid accounts now correct (manual conversions processed, AFx skipped). The only "loss" is theoretical implicit FX from holding FCY across stock trades — but that was phantom gains anyway due to missing lots.
 
 ## Project Philosophy
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { FxFifoEngine } from "../../src/engine/fx-fifo.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 import { degiroParser } from "../../src/parsers/degiro.js";
 import { binanceParser } from "../../src/parsers/binance.js";
 import { coinbaseParser } from "../../src/parsers/coinbase.js";
@@ -202,9 +203,12 @@ describe("fixture file integration", () => {
       expect(afxTrades.every((t) => t.exchange === "IDEALFX")).toBe(true);
     });
 
-    it("should detect auto-convert via AFx notes", () => {
+    it("should skip AFx trades and produce zero FX events from CASH", () => {
       const r = parseIbkrFlexXml(xml);
-      expect(FxFifoEngine.detectAutoConvert(r.trades)).toBe(true);
+      const rateMap: EcbRateMap = new Map([["2025-03-17", new Map([["USD", "0.92"]])]]);
+      const events = FxFifoEngine.extractFxEvents(r.trades, rateMap);
+      // All CASH trades have AFx notes → all skipped by isFxconv
+      expect(events).toHaveLength(0);
     });
 
     it("should have 5 STK trades across EUR and USD", () => {
@@ -267,10 +271,12 @@ describe("fixture file integration", () => {
       expect(usd).toHaveLength(5);
     });
 
-    it("should detect auto-convert via heuristic (non-EUR trades, no manual CASH)", () => {
+    it("should produce zero FX events (no manual CASH trades present)", () => {
       const r = parseIbkrFlexXml(xml);
-      // Heuristic: has non-EUR securities but no manual CASH trades → auto-convert
-      expect(FxFifoEngine.detectAutoConvert(r.trades)).toBe(true);
+      const rateMap: EcbRateMap = new Map([["2025-03-17", new Map([["CAD", "0.68"], ["USD", "0.92"]])]]);
+      const events = FxFifoEngine.extractFxEvents(r.trades, rateMap);
+      // No CASH trades at all in this fixture → zero FX events
+      expect(events).toHaveLength(0);
     });
 
     it("should have buy+sell pairs for FIFO testing", () => {

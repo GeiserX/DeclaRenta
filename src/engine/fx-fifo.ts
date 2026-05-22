@@ -72,142 +72,36 @@ export class FxFifoEngine {
   }
 
   /**
-   * Detect whether the account uses automatic currency conversion.
-   * If FXCONV trades exist, the broker converts FCY instantly on each trade —
-   * the user never holds FCY between operations, so securities trades
-   * don't generate independent FX exposure.
-   *
-   * Detection uses multiple signals (any one triggers auto-convert):
-   * 1. FXCONV/CASH RECEIPTS/DISBURSEMENTS in trade descriptions
-   * 2. exchange="FXCONV" on CASH-category trades
-   * 3. Heuristic: non-EUR securities trades exist but zero manual CASH trades
-   *    (user never converted manually → broker does it automatically)
-   * 4. Amount-correlation: all CASH trades on IDEALFX with amounts matching
-   *    same-day securities tradeMoney within 2% (broker converts exact amounts
-   *    needed for settlement). Requires ≥3 CASH trades and 90%+ matches.
-   */
-  static detectAutoConvert(trades: Trade[]): boolean {
-    // Signal 1+2: Explicit FXCONV markers in trade data
-    if (trades.some((t) => t.assetCategory === "CASH" && FxFifoEngine.isFxconv(t))) {
-      return true;
-    }
-
-    // Signal 3: Heuristic — non-EUR stock trades exist but no manual CASH trades at all
-    const hasNonEurSecurities = trades.some(
-      (t) => t.currency !== "EUR" && t.assetCategory !== "CASH" && t.assetCategory !== "WAR",
-    );
-    const hasManualCashTrades = trades.some(
-      (t) => t.assetCategory === "CASH" && !FxFifoEngine.isFxconv(t),
-    );
-
-    if (hasNonEurSecurities && !hasManualCashTrades) {
-      return true;
-    }
-
-    // Signal 4: Amount-correlation heuristic for missing Notes/AFx marker.
-    // Auto-convert CASH trades have amounts that closely match same-day
-    // securities tradeMoney (broker converts exactly what's needed).
-    // Manual conversions are typically bulk round amounts unrelated to trades.
-    if (hasNonEurSecurities && hasManualCashTrades) {
-      const cashTrades = trades.filter(
-        (t) => t.assetCategory === "CASH" && !FxFifoEngine.isFxconv(t) && t.currency !== "EUR",
-      );
-      const allOnIdealfx = cashTrades.every(
-        (t) => (t.exchange || "").toUpperCase() === "IDEALFX",
-      );
-
-      if (allOnIdealfx && cashTrades.length >= 3) {
-        const nonEurStk = trades.filter(
-          (t) => t.assetCategory !== "CASH" && t.assetCategory !== "WAR" && t.currency !== "EUR",
-        );
-        let matchedCount = 0;
-        const usedStkIds = new Set<string>();
-
-        for (const cash of cashTrades) {
-          const cashDate = normalizeDate(cash.tradeDate);
-          const cashQty = new Decimal(cash.quantity).abs();
-
-          for (const stk of nonEurStk) {
-            if (usedStkIds.has(stk.tradeID)) continue;
-            if (normalizeDate(stk.tradeDate) !== cashDate) continue;
-            const stkMoney = new Decimal(stk.tradeMoney).abs();
-            if (stkMoney.isZero()) continue;
-
-            const ratio = cashQty.div(stkMoney);
-            if (ratio.gte("0.98") && ratio.lte("1.02")) {
-              matchedCount++;
-              usedStkIds.add(stk.tradeID);
-              break;
-            }
-          }
-        }
-
-        if (matchedCount / cashTrades.length >= 0.90) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  /**
    * Extract FX events from trades.
    *
-   * Two sources of FX events:
-   * 1. CASH trades (assetCategory=CASH): direct forex conversions
-   *    - BUY CASH in USD = acquiring USD (add lot)
-   *    - SELL CASH in USD = disposing USD (consume lots)
-   * 2. Securities trades in non-EUR (ONLY in multi-currency accounts):
-   *    - BUY stock in USD = spending USD (dispose FCY lots)
-   *    - SELL stock in USD = receiving USD (add FCY lot)
+   * Only explicit CASH trades generate FX events:
+   *   - BUY CASH in USD = acquiring USD (add lot)
+   *   - SELL CASH in USD = disposing USD (consume lots)
    *
-   * Auto-convert accounts: only manual CASH conversions generate FX events.
-   * Stock trades are settled instantly via FXCONV — no FX exposure.
+   * FXCONV/AFx-marked trades (automatic broker conversions for settlement)
+   * are skipped per-trade via isFxconv(). No global auto-convert detection —
+   * accounts can mix manual and automatic conversions freely.
+   *
+   * Securities trades do NOT generate implicit FX events. This avoids
+   * double-counting (the broker's AFx conversion already covers settlement)
+   * and eliminates phantom gains from missing prior-year lots.
    */
   static extractFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
-    const autoConvert = FxFifoEngine.detectAutoConvert(trades);
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
       if (trade.currency === "EUR") continue;
+      if (trade.assetCategory !== "CASH") continue;
+      if (FxFifoEngine.isFxconv(trade)) continue;
 
-      // Use settlement date for FX events: stock purchases and their corresponding
-      // forex conversions settle on the same date (T+2/T+1), eliminating false
-      // "missing lots" warnings caused by trade-date ordering mismatches.
       const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
+      const quantity = new Decimal(trade.quantity).abs();
 
-      if (trade.assetCategory === "CASH") {
-        // Skip all CASH trades in auto-convert accounts: the underlying FCY was
-        // created/consumed by the auto-convert mechanism (AFx), so manual
-        // conversions are just cleanup moves with no independent FX exposure.
-        if (autoConvert) continue;
-        if (FxFifoEngine.isFxconv(trade)) continue;
-
-        const quantity = new Decimal(trade.quantity).abs();
-        if (trade.buySell === "BUY") {
-          events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion" });
-        } else {
-          events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion" });
-        }
-      } else if (!autoConvert && trade.assetCategory !== "WAR") {
-        // Multi-currency account: securities trade = implicit FX event
-        const tradeMoney = new Decimal(trade.tradeMoney).abs();
-        if (tradeMoney.isZero()) continue;
-
-        if (trade.buySell === "BUY") {
-          events.push({ date, currency: trade.currency, quantity: tradeMoney.negated(), ecbRate, trigger: "stock_purchase" });
-        } else {
-          events.push({ date, currency: trade.currency, quantity: tradeMoney, ecbRate, trigger: "stock_sale" });
-        }
-
-        // Commission also consumes FCY (paid in commissionCurrency)
-        const commission = new Decimal(trade.commission).abs();
-        if (commission.greaterThan(0) && trade.commissionCurrency !== "EUR") {
-          const commRate = getEcbRate(rateMap, date, trade.commissionCurrency);
-          events.push({ date, currency: trade.commissionCurrency, quantity: commission.negated(), ecbRate: commRate, trigger: "commission" });
-        }
+      if (trade.buySell === "BUY") {
+        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion" });
+      } else {
+        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion" });
       }
     }
 
@@ -217,12 +111,10 @@ export class FxFifoEngine {
   /**
    * Extract FX events from cash transactions (dividends, interest).
    *
-   * Only relevant for multi-currency accounts where FCY is held.
-   * Auto-convert accounts don't hold FCY — dividends/interest are
-   * converted instantly, so no FX lots are created.
+   * Dividends/interest received in FCY create acquisition lots;
+   * withholding tax and fees paid in FCY consume lots.
    */
-  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap, autoConvert: boolean): FxEvent[] {
-    if (autoConvert) return [];
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
 
     const events: FxEvent[] = [];
 
