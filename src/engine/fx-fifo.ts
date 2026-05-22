@@ -7,7 +7,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { FxLot, FxDisposal, FxTrigger } from "../types/tax.js";
+import type { FxLot, FxDisposal, FxTrigger, TaxMessage } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "./ecb.js";
@@ -28,6 +28,14 @@ export class FxFifoEngine {
   private disposals: FxDisposal[] = [];
   private nextLotId = 1;
   warnings: string[] = [];
+  /** Structured messages with severity, hint, and context */
+  messages: TaxMessage[] = [];
+
+  private emit(msg: TaxMessage): void {
+    this.messages.push(msg);
+    this.warnings.push(msg.message);
+  }
+
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
   /**
@@ -57,7 +65,7 @@ export class FxFifoEngine {
     }
 
     for (const [currency, { count, totalQty }] of this.fxMissing) {
-      this.warnings.push(`⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`);
+      this.emit({ id: "fx.missing_prior_lots", severity: "info", message: `⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`, hint: "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).", context: { currency, count: count.toString(), totalQuantity: totalQty.toFixed(2) } });
     }
 
     return this.disposals;

@@ -271,31 +271,50 @@ export async function generatePdfWebReport(
     contentEndY = lastTableY(doc, contentEndY);
   }
 
-  // --- Section 5: Warnings ---
-  if (report.warnings.length > 0) {
+  // --- Section 5: Messages (three-tier) ---
+  const msgs = report.messages;
+  if (msgs.length > 0) {
     const y5 = contentEndY + 10;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(C.header);
-    doc.text(t("pdf.section_warnings"), MARGIN, y5);
+    doc.text(t("pdf.section_messages"), MARGIN, y5);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(C.danger);
     let wy = y5 + 6;
-    for (const w of report.warnings) {
-      const lines = doc.splitTextToSize(w, CONTENT_W) as string[];
-      const blockH = lines.length * 4;
-      if (wy + blockH > PAGE_H - MARGIN - 20) {
-        doc.addPage();
-        wy = MARGIN + 10;
-      }
-      doc.text(lines, MARGIN, wy);
-      wy += blockH;
-    }
 
-    // Warnings use manual text — update contentEndY from the text cursor, not lastAutoTable
+    const renderGroup = (items: typeof msgs, label: string, color: [number, number, number]) => {
+      if (items.length === 0) return;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...color);
+      if (wy + 8 > PAGE_H - MARGIN - 20) { doc.addPage(); wy = MARGIN + 10; }
+      doc.text(label, MARGIN, wy);
+      wy += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      for (const m of items) {
+        doc.setTextColor(...color);
+        const text = m.message + (m.hint ? ` → ${m.hint}` : "");
+        const lines = doc.splitTextToSize(text, CONTENT_W) as string[];
+        const blockH = lines.length * 4;
+        if (wy + blockH > PAGE_H - MARGIN - 20) { doc.addPage(); wy = MARGIN + 10; }
+        doc.text(lines, MARGIN, wy);
+        wy += blockH;
+      }
+      wy += 2;
+    };
+
+    const errors = msgs.filter((m) => m.severity === "error");
+    const warnings = msgs.filter((m) => m.severity === "warning");
+    const infos = msgs.filter((m) => m.severity === "info");
+
+    renderGroup(errors, `⛔ ${errors.length} error(es)`, [220, 38, 38]);
+    renderGroup(warnings, `⚠ ${warnings.length} aviso(s)`, [180, 120, 0]);
+    renderGroup(infos, `ℹ ${infos.length} nota(s)`, [120, 120, 140]);
+
     contentEndY = wy;
   }
 

@@ -10,6 +10,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
   return {
     year: 2025,
     warnings: [],
+    messages: [],
     capitalGains: {
       transmissionValue: new Decimal("10000"),
       acquisitionValue: new Decimal("8000"),
@@ -133,8 +134,11 @@ describe("generatePdfWebReport", () => {
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
-  it("handles warnings section without throwing", async () => {
-    const report = makeReport({ warnings: ["Short sale detected: TSLA", "Missing lot: NVDA"] });
+  it("handles messages section without throwing", async () => {
+    const report = makeReport({ messages: [
+      { id: "fifo.sell_without_lots", severity: "error", message: "Short sale detected: TSLA" },
+      { id: "fifo.insufficient_lots", severity: "error", message: "Missing lot: NVDA" },
+    ] });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
@@ -284,7 +288,7 @@ describe("generatePdfWebReport", () => {
     expect(blob.size).toBeGreaterThan(20_000);
   });
 
-  it("handles warnings long enough to overflow onto a new page", async () => {
+  it("handles messages long enough to overflow onto a new page", async () => {
     const longWarning = "Warning: missing acquisition cost data for ticker ".padEnd(300, "X");
     const report = makeReport({
       capitalGains: {
@@ -296,12 +300,12 @@ describe("generatePdfWebReport", () => {
       },
       dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
-      warnings: Array.from({ length: 20 }, (_, i) => `${i + 1}: ${longWarning}`),
+      messages: Array.from({ length: 20 }, (_, i) => ({ id: "test.overflow", severity: "warning" as const, message: `${i + 1}: ${longWarning}` })),
     });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
-  it("pushes ECB footnote to a new page when warnings fill the page near the bottom", async () => {
+  it("pushes ECB footnote to a new page when messages fill the page near the bottom", async () => {
     const mediumWarning = "Warning: ECB rate not found, using fallback rate for ".padEnd(200, "X");
     const report = makeReport({
       capitalGains: {
@@ -313,7 +317,7 @@ describe("generatePdfWebReport", () => {
       },
       dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
-      warnings: Array.from({ length: 18 }, (_, i) => `${i + 1}: ${mediumWarning}`),
+      messages: Array.from({ length: 18 }, (_, i) => ({ id: "test.overflow", severity: "info" as const, message: `${i + 1}: ${mediumWarning}` })),
     });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });

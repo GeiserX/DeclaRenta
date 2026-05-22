@@ -17,6 +17,7 @@ import type {
   OptionExercise,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
+import type { TaxMessage } from "../types/tax.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -83,6 +84,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
+  const parserMessages: TaxMessage[] = [];
   const importantUnparsed: Record<string, string> = {
     TransfersInTransit: "transferencias en tránsito",
     UnbookedTrades: "operaciones no liquidadas",
@@ -93,6 +95,13 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     for (const [section, desc] of Object.entries(importantUnparsed)) {
       if (stmt[section] !== undefined && stmt[section] !== null) {
         parserWarnings.push(`⚠ Sección "${section}" encontrada en el Flex Query pero no procesada (${desc}). Revisa manualmente.`);
+        parserMessages.push({
+          id: `parser.unparsed_section.${section}`,
+          severity: "info",
+          message: `⚠ Sección "${section}" encontrada en el Flex Query pero no procesada (${desc}). Revisa manualmente.`,
+          hint: "Esta sección no afecta al cálculo fiscal. Si crees que debería incluirse, contacta con soporte.",
+          context: { section },
+        });
       }
     }
   }
@@ -116,6 +125,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
     optionExercises: optionExercises.length > 0 ? optionExercises : undefined,
     parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
+    parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
 }
 

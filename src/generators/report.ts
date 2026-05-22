@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { FlexStatement } from "../types/ibkr.js";
-import type { TaxSummary } from "../types/tax.js";
+import type { TaxSummary, TaxMessage } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
@@ -18,18 +18,36 @@ import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { getEcbRate } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 
+const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
+
+function filterByYear<T>(items: T[], yearStr: string, getText: (item: T) => string, getContext?: (item: T) => Record<string, string> | undefined): T[] {
+  return items.filter((item) => {
+    const ctx = getContext?.(item);
+    if (ctx?.date) return ctx.date.startsWith(yearStr);
+    const dateMatch = getText(item).match(DATE_RE);
+    if (!dateMatch) return true;
+    return dateMatch[1] === yearStr;
+  });
+}
+
+export interface ReportOptions {
+  skipFx?: boolean;
+}
+
 /**
  * Generate a complete tax report from an IBKR Flex Statement.
  *
  * @param statement - Parsed IBKR Flex Query
  * @param rateMap - Pre-fetched ECB exchange rates
  * @param year - Tax year
+ * @param options - Optional config (skipFx disables FX FIFO engine)
  * @returns TaxSummary with all casilla values calculated
  */
 export function generateTaxReport(
   statement: FlexStatement,
   rateMap: EcbRateMap,
   year: number,
+  options?: ReportOptions,
 ): TaxSummary {
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
@@ -98,15 +116,32 @@ export function generateTaxReport(
 
   // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
   // Auto-convert accounts (FXCONV present) don't hold FCY — no implicit FX events from trades
-  const fxEngine = new FxFifoEngine();
-  const autoConvert = FxFifoEngine.detectAutoConvert(statement.trades);
-  const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
-  const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap, autoConvert);
-  const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
-  const fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
+  // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
+  let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
+  let fxTransmissionValue = new Decimal(0);
+  let fxAcquisitionValue = new Decimal(0);
+  let fxWarningsList: string[] = [];
+  let fxMessagesList: TaxMessage[] = [];
 
-  const fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
-  const fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+  if (!options?.skipFx) {
+    const fxEngine = new FxFifoEngine();
+    const autoConvert = FxFifoEngine.detectAutoConvert(statement.trades);
+    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
+    const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap, autoConvert);
+    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
+    fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
+
+    fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
+    fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+
+    // Only show FX warnings when there are FX disposals in the target year.
+    // Undated warnings (missing lots summaries) refer to events across all years —
+    // showing them when the target year has zero FX activity is misleading noise.
+    if (fxDisposals.length > 0) {
+      fxWarningsList = filterByYear(fxEngine.warnings, yearStr, (w) => w);
+      fxMessagesList = filterByYear(fxEngine.messages, yearStr, (m) => m.message, (m) => m.context);
+    }
+  }
 
   // 5. Double taxation. Art. 80 caps the deduction by the effective average
   // Spanish rate on the relevant savings-tax base, not by standalone country
@@ -118,24 +153,29 @@ export function generateTaxReport(
   const doubleTaxation = calculateDoubleTaxation(dividendEntries, totalSavingsBase);
 
   // Filter warnings to those relevant to the selected year
-  const yearWarnings = fifoEngine.warnings.filter((w) => {
-    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-    if (!dateMatch) return true; // No date in warning → always show
-    return dateMatch[1] === yearStr;
-  });
-
-  const fxWarnings = fxEngine.warnings.filter((w) => {
-    const dateMatch = w.match(/\b(\d{4})-\d{2}-\d{2}\b/);
-    if (!dateMatch) return true;
-    return dateMatch[1] === yearStr;
-  });
+  const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
+  const yearMessages = filterByYear(fifoEngine.messages, yearStr, (m) => m.message, (m) => m.context);
 
   // Prepend parser warnings (unparsed sections, etc.)
-  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarnings];
+  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarningsList];
+
+  // Aggregate structured messages from all sources
+  const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList];
+
+  // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)
+  if (!options?.skipFx && fxDisposals.length > 0) {
+    allMessages.push({
+      id: "report.competitor_reconciliation",
+      severity: "info",
+      message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 37.1.l LIRPF).",
+      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+    });
+  }
 
   return {
     year,
     warnings: allWarnings,
+    messages: allMessages,
     capitalGains: {
       transmissionValue,
       acquisitionValue,

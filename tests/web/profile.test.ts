@@ -83,9 +83,25 @@ describe("getProfile / saveProfile", () => {
       ccaa: "Madrid",
       telefono: "600123456",
       year: 2025,
+      monodivisa: false,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
+  });
+
+  it("should round-trip monodivisa: true via saveProfile then getProfile", () => {
+    const data = {
+      nif: "12345678Z",
+      apellidos: "Garcia",
+      nombre: "Juan",
+      ccaa: "Madrid",
+      telefono: "600123456",
+      year: 2025,
+      monodivisa: true,
+    };
+    saveProfile(data);
+    expect(getProfile()).toEqual(data);
+    expect(getProfile().monodivisa).toBe(true);
   });
 
   it("should merge partial stored JSON with defaults", () => {
@@ -94,6 +110,15 @@ describe("getProfile / saveProfile", () => {
     expect(profile.nif).toBe("12345678Z");
     expect(profile.apellidos).toBe("");
     expect(profile.year).toBe(new Date().getFullYear() - 1);
+  });
+
+  it("should default monodivisa to false for pre-existing profiles without the key", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({
+      nif: "12345678Z", apellidos: "Garcia", nombre: "Juan",
+      ccaa: "Madrid", telefono: "600123456", year: 2024,
+    }));
+    const profile = getProfile();
+    expect(profile.monodivisa).toBe(false);
   });
 
   it("should return defaults when stored JSON is corrupted", () => {

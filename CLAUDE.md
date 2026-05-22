@@ -229,6 +229,49 @@ When adding a new section (like 721), follow this checklist:
 - Rate source: `https://data-api.ecb.europa.eu/service/data/EXR`
 - **Early-January lookback (Hard Trace)**: `fetchEcbRates(year)` only fetches rates for that calendar year. Trades on Jan 1-2 trigger a 10-day lookback into late December of the *previous* year, but those rates won't exist in the map unless `year - 1` is also fetched. **Both `main.ts` and `cli/index.ts` must add `minYear - 1` to the years set** before the fetch loop. This bug surfaces every time a new parser is added with sample data containing early-January trades.
 
+### Monodivisa Mode
+- Optional toggle in fiscal profile (`monodivisa: boolean`) + CLI `--monodivisa` flag
+- When active: skips the FX FIFO engine entirely (`skipFx: true` in `ReportOptions`)
+- Capital gains still computed correctly in EUR via ECB rates — only separate FX lot tracking is skipped
+- Matches behavior of Autodeclaro/Taxdown (competitors don't calculate Art. 37.1.l FX gains)
+- Warning text must say "distorsionar" not "infraestimar" — monodivisa can both understate (miss FX gains) and overstate (miss FX losses)
+- Art. 80 double taxation deduction is subtly affected (lower `totalSavingsBase` when FX gains are skipped) — accepted known limitation matching competitors
+- DGT V2324-10 is the specific consulta vinculante confirming FIFO for currency — cite specifically, not generic "consultas vinculantes"
+
+### Auto-Convert Detection Limitations
+- `detectAutoConvert()` returns true when AFx markers exist, preventing securities trades from generating implicit FX events
+- **USD deposits** (`type="Deposits/Withdrawals"` in cashTransactions) do NOT create FX acquisition lots in auto-convert accounts because `extractCashFxEvents()` returns `[]` when `autoConvert=true`
+- This means a user who deposits USD directly, then converts it manually, will get "UNKNOWN" lot IDs with gain=0 — correct conservative treatment but confusing UX
+- **Future enhancement**: USD deposits should always create FX acquisition lots regardless of auto-convert status
+
+## Project Philosophy
+
+### Correctness with User Comfort
+- DeclaRenta must be 100% fiscally correct by default
+- BUT users should not be alarmed by non-critical warnings or confusing technical output
+- "UNKNOWN" lot IDs and multi-line FX warnings for zero-gain events are inelegant — users don't need to worry about these
+- **Planned: Three-tier message system** (info/warn/error) to replace flat warnings:
+  - **Error**: Blocks report validity — missing data that affects tax amounts
+  - **Warning**: User should review but report is still usable — e.g. wash-sale applied, large FX gains
+  - **Info**: Informational only, no action needed — e.g. prior-year lots assumed, auto-convert detected
+- Current "sin lotes previos suficientes" with gain=0 should be INFO (not warning) — it's handled correctly and needs no user action
+- Goal: users who upload their file and see green results should feel confident, not anxious
+
+### Actionable Explanations (Every Tier)
+- Every message (error, warning, info) MUST include a brief, localized explanation of **what likely caused it** and **what the user can try**
+- Common root causes to suggest: missing columns in the export, incomplete date range (doesn't cover prior years' acquisitions), wrong report type selected from broker
+- Example: "Venta sin lotes previos — ¿has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra."
+- These hints are rendered in the user's active locale (use `t()` keys, never hardcoded Spanish)
+- The tone is helpful ("try this"), never blaming ("you forgot to...")
+
+### Competitor Reconciliation Hint
+- When the final results page is shown, include a subtle note (not a warning) explaining:
+  - If other tools (Autodeclaro, Taxdown, etc.) show a different amount, it's likely because they use "monodivisa" mode (they don't calculate FX gains per Art. 37.1.l LIRPF)
+  - Point the user to the monodivisa toggle in their fiscal profile to compare
+  - Wording: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio. Puedes activar el modo monodivisa en tu perfil fiscal para comparar."
+- This hint should appear near the capital gains total, rendered as a collapsible "info" note (not a warning)
+- It validates the user's concern ("your numbers are correct, here's why they differ") rather than creating doubt
+
 ## Development
 
 ```bash

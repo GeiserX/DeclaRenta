@@ -221,7 +221,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     const isNetRow = c.code === "";
 
     return `
-      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}">
+      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}"${hasDetail ? ` tabindex="0" role="button" aria-expanded="false"` : ""}>
         <div class="casilla-header">
           ${c.code ? `<span class="casilla-code">${c.code}</span>` : ""}
           <span class="casilla-concept">${isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0])}</span>
@@ -232,27 +232,58 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       </div>`;
   }).join("");
 
-  const warnings = [
-    report.capitalGains.blockedLosses.greaterThan(0)
-      ? `<p class="warning">${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>`
-      : "",
-    report.warnings.length > 0
-      ? `<details><summary>${t("casilla.warnings_count", { count: String(report.warnings.length) })}</summary><ul>${report.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>`
-      : "",
-  ].filter(Boolean).join("");
+  const blockedWarning = report.capitalGains.blockedLosses.greaterThan(0)
+    ? `<p class="warning">${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>`
+    : "";
 
-  container.innerHTML = `<div class="casilla-cards">${cards}</div>${warnings}`;
+  const msgs = report.messages;
+  const errors = msgs.filter((m) => m.severity === "error");
+  const warns = msgs.filter((m) => m.severity === "warning");
+  const infos = msgs.filter((m) => m.severity === "info");
 
-  // Toggle expansion on click
+  let messagesHtml = "";
+
+  if (errors.length > 0) {
+    messagesHtml += `<div class="msg-section msg-error" role="alert">
+      <div class="msg-header"><span class="msg-icon" role="img" aria-label="${esc(t("messages.errors_title", { count: String(errors.length) }))}">⛔</span> ${t("messages.errors_title", { count: String(errors.length) })}</div>
+      <ul>${errors.map((e) => `<li>${esc(e.message)}${e.hint ? `<span class="msg-hint">${esc(e.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </div>`;
+  }
+
+  if (warns.length > 0) {
+    messagesHtml += `<details class="msg-section msg-warning" open>
+      <summary><span class="msg-icon">⚠️</span> ${t("messages.warnings_title", { count: String(warns.length) })}</summary>
+      <ul>${warns.map((w) => `<li>${esc(w.message)}${w.hint ? `<span class="msg-hint">${esc(w.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </details>`;
+  }
+
+  if (infos.length > 0) {
+    messagesHtml += `<details class="msg-section msg-info">
+      <summary><span class="msg-icon">ℹ️</span> ${t("messages.info_title", { count: String(infos.length) })}</summary>
+      <ul>${infos.map((i) => `<li>${esc(i.message)}${i.hint ? `<span class="msg-hint">${esc(i.hint)}</span>` : ""}</li>`).join("")}</ul>
+    </details>`;
+  }
+
+  container.innerHTML = `<div class="casilla-cards">${cards}</div>${blockedWarning}${messagesHtml}`;
+
+  // Toggle expansion on click/keyboard
   container.querySelectorAll<HTMLElement>(".casilla-card.expandable").forEach((card) => {
-    card.addEventListener("click", () => {
+    const toggle = () => {
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
-      const toggle = card.querySelector<HTMLElement>(".casilla-toggle");
+      const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);
-        if (toggle) toggle.innerHTML = isOpen ? "&#9656;" : "&#9662;";
+        card.setAttribute("aria-expanded", String(!isOpen));
+        if (arrow) arrow.innerHTML = isOpen ? "&#9656;" : "&#9662;";
+      }
+    };
+    card.addEventListener("click", toggle);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle();
       }
     });
   });
