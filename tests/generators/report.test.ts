@@ -432,6 +432,8 @@ describe("generateTaxReport", () => {
 
     const report = generateTaxReport(statement, rates, 2025);
     const nonHintMessages = report.messages.filter((m) => m.id !== "report.competitor_reconciliation");
-    expect(report.warnings.length).toBe(nonHintMessages.length);
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- verifying backward compat sync
+    const warningsCount = report.warnings.length;
+    expect(warningsCount).toBe(nonHintMessages.length);
   });
 });
