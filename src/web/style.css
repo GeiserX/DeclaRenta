@@ -1696,6 +1696,46 @@ footer a:hover {
   opacity: 1;
 }
 
+/* Monodivisa callout */
+.monodivisa-callout {
+  grid-column: 1 / -1;
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 0.5rem;
+}
+.monodivisa-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.monodivisa-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--warning);
+  flex-shrink: 0;
+}
+.monodivisa-label {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.monodivisa-detail {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.monodivisa-warning {
+  font-size: 0.78rem;
+  color: var(--warning);
+  margin: 8px 0 0;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
 /* Banner / alert */
 .banner {
   padding: 0.75rem 1rem;

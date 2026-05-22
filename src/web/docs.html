@@ -394,7 +394,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <ul>
           <li><code>--output fichero.json</code> &mdash; Guardar resultado en un fichero en vez de stdout.</li>
           <li><code>--format pdf|csv|json</code> &mdash; Formato de salida (por defecto JSON).</li>
-          <li><code>--broker ibkr|degiro|scalable|etoro|freedom24|coinbase|binance|kraken</code> &mdash; Forzar broker si la auto-detección falla.</li>
+          <li><code>--broker ibkr|degiro|scalable|etoro|revolut|lightyear|freedom24|coinbase|binance|kraken|traderepublic|trading212|mexem|swissquote</code> &mdash; Forzar broker si la auto-detección falla.</li>
           <li><code>--prior-losses fichero.json</code> &mdash; Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF).</li>
         </ul>
 
@@ -593,7 +593,9 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
           <li>Inicia sesión en el <strong>Portal del Cliente</strong> de MEXEM (misma interfaz que IBKR).</li>
           <li>Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>.</li>
           <li>Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions.</li>
+          <li>En cada sección, selecciona <strong>todos los campos disponibles</strong>. Como mínimo, incluye <strong>Notes</strong> en Trades.</li>
           <li>Formato de salida: <strong>XML</strong>.</li>
+          <li>Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto.</li>
           <li>Ejecuta la consulta y descarga el fichero <code>.xml</code>.</li>
         </ol>
         <p><strong>Formato:</strong> XML con estructura <code>&lt;FlexQueryResponse&gt;</code> (idéntico a IBKR).</p>

@@ -16,6 +16,7 @@ export interface FiscalProfile {
   ccaa: string;
   telefono: string;
   year: number;
+  monodivisa: boolean;
 }
 
 const CCAA_LIST = [
@@ -32,6 +33,7 @@ const DEFAULT_PROFILE: FiscalProfile = {
   ccaa: "",
   telefono: "",
   year: new Date().getFullYear() - 1,
+  monodivisa: false,
 };
 
 /** Get the current fiscal profile from localStorage */
@@ -125,6 +127,16 @@ export function initProfile(): void {
           ${yearOptions}
         </select>
       </label>
+      <div class="monodivisa-callout">
+        <label class="monodivisa-toggle">
+          <input type="checkbox" id="profile-monodivisa" ${profile.monodivisa ? "checked" : ""} />
+          <span class="monodivisa-label">
+            <strong>${t("profile.monodivisa_label")}</strong>
+          </span>
+        </label>
+        <p class="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
+        <p class="monodivisa-warning" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
+      </div>
       <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
     </form>
     <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
@@ -138,8 +150,16 @@ export function initProfile(): void {
       ccaa: (document.getElementById("profile-ccaa") as HTMLSelectElement).value,
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
       year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
+      monodivisa: (document.getElementById("profile-monodivisa") as HTMLInputElement).checked,
     };
   }
+
+  // Toggle warning visibility when monodivisa checkbox changes
+  document.getElementById("profile-monodivisa")!.addEventListener("change", () => {
+    const checked = (document.getElementById("profile-monodivisa") as HTMLInputElement).checked;
+    const warning = document.querySelector(".monodivisa-warning") as HTMLElement;
+    if (warning) warning.hidden = !checked;
+  });
 
   // Auto-save on any input change
   document.getElementById("profile-form")!.addEventListener("input", () => {

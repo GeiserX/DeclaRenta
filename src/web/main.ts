@@ -579,7 +579,7 @@ async function processFiles(): Promise<void> {
       }
     }
 
-    const report = generateTaxReport(merged, allRates, year);
+    const report = generateTaxReport(merged, allRates, year, { skipFx: getProfile().monodivisa });
     currentReport = report;
     currentBrokers = detectedBrokers;
 

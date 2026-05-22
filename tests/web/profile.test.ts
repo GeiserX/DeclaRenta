@@ -83,6 +83,7 @@ describe("getProfile / saveProfile", () => {
       ccaa: "Madrid",
       telefono: "600123456",
       year: 2025,
+      monodivisa: false,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
