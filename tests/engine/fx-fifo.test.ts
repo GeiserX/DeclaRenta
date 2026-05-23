@@ -287,6 +287,72 @@ describe("FxFifoEngine", () => {
       // Verify lotId traceability
       expect(disposals[0]!.lotId).toBe("FX-1");
     });
+
+    it("should include commission in cost basis on BUY", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        // Acquire 1000 USD at 0.92 EUR/USD with 3 EUR commission
+        { date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion", commissionEur: new Decimal("3") },
+        // Dispose 1000 USD at 0.95 EUR/USD (no commission on sell)
+        { date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.95"), trigger: "conversion" },
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      // Cost: 1000 * 0.92 + 3 = 923 EUR
+      // Proceeds: 1000 * 0.95 = 950 EUR
+      // Gain: 950 - 923 = 27 EUR (vs 30 without commission)
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("923.00");
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("950.00");
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("27.00");
+    });
+
+    it("should subtract commission from proceeds on SELL", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        // Acquire 1000 USD at 0.92 EUR/USD (no commission)
+        { date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion" },
+        // Dispose 1000 USD at 0.95 EUR/USD with 5 EUR commission
+        { date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.95"), trigger: "conversion", commissionEur: new Decimal("5") },
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      // Cost: 1000 * 0.92 = 920 EUR
+      // Proceeds: 1000 * 0.95 - 5 = 945 EUR
+      // Gain: 945 - 920 = 25 EUR (vs 30 without commission)
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("920.00");
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("945.00");
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("25.00");
+    });
+
+    it("should extract commissionEur from CASH trade commission field", () => {
+      const trades = [
+        makeTrade({ buySell: "BUY", quantity: "1000", commission: "-3.50", commissionCurrency: "EUR" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.commissionEur!.toFixed(2)).toBe("3.50");
+    });
+
+    it("should convert non-EUR commission to EUR via ECB rate", () => {
+      const trades = [
+        makeTrade({ buySell: "BUY", quantity: "1000", commission: "-2", commissionCurrency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      // 2 USD * 0.92 EUR/USD = 1.84 EUR
+      expect(events[0]!.commissionEur!.toFixed(2)).toBe("1.84");
+    });
+
+    it("should not set commissionEur when commission is zero", () => {
+      const trades = [
+        makeTrade({ buySell: "BUY", quantity: "1000", commission: "0" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.commissionEur).toBeUndefined();
+    });
   });
 
   describe("extractCashFxEvents", () => {

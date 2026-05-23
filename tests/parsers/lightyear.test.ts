@@ -399,6 +399,26 @@ describe("lightyearParser", () => {
       expect(fx.quantity).toBe("-500");
     });
 
+    it("should capture commission from EUR leg of conversion pair", () => {
+      const result = lightyearParser.parse(LIGHTYEAR_CSV);
+      const fx = result.trades.find((t) => t.assetCategory === "CASH")!;
+      // Fee=0.21 is on the EUR leg (row 14 in fixture) — parser should extract it
+      expect(fx.commission).toBe("-0.21");
+      expect(fx.commissionCurrency).toBe("EUR");
+    });
+
+    it("should capture commission from FCY leg when fee is there instead", () => {
+      const csv = [
+        "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.",
+        "10/05/2025 12:00:00,CN-0000000098,USD,,Conversion,,USD,,500.00,0.92,2.50,497.50,",
+        "10/05/2025 12:00:00,CN-0000000099,EUR,,Conversion,,EUR,,-460.00,1.087,,,-460.00,",
+      ].join("\n");
+      const result = lightyearParser.parse(csv);
+      const fx = result.trades.find((t) => t.assetCategory === "CASH")!;
+      expect(fx.commission).toBe("-2.5");
+      expect(fx.commissionCurrency).toBe("USD");
+    });
+
     it("should have CASH trades that generate FX events alongside STK trades", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
       const hasCash = result.trades.some((t) => t.assetCategory === "CASH");
