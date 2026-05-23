@@ -21,6 +21,8 @@ export interface FxEvent {
   /** EUR rate at event time (EUR per 1 FCY) */
   ecbRate: Decimal;
   trigger: FxTrigger;
+  /** Commission in EUR (positive = cost paid). Increases cost basis on BUY, reduces proceeds on SELL. */
+  commissionEur?: Decimal;
 }
 
 export class FxFifoEngine {
@@ -98,10 +100,23 @@ export class FxFifoEngine {
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
       const quantity = new Decimal(trade.quantity).abs();
 
+      // Commission increases cost basis (BUY) or reduces proceeds (SELL)
+      let commissionEur: Decimal | undefined;
+      const commAbs = new Decimal(trade.commission).abs();
+      if (commAbs.greaterThan(0)) {
+        const commCcy = trade.commissionCurrency || trade.currency;
+        if (commCcy === "EUR") {
+          commissionEur = commAbs;
+        } else {
+          const commRate = getEcbRate(rateMap, date, commCcy);
+          commissionEur = commAbs.mul(commRate);
+        }
+      }
+
       if (trade.buySell === "BUY") {
-        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion" });
+        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion", commissionEur });
       } else {
-        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion" });
+        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion", commissionEur });
       }
     }
 
@@ -157,13 +172,18 @@ export class FxFifoEngine {
   }
 
   private addLot(event: FxEvent): void {
+    // Commission increases the EUR cost of acquiring the lot
+    const baseCost = event.quantity.mul(event.ecbRate);
+    const totalCost = event.commissionEur ? baseCost.plus(event.commissionEur) : baseCost;
+    const costPerUnit = totalCost.div(event.quantity);
+
     const lot: FxLot = {
       id: `FX-${this.nextLotId++}`,
       currency: event.currency,
       acquireDate: event.date,
       quantity: event.quantity,
-      costPerUnit: event.ecbRate,
-      costInEur: event.quantity.mul(event.ecbRate),
+      costPerUnit,
+      costInEur: totalCost,
     };
 
     if (!this.lots.has(event.currency)) {
@@ -174,6 +194,7 @@ export class FxFifoEngine {
 
   private consumeLots(event: FxEvent): void {
     let remaining = event.quantity.abs();
+    const totalQty = remaining;
     const lots = this.lots.get(event.currency);
 
     if (!lots || lots.length === 0) {
@@ -181,16 +202,15 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      // No lots = prior-year acquisition. Record with zero gain (cost = proceeds)
-      // to avoid fabricating phantom profits from missing historical data.
       const proceedsEur = remaining.mul(event.ecbRate);
+      const netProceeds = event.commissionEur ? proceedsEur.minus(event.commissionEur) : proceedsEur;
       this.disposals.push({
         currency: event.currency,
         disposeDate: event.date,
         acquireDate: event.date,
         quantity: remaining,
-        proceedsEur,
-        costBasisEur: proceedsEur,
+        proceedsEur: netProceeds,
+        costBasisEur: netProceeds,
         gainLossEur: new Decimal(0),
         trigger: event.trigger,
         holdingPeriodDays: 0,
@@ -203,7 +223,12 @@ export class FxFifoEngine {
       const lot = lots[0]!;
       const consumed = Decimal.min(remaining, lot.quantity);
 
-      const proceedsEur = consumed.mul(event.ecbRate);
+      // Commission reduces proceeds, distributed proportionally across consumed lots
+      let proceedsEur = consumed.mul(event.ecbRate);
+      if (event.commissionEur) {
+        const proportion = consumed.div(totalQty);
+        proceedsEur = proceedsEur.minus(event.commissionEur.mul(proportion));
+      }
       const costBasisEur = consumed.mul(lot.costPerUnit);
       const holdingDays = daysBetween(lot.acquireDate, event.date);
 
@@ -235,9 +260,11 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      // Without prior-year lots we cannot determine cost basis.
-      // Use current rate as cost (zero gain) to avoid fabricating phantom profits.
-      const proceedsEur = remaining.mul(event.ecbRate);
+      let proceedsEur = remaining.mul(event.ecbRate);
+      if (event.commissionEur) {
+        const proportion = remaining.div(totalQty);
+        proceedsEur = proceedsEur.minus(event.commissionEur.mul(proportion));
+      }
       this.disposals.push({
         currency: event.currency,
         disposeDate: event.date,
