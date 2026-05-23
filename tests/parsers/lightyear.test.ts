@@ -411,7 +411,7 @@ describe("lightyearParser", () => {
       const csv = [
         "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.",
         "10/05/2025 12:00:00,CN-0000000098,USD,,Conversion,,USD,,500.00,0.92,2.50,497.50,",
-        "10/05/2025 12:00:00,CN-0000000099,EUR,,Conversion,,EUR,,-460.00,1.087,,,-460.00,",
+        "10/05/2025 12:00:00,CN-0000000098,EUR,,Conversion,,EUR,,-460.00,1.087,,,-460.00,",
       ].join("\n");
       const result = lightyearParser.parse(csv);
       const fx = result.trades.find((t) => t.assetCategory === "CASH")!;
