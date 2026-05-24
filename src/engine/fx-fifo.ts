@@ -98,7 +98,21 @@ export class FxFifoEngine {
 
       const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
-      const quantity = new Decimal(trade.quantity).abs();
+
+      // EUR.XXX pairs: quantity is in EUR (base), tradeMoney is in trade.currency (quote).
+      // SELL EUR.XXX = selling EUR = acquiring quote currency.
+      // Non-EUR pairs (e.g. GBP.USD with currency=GBP): quantity is already in trade.currency.
+      const isEurBase = (trade.symbol || trade.description || "").toUpperCase().startsWith("EUR.");
+      let amount: Decimal;
+      let acquiring: boolean;
+
+      if (isEurBase) {
+        amount = new Decimal(trade.tradeMoney).abs();
+        acquiring = trade.buySell === "SELL";
+      } else {
+        amount = new Decimal(trade.quantity).abs();
+        acquiring = trade.buySell === "BUY";
+      }
 
       // Commission increases cost basis (BUY) or reduces proceeds (SELL)
       let commissionEur: Decimal | undefined;
@@ -113,10 +127,10 @@ export class FxFifoEngine {
         }
       }
 
-      if (trade.buySell === "BUY") {
-        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion", commissionEur });
+      if (acquiring) {
+        events.push({ date, currency: trade.currency, quantity: amount, ecbRate, trigger: "conversion", commissionEur });
       } else {
-        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion", commissionEur });
+        events.push({ date, currency: trade.currency, quantity: amount.negated(), ecbRate, trigger: "conversion", commissionEur });
       }
     }
 

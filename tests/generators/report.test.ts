@@ -238,21 +238,20 @@ describe("generateTaxReport", () => {
       "2025-06-15": "0.9500",
     });
 
-    // Include a manual CASH BUY (acquire USD) and CASH SELL (dispose USD)
-    // to bypass auto-convert detection and produce real FX disposals
+    // SELL EUR.USD = selling EUR to acquire USD; BUY EUR.USD = buying EUR by disposing USD
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+          tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
           symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
-          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+          currency: "USD", quantity: "-5000", tradePrice: "1.0870", tradeMoney: "-5435",
+          proceeds: "5435", buySell: "SELL", exchange: "IDEALFX",
         }),
         makeTrade({
-          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+          tradeID: "fx-buy", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
           symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
-          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+          currency: "USD", quantity: "5000", tradePrice: "1.0526", tradeMoney: "5263",
+          proceeds: "-5263", buySell: "BUY", exchange: "IDEALFX",
         }),
       ],
     });

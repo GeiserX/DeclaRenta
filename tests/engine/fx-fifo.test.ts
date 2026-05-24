@@ -181,22 +181,38 @@ describe("FxFifoEngine", () => {
   });
 
   describe("extractFxEvents", () => {
-    it("should extract BUY CASH as positive FX event", () => {
-      const trades = [makeTrade({ buySell: "BUY", quantity: "1000" })];
+    it("EUR.USD SELL = acquiring USD (positive event, uses tradeMoney)", () => {
+      const trades = [makeTrade({ buySell: "SELL", quantity: "-998", tradeMoney: "-1080.24" })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("1000");
+      expect(events[0]!.quantity.toString()).toBe("1080.24");
       expect(events[0]!.trigger).toBe("conversion");
     });
 
-    it("should extract SELL CASH as negative FX event", () => {
-      const trades = [makeTrade({ buySell: "SELL", quantity: "1000" })];
+    it("EUR.USD BUY = disposing USD (negative event, uses tradeMoney)", () => {
+      const trades = [makeTrade({ buySell: "BUY", quantity: "1000", tradeMoney: "1080" })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("-1000");
+      expect(events[0]!.quantity.toString()).toBe("-1080");
       expect(events[0]!.trigger).toBe("conversion");
+    });
+
+    it("non-EUR pair: BUY = acquiring (positive event, uses quantity)", () => {
+      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "BUY", quantity: "5000", tradeMoney: "5000" })];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("5000");
+    });
+
+    it("non-EUR pair: SELL = disposing (negative event, uses quantity)", () => {
+      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "SELL", quantity: "-5000", tradeMoney: "-5000" })];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("-5000");
     });
 
     it("should skip FXCONV trades (automatic conversions)", () => {
@@ -218,25 +234,25 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.date).toBe("2025-03-15");
     });
 
-    it("should handle negative quantity on BUY via .abs() normalization", () => {
+    it("should handle negative tradeMoney on EUR.USD SELL via .abs()", () => {
       const trades = [
-        makeTrade({ buySell: "BUY", quantity: "-500" }),
+        makeTrade({ buySell: "SELL", quantity: "-500", tradeMoney: "-540" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("500");
+      expect(events[0]!.quantity.toString()).toBe("540");
     });
 
     it("should only extract CASH trades, ignoring STK trades entirely", () => {
       const trades = [
-        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "10000", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-998", tradeMoney: "-1080", currency: "USD" }),
         makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "5000", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
       expect(events).toHaveLength(1);
       expect(events[0]!.trigger).toBe("conversion");
-      expect(events[0]!.quantity.toString()).toBe("10000");
+      expect(events[0]!.quantity.toString()).toBe("1080");
     });
 
     it("should skip EUR trades", () => {
@@ -446,11 +462,11 @@ describe("FxFifoEngine", () => {
     it("should skip FXCONV-described CASH trades", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
-        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("1000");
+      expect(events[0]!.quantity.toString()).toBe("1080");
     });
 
     it("should skip AFx-noted CASH trades", () => {
@@ -496,14 +512,14 @@ describe("FxFifoEngine", () => {
 
     it("should handle hybrid account: manual conversions processed, AFx skipped", () => {
       const trades = [
-        makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "500", currency: "USD" }),
-        makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "BUY", quantity: "1000", currency: "USD" }),
+        makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "SELL", quantity: "-500", tradeMoney: "-540", currency: "USD" }),
+        makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
         makeTrade({ tradeID: "3", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "800", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      // Only the manual CASH BUY (tradeID 2) generates an event; AFx skipped, STK ignored
+      // Only the manual CASH SELL (tradeID 2) generates an event; AFx skipped, STK ignored
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("1000");
+      expect(events[0]!.quantity.toString()).toBe("1080");
       expect(events[0]!.trigger).toBe("conversion");
     });
 
