@@ -76,9 +76,12 @@ export class FxFifoEngine {
   /**
    * Extract FX events from trades.
    *
-   * Only explicit CASH trades generate FX events:
-   *   - BUY CASH in USD = acquiring USD (add lot)
-   *   - SELL CASH in USD = disposing USD (consume lots)
+   * Only explicit CASH trades generate FX events. For BASE.QUOTE pairs:
+   *   - If trade.currency matches the quote: quantity is in the base (wrong
+   *     currency), so we use tradeMoney (in quote = trade.currency) and invert
+   *     polarity (SELL base = acquiring quote, BUY base = disposing quote).
+   *   - If trade.currency matches the base: quantity is already in
+   *     trade.currency, BUY = acquiring, SELL = disposing.
    *
    * FXCONV/AFx-marked trades (automatic broker conversions for settlement)
    * are skipped per-trade via isFxconv(). No global auto-convert detection —
@@ -98,7 +101,18 @@ export class FxFifoEngine {
 
       const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
-      const quantity = new Decimal(trade.quantity).abs();
+
+      const quoteIsTarget = FxFifoEngine.isCurrencyQuote(trade);
+      let amount: Decimal;
+      let acquiring: boolean;
+
+      if (quoteIsTarget) {
+        amount = new Decimal(trade.tradeMoney).abs();
+        acquiring = trade.buySell === "SELL";
+      } else {
+        amount = new Decimal(trade.quantity).abs();
+        acquiring = trade.buySell === "BUY";
+      }
 
       // Commission increases cost basis (BUY) or reduces proceeds (SELL)
       let commissionEur: Decimal | undefined;
@@ -113,14 +127,27 @@ export class FxFifoEngine {
         }
       }
 
-      if (trade.buySell === "BUY") {
-        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion", commissionEur });
+      if (acquiring) {
+        events.push({ date, currency: trade.currency, quantity: amount, ecbRate, trigger: "conversion", commissionEur });
       } else {
-        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion", commissionEur });
+        events.push({ date, currency: trade.currency, quantity: amount.negated(), ecbRate, trigger: "conversion", commissionEur });
       }
     }
 
     return events;
+  }
+
+  /**
+   * Detect if trade.currency is the QUOTE side of a BASE.QUOTE pair.
+   * When true, quantity is in the base (wrong currency for lot tracking)
+   * and tradeMoney is in the quote (= trade.currency).
+   */
+  private static isCurrencyQuote(trade: Trade): boolean {
+    const sym = (trade.symbol || trade.description || "").toUpperCase();
+    const dot = sym.indexOf(".");
+    if (dot === -1) return false;
+    const quote = sym.slice(dot + 1);
+    return quote === trade.currency.toUpperCase();
   }
 
   /**
