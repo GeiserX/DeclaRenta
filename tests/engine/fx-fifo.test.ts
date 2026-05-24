@@ -199,20 +199,43 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.trigger).toBe("conversion");
     });
 
-    it("non-EUR pair: BUY = acquiring (positive event, uses quantity)", () => {
-      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "BUY", quantity: "5000", tradeMoney: "5000" })];
+    it("EUR.GBP SELL = acquiring GBP (positive, uses tradeMoney)", () => {
+      const rateMapWithGbp: EcbRateMap = new Map([
+        ["2025-03-15", new Map([["GBP", new Decimal("1.15")]])],
+      ]);
+      const trades = [makeTrade({ symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commissionCurrency: "EUR", buySell: "SELL", quantity: "-2000", tradeMoney: "-1700", settlementDate: "20250315" })];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMapWithGbp);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("1700");
+      expect(events[0]!.currency).toBe("GBP");
+    });
+
+    it("non-EUR base pair where currency=base: BUY = acquiring (uses quantity)", () => {
+      // USD.JPY with currency=USD — currency matches base, so quantity (in USD) is the right field
+      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "BUY", quantity: "5000", tradeMoney: "625000", settlementDate: "20250315" })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("5000");
     });
 
-    it("non-EUR pair: SELL = disposing (negative event, uses quantity)", () => {
-      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "SELL", quantity: "-5000", tradeMoney: "-5000" })];
+    it("non-EUR base pair where currency=base: SELL = disposing (uses quantity)", () => {
+      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "SELL", quantity: "5000", tradeMoney: "625000", settlementDate: "20250315" })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
 
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("-5000");
+    });
+
+    it("cross-rate pair where currency=quote: GBP.USD with currency=USD (uses tradeMoney, inverted)", () => {
+      // GBP.USD: quantity=GBP (base), tradeMoney=USD (quote=currency). SELL = acquiring USD.
+      const trades = [makeTrade({ symbol: "GBP.USD", description: "GBP.USD", currency: "USD", buySell: "SELL", quantity: "-3000", tradeMoney: "-3900", settlementDate: "20250315" })];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("3900");
+      expect(events[0]!.currency).toBe("USD");
     });
 
     it("should skip FXCONV trades (automatic conversions)", () => {
