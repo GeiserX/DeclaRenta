@@ -180,7 +180,7 @@ export interface FxLot {
 }
 
 /** What triggered an FX disposal */
-export type FxTrigger = "conversion" | "dividend" | "interest" | "commission";
+export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_purchase" | "stock_sale";
 
 /** Result of consuming FX lots via FIFO for a currency disposal */
 export interface FxDisposal {

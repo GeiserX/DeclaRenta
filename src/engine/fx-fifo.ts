@@ -92,34 +92,53 @@ export class FxFifoEngine {
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
-      if (trade.currency === "EUR") continue;
-      if (trade.assetCategory !== "CASH") continue;
-      if (FxFifoEngine.isFxconv(trade)) continue;
 
       const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
       const quantity = new Decimal(trade.quantity).abs();
 
-      // Commission increases cost basis (BUY) or reduces proceeds (SELL)
-      let commissionEur: Decimal | undefined;
-      const commAbs = new Decimal(trade.commission).abs();
-      if (commAbs.greaterThan(0)) {
-        const commCcy = trade.commissionCurrency || trade.currency;
-        if (commCcy === "EUR") {
-          commissionEur = commAbs;
+      if (trade.currency === "EUR") continue;
+      if (trade.assetCategory === "CASH") {
+
+        if (FxFifoEngine.isFxconv(trade)) continue;
+
+        // Commission increases cost basis (BUY) or reduces proceeds (SELL)
+        let commissionEur: Decimal | undefined;
+        const commAbs = new Decimal(trade.commission).abs();
+        if (commAbs.greaterThan(0)) {
+          const commCcy = trade.commissionCurrency || trade.currency;
+          if (commCcy === "EUR") {
+            commissionEur = commAbs;
+          } else {
+            const commRate = getEcbRate(rateMap, date, commCcy);
+            commissionEur = commAbs.mul(commRate);
+          }
+        }
+
+        if (trade.buySell === "BUY") {
+          events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion", commissionEur });
         } else {
-          const commRate = getEcbRate(rateMap, date, commCcy);
-          commissionEur = commAbs.mul(commRate);
+          events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion", commissionEur });
+        }
+      } else if (trade.assetCategory !== "WAR") {
+        // Multi-currency account: securities trade = implicit FX event
+        const tradeMoney = new Decimal(trade.tradeMoney).abs();
+        if (tradeMoney.isZero()) continue;
+
+        if (trade.buySell === "BUY") {
+          events.push({ date, currency: trade.currency, quantity: tradeMoney.negated(), ecbRate, trigger: "stock_purchase" });
+        } else {
+          events.push({ date, currency: trade.currency, quantity: tradeMoney, ecbRate, trigger: "stock_sale" });
+        }
+
+        // Commission also consumes FCY (paid in commissionCurrency)
+        const commission = new Decimal(trade.commission).abs();
+        if (commission.greaterThan(0) && trade.commissionCurrency !== "EUR") {
+          const commRate = getEcbRate(rateMap, date, trade.commissionCurrency);
+          events.push({ date, currency: trade.commissionCurrency, quantity: commission.negated(), ecbRate: commRate, trigger: "commission" });
         }
       }
-
-      if (trade.buySell === "BUY") {
-        events.push({ date, currency: trade.currency, quantity, ecbRate, trigger: "conversion", commissionEur });
-      } else {
-        events.push({ date, currency: trade.currency, quantity: quantity.negated(), ecbRate, trigger: "conversion", commissionEur });
-      }
     }
-
     return events;
   }
 
