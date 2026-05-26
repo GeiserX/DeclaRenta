@@ -5,7 +5,7 @@
  * Mobile: hamburger toggle with backdrop overlay.
  */
 
-const SECTIONS = ["perfil", "renta", "m720", "m721", "d6"] as const;
+const SECTIONS = ["perfil", "renta", "guia", "m720", "m721", "d6"] as const;
 type Section = (typeof SECTIONS)[number];
 
 function isSection(value: string): value is Section {
@@ -65,7 +65,10 @@ export function navigateToSection(section: Section): void {
   }
 
   document.querySelectorAll<HTMLAnchorElement>(".sidebar-link").forEach((link) => {
-    link.classList.toggle("active", link.dataset.section === section);
+    const isActive = link.dataset.section === section;
+    link.classList.toggle("active", isActive);
+    if (isActive) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   });
 
   if (location.hash !== `#${section}`) {

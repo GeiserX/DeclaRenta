@@ -1018,6 +1018,13 @@ details ul {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+.sidebar-link-sub {
+  padding-left: 2.75rem;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .sidebar-icon {
   width: 1.25rem;
   height: 1.25rem;
@@ -2004,6 +2011,106 @@ footer a:hover {
   color: var(--muted);
 }
 
+/* Guía de cumplimentación section */
+.guide-intro {
+  margin-bottom: 1.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.guide-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.guide-section h4 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.guide-casilla-badge {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--tag-border);
+}
+
+.guide-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.guide-field-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.guide-field-value {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.guide-fields dt:last-of-type,
+.guide-fields dd:last-of-type {
+  border-bottom: none;
+}
+
+.guide-field-value strong {
+  color: var(--text);
+}
+
+.guide-note {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border);
+}
+
+.guide-section-warning {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.guide-section-warning h4 {
+  color: var(--warning);
+}
+
+.guide-tip {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--accent-subtle);
+  border: 1px solid var(--tag-border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 /* Top bar legal button */
 .top-bar-legal {
   background: none;
@@ -2444,6 +2551,15 @@ footer a:hover {
 
   .aforix-field-label {
     min-width: 100%;
+  }
+
+  .guide-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-field-label {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 }
 

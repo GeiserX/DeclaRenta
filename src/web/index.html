@@ -94,6 +94,10 @@
           <span data-i18n="sidebar.renta">Modelo 100 (Renta)</span>
           <span class="sidebar-badge" id="badge-renta"></span>
         </a>
+        <a href="#guia" class="sidebar-link sidebar-link-sub" data-section="guia">
+          <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+          <span data-i18n="sidebar.guia">Guía Renta Web</span>
+        </a>
         <div class="sidebar-divider"></div>
         <a href="#m720" class="sidebar-link" data-section="m720">
           <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
@@ -269,6 +273,15 @@
             <button id="wizard-next" disabled data-i18n="wizard.next">Siguiente</button>
           </div>
         </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: Guía de cumplimentación (Renta Web)                 -->
+      <!-- ============================================================ -->
+      <section id="section-guia" class="app-section" hidden>
+        <h2 data-i18n="guide_rw.title">Guía de cumplimentación — Renta Web</h2>
+        <p class="section-description" data-i18n="guide_rw.description">Cómo rellenar cada casilla en Renta Web con los datos de DeclaRenta.</p>
+        <div id="guide-content" aria-live="polite"></div>
       </section>
 
       <!-- ============================================================ -->

@@ -28,6 +28,7 @@ import { esc } from "./esc.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
+import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
@@ -84,6 +85,7 @@ document.addEventListener("localechange", () => {
   rerenderSection720();
   rerenderSection721();
   rerenderSectionD6();
+  rerenderSectionGuide();
   initProfile();
   renderDetectionStatus();
 });
@@ -198,6 +200,7 @@ initBrokerGuides();
 initSection720();
 initSection721();
 initSectionD6();
+initSectionGuide();
 
 /** Control wizard "Next" behavior per step */
 onStepChange((_from: WizardStep, to: WizardStep) => {
