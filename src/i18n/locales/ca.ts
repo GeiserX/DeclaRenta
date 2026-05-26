@@ -432,6 +432,8 @@ const ca: TranslationKeys = {
   "guide_rw.dt_pais_hint": "Selecciona el país on es va practicar la retenció (ex. Estats Units, Irlanda, Alemanya…). Si tens retencions de diversos països, afegeix una línia per cadascun.",
   "guide_rw.dt_importe_label": "Import de la deducció",
   "guide_rw.dt_importe_hint": "L'import de la casella <strong>0588</strong> de DeclaRenta. És el menor entre la retenció estrangera pagada i la quota espanyola corresponent (Art. 80 LIRPF).",
+  "guide_rw.dt_campo_label": "En quin camp del quadre?",
+  "guide_rw.dt_campo_hint": "Introdueix l'import NOMÉS a <strong>«Impost satisfet a l'estranger»</strong> (última fila del quadre). Les altres tres files (rendiment del treball, altres rendiments base general, guanys base general) deixa-les a 0 — els dividends de brokers van a la base de l'estalvi, no a la base general.",
   "guide_rw.capital_gains_note": "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note": "Els guanys per tipus de canvi es declaren apart dels guanys de valors. Només apareixen si has operat amb divises manualment (ex. conversions EUR→USD a IBKR). Si uses mode monodivisa, aquesta secció no aplica.",
   "guide_rw.dividends_note": "Els dividends de brokers estrangers no porten retenció espanyola. La retenció estrangera (withholding tax) NO es posa aquí: es dedueix apart a la casella 0588 (doble imposició).",

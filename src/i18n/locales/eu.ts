@@ -432,6 +432,8 @@ const eu: TranslationKeys = {
   "guide_rw.dt_pais_hint": "Hautatu atxikipena egin zen herrialdea (adib. Ameriketako Estatu Batuak, Irlanda, Alemania…). Hainbat herrialdeetako atxikipenak badituzu, gehitu lerro bat bakoitzeko.",
   "guide_rw.dt_importe_label": "Kenkariaren zenbatekoa",
   "guide_rw.dt_importe_hint": "DeclaRenta-ren <strong>0588</strong> gelaxkako zenbatekoa. Atzerrian ordaindutako zergaren eta Espainiako kuota dagokionaren arteko txikiena da (80. art. LIRPF).",
+  "guide_rw.dt_campo_label": "Zein eremutan koadroan?",
+  "guide_rw.dt_campo_hint": "Sartu zenbatekoa BAKARRIK <strong>«Atzerrian ordaindutako zerga»</strong> lerroan (koadroko azken lerroa). Beste hiru lerroak (lanaren errendimendua, beste errendimendu batzuk oinarri orokorra, irabaziak oinarri orokorra) 0-n utzi — broker-en dibidenduak aurrezki-oinarrira doaz, ez oinarri orokorrera.",
   "guide_rw.capital_gains_note": "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note": "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisekin eskuz operatu baduzu bakarrik agertzen dira (adib. EUR→USD bihurketak IBKR-n). Monodibisa modua erabiltzen baduzu, atal hau ez da aplikagarria.",
   "guide_rw.dividends_note": "Atzerriko broker-en dibidenduek ez dute Espainiako atxikipenik. Atzerriko atxikipena (withholding tax) EZ da hemen jartzen: 0588 gelaxkan kentzen da bereizita (zergapetze bikoitza).",

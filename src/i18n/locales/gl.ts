@@ -432,6 +432,8 @@ const gl: TranslationKeys = {
   "guide_rw.dt_pais_hint": "Selecciona o país onde se practicou a retención (ex. Estados Unidos, Irlanda, Alemaña…). Se tes retencións de varios países, engade unha liña por cada un.",
   "guide_rw.dt_importe_label": "Importe da dedución",
   "guide_rw.dt_importe_hint": "O importe da casilla <strong>0588</strong> de DeclaRenta. É o menor entre a retención estranxeira pagada e a cota española correspondente (Art. 80 LIRPF).",
+  "guide_rw.dt_campo_label": "En que campo do cadro?",
+  "guide_rw.dt_campo_hint": "Introduce o importe SÓ en <strong>«Imposto satisfeito no estranxeiro»</strong> (última fila do cadro). As outras tres filas (rendemento de traballo, outros rendementos base xeral, ganancias base xeral) déixaas a 0 — os dividendos de brokers van á base do aforro, non á base xeral.",
   "guide_rw.capital_gains_note": "Se tes moitas operacións, podes consolidalas nunha soa liña por tipo de activo usando as datas xenéricas 01/01 e 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note": "As ganancias por tipo de cambio decláranse aparte das ganancias de valores. Só aparecen se operaches con divisas manualmente (ex. conversións EUR→USD en IBKR). Se usas modo monodivisa, esta sección non aplica.",
   "guide_rw.dividends_note": "Os dividendos de brokers estranxeiros non levan retención española. A retención estranxeira (withholding tax) NON se pon aquí: dedúcese aparte na casilla 0588 (dobre imposición).",

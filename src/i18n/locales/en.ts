@@ -436,6 +436,8 @@ const en: TranslationKeys = {
   "guide_rw.dt_pais_hint": "Select the country where withholding was applied (e.g. United States, Ireland, Germany…). If you have withholdings from multiple countries, add one line per country.",
   "guide_rw.dt_importe_label": "Deduction amount",
   "guide_rw.dt_importe_hint": "The amount from DeclaRenta's box <strong>0588</strong>. This is the lesser of the foreign tax paid and the corresponding Spanish tax (Art. 80 LIRPF).",
+  "guide_rw.dt_campo_label": "Which field in the dialog?",
+  "guide_rw.dt_campo_hint": "Enter the amount ONLY in <strong>\"Tax paid abroad\"</strong> (last row in the dialog). Leave the other three rows at 0 (employment income, other income in general base, capital gains in general base) — broker dividends go to the savings tax base, not the general base.",
   "guide_rw.capital_gains_note": "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note": "FX gains are declared separately from securities gains. They only appear if you manually traded currencies (e.g. EUR→USD conversions in IBKR). If using single-currency mode, this section does not apply.",
   "guide_rw.dividends_note": "Dividends from foreign brokers have no Spanish withholding. Foreign withholding tax is NOT entered here: it is deducted separately in box 0588 (double taxation).",

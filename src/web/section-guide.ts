@@ -95,6 +95,7 @@ function renderGuideContent(): void {
     [
       { label: t("guide_rw.dt_pais_label"), value: t("guide_rw.dt_pais_hint") },
       { label: t("guide_rw.dt_importe_label"), value: t("guide_rw.dt_importe_hint") },
+      { label: t("guide_rw.dt_campo_label"), value: t("guide_rw.dt_campo_hint") },
     ],
     t("guide_rw.double_taxation_note"),
   );
