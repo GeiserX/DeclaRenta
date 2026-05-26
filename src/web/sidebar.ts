@@ -5,7 +5,7 @@
  * Mobile: hamburger toggle with backdrop overlay.
  */
 
-const SECTIONS = ["perfil", "renta", "m720", "m721", "d6"] as const;
+const SECTIONS = ["perfil", "renta", "guia", "m720", "m721", "d6"] as const;
 type Section = (typeof SECTIONS)[number];
 
 function isSection(value: string): value is Section {
