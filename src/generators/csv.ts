@@ -72,8 +72,8 @@ export function formatCsv(report: TaxSummary): string {
   lines.push("Casilla,Concepto,Valor_EUR");
   lines.push(`0327,Valor de transmision,${report.capitalGains.transmissionValue.toFixed(2)}`);
   lines.push(`0328,Valor de adquisicion,${report.capitalGains.acquisitionValue.toFixed(2)}`);
-  lines.push(`1626,Valor de transmision FX,${report.fxGains.transmissionValue.toFixed(2)}`);
-  lines.push(`1631,Valor de adquisicion FX,${report.fxGains.acquisitionValue.toFixed(2)}`);
+  lines.push(`1633,Valor de transmision FX,${report.fxGains.transmissionValue.toFixed(2)}`);
+  lines.push(`1637,Valor de adquisicion FX,${report.fxGains.acquisitionValue.toFixed(2)}`);
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
   lines.push(`0027,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);
