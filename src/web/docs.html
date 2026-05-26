@@ -962,7 +962,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>Las operaciones de compraventa de divisas tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 37.1.l LIRPF). DeclaRenta implementa un <strong>motor FX FIFO independiente</strong> que genera dos eventos fiscales al operar en divisa extranjera:</p>
         <ol>
           <li><strong>Ganancia/pérdida del valor</strong> (casillas 0327/0328): calculada sobre el precio del activo × tipo ECB en cada fecha.</li>
-          <li><strong>Ganancia/pérdida FX</strong> (casillas 1626/1631): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.</li>
+          <li><strong>Ganancia/pérdida FX</strong> (casillas 1633/1637): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.</li>
         </ol>
         <p>Cada adquisición de divisa extranjera (depósito EUR→USD, venta de acciones que genera USD) crea un lote en la cola FIFO de esa divisa. Cada disposición (conversión USD→EUR, compra de acciones en USD) consume lotes por orden cronológico.</p>
         <p>Las conversiones automáticas del broker para liquidación (FXCONV) se excluyen automáticamente — solo las operaciones de forex deliberadas generan eventos fiscales.</p>

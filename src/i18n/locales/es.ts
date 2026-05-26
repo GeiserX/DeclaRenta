@@ -176,7 +176,7 @@ const es = {
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
-  "profile.monodivisa_detail": "No calcula ganancias por tipo de cambio de forma separada (casillas 1626/1631). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios que tratan todas las operaciones como moneda única EUR.",
+  "profile.monodivisa_detail": "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios que tratan todas las operaciones como moneda única EUR.",
   "profile.monodivisa_warning": "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 37.1.l LIRPF (DGT V2324-10).",
   "profile.saved": "Perfil guardado",
   "profile.save_btn": "Guardar perfil",

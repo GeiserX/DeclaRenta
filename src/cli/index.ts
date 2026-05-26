@@ -440,8 +440,8 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       "0027_intereses_cuentas": report.interest.earned.toFixed(2),
       "0327_valor_transmision": report.capitalGains.transmissionValue.toFixed(2),
       "0328_valor_adquisicion": report.capitalGains.acquisitionValue.toFixed(2),
-      "1626_valor_transmision_fx": report.fxGains.transmissionValue.toFixed(2),
-      "1631_valor_adquisicion_fx": report.fxGains.acquisitionValue.toFixed(2),
+      "1633_valor_transmision_fx": report.fxGains.transmissionValue.toFixed(2),
+      "1637_valor_adquisicion_fx": report.fxGains.acquisitionValue.toFixed(2),
       "0588_deduccion_doble_imposicion": report.doubleTaxation.deduction.toFixed(2),
     },
     resumen: {
@@ -515,8 +515,8 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   if (report.fxGains.disposals.length > 0) {
     console.error("");
     console.error("  GANANCIAS FX — MONEDA EXTRANJERA (Art. 37.1.l)");
-    console.error(`    Casilla 1626 (Valor transmisión):  ${report.fxGains.transmissionValue.toFixed(2)} EUR`);
-    console.error(`    Casilla 1631 (Valor adquisición):  ${report.fxGains.acquisitionValue.toFixed(2)} EUR`);
+    console.error(`    Casilla 1633 (Valor transmisión):  ${report.fxGains.transmissionValue.toFixed(2)} EUR`);
+    console.error(`    Casilla 1637 (Valor adquisición):  ${report.fxGains.acquisitionValue.toFixed(2)} EUR`);
     console.error(`    Ganancia/Pérdida neta FX:          ${report.fxGains.netGainLoss.toFixed(2)} EUR`);
   }
   console.error("");

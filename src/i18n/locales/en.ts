@@ -165,7 +165,7 @@ const en: TranslationKeys = {
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
-  "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1626/1631). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
+  "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1633/1637). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
   "profile.monodivisa_warning": "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 37.1.l LIRPF (DGT V2324-10).",
   "profile.saved": "Profile saved",
   "profile.save_btn": "Save profile",

@@ -154,13 +154,13 @@ export interface TaxSummary {
     byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>;
   };
 
-  /** FX gains: Ganancias/pérdidas por transmisión de moneda extranjera (Casillas 1626/1631) */
+  /** FX gains: Ganancias/pérdidas por transmisión de moneda extranjera (Casillas 1633/1637) */
   fxGains: {
-    /** Casilla 1626: Valor de transmisión (FX) */
+    /** Casilla 1633: Valor de transmisión (FX) */
     transmissionValue: Decimal;
-    /** Casilla 1631: Valor de adquisición (FX) */
+    /** Casilla 1637: Valor de adquisición (FX) */
     acquisitionValue: Decimal;
-    /** Net gain/loss (1626 - 1631) */
+    /** Net gain/loss (1633 - 1637) */
     netGainLoss: Decimal;
     /** Individual FX disposals */
     disposals: FxDisposal[];

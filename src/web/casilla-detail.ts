@@ -114,7 +114,7 @@ function renderDoubleTaxDetail(report: TaxSummary): string {
     </table>`;
 }
 
-/** Render a detail table of FX disposals for casilla 1626/1631 drill-down. */
+/** Render a detail table of FX disposals for casilla 1633/1637 drill-down. */
 function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string {
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   return `
@@ -154,14 +154,14 @@ const CASILLAS: CasillaConfig[] = [
     getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.acquisition_value")),
   },
   {
-    code: "1626",
+    code: "1633",
     i18nKey: "casilla.fx_transmission_value",
     getValue: (r) => r.fxGains.transmissionValue.toFixed(2),
     getClass: () => "",
     getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
   },
   {
-    code: "1631",
+    code: "1637",
     i18nKey: "casilla.fx_acquisition_value",
     getValue: (r) => r.fxGains.acquisitionValue.toFixed(2),
     getClass: () => "",

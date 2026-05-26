@@ -103,10 +103,10 @@ export async function generatePdfWebReport(
     ["0588", t("casilla.double_taxation"),     eur(report.doubleTaxation.deduction)],
   ];
 
-  // FX gains (Casillas 1626/1631) — only shown when multi-currency FX events exist
+  // FX gains (Casillas 1633/1637) — only shown when multi-currency FX events exist
   if (report.fxGains.disposals.length > 0) {
-    casillasBody.push(["1626", t("casilla.fx_transmission_value"), eur(report.fxGains.transmissionValue)]);
-    casillasBody.push(["1631", t("casilla.fx_acquisition_value"),  eur(report.fxGains.acquisitionValue)]);
+    casillasBody.push(["1633", t("casilla.fx_transmission_value"), eur(report.fxGains.transmissionValue)]);
+    casillasBody.push(["1637", t("casilla.fx_acquisition_value"),  eur(report.fxGains.acquisitionValue)]);
     casillasBody.push(["",     t("casilla.fx_net_gain_loss"),       eur(report.fxGains.netGainLoss)]);
   }
 
