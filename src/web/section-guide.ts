@@ -6,10 +6,7 @@
  */
 
 import { t } from "../i18n/index.js";
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "./esc.js";
 
 export function initSectionGuide(): void {
   renderGuideContent();
@@ -102,7 +99,7 @@ function renderGuideContent(): void {
 
   // Anti-churning losses reminder
   html += `<div class="guide-section guide-section-warning">
-    <h4>${esc(t("guide_rw.blocked_losses_title"))}</h4>
+    <h3>${esc(t("guide_rw.blocked_losses_title"))}</h3>
     <p>${t("guide_rw.blocked_losses_hint")}</p>
   </div>`;
 
@@ -116,22 +113,26 @@ function renderGuideContent(): void {
 
 interface GuideField {
   label: string;
+  /** Rendered as raw HTML. MUST only contain trusted i18n strings from locale files. */
   value: string;
 }
 
+/**
+ * WARNING: `fields[].value` and `note` are injected as raw HTML (they contain
+ * intentional formatting like <strong>, <br> from locale files).
+ * NEVER pass user-controlled data in these parameters.
+ */
 function renderGuideSection(title: string, casillas: string, fields: GuideField[], note: string): string {
   let html = `<div class="guide-section">
-    <h4><span class="guide-casilla-badge">${esc(casillas)}</span> ${esc(title)}</h4>
-    <div class="guide-fields">`;
+    <h3><span class="guide-casilla-badge">${esc(casillas)}</span> ${esc(title)}</h3>
+    <dl class="guide-fields">`;
 
   for (const field of fields) {
-    html += `<div class="guide-field">
-      <span class="guide-field-label">${esc(field.label)}</span>
-      <span class="guide-field-value">${field.value}</span>
-    </div>`;
+    html += `<dt class="guide-field-label">${esc(field.label)}</dt>
+      <dd class="guide-field-value">${field.value}</dd>`;
   }
 
-  html += `</div>`;
+  html += `</dl>`;
   if (note) {
     html += `<p class="guide-note">${note}</p>`;
   }

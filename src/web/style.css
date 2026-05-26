@@ -1022,7 +1022,7 @@ details ul {
   padding-left: 2.75rem;
   font-size: 0.82rem;
   font-weight: 400;
-  opacity: 0.85;
+  color: var(--muted);
 }
 
 .sidebar-icon {
@@ -2048,35 +2048,34 @@ footer a:hover {
 }
 
 .guide-fields {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
   gap: 0;
-}
-
-.guide-field {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.guide-field:last-child {
-  border-bottom: none;
+  margin: 0;
+  padding: 0;
 }
 
 .guide-field-label {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text);
-  min-width: 160px;
-  flex-shrink: 0;
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
 }
 
 .guide-field-value {
   font-size: 0.85rem;
   color: var(--muted);
   line-height: 1.5;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+
+.guide-fields dt:last-of-type,
+.guide-fields dd:last-of-type {
+  border-bottom: none;
 }
 
 .guide-field-value strong {
@@ -2552,6 +2551,15 @@ footer a:hover {
 
   .aforix-field-label {
     min-width: 100%;
+  }
+
+  .guide-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-field-label {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 }
 
