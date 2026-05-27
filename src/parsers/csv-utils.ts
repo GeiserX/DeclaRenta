@@ -60,7 +60,7 @@ export function parseNumber(val: string): string {
   if (!trimmed) return "0";
 
   // Handle parenthesized negatives: (123.45) → -123.45
-  const parenMatch = trimmed.match(/^\((.+)\)$/);
+  const parenMatch = trimmed.match(/^\(([0-9.,\s-]+)\)$/);
   if (parenMatch) {
     trimmed = `-${parenMatch[1]!.trim()}`;
   }

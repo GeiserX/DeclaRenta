@@ -17,6 +17,7 @@
  * parsing, use the parseEtoroXlsx() function with the xlsx library.
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import { findColumn, parseNumber } from "./csv-utils.js";
@@ -48,7 +49,8 @@ const DIV_DATE_HEADERS = ["date of payment", "fecha de pago", "date"];
 const DIV_INSTRUMENT_HEADERS = ["instrument name", "nombre del instrumento", "instrument"];
 const DIV_NET_HEADERS = ["net dividend received (usd)", "dividendo neto recibido (usd)", "net dividend", "amount"];
 const DIV_NET_EUR_HEADERS = ["net dividend received (eur)", "dividendo neto recibido (eur)"];
-const DIV_WHT_HEADERS = ["withholding tax amount (usd)", "importe de la retención tributaria (usd)", "withholding tax rate (%)", "tasa de retención fiscal (%)"];
+const DIV_WHT_AMOUNT_HEADERS = ["withholding tax amount (usd)", "importe de la retención tributaria (usd)"];
+const DIV_WHT_RATE_HEADERS = ["withholding tax rate (%)", "tasa de retención fiscal (%)"];
 const DIV_WHT_EUR_HEADERS = ["withholding tax amount (eur)", "importe de la retención tributaria (eur)"];
 const DIV_ISIN_HEADERS = ["isin"];
 
@@ -217,9 +219,9 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     });
 
     // Sell leg (closing)
-    const amountNum = parseFloat(parseNumber(amount));
-    const profitNum = parseFloat(parseNumber(profit));
-    const proceeds = isNaN(amountNum) || isNaN(profitNum) ? "0" : `${amountNum + profitNum}`;
+    const amountDec = new Decimal(parseNumber(amount) || "0");
+    const profitDec = new Decimal(profit || "0");
+    const proceeds = amountDec.plus(profitDec).toString();
 
     trades.push({
       tradeID: `etoro-close-${closeDate}-${symbol}-${i}`,
@@ -264,7 +266,8 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
   const instrumentCol = findColumn(headers, DIV_INSTRUMENT_HEADERS);
   const netCol = findColumn(headers, DIV_NET_HEADERS);
   const netEurCol = findColumn(headers, DIV_NET_EUR_HEADERS);
-  const whtCol = findColumn(headers, DIV_WHT_HEADERS);
+  const whtAmountCol = findColumn(headers, DIV_WHT_AMOUNT_HEADERS);
+  const whtRateCol = findColumn(headers, DIV_WHT_RATE_HEADERS);
   const whtEurCol = findColumn(headers, DIV_WHT_EUR_HEADERS);
   const isinCol = findColumn(headers, DIV_ISIN_HEADERS);
 
@@ -273,7 +276,8 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
   // Prefer EUR columns if available (Spanish export provides both USD and EUR)
   const useEur = netEurCol >= 0;
   const effectiveNetCol = useEur ? netEurCol : netCol;
-  const effectiveWhtCol = useEur ? whtEurCol : whtCol;
+  // WHT: prefer absolute EUR amount → absolute USD amount → percentage rate
+  const effectiveWhtCol = useEur ? whtEurCol : whtAmountCol;
   const currency = useEur ? "EUR" : "USD";
 
   const cashTransactions: CashTransaction[] = [];
@@ -298,41 +302,30 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
     let taxAmount = "0";
 
     if (effectiveWhtCol >= 0) {
+      // Absolute WHT amount column available
       const whtRaw = (row[effectiveWhtCol] ?? "0").trim();
       const whtNum = parseFloat(parseNumber(whtRaw));
 
       if (!isNaN(whtNum) && whtNum !== 0) {
-        // Check if WHT column is a percentage (header contains "%") or absolute
-        const whtHeader = (headers[effectiveWhtCol] ?? "").toLowerCase();
-        const isPercentage = whtNum > 0 && whtNum <= 100 && whtHeader.includes("%");
-        if (isPercentage) {
-          const grossNum = netNum / (1 - whtNum / 100);
-          grossAmount = grossNum.toFixed(4);
-          taxAmount = `-${(grossNum * (whtNum / 100)).toFixed(4)}`;
-        } else {
-          const absWht = Math.abs(whtNum);
-          grossAmount = (netNum + absWht).toFixed(4);
-          taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
-        }
+        const absWht = Math.abs(whtNum);
+        grossAmount = (netNum + absWht).toFixed(4);
+        taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
+      } else {
+        grossAmount = netAmount;
+      }
+    } else if (whtRateCol >= 0) {
+      // Fall back to percentage rate column
+      const pctRaw = (row[whtRateCol] ?? "0").replace(/%/g, "").trim();
+      const pctNum = parseFloat(parseNumber(pctRaw));
+      if (!isNaN(pctNum) && pctNum > 0) {
+        const grossNum = netNum / (1 - pctNum / 100);
+        grossAmount = grossNum.toFixed(4);
+        taxAmount = `-${(grossNum * (pctNum / 100)).toFixed(4)}`;
       } else {
         grossAmount = netAmount;
       }
     } else {
-      // No WHT column for this currency — try the percentage column as fallback
-      const pctCol = findColumn(headers, ["withholding tax rate (%)", "tasa de retención fiscal (%)"]);
-      if (pctCol >= 0) {
-        const pctRaw = (row[pctCol] ?? "0").replace(/%/g, "").trim();
-        const pctNum = parseFloat(parseNumber(pctRaw));
-        if (!isNaN(pctNum) && pctNum > 0) {
-          const grossNum = netNum / (1 - pctNum / 100);
-          grossAmount = grossNum.toFixed(4);
-          taxAmount = `-${(grossNum * (pctNum / 100)).toFixed(4)}`;
-        } else {
-          grossAmount = netAmount;
-        }
-      } else {
-        grossAmount = netAmount;
-      }
+      grossAmount = netAmount;
     }
 
     // Dividend (gross amount — downstream engine expects gross)
@@ -415,7 +408,7 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
       symbol: "CASH",
       description: "Interest Payment",
       isin: "",
-      currency: "USD",
+      currency: "USD", // eToro pays interest in USD regardless of interface language
       dateTime: tradeDate,
       settleDate: tradeDate,
       amount: `${amountNum}`,
