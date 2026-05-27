@@ -81,7 +81,7 @@ async function parseAndMerge(
       console.error(`  [Revolut XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`);
       continue;
     }
-    if (detectEtoroXlsx(buf)) {
+    if (await detectEtoroXlsx(buf)) {
       const statement = await parseEtoroXlsx(buf);
       mergeStatement(merged, statement);
       brokerNames.push("eToro");

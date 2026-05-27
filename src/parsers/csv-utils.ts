@@ -56,8 +56,14 @@ export function parseCsvLine(line: string, delimiter: string): string[] {
  */
 export function parseNumber(val: string): string {
   // Strip currency symbols (€, $, £, etc.) from any position before parsing
-  const trimmed = val.trim().replace(/[€$£¥]/g, "").trim();
+  let trimmed = val.trim().replace(/[€$£¥]/g, "").trim();
   if (!trimmed) return "0";
+
+  // Handle parenthesized negatives: (123.45) → -123.45
+  const parenMatch = trimmed.match(/^\((.+)\)$/);
+  if (parenMatch) {
+    trimmed = `-${parenMatch[1]!.trim()}`;
+  }
 
   // If it has both dot and comma, the last one is the decimal separator
   const lastDot = trimmed.lastIndexOf(".");

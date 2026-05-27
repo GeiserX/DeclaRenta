@@ -410,4 +410,224 @@ describe("eToro XLSX parsing", () => {
       expect(result.trades).toHaveLength(2);
     });
   });
+
+  describe("parseEtoroXlsx — Spanish export format (full)", () => {
+    const SPANISH_CLOSED_HEADER = [
+      "ID de posición", "Acción", "Long / Short", "Importe", "Unidades",
+      "Fecha de apertura", "Fecha de cierre", "Apalancamiento",
+      "Comisiones de diferencial (USD)", "Diferencial de mercado (USD)",
+      "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)",
+      "Tipo de cambio al cierre (USD)", "Tasa de apertura", "Tasa de cierre",
+      "Tasa de Take Profit", "Tasa de Stop Loss",
+      "Comisiones nocturnas y dividendos", "Copiado desde", "Tipo", "ISIN", "Notas",
+    ];
+
+    const SPANISH_DIVIDENDS_HEADER = [
+      "Fecha de pago", "Nombre del instrumento", "Dividendo neto recibido (USD)",
+      "Net dividends", "Currency", "Con deducción/sin deducción",
+      "Dividendos con deducción (AUD)", "Dividendo neto recibido (EUR)",
+      "Tasa de retención fiscal (%)", "Importe de la retención tributaria (USD)",
+      "Importe de la retención tributaria (EUR)", "ID de posición", "Tipo", "ISIN",
+    ];
+
+    const SPANISH_ACTIVITY_HEADER = [
+      "Fecha", "Tipo", "Detalles", "Importe", "Unidades",
+      "Cambio de capital realizado", "Capital realizado", "Saldo",
+      "ID de posición", "Tipo de activo", "Importe no retirable",
+    ];
+
+    function buildSpanishWorkbook(opts: {
+      closedPositions?: string[][];
+      dividends?: string[][];
+      activity?: string[][];
+    }): Uint8Array {
+      const wb = XLSX.utils.book_new();
+      if (opts.closedPositions) {
+        const ws = XLSX.utils.aoa_to_sheet(opts.closedPositions);
+        XLSX.utils.book_append_sheet(wb, ws, "Posiciones cerradas");
+      }
+      if (opts.dividends) {
+        const ws = XLSX.utils.aoa_to_sheet(opts.dividends);
+        XLSX.utils.book_append_sheet(wb, ws, "Dividendos");
+      }
+      if (opts.activity) {
+        const ws = XLSX.utils.aoa_to_sheet(opts.activity);
+        XLSX.utils.book_append_sheet(wb, ws, "Actividad de la cuenta");
+      }
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+      return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    }
+
+    it("should detect Spanish eToro workbook", () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [SPANISH_CLOSED_HEADER],
+      });
+      expect(detectEtoroXlsx(data)).toBe(true);
+    });
+
+    it("should parse Long positions using 'Acción' as symbol and 'Long / Short' for direction", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          // ID, Acción, Long/Short, Importe, Unidades, FechaApertura, FechaCierre, Apalancamiento,
+          // ComDif(USD), DifMercado(USD), Ganancias(USD), Ganancias(EUR), TipoCambioAp, TipoCambioCi,
+          // TasaApertura, TasaCierre, TP, SL, Comisiones, Copiado, Tipo, ISIN, Notas
+          ["123", "Apple Inc (AAPL)", "Long", "1000", "5.5", "15/03/2024 09:30:00", "20/09/2025 14:00:00",
+           "1", "0", "-0.5", "100", "91.50", "1.08", "1.10", "180", "200", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+
+      const buy = result.trades[0]!;
+      expect(buy.buySell).toBe("BUY");
+      expect(buy.symbol).toBe("Apple Inc (AAPL)");
+      expect(buy.isin).toBe("US0378331005");
+      expect(buy.currency).toBe("EUR");
+      expect(buy.quantity).toBe("5.5");
+      expect(buy.tradePrice).toBe("180");
+      expect(buy.tradeDate).toBe("20240315");
+
+      const sell = result.trades[1]!;
+      expect(sell.buySell).toBe("SELL");
+      expect(sell.tradeDate).toBe("20250920");
+      expect(sell.tradePrice).toBe("200");
+      expect(sell.fifoPnlRealized).toBe("91.50");
+      expect(sell.currency).toBe("EUR");
+    });
+
+    it("should parse Short positions with inverted buy/sell legs", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["456", "Tesla (TSLA)", "Short", "2000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "1", "0", "0", "50", "45", "1.09", "1.10", "250", "200", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      // Short: opening leg is SELL, closing leg is BUY
+      expect(result.trades[0]!.buySell).toBe("SELL");
+      expect(result.trades[1]!.buySell).toBe("BUY");
+    });
+
+    it("should handle parenthesized negative profits like (16.63)", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["789", "ProSieben (PSM.DE)", "Long", "83.11", "7.84", "08/02/2023 15:36:21", "26/08/2025 14:04:10",
+           "1", "0", "-0.07", "(16.63)", "(14.29)", "1.07", "1.16", "9.89", "8.07", "0", "0", "0.95", "-", "Acciones", "DE000PSM7770", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      const sell = result.trades[1]!;
+      // Proceeds = amount + profit = 83.11 + (-14.29) = 68.82
+      expect(parseFloat(sell.proceeds)).toBeCloseTo(68.82, 2);
+      expect(sell.fifoPnlRealized).toBe("-14.29");
+    });
+
+    it("should use EUR dividend columns when available", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [SPANISH_CLOSED_HEADER],
+        dividends: [
+          SPANISH_DIVIDENDS_HEADER,
+          // FechaPago, Instrumento, NetUSD, NetDividends, Currency, Deducción, DedAUD,
+          // NetEUR, TasaRet%, RetUSD, RetEUR, ID, Tipo, ISIN
+          ["02/01/2025", "Paramount Skydance Corp", "1.08", "0", "", "-", "-",
+           "1.0518", "15 %", "0.1906", "0.1856", "123", "Stocks", "US69932A2042"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      const divs = result.cashTransactions.filter((c) => c.type === "Dividends");
+      const whts = result.cashTransactions.filter((c) => c.type === "Withholding Tax");
+
+      expect(divs).toHaveLength(1);
+      expect(whts).toHaveLength(1);
+      expect(divs[0]!.currency).toBe("EUR");
+      expect(divs[0]!.isin).toBe("US69932A2042");
+      expect(divs[0]!.description).toContain("US");
+      // Gross = net / (1 - rate) = 1.0518 / (1 - 0.15) = ~1.2374
+      expect(parseFloat(divs[0]!.amount)).toBeCloseTo(1.2374, 3);
+      expect(whts[0]!.currency).toBe("EUR");
+    });
+
+    it("should handle 0% withholding (UK dividends)", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [SPANISH_CLOSED_HEADER],
+        dividends: [
+          SPANISH_DIVIDENDS_HEADER,
+          ["21/03/2025", "easyJet", "12.41", "0", "", "-", "-",
+           "11.4747", "0 %", "0.0000", "0.0000", "630", "Stocks", "GB00B7KR2P84"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      const divs = result.cashTransactions.filter((c) => c.type === "Dividends");
+      const whts = result.cashTransactions.filter((c) => c.type === "Withholding Tax");
+
+      expect(divs).toHaveLength(1);
+      expect(whts).toHaveLength(0);
+      // 0% WHT → gross = net
+      expect(divs[0]!.amount).toBe("11.4747");
+    });
+
+    it("should parse interest from Account Activity sheet", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [SPANISH_CLOSED_HEADER],
+        activity: [
+          SPANISH_ACTIVITY_HEADER,
+          ["01/01/2025 06:01:43", "Pago de intereses", "-", "0.26", "-", "0.26", "7843.61", "0.26", "-", "-", "0"],
+          ["01/03/2025 06:01:15", "Pago de intereses", "-", "0.10", "-", "0.10", "7903.58", "60.23", "-", "-", "0"],
+          ["02/01/2025 00:19:24", "Dividendo", "PSKY/USD", "1.08", "-", "1.08", "7844.69", "1.34", "123", "Acciones", "0"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      const interest = result.cashTransactions.filter((c) => c.type === "Broker Interest Received");
+      expect(interest).toHaveLength(2);
+      expect(interest[0]!.amount).toBe("0.26");
+      expect(interest[0]!.dateTime).toBe("20250101");
+      expect(interest[1]!.amount).toBe("0.1");
+    });
+
+    it("should skip non-interest rows in Account Activity", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [SPANISH_CLOSED_HEADER],
+        activity: [
+          SPANISH_ACTIVITY_HEADER,
+          ["02/01/2025 00:19:24", "Dividendo", "PSKY/USD", "1.08", "-", "1.08", "7844.69", "1.34", "123", "Acciones", "0"],
+          ["13/03/2025 15:27:24", "Comisión", "Al abrir", "(1.00)", "-", "0", "7908.06", "1.00", "123", "Acciones", "0"],
+          ["13/03/2025 15:27:24", "Posición abierta", "PAH3.DE/EUR", "63.71", "1.54", "0", "7908.06", "1.00", "123", "Acciones", "0"],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      const interest = result.cashTransactions.filter((c) => c.type === "Broker Interest Received");
+      expect(interest).toHaveLength(0);
+    });
+
+    it("should classify CFDs by type or leverage in Spanish format", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          // CFD by type
+          ["111", "Energy Transfer LP", "Long", "500", "100", "01/01/2025", "01/03/2025",
+           "1", "0", "0", "50", "45", "1.08", "1.10", "5", "5.5", "0", "0", "0", "-", "CFD", "US29273V1008", ""],
+          // CFD by leverage > 1
+          ["222", "AAPL Leveraged", "Long", "1000", "5", "01/01/2025", "01/06/2025",
+           "5", "0", "0", "200", "180", "1.08", "1.10", "180", "220", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(4);
+      expect(result.trades[0]!.assetCategory).toBe("CFD");
+      expect(result.trades[2]!.assetCategory).toBe("CFD");
+    });
+  });
 });

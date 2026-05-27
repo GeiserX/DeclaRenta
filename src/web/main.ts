@@ -340,7 +340,7 @@ async function previewDetectBroker(file: File): Promise<string | null> {
     const uint8 = await getFileBytes(file);
     let result: string | null = null;
     if (await detectRevolutXlsx(uint8)) result = "Revolut";
-    else if (detectEtoroXlsx(uint8)) result = "eToro";
+    else if (await detectEtoroXlsx(uint8)) result = "eToro";
     else result = detectBroker(new TextDecoder("utf-8").decode(uint8))?.name ?? null;
     detectionCache.set(key, result);
     return result;
@@ -423,7 +423,7 @@ async function parseFiles(): Promise<void> {
         continue;
       }
 
-      if (detectEtoroXlsx(uint8)) {
+      if (await detectEtoroXlsx(uint8)) {
         const statement = await parseEtoroXlsx(uint8);
         mergeStatement(merged, statement);
         brokerNames.push("eToro");

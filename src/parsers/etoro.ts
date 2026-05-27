@@ -32,20 +32,24 @@ type WorkSheet = import("xlsx").WorkSheet;
 const ACTION_HEADERS = ["action", "acción"];
 const AMOUNT_HEADERS = ["amount", "importe", "invested"];
 const UNITS_HEADERS = ["units", "units / contracts", "unidades"];
-const OPEN_RATE_HEADERS = ["open rate", "tipo de apertura", "open price"];
-const CLOSE_RATE_HEADERS = ["close rate", "tipo de cierre", "close price"];
-const PROFIT_HEADERS = ["profit", "profit(usd)", "ganancia", "p/l"];
+const OPEN_RATE_HEADERS = ["open rate", "tipo de apertura", "open price", "tasa de apertura"];
+const CLOSE_RATE_HEADERS = ["close rate", "tipo de cierre", "close price", "tasa de cierre"];
+const PROFIT_HEADERS = ["profit", "profit(usd)", "ganancia", "ganancias (usd)", "p/l"];
+const PROFIT_EUR_HEADERS = ["profit(eur)", "ganancias (eur)"];
 const OPEN_DATE_HEADERS = ["open date", "fecha de apertura"];
 const CLOSE_DATE_HEADERS = ["close date", "fecha de cierre"];
 const TYPE_HEADERS = ["type", "tipo"];
 const LEVERAGE_HEADERS = ["leverage", "apalancamiento"];
 const ISIN_HEADERS = ["isin"];
+const DIRECTION_HEADERS = ["long / short", "long/short"];
 
 // Dividend sheet columns
 const DIV_DATE_HEADERS = ["date of payment", "fecha de pago", "date"];
 const DIV_INSTRUMENT_HEADERS = ["instrument name", "nombre del instrumento", "instrument"];
-const DIV_NET_HEADERS = ["net dividend received (usd)", "dividendo neto recibido", "net dividend", "amount"];
-const DIV_WHT_HEADERS = ["withholding tax amount (usd)", "impuesto retenido", "withholding tax rate (%)"];
+const DIV_NET_HEADERS = ["net dividend received (usd)", "dividendo neto recibido (usd)", "net dividend", "amount"];
+const DIV_NET_EUR_HEADERS = ["net dividend received (eur)", "dividendo neto recibido (eur)"];
+const DIV_WHT_HEADERS = ["withholding tax amount (usd)", "importe de la retención tributaria (usd)", "withholding tax rate (%)", "tasa de retención fiscal (%)"];
+const DIV_WHT_EUR_HEADERS = ["withholding tax amount (eur)", "importe de la retención tributaria (eur)"];
 const DIV_ISIN_HEADERS = ["isin"];
 
 // ---------------------------------------------------------------------------
@@ -111,11 +115,13 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
   const openRateCol = findColumn(headers, OPEN_RATE_HEADERS);
   const closeRateCol = findColumn(headers, CLOSE_RATE_HEADERS);
   const profitCol = findColumn(headers, PROFIT_HEADERS);
+  const profitEurCol = findColumn(headers, PROFIT_EUR_HEADERS);
   const openDateCol = findColumn(headers, OPEN_DATE_HEADERS);
   const closeDateCol = findColumn(headers, CLOSE_DATE_HEADERS);
   const typeCol = findColumn(headers, TYPE_HEADERS);
   const leverageCol = findColumn(headers, LEVERAGE_HEADERS);
   const isinCol = findColumn(headers, ISIN_HEADERS);
+  const directionCol = findColumn(headers, DIRECTION_HEADERS);
 
   if (actionCol < 0 || unitsCol < 0) return [];
 
@@ -141,16 +147,38 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     const isCfd = (!isNaN(leverageNum) && leverageNum > 1) || rowType.includes("cfd") || rowType.includes("commodit");
     const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
+    // Two eToro formats:
+    // English: "Action" = "Buy AAPL" (direction + symbol combined)
+    // Spanish: "Acción" = instrument name, "Long / Short" = direction
     const actionStr = row[actionCol] ?? "";
-    const parsed = parseAction(actionStr);
-    if (!parsed) continue;
+    let symbol: string;
+    let direction: "BUY" | "SELL";
+
+    if (directionCol >= 0) {
+      // Spanish format: Acción = name, Long/Short = direction
+      symbol = actionStr.trim();
+      const dirStr = (row[directionCol] ?? "").toLowerCase().trim();
+      direction = dirStr === "short" ? "SELL" : "BUY";
+    } else {
+      const parsed = parseAction(actionStr);
+      if (!parsed) continue;
+      symbol = parsed.symbol;
+      direction = parsed.direction;
+    }
+
+    if (!symbol) continue;
 
     const isin = isinCol >= 0 ? (row[isinCol] ?? "").trim() : "";
     const units = (row[unitsCol] ?? "0").trim();
     const openRate = openRateCol >= 0 ? (row[openRateCol] ?? "0").trim() : "0";
     const closeRate = closeRateCol >= 0 ? (row[closeRateCol] ?? "0").trim() : "0";
     const amount = amountCol >= 0 ? (row[amountCol] ?? "0").trim() : "0";
-    const profit = profitCol >= 0 ? (row[profitCol] ?? "0").trim() : "0";
+    // Prefer EUR profit if available (Spanish export has both USD and EUR)
+    const profitRaw = profitEurCol >= 0
+      ? (row[profitEurCol] ?? "0").trim()
+      : profitCol >= 0 ? (row[profitCol] ?? "0").trim() : "0";
+    const profit = parseNumber(profitRaw);
+    const currency = profitEurCol >= 0 && (row[profitEurCol] ?? "").trim() ? "EUR" : "USD";
     const openDate = openDateCol >= 0 ? parseEtoroDate(row[openDateCol] ?? "") : "";
     const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
 
@@ -163,13 +191,13 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
 
     // Buy leg (opening)
     trades.push({
-      tradeID: `etoro-open-${openDate}-${parsed.symbol}-${i}`,
+      tradeID: `etoro-open-${openDate}-${symbol}-${i}`,
       accountId: "",
-      symbol: parsed.symbol,
-      description: parsed.symbol,
+      symbol,
+      description: symbol,
       isin,
       assetCategory: assetCat,
-      currency: "USD",
+      currency,
       tradeDate: openDate,
       settlementDate: openDate,
       quantity: `${absUnits}`,
@@ -179,10 +207,10 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       cost: `-${amount}`,
       fifoPnlRealized: "0",
       fxRateToBase: "1",
-      buySell: "BUY",
+      buySell: direction === "SELL" ? "SELL" : "BUY",
       openCloseIndicator: "O",
       exchange: "ETORO",
-      commissionCurrency: "USD",
+      commissionCurrency: currency,
       commission: "0",
       taxes: "0",
       multiplier: "1",
@@ -194,13 +222,13 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     const proceeds = isNaN(amountNum) || isNaN(profitNum) ? "0" : `${amountNum + profitNum}`;
 
     trades.push({
-      tradeID: `etoro-close-${closeDate}-${parsed.symbol}-${i}`,
+      tradeID: `etoro-close-${closeDate}-${symbol}-${i}`,
       accountId: "",
-      symbol: parsed.symbol,
-      description: parsed.symbol,
+      symbol,
+      description: symbol,
       isin,
       assetCategory: assetCat,
-      currency: "USD",
+      currency,
       tradeDate: closeDate,
       settlementDate: closeDate,
       quantity: `-${absUnits}`,
@@ -210,10 +238,10 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       cost: "0",
       fifoPnlRealized: profit,
       fxRateToBase: "1",
-      buySell: "SELL",
+      buySell: direction === "SELL" ? "BUY" : "SELL",
       openCloseIndicator: "C",
       exchange: "ETORO",
-      commissionCurrency: "USD",
+      commissionCurrency: currency,
       commission: "0",
       taxes: "0",
       multiplier: "1",
@@ -235,10 +263,18 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
   const dateCol = findColumn(headers, DIV_DATE_HEADERS);
   const instrumentCol = findColumn(headers, DIV_INSTRUMENT_HEADERS);
   const netCol = findColumn(headers, DIV_NET_HEADERS);
+  const netEurCol = findColumn(headers, DIV_NET_EUR_HEADERS);
   const whtCol = findColumn(headers, DIV_WHT_HEADERS);
+  const whtEurCol = findColumn(headers, DIV_WHT_EUR_HEADERS);
   const isinCol = findColumn(headers, DIV_ISIN_HEADERS);
 
-  if (dateCol < 0 || netCol < 0) return [];
+  if (dateCol < 0 || (netCol < 0 && netEurCol < 0)) return [];
+
+  // Prefer EUR columns if available (Spanish export provides both USD and EUR)
+  const useEur = netEurCol >= 0;
+  const effectiveNetCol = useEur ? netEurCol : netCol;
+  const effectiveWhtCol = useEur ? whtEurCol : whtCol;
+  const currency = useEur ? "EUR" : "USD";
 
   const cashTransactions: CashTransaction[] = [];
 
@@ -251,33 +287,55 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
 
     const tradeDate = parseEtoroDate(dateStr);
     const instrument = instrumentCol >= 0 ? (row[instrumentCol] ?? "").trim() : "";
-    const netAmount = (row[netCol] ?? "0").trim();
-    const whtAmount = whtCol >= 0 ? (row[whtCol] ?? "0").trim() : "0";
+    const netAmount = (row[effectiveNetCol] ?? "0").trim();
     const isin = isinCol >= 0 ? (row[isinCol] ?? "").trim() : "";
 
     const netNum = parseFloat(parseNumber(netAmount));
     if (isNaN(netNum) || netNum === 0) continue;
 
     // Compute gross dividend and withholding tax
-    const whtNum = parseFloat(parseNumber(whtAmount));
-    let grossAmount = netAmount;
+    let grossAmount: string;
     let taxAmount = "0";
-    if (!isNaN(whtNum) && whtNum !== 0) {
-      // WHT might be a percentage or absolute amount
-      const isPercentage = whtNum > 0 && whtNum <= 100 && headers[whtCol]?.toLowerCase().includes("%");
-      if (isPercentage) {
-        const grossNum = netNum / (1 - whtNum / 100);
-        grossAmount = grossNum.toFixed(2);
-        taxAmount = `-${(grossNum * (whtNum / 100)).toFixed(2)}`;
+
+    if (effectiveWhtCol >= 0) {
+      const whtRaw = (row[effectiveWhtCol] ?? "0").trim();
+      const whtNum = parseFloat(parseNumber(whtRaw));
+
+      if (!isNaN(whtNum) && whtNum !== 0) {
+        // Check if WHT column is a percentage (header contains "%") or absolute
+        const whtHeader = (headers[effectiveWhtCol] ?? "").toLowerCase();
+        const isPercentage = whtNum > 0 && whtNum <= 100 && whtHeader.includes("%");
+        if (isPercentage) {
+          const grossNum = netNum / (1 - whtNum / 100);
+          grossAmount = grossNum.toFixed(4);
+          taxAmount = `-${(grossNum * (whtNum / 100)).toFixed(4)}`;
+        } else {
+          const absWht = Math.abs(whtNum);
+          grossAmount = (netNum + absWht).toFixed(4);
+          taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
+        }
       } else {
-        const absWht = Math.abs(whtNum);
-        grossAmount = (netNum + absWht).toFixed(2);
-        taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
+        grossAmount = netAmount;
+      }
+    } else {
+      // No WHT column for this currency — try the percentage column as fallback
+      const pctCol = findColumn(headers, ["withholding tax rate (%)", "tasa de retención fiscal (%)"]);
+      if (pctCol >= 0) {
+        const pctRaw = (row[pctCol] ?? "0").replace(/%/g, "").trim();
+        const pctNum = parseFloat(parseNumber(pctRaw));
+        if (!isNaN(pctNum) && pctNum > 0) {
+          const grossNum = netNum / (1 - pctNum / 100);
+          grossAmount = grossNum.toFixed(4);
+          taxAmount = `-${(grossNum * (pctNum / 100)).toFixed(4)}`;
+        } else {
+          grossAmount = netAmount;
+        }
+      } else {
+        grossAmount = netAmount;
       }
     }
 
     // Dividend (gross amount — downstream engine expects gross)
-    // Include ISIN country code so dividend engine can extract withholding country
     const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
     cashTransactions.push({
       transactionID: `etoro-div-${tradeDate}-${instrument}-${i}`,
@@ -285,7 +343,7 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
       symbol: instrument,
       description: `${isinCountry} Dividend - ${instrument}`,
       isin,
-      currency: "USD",
+      currency,
       dateTime: tradeDate,
       settleDate: tradeDate,
       amount: grossAmount,
@@ -301,7 +359,7 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
         symbol: instrument,
         description: `${isinCountry} WHT - ${instrument}`,
         isin,
-        currency: "USD",
+        currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
         amount: taxAmount,
@@ -309,6 +367,61 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
         type: "Withholding Tax",
       });
     }
+  }
+
+  return cashTransactions;
+}
+
+// ---------------------------------------------------------------------------
+// Account Activity parser (interest income)
+// ---------------------------------------------------------------------------
+
+const ACTIVITY_DATE_HEADERS = ["date", "fecha"];
+const ACTIVITY_TYPE_HEADERS = ["type", "tipo"];
+const ACTIVITY_AMOUNT_HEADERS = ["amount", "importe"];
+
+function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTransaction[] {
+  const rows = sheetToRows(xlsx, sheet);
+  if (rows.length < 2) return [];
+
+  const headers = rows[0]!;
+  const dateCol = findColumn(headers, ACTIVITY_DATE_HEADERS);
+  const typeCol = findColumn(headers, ACTIVITY_TYPE_HEADERS);
+  const amountCol = findColumn(headers, ACTIVITY_AMOUNT_HEADERS);
+
+  if (dateCol < 0 || typeCol < 0 || amountCol < 0) return [];
+
+  const cashTransactions: CashTransaction[] = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (!row.length) continue;
+
+    const typeStr = (row[typeCol] ?? "").toLowerCase().trim();
+    // Only capture interest payments
+    if (!typeStr.includes("interest") && !typeStr.includes("intereses")) continue;
+
+    const dateStr = (row[dateCol] ?? "").trim();
+    if (!dateStr) continue;
+
+    const tradeDate = parseEtoroDate(dateStr);
+    const amountStr = (row[amountCol] ?? "0").trim();
+    const amountNum = parseFloat(parseNumber(amountStr));
+    if (isNaN(amountNum) || amountNum === 0) continue;
+
+    cashTransactions.push({
+      transactionID: `etoro-interest-${tradeDate}-${i}`,
+      accountId: "",
+      symbol: "CASH",
+      description: "Interest Payment",
+      isin: "",
+      currency: "USD",
+      dateTime: tradeDate,
+      settleDate: tradeDate,
+      amount: `${amountNum}`,
+      fxRateToBase: "1",
+      type: "Broker Interest Received",
+    });
   }
 
   return cashTransactions;
@@ -328,9 +441,11 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
 
   const closedSheet = getSheet(wb, ["closed positions", "posiciones cerradas"]);
   const dividendSheet = getSheet(wb, ["dividends", "dividendos"]);
+  const activitySheet = getSheet(wb, ["account activity", "actividad de la cuenta"]);
 
   const trades = closedSheet ? parseClosedPositions(xlsx, closedSheet) : [];
-  const cashTransactions = dividendSheet ? parseDividends(xlsx, dividendSheet) : [];
+  const dividends = dividendSheet ? parseDividends(xlsx, dividendSheet) : [];
+  const interest = activitySheet ? parseAccountActivity(xlsx, activitySheet) : [];
 
   return {
     accountId: "",
@@ -338,7 +453,7 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
     toDate: "",
     period: "",
     trades,
-    cashTransactions,
+    cashTransactions: [...dividends, ...interest],
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
@@ -347,19 +462,16 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
 
 /**
  * Check if a Buffer/Uint8Array is likely an eToro XLSX file.
- * Checks for PK (ZIP) magic bytes and eToro-specific sheet names.
+ * Reads only sheet names via xlsx (async — works in both Node and browser).
  */
-export function detectEtoroXlsx(data: Buffer | Uint8Array): boolean {
-  // Check ZIP magic bytes (PK\x03\x04)
+export async function detectEtoroXlsx(data: Buffer | Uint8Array): Promise<boolean> {
   if (data.length < 4 || data[0] !== 0x50 || data[1] !== 0x4B) return false;
 
   try {
-    // Lazy import check — if xlsx isn't available, can't parse
-    // For detection, check if it contains eToro-specific content
-    const textSlice = Buffer.from(data.slice(0, Math.min(data.length, 100000))).toString("utf-8", 0, Math.min(data.length, 100000));
-    return textSlice.toLowerCase().includes("closed position") ||
-           textSlice.toLowerCase().includes("posiciones cerradas") ||
-           textSlice.toLowerCase().includes("etoro");
+    const xlsx = await import("xlsx");
+    const wb = xlsx.read(data, { type: "buffer", bookSheets: true });
+    const names = wb.SheetNames.map((s) => s.toLowerCase());
+    return names.some((n) => n.includes("closed position") || n.includes("posiciones cerradas"));
   } catch {
     return false;
   }
