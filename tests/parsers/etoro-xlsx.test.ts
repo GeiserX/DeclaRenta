@@ -47,24 +47,24 @@ function buildEtoroWorkbook(opts: {
 
 describe("eToro XLSX parsing", () => {
   describe("detectEtoroXlsx", () => {
-    it("should detect a valid eToro XLSX", () => {
+    it("should detect a valid eToro XLSX", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
           ["Buy AAPL", "1000", "5", "180", "195", "82.50", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
         ],
       });
-      expect(detectEtoroXlsx(data)).toBe(true);
+      expect(await detectEtoroXlsx(data)).toBe(true);
     });
 
-    it("should reject non-ZIP data", () => {
+    it("should reject non-ZIP data", async () => {
       const data = new Uint8Array([0x00, 0x01, 0x02, 0x03]);
-      expect(detectEtoroXlsx(data)).toBe(false);
+      expect(await detectEtoroXlsx(data)).toBe(false);
     });
 
-    it("should reject empty data", () => {
+    it("should reject empty data", async () => {
       const data = new Uint8Array(0);
-      expect(detectEtoroXlsx(data)).toBe(false);
+      expect(await detectEtoroXlsx(data)).toBe(false);
     });
   });
 
@@ -458,11 +458,11 @@ describe("eToro XLSX parsing", () => {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
 
-    it("should detect Spanish eToro workbook", () => {
+    it("should detect Spanish eToro workbook", async () => {
       const data = buildSpanishWorkbook({
         closedPositions: [SPANISH_CLOSED_HEADER],
       });
-      expect(detectEtoroXlsx(data)).toBe(true);
+      expect(await detectEtoroXlsx(data)).toBe(true);
     });
 
     it("should parse Long positions using 'Acción' as symbol and 'Long / Short' for direction", async () => {
