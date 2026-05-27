@@ -94,6 +94,19 @@ describe("parseNumber", () => {
   it("should handle negative number with no separator", () => {
     expect(parseNumber("-50")).toBe("-50");
   });
+
+  it("should handle parenthesized negatives", () => {
+    expect(parseNumber("(16.63)")).toBe("-16.63");
+    expect(parseNumber("(1,234.56)")).toBe("-1234.56");
+    expect(parseNumber("(0.07)")).toBe("-0.07");
+    expect(parseNumber("( 42 )")).toBe("-42");
+  });
+
+  it("should strip currency symbols", () => {
+    expect(parseNumber("€1.234,56")).toBe("1234.56");
+    expect(parseNumber("$100.50")).toBe("100.50");
+    expect(parseNumber("£(50.00)")).toBe("-50.00");
+  });
 });
 
 describe("convertDateDMY", () => {
