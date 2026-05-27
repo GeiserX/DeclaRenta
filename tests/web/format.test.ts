@@ -38,4 +38,8 @@ describe("fmtEur — Spanish number formatting", () => {
   it("handles negative thousands correctly", () => {
     expect(fmtEur(new Decimal("-12345.67"))).toBe("-12.345,67");
   });
+
+  it("handles zero decimals (no comma)", () => {
+    expect(fmtEur(new Decimal("12345"), 0)).toBe("12.345");
+  });
 });

@@ -35,9 +35,7 @@ function fmtDate(d: string): string {
   return `${clean.slice(6, 8)}/${clean.slice(4, 6)}/${clean.slice(0, 4)}`;
 }
 
-function fmtNum(d: Decimal): string {
-  return fmtEur(d);
-}
+function fmtNum(d: Decimal): string { return fmtEur(d); }
 
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
