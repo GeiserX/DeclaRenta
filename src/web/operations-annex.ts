@@ -6,6 +6,7 @@
 import Decimal from "decimal.js";
 import { t } from "../i18n/index.js";
 import type { TaxSummary, FifoDisposal } from "../types/tax.js";
+import { fmtEur } from "./format.js";
 
 const ASSET_LABELS: Record<string, string> = {
   STK: "Acciones cotizadas",
@@ -35,7 +36,7 @@ function fmtDate(d: string): string {
 }
 
 function fmtNum(d: Decimal): string {
-  return d.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return fmtEur(d);
 }
 
 export function renderOperationsAnnex(report: TaxSummary): string {

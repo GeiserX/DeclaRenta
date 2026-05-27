@@ -7,6 +7,7 @@
 
 import Decimal from "decimal.js";
 import { t } from "../i18n/index.js";
+import { fmtEur } from "./format.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -151,7 +152,7 @@ export function renderHorizontalBarChart(title: string, items: { label: string; 
     return `
       <text x="${labelW - 4}" y="${y + barH / 2 + 4}" text-anchor="end" fill="var(--text)" font-size="11">${escSvg(d.label)}</text>
       <rect x="${labelW}" y="${y}" width="${w}" height="${barH}" rx="4" fill="${d.color}" opacity="0.8"/>
-      <text x="${labelW + w + 6}" y="${y + barH / 2 + 4}" fill="var(--muted)" font-size="10">${d.value.toFixed(2)} EUR</text>
+      <text x="${labelW + w + 6}" y="${y + barH / 2 + 4}" fill="var(--muted)" font-size="10">${fmtEur(d.value)} EUR</text>
     `;
   }).join("");
 
@@ -306,16 +307,16 @@ export function renderTaxBracketCard(
   const tableRows = rows.map((r) =>
     `<tr>
       <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${escSvg(r.label)}</td>
-      <td style="text-align:right">${r.amount.toFixed(2)} &euro;</td>
+      <td style="text-align:right">${fmtEur(r.amount)} &euro;</td>
       <td style="text-align:right">${(r.rate * 100).toFixed(0)}%</td>
-      <td style="text-align:right">${r.tax.toFixed(2)} &euro;</td>
+      <td style="text-align:right">${fmtEur(r.tax)} &euro;</td>
     </tr>`,
   ).join("");
 
   const deductionRow = doubleTaxDeduction > 0
     ? `<tr class="muted">
         <td colspan="3" style="text-align:right">${escSvg(t("tax.double_tax_deduction"))}</td>
-        <td style="text-align:right">-${doubleTaxDeduction.toFixed(2)} &euro;</td>
+        <td style="text-align:right">-${fmtEur(doubleTaxDeduction)} &euro;</td>
       </tr>`
     : "";
 
@@ -337,7 +338,7 @@ export function renderTaxBracketCard(
         ${deductionRow}
         <tr style="font-weight:700;border-top:2px solid var(--border,#ccc)">
           <td colspan="3" style="text-align:right">${escSvg(t("tax.total_estimated"))}</td>
-          <td style="text-align:right">${netTax.toFixed(2)} &euro;</td>
+          <td style="text-align:right">${fmtEur(netTax)} &euro;</td>
         </tr>
         <tr class="muted">
           <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate"))}</td>
@@ -351,11 +352,11 @@ export function renderTaxBracketCard(
 
 function renderBreakdown(b: TaxBaseBreakdown): string {
   const lines: string[] = [];
-  if (b.capitalGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_capital_gains"))}: <strong>${b.capitalGains.toFixed(2)} &euro;</strong></span>`);
-  if (b.fxGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_fx_gains"))}: <strong>${b.fxGains.toFixed(2)} &euro;</strong></span>`);
-  if (b.dividends !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_dividends"))}: <strong>${b.dividends.toFixed(2)} &euro;</strong></span>`);
-  if (b.interest !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_interest"))}: <strong>${b.interest.toFixed(2)} &euro;</strong></span>`);
-  if (b.blockedLosses > 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${b.blockedLosses.toFixed(2)} &euro;</strong></span>`);
+  if (b.capitalGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_capital_gains"))}: <strong>${fmtEur(b.capitalGains)} &euro;</strong></span>`);
+  if (b.fxGains !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_fx_gains"))}: <strong>${fmtEur(b.fxGains)} &euro;</strong></span>`);
+  if (b.dividends !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_dividends"))}: <strong>${fmtEur(b.dividends)} &euro;</strong></span>`);
+  if (b.interest !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_interest"))}: <strong>${fmtEur(b.interest)} &euro;</strong></span>`);
+  if (b.blockedLosses > 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${fmtEur(b.blockedLosses)} &euro;</strong></span>`);
   if (lines.length === 0) return "";
   return `<div class="bracket-breakdown muted" style="font-size:0.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 12px">${lines.join("")}</div>`;
 }

@@ -8,6 +8,7 @@
 import type { TaxSummary } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { saveReport, loadAllReports, clearAllReports, type StoredReport } from "./storage.js";
+import { fmtEur } from "./format.js";
 
 /** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
@@ -117,7 +118,7 @@ export function renderYearComparison(container: HTMLElement): void {
   // Data rows
   const rows = COMPARISON_ROWS.map((row) => {
     const values = sorted.map((r) => r.casillas[row.key]);
-    const valueCells = values.map((v) => `<td>${v.toFixed(2)}</td>`).join("");
+    const valueCells = values.map((v) => `<td>${fmtEur(v)}</td>`).join("");
 
     const varCells = values.length >= 2
       ? values.slice(0, -1).map((v, i) => {
