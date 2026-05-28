@@ -7,6 +7,7 @@
 
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
+import { fmtEur } from "./format.js";
 
 /** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
@@ -48,7 +49,7 @@ function renderDisposalsDetail(disposals: FifoDisposal[], label: string): string
           <td>${esc(d.symbol)}</td>
           <td>${formatDate(d.sellDate)}</td>
           <td>${d.quantity.toString()}</td>
-          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${d.proceedsEur.toFixed(2)}</td>
+          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -69,7 +70,7 @@ function renderDividendsDetail(entries: DividendEntry[]): string {
           <td class="mono">${esc(d.isin)}</td>
           <td>${esc(d.symbol)}</td>
           <td>${formatDate(d.payDate)}</td>
-          <td>${d.grossAmountEur.toFixed(2)}</td>
+          <td>${fmtEur(d.grossAmountEur)}</td>
           <td>${esc(d.withholdingCountry)}</td>
         </tr>`).join("")}
       </tbody>
@@ -90,7 +91,7 @@ function renderInterestDetail(entries: InterestEntry[], filterType: "earned" | "
         <tr>
           <td>${formatDate(e.date)}</td>
           <td>${esc(e.description)}</td>
-          <td>${e.amountEur.toFixed(2)}</td>
+          <td>${fmtEur(e.amountEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -107,8 +108,8 @@ function renderDoubleTaxDetail(report: TaxSummary): string {
       <tbody>${countries.map(([country, data]) => `
         <tr>
           <td>${esc(country)}</td>
-          <td>${data.taxPaid.toFixed(2)}</td>
-          <td>${data.deductionAllowed.toFixed(2)}</td>
+          <td>${fmtEur(data.taxPaid)}</td>
+          <td>${fmtEur(data.deductionAllowed)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -129,8 +130,8 @@ function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string
           <td>${esc(d.currency)}</td>
           <td>${formatDate(d.disposeDate)}</td>
           <td>${formatDate(d.acquireDate)}</td>
-          <td>${d.quantity.toFixed(2)}</td>
-          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${d.gainLossEur.toFixed(2)}</td>
+          <td>${fmtEur(d.quantity)}</td>
+          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
           <td>${esc(d.trigger)}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
@@ -142,63 +143,63 @@ const CASILLAS: CasillaConfig[] = [
   {
     code: "0327",
     i18nKey: "casilla.transmission_value",
-    getValue: (r) => r.capitalGains.transmissionValue.toFixed(2),
+    getValue: (r) => fmtEur(r.capitalGains.transmissionValue),
     getClass: () => "",
     getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.transmission_value")),
   },
   {
     code: "0328",
     i18nKey: "casilla.acquisition_value",
-    getValue: (r) => r.capitalGains.acquisitionValue.toFixed(2),
+    getValue: (r) => fmtEur(r.capitalGains.acquisitionValue),
     getClass: () => "",
     getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.acquisition_value")),
   },
   {
     code: "1633",
     i18nKey: "casilla.fx_transmission_value",
-    getValue: (r) => r.fxGains.transmissionValue.toFixed(2),
+    getValue: (r) => fmtEur(r.fxGains.transmissionValue),
     getClass: () => "",
     getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
   },
   {
     code: "1637",
     i18nKey: "casilla.fx_acquisition_value",
-    getValue: (r) => r.fxGains.acquisitionValue.toFixed(2),
+    getValue: (r) => fmtEur(r.fxGains.acquisitionValue),
     getClass: () => "",
     getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value")),
   },
   {
     code: "",
     i18nKey: "casilla.net_gain_loss",
-    getValue: (r) => r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).toFixed(2),
+    getValue: (r) => fmtEur(r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss)),
     getClass: (r) => r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).greaterThanOrEqualTo(0) ? "gain" : "loss",
     getDetail: () => "",
   },
   {
     code: "0029",
     i18nKey: "casilla.gross_dividends",
-    getValue: (r) => r.dividends.grossIncome.toFixed(2),
+    getValue: (r) => fmtEur(r.dividends.grossIncome),
     getClass: () => "",
     getDetail: (r) => renderDividendsDetail(r.dividends.entries),
   },
   {
     code: "0027",
     i18nKey: "casilla.interest_earned",
-    getValue: (r) => r.interest.earned.toFixed(2),
+    getValue: (r) => fmtEur(r.interest.earned),
     getClass: () => "",
     getDetail: (r) => renderInterestDetail(r.interest.entries, "earned"),
   },
   {
     code: "",
     i18nKey: "casilla.interest_paid",
-    getValue: (r) => r.interest.paid.toFixed(2),
+    getValue: (r) => fmtEur(r.interest.paid),
     getClass: () => "",
     getDetail: (r) => renderInterestDetail(r.interest.entries, "paid"),
   },
   {
     code: "0588",
     i18nKey: "casilla.double_taxation",
-    getValue: (r) => r.doubleTaxation.deduction.toFixed(2),
+    getValue: (r) => fmtEur(r.doubleTaxation.deduction),
     getClass: () => "",
     getDetail: (r) => renderDoubleTaxDetail(r),
   },
@@ -233,7 +234,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
   }).join("");
 
   const blockedWarning = report.capitalGains.blockedLosses.greaterThan(0)
-    ? `<p class="warning">${t("casilla.blocked_losses", { amount: report.capitalGains.blockedLosses.toFixed(2) })}</p>`
+    ? `<p class="warning">${t("casilla.blocked_losses", { amount: fmtEur(report.capitalGains.blockedLosses) })}</p>`
     : "";
 
   const msgs = report.messages;

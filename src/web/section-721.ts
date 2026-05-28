@@ -11,6 +11,7 @@ import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate } from "../engine/ecb.js";
 import Decimal from "decimal.js";
+import { fmtEur } from "./format.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -106,14 +107,14 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <div class="threshold-fill ${exceeds ? "over" : "under"}" style="width: ${pct}%"></div>
     </div>
     <div class="threshold-labels">
-      <span>${t("m721.total_value", { amount: totalValue.toFixed(2) })}</span>
+      <span>${t("m721.total_value", { amount: fmtEur(totalValue) })}</span>
       <span>50.000 €</span>
     </div>
   </div>
   <p class="${exceeds ? "warning" : "muted"}">
     ${exceeds
-      ? t("m721.threshold_exceeded", { amount: totalValue.toFixed(2) })
-      : t("m721.threshold_not_exceeded", { amount: totalValue.toFixed(2) })}
+      ? t("m721.threshold_exceeded", { amount: fmtEur(totalValue) })
+      : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
   </p>`;
 
   // Positions table
@@ -125,7 +126,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     </tr></thead>
     <tbody>${positions.map((p) => {
       const rate = getEcbRate(rateMap, yearEnd, p.currency);
-      const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
+      const val = fmtEur(new Decimal(p.positionValue).mul(rate));
       const exchange = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "—";
       return `<tr>
         <td class="mono">${esc(p.description || p.isin || p.symbol)}</td>

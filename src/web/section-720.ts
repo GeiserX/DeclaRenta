@@ -12,6 +12,7 @@ import { checkModelo720Thresholds } from "../generators/modelo720.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
+import { fmtEur } from "./format.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -106,7 +107,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         <div class="threshold-fill ${cat.exceeds ? "over" : "under"}" style="width: ${pct}%"></div>
       </div>
       <div class="threshold-labels">
-        <span>${t("m720.total_value", { amount: cat.total.toFixed(2) })}</span>
+        <span>${t("m720.total_value", { amount: fmtEur(cat.total) })}</span>
         <span>50.000 €</span>
       </div>
       <p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>
@@ -115,7 +116,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
   if (exceeds) {
     const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
-    html += `<p class="warning">${t("m720.threshold_exceeded", { amount: totalValue.toFixed(2) })}</p>`;
+    html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
   }
 
   // Positions table
@@ -138,7 +139,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         } catch {
           rate = getEcbRate(rateMap, dateForRates, p.currency);
         }
-        const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
+        const val = fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(p.isin.slice(0, 2))}</td><td>${val}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -168,8 +169,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
       </tr></thead>
       <tbody>${cashBalances.map((cb) => {
         const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, dateForRates, cb.currency);
-        const val = new Decimal(cb.endingCash).mul(ecbRate).toFixed(2);
-        const avg = cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate).toFixed(2) : "—";
+        const val = fmtEur(new Decimal(cb.endingCash).mul(ecbRate));
+        const avg = cb.averageQ4Cash ? fmtEur(new Decimal(cb.averageQ4Cash).mul(ecbRate)) : "—";
         return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;

@@ -12,6 +12,7 @@ import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
+import { fmtEur } from "./format.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -101,7 +102,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     const rate = getEcbRate(rateMap, yearEnd, p.currency);
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
-  html += `<p><strong>${t("d6.total_value", { amount: totalValue.toFixed(2) })}</strong></p>`;
+  html += `<p><strong>${t("d6.total_value", { amount: fmtEur(totalValue) })}</strong></p>`;
 
   // Positions table
   html += `<h3>${t("d6.positions_title")}</h3>
@@ -113,7 +114,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     <tbody>${positions
       .map((p) => {
         const rate = getEcbRate(rateMap, yearEnd, p.currency);
-        const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
+        const val = fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
         <td>${esc(p.isin.slice(0, 2))}</td><td>${new Decimal(p.quantity).toString()}</td><td>${val}</td>
@@ -193,7 +194,7 @@ function renderAforixGuide(
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
     const rate = getEcbRate(rateMap, yearEnd, p.currency);
-    const val = new Decimal(p.positionValue).mul(rate).toFixed(2);
+    const val = fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField("ISIN", p.isin);
     html += aforixField("Denominación", p.description);

@@ -33,6 +33,7 @@ import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
+import { fmtEur } from "./format.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -859,9 +860,9 @@ function renderOperationsTable() {
             <td>${formatDate(d.acquireDate)}</td>
             <td>${formatDate(d.sellDate)}</td>
             <td>${d.quantity.toString()}</td>
-            <td>${d.costBasisEur.toFixed(2)}</td>
-            <td>${d.proceedsEur.toFixed(2)}</td>
-            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">${d.gainLossEur.toFixed(2)}</td>
+            <td>${fmtEur(d.costBasisEur)}</td>
+            <td>${fmtEur(d.proceedsEur)}</td>
+            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
           </tr>
         `).join("")}
@@ -915,8 +916,8 @@ function renderDividendsTable(report: TaxSummary) {
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
             <td>${formatDate(d.payDate)}</td>
-            <td>${d.grossAmountEur.toFixed(2)}</td>
-            <td>${d.withholdingTaxEur.toFixed(2)}</td>
+            <td>${fmtEur(d.grossAmountEur)}</td>
+            <td>${fmtEur(d.withholdingTaxEur)}</td>
             <td>${esc(d.withholdingCountry)}</td>
           </tr>
         `).join("")}
