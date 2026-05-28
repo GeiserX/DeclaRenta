@@ -35,7 +35,6 @@ function fmtDate(d: string): string {
   return `${clean.slice(6, 8)}/${clean.slice(4, 6)}/${clean.slice(0, 4)}`;
 }
 
-function fmtNum(d: Decimal): string { return fmtEur(d); }
 
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
@@ -65,7 +64,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
       <summary class="annex-group-header">
         <span class="annex-group-name">${esc(label)}</span>
         <span class="annex-group-count">${ops.length} ${t("annex.operations")}</span>
-        <span class="annex-group-total ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtNum(subtotalGL)} EUR</span>
+        <span class="annex-group-total ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</span>
       </summary>
       <div class="annex-table-wrap">
         <table class="annex-table">
@@ -98,9 +97,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${fmtDate(d.acquireDate)}</td>
               <td>${fmtDate(d.sellDate)}</td>
               <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>
-              <td class="num">${fmtNum(d.costBasisEur)}</td>
-              <td class="num">${fmtNum(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtNum(d.gainLossEur)}</td>
+              <td class="num">${fmtEur(d.costBasisEur)}</td>
+              <td class="num">${fmtEur(d.proceedsEur)}</td>
+              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
             </tr>`;
     });
 
@@ -109,9 +108,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
           <tfoot>
             <tr class="annex-subtotal">
               <td colspan="6">${esc(label)}</td>
-              <td class="num">${fmtNum(subtotalCost)}</td>
-              <td class="num">${fmtNum(subtotalProceeds)}</td>
-              <td class="num ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtNum(subtotalGL)} EUR</td>
+              <td class="num">${fmtEur(subtotalCost)}</td>
+              <td class="num">${fmtEur(subtotalProceeds)}</td>
+              <td class="num ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</td>
             </tr>
           </tfoot>
         </table>
