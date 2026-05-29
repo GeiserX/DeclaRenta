@@ -59,8 +59,11 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
     const glClass = subtotalGL.greaterThanOrEqualTo(0) ? "gain" : "loss";
 
+    // Collapsed by default: the per-operation tables can be hundreds of rows
+    // long, which drowns the Modelo 100 results. The summary (asset type, count,
+    // subtotal) stays visible; the user expands a group to see its operations.
     html += `
-    <details class="annex-group" open>
+    <details class="annex-group">
       <summary class="annex-group-header">
         <span class="annex-group-name">${esc(label)}</span>
         <span class="annex-group-count">${ops.length} ${t("annex.operations")}</span>

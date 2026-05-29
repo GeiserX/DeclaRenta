@@ -96,6 +96,14 @@ export function convertDateDMY(date: string): string {
   return `${match[3]}${match[2]}${match[1]}`;
 }
 
+/** Convert DD.MM.YYYY to YYYYMMDD (Flatex/German format) */
+export function convertDateDMYDot(date: string): string {
+  const trimmed = date.trim();
+  const match = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return trimmed;
+  return `${match[3]}${match[2]}${match[1]}`;
+}
+
 /** Convert DD/MM/YYYY to YYYYMMDD */
 export function convertDateDMYSlash(date: string): string {
   const trimmed = date.trim();

@@ -150,7 +150,7 @@ describe("calculateDividends", () => {
       expect(entries[0]!.withholdingCountry).toBe("US");
     });
 
-    it("should default to XX when no country pattern matches", () => {
+    it("should fall back to the ISIN prefix when no country pattern matches", () => {
       const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
 
       const transactions: CashTransaction[] = [
@@ -158,6 +158,26 @@ describe("calculateDividends", () => {
           transactionID: "1",
           amount: "100",
           type: "Dividends",
+          isin: "US0378331005",
+          description: "SOME DIVIDEND",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("US");
+    });
+
+    it("should default to XX when there is neither a marker nor an ISIN", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          amount: "100",
+          type: "Dividends",
+          isin: "",
           description: "SOME DIVIDEND",
         }),
       ];
@@ -166,6 +186,46 @@ describe("calculateDividends", () => {
 
       expect(entries).toHaveLength(1);
       expect(entries[0]!.withholdingCountry).toBe("XX");
+    });
+
+    it("should derive ES (domestic) from a Spanish ISIN — Flatex dividend", () => {
+      const rates: EcbRateMap = new Map();
+
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          amount: "60.75",
+          currency: "EUR",
+          type: "Dividends",
+          isin: "ES0178430E18",
+          description: "Dividendenzahlung ES0178430E18",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("ES");
+    });
+
+    it("should prefer an explicit Tax marker over the ISIN prefix", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      // Irish-domiciled ETF, but the broker marks US withholding explicitly.
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          amount: "100",
+          type: "Dividends",
+          isin: "IE00B4L5Y983",
+          description: "US Tax withheld on distribution",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("US");
     });
   });
 });

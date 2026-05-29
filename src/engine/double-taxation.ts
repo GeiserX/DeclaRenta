@@ -47,6 +47,10 @@ export function calculateDoubleTaxation(
     : undefined;
 
   for (const [country, data] of Object.entries(byCountry)) {
+    // Spain is domestic: any "withholding" on an ES security is a retención a
+    // cuenta (paid into the Spanish system), not a foreign tax eligible for the
+    // Art. 80 double-taxation deduction. Never count it as a foreign credit.
+    if (country === "ES") continue;
     if (data.taxPaid.isZero()) continue;
 
     const spanishTax = effectiveSavingsRate
