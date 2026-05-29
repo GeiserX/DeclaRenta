@@ -2,7 +2,7 @@ import type { TaxSummary } from "../types/tax.js";
 import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
-import { computeCasillaBlocksWithFx } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx } from "./casillas.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
 
@@ -109,7 +109,7 @@ export async function generatePdfWebReport(
   }
 
   casillasBody.push(
-    ["",     t("casilla.net_gain_loss"),       eur(report.capitalGains.netGainLoss.plus(report.fxGains.netGainLoss))],
+    ["",     t("casilla.net_gain_loss"),       eur(combinedNetGainLoss(blocks))],
     ["0029", t("casilla.gross_dividends"),     eur(report.dividends.grossIncome)],
     // Casilla 0027: Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF)
     ["0027", t("casilla.interest_earned"),     eur(report.interest.earned)],

@@ -8,7 +8,7 @@
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
-import { computeCasillaBlocksWithFx, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
 
 /** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
@@ -30,7 +30,7 @@ interface CasillaConfig {
   code: string;
   i18nKey: string;
   getValue: (r: TaxSummary, blocks: CasillaBlocks) => string;
-  getClass: (r: TaxSummary) => string;
+  getClass: (r: TaxSummary, blocks: CasillaBlocks) => string;
   getDetail: (r: TaxSummary) => string;
   /** Optional: hide this card when it returns false (e.g. block has no operations). */
   visible?: (r: TaxSummary, blocks: CasillaBlocks) => boolean;
@@ -195,8 +195,8 @@ const CASILLAS: CasillaConfig[] = [
   {
     code: "",
     i18nKey: "casilla.net_gain_loss",
-    getValue: (r) => fmtEur(r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss)),
-    getClass: (r) => r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).greaterThanOrEqualTo(0) ? "gain" : "loss",
+    getValue: (_r, blocks) => fmtEur(combinedNetGainLoss(blocks)),
+    getClass: (_r, blocks) => combinedNetGainLoss(blocks).greaterThanOrEqualTo(0) ? "gain" : "loss",
     getDetail: () => "",
   },
   {
@@ -242,7 +242,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
   const blocks = computeCasillaBlocksWithFx(report);
   const cards = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks)).map((c, idx) => {
     const value = c.getValue(report, blocks);
-    const cls = c.getClass(report);
+    const cls = c.getClass(report, blocks);
     const hasDetail = c.code !== "";
     const isNetRow = c.code === "";
 

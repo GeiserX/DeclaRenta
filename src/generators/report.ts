@@ -65,6 +65,11 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
   };
 }
 
+/** Divide an interest amount (already abs-valued EUR) by the number of titulares. */
+function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
+  return n <= 1 ? amountEur : amountEur.div(n);
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
   /**
@@ -103,7 +108,9 @@ export function generateTaxReport(
 
   // Number of account holders. >1 splits every reported amount equally per
   // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.
-  const titulares = Math.max(1, Math.floor(options?.titulares ?? 1));
+  // Math.max(1, NaN) is NaN, so guard finiteness explicitly (CLI --titulares abc → NaN).
+  const titularesRaw = Math.floor(options?.titulares ?? 1);
+  const titulares = Number.isFinite(titularesRaw) && titularesRaw >= 1 ? titularesRaw : 1;
 
   const yearStr = year.toString();
   let disposals = fifoEngine.getDisposals().filter((d) => d.sellDate.startsWith(yearStr));
@@ -156,7 +163,7 @@ export function generateTaxReport(
     })
     .map((t) => {
       const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
-      const amountEur = new Decimal(t.amount).mul(ecbRate).abs().div(titulares);
+      const amountEur = splitInterestAmount(new Decimal(t.amount).mul(ecbRate).abs(), titulares);
       const isEarned = t.type.includes("Received");
 
       if (isEarned) {

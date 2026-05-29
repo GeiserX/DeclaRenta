@@ -15,7 +15,7 @@
  *
  *  2. "Otros elementos patrimoniales" (página 17 I) — options (Art. 37.1.m),
  *     crypto, non-listed funds, and foreign-currency gains (Art. 37.1.l):
- *       1626 = Tipo de elemento patrimonial. Clave (use 4 = no afectos)
+ *       1626 = Tipo de elemento patrimonial. Clave (use 5 = otros elementos no afectos)
  *       1633 = Valor de transmisión
  *       1637 = Valor de adquisición
  *       1640 = Ganancia patrimonial obtenida ([1633] - [1637] positiva)
@@ -145,4 +145,14 @@ export function computeCasillaBlocksWithFx(report: TaxSummary): CasillaBlocks {
     count: otherElements.count + fx.disposals.length,
   };
   return { listedShares, otherElements: merged };
+}
+
+/**
+ * Combined net gain/loss across both blocks (listed shares + otros elementos,
+ * FX already folded in). Use this instead of recomputing
+ * `capitalGains.netGainLoss + fxGains.netGainLoss` by hand, so the FX merge stays
+ * owned by a single place (see {@link computeCasillaBlocksWithFx}).
+ */
+export function combinedNetGainLoss(blocks: CasillaBlocks): Decimal {
+  return blocks.listedShares.netGainLoss.plus(blocks.otherElements.netGainLoss);
 }

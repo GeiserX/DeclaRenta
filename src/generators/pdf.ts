@@ -10,7 +10,7 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
-import { computeCasillaBlocksWithFx } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx } from "./casillas.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -119,7 +119,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         casillas.push(["Casilla 1637", "V. adquisición (otros: opc./cripto/fondos/divisa)", formatEur(blocks.otherElements.acquisitionValue)]);
       }
       casillas.push(
-        ["", "Ganancia/Pérdida neta", formatEur(report.capitalGains.netGainLoss.plus(report.fxGains.netGainLoss))],
+        ["", "Ganancia/Pérdida neta", formatEur(combinedNetGainLoss(blocks))],
         ["Casilla 0029", "Dividendos brutos", formatEur(report.dividends.grossIncome)],
         ["Casilla 0027", "Intereses ganados", formatEur(report.interest.earned)],
         ["Informativo", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
