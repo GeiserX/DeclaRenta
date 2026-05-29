@@ -49,6 +49,7 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
           isin: "US0378331005",
           symbol: "AAPL",
           description: "APPLE INC",
+          assetCategory: "STK",
           sellDate: "20250920",
           acquireDate: "20250315",
           quantity: new Decimal(10),
@@ -149,10 +150,18 @@ describe("formatCsv", () => {
   it("should include casilla summary values", () => {
     const csv = formatCsv(makeReport());
 
-    expect(csv).toContain("0327,Valor de transmision,1000.00");
-    expect(csv).toContain("0328,Valor de adquisicion,800.00");
+    expect(csv).toContain("0328,Valor de transmision (acciones negociadas),1000.00");
+    expect(csv).toContain("0331,Valor de adquisicion (acciones negociadas),800.00");
     expect(csv).toContain("0029,Dividendos brutos,50.00");
     expect(csv).toContain("0588,Deduccion doble imposicion,7.50");
+  });
+
+  it("should NOT emit the deprecated single-casilla 0327 summary line", () => {
+    const csv = formatCsv(makeReport());
+    // 0327 is a TEXT field (denominación), never a money box — regression guard
+    // against reintroducing the old 0327/0328 transmisión/adquisición mapping.
+    const lines = csv.split("\n");
+    expect(lines.some((l) => l.startsWith("0327,"))).toBe(false);
   });
 
   it("should escape descriptions with commas", () => {

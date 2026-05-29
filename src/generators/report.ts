@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { FlexStatement } from "../types/ibkr.js";
-import type { TaxSummary, TaxMessage } from "../types/tax.js";
+import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
@@ -30,8 +30,56 @@ function filterByYear<T>(items: T[], yearStr: string, getText: (item: T) => stri
   });
 }
 
+/**
+ * Divide a disposal's monetary fields (and quantity) by the number of titulares.
+ * Rates, dates, and classification metadata are per-unit and stay unchanged.
+ */
+function splitDisposal(d: FifoDisposal, n: number): FifoDisposal {
+  if (n <= 1) return d;
+  return {
+    ...d,
+    quantity: d.quantity.div(n),
+    proceedsEur: d.proceedsEur.div(n),
+    costBasisEur: d.costBasisEur.div(n),
+    gainLossEur: d.gainLossEur.div(n),
+  };
+}
+
+function splitFxDisposal(d: FxDisposal, n: number): FxDisposal {
+  if (n <= 1) return d;
+  return {
+    ...d,
+    quantity: d.quantity.div(n),
+    proceedsEur: d.proceedsEur.div(n),
+    costBasisEur: d.costBasisEur.div(n),
+    gainLossEur: d.gainLossEur.div(n),
+  };
+}
+
+function splitDividend(d: DividendEntry, n: number): DividendEntry {
+  if (n <= 1) return d;
+  return {
+    ...d,
+    grossAmountEur: d.grossAmountEur.div(n),
+    withholdingTaxEur: d.withholdingTaxEur.div(n),
+  };
+}
+
+/** Divide an interest amount (already abs-valued EUR) by the number of titulares. */
+function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
+  return n <= 1 ? amountEur : amountEur.div(n);
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
+  /**
+   * Number of account holders (titulares). Default 1.
+   * When > 1, every reported amount is divided equally per contribuyente
+   * (Art. 11.3 LIRPF: rentas atribuidas según titularidad; gananciales = 50/50).
+   * The declaration is understood to be filed individually by each titular for
+   * their proportional share.
+   */
+  titulares?: number;
 }
 
 /**
@@ -58,9 +106,16 @@ export function generateTaxReport(
     statement.optionExercises,
   );
 
+  // Number of account holders. >1 splits every reported amount equally per
+  // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.
+  // Math.max(1, NaN) is NaN, so guard finiteness explicitly (CLI --titulares abc → NaN).
+  const titularesRaw = Math.floor(options?.titulares ?? 1);
+  const titulares = Number.isFinite(titularesRaw) && titularesRaw >= 1 ? titularesRaw : 1;
+
   const yearStr = year.toString();
   let disposals = fifoEngine.getDisposals().filter((d) => d.sellDate.startsWith(yearStr));
   disposals = detectWashSales(disposals, statement.trades);
+  if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
 
   const transmissionValue = disposals.reduce(
     (sum, d) => sum.plus(d.proceedsEur),
@@ -76,7 +131,8 @@ export function generateTaxReport(
 
   // 2. Dividends (filter to target year)
   const yearCashTransactions = statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
-  const dividendEntries = calculateDividends(yearCashTransactions, rateMap);
+  let dividendEntries = calculateDividends(yearCashTransactions, rateMap);
+  if (titulares > 1) dividendEntries = dividendEntries.map((d) => splitDividend(d, titulares));
   const grossDividends = dividendEntries.reduce(
     (sum, d) => sum.plus(d.grossAmountEur),
     new Decimal(0),
@@ -107,20 +163,20 @@ export function generateTaxReport(
     })
     .map((t) => {
       const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
-      const amountEur = new Decimal(t.amount).mul(ecbRate);
+      const amountEur = splitInterestAmount(new Decimal(t.amount).mul(ecbRate).abs(), titulares);
       const isEarned = t.type.includes("Received");
 
       if (isEarned) {
-        interestEarned = interestEarned.plus(amountEur.abs());
+        interestEarned = interestEarned.plus(amountEur);
       } else {
-        interestPaid = interestPaid.plus(amountEur.abs());
+        interestPaid = interestPaid.plus(amountEur);
       }
 
       return {
         type: isEarned ? "earned" as const : "paid" as const,
         description: t.description,
         date: normalizeDate(t.dateTime),
-        amountEur: amountEur.abs(),
+        amountEur,
         currency: t.currency,
         ecbRate,
       };
@@ -141,6 +197,7 @@ export function generateTaxReport(
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
     const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
+    if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
     fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
     fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
@@ -184,6 +241,17 @@ export function generateTaxReport(
       hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
     });
     allWarnings.push(cryptoMsg);
+  }
+
+  // Shared-titularity notice: amounts have been split equally per contribuyente.
+  if (titulares > 1) {
+    allMessages.push({
+      id: "report.titularidad_compartida",
+      severity: "info",
+      message: `Los importes mostrados están divididos entre ${titulares} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los ${titulares} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.`,
+      hint: `El reparto a partes iguales (${titulares} × ${(100 / titulares).toFixed(titulares === 3 ? 2 : 0)} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.`,
+      context: { titulares: String(titulares) },
+    });
   }
 
   // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)

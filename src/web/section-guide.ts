@@ -27,10 +27,10 @@ function renderGuideContent(): void {
     <p>${t("guide_rw.intro")}</p>
   </div>`;
 
-  // Capital gains section (0327/0328)
+  // Capital gains section — acciones negociadas (Art. 37.1.a) → 0328/0331
   html += renderGuideSection(
     t("guide_rw.capital_gains_title"),
-    "0327 / 0328",
+    "0328 / 0331",
     [
       { label: t("guide_rw.entidad_emisora_label"), value: t("guide_rw.entidad_emisora_value") },
       { label: t("guide_rw.tipo_elemento_label"), value: t("guide_rw.tipo_elemento_value_capital") },

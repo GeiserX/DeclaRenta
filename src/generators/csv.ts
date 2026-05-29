@@ -5,6 +5,7 @@
  */
 
 import type { TaxSummary } from "../types/tax.js";
+import { computeCasillaBlocksWithFx } from "./casillas.js";
 
 export function escapeCsv(val: string): string {
   // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in Excel/Sheets)
@@ -67,13 +68,16 @@ export function formatCsv(report: TaxSummary): string {
     lines.push("");
   }
 
-  // Summary section
+  // Summary section. "Otros elementos patrimoniales" (1633/1637) combines
+  // non-listed disposals (options, crypto, funds) and foreign-currency gains
+  // (Art. 37.1.l) — the FX merge is owned by computeCasillaBlocksWithFx().
+  const blocks = computeCasillaBlocksWithFx(report);
   lines.push("# RESUMEN CASILLAS");
   lines.push("Casilla,Concepto,Valor_EUR");
-  lines.push(`0327,Valor de transmision,${report.capitalGains.transmissionValue.toFixed(2)}`);
-  lines.push(`0328,Valor de adquisicion,${report.capitalGains.acquisitionValue.toFixed(2)}`);
-  lines.push(`1633,Valor de transmision FX,${report.fxGains.transmissionValue.toFixed(2)}`);
-  lines.push(`1637,Valor de adquisicion FX,${report.fxGains.acquisitionValue.toFixed(2)}`);
+  lines.push(`0328,Valor de transmision (acciones negociadas),${blocks.listedShares.transmissionValue.toFixed(2)}`);
+  lines.push(`0331,Valor de adquisicion (acciones negociadas),${blocks.listedShares.acquisitionValue.toFixed(2)}`);
+  lines.push(`1633,Valor de transmision (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.transmissionValue.toFixed(2)}`);
+  lines.push(`1637,Valor de adquisicion (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.acquisitionValue.toFixed(2)}`);
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
   lines.push(`0027,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);

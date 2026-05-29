@@ -10,6 +10,7 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx } from "./casillas.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -107,15 +108,23 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
       // --- Section 1: Resumen Casillas ---
       sectionHeader(doc, "1. Resumen de Casillas — Modelo 100");
 
-      const casillas: [string, string, string][] = [
-        ["Casilla 0327", "Valor de transmisión", formatEur(report.capitalGains.transmissionValue)],
-        ["Casilla 0328", "Valor de adquisición", formatEur(report.capitalGains.acquisitionValue)],
-        ["", "Ganancia/Pérdida neta", formatEur(report.capitalGains.netGainLoss)],
+      const blocks = computeCasillaBlocksWithFx(report);
+      const casillas: [string, string, string][] = [];
+      if (blocks.listedShares.count > 0) {
+        casillas.push(["Casilla 0328", "V. transmisión (acciones negociadas)", formatEur(blocks.listedShares.transmissionValue)]);
+        casillas.push(["Casilla 0331", "V. adquisición (acciones negociadas)", formatEur(blocks.listedShares.acquisitionValue)]);
+      }
+      if (blocks.otherElements.count > 0) {
+        casillas.push(["Casilla 1633", "V. transmisión (otros: opc./cripto/fondos/divisa)", formatEur(blocks.otherElements.transmissionValue)]);
+        casillas.push(["Casilla 1637", "V. adquisición (otros: opc./cripto/fondos/divisa)", formatEur(blocks.otherElements.acquisitionValue)]);
+      }
+      casillas.push(
+        ["", "Ganancia/Pérdida neta", formatEur(combinedNetGainLoss(blocks))],
         ["Casilla 0029", "Dividendos brutos", formatEur(report.dividends.grossIncome)],
         ["Casilla 0027", "Intereses ganados", formatEur(report.interest.earned)],
         ["Informativo", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
-      ];
+      );
 
       for (const [casilla, desc, value] of casillas) {
         const y = doc.y;

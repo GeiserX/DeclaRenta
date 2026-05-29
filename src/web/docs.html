@@ -619,19 +619,19 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p>DeclaRenta calcula los valores de las siguientes casillas de la base del ahorro del IRPF. Los valores se obtienen en euros utilizando los tipos de cambio oficiales del BCE.</p>
 
         <div class="casilla-ref">
-          <span class="casilla-num">0327</span>
-          <h4>Valor de transmisión</h4>
-          <p>Suma de los importes netos de venta de todas las operaciones del ejercicio: <code>(precio_venta x cantidad - comisión_venta) x tipo_ECB</code>.</p>
-          <p>Refleja el importe total recibido por la venta de acciones, fondos y opciones, convertido a euros al tipo de cambio del BCE del día de la operación.</p>
-          <p class="muted">Base legal: Art. 35 LIRPF. En Renta Web: Ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales &gt; Valor de transmisión.</p>
+          <span class="casilla-num">0328 / 0331</span>
+          <h4>Acciones negociadas en mercados regulados (Art. 37.1.a)</h4>
+          <p><strong>0328 — Valor de transmisión:</strong> suma de los importes netos de venta de las acciones cotizadas del ejercicio: <code>(precio_venta x cantidad - comisión_venta) x tipo_ECB</code>.</p>
+          <p><strong>0331 — Valor de adquisición:</strong> suma del coste base FIFO de esas ventas: <code>(precio_compra x cantidad + comisión_compra) x tipo_ECB_compra</code>. El coste se calcula mediante FIFO (Art. 37.2 LIRPF).</p>
+          <p class="muted">Base legal: Art. 35 y 37.1.a y 37.2 LIRPF. En Renta Web (Orden HAC/277/2026): «Acciones o participaciones negociadas» &gt; Importe global de las transmisiones (0328) y Valor de adquisición global (0331). Nota: la casilla 0327 es un campo de texto (denominación de los valores), no un importe.</p>
         </div>
 
         <div class="casilla-ref">
-          <span class="casilla-num">0328</span>
-          <h4>Valor de adquisición</h4>
-          <p>Suma del coste base FIFO de todas las ventas: <code>(precio_compra x cantidad + comisión_compra) x tipo_ECB_compra</code>.</p>
-          <p>El coste se calcula mediante FIFO. Si una venta consume lotes de varias compras, el coste base se calcula proporcionalmente para cada lote consumido.</p>
-          <p class="muted">Base legal: Art. 35 y 37.2 LIRPF. En Renta Web: junto a la casilla 0327.</p>
+          <span class="casilla-num">1633 / 1637</span>
+          <h4>Otros elementos patrimoniales (opciones, cripto, fondos no cotizados y divisa)</h4>
+          <p><strong>1633 — Valor de transmisión</strong> y <strong>1637 — Valor de adquisición</strong> de los elementos no encuadrados en acciones negociadas: opciones y derivados (Art. 37.1.m), criptomonedas, fondos no cotizados, y ganancias por tipo de cambio de moneda extranjera (Art. 37.1.l).</p>
+          <p class="muted">Base legal: Art. 37.1.m y 37.1.l LIRPF. En Renta Web: «Otros elementos patrimoniales» (clave 5 — otros elementos no afectos a actividades económicas) &gt; Valor de transmisión (1633) y Valor de adquisición (1637).</p>
+          <p class="warning"><strong>Fondos y ETFs:</strong> DeclaRenta clasifica los fondos y ETFs (categoría FUND) y los bonos (BOND) en este bloque «otros elementos» (1633/1637). Si tu fondo/ETF <em>cotiza</em> en un mercado regulado, técnicamente correspondería al bloque de acciones negociadas (0328/0331). Los informes de los brokers no indican de forma fiable si un fondo cotiza o no, por lo que se aplica este criterio uniforme. <strong>El impuesto a pagar es idéntico</strong> (ambos bloques tributan en la base del ahorro al mismo tipo); solo cambia la casilla en la que se anota. Si lo prefieres, puedes mover manualmente en Renta Web las ventas de ETFs cotizados a las casillas 0328/0331.</p>
         </div>
 
         <div class="casilla-ref">
@@ -961,7 +961,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <h3>Forex (CASH) — Art. 37.1.l LIRPF</h3>
         <p>Las operaciones de compraventa de divisas tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 37.1.l LIRPF). DeclaRenta implementa un <strong>motor FX FIFO independiente</strong> que genera dos eventos fiscales al operar en divisa extranjera:</p>
         <ol>
-          <li><strong>Ganancia/pérdida del valor</strong> (casillas 0327/0328): calculada sobre el precio del activo × tipo ECB en cada fecha.</li>
+          <li><strong>Ganancia/pérdida del valor</strong> (acciones cotizadas → casillas 0328/0331; resto de elementos → 1633/1637): calculada sobre el precio del activo × tipo ECB en cada fecha.</li>
           <li><strong>Ganancia/pérdida FX</strong> (casillas 1633/1637): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.</li>
         </ol>
         <p>Cada adquisición de divisa extranjera (depósito EUR→USD, venta de acciones que genera USD) crea un lote en la cola FIFO de esa divisa. Cada disposición (conversión USD→EUR, compra de acciones en USD) consume lotes por orden cronológico.</p>
@@ -1050,8 +1050,8 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
           </div>
 
           <div class="faq-item">
-            <dt>¿Por qué la ganancia neta no coincide con la diferencia entre 0327 y 0328?</dt>
-            <dd>Si hay pérdidas bloqueadas por la norma anti-churning, la ganancia neta "real" es menor que la aritmética. Las casillas 0327 y 0328 reflejan los importes brutos; las pérdidas bloqueadas se declaran por separado.</dd>
+            <dt>¿Por qué la ganancia neta no coincide con la diferencia entre el valor de transmisión y el de adquisición?</dt>
+            <dd>Si hay pérdidas bloqueadas por la norma anti-churning, la ganancia neta "real" es menor que la aritmética. Las casillas de valor de transmisión (0328/1633) y de adquisición (0331/1637) reflejan los importes brutos; las pérdidas bloqueadas se declaran por separado.</dd>
           </div>
 
           <div class="faq-item">

@@ -465,4 +465,265 @@ describe("generateTaxReport", () => {
     const warningsCount = report.warnings.length;
     expect(warningsCount).toBe(nonHintMessages.length);
   });
+
+  describe("titulares (per-contribuyente split)", () => {
+    function makeMixedStatement(): FlexStatement {
+      return makeStatement({
+        trades: [
+          makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+          makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+        ],
+        cashTransactions: [
+          makeCashTx({ transactionID: "d1", dateTime: "20250601", amount: "100", type: "Dividends" }),
+          makeCashTx({ transactionID: "w1", dateTime: "20250601", amount: "-15", type: "Withholding Tax" }),
+          makeCashTx({
+            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
+            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+          }),
+        ],
+      });
+    }
+
+    const splitRates = makeRateMap({
+      "2025-03-15": "0.9200",
+      "2025-09-20": "0.9100",
+      "2025-06-01": "0.9200",
+    });
+
+    it("should halve every reported amount when titulares = 2", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 2 });
+
+      expect(split.capitalGains.transmissionValue.toFixed(2))
+        .toBe(solo.capitalGains.transmissionValue.div(2).toFixed(2));
+      expect(split.capitalGains.acquisitionValue.toFixed(2))
+        .toBe(solo.capitalGains.acquisitionValue.div(2).toFixed(2));
+      expect(split.capitalGains.netGainLoss.toFixed(2))
+        .toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
+      expect(split.dividends.grossIncome.toFixed(2))
+        .toBe(solo.dividends.grossIncome.div(2).toFixed(2));
+      expect(split.interest.earned.toFixed(2))
+        .toBe(solo.interest.earned.div(2).toFixed(2));
+      expect(split.doubleTaxation.deduction.toFixed(2))
+        .toBe(solo.doubleTaxation.deduction.div(2).toFixed(2));
+
+      // Per-operation amounts are split too (keeps the annex consistent).
+      expect(split.capitalGains.disposals[0]!.proceedsEur.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.quantity.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2));
+    });
+
+    it("should emit an info message about shared titularity when titulares > 1", () => {
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 3 });
+      const msg = split.messages.find((m) => m.id === "report.titularidad_compartida");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.context?.titulares).toBe("3");
+    });
+
+    it("should not change amounts or emit the message when titulares = 1", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const explicit = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 1 });
+
+      expect(explicit.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      expect(explicit.messages.some((m) => m.id === "report.titularidad_compartida")).toBe(false);
+    });
+
+    it("should treat invalid titulares (<1 or fractional) as 1", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const zero = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 0 });
+      const frac = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 1.5 });
+
+      expect(zero.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      // 1.5 floors to 1 → no split
+      expect(frac.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+    });
+
+    it("should split FX disposals per contribuyente when titulares > 1", () => {
+      const fxRates = makeRateMap({ "2025-01-10": "0.9200", "2025-06-15": "0.9500" });
+      const fxStatement = makeStatement({
+        trades: [
+          makeTrade({
+            tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+            currency: "USD", quantity: "-5000", tradePrice: "1.0870", tradeMoney: "-5435",
+            proceeds: "5435", buySell: "SELL", exchange: "IDEALFX",
+          }),
+          makeTrade({
+            tradeID: "fx-buy", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+            currency: "USD", quantity: "5000", tradePrice: "1.0526", tradeMoney: "5263",
+            proceeds: "-5263", buySell: "BUY", exchange: "IDEALFX",
+          }),
+        ],
+      });
+
+      const solo = generateTaxReport(fxStatement, fxRates, 2025);
+      const split = generateTaxReport(fxStatement, fxRates, 2025, { titulares: 2 });
+
+      expect(solo.fxGains.disposals.length).toBeGreaterThan(0);
+      expect(split.fxGains.disposals.length).toBe(solo.fxGains.disposals.length);
+      expect(split.fxGains.netGainLoss.toFixed(2)).toBe(solo.fxGains.netGainLoss.div(2).toFixed(2));
+      expect(split.fxGains.transmissionValue.toFixed(2)).toBe(solo.fxGains.transmissionValue.div(2).toFixed(2));
+      expect(split.fxGains.disposals[0]!.gainLossEur.toFixed(2))
+        .toBe(solo.fxGains.disposals[0]!.gainLossEur.div(2).toFixed(2));
+    });
+
+    it("should keep titulares=3 split consistent (each third reconciles to the whole)", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 3 });
+
+      // Each titular's net × 3 reconciles to the undivided total (within Decimal rounding).
+      const reconstructed = split.capitalGains.netGainLoss.times(3);
+      expect(reconstructed.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      expect(split.dividends.grossIncome.times(3).toFixed(2))
+        .toBe(solo.dividends.grossIncome.toFixed(2));
+    });
+
+    it("titulares=2 halves interest paid (Broker Interest Paid path)", () => {
+      // The existing makeMixedStatement() only has Broker Interest Received.
+      // This test exercises the paid-interest split path which was previously untested.
+      const stmtWithPaid = makeStatement({
+        trades: [
+          makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+          makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+        ],
+        cashTransactions: [
+          makeCashTx({
+            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
+            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+          }),
+          makeCashTx({
+            transactionID: "p1", symbol: "", isin: "", description: "MARGIN INTEREST EXPENSE",
+            dateTime: "20250601", amount: "-40", type: "Broker Interest Paid",
+          }),
+        ],
+      });
+
+      const solo = generateTaxReport(stmtWithPaid, splitRates, 2025);
+      const split = generateTaxReport(stmtWithPaid, splitRates, 2025, { titulares: 2 });
+
+      // Paid path: 40 × 0.92 = 36.80 (abs). Solo paid = 36.80; split = 18.40.
+      expect(solo.interest.paid.toFixed(2)).toBe("36.80");
+      expect(split.interest.paid.toFixed(2)).toBe(solo.interest.paid.div(2).toFixed(2));
+
+      // Earned path is unchanged in ratio
+      expect(split.interest.earned.toFixed(2)).toBe(solo.interest.earned.div(2).toFixed(2));
+
+      // Both entries appear in the split (per-entry amounts are also halved)
+      expect(split.interest.entries).toHaveLength(2);
+      const paidEntry = split.interest.entries.find((e) => e.type === "paid");
+      expect(paidEntry).toBeDefined();
+      expect(paidEntry!.amountEur.toFixed(2)).toBe(solo.interest.paid.div(2).toFixed(2));
+    });
+
+    it("titulares=2 halves a net capital loss and preserves the negative sign", () => {
+      // Disposals that produce a net loss: sell below cost basis.
+      // solo net = 10 × 80 × 0.91 − 10 × 100 × 0.92 = 728 − 920 = −192 EUR
+      const lossRates = makeRateMap({
+        "2025-03-15": "0.9200",
+        "2025-09-20": "0.9100",
+      });
+      const lossStatement = makeStatement({
+        trades: [
+          makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+          makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "80", buySell: "SELL" }),
+        ],
+      });
+
+      const solo = generateTaxReport(lossStatement, lossRates, 2025);
+      const split = generateTaxReport(lossStatement, lossRates, 2025, { titulares: 2 });
+
+      // Verify the solo loss is negative to guard the fixture itself
+      expect(solo.capitalGains.netGainLoss.isNegative()).toBe(true);
+
+      // Split must be exactly half
+      expect(split.capitalGains.netGainLoss.toFixed(2))
+        .toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
+
+      // Sign must be preserved (each titular's loss is still negative)
+      expect(split.capitalGains.netGainLoss.isNegative()).toBe(true);
+
+      // Per-disposal gainLossEur is also negative and halved
+      expect(split.capitalGains.disposals[0]!.gainLossEur.isNegative()).toBe(true);
+      expect(split.capitalGains.disposals[0]!.gainLossEur.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.gainLossEur.div(2).toFixed(2));
+    });
+
+    it("titulares=2 splits the double-taxation deduction linearly when the foreign treaty cap binds", () => {
+      // Art. 80 LIRPF: the deduction is the LESSER of (a) creditable foreign tax
+      // and (b) the Spanish savings tax owed on that foreign income at the
+      // effective rate of the titular's total savings base.
+      //
+      // This fixture deliberately straddles the 6 000 EUR savings bracket so the
+      // solo base is in the 21 % band while the per-titular base (solo/2) is in the
+      // 19 % band. One might expect that to make the deduction NON-linear in N.
+      // It does NOT here, because cap (a) — the foreign treaty withholding — is the
+      // binding constraint at both bases, and the withholding scales exactly 1/N:
+      //   Dividends = 4 000 USD × 0.92 = 3 680 EUR gross per entry × 2 = 7 360 EUR
+      //   Withholding = 600 USD × 0.92 = 552 EUR per entry × 2 = 1 104 EUR (US 15 % treaty)
+      //   Capital gain = 10 × 120 × 0.91 − 10 × 100 × 0.92 = 172 EUR
+      //   Interest earned = 50 × 0.92 = 46 EUR
+      //   Solo savings base = 172 + 7 360 + 46 = 7 578 EUR  (21 % band)
+      //   Per-titular base  = 7 578 / 2 = 3 789 EUR        (19 % band)
+      // Spanish-tax cap (b) at either base (~19–21 % of 7 360 ≈ 1 400+) exceeds the
+      // 1 104 EUR foreign withholding, so cap (a) wins and the deduction = withholding,
+      // which halves cleanly: solo = 1 104.00, split = 552.00, split × 2 = solo.
+      // The progressive bracket only changes the result when the Spanish cap binds
+      // (low foreign withholding) — covered conceptually here; we pin the observed
+      // treaty-capped values to lock the behaviour against regressions.
+      const bigDividendRates = makeRateMap({
+        "2025-03-15": "0.9200",
+        "2025-09-20": "0.9100",
+        "2025-06-01": "0.9200",
+      });
+      const bigDividendStatement = makeStatement({
+        trades: [
+          makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+          makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+        ],
+        cashTransactions: [
+          // Two dividend entries from US (AAPL) — large enough to push solo base > 6 000
+          makeCashTx({ transactionID: "d1", dateTime: "20250601", amount: "4000", type: "Dividends" }),
+          makeCashTx({ transactionID: "w1", dateTime: "20250601", amount: "-600", type: "Withholding Tax" }),
+          makeCashTx({ transactionID: "d2", dateTime: "20250601", amount: "4000", type: "Dividends" }),
+          makeCashTx({ transactionID: "w2", dateTime: "20250601", amount: "-600", type: "Withholding Tax" }),
+          makeCashTx({
+            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
+            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+          }),
+        ],
+      });
+
+      const solo = generateTaxReport(bigDividendStatement, bigDividendRates, 2025);
+      const split = generateTaxReport(bigDividendStatement, bigDividendRates, 2025, { titulares: 2 });
+
+      // Sanity: solo savings base is above 6 000 (crosses into the 21 % band)
+      const soloBase = solo.capitalGains.netGainLoss
+        .plus(solo.dividends.grossIncome)
+        .plus(solo.interest.earned);
+      expect(soloBase.greaterThan(6000)).toBe(true);
+
+      // Per-titular base is below 6 000 (stays in the 19 % band)
+      const perTitularBase = soloBase.div(2);
+      expect(perTitularBase.lessThan(6000)).toBe(true);
+
+      // Deduction = creditable foreign withholding (1 104 EUR), the binding cap here.
+      expect(solo.doubleTaxation.deduction.toFixed(2)).toBe("1104.00");
+      expect(split.doubleTaxation.deduction.toFixed(2)).toBe("552.00");
+
+      // Each titular's deduction never exceeds their share of the withholding.
+      expect(
+        split.doubleTaxation.deduction.lessThanOrEqualTo(solo.doubleTaxation.deduction),
+      ).toBe(true);
+
+      // When the foreign cap binds, the split is exactly linear (withholding scales 1/N),
+      // even though the bases straddle the 6 000 EUR bracket. Locks the behaviour so a
+      // regression to a base-independent / wrongly-scaled deduction is caught.
+      expect(split.doubleTaxation.deduction.times(2).toFixed(2)).toBe(
+        solo.doubleTaxation.deduction.toFixed(2),
+      );
+    });
+  });
 });
