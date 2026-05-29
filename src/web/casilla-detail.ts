@@ -46,23 +46,32 @@ function listedShareDisposals(r: TaxSummary): FifoDisposal[] {
   return r.capitalGains.disposals.filter((d) => isListedShare(d));
 }
 
-/** Render a detail table of FIFO disposals for a casilla drill-down. */
-function renderDisposalsDetail(disposals: FifoDisposal[], label: string): string {
+/**
+ * Render a detail table of FIFO disposals for a casilla drill-down.
+ * `mode` selects which date/amount the table reflects so acquisition cards
+ * (0331/1637) show acquireDate + costBasisEur, not the transmission figures.
+ */
+function renderDisposalsDetail(
+  disposals: FifoDisposal[],
+  label: string,
+  mode: "transmission" | "acquisition" = "transmission",
+): string {
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  const dateHeader = mode === "acquisition" ? t("table.buy_date") : t("table.sell_date");
   return `
     <p class="detail-label">${esc(label)} (${disposals.length})</p>
     <table class="detail-table">
       <thead><tr>
-        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.sell_date")}</th>
+        <th>ISIN</th><th>${t("table.symbol")}</th><th>${dateHeader}</th>
         <th>${t("table.units")}</th><th>EUR</th>
       </tr></thead>
       <tbody>${disposals.map((d) => `
         <tr>
           <td class="mono">${esc(d.isin)}</td>
           <td>${esc(d.symbol)}</td>
-          <td>${formatDate(d.sellDate)}</td>
+          <td>${formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate)}</td>
           <td>${d.quantity.toString()}</td>
-          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.proceedsEur)}</td>
+          <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -128,8 +137,16 @@ function renderDoubleTaxDetail(report: TaxSummary): string {
     </table>`;
 }
 
-/** Render a detail table of FX disposals for casilla 1633/1637 drill-down. */
-function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string {
+/**
+ * Render a detail table of FX disposals for casilla 1633/1637 drill-down.
+ * `mode` selects the EUR amount: transmission (1633) shows proceedsEur,
+ * acquisition (1637) shows costBasisEur — matching the parent casilla.
+ */
+function renderFxDisposalsDetail(
+  disposals: FxDisposal[],
+  label: string,
+  mode: "transmission" | "acquisition" = "transmission",
+): string {
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   return `
     <p class="detail-label">${esc(label)} (${disposals.length})</p>
@@ -144,7 +161,7 @@ function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string
           <td>${formatDate(d.disposeDate)}</td>
           <td>${formatDate(d.acquireDate)}</td>
           <td>${fmtEur(d.quantity)}</td>
-          <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
+          <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
           <td>${esc(d.trigger)}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
@@ -167,7 +184,7 @@ const CASILLAS: CasillaConfig[] = [
     i18nKey: "casilla.listed_acquisition_value",
     getValue: (_r, blocks) => fmtEur(blocks.listedShares.acquisitionValue),
     getClass: () => "",
-    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_acquisition_value")),
+    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_acquisition_value"), "acquisition"),
     visible: (_r, blocks) => blocks.listedShares.count > 0,
   },
   // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa
@@ -188,8 +205,8 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (_r, blocks) => fmtEur(blocks.otherElements.acquisitionValue),
     getClass: () => "",
     getDetail: (r) =>
-      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_acquisition_value")) +
-      renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value")),
+      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_acquisition_value"), "acquisition") +
+      renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value"), "acquisition"),
     visible: (_r, blocks) => blocks.otherElements.count > 0,
   },
   {
