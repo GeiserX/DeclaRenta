@@ -161,6 +161,8 @@ const en: TranslationKeys = {
   // Fiscal profile
   "profile.title": "Tax profile",
   "profile.description": "This data is used to generate the Modelo 720 and D-6 files.",
+  "profile.section_personal": "Personal details",
+  "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
   "profile.surname_label": "Surname:",
   "profile.surname_placeholder": "Smith Jones",

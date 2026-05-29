@@ -160,6 +160,8 @@ const eu: TranslationKeys = {
 
   "profile.title": "Profil fiskala",
   "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira.",
+  "profile.section_personal": "Datu pertsonalak",
+  "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
   "profile.surname_label": "Abizenak:",
   "profile.surname_placeholder": "García López",

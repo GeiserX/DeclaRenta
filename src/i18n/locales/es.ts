@@ -172,6 +172,8 @@ const es = {
   // Fiscal profile
   "profile.title": "Perfil fiscal",
   "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.",
+  "profile.section_personal": "Datos personales",
+  "profile.section_declaration": "Configuración de la declaración",
   "profile.nif_label": "NIF/NIE:",
   "profile.surname_label": "Apellidos:",
   "profile.surname_placeholder": "García López",

@@ -160,6 +160,8 @@ const ca: TranslationKeys = {
 
   "profile.title": "Perfil fiscal",
   "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6.",
+  "profile.section_personal": "Dades personals",
+  "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
   "profile.surname_label": "Cognoms:",
   "profile.surname_placeholder": "García López",
