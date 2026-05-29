@@ -16,7 +16,8 @@
  */
 
 import type { BrokerParser, Statement } from "../types/broker.js";
-import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { Trade, CashTransaction, OrderLeg } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import Decimal from "decimal.js";
 import {
   detectDelimiter,
@@ -36,6 +37,22 @@ const ISIN_RE = /\b([A-Z]{2}[A-Z0-9]{9}\d)\b/;
 /** Extract an ISIN embedded in a free-text description (Kontoumsätze). */
 function extractIsin(text: string): string {
   const m = text.match(ISIN_RE);
+  return m ? m[1]! : "";
+}
+
+/**
+ * Trade cash legs in the Kontoumsätze file read e.g.
+ *   "Ausführung ORDER Kauf US94106L1098 329432092"
+ * The trailing number is the broker order id, which ALSO appears in the
+ * matching Depotumsätze row. We use it to join the two files and recover the
+ * per-trade commission (gross vs. net cash discrepancy).
+ */
+const ORDER_RE = /\bausf.hrung\b.*\border\b/i;
+const ORDER_KEY_RE = /(\d{6,})\s*$/;
+
+/** Extract the trailing broker order id from an "Ausführung ORDER ..." line. */
+function extractOrderKey(text: string): string {
+  const m = text.match(ORDER_KEY_RE);
   return m ? m[1]! : "";
 }
 
@@ -90,6 +107,11 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   }
 
   const trades: Trade[] = [];
+  // Track Lagerstellenwechsel (custody transfer) net quantity per ISIN. A
+  // balanced in/out pair nets to zero and is harmless; an unmatched leg means
+  // a position entered or left the depot without a cost basis — same phantom-lot
+  // risk as missing prior-year lots — so we warn the user.
+  const custodyNet = new Map<string, Decimal>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -106,7 +128,10 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     if (!isin || qtyNum.isZero()) continue;
 
     // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
-    if (/lagerstellenwechsel/i.test(info)) continue;
+    if (/lagerstellenwechsel/i.test(info)) {
+      custodyNet.set(isin, (custodyNet.get(isin) ?? new Decimal(0)).plus(qtyNum));
+      continue;
+    }
 
     // Skip zero-price rows (non-tradeable conversions, rights).
     if (new Decimal(price).isZero()) continue;
@@ -120,6 +145,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
     const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
     const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
+    // Broker order id embedded in the Buchungsinformationen text — used after
+    // merge to recover the commission from the matching Kontoumsätze cash leg.
+    const orderKey = extractOrderKey(info);
 
     trades.push({
       tradeID: orderId,
@@ -145,7 +173,21 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       commission: "0",
       taxes: "0",
       multiplier: "1",
+      ...(orderKey ? { notes: `flatex-order:${orderKey}` } : {}),
     });
+  }
+
+  const parserMessages: TaxMessage[] = [];
+  for (const [isin, net] of custodyNet) {
+    if (!net.isZero()) {
+      parserMessages.push({
+        id: "flatex.lagerstellenwechsel.unmatched",
+        severity: "info",
+        message: `Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para ${isin}: ${net.toFixed()} títulos.`,
+        hint: "Un traspaso sin pareja entró o salió del depósito sin precio de adquisición. Si más tarde vendes estos títulos, revisa que el valor de compra original esté incluido para no declarar una ganancia ficticia.",
+        context: { isin, netQuantity: net.toFixed() },
+      });
+    }
   }
 
   return {
@@ -158,6 +200,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0
+      ? { parserMessages, parserWarnings: parserMessages.map((m) => m.message) }
+      : {}),
   };
 }
 
@@ -191,6 +236,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
   }
 
   const cashTransactions: CashTransaction[] = [];
+  const pendingOrderLegs: OrderLeg[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -201,6 +247,23 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     const info = (fields[infoCol] ?? "").trim();
     if (!info) continue;
 
+    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
+    const amount = parseNumber(fields[amountCol] ?? "0");
+    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+    const isin = extractIsin(info);
+
+    // Trade cash legs ("Ausführung ORDER Kauf/Verkauf <ISIN> <orderId>") are NOT
+    // income — the trade itself lives in Depotumsätze. But the net cash here vs.
+    // the gross trade value reveals the commission, so stash the leg for the
+    // post-merge reconciliation pass instead of discarding it.
+    if (ORDER_RE.test(info)) {
+      const orderKey = extractOrderKey(info);
+      if (orderKey) {
+        pendingOrderLegs.push({ orderKey, netAmount: amount, isin, currency: currency || "EUR" });
+      }
+      continue;
+    }
+
     let type: CashTransaction["type"] | null = null;
     if (matchesAny(info, WITHHOLDING_PATTERNS)) {
       type = "Withholding Tax";
@@ -208,14 +271,10 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       type = "Dividends";
     }
 
-    // Skip trade cash legs ("Ausführung ORDER"), transfers ("ENTRE CUENTAS"),
-    // and anything else that isn't dividend/distribution/withholding.
+    // Skip transfers ("ENTRE CUENTAS") and anything else that isn't
+    // dividend/distribution/withholding.
     if (!type) continue;
 
-    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
-    const amount = parseNumber(fields[amountCol] ?? "0");
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
-    const isin = extractIsin(info);
     const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
 
     cashTransactions.push({
@@ -243,6 +302,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(pendingOrderLegs.length > 0 ? { pendingOrderLegs } : {}),
   };
 }
 

@@ -106,6 +106,66 @@ describe("statement merge utilities", () => {
     expect(target.parserWarnings).toEqual(["first warning", "second warning"]);
   });
 
+  function makeTrade(overrides: Partial<Statement["trades"][number]>): Statement["trades"][number] {
+    return {
+      tradeID: "T1",
+      accountId: "",
+      symbol: "AAA",
+      description: "AAA",
+      isin: "US0000000001",
+      assetCategory: "STK",
+      currency: "USD",
+      tradeDate: "20250101",
+      settlementDate: "20250101",
+      quantity: "1",
+      tradePrice: "10",
+      tradeMoney: "10",
+      proceeds: "0",
+      cost: "10",
+      fifoPnlRealized: "0",
+      fxRateToBase: "1",
+      buySell: "BUY",
+      openCloseIndicator: "O",
+      exchange: "NYSE",
+      commissionCurrency: "USD",
+      commission: "0",
+      taxes: "0",
+      multiplier: "1",
+      ...overrides,
+    };
+  }
+
+  it("reconciliation leaves non-Flatex trades (IBKR AFx notes) untouched", () => {
+    const statement = makeStatement({
+      trades: [makeTrade({ notes: "AFx", commission: "0" })],
+    });
+
+    finalizeMergedStatement(statement);
+
+    expect(statement.trades[0]!.notes).toBe("AFx");
+    expect(statement.trades[0]!.commission).toBe("0");
+    expect(statement.pendingOrderLegs).toBeUndefined();
+  });
+
+  it("reconciles Flatex commission, clears the scratch note, and drops pendingOrderLegs", () => {
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ isin: "US94106L1098", buySell: "BUY", tradeMoney: "3762.4", notes: "flatex-order:329432092" }),
+      ],
+      pendingOrderLegs: [
+        { orderKey: "329432092", netAmount: "-3770.3", isin: "US94106L1098", currency: "EUR" },
+      ],
+    });
+
+    finalizeMergedStatement(statement);
+
+    const trade = statement.trades[0]!;
+    expect(trade.commission).toBe("7.9");
+    expect(trade.cost).toBe("10"); // gross, unchanged by reconciliation
+    expect(trade.notes).toBeUndefined();
+    expect(statement.pendingOrderLegs).toBeUndefined();
+  });
+
   it("sorts merged chronological collections deterministically", () => {
     const statement = makeStatement({
       trades: [

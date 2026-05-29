@@ -77,6 +77,26 @@ describe("calculateDoubleTaxation", () => {
     expect(Object.keys(result.byCountry)).toHaveLength(0);
   });
 
+  it("should exclude domestic ES withholding from the foreign deduction", () => {
+    // A Spanish dividend's retención a cuenta is NOT a foreign tax credit
+    // (Art. 80 LIRPF). Even with tax withheld, ES must never appear.
+    const entries = [
+      makeEntry({
+        isin: "ES0178430E18",
+        withholdingCountry: "ES",
+        grossAmountEur: new Decimal(1000),
+        withholdingTaxEur: new Decimal(190),
+      }),
+      makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(150) }),
+    ];
+
+    const result = calculateDoubleTaxation(entries);
+
+    expect(result.byCountry["ES"]).toBeUndefined();
+    expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
+    expect(result.total.toFixed(2)).toBe("150.00");
+  });
+
   it("should use progressive savings brackets for large amounts", () => {
     const entries = [
       makeEntry({

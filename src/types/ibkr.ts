@@ -17,6 +17,27 @@ export interface FlexStatement {
   optionExercises?: OptionExercise[];
   parserWarnings?: string[];
   parserMessages?: import("./tax.js").TaxMessage[];
+  /**
+   * Net cash legs of trades that live in a SEPARATE statement file (e.g. Flatex
+   * exports trades and their cash settlement in two CSVs). Used post-merge to
+   * derive the per-trade commission from the gross/net discrepancy, then dropped.
+   */
+  pendingOrderLegs?: OrderLeg[];
+}
+
+/**
+ * A trade's net cash settlement leg, sourced from a different file than the
+ * trade itself. Matched to a Trade via `orderKey` (stored in `Trade.notes`)
+ * so commission can be recovered as |grossTradeMoney − |netAmount||.
+ */
+export interface OrderLeg {
+  /** Join key (broker order number) — matches the owning Trade's `notes`. */
+  orderKey: string;
+  /** Signed net cash credited/debited for the trade, in `currency`. */
+  netAmount: string;
+  /** ISIN of the traded security, for diagnostics. */
+  isin: string;
+  currency: string;
 }
 
 export interface Trade {

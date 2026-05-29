@@ -48,10 +48,18 @@ export function calculateDividends(
 
     const withholdingAmount = matching ? new Decimal(matching.amount).abs() : new Decimal(0);
 
-    // Extract country from description (e.g. "US Tax" -> "US")
+    // Country precedence:
+    //  1. Explicit "XX Tax" / "XX WHT" marker in the dividend description (IBKR).
+    //  2. A 2-letter code in the matched withholding description.
+    //  3. The ISIN issuer-country prefix (first 2 letters). Best signal for
+    //     brokers like Flatex whose German descriptions carry no country marker
+    //     — without it every Flatex dividend would fall through to "XX". ES →
+    //     domestic, so it stays out of the foreign double-taxation pool
+    //     (Casilla 0588); its zero withholding is skipped in double-taxation.ts.
+    const isinPrefix = /^[A-Z]{2}/.test(div.isin) ? div.isin.slice(0, 2) : "";
     const countryMatch = div.description.match(/\b([A-Z]{2})\b.*(?:Tax|WHT)/i) ??
       matching?.description.match(/\b([A-Z]{2})\b/);
-    const country = countryMatch?.[1] ?? "XX";
+    const country = countryMatch?.[1] ?? (isinPrefix || "XX");
 
     return {
       isin: div.isin,
