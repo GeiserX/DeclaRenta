@@ -458,6 +458,18 @@ describe("Modelo 720 Generator", () => {
       // 60000.1 → int 60000, frac 10
       expect(valuationField("60000.1")).toBe("00010");
     });
+
+    it("should throw rather than silently widen the record when the integer part overflows its field", () => {
+      // Valuation int field is 13 digits. A 14-digit integer part cannot fit and
+      // must fail fast instead of shifting every following byte in the 500-byte record.
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: "12345678901234.56",
+        costBasisMoney: "12345678901234.56",
+        assetCategory: "STK",
+      })];
+      expect(() => generateModelo720(positions, rateMap, baseConfig)).toThrow(/excede el campo/);
+    });
   });
 
   describe("Detail record holder name (36-75)", () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import Decimal from "decimal.js";
 import { fetchEcbRates } from "../../src/engine/ecb.js";
 
 function mockFetchOk(csvData: string) {
@@ -26,8 +27,8 @@ describe("fetchEcbRates", () => {
     expect(rates.has("2025-01-03")).toBe(true);
 
     // Inverted: 1/1.035 ≈ 0.966...
-    const rate = parseFloat(rates.get("2025-01-02")!.get("USD")!);
-    expect(rate).toBeCloseTo(1 / 1.035, 4);
+    const rate = new Decimal(rates.get("2025-01-02")!.get("USD")!);
+    expect(rate.toDecimalPlaces(4).toString()).toBe(new Decimal(1).div("1.035").toDecimalPlaces(4).toString());
   });
 
   it("should fetch multiple currencies", async () => {
@@ -211,8 +212,8 @@ describe("fetchEcbRates", () => {
 
     const rates = await fetchEcbRates(2025, ["USD"]);
     expect(rates.has("2025-01-02")).toBe(true);
-    const rate = parseFloat(rates.get("2025-01-02")!.get("USD")!);
-    expect(rate).toBeCloseTo(1 / 1.035, 4);
+    const rate = new Decimal(rates.get("2025-01-02")!.get("USD")!);
+    expect(rate.toDecimalPlaces(4).toString()).toBe(new Decimal(1).div("1.035").toDecimalPlaces(4).toString());
   });
 
   it("should throw when a required column is missing and data rows exist", async () => {

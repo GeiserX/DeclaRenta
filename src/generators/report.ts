@@ -176,12 +176,14 @@ export function generateTaxReport(
   // Crypto-denominated income (staking rewards paid in the coin) can't be valued
   // via ECB rates. We skip it rather than crash; the user must value it manually.
   if (unresolvableInterest > 0) {
+    const cryptoMsg = `Hay ${unresolvableInterest} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.`;
     allMessages.push({
       id: "report.crypto_income_unvalued",
       severity: "warning",
-      message: `Hay ${unresolvableInterest} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.`,
+      message: cryptoMsg,
       hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
     });
+    allWarnings.push(cryptoMsg);
   }
 
   // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)

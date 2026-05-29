@@ -221,7 +221,14 @@ function numPad(value: string, intLen: number, decLen: number): string {
   // AEAT receives rounded values (not truncated) and any rounding that bumps
   // the integer part (e.g. 1.999 → 2.00) is reflected in the integer field.
   const dec = new Decimal(value).abs().toDecimalPlaces(decLen, Decimal.ROUND_HALF_UP);
-  const intPart = dec.floor().toString().padStart(intLen, "0");
+  const intDigits = dec.floor().toString();
+  if (intDigits.length > intLen) {
+    // A rounding carry (or an oversized input) pushed the integer part past the
+    // fixed field width. Padding would silently shift every following byte and
+    // corrupt the 500-byte record — fail fast instead.
+    throw new Error(`Modelo 720: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
+  }
+  const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).round().toString().padStart(decLen, "0");
   return intPart + fracPart;
 }

@@ -100,7 +100,7 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
     const lines = csv.split("\n");
 
     // Determine whether there is any data to parse (a non-empty line after the header).
-    const hasDataRows = lines.slice(1).some((l) => l?.trim());
+    const hasDataRows = lines.slice(1).some((l) => l.trim());
 
     // Parse the header (line 0) and locate columns by name so that we are resilient
     // to the ECB reordering columns. ECB csvdata is comma-delimited and unquoted.

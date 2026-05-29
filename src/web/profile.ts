@@ -50,7 +50,7 @@ export function getProfile(): FiscalProfile {
       if (typeof parsed.nombre === "string") profile.nombre = parsed.nombre;
       if (typeof parsed.ccaa === "string") profile.ccaa = parsed.ccaa;
       if (typeof parsed.telefono === "string") profile.telefono = parsed.telefono;
-      if (typeof parsed.year === "number" && Number.isFinite(parsed.year)) profile.year = parsed.year;
+      if (typeof parsed.year === "number" && Number.isInteger(parsed.year)) profile.year = parsed.year;
       if (typeof parsed.monodivisa === "boolean") profile.monodivisa = parsed.monodivisa;
       return profile;
     }

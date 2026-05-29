@@ -30,5 +30,8 @@ npm-debug.log*
 .eslintcache
 *.tsbuildinfo
 
-.claude/worktrees/
+# Local agent tooling (not part of the project)
+.claude/
+.tbd/
+AGENTS.md
 .omc/
