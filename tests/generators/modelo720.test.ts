@@ -413,6 +413,81 @@ describe("Modelo 720 Generator", () => {
     });
   });
 
+  describe("numPad rounding (via record numeric fields)", () => {
+    // Valuation value lives at 449-463 (13 int + 2 dec). We assert the last 5
+    // chars (3 int + 2 dec) to verify rounding behaviour of numPad.
+    function valuationField(positionValueEur: string): string {
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: positionValueEur,
+        costBasisMoney: positionValueEur,
+        assetCategory: "STK",
+      })];
+      const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
+      // 449-463 → 0-indexed 448..461 (15 chars). Tail 5 = last 3 int + 2 dec.
+      return detail.slice(448, 463).slice(-5);
+    }
+
+    it("should round half-up (1.005 → ...01)", () => {
+      // Position must exceed 50K to emit a record; 1.005 alone won't.
+      // Use a value whose fractional rounds half-up: 60000.005 → 60000.01.
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: "60000.005",
+        costBasisMoney: "60000.005",
+        assetCategory: "STK",
+      })];
+      const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
+      // Valuation 449-463: int=60000, frac=01
+      expect(detail.slice(448, 463)).toBe("000000006000001");
+    });
+
+    it("should bump integer when rounding (60001.999 → int 60002, frac 00)", () => {
+      const positions = [makePosition({
+        currency: "EUR",
+        positionValue: "60001.999",
+        costBasisMoney: "60001.999",
+        assetCategory: "STK",
+      })];
+      const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
+      // 60001.999 → 60002.00
+      expect(detail.slice(448, 463)).toBe("000000006000200");
+    });
+
+    it("should render 0.1 as frac '10'", () => {
+      // 60000.1 → int 60000, frac 10
+      expect(valuationField("60000.1")).toBe("00010");
+    });
+  });
+
+  describe("Detail record holder name (36-75)", () => {
+    it("should contain the filer name, not the security description", () => {
+      const positions = [makePosition({ description: "SPDR S&P 500 ETF" })];
+      const result = generateModelo720(positions, rateMap, baseConfig);
+      const detail = result.split("\n")[1]!;
+      // 36-75 → 0-indexed 35..74 (40 chars)
+      const holderField = detail.slice(35, 75);
+      expect(holderField.trim()).toBe("GARCIA LOPEZ JUAN");
+      expect(holderField).not.toContain("SPDR");
+      // Entity name field (190-230) still carries the description.
+      expect(detail.slice(189, 230).trim()).toBe("SPDR S&P 500 ETF");
+    });
+  });
+
+  describe("Record length", () => {
+    it("should keep every record at 500 bytes", () => {
+      const positions = [makePosition()];
+      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
+      ];
+      const result = generateModelo720(positions, rateMap, config, undefined, cashBalances);
+      for (const line of result.split("\n")) {
+        expect(line.length).toBe(500);
+      }
+    });
+  });
+
   describe("Q4 average FX rate for STK positions", () => {
     it("should use Q4 average rate for STK and Dec 31 spot for FUND", () => {
       // Build a rate map with different rates across Q4

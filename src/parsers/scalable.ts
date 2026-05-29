@@ -105,6 +105,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const dateStr = (fields[cols.date] ?? "").trim();
     const tradeDate = convertDateISO(dateStr); // YYYY-MM-DD → YYYYMMDD
     const type = (fields[cols.type] ?? "").trim().toLowerCase();
+    const assetType = cols.assetType >= 0 ? (fields[cols.assetType] ?? "").trim().toLowerCase() : "";
     const isin = (fields[cols.isin] ?? "").trim();
     const description = (fields[cols.description] ?? "").trim();
     const shares = parseNumber(fields[cols.shares] ?? "0");
@@ -165,6 +166,9 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
     const absShares = Math.abs(sharesNum);
     const feeNum = parseFloat(parseNumber(fee));
+    // Scalable's assetType column flags ETFs/funds explicitly ("ETF").
+    // Map those to FUND; "Security" and others remain STK.
+    const assetCategory = /etf|fund/.test(assetType) ? "FUND" : "STK";
 
     trades.push({
       tradeID: reference || `scalable-${tradeDate}-${isin}-${i}`,
@@ -172,7 +176,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       symbol: description,
       description,
       isin,
-      assetCategory: "STK",
+      assetCategory,
       currency: currency || "EUR",
       tradeDate,
       settlementDate: tradeDate,

@@ -277,10 +277,35 @@ fileInput.addEventListener("change", () => {
   }
 });
 
+// Reject pathologically large uploads before any parsing to avoid a
+// browser-tab DoS (a 1 GB file would otherwise be read fully into memory).
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB per file
+
 function addFiles(files: File[]) {
+  // Size guard: drop oversized files and report them to the user
+  const oversized: string[] = [];
+  const accepted = files.filter((f) => {
+    if (f.size > MAX_FILE_BYTES) {
+      oversized.push(f.name);
+      return false;
+    }
+    return true;
+  });
+  if (oversized.length > 0) {
+    const statusEl = document.getElementById("detection-status");
+    if (statusEl) {
+      const limitMb = String(Math.round(MAX_FILE_BYTES / (1024 * 1024)));
+      statusEl.innerHTML = oversized
+        .map((name) =>
+          `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${esc(t("error.file_too_large", { filename: name, limit: limitMb }))}</span>`,
+        )
+        .join("");
+    }
+  }
+
   // Duplicate guard: skip files already in the list by name + size
   const existing = new Set(pendingFiles.map((f) => `${f.name}:${f.size}`));
-  for (const f of files) {
+  for (const f of accepted) {
     if (!existing.has(`${f.name}:${f.size}`)) {
       pendingFiles.push(f);
     }
@@ -292,7 +317,11 @@ function addFiles(files: File[]) {
   activeYear = null;
   detectedYears = [];
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
-  void updateDetectionStatus();
+  // Refresh detection unless every file was rejected for size — in that case
+  // keep the "file too large" message visible instead of clearing it.
+  if (pendingFiles.length > 0 || oversized.length === 0) {
+    void updateDetectionStatus();
+  }
 }
 
 function renderFileList() {
@@ -765,7 +794,7 @@ function renderResults(report: TaxSummary) {
     renderMonthlyGainLossChart(t("chart.monthly_gl"), chartData.monthlyGainLoss),
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
-    renderTaxBracketCard(t("chart.tax_estimate"), taxableBase, dtDeduction, taxBaseBreakdown),
+    renderTaxBracketCard(t("chart.tax_estimate"), report.year, taxableBase, dtDeduction, taxBaseBreakdown),
   ].filter(Boolean).join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;

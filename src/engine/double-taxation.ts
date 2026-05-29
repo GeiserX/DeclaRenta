@@ -2,31 +2,46 @@
  * Double taxation deduction calculator (Art. 80 LIRPF, Casilla 0588).
  *
  * Spain allows a deduction for foreign taxes paid on dividends/interest,
- * limited to the lesser of: the foreign tax actually paid, or the Spanish
- * tax that would have been due on that income.
+ * limited to the lesser of: the foreign tax actually paid (capped at the
+ * relevant double-tax-treaty rate), or the Spanish tax that would have been
+ * due on that income.
  */
 
 import Decimal from "decimal.js";
 import type { DividendEntry } from "../types/tax.js";
+import { calculateSavingsTax } from "./tax-brackets.js";
 
-/** Spanish savings tax brackets for 2025 */
-const SAVINGS_TAX_BRACKETS = [
-  { limit: new Decimal(6000), rate: new Decimal(0.19) },
-  { limit: new Decimal(44000), rate: new Decimal(0.21) },
-  { limit: new Decimal(150000), rate: new Decimal(0.23) },
-  { limit: new Decimal(100000), rate: new Decimal(0.27) },
-  { limit: new Decimal(Infinity), rate: new Decimal(0.30) },
-];
+/**
+ * Maximum dividend withholding rate that the source country may levy under
+ * its double-tax treaty with Spain. Spain only credits foreign tax UP TO this
+ * capped rate; any excess withheld at source is NOT creditable in Spain — it
+ * must be reclaimed from the source country's tax authority (devolución del
+ * exceso de retención en origen).
+ *
+ * Most Spanish treaties cap dividend withholding at 15 %, so we use that as a
+ * conservative default for all countries and seed the map with explicit
+ * entries where useful. The map is intentionally minimal and overridable.
+ */
+const DEFAULT_TREATY_RATE = new Decimal(0.15);
+
+const TREATY_DIVIDEND_RATES: Record<string, Decimal> = {
+  US: new Decimal(0.15),
+};
+
+function treatyRate(country: string): Decimal {
+  return TREATY_DIVIDEND_RATES[country] ?? DEFAULT_TREATY_RATE;
+}
 
 /**
  * Calculate the double taxation deduction per country.
  *
  * For each country, the deduction is the lesser of:
- * - Total foreign withholding tax paid to that country
+ * - Foreign withholding tax paid, capped at the treaty dividend rate × gross
  * - Spanish tax that would apply to the gross income from that country
  */
 export function calculateDoubleTaxation(
   dividends: DividendEntry[],
+  year: number,
   totalSavingsBase?: Decimal,
 ): { total: Decimal; byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> } {
   const byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal }> = {};
@@ -43,7 +58,7 @@ export function calculateDoubleTaxation(
   let total = new Decimal(0);
   const result: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> = {};
   const effectiveSavingsRate = totalSavingsBase && totalSavingsBase.greaterThan(0)
-    ? calculateSavingsTax(totalSavingsBase).dividedBy(totalSavingsBase)
+    ? calculateSavingsTax(totalSavingsBase, year).dividedBy(totalSavingsBase)
     : undefined;
 
   for (const [country, data] of Object.entries(byCountry)) {
@@ -55,12 +70,20 @@ export function calculateDoubleTaxation(
 
     const spanishTax = effectiveSavingsRate
       ? data.grossIncome.mul(effectiveSavingsRate)
-      : calculateSavingsTax(data.grossIncome);
+      : calculateSavingsTax(data.grossIncome, year);
 
-    // Deduction = lesser of foreign tax paid or Spanish tax due
-    const deduction = Decimal.min(data.taxPaid, spanishTax);
+    // Treaty cap: Spain only credits foreign tax up to the treaty dividend
+    // rate. Excess withholding is reclaimable at source, not here.
+    const creditableForeignTax = Decimal.min(
+      data.taxPaid,
+      data.grossIncome.mul(treatyRate(country)),
+    );
+
+    // Deduction = lesser of creditable foreign tax or Spanish tax due
+    const deduction = Decimal.min(creditableForeignTax, spanishTax);
 
     result[country] = {
+      // taxPaid stays the ACTUAL paid amount for display purposes.
       taxPaid: data.taxPaid,
       deductionAllowed: deduction,
     };
@@ -69,19 +92,4 @@ export function calculateDoubleTaxation(
   }
 
   return { total, byCountry: result };
-}
-
-function calculateSavingsTax(income: Decimal): Decimal {
-  let remaining = income;
-  let tax = new Decimal(0);
-
-  for (const bracket of SAVINGS_TAX_BRACKETS) {
-    if (remaining.lessThanOrEqualTo(0)) break;
-
-    const taxable = Decimal.min(remaining, bracket.limit);
-    tax = tax.plus(taxable.mul(bracket.rate));
-    remaining = remaining.minus(taxable);
-  }
-
-  return tax;
 }

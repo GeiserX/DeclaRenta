@@ -202,6 +202,25 @@ describe("scalableParser", () => {
     });
   });
 
+  describe("ETF detection via assetType", () => {
+    it("should map assetType 'ETF' to FUND", () => {
+      const csv = [
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        "2025-03-15;09:15;Executed;REF001;Vanguard FTSE All-World;ETF;Buy;IE00BK5BQT80;10;110,25;-1102,50;-0,99;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.assetCategory).toBe("FUND");
+    });
+
+    it("should leave assetType 'Security' as STK", () => {
+      const result = scalableParser.parse(SCALABLE_CSV);
+      const trades = result.trades;
+      expect(trades.length).toBeGreaterThan(0);
+      expect(trades.every((t) => t.assetCategory === "STK")).toBe(true);
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => scalableParser.parse("")).toThrow("vacío");

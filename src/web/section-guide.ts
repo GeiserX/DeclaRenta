@@ -73,10 +73,10 @@ function renderGuideContent(): void {
     t("guide_rw.dividends_note"),
   );
 
-  // Interest section (0033)
+  // Interest section (0027)
   html += renderGuideSection(
     t("guide_rw.interest_title"),
-    "0033",
+    "0027",
     [
       { label: t("guide_rw.retenciones_label"), value: t("guide_rw.retenciones_zero") },
       { label: t("guide_rw.gastos_label"), value: t("guide_rw.gastos_zero") },

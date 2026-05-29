@@ -141,6 +141,7 @@ const ca: TranslationKeys = {
   "compare.clear_confirm": "Esborrar tots els informes desats?",
 
   "error.no_broker_detected": "No s'ha pogut detectar el broker de \"{{filename}}\". Selecciona el broker manualment.",
+  "error.file_too_large": "El fitxer \"{{filename}}\" supera el límit de {{limit}} MB i s'ha descartat. Exporta un període més curt o divideix el fitxer.",
   "error.prefix": "Error: ",
 
   "status.fetching_rates": "Obtenint tipus BCE per a {{currencies}}...",
@@ -433,7 +434,7 @@ const ca: TranslationKeys = {
   "guide_rw.retenciones_zero": "<strong>0</strong> — Els brokers estrangers no practiquen retenció a compte de l'IRPF espanyol. La retenció estrangera es dedueix a la casella 0588.",
   "guide_rw.importe_label": "Ingressos íntegres",
   "guide_rw.dividends_importe_hint": "L'import brut de la casella <strong>0029</strong> de DeclaRenta (EUR).",
-  "guide_rw.interest_importe_hint": "L'import de la casella <strong>0033</strong> de DeclaRenta (EUR).",
+  "guide_rw.interest_importe_hint": "L'import de la casella <strong>0027</strong> de DeclaRenta (EUR).",
   "guide_rw.dt_pais_label": "País d'origen",
   "guide_rw.dt_pais_hint": "Selecciona el país on es va practicar la retenció (ex. Estats Units, Irlanda, Alemanya…). Si tens retencions de diversos països, afegeix una línia per cadascun.",
   "guide_rw.dt_importe_label": "Import de la deducció",

@@ -99,34 +99,36 @@ describe("coinbaseParser", () => {
   // -------------------------------------------------------------------------
 
   describe("parse income transactions", () => {
-    it("should parse Staking Income as Dividends cash transaction", () => {
+    it("should parse Staking Income as interest-like income (not a dividend)", () => {
       const result = coinbaseParser.parse(COINBASE_CSV);
       const staking = result.cashTransactions.filter((t) => t.description.includes("staking income"));
       expect(staking).toHaveLength(1);
 
       const tx = staking[0]!;
-      expect(tx.type).toBe("Dividends");
+      // Crypto staking is income, not a foreign dividend with withholding.
+      expect(tx.type).toBe("Broker Interest Received");
       expect(tx.symbol).toBe("ETH");
+      expect(tx.currency).toBe("EUR"); // fiat spot value resolves via ECB
       expect(tx.amount).toBe("32.00");
       expect(tx.dateTime).toBe("20240801");
     });
 
-    it("should parse Learning Reward as Dividends cash transaction", () => {
+    it("should parse Learning Reward as interest-like income (not a dividend)", () => {
       const result = coinbaseParser.parse(COINBASE_CSV);
       const learning = result.cashTransactions.filter((t) => t.description.includes("learning reward"));
       expect(learning).toHaveLength(1);
 
       expect(learning[0]!.symbol).toBe("GRT");
-      expect(learning[0]!.type).toBe("Dividends");
+      expect(learning[0]!.type).toBe("Broker Interest Received");
     });
 
-    it("should parse Rewards Income as Dividends cash transaction", () => {
+    it("should parse Rewards Income as interest-like income (not a dividend)", () => {
       const result = coinbaseParser.parse(COINBASE_CSV);
       const rewards = result.cashTransactions.filter((t) => t.description.includes("rewards income"));
       expect(rewards).toHaveLength(1);
 
       expect(rewards[0]!.symbol).toBe("ALGO");
-      expect(rewards[0]!.type).toBe("Dividends");
+      expect(rewards[0]!.type).toBe("Broker Interest Received");
       expect(rewards[0]!.amount).toBe("1.50");
     });
   });

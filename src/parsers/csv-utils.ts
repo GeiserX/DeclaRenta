@@ -69,17 +69,31 @@ export function parseNumber(val: string): string {
   const lastDot = trimmed.lastIndexOf(".");
   const lastComma = trimmed.lastIndexOf(",");
 
+  if (lastComma >= 0 && lastDot < 0) {
+    // Only commas, no dot. A lone comma is ambiguous: it can be a decimal
+    // separator (EU "1,5" = 1.5, German "2,082" = 2.082) or a US thousands
+    // separator ("1,500" = 1500). Most DeclaRenta brokers are European
+    // (comma = decimal), and German brokers like Flatex legitimately emit
+    // 3-decimal prices such as "2,082". Misreading those as thousands causes a
+    // 1000x overstatement — a worse fiscal error than the reverse. We therefore
+    // only treat the UNAMBIGUOUS multi-comma case as thousands and keep a lone
+    // comma as a decimal separator.
+    //  - Multiple commas → always thousands ("1,234,567" = 1234567)
+    //  - A single comma → decimal ("1,5"→1.5, "1,50"→1.5, "2,082"→2.082)
+    const commaCount = (trimmed.match(/,/g) ?? []).length;
+    if (commaCount > 1) {
+      // Multiple commas can only be thousands separators
+      return trimmed.replace(/,/g, "");
+    }
+    return trimmed.replace(",", ".");
+  }
   if (lastComma > lastDot) {
-    // EU format: dots are thousands, comma is decimal
+    // EU format: dots are thousands, comma is decimal ("1.234,56" → "1234.56")
     return trimmed.replace(/\./g, "").replace(",", ".");
   }
   if (lastDot > lastComma && lastComma >= 0) {
     // US/UK format: commas are thousands, dot is decimal
     return trimmed.replace(/,/g, "");
-  }
-  // Only one separator or none — comma might be decimal (no thousands)
-  if (lastComma >= 0 && lastDot < 0) {
-    return trimmed.replace(",", ".");
   }
   return trimmed;
 }

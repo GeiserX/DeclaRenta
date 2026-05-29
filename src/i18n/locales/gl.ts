@@ -141,6 +141,7 @@ const gl: TranslationKeys = {
   "compare.clear_confirm": "Borrar todos os informes gardados?",
 
   "error.no_broker_detected": "Non se puido detectar o broker de \"{{filename}}\". Selecciona o broker manualmente.",
+  "error.file_too_large": "O ficheiro \"{{filename}}\" supera o límite de {{limit}} MB e descartouse. Exporta un período máis curto ou divide o ficheiro.",
   "error.prefix": "Erro: ",
 
   "status.fetching_rates": "Obtendo tipos BCE para {{currencies}}...",
@@ -433,7 +434,7 @@ const gl: TranslationKeys = {
   "guide_rw.retenciones_zero": "<strong>0</strong> — Os brokers estranxeiros non practican retención a conta do IRPF español. A retención estranxeira dedúcese na casilla 0588.",
   "guide_rw.importe_label": "Ingresos íntegros",
   "guide_rw.dividends_importe_hint": "O importe bruto da casilla <strong>0029</strong> de DeclaRenta (EUR).",
-  "guide_rw.interest_importe_hint": "O importe da casilla <strong>0033</strong> de DeclaRenta (EUR).",
+  "guide_rw.interest_importe_hint": "O importe da casilla <strong>0027</strong> de DeclaRenta (EUR).",
   "guide_rw.dt_pais_label": "País de orixe",
   "guide_rw.dt_pais_hint": "Selecciona o país onde se practicou a retención (ex. Estados Unidos, Irlanda, Alemaña…). Se tes retencións de varios países, engade unha liña por cada un.",
   "guide_rw.dt_importe_label": "Importe da dedución",

@@ -150,6 +150,7 @@ const es = {
 
   // Errors
   "error.no_broker_detected": "No se pudo detectar el broker de \"{{filename}}\". Selecciona el broker manualmente.",
+  "error.file_too_large": "El fichero \"{{filename}}\" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.",
   "error.prefix": "Error: ",
 
   // Status
@@ -466,7 +467,7 @@ const es = {
   "guide_rw.retenciones_zero": "<strong>0</strong> — Los brokers extranjeros no practican retención a cuenta del IRPF español. La retención extranjera se deduce en la casilla 0588.",
   "guide_rw.importe_label": "Ingresos íntegros",
   "guide_rw.dividends_importe_hint": "El importe bruto de la casilla <strong>0029</strong> de DeclaRenta (EUR).",
-  "guide_rw.interest_importe_hint": "El importe de la casilla <strong>0033</strong> de DeclaRenta (EUR).",
+  "guide_rw.interest_importe_hint": "El importe de la casilla <strong>0027</strong> de DeclaRenta (EUR).",
   "guide_rw.dt_pais_label": "País de origen",
   "guide_rw.dt_pais_hint": "Selecciona el país donde se practicó la retención (ej. Estados Unidos, Irlanda, Alemania…). Si tienes retenciones de varios países, añade una línea por cada uno.",
   "guide_rw.dt_importe_label": "Importe de la deducción",

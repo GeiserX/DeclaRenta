@@ -10,7 +10,7 @@ import Decimal from "decimal.js";
 import type { FxLot, FxDisposal, FxTrigger, TaxMessage } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate } from "./ecb.js";
+import { getEcbRate, isEcbResolvable } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
 export interface FxEvent {
@@ -165,6 +165,11 @@ export class FxFifoEngine {
 
       const amount = new Decimal(tx.amount);
       if (amount.isZero()) continue;
+
+      // Crypto-denominated income (e.g. Kraken staking, reported in the staked
+      // coin) has no ECB rate. It can't generate an FX event — skip it here.
+      // report.ts surfaces a warning so the user values it manually.
+      if (!isEcbResolvable(tx.currency)) continue;
 
       const date = normalizeDate(tx.settleDate || tx.dateTime);
       const ecbRate = getEcbRate(rateMap, date, tx.currency);

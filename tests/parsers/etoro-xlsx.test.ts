@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../../src/parsers/etoro.js";
 import * as XLSX from "xlsx";
 
@@ -511,6 +512,60 @@ describe("eToro XLSX parsing", () => {
       // Short: opening leg is SELL, closing leg is BUY
       expect(result.trades[0]!.buySell).toBe("SELL");
       expect(result.trades[1]!.buySell).toBe("BUY");
+    });
+
+    it("should build a PROFITABLE short with open-high/close-low legs and O/C indicators", async () => {
+      // Short 10 units, open @250 (sell high), close @200 (buy back low) → profit.
+      // FIFO computes P/L from tradePrice: openProceeds (qty*openRate) − closeCost
+      // (qty*closeRate) = 10*250 − 10*200 = +500 (in native units, before ECB).
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["456", "Tesla (TSLA)", "Short", "2000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "1", "0", "0", "500", "455", "1.09", "1.10", "250", "200", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      const open = result.trades[0]!;
+      const close = result.trades[1]!;
+      // Opening short leg: SELL + O at the OPEN rate
+      expect(open.buySell).toBe("SELL");
+      expect(open.openCloseIndicator).toBe("O");
+      expect(open.tradePrice).toBe("250");
+      expect(open.quantity).toBe("10");
+      // Closing leg: BUY + C at the CLOSE (lower) rate
+      expect(close.buySell).toBe("BUY");
+      expect(close.openCloseIndicator).toBe("C");
+      expect(close.tradePrice).toBe("200");
+      expect(close.quantity).toBe("-10");
+      // openRate (250) > closeRate (200) → engine yields a positive gain
+      expect(new Decimal(open.tradePrice).greaterThan(close.tradePrice)).toBe(true);
+    });
+
+    it("should build a LOSING short with open-low/close-high legs", async () => {
+      // Short 10 units, open @200 (sell low), close @250 (buy back high) → loss.
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["789", "Tesla (TSLA)", "Short", "2000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "1", "0", "0", "-500", "-455", "1.09", "1.10", "200", "250", "0", "0", "0", "-", "Acciones", "US88160R1014", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      const open = result.trades[0]!;
+      const close = result.trades[1]!;
+      expect(open.buySell).toBe("SELL");
+      expect(open.openCloseIndicator).toBe("O");
+      expect(open.tradePrice).toBe("200");
+      expect(close.buySell).toBe("BUY");
+      expect(close.openCloseIndicator).toBe("C");
+      expect(close.tradePrice).toBe("250");
+      // openRate (200) < closeRate (250) → engine yields a loss
+      expect(new Decimal(open.tradePrice).lessThan(close.tradePrice)).toBe(true);
     });
 
     it("should handle parenthesized negative profits like (16.63)", async () => {

@@ -174,7 +174,9 @@ describe("krakenParser", () => {
       const result = krakenParser.parse(LEDGERS_CSV);
       const ethStake = result.cashTransactions.find((t) => t.symbol === "ETH");
       expect(ethStake).toBeDefined();
-      expect(ethStake!.type).toBe("Dividends");
+      // Staking is income, not a foreign dividend — classified as interest-like
+      // income so it stays out of the double-taxation/withholding-country pool.
+      expect(ethStake!.type).toBe("Broker Interest Received");
       expect(ethStake!.description).toBe("Staking reward - ETH");
       expect(ethStake!.dateTime).toBe("20240601");
       expect(parseFloat(ethStake!.amount)).toBeCloseTo(0.0249, 4);

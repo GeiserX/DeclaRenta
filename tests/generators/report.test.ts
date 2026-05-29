@@ -75,6 +75,36 @@ function makeStatement(overrides?: Partial<FlexStatement>): FlexStatement {
 }
 
 describe("generateTaxReport", () => {
+  it("does not crash on crypto-denominated staking income and warns instead", () => {
+    // Kraken staking rewards are paid in the staked coin (e.g. DOT), which has
+    // no ECB rate. The report must skip them with a warning, not throw.
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "stk-1",
+          symbol: "DOT",
+          description: "Staking reward - DOT",
+          isin: "",
+          currency: "DOT",
+          dateTime: "20250601",
+          settleDate: "20250601",
+          amount: "5.5",
+          type: "Broker Interest Received",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    // Crypto staking is excluded from computed interest (can't be valued).
+    expect(report.interest.earned.toFixed(2)).toBe("0.00");
+    expect(report.interest.entries).toHaveLength(0);
+    // A warning tells the user to value it manually.
+    expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(true);
+  });
+
   it("should produce capital gains from buy+sell trades", () => {
     const rates = makeRateMap({
       "2025-03-15": "0.9200",

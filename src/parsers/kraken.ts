@@ -288,6 +288,11 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       const feeLedgerDec = new Decimal(fee || "0").abs();
       const netAmount = amountDec.minus(feeLedgerDec);
 
+      // Staking rewards are NOT foreign dividends (no issuer/withholding country,
+      // not in the Art. 80 double-taxation pool). They are income in the staked
+      // crypto. Classify as interest-like income (Broker Interest Received) so
+      // they never enter calculateDividends() — which would try to resolve a
+      // crypto "currency" against ECB rates and fail.
       cashTransactions.push({
         transactionID: `kraken-staking-${txid}`,
         accountId: "",
@@ -299,7 +304,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         settleDate: tradeDate,
         amount: netAmount.toString(),
         fxRateToBase: "1",
-        type: "Dividends",
+        type: "Broker Interest Received",
       });
     }
   }

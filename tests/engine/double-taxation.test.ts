@@ -3,11 +3,13 @@ import Decimal from "decimal.js";
 import { calculateDoubleTaxation } from "../../src/engine/double-taxation.js";
 import type { DividendEntry } from "../../src/types/tax.js";
 
+const YEAR = 2025;
+
 function makeEntry(overrides: Partial<DividendEntry>): DividendEntry {
   return {
-    isin: "US0378331005",
-    symbol: "AAPL",
-    description: "APPLE INC",
+    isin: "US0000000000",
+    symbol: "FOO",
+    description: "FOO INC",
     payDate: "2025-06-01",
     grossAmountEur: new Decimal(100),
     withholdingTaxEur: new Decimal(15),
@@ -19,46 +21,47 @@ function makeEntry(overrides: Partial<DividendEntry>): DividendEntry {
 }
 
 describe("calculateDoubleTaxation", () => {
-  it("should calculate deduction capped by Spanish tax", () => {
+  it("should cap the credit at the treaty rate, then by Spanish tax", () => {
     const entries = [
       makeEntry({ grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(300) }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
-    // Spanish tax on 1000 EUR: 19% of 1000 = 190
-    // Foreign tax: 300, Spanish tax: 190 → deduction = min(300, 190) = 190
-    expect(result.total.toFixed(2)).toBe("190.00");
+    // Treaty cap (15% of 1000) = 150; Spanish tax on 1000 = 190.
+    // deduction = min(min(300, 150), 190) = 150
+    expect(result.total.toFixed(2)).toBe("150.00");
+    // taxPaid still shows the ACTUAL withheld amount for display.
     expect(result.byCountry["US"]!.taxPaid.toFixed(2)).toBe("300.00");
-    expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("190.00");
+    expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
   });
 
-  it("should allow full deduction when foreign tax is lower", () => {
+  it("should allow full deduction when foreign tax is below treaty cap and Spanish tax", () => {
     const entries = [
       makeEntry({ grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(100) }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
-    // Spanish tax on 1000: 190. Foreign: 100. Deduction = min(100, 190) = 100
+    // Treaty cap 150, Spanish tax 190, foreign 100 → min = 100
     expect(result.total.toFixed(2)).toBe("100.00");
   });
 
-  it("should aggregate by country", () => {
+  it("should aggregate by country with per-country treaty caps", () => {
     const entries = [
       makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(500), withholdingTaxEur: new Decimal(75) }),
       makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(500), withholdingTaxEur: new Decimal(75) }),
       makeEntry({ withholdingCountry: "DE", grossAmountEur: new Decimal(200), withholdingTaxEur: new Decimal(52) }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
     expect(Object.keys(result.byCountry)).toHaveLength(2);
-    // US: gross 1000, tax 150, Spanish tax 190 → deduction 150
+    // US: gross 1000, tax 150, treaty cap 150, Spanish tax 190 → deduction 150
     expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
-    // DE: gross 200, tax 52, Spanish tax 38 → deduction 38
-    expect(result.byCountry["DE"]!.deductionAllowed.toFixed(2)).toBe("38.00");
-    expect(result.total.toFixed(2)).toBe("188.00");
+    // DE: gross 200, tax 52, treaty cap 15% × 200 = 30 → deduction 30 (excess reclaimable at source)
+    expect(result.byCountry["DE"]!.deductionAllowed.toFixed(2)).toBe("30.00");
+    expect(result.total.toFixed(2)).toBe("180.00");
   });
 
   it("should return empty when no withholdings", () => {
@@ -66,13 +69,13 @@ describe("calculateDoubleTaxation", () => {
       makeEntry({ withholdingTaxEur: new Decimal(0) }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
     expect(result.total.toFixed(2)).toBe("0.00");
     expect(Object.keys(result.byCountry)).toHaveLength(0);
   });
 
   it("should handle empty input", () => {
-    const result = calculateDoubleTaxation([]);
+    const result = calculateDoubleTaxation([], YEAR);
     expect(result.total.toFixed(2)).toBe("0.00");
     expect(Object.keys(result.byCountry)).toHaveLength(0);
   });
@@ -82,7 +85,7 @@ describe("calculateDoubleTaxation", () => {
     // (Art. 80 LIRPF). Even with tax withheld, ES must never appear.
     const entries = [
       makeEntry({
-        isin: "ES0178430E18",
+        isin: "ES0000000000",
         withholdingCountry: "ES",
         grossAmountEur: new Decimal(1000),
         withholdingTaxEur: new Decimal(190),
@@ -90,14 +93,15 @@ describe("calculateDoubleTaxation", () => {
       makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(150) }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
     expect(result.byCountry["ES"]).toBeUndefined();
+    // US: gross 1000, tax 150 = treaty cap, Spanish 190 → 150
     expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
     expect(result.total.toFixed(2)).toBe("150.00");
   });
 
-  it("should use progressive savings brackets for large amounts", () => {
+  it("should use progressive savings brackets but still cap at the treaty rate", () => {
     const entries = [
       makeEntry({
         grossAmountEur: new Decimal(10000),
@@ -105,17 +109,34 @@ describe("calculateDoubleTaxation", () => {
       }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
-    // Spanish tax on 10000:
-    // 6000 × 19% = 1140
-    // 4000 × 21% = 840
-    // Total = 1980
-    // Foreign: 5000, deduction = min(5000, 1980) = 1980
-    expect(result.total.toFixed(2)).toBe("1980.00");
+    // Spanish tax on 10000: 6000×19% + 4000×21% = 1140 + 840 = 1980.
+    // Treaty cap: 15% × 10000 = 1500.
+    // deduction = min(min(5000, 1500), 1980) = 1500
+    expect(result.total.toFixed(2)).toBe("1500.00");
   });
 
-  it("should apply 30% top bracket for amounts over 300K (Ley 7/2024)", () => {
+  it("should cap a 30%-withholding US dividend at the 15% treaty rate", () => {
+    // Anonymized: a broker withholds 30% on a US dividend (e.g. missing W-8BEN).
+    // Spain only credits up to the treaty 15%; the rest is reclaimable in the US.
+    const entries = [
+      makeEntry({
+        withholdingCountry: "US",
+        grossAmountEur: new Decimal(1000),
+        withholdingTaxEur: new Decimal(300),
+      }),
+    ];
+
+    const result = calculateDoubleTaxation(entries, YEAR);
+
+    // Treaty cap 15% × 1000 = 150; Spanish tax 190 → deduction 150.
+    expect(result.byCountry["US"]!.taxPaid.toFixed(2)).toBe("300.00");
+    expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
+    expect(result.total.toFixed(2)).toBe("150.00");
+  });
+
+  it("should respect the treaty cap on the top savings bracket too", () => {
     const entries = [
       makeEntry({
         grossAmountEur: new Decimal(400000),
@@ -123,16 +144,11 @@ describe("calculateDoubleTaxation", () => {
       }),
     ];
 
-    const result = calculateDoubleTaxation(entries);
+    const result = calculateDoubleTaxation(entries, YEAR);
 
-    // Spanish tax on 400000:
-    // 6000 × 19% = 1140
-    // 44000 × 21% = 9240
-    // 150000 × 23% = 34500
-    // 100000 × 27% = 27000
-    // 100000 × 30% = 30000
-    // Total = 101880
-    // Foreign: 200000, deduction = min(200000, 101880) = 101880
-    expect(result.total.toFixed(2)).toBe("101880.00");
+    // Spanish tax on 400000 (Ley 7/2024) = 101880.
+    // Treaty cap: 15% × 400000 = 60000.
+    // deduction = min(min(200000, 60000), 101880) = 60000
+    expect(result.total.toFixed(2)).toBe("60000.00");
   });
 });

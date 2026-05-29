@@ -140,6 +140,7 @@ const en: TranslationKeys = {
   "compare.clear_confirm": "Delete all saved reports?",
 
   "error.no_broker_detected": "Could not detect broker for \"{{filename}}\". Select the broker manually.",
+  "error.file_too_large": "File \"{{filename}}\" exceeds the {{limit}} MB limit and was discarded. Export a shorter period or split the file.",
   "error.prefix": "Error: ",
 
   "status.fetching_rates": "Fetching ECB rates for {{currencies}}...",
@@ -437,7 +438,7 @@ const en: TranslationKeys = {
   "guide_rw.retenciones_zero": "<strong>0</strong> — Foreign brokers do not withhold Spanish IRPF. Foreign withholding tax is deducted in box 0588.",
   "guide_rw.importe_label": "Gross income",
   "guide_rw.dividends_importe_hint": "The gross amount from DeclaRenta's box <strong>0029</strong> (EUR).",
-  "guide_rw.interest_importe_hint": "The amount from DeclaRenta's box <strong>0033</strong> (EUR).",
+  "guide_rw.interest_importe_hint": "The amount from DeclaRenta's box <strong>0027</strong> (EUR).",
   "guide_rw.dt_pais_label": "Country of origin",
   "guide_rw.dt_pais_hint": "Select the country where withholding was applied (e.g. United States, Ireland, Germany…). If you have withholdings from multiple countries, add one line per country.",
   "guide_rw.dt_importe_label": "Deduction amount",
