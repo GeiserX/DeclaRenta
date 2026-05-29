@@ -74,10 +74,14 @@ export function formatCsv(report: TaxSummary): string {
   const blocks = computeCasillaBlocksWithFx(report);
   lines.push("# RESUMEN CASILLAS");
   lines.push("Casilla,Concepto,Valor_EUR");
-  lines.push(`0328,Valor de transmision (acciones negociadas),${blocks.listedShares.transmissionValue.toFixed(2)}`);
-  lines.push(`0331,Valor de adquisicion (acciones negociadas),${blocks.listedShares.acquisitionValue.toFixed(2)}`);
-  lines.push(`1633,Valor de transmision (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.transmissionValue.toFixed(2)}`);
-  lines.push(`1637,Valor de adquisicion (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.acquisitionValue.toFixed(2)}`);
+  if (blocks.listedShares.count > 0) {
+    lines.push(`0328,Valor de transmision (acciones negociadas),${blocks.listedShares.transmissionValue.toFixed(2)}`);
+    lines.push(`0331,Valor de adquisicion (acciones negociadas),${blocks.listedShares.acquisitionValue.toFixed(2)}`);
+  }
+  if (blocks.otherElements.count > 0) {
+    lines.push(`1633,Valor de transmision (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.transmissionValue.toFixed(2)}`);
+    lines.push(`1637,Valor de adquisicion (otros elementos: opciones/cripto/fondos/divisa),${blocks.otherElements.acquisitionValue.toFixed(2)}`);
+  }
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
   lines.push(`0027,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);

@@ -156,6 +156,63 @@ describe("formatCsv", () => {
     expect(csv).toContain("0588,Deduccion doble imposicion,7.50");
   });
 
+  it("should omit 1633/1637 rows when there are no other-element or FX disposals", () => {
+    // STK-only fixture → otros elementos block is empty, so those rows must not appear.
+    const csv = formatCsv(makeReport());
+    const lines = csv.split("\n");
+    expect(lines.some((l) => l.startsWith("1633,"))).toBe(false);
+    expect(lines.some((l) => l.startsWith("1637,"))).toBe(false);
+  });
+
+  it("should omit 0328/0331 rows when there are no listed-share disposals", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.assetCategory = "OPT";
+    const csv = formatCsv(report);
+    const lines = csv.split("\n");
+    expect(lines.some((l) => l.startsWith("0328,"))).toBe(false);
+    expect(lines.some((l) => l.startsWith("0331,"))).toBe(false);
+    // OPT routes to otros elementos → 1633/1637 present instead.
+    expect(lines.some((l) => l.startsWith("1633,"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("1637,"))).toBe(true);
+  });
+
+  it("should emit 1633/1637 rows when only FX disposals exist (no FIFO other-elements)", () => {
+    const report = makeReport({
+      capitalGains: {
+        transmissionValue: new Decimal(0),
+        acquisitionValue: new Decimal(0),
+        netGainLoss: new Decimal(0),
+        blockedLosses: new Decimal(0),
+        disposals: [],
+      },
+      fxGains: {
+        transmissionValue: new Decimal(800),
+        acquisitionValue: new Decimal(750),
+        netGainLoss: new Decimal(50),
+        disposals: [
+          {
+            currency: "USD",
+            disposeDate: "20250615",
+            acquireDate: "20250110",
+            quantity: new Decimal(5000),
+            proceedsEur: new Decimal(800),
+            costBasisEur: new Decimal(750),
+            gainLossEur: new Decimal(50),
+            trigger: "conversion",
+            holdingPeriodDays: 156,
+            lotId: "lot-001",
+          },
+        ],
+      },
+    });
+    const csv = formatCsv(report);
+    const lines = csv.split("\n");
+    expect(lines.some((l) => l.startsWith("1633,Valor de transmision (otros elementos: opciones/cripto/fondos/divisa),800.00"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("1637,Valor de adquisicion (otros elementos: opciones/cripto/fondos/divisa),750.00"))).toBe(true);
+    // No STK disposals → listed-shares rows absent.
+    expect(lines.some((l) => l.startsWith("0328,"))).toBe(false);
+  });
+
   it("should NOT emit the deprecated single-casilla 0327 summary line", () => {
     const csv = formatCsv(makeReport());
     // 0327 is a TEXT field (denominación), never a money box — regression guard
