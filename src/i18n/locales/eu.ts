@@ -63,8 +63,8 @@ const eu: TranslationKeys = {
   "table.amount_eur": "Zenbatekoa (EUR)",
   "table.currency": "Moneta",
 
-  "casilla.transmission_value": "Transmisio-balioa",
-  "casilla.acquisition_value": "Eskuratze-balioa",
+  "casilla.transmission_value": "Transmisio-balioa (transmisio guztiak)",
+  "casilla.acquisition_value": "Eskuratze-balioa (transmisio guztiak)",
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
   "casilla.other_transmission_value": "Transmisio-balioa (beste elementuak: opzioak/kripto/funtsak/dibisa)",

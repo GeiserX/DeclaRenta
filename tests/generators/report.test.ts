@@ -539,5 +539,46 @@ describe("generateTaxReport", () => {
       // 1.5 floors to 1 → no split
       expect(frac.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
     });
+
+    it("should split FX disposals per contribuyente when titulares > 1", () => {
+      const fxRates = makeRateMap({ "2025-01-10": "0.9200", "2025-06-15": "0.9500" });
+      const fxStatement = makeStatement({
+        trades: [
+          makeTrade({
+            tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+            currency: "USD", quantity: "-5000", tradePrice: "1.0870", tradeMoney: "-5435",
+            proceeds: "5435", buySell: "SELL", exchange: "IDEALFX",
+          }),
+          makeTrade({
+            tradeID: "fx-buy", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
+            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+            currency: "USD", quantity: "5000", tradePrice: "1.0526", tradeMoney: "5263",
+            proceeds: "-5263", buySell: "BUY", exchange: "IDEALFX",
+          }),
+        ],
+      });
+
+      const solo = generateTaxReport(fxStatement, fxRates, 2025);
+      const split = generateTaxReport(fxStatement, fxRates, 2025, { titulares: 2 });
+
+      expect(solo.fxGains.disposals.length).toBeGreaterThan(0);
+      expect(split.fxGains.disposals.length).toBe(solo.fxGains.disposals.length);
+      expect(split.fxGains.netGainLoss.toFixed(2)).toBe(solo.fxGains.netGainLoss.div(2).toFixed(2));
+      expect(split.fxGains.transmissionValue.toFixed(2)).toBe(solo.fxGains.transmissionValue.div(2).toFixed(2));
+      expect(split.fxGains.disposals[0]!.gainLossEur.toFixed(2))
+        .toBe(solo.fxGains.disposals[0]!.gainLossEur.div(2).toFixed(2));
+    });
+
+    it("should keep titulares=3 split consistent (each third reconciles to the whole)", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 3 });
+
+      // Each titular's net × 3 reconciles to the undivided total (within Decimal rounding).
+      const reconstructed = split.capitalGains.netGainLoss.times(3);
+      expect(reconstructed.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      expect(split.dividends.grossIncome.times(3).toFixed(2))
+        .toBe(solo.dividends.grossIncome.toFixed(2));
+    });
   });
 });

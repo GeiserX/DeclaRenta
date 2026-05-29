@@ -66,8 +66,8 @@ const es = {
   "table.currency": "Divisa",
 
   // Casillas
-  "casilla.transmission_value": "Valor de transmisión",
-  "casilla.acquisition_value": "Valor de adquisición",
+  "casilla.transmission_value": "Valor de transmisión (total transmisiones)",
+  "casilla.acquisition_value": "Valor de adquisición (total transmisiones)",
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (acciones negociadas)",
   "casilla.other_transmission_value": "Valor de transmisión (otros elementos: opciones/cripto/fondos/divisa)",

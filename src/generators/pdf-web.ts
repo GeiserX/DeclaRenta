@@ -2,7 +2,7 @@ import type { TaxSummary } from "../types/tax.js";
 import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
-import { computeCasillaBlocks } from "./casillas.js";
+import { computeCasillaBlocksWithFx } from "./casillas.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
 
@@ -93,7 +93,7 @@ export async function generatePdfWebReport(
   doc.setTextColor(C.header);
   doc.text(t("pdf.section_casillas"), MARGIN, MARGIN + 27);
 
-  const blocks = computeCasillaBlocks(report.capitalGains.disposals);
+  const blocks = computeCasillaBlocksWithFx(report);
   const casillasBody: string[][] = [];
 
   // Acciones negociadas en mercados regulados (Art. 37.1.a) → 0328/0331
@@ -103,9 +103,9 @@ export async function generatePdfWebReport(
   }
 
   // Otros elementos: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l) → 1633/1637
-  if (blocks.otherElements.count > 0 || report.fxGains.disposals.length > 0) {
-    casillasBody.push(["1633", t("casilla.other_transmission_value"), eur(blocks.otherElements.transmissionValue.plus(report.fxGains.transmissionValue))]);
-    casillasBody.push(["1637", t("casilla.other_acquisition_value"),  eur(blocks.otherElements.acquisitionValue.plus(report.fxGains.acquisitionValue))]);
+  if (blocks.otherElements.count > 0) {
+    casillasBody.push(["1633", t("casilla.other_transmission_value"), eur(blocks.otherElements.transmissionValue)]);
+    casillasBody.push(["1637", t("casilla.other_acquisition_value"),  eur(blocks.otherElements.acquisitionValue)]);
   }
 
   casillasBody.push(

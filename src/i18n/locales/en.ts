@@ -62,8 +62,8 @@ const en: TranslationKeys = {
   "table.amount_eur": "Amount (EUR)",
   "table.currency": "Currency",
 
-  "casilla.transmission_value": "Transmission value",
-  "casilla.acquisition_value": "Acquisition value",
+  "casilla.transmission_value": "Transmission value (all disposals)",
+  "casilla.acquisition_value": "Acquisition value (all disposals)",
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
   "casilla.other_transmission_value": "Transmission value (other elements: options/crypto/funds/FX)",

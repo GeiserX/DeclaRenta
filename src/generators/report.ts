@@ -241,8 +241,8 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.titularidad_compartida",
       severity: "info",
-      message: `Los importes mostrados están divididos entre ${titulares} titulares (la parte que corresponde a cada contribuyente). Se entiende que la declaración se presenta de forma individual por cada titular según su porcentaje de titularidad.`,
-      hint: "Si la cuenta es de gananciales o de titularidad compartida, cada cónyuge/titular declara su parte proporcional (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.",
+      message: `Los importes mostrados están divididos entre ${titulares} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los ${titulares} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.`,
+      hint: `El reparto a partes iguales (${titulares} × ${(100 / titulares).toFixed(titulares === 3 ? 2 : 0)} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.`,
       context: { titulares: String(titulares) },
     });
   }

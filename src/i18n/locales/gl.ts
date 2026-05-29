@@ -63,8 +63,8 @@ const gl: TranslationKeys = {
   "table.amount_eur": "Importe (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmisión",
-  "casilla.acquisition_value": "Valor de adquisición",
+  "casilla.transmission_value": "Valor de transmisión (total transmisións)",
+  "casilla.acquisition_value": "Valor de adquisición (total transmisións)",
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",
   "casilla.other_transmission_value": "Valor de transmisión (outros elementos: opcións/cripto/fondos/divisa)",

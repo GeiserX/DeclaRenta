@@ -28,9 +28,24 @@
  */
 
 import Decimal from "decimal.js";
-import type { FifoDisposal } from "../types/tax.js";
+import type { FifoDisposal, TaxSummary } from "../types/tax.js";
 
-/** Asset categories that belong to the "acciones negociadas" block (listed shares). */
+/**
+ * Asset categories routed to the "acciones negociadas" block (listed shares).
+ *
+ * CAVEAT — this is a deliberate simplification. The AEAT block split is by
+ * *listing status*, not by IBKR `assetCategory`:
+ *  - A listed ETF/fund IS an "acción/participación negociada" (0328/0331), but
+ *    parsers emit it as FUND, so it currently routes to "otros elementos"
+ *    (1633/1637).
+ *  - A non-listed (OTC) share would belong in "otros elementos", but STK has no
+ *    listing flag to distinguish it.
+ * We have no reliable listed/unlisted signal in the broker exports, so we treat
+ * STK as listed and everything else as "otros elementos". This errs toward the
+ * conservative side (both blocks feed the same savings base at the same rate, so
+ * the *tax due* is identical — only the box placement differs). Revisit if a
+ * listing flag becomes available. See docs.html FAQ for the user-facing note.
+ */
 const LISTED_SHARE_CATEGORIES: ReadonlySet<string> = new Set(["STK"]);
 
 export interface CasillaBlock {
@@ -74,6 +89,10 @@ function emptyBlock(): CasillaBlock {
 function accumulate(block: CasillaBlock, d: FifoDisposal): void {
   block.transmissionValue = block.transmissionValue.plus(d.proceedsEur);
   block.acquisitionValue = block.acquisitionValue.plus(d.costBasisEur);
+  // Zero-gain disposals fall into the gains bucket (>= 0). This is a sum-of-
+  // positives / sum-of-losses split for the 0339/0340 (or 0386/0385) totals; a
+  // zero contributes nothing either way, so the boundary choice is immaterial to
+  // the figures and only keeps the count of "loss" rows from being inflated.
   if (d.gainLossEur.greaterThanOrEqualTo(0)) {
     block.gains = block.gains.plus(d.gainLossEur);
   } else {
@@ -97,4 +116,33 @@ export function computeCasillaBlocks(disposals: FifoDisposal[]): CasillaBlocks {
     accumulate(isListedShare(d) ? listedShares : otherElements, d);
   }
   return { listedShares, otherElements };
+}
+
+/**
+ * Compute the casilla blocks AND fold foreign-currency (FX) gains into the
+ * "otros elementos" block. Use this from output generators (PDF/CSV/CLI/web) so
+ * the FX merge lives in exactly one place — previously each consumer added
+ * `report.fxGains.*` to `otherElements` by hand, which is easy to get wrong and
+ * drifts between formats.
+ *
+ * FX gains (Art. 37.1.l LIRPF) are reported in the same 1633/1637 block as
+ * options/crypto/non-listed funds (Art. 37.1.m). `listedShares` is returned
+ * unchanged.
+ */
+export function computeCasillaBlocksWithFx(report: TaxSummary): CasillaBlocks {
+  const { listedShares, otherElements } = computeCasillaBlocks(report.capitalGains.disposals);
+  const fx = report.fxGains;
+  const merged: CasillaBlock = {
+    transmissionValue: otherElements.transmissionValue.plus(fx.transmissionValue),
+    acquisitionValue: otherElements.acquisitionValue.plus(fx.acquisitionValue),
+    gains: fx.netGainLoss.greaterThanOrEqualTo(0)
+      ? otherElements.gains.plus(fx.netGainLoss)
+      : otherElements.gains,
+    losses: fx.netGainLoss.lessThan(0)
+      ? otherElements.losses.plus(fx.netGainLoss.abs())
+      : otherElements.losses,
+    netGainLoss: otherElements.netGainLoss.plus(fx.netGainLoss),
+    count: otherElements.count + fx.disposals.length,
+  };
+  return { listedShares, otherElements: merged };
 }

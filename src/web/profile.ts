@@ -115,7 +115,12 @@ export function initProfile(): void {
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");
 
-  const titularesOptions = [1, 2, 3, 4].map(
+  // Common case is 1–4 titulares. If a profile was saved with a higher count
+  // (e.g. via the CLI --titulares flag, which accepts any N), include that value
+  // too so re-saving the form doesn't silently reset it to 1 and lose data.
+  const titularesChoices = [1, 2, 3, 4];
+  if (profile.titulares > 4) titularesChoices.push(profile.titulares);
+  const titularesOptions = titularesChoices.map(
     (n) => `<option value="${n}"${n === profile.titulares ? " selected" : ""}>${n}</option>`,
   ).join("");
 

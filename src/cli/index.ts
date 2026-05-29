@@ -26,7 +26,7 @@ import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
-import { computeCasillaBlocks } from "../generators/casillas.js";
+import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
 import type { LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
@@ -437,9 +437,7 @@ program
 // ---------------------------------------------------------------------------
 
 function formatReport(report: ReturnType<typeof generateTaxReport>) {
-  const blocks = computeCasillaBlocks(report.capitalGains.disposals);
-  const otherTransmision = blocks.otherElements.transmissionValue.plus(report.fxGains.transmissionValue);
-  const otherAdquisicion = blocks.otherElements.acquisitionValue.plus(report.fxGains.acquisitionValue);
+  const blocks = computeCasillaBlocksWithFx(report);
   return {
     year: report.year,
     casillas: {
@@ -450,8 +448,8 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       "0328_valor_transmision_acciones": blocks.listedShares.transmissionValue.toFixed(2),
       "0331_valor_adquisicion_acciones": blocks.listedShares.acquisitionValue.toFixed(2),
       // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l)
-      "1633_valor_transmision_otros": otherTransmision.toFixed(2),
-      "1637_valor_adquisicion_otros": otherAdquisicion.toFixed(2),
+      "1633_valor_transmision_otros": blocks.otherElements.transmissionValue.toFixed(2),
+      "1637_valor_adquisicion_otros": blocks.otherElements.acquisitionValue.toFixed(2),
       "0588_deduccion_doble_imposicion": report.doubleTaxation.deduction.toFixed(2),
     },
     resumen: {
@@ -515,22 +513,19 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error("═══════════════════════════════════════════════");
   console.error(`  Ejercicio: ${report.year}`);
   console.error("");
-  const blocks = computeCasillaBlocks(report.capitalGains.disposals);
+  const blocks = computeCasillaBlocksWithFx(report);
   if (blocks.listedShares.count > 0) {
     console.error("  ACCIONES NEGOCIADAS — mercados regulados (Art. 37.1.a)");
     console.error(`    Casilla 0328 (Valor transmisión):  ${blocks.listedShares.transmissionValue.toFixed(2)} EUR`);
     console.error(`    Casilla 0331 (Valor adquisición):  ${blocks.listedShares.acquisitionValue.toFixed(2)} EUR`);
     console.error(`    Ganancia/Pérdida neta:             ${blocks.listedShares.netGainLoss.toFixed(2)} EUR`);
   }
-  if (blocks.otherElements.count > 0 || report.fxGains.disposals.length > 0) {
-    const otherTransmision = blocks.otherElements.transmissionValue.plus(report.fxGains.transmissionValue);
-    const otherAdquisicion = blocks.otherElements.acquisitionValue.plus(report.fxGains.acquisitionValue);
-    const otherNeto = blocks.otherElements.netGainLoss.plus(report.fxGains.netGainLoss);
+  if (blocks.otherElements.count > 0) {
     console.error("");
     console.error("  OTROS ELEMENTOS PATRIMONIALES — opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l)");
-    console.error(`    Casilla 1633 (Valor transmisión):  ${otherTransmision.toFixed(2)} EUR`);
-    console.error(`    Casilla 1637 (Valor adquisición):  ${otherAdquisicion.toFixed(2)} EUR`);
-    console.error(`    Ganancia/Pérdida neta:             ${otherNeto.toFixed(2)} EUR`);
+    console.error(`    Casilla 1633 (Valor transmisión):  ${blocks.otherElements.transmissionValue.toFixed(2)} EUR`);
+    console.error(`    Casilla 1637 (Valor adquisición):  ${blocks.otherElements.acquisitionValue.toFixed(2)} EUR`);
+    console.error(`    Ganancia/Pérdida neta:             ${blocks.otherElements.netGainLoss.toFixed(2)} EUR`);
   }
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);

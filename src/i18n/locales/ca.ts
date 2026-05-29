@@ -63,8 +63,8 @@ const ca: TranslationKeys = {
   "table.amount_eur": "Import (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmissió",
-  "casilla.acquisition_value": "Valor d'adquisició",
+  "casilla.transmission_value": "Valor de transmissió (total transmissions)",
+  "casilla.acquisition_value": "Valor d'adquisició (total transmissions)",
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
   "casilla.other_transmission_value": "Valor de transmissió (altres elements: opcions/cripto/fons/divisa)",

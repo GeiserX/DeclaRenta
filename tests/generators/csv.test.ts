@@ -156,6 +156,14 @@ describe("formatCsv", () => {
     expect(csv).toContain("0588,Deduccion doble imposicion,7.50");
   });
 
+  it("should NOT emit the deprecated single-casilla 0327 summary line", () => {
+    const csv = formatCsv(makeReport());
+    // 0327 is a TEXT field (denominación), never a money box — regression guard
+    // against reintroducing the old 0327/0328 transmisión/adquisición mapping.
+    const lines = csv.split("\n");
+    expect(lines.some((l) => l.startsWith("0327,"))).toBe(false);
+  });
+
   it("should escape descriptions with commas", () => {
     const report = makeReport();
     report.capitalGains.disposals[0]!.description = "BERKSHIRE HATHAWAY, CL B";

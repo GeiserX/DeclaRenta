@@ -129,6 +129,33 @@ describe("getProfile / saveProfile", () => {
     expect(profile.nif).toBe("");
     expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
+
+  it("should default titulares to 1 for pre-existing profiles without the key", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ nif: "12345678Z" }));
+    expect(getProfile().titulares).toBe(1);
+  });
+
+  it("should accept a stored titulares > 4 (CLI can set any N)", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ titulares: 6 }));
+    expect(getProfile().titulares).toBe(6);
+  });
+
+  it("should reject a fractional titulares and fall back to 1", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ titulares: 2.5 }));
+    expect(getProfile().titulares).toBe(1);
+  });
+
+  it("should reject a negative or zero titulares and fall back to 1", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ titulares: 0 }));
+    expect(getProfile().titulares).toBe(1);
+    localStorage.setItem("declarenta_profile", JSON.stringify({ titulares: -3 }));
+    expect(getProfile().titulares).toBe(1);
+  });
+
+  it("should reject a non-numeric (NaN/string) titulares and fall back to 1", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ titulares: "two" }));
+    expect(getProfile().titulares).toBe(1);
+  });
 });
 
 describe("isProfileComplete", () => {

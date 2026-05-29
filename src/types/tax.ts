@@ -115,14 +115,19 @@ export interface TaxSummary {
 
   /**
    * Capital gains: Ganancias y pérdidas patrimoniales. These aggregate totals
-   * span both AEAT blocks (acciones negociadas 0328/0331 and otros elementos
-   * 1633/1637). Use computeCasillaBlocks() to split by asset type when mapping
-   * to specific casillas.
+   * span BOTH AEAT blocks (acciones negociadas 0328/0331 and otros elementos
+   * 1633/1637) and do NOT include FX gains (see `fxGains`).
+   *
+   * ⚠️ Do NOT map `transmissionValue`/`acquisitionValue` to a single casilla —
+   * they are cross-block sums, not box 0328 nor 1633. To produce per-casilla
+   * figures use computeCasillaBlocks(disposals) (or computeCasillaBlocksWithFx)
+   * which partition by asset type. These aggregates are for headline totals and
+   * year-over-year comparison only.
    */
   capitalGains: {
-    /** Valor de transmisión (total proceeds across all disposals) */
+    /** Total proceeds across ALL disposals (both blocks). NOT casilla 0328 — see warning above. */
     transmissionValue: Decimal;
-    /** Valor de adquisición (total cost basis across all disposals) */
+    /** Total cost basis across ALL disposals (both blocks). NOT casilla 0331 — see warning above. */
     acquisitionValue: Decimal;
     /** Net gain/loss (transmissionValue - acquisitionValue) */
     netGainLoss: Decimal;
