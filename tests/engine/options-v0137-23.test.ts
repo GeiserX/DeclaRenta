@@ -239,11 +239,14 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(lots![0]!.costInEur.greaterThan(bareStrikeCost)).toBe(true);
     });
 
-    it("call buyer exercises with marketPrice → uses market price, not strike", () => {
+    it("call buyer exercises → uses STRIKE for share cost, ignores market price", () => {
+      // Fiscally correct: on exercise the buyer pays the contractual STRIKE for the
+      // shares, regardless of the market price at exercise. Market price is irrelevant
+      // to the cost basis (only the strike + integrated premium matter).
       const engine = new FifoEngine();
       engine.processTrades([makeOptionTrade()], rateMap);
 
-      // Market price $220 (higher than $200 strike)
+      // Even if IBKR reports a market price of $220, the basis must use the $200 strike.
       engine.processOptionExercises([makeExercise({ marketPrice: "220" })], rateMap);
 
       const disposals = engine.getDisposals();
@@ -251,10 +254,13 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
 
       const lots = engine.getRemainingLots().get("US0378331005");
       expect(lots).toHaveLength(1);
-      expect(lots![0]!.pricePerShare.toString()).toBe("220");
-      // Base cost: 100 × $220 × 0.94 = 20680, plus premium
-      const bareMarketCost = new Decimal("20680");
-      expect(lots![0]!.costInEur.greaterThan(bareMarketCost)).toBe(true);
+      // Share price = strike ($200), NOT market price ($220)
+      expect(lots![0]!.pricePerShare.toString()).toBe("200");
+      // Base cost at strike: 100 × $200 × 0.94 = 18800, plus integrated premium
+      const bareStrikeCost = new Decimal("18800");
+      expect(lots![0]!.costInEur.greaterThan(bareStrikeCost)).toBe(true);
+      // Must be well below the market-priced cost (100 × $220 × 0.94 = 20680)
+      expect(lots![0]!.costInEur.lessThan(new Decimal("20680"))).toBe(true);
     });
 
     it("put buyer exercises → no OPT disposal, premium reduces sale proceeds", () => {

@@ -40,7 +40,20 @@ const DEFAULT_PROFILE: FiscalProfile = {
 export function getProfile(): FiscalProfile {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) return { ...DEFAULT_PROFILE, ...(JSON.parse(raw) as Partial<FiscalProfile>) };
+    if (raw) {
+      // Copy only known fields from untrusted parsed JSON. Blind spreading would
+      // let crafted keys like __proto__/constructor/prototype pollute the object.
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const profile: FiscalProfile = { ...DEFAULT_PROFILE };
+      if (typeof parsed.nif === "string") profile.nif = parsed.nif;
+      if (typeof parsed.apellidos === "string") profile.apellidos = parsed.apellidos;
+      if (typeof parsed.nombre === "string") profile.nombre = parsed.nombre;
+      if (typeof parsed.ccaa === "string") profile.ccaa = parsed.ccaa;
+      if (typeof parsed.telefono === "string") profile.telefono = parsed.telefono;
+      if (typeof parsed.year === "number" && Number.isInteger(parsed.year)) profile.year = parsed.year;
+      if (typeof parsed.monodivisa === "boolean") profile.monodivisa = parsed.monodivisa;
+      return profile;
+    }
   } catch { /* ignore */ }
   return { ...DEFAULT_PROFILE };
 }

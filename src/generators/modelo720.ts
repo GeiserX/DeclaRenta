@@ -217,9 +217,19 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
 }
 
 function numPad(value: string, intLen: number, decLen: number): string {
-  const dec = new Decimal(value).abs();
-  const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
+  // Round to `decLen` decimals (ROUND_HALF_UP) BEFORE splitting int/frac, so
+  // AEAT receives rounded values (not truncated) and any rounding that bumps
+  // the integer part (e.g. 1.999 → 2.00) is reflected in the integer field.
+  const dec = new Decimal(value).abs().toDecimalPlaces(decLen, Decimal.ROUND_HALF_UP);
+  const intDigits = dec.floor().toString();
+  if (intDigits.length > intLen) {
+    // A rounding carry (or an oversized input) pushed the integer part past the
+    // fixed field width. Padding would silently shift every following byte and
+    // corrupt the 500-byte record — fail fast instead.
+    throw new Error(`Modelo 720: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
+  }
+  const intPart = intDigits.padStart(intLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).round().toString().padStart(decLen, "0");
   return intPart + fracPart;
 }
 
@@ -272,7 +282,7 @@ function buildDetailRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += pad(pos.description, 40);                         // 36-75: Name
+  record += pad(config.surname + " " + config.name, 40);     // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
   record += "V";                                              // 102: Asset type (stocks)

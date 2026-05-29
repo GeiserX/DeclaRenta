@@ -145,8 +145,15 @@ export class FifoEngine {
         const ratioNew = parseFloat(soMatch[3]!);
         const ratioOld = parseFloat(soMatch[4]!);
         const date = normalizeDate(ca.dateTime.slice(0, 8));
-        // Default cost fraction: estimate from the ratio (will be approximate)
-        // In practice, the cost basis split should use market values on the distribution date
+        // Cost-basis split fraction for the spin-off entity.
+        //
+        // FISCAL NOTE: the correct apportionment is by relative FAIR-MARKET VALUE
+        // (parent vs spun-off) on the distribution date, not by share count. However,
+        // the IBKR CorporateAction record (see types/ibkr.ts) carries only `quantity`
+        // and `amount` (=0 for SO events) — it provides NO fair-market-value data for
+        // either the parent or the new entity. With no value data available, the share
+        // ratio is the only proxy we can compute without fabricating numbers. If a future
+        // data source exposes FMVs, switch this to (spinoffValue / (parentValue + spinoffValue)).
         const costFraction = ratioNew / (ratioNew + ratioOld);
         spinOffs.push({ date, parentIsin, newIsin, newSymbol, newDescription: ca.description, ratio: ratioNew / ratioOld, costFraction });
       }
@@ -824,9 +831,11 @@ export class FifoEngine {
 
     if (longLots && longLots.length > 0) {
       // BUYER exercising: consume option lots, integrate premium into underlying cost basis
-      // Per DGT V0137-23: no separate option disposal — premium integrates into stock cost
-      const useMarketPrice = ex.marketPrice && /^-?\d+(\.\d+)?$/.test(ex.marketPrice.trim());
-      const priceForUnderlying = useMarketPrice ? new Decimal(ex.marketPrice!) : strike;
+      // Per DGT V0137-23: no separate option disposal — premium integrates into stock cost.
+      // The share acquisition/disposal price is the STRIKE (the contractual price actually
+      // paid/received on exercise), never the market price. Market price at exercise is
+      // irrelevant to the cost basis: a call buyer pays strike for the shares.
+      const priceForUnderlying = strike;
 
       let remaining = quantity;
       while (remaining.greaterThan(0) && longLots.length > 0) {
@@ -836,7 +845,7 @@ export class FifoEngine {
         const optionPremiumEur = costPerUnit.mul(consumed);
 
         if (ex.putCall === "C") {
-          // Call buyer: acquires shares at market price + premium (DGT V0137-23)
+          // Call buyer: acquires shares at strike + premium (DGT V0137-23)
           const baseShareCost = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
           const totalCost = baseShareCost.plus(optionPremiumEur);
           const underlyingLot: Lot = {
@@ -854,7 +863,7 @@ export class FifoEngine {
           if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
           this.lots.get(underlyingKey)!.push(underlyingLot);
         } else {
-          // Put buyer exercising: sells shares at market price, premium reduces proceeds
+          // Put buyer exercising: sells shares at strike, premium reduces proceeds
           const shareProceeds = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
           const netProceeds = shareProceeds.minus(optionPremiumEur);
           this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceeds, date, ecbRate, ex);
@@ -869,9 +878,10 @@ export class FifoEngine {
 
     } else if (shortLots && shortLots.length > 0) {
       // WRITER assigned: consume short option lots, integrate premium into underlying event
-      // Per DGT V0137-23: no separate option disposal — premium integrates into stock event
-      const useMarketPrice = ex.marketPrice && /^-?\d+(\.\d+)?$/.test(ex.marketPrice.trim());
-      const priceForUnderlying = useMarketPrice ? new Decimal(ex.marketPrice!) : strike;
+      // Per DGT V0137-23: no separate option disposal — premium integrates into stock event.
+      // The share disposal/acquisition price is the STRIKE (the contractual price actually
+      // received/paid on assignment), never the market price.
+      const priceForUnderlying = strike;
 
       let remaining = quantity;
       while (remaining.greaterThan(0) && shortLots.length > 0) {
@@ -880,8 +890,8 @@ export class FifoEngine {
         const proceedsPerUnit = lot.costInEur.dividedBy(lot.quantity);
         const optionPremiumEur = proceedsPerUnit.mul(consumed);
 
-        // Call writer assigned: SELL shares at market price, premium adds to proceeds
-        // Put writer assigned: BUY shares at market price, premium reduces cost
+        // Call writer assigned: SELL shares at strike, premium adds to proceeds
+        // Put writer assigned: BUY shares at strike, premium reduces cost
         if (ex.putCall === "C") {
           const shareProceeds = priceForUnderlying.mul(consumed).mul(sharesPerContract).mul(ecbRate);
           const netProceeds = shareProceeds.plus(optionPremiumEur);

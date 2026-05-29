@@ -15,7 +15,7 @@ import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
-import { getEcbRate } from "../engine/ecb.js";
+import { getEcbRate, isEcbResolvable } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
@@ -93,26 +93,38 @@ export function generateTaxReport(
 
   let interestEarned = new Decimal(0);
   let interestPaid = new Decimal(0);
-  const interestEntries = interestTransactions.map((t) => {
-    const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
-    const amountEur = new Decimal(t.amount).mul(ecbRate);
-    const isEarned = t.type.includes("Received");
+  let unresolvableInterest = 0;
+  const interestEntries = interestTransactions
+    .filter((t) => {
+      // Crypto-denominated income (e.g. Kraken staking, paid in the staked coin)
+      // has no ECB rate and can't be valued automatically. Skip it and warn so the
+      // user enters its EUR value manually, instead of crashing the whole report.
+      if (!isEcbResolvable(t.currency)) {
+        unresolvableInterest++;
+        return false;
+      }
+      return true;
+    })
+    .map((t) => {
+      const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
+      const amountEur = new Decimal(t.amount).mul(ecbRate);
+      const isEarned = t.type.includes("Received");
 
-    if (isEarned) {
-      interestEarned = interestEarned.plus(amountEur.abs());
-    } else {
-      interestPaid = interestPaid.plus(amountEur.abs());
-    }
+      if (isEarned) {
+        interestEarned = interestEarned.plus(amountEur.abs());
+      } else {
+        interestPaid = interestPaid.plus(amountEur.abs());
+      }
 
-    return {
-      type: isEarned ? "earned" as const : "paid" as const,
-      description: t.description,
-      date: normalizeDate(t.dateTime),
-      amountEur: amountEur.abs(),
-      currency: t.currency,
-      ecbRate,
-    };
-  });
+      return {
+        type: isEarned ? "earned" as const : "paid" as const,
+        description: t.description,
+        date: normalizeDate(t.dateTime),
+        amountEur: amountEur.abs(),
+        currency: t.currency,
+        ecbRate,
+      };
+    });
 
   // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
   // FXCONV/AFx trades filtered per-trade by isFxconv(); securities trades don't generate FX events
@@ -149,7 +161,7 @@ export function generateTaxReport(
     .plus(Decimal.max(fxTransmissionValue.minus(fxAcquisitionValue), 0))
     .plus(grossDividends)
     .plus(interestEarned);
-  const doubleTaxation = calculateDoubleTaxation(dividendEntries, totalSavingsBase);
+  const doubleTaxation = calculateDoubleTaxation(dividendEntries, year, totalSavingsBase);
 
   // Filter warnings to those relevant to the selected year
   const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
@@ -160,6 +172,19 @@ export function generateTaxReport(
 
   // Aggregate structured messages from all sources
   const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList];
+
+  // Crypto-denominated income (staking rewards paid in the coin) can't be valued
+  // via ECB rates. We skip it rather than crash; the user must value it manually.
+  if (unresolvableInterest > 0) {
+    const cryptoMsg = `Hay ${unresolvableInterest} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.`;
+    allMessages.push({
+      id: "report.crypto_income_unvalued",
+      severity: "warning",
+      message: cryptoMsg,
+      hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+    });
+    allWarnings.push(cryptoMsg);
+  }
 
   // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)
   if (!options?.skipFx && fxDisposals.length > 0) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { detectWashSales } from "../../src/engine/wash-sale.js";
+import { detectWashSales, addMonths } from "../../src/engine/wash-sale.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
 import type { Trade } from "../../src/types/ibkr.js";
 
@@ -36,6 +36,40 @@ function makeTrade(isin: string, date: string, buySell: "BUY" | "SELL"): Trade {
     exchange: "NASDAQ", commissionCurrency: "USD", commission: "0", taxes: "0", multiplier: "1",
   };
 }
+
+describe("addMonths (calendar-clamped)", () => {
+  it("clamps Jan 31 + 1 month to the last day of February (non-leap)", () => {
+    const result = addMonths(new Date(2025, 0, 31), 1); // 2025-01-31, Feb 2025 = 28d
+    expect(result.getFullYear()).toBe(2025);
+    expect(result.getMonth()).toBe(1); // February
+    expect(result.getDate()).toBe(28); // clamped, NOT Mar 2/3
+  });
+
+  it("clamps Jan 31 + 1 month to Feb 29 in a leap year", () => {
+    const result = addMonths(new Date(2024, 0, 31), 1); // 2024-01-31, Feb 2024 = 29d
+    expect(result.getMonth()).toBe(1);
+    expect(result.getDate()).toBe(29);
+  });
+
+  it("clamps Dec 31 + 2 months to the last day of February next year", () => {
+    const result = addMonths(new Date(2025, 11, 31), 2); // 2025-12-31 → Feb 2026
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(1); // February
+    expect(result.getDate()).toBe(28); // clamped, NOT Mar 2/3
+  });
+
+  it("clamps Mar 31 - 1 month to the last day of February (no overflow)", () => {
+    const result = addMonths(new Date(2025, 2, 31), -1); // 2025-03-31 → Feb 2025
+    expect(result.getMonth()).toBe(1);
+    expect(result.getDate()).toBe(28);
+  });
+
+  it("preserves the day when the target month is long enough", () => {
+    const result = addMonths(new Date(2025, 0, 15), 1); // 2025-01-15 → 2025-02-15
+    expect(result.getMonth()).toBe(1);
+    expect(result.getDate()).toBe(15);
+  });
+});
 
 describe("detectWashSales", () => {
   it("should block loss when repurchased within 2 months after sale", () => {
@@ -141,6 +175,43 @@ describe("detectWashSales", () => {
 
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("should use 1-year window for unlisted (no-ISIN, non-crypto) asset", () => {
+    // STK with NO ISIN → treated as unlisted → 12-month window.
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol: "PRIVCO",
+      assetCategory: "STK",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-300),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL"), symbol: "PRIVCO", isin: "" },
+      // Repurchase ~9 months later: outside 2mo, inside 12mo window.
+      { ...makeTrade("", "2026-03-01", "BUY"), symbol: "PRIVCO", isin: "" },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("should use 2-month window for listed STK with a real ISIN (no 12mo block)", () => {
+    const disposals = [makeDisposal({
+      isin: "US0378331005",
+      symbol: "AAPL",
+      assetCategory: "STK",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      makeTrade("US0378331005", "2025-06-15", "SELL"),
+      // ~9 months later: outside the 2-month listed window → not blocked.
+      makeTrade("US0378331005", "2026-03-01", "BUY"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
   });
 
   it("should NOT block loss for options (OPT assetCategory)", () => {

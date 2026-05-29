@@ -7,6 +7,7 @@
 
 import Decimal from "decimal.js";
 import { t } from "../i18n/index.js";
+import { getSavingsBands } from "../engine/tax-brackets.js";
 import { fmtEur } from "./format.js";
 
 // ---------------------------------------------------------------------------
@@ -244,13 +245,35 @@ const ASSET_LABELS: Record<string, string> = {
 // Tax Bracket Stacked Bar + Estimate Card
 // ---------------------------------------------------------------------------
 
-const BRACKETS = [
-  { limit: 6000, rate: 0.19, label: "0 – 6.000", color: "#22c55e" },
-  { limit: 50000, rate: 0.21, label: "6.000 – 50.000", color: "#84cc16" },
-  { limit: 200000, rate: 0.23, label: "50.000 – 200.000", color: "#f59e0b" },
-  { limit: 300000, rate: 0.27, label: "200.000 – 300.000", color: "#f97316" },
-  { limit: Infinity, rate: 0.28, label: "> 300.000", color: "#ef4444" },
-];
+// Color palette for the savings bands, mapped by band index. Extra colors are
+// ignored if a year has fewer bands; the engine table is the source of truth.
+const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
+
+/** Format a band threshold with Spanish thousands separators (no decimals). */
+function fmtThreshold(n: number): string {
+  return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+}
+
+/** Spanish range label for a band, e.g. "6.000 – 50.000" or "> 300.000". */
+function bandLabel(from: number, to: number): string {
+  if (to === Infinity) return `> ${fmtThreshold(from)}`;
+  return `${fmtThreshold(from)} – ${fmtThreshold(to)}`;
+}
+
+/**
+ * Build the display brackets for a tax year from the shared engine bands.
+ * Band rates/thresholds come from `getSavingsBands(year)` (single source of
+ * truth); only the color palette and labels are presentation concerns here.
+ * Number is used for the existing display math — band definitions are not.
+ */
+function displayBrackets(year: number): { limit: number; rate: number; label: string; color: string }[] {
+  return getSavingsBands(year).map((b, i) => ({
+    limit: b.to,
+    rate: b.rate.toNumber(),
+    label: bandLabel(b.from, b.to),
+    color: BRACKET_COLORS[i % BRACKET_COLORS.length]!,
+  }));
+}
 
 export interface TaxBaseBreakdown {
   capitalGains: number;
@@ -262,18 +285,23 @@ export interface TaxBaseBreakdown {
 
 export function renderTaxBracketCard(
   title: string,
+  year: number,
   taxableBase: number,
   doubleTaxDeduction: number,
   breakdown?: TaxBaseBreakdown,
 ): string {
   if (taxableBase <= 0) return "";
 
+  // Bracket definitions come from the shared engine table (single source of
+  // truth); display math below stays in Number as before.
+  const brackets = displayBrackets(year);
+
   // Calculate tax per bracket
   let remaining = taxableBase;
   let prevLimit = 0;
   const rows: { label: string; amount: number; rate: number; tax: number; color: string }[] = [];
 
-  for (const b of BRACKETS) {
+  for (const b of brackets) {
     if (remaining <= 0) break;
     const width = b.limit === Infinity ? remaining : b.limit - prevLimit;
     const amount = Math.min(remaining, width);

@@ -11,6 +11,7 @@
  * payment_reference,mcc_code
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import { parseCsvLine, parseNumber, stripBom } from "./csv-utils.js";
@@ -72,6 +73,18 @@ function field(fields: string[], col: number): string {
   return (fields[col] ?? "").trim();
 }
 
+/**
+ * Normalized money string for a column. Trade/CashTransaction money fields are
+ * strings consumed downstream by Decimal, so we keep full precision here instead
+ * of round-tripping through parseFloat (which loses precision).
+ */
+function numStr(fields: string[], col: number): string {
+  const v = field(fields, col);
+  if (!v) return "0";
+  return parseNumber(v);
+}
+
+/** Numeric value of a column, for sign/zero comparisons only (never money). */
 function num(fields: string[], col: number): number {
   const v = field(fields, col);
   if (!v) return 0;
@@ -124,10 +137,15 @@ function parseTrCsv(lines: string[]): Statement {
     const tradeDate = dateToCompact(dateStr);
     const txId = field(fields, cols.transactionId);
     const currency = field(fields, cols.currency) || "EUR";
+    // Money fields kept as normalized strings for full Decimal precision.
+    const amountStr = numStr(fields, cols.amount);
+    const sharesStr = numStr(fields, cols.shares);
+    const priceStr = numStr(fields, cols.price);
+    const feeStr = numStr(fields, cols.fee);
+    const taxStr = numStr(fields, cols.tax);
+    // Numeric values used only for sign/zero comparisons (never as money).
     const amount = num(fields, cols.amount);
     const shares = num(fields, cols.shares);
-    const price = num(fields, cols.price);
-    const fee = num(fields, cols.fee);
     const tax = num(fields, cols.tax);
     const fxRate = field(fields, cols.fxRate);
     const originalAmount = field(fields, cols.originalAmount);
@@ -138,9 +156,10 @@ function parseTrCsv(lines: string[]): Statement {
       if (shares === 0) continue;
 
       const isSell = type === "SELL";
-      const absShares = Math.abs(shares);
-      const absFee = Math.abs(fee);
-      const absTax = Math.abs(tax);
+      const absShares = new Decimal(sharesStr).abs().toString();
+      const absAmount = new Decimal(amountStr).abs().toString();
+      const absFee = new Decimal(feeStr).abs();
+      const absTax = new Decimal(taxStr).abs();
 
       trades.push({
         tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
@@ -152,19 +171,19 @@ function parseTrCsv(lines: string[]): Statement {
         currency,
         tradeDate,
         settlementDate: tradeDate,
-        quantity: isSell ? `-${absShares}` : `${absShares}`,
-        tradePrice: `${price}`,
-        tradeMoney: `${amount}`,
-        proceeds: isSell ? `${Math.abs(amount)}` : "0",
-        cost: isSell ? "0" : `${Math.abs(amount)}`,
+        quantity: isSell ? `-${absShares}` : absShares,
+        tradePrice: priceStr,
+        tradeMoney: amountStr,
+        proceeds: isSell ? absAmount : "0",
+        cost: isSell ? "0" : absAmount,
         fifoPnlRealized: "0",
         fxRateToBase: "1",
         buySell: isSell ? "SELL" : "BUY",
         openCloseIndicator: isSell ? "C" : "O",
         exchange: "TRADE_REPUBLIC",
         commissionCurrency: currency,
-        commission: absFee !== 0 ? `-${absFee}` : "0",
-        taxes: absTax !== 0 ? `-${absTax}` : "0",
+        commission: absFee.isZero() ? "0" : absFee.neg().toString(),
+        taxes: absTax.isZero() ? "0" : absTax.neg().toString(),
         multiplier: "1",
       });
       continue;
@@ -175,7 +194,7 @@ function parseTrCsv(lines: string[]): Statement {
       const isinCountry = symbol.length >= 2 ? symbol.slice(0, 2).toUpperCase() : "";
       const divAmount = originalAmount && originalCurrency
         ? originalAmount
-        : `${amount}`;
+        : amountStr;
       const divCurrency = originalCurrency || currency;
       const fxToBase = fxRate || "1";
 
@@ -204,7 +223,7 @@ function parseTrCsv(lines: string[]): Statement {
           currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: tax > 0 ? `-${Math.abs(tax)}` : `${tax}`,
+          amount: tax > 0 ? new Decimal(taxStr).abs().neg().toString() : taxStr,
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
@@ -223,7 +242,7 @@ function parseTrCsv(lines: string[]): Statement {
         currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: `${amount}`,
+        amount: amountStr,
         fxRateToBase: "1",
         type: "Broker Interest Received",
       });
@@ -242,7 +261,7 @@ function parseTrCsv(lines: string[]): Statement {
           currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: `${amount}`,
+          amount: amountStr,
           fxRateToBase: "1",
           type: "Broker Interest Received",
         });

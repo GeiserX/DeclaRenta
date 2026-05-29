@@ -8,16 +8,16 @@ DeclaRenta converts foreign broker reports into Spanish tax declarations (Modelo
 - **Alt URL**: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/)
 - **Docker**: `drumsergio/declarenta` on Docker Hub
 
-### Supported Brokers (11)
+### Supported Brokers (13)
 
-IBKR (XML), Degiro (CSV), Flatex (CSV), eToro (XLSX), Scalable Capital (CSV), Freedom24 (JSON), Revolut (XLSX), Lightyear (CSV), Coinbase (CSV), Binance (CSV), Kraken (CSV)
+IBKR (XML), Degiro (CSV), Flatex (CSV), eToro (XLSX), Scalable Capital (CSV), Freedom24 (JSON), Revolut (XLSX), Lightyear (CSV), Coinbase (CSV), Binance (CSV), Kraken (CSV), Trade Republic (CSV), Trading 212 (CSV)
 
 ## Architecture
 
 ```
 src/
   types/         TypeScript interfaces (broker, tax, ECB, IBKR)
-  parsers/       Broker-specific parsers (11 brokers + auto-detect)
+  parsers/       Broker-specific parsers (13 brokers + auto-detect)
     index.ts     detectBroker() auto-detection, brokerParsers registry
     ibkr.ts      IBKR Flex Query XML
     degiro.ts    Degiro CSV (auto-detect delimiter)
@@ -145,7 +145,7 @@ tests/           Vitest tests mirroring src/ structure
 - **Art. 33.5.f LIRPF**: Anti-churning rule — losses blocked if same security repurchased within 2 calendar months (listed on regulated markets) or 1 year (unlisted, including most crypto)
 - **Art. 80 LIRPF**: Double taxation deduction — lesser of foreign tax paid or Spanish tax due
 - **Art. 26.1.a LIRPF**: Only custody/administration fees are deductible from capital income. Margin interest is NOT deductible — shown as informational only.
-- **Casillas**: 0327-0328 (capital gains), 0029 (dividends), 0033 (interest income), 0588 (double taxation). Real casilla 0032 = insurance income (Art. 25.3), not broker margin interest.
+- **Casillas**: 0327-0328 (capital gains), 0029 (dividends), 0027 (interest income), 0588 (double taxation). Real casilla 0032 = insurance income (Art. 25.3), not broker margin interest.
 - **Savings brackets (2025+, Ley 7/2024)**: 19% (0–6k), 21% (6k–50k), 23% (50k–200k), 27% (200k–300k), 30% (>300k)
 
 ### AEAT Formats

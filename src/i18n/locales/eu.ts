@@ -141,6 +141,7 @@ const eu: TranslationKeys = {
   "compare.clear_confirm": "Gordetako txosten guztiak ezabatu?",
 
   "error.no_broker_detected": "Ezin izan da \"{{filename}}\" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.",
+  "error.file_too_large": "\"{{filename}}\" fitxategiak {{limit}} MB-ko muga gainditzen du eta baztertu egin da. Esportatu epe laburragoa edo zatitu fitxategia.",
   "error.prefix": "Errorea: ",
 
   "status.fetching_rates": "EBZ tasak lortzen {{currencies}} monetetarako...",
@@ -433,7 +434,7 @@ const eu: TranslationKeys = {
   "guide_rw.retenciones_zero": "<strong>0</strong> — Atzerriko broker-ek ez dute Espainiako IRPF-ren konturako atxikipenik egiten. Atzerriko atxikipena 0588 gelaxkan kentzen da.",
   "guide_rw.importe_label": "Diru-sarrera osoak",
   "guide_rw.dividends_importe_hint": "DeclaRenta-ren <strong>0029</strong> gelaxkako zenbateko gordina (EUR).",
-  "guide_rw.interest_importe_hint": "DeclaRenta-ren <strong>0033</strong> gelaxkako zenbatekoa (EUR).",
+  "guide_rw.interest_importe_hint": "DeclaRenta-ren <strong>0027</strong> gelaxkako zenbatekoa (EUR).",
   "guide_rw.dt_pais_label": "Jatorrizko herrialdea",
   "guide_rw.dt_pais_hint": "Hautatu atxikipena egin zen herrialdea (adib. Ameriketako Estatu Batuak, Irlanda, Alemania…). Hainbat herrialdeetako atxikipenak badituzu, gehitu lerro bat bakoitzeko.",
   "guide_rw.dt_importe_label": "Kenkariaren zenbatekoa",

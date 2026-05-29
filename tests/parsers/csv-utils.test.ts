@@ -107,6 +107,37 @@ describe("parseNumber", () => {
     expect(parseNumber("$100.50")).toBe("100.50");
     expect(parseNumber("£(50.00)")).toBe("-50.00");
   });
+
+  it("should treat a lone comma with 1-2 trailing digits as decimal", () => {
+    expect(parseNumber("1,5")).toBe("1.5");
+    expect(parseNumber("1,50")).toBe("1.50");
+  });
+
+  it("should treat a lone comma with 3 trailing digits as a decimal (EU/German)", () => {
+    // A single comma is treated as a decimal separator: European brokers
+    // (e.g. Flatex) legitimately emit 3-decimal prices like "2,082" = 2.082.
+    // Interpreting these as thousands ("2082") would overstate by 1000x.
+    expect(parseNumber("2,082")).toBe("2.082");
+    expect(parseNumber("1,500")).toBe("1.500");
+    expect(parseNumber("-1,500")).toBe("-1.500");
+  });
+
+  it("should treat multiple commas as thousands separators", () => {
+    // Multiple commas are unambiguous: they can only be thousands separators.
+    expect(parseNumber("1,234,567")).toBe("1234567");
+    expect(parseNumber("12,345,678")).toBe("12345678");
+  });
+
+  it("should treat a lone comma with 4+ trailing digits as decimal (not a thousands group)", () => {
+    expect(parseNumber("1,5000")).toBe("1.5000");
+  });
+
+  it("should not regress combined dot+comma formats", () => {
+    expect(parseNumber("1.234,56")).toBe("1234.56");
+    expect(parseNumber("1,234.56")).toBe("1234.56");
+    expect(parseNumber("-175,50")).toBe("-175.50");
+    expect(parseNumber("(123.45)")).toBe("-123.45");
+  });
 });
 
 describe("convertDateDMY", () => {

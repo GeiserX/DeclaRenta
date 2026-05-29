@@ -99,20 +99,48 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
     const csv = await response.text();
     const lines = csv.split("\n");
 
+    // Determine whether there is any data to parse (a non-empty line after the header).
+    const hasDataRows = lines.slice(1).some((l) => l.trim());
+
+    // Parse the header (line 0) and locate columns by name so that we are resilient
+    // to the ECB reordering columns. ECB csvdata is comma-delimited and unquoted.
+    const header = (lines[0] ?? "").trim().split(",").map((h) => h.trim());
+    const dateIdx = header.indexOf("TIME_PERIOD");
+    const valueIdx = header.indexOf("OBS_VALUE");
+
+    // Only enforce the header contract when there is actual data to map; a
+    // header-only/empty response is a valid "no rates" result, not a format error.
+    if (hasDataRows && (dateIdx === -1 || valueIdx === -1)) {
+      const missing = [
+        dateIdx === -1 ? "TIME_PERIOD" : null,
+        valueIdx === -1 ? "OBS_VALUE" : null,
+      ].filter(Boolean).join(", ");
+      throw new Error(`ECB CSV for ${currency} is missing required column(s): ${missing}. Header was: ${lines[0] ?? "(empty)"}`);
+    }
+
     // Skip header line
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]?.trim();
       if (!line) continue;
 
       const fields = line.split(",");
-      // CSV format: ... TIME_PERIOD is col 6, OBS_VALUE is col 7
-      const date = fields[6];
-      const ecbRate = fields[7]; // 1 EUR = X FCY
+      const date = fields[dateIdx];
+      const ecbRate = fields[valueIdx]; // 1 EUR = X FCY
 
       if (!date || !ecbRate || ecbRate === "") continue;
 
+      // Guard against non-finite/non-positive rates (e.g. "0" → would yield Infinity
+      // on inversion, "-"/garbage → throws/NaN). Skip the row rather than poisoning the map.
+      let parsedRate: Decimal;
+      try {
+        parsedRate = new Decimal(ecbRate);
+      } catch {
+        continue;
+      }
+      if (!parsedRate.isFinite() || parsedRate.lessThanOrEqualTo(0)) continue;
+
       // Invert: 1 FCY = 1/X EUR
-      const eurPerFcy = new Decimal(1).dividedBy(new Decimal(ecbRate)).toFixed(10);
+      const eurPerFcy = new Decimal(1).dividedBy(parsedRate).toFixed(10);
 
       if (!rateMap.has(date)) {
         rateMap.set(date, new Map());

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import Decimal from "decimal.js";
 import { fetchEcbRates } from "../../src/engine/ecb.js";
 
 function mockFetchOk(csvData: string) {
@@ -26,8 +27,8 @@ describe("fetchEcbRates", () => {
     expect(rates.has("2025-01-03")).toBe(true);
 
     // Inverted: 1/1.035 ≈ 0.966...
-    const rate = parseFloat(rates.get("2025-01-02")!.get("USD")!);
-    expect(rate).toBeCloseTo(1 / 1.035, 4);
+    const rate = new Decimal(rates.get("2025-01-02")!.get("USD")!);
+    expect(rate.toDecimalPlaces(4).toString()).toBe(new Decimal(1).div("1.035").toDecimalPlaces(4).toString());
   });
 
   it("should fetch multiple currencies", async () => {
@@ -199,6 +200,50 @@ describe("fetchEcbRates", () => {
     const rates = await fetchEcbRates(2025, ["USD"]);
     expect(rates.has("2025-01-02")).toBe(true);
     expect(rates.has("2025-01-03")).toBe(false);
+  });
+
+  it("should locate columns by header name when ECB reorders columns", async () => {
+    // OBS_VALUE before TIME_PERIOD, extra leading column.
+    const csvData =
+      "OBS_VALUE,KEY,FREQ,TIME_PERIOD\n" +
+      "1.0350,EXR.D.USD.EUR.SP00.A,D,2025-01-02\n";
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
+
+    const rates = await fetchEcbRates(2025, ["USD"]);
+    expect(rates.has("2025-01-02")).toBe(true);
+    const rate = new Decimal(rates.get("2025-01-02")!.get("USD")!);
+    expect(rate.toDecimalPlaces(4).toString()).toBe(new Decimal(1).div("1.035").toDecimalPlaces(4).toString());
+  });
+
+  it("should throw when a required column is missing and data rows exist", async () => {
+    // Missing OBS_VALUE column entirely.
+    const csvData =
+      "KEY,FREQ,CURRENCY,TIME_PERIOD\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,2025-01-02\n";
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
+
+    await expect(fetchEcbRates(2025, ["USD"])).rejects.toThrow(/missing required column/);
+  });
+
+  it("should NOT throw on a header-only / empty response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk("header\n"));
+    const rates = await fetchEcbRates(2025, ["USD"]);
+    expect(rates.size).toBe(0);
+  });
+
+  it("should skip rows with a zero rate (avoids Infinity)", async () => {
+    const csvData =
+      "KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-02,0\n" +
+      "EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,2025-01-03,1.0400\n";
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockFetchOk(csvData));
+
+    const rates = await fetchEcbRates(2025, ["USD"]);
+    expect(rates.has("2025-01-02")).toBe(false); // zero rate skipped
+    expect(rates.has("2025-01-03")).toBe(true);
   });
 
   it("should use correct URL format with year range", async () => {

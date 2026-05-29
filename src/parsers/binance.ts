@@ -433,7 +433,9 @@ function parseBinanceCsv(lines: string[]): Statement {
       accountId: "",
       symbol,
       description: `${symbol}/${currency} ${sideLower.toUpperCase()}`,
-      isin: symbol,
+      // Crypto has no ISIN. Leave empty so wash-sale keys on CRYPTO:${symbol}
+      // and never collides with a real ISIN-keyed security.
+      isin: "",
       assetCategory: "CRYPTO",
       currency,
       tradeDate,

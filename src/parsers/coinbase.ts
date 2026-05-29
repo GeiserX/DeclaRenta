@@ -124,7 +124,11 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // Skip non-taxable transfers
     if (SKIP_TYPES.includes(txType)) continue;
 
-    // Income transactions → cash transactions (dividends)
+    // Income transactions (staking, rewards, learning) → interest-like income.
+    // These are NOT foreign dividends — no issuer/withholding country and not in
+    // the Art. 80 double-taxation pool. Coinbase reports them with a fiat spot
+    // value (total/subtotal in spotCurrency), so they resolve cleanly via ECB as
+    // Broker Interest Received, keeping them out of calculateDividends().
     if (INCOME_TYPES.includes(txType)) {
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
@@ -137,7 +141,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         settleDate: tradeDate,
         amount: total || subtotal,
         fxRateToBase: "1",
-        type: "Dividends",
+        type: "Broker Interest Received",
       });
       continue;
     }

@@ -10,7 +10,7 @@ describe("krakenParser - Ledgers CSV", () => {
     const result = krakenParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
     expect(result.cashTransactions[0].symbol).toBe("ETH");
-    expect(result.cashTransactions[0].type).toBe("Dividends");
+    expect(result.cashTransactions[0].type).toBe("Broker Interest Received");
   });
 
   it("should skip non-staking ledger entries", () => {

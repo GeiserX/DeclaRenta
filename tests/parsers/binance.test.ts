@@ -54,7 +54,7 @@ describe("binanceParser", () => {
 
       const btcBuy = buys[0]!;
       expect(btcBuy.symbol).toBe("BTC");
-      expect(btcBuy.isin).toBe("BTC");
+      expect(btcBuy.isin).toBe(""); // crypto has no ISIN — wash-sale keys on CRYPTO:${symbol}
       expect(btcBuy.assetCategory).toBe("CRYPTO");
       expect(btcBuy.currency).toBe("EUR");
       expect(btcBuy.quantity).toBe("0.05");

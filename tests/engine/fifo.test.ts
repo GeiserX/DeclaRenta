@@ -1069,4 +1069,70 @@ describe("FifoEngine", () => {
       expect(d.gainLossEur.toFixed(2)).toBe("322.00");
     });
   });
+
+  describe("Same-day SELL and BUY ordering", () => {
+    it("should consume the oldest lot first even when a same-day BUY exists", () => {
+      // Older lot from January, then on the SAME day a BUY (10 @ 200) and a
+      // SELL (10) occur. FIFO must consume the oldest (January) lot, NOT the
+      // fresh same-day repurchase. The same-day buy is a valid lot but sits at
+      // the back of the FIFO queue.
+      const rates = makeRateMap({
+        "2025-01-10": "0.90",
+        "2025-06-15": "0.91",
+      });
+
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", tradeDate: "2025-01-10", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-06-15", quantity: "10", tradePrice: "200", buySell: "BUY" }),
+        makeTrade({ tradeID: "3", tradeDate: "2025-06-15", quantity: "-10", tradePrice: "210", buySell: "SELL" }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      // One disposal, fully satisfied by the January lot (oldest acquisition)
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.acquireDate).toBe("2025-01-10");
+      expect(disposals[0]!.quantity.toString()).toBe("10");
+      // Cost basis = January lot: 10 × 100 × 0.90 = 900.00 (not the 200-priced same-day buy)
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("900.00");
+
+      // The same-day BUY lot remains untouched (10 @ 200)
+      const remaining = engine.getRemainingLots().get("US0378331005") ?? [];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.quantity.toString()).toBe("10");
+      expect(remaining[0]!.acquireDate).toBe("2025-06-15");
+    });
+  });
+
+  describe("Reverse split cost-basis conservation", () => {
+    it("should preserve total cost basis when quantity does not divide evenly", () => {
+      // 25 shares with a 1:10 reverse split → 2.5 shares. The fractional
+      // remainder must NOT silently lose its cost basis: the surviving lots
+      // plus any disposed shares must conserve the original total cost.
+      const rates = makeRateMap({ "2024-06-01": "0.92" });
+
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: "US1234567890", tradeDate: "20240601", quantity: "25", tradePrice: "10", buySell: "BUY" }),
+      ];
+
+      const corporateActions: CorporateAction[] = [{
+        transactionID: "CA1", accountId: "U1", symbol: "TEST", isin: "US1234567890",
+        description: "TEST(US1234567890) SPLIT 1 FOR 10", currency: "USD",
+        reportDate: "20240807", dateTime: "20240807", quantity: "0", amount: "0",
+        type: "FS", actionDescription: "",
+      }];
+
+      const engine = new FifoEngine();
+      engine.processTrades(trades, rates, corporateActions);
+
+      // Original total cost: 25 × 10 × 0.92 = 230.00 EUR
+      const remaining = engine.getRemainingLots().get("US1234567890") ?? [];
+      // 2.5 shares → 2 whole shares survive, 0.5 becomes cash-in-lieu
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.quantity.toString()).toBe("2.5");
+      // Total cost basis must be fully conserved on the surviving lot (230.00)
+      expect(remaining[0]!.costInEur.toFixed(2)).toBe("230.00");
+    });
+  });
 });
