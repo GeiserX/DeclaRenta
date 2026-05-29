@@ -163,6 +163,7 @@ const gl: TranslationKeys = {
   "profile.section_personal": "Datos persoais",
   "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
+  "profile.nif_placeholder": "12345678A",
   "profile.surname_label": "Apelidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nome:",

@@ -175,6 +175,7 @@ const es = {
   "profile.section_personal": "Datos personales",
   "profile.section_declaration": "Configuración de la declaración",
   "profile.nif_label": "NIF/NIE:",
+  "profile.nif_placeholder": "12345678A",
   "profile.surname_label": "Apellidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nombre:",

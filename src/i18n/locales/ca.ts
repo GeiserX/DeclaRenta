@@ -163,6 +163,7 @@ const ca: TranslationKeys = {
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
+  "profile.nif_placeholder": "12345678A",
   "profile.surname_label": "Cognoms:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nom:",

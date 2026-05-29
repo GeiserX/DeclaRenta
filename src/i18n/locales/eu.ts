@@ -163,6 +163,7 @@ const eu: TranslationKeys = {
   "profile.section_personal": "Datu pertsonalak",
   "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
+  "profile.nif_placeholder": "12345678A",
   "profile.surname_label": "Abizenak:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Izena:",

@@ -131,7 +131,7 @@ export function initProfile(): void {
         <div class="profile-grid">
           <label>
             <span>${t("profile.nif_label")}</span>
-            <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="12345678A" maxlength="9" autocomplete="off" />
+            <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="${t("profile.nif_placeholder")}" maxlength="9" autocomplete="off" />
           </label>
           <label>
             <span>${t("profile.surname_label")}</span>
