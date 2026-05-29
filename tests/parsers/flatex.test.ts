@@ -139,6 +139,21 @@ describe("flatexParser — Kontoumsätze cash", () => {
   });
 });
 
+describe("flatexParser — zero guards", () => {
+  const header =
+    "Nummer;Buchtag;Valuta;ISIN;Bezeichnung;Nominal;;Buchungsinformationen;TA-Nr.;Kurs;;Depot";
+
+  it("skips decimal-formatted zero quantity rows", () => {
+    const csv = `${header}\n1;01.12.2025;01.12.2025;US0000000000;TEST CORP.;0,00;Stk.;Ausführung ORDER Kauf US0000000000 1;1;10,00;EUR;***xxx Depot`;
+    expect(flatexParser.parse(csv).trades).toHaveLength(0);
+  });
+
+  it("skips decimal-formatted zero price rows", () => {
+    const csv = `${header}\n1;01.12.2025;01.12.2025;US0000000000;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000000 1;1;0,00;EUR;***xxx Depot`;
+    expect(flatexParser.parse(csv).trades).toHaveLength(0);
+  });
+});
+
 describe("flatexParser — errors", () => {
   it("throws on empty input", () => {
     expect(() => flatexParser.parse("Buchtag;Betrag\n")).toThrow(/vac/i);

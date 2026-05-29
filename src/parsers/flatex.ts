@@ -102,15 +102,15 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const qtyRaw = parseNumber(fields[qtyCol] ?? "0");
     const price = parseNumber(fields[priceCol] ?? "0");
 
-    if (!isin || qtyRaw === "0") continue;
+    const qtyNum = new Decimal(qtyRaw);
+    if (!isin || qtyNum.isZero()) continue;
 
     // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
     if (/lagerstellenwechsel/i.test(info)) continue;
 
     // Skip zero-price rows (non-tradeable conversions, rights).
-    if (price === "0") continue;
+    if (new Decimal(price).isZero()) continue;
 
-    const qtyNum = new Decimal(qtyRaw);
     // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
     const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
     const absQty = qtyNum.abs();
