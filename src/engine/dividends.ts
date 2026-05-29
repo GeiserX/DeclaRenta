@@ -59,7 +59,9 @@ export function calculateDividends(
     const isinPrefix = /^[A-Z]{2}/.test(div.isin) ? div.isin.slice(0, 2) : "";
     const countryMatch = div.description.match(/\b([A-Z]{2})\b.*(?:Tax|WHT)/i) ??
       matching?.description.match(/\b([A-Z]{2})\b/);
-    const country = countryMatch?.[1] ?? (isinPrefix || "XX");
+    // The description regex is case-insensitive, so a captured code may be lower
+    // case (e.g. "us Tax" → "us"). Normalize so it matches isinPrefix/"XX".
+    const country = (countryMatch?.[1] ?? (isinPrefix || "XX")).toUpperCase();
 
     return {
       isin: div.isin,

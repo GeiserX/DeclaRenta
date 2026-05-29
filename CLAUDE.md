@@ -17,7 +17,7 @@ IBKR (XML), Degiro (CSV), Flatex (CSV), eToro (XLSX), Scalable Capital (CSV), Fr
 ```
 src/
   types/         TypeScript interfaces (broker, tax, ECB, IBKR)
-  parsers/       Broker-specific parsers (10 brokers + auto-detect)
+  parsers/       Broker-specific parsers (11 brokers + auto-detect)
     index.ts     detectBroker() auto-detection, brokerParsers registry
     ibkr.ts      IBKR Flex Query XML
     degiro.ts    Degiro CSV (auto-detect delimiter)

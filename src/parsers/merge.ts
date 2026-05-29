@@ -129,7 +129,7 @@ function reconcileOrderLegs(statement: Statement): void {
       severity: "info",
       message:
         "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
-      hint: "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se reste del valor de transmisión.",
+      hint: "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
       context: { unmatchedTrades: String(unmatchedTrades) },
     });
   }
