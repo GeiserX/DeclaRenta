@@ -24,6 +24,7 @@ const BROKER_LOGOS: Record<string, string> = {
 const BROKERS: BrokerInfo[] = [
   { id: "ibkr", format: "XML" },
   { id: "degiro", format: "CSV" },
+  { id: "flatex", format: "CSV" },
   { id: "scalable", format: "CSV" },
   { id: "etoro", format: "XLSX" },
   { id: "freedom24", format: "JSON" },
@@ -116,6 +117,7 @@ export function getSelectedBrokerIds(): ReadonlySet<string> {
 export const BROKER_ID_TO_PARSER: Record<string, string> = {
   ibkr: "Interactive Brokers",
   degiro: "Degiro",
+  flatex: "Flatex",
   scalable: "Scalable Capital",
   etoro: "eToro",
   freedom24: "Freedom24",

@@ -208,6 +208,12 @@ const es = {
   "guide.degiro.step4": "Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO)",
   "guide.degiro.step5": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
   "guide.degiro.step6": "Para dividendos: vuelve al <strong>Buzón</strong> → <strong>Cuenta</strong> (historial de movimientos de tu cuenta) → misma fecha → <strong>Exportar</strong> CSV",
+  "guide.flatex.title": "Flatex (CSV)",
+  "guide.flatex.step1": "Inicia sesión en la <strong>web de Flatex</strong>",
+  "guide.flatex.step2": "Ve a <strong>Movimientos</strong> → <strong>Depotumsätze</strong> (movimientos de la cartera)",
+  "guide.flatex.step3": "Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV",
+  "guide.flatex.step4": "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV",
+  "guide.flatex.step5": "Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos)",
 
   // eToro
   "guide.etoro.title": "eToro (XLSX)",

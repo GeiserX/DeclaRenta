@@ -8,9 +8,9 @@ DeclaRenta converts foreign broker reports into Spanish tax declarations (Modelo
 - **Alt URL**: [geiserx.github.io/DeclaRenta](https://geiserx.github.io/DeclaRenta/)
 - **Docker**: `drumsergio/declarenta` on Docker Hub
 
-### Supported Brokers (10)
+### Supported Brokers (11)
 
-IBKR (XML), Degiro (CSV), eToro (XLSX), Scalable Capital (CSV), Freedom24 (JSON), Revolut (XLSX), Lightyear (CSV), Coinbase (CSV), Binance (CSV), Kraken (CSV)
+IBKR (XML), Degiro (CSV), Flatex (CSV), eToro (XLSX), Scalable Capital (CSV), Freedom24 (JSON), Revolut (XLSX), Lightyear (CSV), Coinbase (CSV), Binance (CSV), Kraken (CSV)
 
 ## Architecture
 
@@ -21,6 +21,7 @@ src/
     index.ts     detectBroker() auto-detection, brokerParsers registry
     ibkr.ts      IBKR Flex Query XML
     degiro.ts    Degiro CSV (auto-detect delimiter)
+    flatex.ts    Flatex CSV (German, 2 files: Depotumsätze trades + Kontoumsätze cash)
     etoro.ts     eToro XLSX (6+ header variants)
     scalable.ts  Scalable Capital CSV
     freedom24.ts Freedom24 JSON

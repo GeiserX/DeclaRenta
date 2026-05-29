@@ -10,6 +10,7 @@ import { ibkrParser } from "./ibkr.js";
 import { freedom24Parser } from "./freedom24.js";
 import { etoroParser } from "./etoro.js";
 import { degiroParser } from "./degiro.js";
+import { flatexParser } from "./flatex.js";
 import { scalableParser } from "./scalable.js";
 import { binanceParser } from "./binance.js";
 import { coinbaseParser } from "./coinbase.js";
@@ -29,6 +30,7 @@ export const brokerParsers: BrokerParser[] = [
   revolutParser,    // XLSX with "Date acquired" + "Cost basis"
   etoroParser,      // XLSX/CSV with "Closed Positions"
   lightyearParser,  // CSV with Reference + Ticker + ISIN + CCY + Net Amt.
+  flatexParser,     // CSV with Buchtag + Bezeichnung/Nominal or Buchungsinformationen + Betrag
   degiroParser,     // CSV with ISIN + quantity + price headers
   scalableParser,   // CSV with date;time;status;reference headers
   tradeRepublicParser, // CSV with transaction_id + asset_class + counterparty_name

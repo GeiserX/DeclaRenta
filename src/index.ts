@@ -8,6 +8,7 @@
 // Parsers
 export { parseIbkrFlexXml, ibkrParser } from "./parsers/ibkr.js";
 export { degiroParser } from "./parsers/degiro.js";
+export { flatexParser } from "./parsers/flatex.js";
 export { scalableParser } from "./parsers/scalable.js";
 export { freedom24Parser } from "./parsers/freedom24.js";
 export { etoroParser, parseEtoroXlsx, detectEtoroXlsx } from "./parsers/etoro.js";
@@ -25,6 +26,7 @@ export {
   parseCsvLine,
   parseNumber,
   convertDateDMY,
+  convertDateDMYDot,
   convertDateDMYSlash,
   convertDateISO,
   findColumn,
