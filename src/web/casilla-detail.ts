@@ -8,6 +8,7 @@
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
+import { computeCasillaBlocks, isListedShare } from "../generators/casillas.js";
 
 /** Escape HTML special characters to prevent XSS in rendered strings. */
 function esc(s: string): string {
@@ -31,6 +32,18 @@ interface CasillaConfig {
   getValue: (r: TaxSummary) => string;
   getClass: (r: TaxSummary) => string;
   getDetail: (r: TaxSummary) => string;
+  /** Optional: hide this card when it returns false (e.g. block has no operations). */
+  visible?: (r: TaxSummary) => boolean;
+}
+
+/** Disposals belonging to the "otros elementos" block (everything not a listed share). */
+function otherElementDisposals(r: TaxSummary): FifoDisposal[] {
+  return r.capitalGains.disposals.filter((d) => !isListedShare(d));
+}
+
+/** Disposals belonging to the "acciones negociadas" block (listed shares). */
+function listedShareDisposals(r: TaxSummary): FifoDisposal[] {
+  return r.capitalGains.disposals.filter((d) => isListedShare(d));
 }
 
 /** Render a detail table of FIFO disposals for a casilla drill-down. */
@@ -140,33 +153,44 @@ function renderFxDisposalsDetail(disposals: FxDisposal[], label: string): string
 }
 
 const CASILLAS: CasillaConfig[] = [
-  {
-    code: "0327",
-    i18nKey: "casilla.transmission_value",
-    getValue: (r) => fmtEur(r.capitalGains.transmissionValue),
-    getClass: () => "",
-    getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.transmission_value")),
-  },
+  // Acciones negociadas en mercados regulados (Art. 37.1.a) → 0328/0331.
   {
     code: "0328",
-    i18nKey: "casilla.acquisition_value",
-    getValue: (r) => fmtEur(r.capitalGains.acquisitionValue),
+    i18nKey: "casilla.listed_transmission_value",
+    getValue: (r) => fmtEur(computeCasillaBlocks(r.capitalGains.disposals).listedShares.transmissionValue),
     getClass: () => "",
-    getDetail: (r) => renderDisposalsDetail(r.capitalGains.disposals, t("casilla.acquisition_value")),
+    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_transmission_value")),
+    visible: (r) => computeCasillaBlocks(r.capitalGains.disposals).listedShares.count > 0,
   },
   {
-    code: "1633",
-    i18nKey: "casilla.fx_transmission_value",
-    getValue: (r) => fmtEur(r.fxGains.transmissionValue),
+    code: "0331",
+    i18nKey: "casilla.listed_acquisition_value",
+    getValue: (r) => fmtEur(computeCasillaBlocks(r.capitalGains.disposals).listedShares.acquisitionValue),
     getClass: () => "",
-    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
+    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_acquisition_value")),
+    visible: (r) => computeCasillaBlocks(r.capitalGains.disposals).listedShares.count > 0,
+  },
+  // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa
+  // (Art. 37.1.l) → 1633/1637. Combines the non-listed disposals with FX gains.
+  {
+    code: "1633",
+    i18nKey: "casilla.other_transmission_value",
+    getValue: (r) => fmtEur(computeCasillaBlocks(r.capitalGains.disposals).otherElements.transmissionValue.plus(r.fxGains.transmissionValue)),
+    getClass: () => "",
+    getDetail: (r) =>
+      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_transmission_value")) +
+      renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
+    visible: (r) => computeCasillaBlocks(r.capitalGains.disposals).otherElements.count > 0 || r.fxGains.disposals.length > 0,
   },
   {
     code: "1637",
-    i18nKey: "casilla.fx_acquisition_value",
-    getValue: (r) => fmtEur(r.fxGains.acquisitionValue),
+    i18nKey: "casilla.other_acquisition_value",
+    getValue: (r) => fmtEur(computeCasillaBlocks(r.capitalGains.disposals).otherElements.acquisitionValue.plus(r.fxGains.acquisitionValue)),
     getClass: () => "",
-    getDetail: (r) => renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value")),
+    getDetail: (r) =>
+      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_acquisition_value")) +
+      renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value")),
+    visible: (r) => computeCasillaBlocks(r.capitalGains.disposals).otherElements.count > 0 || r.fxGains.disposals.length > 0,
   },
   {
     code: "",
@@ -215,7 +239,7 @@ const CASILLAS: CasillaConfig[] = [
  * Clicking a card toggles the detail view with contributing operations.
  */
 export function renderCasillaCards(container: HTMLElement, report: TaxSummary): void {
-  const cards = CASILLAS.map((c, idx) => {
+  const cards = CASILLAS.filter((c) => c.visible === undefined || c.visible(report)).map((c, idx) => {
     const value = c.getValue(report);
     const cls = c.getClass(report);
     const hasDetail = c.code !== "";

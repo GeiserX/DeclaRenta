@@ -250,7 +250,8 @@ describe("generatePdfWebReport", () => {
     const blob = await generatePdfWebReport(makeReport(), t);
     const buf = await blob.arrayBuffer();
     const text = new TextDecoder("latin1").decode(new Uint8Array(buf));
-    expect(text).toContain("0327");
+    expect(text).toContain("0328");
+    expect(text).toContain("0331");
     expect(text).toContain("0029");
     expect(text).toContain("0027");
     expect(text).toContain("0588");

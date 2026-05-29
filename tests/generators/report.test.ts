@@ -465,4 +465,79 @@ describe("generateTaxReport", () => {
     const warningsCount = report.warnings.length;
     expect(warningsCount).toBe(nonHintMessages.length);
   });
+
+  describe("titulares (per-contribuyente split)", () => {
+    function makeMixedStatement(): FlexStatement {
+      return makeStatement({
+        trades: [
+          makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+          makeTrade({ tradeID: "2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+        ],
+        cashTransactions: [
+          makeCashTx({ transactionID: "d1", dateTime: "20250601", amount: "100", type: "Dividends" }),
+          makeCashTx({ transactionID: "w1", dateTime: "20250601", amount: "-15", type: "Withholding Tax" }),
+          makeCashTx({
+            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
+            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+          }),
+        ],
+      });
+    }
+
+    const splitRates = makeRateMap({
+      "2025-03-15": "0.9200",
+      "2025-09-20": "0.9100",
+      "2025-06-01": "0.9200",
+    });
+
+    it("should halve every reported amount when titulares = 2", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 2 });
+
+      expect(split.capitalGains.transmissionValue.toFixed(2))
+        .toBe(solo.capitalGains.transmissionValue.div(2).toFixed(2));
+      expect(split.capitalGains.acquisitionValue.toFixed(2))
+        .toBe(solo.capitalGains.acquisitionValue.div(2).toFixed(2));
+      expect(split.capitalGains.netGainLoss.toFixed(2))
+        .toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
+      expect(split.dividends.grossIncome.toFixed(2))
+        .toBe(solo.dividends.grossIncome.div(2).toFixed(2));
+      expect(split.interest.earned.toFixed(2))
+        .toBe(solo.interest.earned.div(2).toFixed(2));
+      expect(split.doubleTaxation.deduction.toFixed(2))
+        .toBe(solo.doubleTaxation.deduction.div(2).toFixed(2));
+
+      // Per-operation amounts are split too (keeps the annex consistent).
+      expect(split.capitalGains.disposals[0]!.proceedsEur.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.quantity.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2));
+    });
+
+    it("should emit an info message about shared titularity when titulares > 1", () => {
+      const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 3 });
+      const msg = split.messages.find((m) => m.id === "report.titularidad_compartida");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.context?.titulares).toBe("3");
+    });
+
+    it("should not change amounts or emit the message when titulares = 1", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const explicit = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 1 });
+
+      expect(explicit.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      expect(explicit.messages.some((m) => m.id === "report.titularidad_compartida")).toBe(false);
+    });
+
+    it("should treat invalid titulares (<1 or fractional) as 1", () => {
+      const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
+      const zero = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 0 });
+      const frac = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 1.5 });
+
+      expect(zero.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+      // 1.5 floors to 1 → no split
+      expect(frac.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
+    });
+  });
 });

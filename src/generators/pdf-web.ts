@@ -2,6 +2,7 @@ import type { TaxSummary } from "../types/tax.js";
 import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
+import { computeCasillaBlocks } from "./casillas.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
 
@@ -92,23 +93,29 @@ export async function generatePdfWebReport(
   doc.setTextColor(C.header);
   doc.text(t("pdf.section_casillas"), MARGIN, MARGIN + 27);
 
-  const casillasBody: string[][] = [
-    ["0327", t("casilla.transmission_value"), eur(report.capitalGains.transmissionValue)],
-    ["0328", t("casilla.acquisition_value"),  eur(report.capitalGains.acquisitionValue)],
-    ["",     t("casilla.net_gain_loss"),       eur(report.capitalGains.netGainLoss)],
+  const blocks = computeCasillaBlocks(report.capitalGains.disposals);
+  const casillasBody: string[][] = [];
+
+  // Acciones negociadas en mercados regulados (Art. 37.1.a) → 0328/0331
+  if (blocks.listedShares.count > 0) {
+    casillasBody.push(["0328", t("casilla.listed_transmission_value"), eur(blocks.listedShares.transmissionValue)]);
+    casillasBody.push(["0331", t("casilla.listed_acquisition_value"),  eur(blocks.listedShares.acquisitionValue)]);
+  }
+
+  // Otros elementos: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l) → 1633/1637
+  if (blocks.otherElements.count > 0 || report.fxGains.disposals.length > 0) {
+    casillasBody.push(["1633", t("casilla.other_transmission_value"), eur(blocks.otherElements.transmissionValue.plus(report.fxGains.transmissionValue))]);
+    casillasBody.push(["1637", t("casilla.other_acquisition_value"),  eur(blocks.otherElements.acquisitionValue.plus(report.fxGains.acquisitionValue))]);
+  }
+
+  casillasBody.push(
+    ["",     t("casilla.net_gain_loss"),       eur(report.capitalGains.netGainLoss.plus(report.fxGains.netGainLoss))],
     ["0029", t("casilla.gross_dividends"),     eur(report.dividends.grossIncome)],
     // Casilla 0027: Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF)
     ["0027", t("casilla.interest_earned"),     eur(report.interest.earned)],
     [t("pdf.informative"), t("pdf.interest_margin"), eur(report.interest.paid)],
     ["0588", t("casilla.double_taxation"),     eur(report.doubleTaxation.deduction)],
-  ];
-
-  // FX gains (Casillas 1633/1637) — only shown when multi-currency FX events exist
-  if (report.fxGains.disposals.length > 0) {
-    casillasBody.push(["1633", t("casilla.fx_transmission_value"), eur(report.fxGains.transmissionValue)]);
-    casillasBody.push(["1637", t("casilla.fx_acquisition_value"),  eur(report.fxGains.acquisitionValue)]);
-    casillasBody.push(["",     t("casilla.fx_net_gain_loss"),       eur(report.fxGains.netGainLoss)]);
-  }
+  );
 
   // Blocked losses: informative only — Renta Web handles Art. 33.5.f per-disposal, no aggregate casilla
   if (report.capitalGains.blockedLosses.greaterThan(0)) {

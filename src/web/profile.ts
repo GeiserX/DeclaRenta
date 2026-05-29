@@ -17,6 +17,8 @@ export interface FiscalProfile {
   telefono: string;
   year: number;
   monodivisa: boolean;
+  /** Número de titulares de la cuenta. 1 = individual. >1 reparte los importes a partes iguales por contribuyente (Art. 11.3 LIRPF). */
+  titulares: number;
 }
 
 const CCAA_LIST = [
@@ -34,6 +36,7 @@ const DEFAULT_PROFILE: FiscalProfile = {
   telefono: "",
   year: new Date().getFullYear() - 1,
   monodivisa: false,
+  titulares: 1,
 };
 
 /** Get the current fiscal profile from localStorage */
@@ -52,6 +55,9 @@ export function getProfile(): FiscalProfile {
       if (typeof parsed.telefono === "string") profile.telefono = parsed.telefono;
       if (typeof parsed.year === "number" && Number.isInteger(parsed.year)) profile.year = parsed.year;
       if (typeof parsed.monodivisa === "boolean") profile.monodivisa = parsed.monodivisa;
+      if (typeof parsed.titulares === "number" && Number.isInteger(parsed.titulares) && parsed.titulares >= 1) {
+        profile.titulares = parsed.titulares;
+      }
       return profile;
     }
   } catch { /* ignore */ }
@@ -109,6 +115,10 @@ export function initProfile(): void {
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");
 
+  const titularesOptions = [1, 2, 3, 4].map(
+    (n) => `<option value="${n}"${n === profile.titulares ? " selected" : ""}>${n}</option>`,
+  ).join("");
+
   container.innerHTML = `
     <form class="profile-form" id="profile-form" autocomplete="on">
       <label>
@@ -140,6 +150,13 @@ export function initProfile(): void {
           ${yearOptions}
         </select>
       </label>
+      <label>
+        <span>${t("profile.titulares_label")}</span>
+        <select id="profile-titulares" aria-describedby="titulares-detail">
+          ${titularesOptions}
+        </select>
+      </label>
+      <p class="field-detail" id="titulares-detail">${t("profile.titulares_detail")}</p>
       <div class="monodivisa-callout">
         <label class="monodivisa-toggle">
           <input type="checkbox" id="profile-monodivisa" aria-describedby="monodivisa-detail monodivisa-warning" ${profile.monodivisa ? "checked" : ""} />
@@ -164,6 +181,7 @@ export function initProfile(): void {
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
       year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
       monodivisa: (document.getElementById("profile-monodivisa") as HTMLInputElement).checked,
+      titulares: parseInt((document.getElementById("profile-titulares") as HTMLSelectElement).value, 10) || 1,
     };
   }
 

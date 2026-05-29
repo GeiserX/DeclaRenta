@@ -113,13 +113,18 @@ export interface TaxSummary {
   /** Structured three-tier messages (error/warning/info) */
   messages: TaxMessage[];
 
-  /** Capital gains: Ganancias y pérdidas patrimoniales (Casillas 0327-0340) */
+  /**
+   * Capital gains: Ganancias y pérdidas patrimoniales. These aggregate totals
+   * span both AEAT blocks (acciones negociadas 0328/0331 and otros elementos
+   * 1633/1637). Use computeCasillaBlocks() to split by asset type when mapping
+   * to specific casillas.
+   */
   capitalGains: {
-    /** Casilla 0327: Valor de transmisión (total proceeds) */
+    /** Valor de transmisión (total proceeds across all disposals) */
     transmissionValue: Decimal;
-    /** Casilla 0328: Valor de adquisición (total cost basis) */
+    /** Valor de adquisición (total cost basis across all disposals) */
     acquisitionValue: Decimal;
-    /** Net gain/loss (0327 - 0328) */
+    /** Net gain/loss (transmissionValue - acquisitionValue) */
     netGainLoss: Decimal;
     /** Gains blocked by anti-churning rule */
     blockedLosses: Decimal;

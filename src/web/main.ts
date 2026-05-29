@@ -612,7 +612,11 @@ async function processFiles(): Promise<void> {
       }
     }
 
-    const report = generateTaxReport(merged, allRates, year, { skipFx: getProfile().monodivisa });
+    const profileForReport = getProfile();
+    const report = generateTaxReport(merged, allRates, year, {
+      skipFx: profileForReport.monodivisa,
+      titulares: profileForReport.titulares,
+    });
     currentReport = report;
     currentBrokers = detectedBrokers;
 

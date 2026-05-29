@@ -84,6 +84,7 @@ describe("getProfile / saveProfile", () => {
       telefono: "600123456",
       year: 2025,
       monodivisa: false,
+      titulares: 1,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
@@ -98,6 +99,7 @@ describe("getProfile / saveProfile", () => {
       telefono: "600123456",
       year: 2025,
       monodivisa: true,
+      titulares: 1,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
