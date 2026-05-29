@@ -126,55 +126,67 @@ export function initProfile(): void {
 
   container.innerHTML = `
     <form class="profile-form" id="profile-form" autocomplete="on">
-      <label>
-        <span>${t("profile.nif_label")}</span>
-        <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="12345678A" maxlength="9" autocomplete="off" />
-      </label>
-      <label>
-        <span>${t("profile.surname_label")}</span>
-        <input type="text" id="profile-surname" value="${esc(profile.apellidos)}" placeholder="${t("profile.surname_placeholder")}" autocomplete="family-name" />
-      </label>
-      <label>
-        <span>${t("profile.name_label")}</span>
-        <input type="text" id="profile-name" value="${esc(profile.nombre)}" placeholder="${t("profile.name_placeholder")}" autocomplete="given-name" />
-      </label>
-      <label>
-        <span>${t("profile.ccaa_label")}</span>
-        <select id="profile-ccaa">
-          <option value="">—</option>
-          ${ccaaOptions}
-        </select>
-      </label>
-      <label>
-        <span>${t("profile.phone_label")}</span>
-        <input type="tel" id="profile-phone" value="${esc(profile.telefono)}" placeholder="${t("profile.phone_placeholder")}" maxlength="15" autocomplete="tel" />
-      </label>
-      <label>
-        <span>${t("config.year_label")}</span>
-        <select id="profile-year">
-          ${yearOptions}
-        </select>
-      </label>
-      <label>
-        <span>${t("profile.titulares_label")}</span>
-        <select id="profile-titulares" aria-describedby="titulares-detail">
-          ${titularesOptions}
-        </select>
-      </label>
-      <p class="field-detail" id="titulares-detail">${t("profile.titulares_detail")}</p>
-      <div class="monodivisa-callout">
-        <label class="monodivisa-toggle">
-          <input type="checkbox" id="profile-monodivisa" aria-describedby="monodivisa-detail monodivisa-warning" ${profile.monodivisa ? "checked" : ""} />
-          <span class="monodivisa-label">
-            <strong>${t("profile.monodivisa_label")}</strong>
-          </span>
-        </label>
-        <p class="monodivisa-detail" id="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
-        <p class="monodivisa-warning" id="monodivisa-warning" role="alert" aria-live="polite" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
+      <fieldset class="profile-group">
+        <legend class="profile-group-title">${t("profile.section_personal")}</legend>
+        <div class="profile-grid">
+          <label>
+            <span>${t("profile.nif_label")}</span>
+            <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="${t("profile.nif_placeholder")}" maxlength="9" autocomplete="off" />
+          </label>
+          <label>
+            <span>${t("profile.surname_label")}</span>
+            <input type="text" id="profile-surname" value="${esc(profile.apellidos)}" placeholder="${t("profile.surname_placeholder")}" autocomplete="family-name" />
+          </label>
+          <label>
+            <span>${t("profile.name_label")}</span>
+            <input type="text" id="profile-name" value="${esc(profile.nombre)}" placeholder="${t("profile.name_placeholder")}" autocomplete="given-name" />
+          </label>
+          <label>
+            <span>${t("profile.ccaa_label")}</span>
+            <select id="profile-ccaa">
+              <option value="">—</option>
+              ${ccaaOptions}
+            </select>
+          </label>
+          <label>
+            <span>${t("profile.phone_label")}</span>
+            <input type="tel" id="profile-phone" value="${esc(profile.telefono)}" placeholder="${t("profile.phone_placeholder")}" maxlength="15" autocomplete="tel" />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="profile-group">
+        <legend class="profile-group-title">${t("profile.section_declaration")}</legend>
+        <div class="profile-grid">
+          <label>
+            <span>${t("config.year_label")}</span>
+            <select id="profile-year">
+              ${yearOptions}
+            </select>
+          </label>
+          <label>
+            <span>${t("profile.titulares_label")}</span>
+            <select id="profile-titulares" aria-describedby="titulares-detail">
+              ${titularesOptions}
+            </select>
+          </label>
+        </div>
+        <p class="field-detail" id="titulares-detail">${t("profile.titulares_detail")}</p>
+        <div class="monodivisa-callout">
+          <label class="monodivisa-toggle">
+            <input type="checkbox" id="profile-monodivisa" aria-describedby="monodivisa-detail monodivisa-warning" ${profile.monodivisa ? "checked" : ""} />
+            <span class="monodivisa-label"><strong>${t("profile.monodivisa_label")}</strong></span>
+          </label>
+          <p class="monodivisa-detail" id="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
+          <p class="monodivisa-warning" id="monodivisa-warning" role="alert" aria-live="polite" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
+        </div>
+      </fieldset>
+
+      <div class="profile-actions">
+        <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
+        <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
       </div>
-      <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
     </form>
-    <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
   `;
 
   function collectProfile(): FiscalProfile {

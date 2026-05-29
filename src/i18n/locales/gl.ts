@@ -160,7 +160,10 @@ const gl: TranslationKeys = {
 
   "profile.title": "Perfil fiscal",
   "profile.description": "Estes datos utilízanse para xerar os ficheiros dos modelos 720 e D-6.",
+  "profile.section_personal": "Datos persoais",
+  "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
+  "profile.nif_placeholder": "12345678A",
   "profile.surname_label": "Apelidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nome:",
