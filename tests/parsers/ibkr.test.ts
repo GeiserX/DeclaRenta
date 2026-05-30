@@ -12,14 +12,14 @@ const MINIMAL_FLEX_XML = `<?xml version="1.0" encoding="UTF-8"?>
                quantity="10" tradePrice="175.50" tradeMoney="1755.00"
                proceeds="1755.00" cost="1500.00" fifoPnlRealized="255.00"
                fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
         <Trade tradeID="123456790" accountId="U1234567" symbol="AAPL" description="APPLE INC"
                isin="US0378331005" assetCategory="STK" currency="USD"
                tradeDate="20250920" settlementDate="20250923"
                quantity="-10" tradePrice="195.00" tradeMoney="-1950.00"
                proceeds="-1950.00" cost="-1500.00" fifoPnlRealized="450.00"
                fxRateToBase="0.91" buySell="SELL" openCloseIndicator="C"
-               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
       </Trades>
       <CashTransactions>
         <CashTransaction transactionID="987654321" accountId="U1234567"
@@ -215,7 +215,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="1" tradePrice="5.50" tradeMoney="550.00"
                    proceeds="550.00" cost="0" fifoPnlRealized="0"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="CBOE" commissionCurrency="USD" commission="-0.65" taxes="0"
+                   exchange="CBOE" ibCommissionCurrency="USD" ibCommission="-0.65" taxes="0"
                    multiplier="100" putCall="C" strike="200" expiry="20250620"
                    underlyingSymbol="AAPL" underlyingIsin="US0378331005" />
           </Trades>
@@ -247,7 +247,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="1" tradePrice="5500.00" tradeMoney="275000.00"
                    proceeds="275000.00" cost="0" fifoPnlRealized="0"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="CME" commissionCurrency="USD" commission="-2.10" taxes="0"
+                   exchange="CME" ibCommissionCurrency="USD" ibCommission="-2.10" taxes="0"
                    multiplier="50" />
           </Trades>
           <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
@@ -275,7 +275,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="10000" tradePrice="97.50" tradeMoney="9750.00"
                    proceeds="9750.00" cost="0" fifoPnlRealized="0"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="SMART" commissionCurrency="USD" commission="-5.00" taxes="0"
+                   exchange="SMART" ibCommissionCurrency="USD" ibCommission="-5.00" taxes="0"
                    multiplier="1" />
           </Trades>
           <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
@@ -301,7 +301,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="1" tradePrice="3.00" tradeMoney="300"
                    proceeds="300" cost="0" fifoPnlRealized="0"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="CBOE" commissionCurrency="USD" commission="-0.65" taxes="0"
+                   exchange="CBOE" ibCommissionCurrency="USD" ibCommission="-0.65" taxes="0"
                    multiplier="100" putCall="X" strike="500" expiry="20250620" />
           </Trades>
           <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
@@ -365,7 +365,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="10" tradePrice="175.50" tradeMoney="1755.00"
                    proceeds="1755.00" cost="1500.00" fifoPnlRealized="255.00"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+                   exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
           </Trades>
           <CashTransactions>
             <CashTransaction transactionID="C001" accountId="U1111111"
@@ -396,14 +396,14 @@ describe("parseIbkrFlexXml", () => {
                    quantity="5" tradePrice="400.00" tradeMoney="2000.00"
                    proceeds="2000.00" cost="1800.00" fifoPnlRealized="200.00"
                    fxRateToBase="0.91" buySell="BUY" openCloseIndicator="O"
-                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+                   exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
             <Trade tradeID="B002" accountId="U2222222" symbol="MSFT" description="MICROSOFT CORP"
                    isin="US5949181045" assetCategory="STK" currency="USD"
                    tradeDate="20250920" settlementDate="20250923"
                    quantity="-5" tradePrice="420.00" tradeMoney="-2100.00"
                    proceeds="-2100.00" cost="-1800.00" fifoPnlRealized="300.00"
                    fxRateToBase="0.90" buySell="SELL" openCloseIndicator="C"
-                   exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+                   exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
           </Trades>
           <CashTransactions>
             <CashTransaction transactionID="C002" accountId="U2222222"
@@ -511,7 +511,7 @@ describe("parseIbkrFlexXml", () => {
                    quantity="10" tradePrice="175" tradeMoney="1750"
                    proceeds="1750" cost="1500" fifoPnlRealized="250"
                    fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-                   exchange="NASDAQ" commissionCurrency="USD" commission="-1" taxes="0" />
+                   exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1" taxes="0" />
           </Trades>
           <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
         </FlexStatement>
