@@ -109,24 +109,18 @@ tests/           Vitest tests mirroring src/ structure
 
 ## Deployment
 
+**Production is GitHub Pages only.** DeclaRenta is a static web app — there is NO self-hosted/Docker deployment. Do not deploy a container to geiserback (or any server); it has been fully removed. Test live only at declarenta.com.
+
 ### Release Flow
 1. Merge PR to main
 2. Auto Release workflow creates semver tag (e.g. `v0.15.6`)
-3. Docker workflow does NOT auto-trigger on tags — must manually trigger: `gh workflow run docker.yml --ref <tag>`
-4. Pull and deploy the new Docker image to prod
+3. `Deploy to GitHub Pages` workflow auto-runs → site live at declarenta.com
 
-### Docker Tag Format
-- Tags are version without `v` prefix and without `web-` prefix: `drumsergio/declarenta:0.16.0`
-
-### Production (geiserback)
-- **Server**: geiserback (NOT watchtower)
-- **Container**: `declarenta-web`, standalone (not a Portainer stack)
-- **Port mapping**: 3080:80, restart: unless-stopped, no volumes
-- **Deploy command**: `ssh root@geiserback "docker stop declarenta-web && docker rm declarenta-web && docker run -d --name declarenta-web --restart unless-stopped -p 3080:80 drumsergio/declarenta:<version>"`
-
-### GitHub Pages (mirror)
-- Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow
-- Serves at geiserx.github.io/DeclaRenta (alternative/mirror URL)
+### Production (GitHub Pages)
+- Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow (Vite build → `dist/web` → Pages artifact)
+- **declarenta.com** (custom domain, Cloudflare DNS) — the canonical production URL
+- **geiserx.github.io/DeclaRenta** — same Pages deploy, alternative URL
+- No Docker, no Portainer, no geiserback. The `drumsergio/declarenta` Docker image still builds in CI but is not deployed anywhere.
 
 ## Critical Rules
 
