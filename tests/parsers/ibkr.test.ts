@@ -65,11 +65,47 @@ describe("parseIbkrFlexXml", () => {
     expect(buy.quantity).toBe("10");
     expect(buy.tradePrice).toBe("175.50");
     expect(buy.currency).toBe("USD");
+    // Commission must be parsed from the ibCommission/ibCommissionCurrency
+    // Flex attributes — never silently 0 (see #188).
+    expect(buy.commission).toBe("-1.00");
+    expect(buy.commissionCurrency).toBe("USD");
 
     const sell = result.trades[1]!;
     expect(sell.buySell).toBe("SELL");
     expect(sell.quantity).toBe("-10");
     expect(sell.tradePrice).toBe("195.00");
+    expect(sell.commission).toBe("-1.00");
+    expect(sell.commissionCurrency).toBe("USD");
+  });
+
+  // Regression for #188: IBKR Flex <Trade> elements carry commissions in
+  // ibCommission/ibCommissionCurrency. The parser previously read the plain
+  // commission/commissionCurrency names (which never exist on <Trade>), so
+  // every IBKR commission silently became 0 — overstating capital gains.
+  it("should read commission from ibCommission and ignore legacy plain commission attr", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="Test" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades>
+        <Trade tradeID="1" accountId="U1234567" symbol="MSFT" description="MICROSOFT"
+               isin="US5949181045" assetCategory="STK" currency="USD"
+               tradeDate="20250410" settlementDate="20250413"
+               quantity="5" tradePrice="400.00" tradeMoney="2000.00"
+               proceeds="2000.00" cost="2000.00" fifoPnlRealized="0"
+               fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-2.50"
+               commission="-99.99" commissionCurrency="EUR" taxes="0" />
+      </Trades>
+      <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(xml);
+    const trade = result.trades[0]!;
+    // The ib-prefixed attributes win; the bogus legacy plain attrs are ignored.
+    expect(trade.commission).toBe("-2.50");
+    expect(trade.commissionCurrency).toBe("USD");
   });
 
   it("should parse cash transactions (dividends + withholdings)", () => {
