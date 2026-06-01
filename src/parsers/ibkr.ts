@@ -18,6 +18,7 @@ import type {
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
+import { normalizeDate } from "../engine/dates.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -43,6 +44,47 @@ function ensureArray<T>(val: T | T[] | undefined): T[] {
   return Array.isArray(val) ? val : [val];
 }
 
+
+function isDividendCashTransaction(tx: CashTransaction): boolean {
+  const type = (tx.type ?? "").toLowerCase();
+  const description = (tx.description ?? "").toLowerCase();
+  return (
+    type.includes("dividend") ||
+    description.includes("dividend") ||
+    description.includes("dividendo")
+  );
+}
+/**
+ * Removes duplicate dividend transactions from the cash transactions array.
+ * Duplicates are identified by matching: normalized date + amount + ISIN.
+ * Non-dividend transactions are passed through unchanged.
+ *
+ * @param transactions - Array of cash transactions (may contain dividends and other types)
+ * @returns Deduplicated array with only unique dividends + all non-dividend transactions
+ */
+
+function dedupeCashTransactions(transactions: CashTransaction[]): CashTransaction[] {
+  const seen = new Map<string, CashTransaction>();
+  const result: CashTransaction[] = [];
+
+  for (const tx of transactions) {
+    if (!isDividendCashTransaction(tx)) {
+      result.push(tx);
+      continue;
+    }
+
+    const normalizedDate = normalizeDate(tx.dateTime || tx.settleDate || "");
+    const normalizedIsin = (tx.isin || "").trim().toUpperCase();
+    const key = `dividend|${normalizedDate}|${tx.amount || ""}|${normalizedIsin}`;
+
+    if (seen.has(key)) continue;
+  
+    seen.set(key, tx);
+    result.push(tx);
+  }
+
+  return result;
+}
 /**
  * Parse an IBKR Flex Query XML string into a FlexStatement.
  *
@@ -74,7 +116,9 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
-    cashTransactions.push(...ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction));
+    //cashTransactions.push(...ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction));
+    const mappedCashTransactions = ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction);
+    cashTransactions.push(...dedupeCashTransactions(mappedCashTransactions));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
