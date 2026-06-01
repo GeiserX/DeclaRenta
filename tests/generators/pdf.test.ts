@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, type MockInstance } from "vitest";
 import Decimal from "decimal.js";
 import PDFDocument from "pdfkit";
 import { generatePdfReport } from "../../src/generators/pdf.js";
@@ -249,7 +249,9 @@ describe("PDF Report Generator", () => {
 
   afterEach(() => { vi.restoreAllMocks(); });
 
-  function captureRenderedText(spy: ReturnType<typeof vi.spyOn>): string[] {
+  function captureRenderedText(
+    spy: MockInstance<typeof PDFDocument.prototype.text>,
+  ): string[] {
     return spy.mock.calls
       .map((args) => String(args[0]))
       .filter(Boolean);
