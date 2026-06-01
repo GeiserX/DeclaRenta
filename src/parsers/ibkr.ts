@@ -123,7 +123,6 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
-    //cashTransactions.push(...ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction));
     const mappedCashTransactions = ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction);
     cashTransactions.push(...dedupeCashTransactions(mappedCashTransactions));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
