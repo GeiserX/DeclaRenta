@@ -73,9 +73,16 @@ function dedupeCashTransactions(transactions: CashTransaction[]): CashTransactio
       continue;
     }
 
-    const normalizedDate = normalizeDate(tx.dateTime || tx.settleDate || "");
+    const normalizedDate = normalizeDate(tx.dateTime || tx.settleDate || "").trim();
     const normalizedIsin = (tx.isin || "").trim().toUpperCase();
-    const key = `dividend|${normalizedDate}|${tx.amount || ""}|${normalizedIsin}`;
+    const normalizedAmount = (tx.amount || "").trim();
+
+    if (!normalizedDate || !normalizedIsin || !normalizedAmount) {
+      result.push(tx);
+      continue;
+    }
+
+    const key = `dividend|${normalizedDate}|${normalizedAmount}|${normalizedIsin}`;
 
     if (seen.has(key)) continue;
 
