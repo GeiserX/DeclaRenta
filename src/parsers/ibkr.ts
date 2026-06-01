@@ -46,8 +46,8 @@ function ensureArray<T>(val: T | T[] | undefined): T[] {
 
 
 function isDividendCashTransaction(tx: CashTransaction): boolean {
-  const type = (tx.type ?? "").toLowerCase();
-  const description = (tx.description ?? "").toLowerCase();
+  const type = tx.type.toLowerCase();
+  const description = tx.description.toLowerCase();
   return (
     type.includes("dividend") ||
     description.includes("dividend") ||
@@ -78,7 +78,7 @@ function dedupeCashTransactions(transactions: CashTransaction[]): CashTransactio
     const key = `dividend|${normalizedDate}|${tx.amount || ""}|${normalizedIsin}`;
 
     if (seen.has(key)) continue;
-  
+
     seen.set(key, tx);
     result.push(tx);
   }
