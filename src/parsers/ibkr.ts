@@ -83,13 +83,8 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
     const rawCash = ensureArray(stmt.CashTransactions?.CashTransaction) as Record<string, string>[];
-    const detailCash = rawCash.filter((raw) => {
-      if (isCashSummaryRow(raw)) {
-        cashSummaryDuplicatesSkipped++;
-        return false;
-      }
-      return true;
-    });
+    const detailCash = rawCash.filter((raw) => !isCashSummaryRow(raw));
+    cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
@@ -190,6 +185,11 @@ function mapTrade(raw: Record<string, string>): Trade {
   };
 }
 
+/** IBKR's own marker for aggregated rows; present in some Flex Query exports. */
+const LEVEL_OF_DETAIL_SUMMARY = "SUMMARY";
+/** Placeholder accountId IBKR writes on summary rows that omit the official attribute. */
+const SUMMARY_ACCOUNT_PLACEHOLDER = "-";
+
 /**
  * Detect a duplicate "Summary" cash-transaction row produced when the user
  * enables the Summary option in the Flex Query Cash Transactions section.
@@ -202,8 +202,8 @@ function mapTrade(raw: Record<string, string>): Trade {
  * so this never drops a legitimate transaction.
  */
 function isCashSummaryRow(raw: Record<string, string>): boolean {
-  if ((raw.levelOfDetail ?? "").toUpperCase() === "SUMMARY") return true;
-  return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === "-";
+  if ((raw.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_SUMMARY) return true;
+  return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === SUMMARY_ACCOUNT_PLACEHOLDER;
 }
 
 function mapCashTransaction(raw: Record<string, string>): CashTransaction {

@@ -704,4 +704,28 @@ describe("IBKR Summary-option duplicate cash transactions", () => {
     expect(result.cashTransactions.map((c) => c.transactionID).sort()).toEqual(["A1", "B1"]);
     expect(result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates")?.context?.skipped).toBe("2");
   });
+
+  it("drops every row when a statement contains only summary rows", () => {
+    const summaryOnlyXml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="SummaryOnly" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U7770000" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <CashTransactions>
+            <CashTransaction transactionID="" accountId="-" symbol="AAPL"
+              description="AAPL Cash Dividend" isin="US0378331005" currency="USD"
+              dateTime="20250515" settleDate="20250515" amount="2.50"
+              fxRateToBase="0.93" type="Dividends" />
+            <CashTransaction transactionID="" accountId="-" symbol="AAPL"
+              description="AAPL US Tax" isin="US0378331005" currency="USD"
+              dateTime="20250515" settleDate="20250515" amount="-0.38"
+              fxRateToBase="0.93" type="Withholding Tax" />
+          </CashTransactions>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(summaryOnlyXml);
+    expect(result.cashTransactions).toHaveLength(0);
+    expect(result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates")?.context?.skipped).toBe("2");
+  });
 });
