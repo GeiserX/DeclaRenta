@@ -613,6 +613,17 @@ describe("IBKR Summary-option duplicate cash transactions", () => {
     expect(byType["Deposits/Withdrawals"]).toBe(5);
   });
 
+  it("sums dividend and withholding amounts without double-counting", () => {
+    const result = parseIbkrFlexXml(xml);
+    const sumOf = (type: string) =>
+      result.cashTransactions
+        .filter((c) => c.type === type)
+        .reduce((acc, c) => acc + Number(c.amount), 0);
+    // Detail-only totals — would be exactly doubled if summary rows leaked through
+    expect(sumOf("Dividends")).toBeCloseTo(176.18, 2);
+    expect(sumOf("Withholding Tax")).toBeCloseTo(-30.79, 2);
+  });
+
   it("emits an info parserMessage reporting how many summary rows were skipped", () => {
     const result = parseIbkrFlexXml(xml);
     const msg = result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates");
@@ -626,5 +637,71 @@ describe("IBKR Summary-option duplicate cash transactions", () => {
     const result = parseIbkrFlexXml(clean);
     expect(result.cashTransactions).toHaveLength(2);
     expect(result.parserMessages?.some((m) => m.id === "parser.cash_summary_duplicates")).toBeFalsy();
+  });
+
+  it("drops rows flagged with levelOfDetail=\"SUMMARY\" even if they carry a real accountId", () => {
+    // Some Flex Query exports DO emit the official levelOfDetail attribute on
+    // summary rows while still populating transactionID/accountId. The blank-id
+    // + "-" marker would miss those, so the levelOfDetail signal must catch them.
+    const summaryXml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Lod" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U5550000" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <CashTransactions>
+            <CashTransaction transactionID="111" accountId="U5550000" symbol="AAPL"
+              description="AAPL Cash Dividend" isin="US0378331005" currency="USD"
+              dateTime="20250515;202000" settleDate="20250515" amount="2.50"
+              fxRateToBase="0.93" type="Dividends" levelOfDetail="DETAIL" />
+            <CashTransaction transactionID="222" accountId="U5550000" symbol="AAPL"
+              description="AAPL Cash Dividend" isin="US0378331005" currency="USD"
+              dateTime="20250515" settleDate="20250515" amount="2.50"
+              fxRateToBase="0.93" type="Dividends" levelOfDetail="SUMMARY" />
+          </CashTransactions>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(summaryXml);
+    expect(result.cashTransactions).toHaveLength(1);
+    expect(result.cashTransactions[0]!.transactionID).toBe("111");
+    expect(result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates")?.context?.skipped).toBe("1");
+  });
+
+  it("aggregates the skipped count across multiple accounts (multi-statement merge)", () => {
+    const multiXml = `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Multi" type="AF">
+      <FlexStatements count="2">
+        <FlexStatement accountId="U1111111" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <CashTransactions>
+            <CashTransaction transactionID="" accountId="-" symbol="AAPL"
+              description="AAPL Cash Dividend" isin="US0378331005" currency="USD"
+              dateTime="20250515" settleDate="20250515" amount="2.50"
+              fxRateToBase="0.93" type="Dividends" />
+            <CashTransaction transactionID="A1" accountId="U1111111" symbol="AAPL"
+              description="AAPL Cash Dividend" isin="US0378331005" currency="USD"
+              dateTime="20250515;202000" settleDate="20250515" amount="2.50"
+              fxRateToBase="0.93" type="Dividends" />
+          </CashTransactions>
+        </FlexStatement>
+        <FlexStatement accountId="U2222222" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <CashTransactions>
+            <CashTransaction transactionID="" accountId="-" symbol="MSFT"
+              description="MSFT Cash Dividend" isin="US5949181045" currency="USD"
+              dateTime="20250610" settleDate="20250610" amount="3.00"
+              fxRateToBase="0.93" type="Dividends" />
+            <CashTransaction transactionID="B1" accountId="U2222222" symbol="MSFT"
+              description="MSFT Cash Dividend" isin="US5949181045" currency="USD"
+              dateTime="20250610;202000" settleDate="20250610" amount="3.00"
+              fxRateToBase="0.93" type="Dividends" />
+          </CashTransactions>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(multiXml);
+    expect(result.cashTransactions).toHaveLength(2);
+    expect(result.cashTransactions.map((c) => c.transactionID).sort()).toEqual(["A1", "B1"]);
+    expect(result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates")?.context?.skipped).toBe("2");
   });
 });
