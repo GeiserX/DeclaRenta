@@ -72,9 +72,20 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
 
+  // The "Summary" option in the Cash Transactions section makes IBKR emit
+  // every cash transaction twice: a DETAIL row (real transactionID, real
+  // accountId, dateTime with ;HHMMSS time) and a SUMMARY row (levelOfDetail
+  // "SUMMARY", or transactionID="" + accountId="-"). Summary rows would
+  // double-count dividends, withholding, fees and deposits, so they are
+  // dropped here before mapping.
+  let cashSummaryDuplicatesSkipped = 0;
+
   for (const stmt of statements) {
     trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
-    cashTransactions.push(...ensureArray(stmt.CashTransactions?.CashTransaction).map(mapCashTransaction));
+    const rawCash = ensureArray(stmt.CashTransactions?.CashTransaction) as Record<string, string>[];
+    const detailCash = rawCash.filter((raw) => !isCashSummaryRow(raw));
+    cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
+    cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
@@ -104,6 +115,16 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
         });
       }
     }
+  }
+
+  if (cashSummaryDuplicatesSkipped > 0) {
+    parserMessages.push({
+      id: "parser.cash_summary_duplicates",
+      severity: "info",
+      message: `Se omitieron ${cashSummaryDuplicatesSkipped} filas resumen duplicadas en las transacciones de efectivo.`,
+      hint: 'Tu Flex Query tiene activada la opción "Summary" en la sección Cash Transactions, lo que duplica cada movimiento. Puedes desactivarla, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar dividendos, retenciones y comisiones.',
+      context: { skipped: String(cashSummaryDuplicatesSkipped) },
+    });
   }
 
   // Use first statement's metadata, combine accountIds for multi-account
@@ -162,6 +183,27 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingSymbol: raw.underlyingSymbol || undefined,
     underlyingIsin: raw.underlyingIsin || undefined,
   };
+}
+
+/** IBKR's own marker for aggregated rows; present in some Flex Query exports. */
+const LEVEL_OF_DETAIL_SUMMARY = "SUMMARY";
+/** Placeholder accountId IBKR writes on summary rows that omit the official attribute. */
+const SUMMARY_ACCOUNT_PLACEHOLDER = "-";
+
+/**
+ * Detect a duplicate "Summary" cash-transaction row produced when the user
+ * enables the Summary option in the Flex Query Cash Transactions section.
+ *
+ * Two independent signals identify these rows:
+ *  - IBKR's own `levelOfDetail="SUMMARY"` attribute (present in some exports), or
+ *  - the export-specific marker: blank `transactionID` AND `accountId === "-"`.
+ *
+ * Detail (real) rows always carry a real transactionID and a real accountId,
+ * so this never drops a legitimate transaction.
+ */
+function isCashSummaryRow(raw: Record<string, string>): boolean {
+  if ((raw.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_SUMMARY) return true;
+  return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === SUMMARY_ACCOUNT_PLACEHOLDER;
 }
 
 function mapCashTransaction(raw: Record<string, string>): CashTransaction {
