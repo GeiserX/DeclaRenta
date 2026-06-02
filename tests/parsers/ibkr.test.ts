@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
+
+function fixture(name: string): string {
+  return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
+}
 
 const MINIMAL_FLEX_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <FlexQueryResponse queryName="Test" type="AF">
@@ -563,5 +568,63 @@ describe("parseIbkrFlexXml", () => {
     expect(result.trades[0]!.symbol).toBe("AAPL");
     expect(result.cashTransactions).toHaveLength(0);
     expect(result.openPositions).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IBKR "Summary" option duplicate cash transactions (PR #191 root cause)
+//
+// When the user enables the "Summary" option in the Cash Transactions section
+// of the Flex Query, IBKR emits every cash transaction twice: a DETAIL row
+// (real transactionID, real accountId, dateTime with ;HHMMSS time) and a
+// SUMMARY row (transactionID="", accountId="-", dateTime without time). The
+// parser must drop the summary rows so dividends, withholding, fees and
+// deposits are not double-counted.
+// ---------------------------------------------------------------------------
+
+describe("IBKR Summary-option duplicate cash transactions", () => {
+  const xml = fixture("ibkr-summary-duplicates.xml");
+
+  it("keeps only the 20 detail rows, dropping the 20 summary duplicates", () => {
+    const result = parseIbkrFlexXml(xml);
+    expect(result.cashTransactions).toHaveLength(20);
+  });
+
+  it("retains only rows with a real accountId (never the '-' summary marker)", () => {
+    const result = parseIbkrFlexXml(xml);
+    expect(result.cashTransactions.every((c) => c.accountId === "U12345678")).toBe(true);
+    expect(result.cashTransactions.some((c) => c.accountId === "-")).toBe(false);
+  });
+
+  it("retains only rows with a real transactionID (never blank summary rows)", () => {
+    const result = parseIbkrFlexXml(xml);
+    expect(result.cashTransactions.every((c) => c.transactionID !== "")).toBe(true);
+  });
+
+  it("preserves one of each cash type after dedup (no over-deletion)", () => {
+    const result = parseIbkrFlexXml(xml);
+    const byType = result.cashTransactions.reduce<Record<string, number>>((acc, c) => {
+      acc[c.type] = (acc[c.type] ?? 0) + 1;
+      return acc;
+    }, {});
+    expect(byType["Dividends"]).toBe(7);
+    expect(byType["Withholding Tax"]).toBe(7);
+    expect(byType["Other Fees"]).toBe(1);
+    expect(byType["Deposits/Withdrawals"]).toBe(5);
+  });
+
+  it("emits an info parserMessage reporting how many summary rows were skipped", () => {
+    const result = parseIbkrFlexXml(xml);
+    const msg = result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates");
+    expect(msg).toBeDefined();
+    expect(msg!.severity).toBe("info");
+    expect(msg!.context?.skipped).toBe("20");
+  });
+
+  it("does NOT drop legitimate rows when no summary duplicates are present", () => {
+    const clean = fixture("ibkr-sample.xml");
+    const result = parseIbkrFlexXml(clean);
+    expect(result.cashTransactions).toHaveLength(2);
+    expect(result.parserMessages?.some((m) => m.id === "parser.cash_summary_duplicates")).toBeFalsy();
   });
 });
