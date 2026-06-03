@@ -1598,6 +1598,48 @@ footer a:hover {
   transition: transform 0.2s;
 }
 
+.casilla-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.casilla-copy:hover {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+
+.casilla-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.casilla-copy .icon-check {
+  display: none;
+}
+
+.casilla-copy.copied {
+  color: var(--success, #16a34a);
+  border-color: currentColor;
+}
+
+.casilla-copy.copied .icon-copy {
+  display: none;
+}
+
+.casilla-copy.copied .icon-check {
+  display: inline;
+}
+
 .casilla-net {
   border-width: 2px;
 }
@@ -2125,6 +2167,15 @@ footer a:hover {
 
 .guide-section-warning h4 {
   color: var(--warning);
+}
+
+.guide-section-tip {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.guide-section-tip h3 {
+  color: var(--accent);
 }
 
 .guide-tip {

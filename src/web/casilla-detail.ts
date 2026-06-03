@@ -263,12 +263,17 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     const hasDetail = c.code !== "";
     const isNetRow = c.code === "";
 
+    const copyLabel = esc(t("casilla.copy"));
     return `
       <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}"${hasDetail ? ` tabindex="0" role="button" aria-expanded="false"` : ""}>
         <div class="casilla-header">
           ${c.code ? `<span class="casilla-code">${c.code}</span>` : ""}
           <span class="casilla-concept">${isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0])}</span>
           <span class="casilla-value ${cls}">${isNetRow ? `<strong>${value}</strong>` : value} EUR</span>
+          <button type="button" class="casilla-copy" data-copy="${esc(value)}" title="${copyLabel}" aria-label="${copyLabel}">
+            <svg class="icon-copy" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg class="icon-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
           ${hasDetail ? `<span class="casilla-toggle" aria-hidden="true">&#9656;</span>` : ""}
         </div>
         ${hasDetail ? `<div class="casilla-detail" hidden>${c.getDetail(report)}</div>` : ""}
@@ -324,10 +329,36 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     };
     card.addEventListener("click", toggle);
     card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
+      if ((e.key === "Enter" || e.key === " ") && e.target === card) {
         e.preventDefault();
         toggle();
       }
+    });
+  });
+
+  // Copy-amount buttons: copy only the Spanish-formatted number (comma decimal,
+  // no "EUR" suffix) so it pastes cleanly into Renta Web fields. stopPropagation
+  // keeps a click from also toggling the card's detail view.
+  container.querySelectorAll<HTMLButtonElement>(".casilla-copy").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const amount = btn.dataset.copy ?? "";
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(amount).then(() => {
+        btn.classList.add("copied");
+        btn.setAttribute("aria-label", t("casilla.copied"));
+        btn.title = t("casilla.copied");
+        window.setTimeout(() => {
+          btn.classList.remove("copied");
+          btn.setAttribute("aria-label", t("casilla.copy"));
+          btn.title = t("casilla.copy");
+        }, 1500);
+      }).catch(() => {
+        // Clipboard can reject in non-secure contexts or without focus; no-op.
+      });
+    });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") e.stopPropagation();
     });
   });
 }

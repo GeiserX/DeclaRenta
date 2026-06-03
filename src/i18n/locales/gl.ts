@@ -13,7 +13,7 @@ const gl: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra o teu ficheiro aquí ou fai clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "O broker detéctase automaticamente na maioría dos casos.",
   "upload.detecting": "Analizando ficheiro...",
   "upload.detected": "Broker detectado:",
@@ -134,6 +134,8 @@ const gl: TranslationKeys = {
   "casilla.collapse": "Agochar detalle",
   "casilla.operations_in": "Operacións nesta casilla",
   "casilla.no_operations": "Sen operacións",
+  "casilla.copy": "Copiar importe",
+  "casilla.copied": "Copiado!",
 
   // Year comparison
   "compare.title": "Comparativa anual",
@@ -425,6 +427,8 @@ const gl: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Accións admitidas a negociación»</strong> para accións cotizadas. Para fondos: «Participacións en IIC». Para derivados/opcións: «Outros elementos patrimoniais».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Outros elementos patrimoniais — Divisas»</strong>.",
+  "guide_rw.clave_prereq_title": "A casa do valor de transmisión está bloqueada?",
+  "guide_rw.clave_prereq_hint": "En Renta Web, as casas <strong>1633</strong> (valor de transmisión) e <strong>1637</strong> (valor de adquisición) <strong>aparecen deshabilitadas ata que enchas primeiro a casa 1626 «Tipo de elemento patrimonial. Clave»</strong>. Desprega o selector e escolle a clave que corresponda (para divisas, opcións, cripto ou fondos adoita ser a clave <strong>«4 — Outros elementos patrimoniais»</strong>). Tamén debes marcar o tipo de operación (casas 1612/1613). Unha vez seleccionada a clave, os campos de importe actívanse e poderás escribir.",
   "guide_rw.gastos_transmision_label": "Gastos da transmisión",
   "guide_rw.gastos_adquisicion_label": "Gastos da adquisición",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta xa inclúe as comisións nos valores de transmisión/adquisición. Non engadas gastos por separado.",

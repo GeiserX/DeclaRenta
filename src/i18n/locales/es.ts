@@ -12,7 +12,7 @@ const es = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "El broker se detecta automáticamente en la mayoría de los casos.",
   "upload.detecting": "Analizando fichero...",
   "upload.detected": "Broker detectado:",
@@ -142,6 +142,8 @@ const es = {
   "casilla.collapse": "Ocultar detalle",
   "casilla.operations_in": "Operaciones en esta casilla",
   "casilla.no_operations": "Sin operaciones",
+  "casilla.copy": "Copiar importe",
+  "casilla.copied": "¡Copiado!",
 
   // Year comparison
   "compare.title": "Comparativa anual",
@@ -458,6 +460,8 @@ const es = {
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Otros elementos patrimoniales — Divisas»</strong>.",
+  "guide_rw.clave_prereq_title": "¿La casilla del valor de transmisión está bloqueada?",
+  "guide_rw.clave_prereq_hint": "En Renta Web, las casillas <strong>1633</strong> (valor de transmisión) y <strong>1637</strong> (valor de adquisición) <strong>aparecen deshabilitadas hasta que rellenes primero la casilla 1626 «Tipo de elemento patrimonial. Clave»</strong>. Despliega el selector y elige la clave que corresponda (para divisas, opciones, cripto o fondos suele ser la clave <strong>«4 — Otros elementos patrimoniales»</strong>). También debes marcar el tipo de operación (casillas 1612/1613). Una vez seleccionada la clave, los campos de importe se activan y podrás escribir.",
   "guide_rw.gastos_transmision_label": "Gastos de la transmisión",
   "guide_rw.gastos_adquisicion_label": "Gastos de la adquisición",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta ya incluye las comisiones en los valores de transmisión/adquisición. No añadas gastos por separado.",

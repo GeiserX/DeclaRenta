@@ -13,7 +13,7 @@ const ca: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
-  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "El broker es detecta automàticament en la majoria dels casos.",
   "upload.detecting": "Analitzant fitxer...",
   "upload.detected": "Broker detectat:",
@@ -134,6 +134,8 @@ const ca: TranslationKeys = {
   "casilla.collapse": "Amagar detall",
   "casilla.operations_in": "Operacions en aquesta casella",
   "casilla.no_operations": "Sense operacions",
+  "casilla.copy": "Copiar import",
+  "casilla.copied": "Copiat!",
 
   // Year comparison
   "compare.title": "Comparativa anual",
@@ -425,6 +427,8 @@ const ca: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Tipus d'element patrimonial",
   "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Accions admeses a negociació»</strong> per a accions cotitzades. Per a fons: «Participacions en IIC». Per a derivats/opcions: «Altres elements patrimonials».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Altres elements patrimonials — Divises»</strong>.",
+  "guide_rw.clave_prereq_title": "La casella del valor de transmissió està bloquejada?",
+  "guide_rw.clave_prereq_hint": "A Renta Web, les caselles <strong>1633</strong> (valor de transmissió) i <strong>1637</strong> (valor d'adquisició) <strong>apareixen deshabilitades fins que omplis primer la casella 1626 «Tipus d'element patrimonial. Clau»</strong>. Desplega el selector i tria la clau que correspongui (per a divises, opcions, cripto o fons sol ser la clau <strong>«4 — Altres elements patrimonials»</strong>). També has de marcar el tipus d'operació (caselles 1612/1613). Un cop seleccionada la clau, els camps d'import s'activen i hi podràs escriure.",
   "guide_rw.gastos_transmision_label": "Despeses de la transmissió",
   "guide_rw.gastos_adquisicion_label": "Despeses de l'adquisició",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta ja inclou les comissions en els valors de transmissió/adquisició. No afegeixis despeses per separat.",

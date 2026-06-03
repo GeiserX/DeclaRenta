@@ -12,7 +12,7 @@ const en: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detect",
   "upload.drop_text": "Drag your file here or click to select",
-  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "The broker is detected automatically in most cases.",
   "upload.detecting": "Analysing file...",
   "upload.detected": "Broker detected:",
@@ -133,6 +133,8 @@ const en: TranslationKeys = {
   "casilla.collapse": "Hide detail",
   "casilla.operations_in": "Transactions in this box",
   "casilla.no_operations": "No transactions",
+  "casilla.copy": "Copy amount",
+  "casilla.copied": "Copied!",
 
   // Year comparison
   "compare.title": "Annual comparison",
@@ -429,6 +431,8 @@ const en: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Asset type",
   "guide_rw.tipo_elemento_value_capital": "Select <strong>\"Listed shares\"</strong> for quoted stocks. For funds: \"Collective investment shares\". For derivatives/options: \"Other assets\".",
   "guide_rw.tipo_elemento_value_fx": "Select <strong>\"Other assets — Foreign currency\"</strong>.",
+  "guide_rw.clave_prereq_title": "Is the transmission-value field greyed out?",
+  "guide_rw.clave_prereq_hint": "In Renta Web, boxes <strong>1633</strong> (transmission value) and <strong>1637</strong> (acquisition value) <strong>stay disabled until you first fill box 1626 \"Type of asset — Code\"</strong>. Open the dropdown and pick the matching code (for foreign currency, options, crypto or funds this is usually code <strong>\"4 — Other assets\"</strong>). You must also tick the operation type (boxes 1612/1613). Once the code is selected, the amount fields unlock and you can type.",
   "guide_rw.gastos_transmision_label": "Disposal expenses",
   "guide_rw.gastos_adquisicion_label": "Acquisition expenses",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta already includes commissions in the disposal/acquisition values. Do not add expenses separately.",
