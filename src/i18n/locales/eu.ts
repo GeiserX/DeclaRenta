@@ -13,7 +13,7 @@ const eu: TranslationKeys = {
   "upload.broker_label": "Brokerra:",
   "upload.auto_detect": "Auto-detektatu",
   "upload.drop_text": "Arrastatu zure fitxategia hona edo egin klik hautatzeko",
-  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatuak: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "Brokerra automatikoki detektatzen da kasu gehienetan.",
   "upload.detecting": "Fitxategia aztertzen...",
   "upload.detected": "Brokerra detektatu da:",
@@ -134,6 +134,8 @@ const eu: TranslationKeys = {
   "casilla.collapse": "Xehetasuna ezkutatu",
   "casilla.operations_in": "Lauki honetako eragiketak",
   "casilla.no_operations": "Eragiketarik ez",
+  "casilla.copy": "Kopiatu zenbatekoa",
+  "casilla.copied": "Kopiatuta!",
 
   // Year comparison
   "compare.title": "Urteko konparazioa",
@@ -425,6 +427,8 @@ const eu: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Ondare elementu mota",
   "guide_rw.tipo_elemento_value_capital": "Hautatu <strong>«Negoziaziora onartutako akzioak»</strong> kotizatutako akzioetarako. Funts-etarako: «IIC-eko partaidetzak». Deribatu/opsioetarako: «Beste ondare elementu batzuk».",
   "guide_rw.tipo_elemento_value_fx": "Hautatu <strong>«Beste ondare elementu batzuk — Dibisak»</strong>.",
+  "guide_rw.clave_prereq_title": "Transmisio-balioaren laukia blokeatuta dago?",
+  "guide_rw.clave_prereq_hint": "Renta Web-en, <strong>1633</strong> (transmisio-balioa) eta <strong>1637</strong> (eskuratze-balioa) laukiak <strong>desgaituta agertzen dira aurretik eremu hauek ordena honetan bete arte</strong>:<br>1) <strong>1626 «Ondare elementu mota. Gakoa»</strong> laukia → dibisak eta aukerak izanez gero, normalean <strong>4</strong> gakoa da («Jarduera ekonomikoei lotu gabeko beste ondare elementu batzuk»); kriptoetarako, begiratu ekitaldiak moneta birtualei esleitzen dien gakoa. Inbertsio-funtsek (IIC) <strong>ez</strong> dute 4 gakoa erabiltzen: «Participaciones en IIC» gisa aitortzen dira.<br>2) <strong>«Transmisio mota»</strong> → <strong>«Transmisión intervivos onerosa (salmenta, trukea, etab.)»</strong> — <strong>onerosa</strong> da, ez doakoa/lukratiboa.<br>3) <strong>Transmisio data</strong> (<strong>1631/1632</strong> laukiak) → salmentaren eguna/hilabetea/urtea.<br>4) <strong>Eskuratze data</strong> (<strong>1932</strong> laukia) → erosketaren eguna/hilabetea/urtea.<br>Bete ondoren, 1633 eta 1637 laukiak aktibatu eta zenbatekoak idatzi ahal izango dituzu. <em>Lauki-zenbaki zehatza ekitaldiaren arabera alda daiteke.</em>",
   "guide_rw.gastos_transmision_label": "Eskualdaketaren gastuak",
   "guide_rw.gastos_adquisicion_label": "Eskuraketaren gastuak",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta-k dagoeneko komisioak eskualdaketa/eskuraketa balioetan sartzen ditu. Ez gehitu gastuak bereizita.",

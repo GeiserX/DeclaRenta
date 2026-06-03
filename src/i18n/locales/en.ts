@@ -12,7 +12,7 @@ const en: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detect",
   "upload.drop_text": "Drag your file here or click to select",
-  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "The broker is detected automatically in most cases.",
   "upload.detecting": "Analysing file...",
   "upload.detected": "Broker detected:",
@@ -133,6 +133,8 @@ const en: TranslationKeys = {
   "casilla.collapse": "Hide detail",
   "casilla.operations_in": "Transactions in this box",
   "casilla.no_operations": "No transactions",
+  "casilla.copy": "Copy amount",
+  "casilla.copied": "Copied!",
 
   // Year comparison
   "compare.title": "Annual comparison",
@@ -429,6 +431,8 @@ const en: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Asset type",
   "guide_rw.tipo_elemento_value_capital": "Select <strong>\"Listed shares\"</strong> for quoted stocks. For funds: \"Collective investment shares\". For derivatives/options: \"Other assets\".",
   "guide_rw.tipo_elemento_value_fx": "Select <strong>\"Other assets — Foreign currency\"</strong>.",
+  "guide_rw.clave_prereq_title": "Is the transmission-value field greyed out?",
+  "guide_rw.clave_prereq_hint": "In Renta Web, boxes <strong>1633</strong> (transmission value) and <strong>1637</strong> (acquisition value) <strong>stay disabled until you first fill these fields, in this order</strong>:<br>1) Box <strong>1626 \"Type of asset — Code\"</strong> → for foreign currency and options this is usually code <strong>4</strong> (\"Other assets not linked to economic activities\"); for crypto, check the code that year assigns to virtual currencies. Investment funds (IIC) do <strong>not</strong> use code 4 — they are declared as \"Participaciones en IIC\".<br>2) <strong>\"Type of transfer\"</strong> → <strong>\"Transmisión intervivos onerosa\"</strong> (sale, swap, etc.) — it is <strong>onerosa</strong> (for consideration), not lucrativa/gratuita.<br>3) <strong>Transmission date</strong> (boxes <strong>1631/1632</strong>) → day/month/year of the sale.<br>4) <strong>Acquisition date</strong> (box <strong>1932</strong>) → day/month/year of the purchase.<br>Once filled, boxes 1633 and 1637 unlock and you can type the amounts. <em>The exact box number may vary by tax year.</em>",
   "guide_rw.gastos_transmision_label": "Disposal expenses",
   "guide_rw.gastos_adquisicion_label": "Acquisition expenses",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta already includes commissions in the disposal/acquisition values. Do not add expenses separately.",

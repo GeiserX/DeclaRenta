@@ -44,6 +44,12 @@ function renderGuideContent(): void {
     t("guide_rw.capital_gains_note"),
   );
 
+  // Prerequisite callout: 1633/1637 stay disabled until casilla 1626 "Clave" is set.
+  html += `<div class="guide-section guide-section-tip">
+    <h3>${esc(t("guide_rw.clave_prereq_title"))}</h3>
+    <p>${t("guide_rw.clave_prereq_hint")}</p>
+  </div>`;
+
   // FX section (1633/1637)
   html += renderGuideSection(
     t("guide_rw.fx_title"),

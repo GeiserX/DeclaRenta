@@ -9,6 +9,7 @@ interface BrokerInfo {
 const BROKER_LOGOS: Record<string, string> = {
   ibkr:          "./broker-logos/interactive-brokers.ico",
   degiro:        "./broker-logos/degiro.ico",
+  flatex:        "./broker-logos/flatex.ico",
   scalable:      "./broker-logos/scalable-capital.png",
   etoro:         "./broker-logos/etoro.ico",
   freedom24:     "./broker-logos/freedom24.png",

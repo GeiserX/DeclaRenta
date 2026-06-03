@@ -8,12 +8,9 @@
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
+import { esc } from "./esc.js";
+import { copyToClipboard } from "./clipboard.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
-
-/** Escape HTML special characters to prevent XSS in rendered strings. */
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 /** Format a date string (YYYYMMDD or YYYY-MM-DD) to DD/MM/YYYY display format. */
 function formatDate(d: string): string {
@@ -263,13 +260,25 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     const hasDetail = c.code !== "";
     const isNetRow = c.code === "";
 
+    const copyLabel = esc(t("casilla.copy"));
+    const concept = isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0]);
+    const inner = `
+      ${c.code ? `<span class="casilla-code">${c.code}</span>` : ""}
+      <span class="casilla-concept">${concept}</span>
+      <span class="casilla-value ${cls}">${isNetRow ? `<strong>${value}</strong>` : value} EUR</span>
+      ${hasDetail ? `<span class="casilla-toggle" aria-hidden="true">&#9656;</span>` : ""}`;
+    const copyBtn = `
+      <button type="button" class="casilla-copy" data-copy="${esc(value)}" title="${copyLabel}" aria-label="${copyLabel}">
+        <svg class="icon-copy" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>`;
     return `
-      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}"${hasDetail ? ` tabindex="0" role="button" aria-expanded="false"` : ""}>
+      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}">
         <div class="casilla-header">
-          ${c.code ? `<span class="casilla-code">${c.code}</span>` : ""}
-          <span class="casilla-concept">${isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0])}</span>
-          <span class="casilla-value ${cls}">${isNetRow ? `<strong>${value}</strong>` : value} EUR</span>
-          ${hasDetail ? `<span class="casilla-toggle" aria-hidden="true">&#9656;</span>` : ""}
+          ${hasDetail
+            ? `<button type="button" class="casilla-trigger" aria-expanded="false">${inner}</button>`
+            : `<div class="casilla-trigger casilla-trigger-static">${inner}</div>`}
+          ${copyBtn}
         </div>
         ${hasDetail ? `<div class="casilla-detail" hidden>${c.getDetail(report)}</div>` : ""}
       </div>`;
@@ -307,27 +316,46 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     </details>`;
   }
 
-  container.innerHTML = `<div class="casilla-cards">${cards}</div>${blockedWarning}${messagesHtml}`;
+  container.innerHTML = `<div class="casilla-cards">${cards}</div><div class="sr-only" role="status" aria-live="polite"></div>${blockedWarning}${messagesHtml}`;
 
-  // Toggle expansion on click/keyboard
-  container.querySelectorAll<HTMLElement>(".casilla-card.expandable").forEach((card) => {
-    const toggle = () => {
+  const liveRegion = container.querySelector<HTMLElement>('[role="status"]');
+
+  // Toggle expansion. The trigger is a real <button>, so it already handles
+  // Enter/Space and exposes a focusable role — no manual keydown wiring needed.
+  container.querySelectorAll<HTMLButtonElement>(".casilla-card.expandable .casilla-trigger").forEach((trigger) => {
+    const card = trigger.closest<HTMLElement>(".casilla-card");
+    trigger.addEventListener("click", () => {
+      if (!card) return;
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
       const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);
-        card.setAttribute("aria-expanded", String(!isOpen));
+        trigger.setAttribute("aria-expanded", String(!isOpen));
         if (arrow) arrow.innerHTML = isOpen ? "&#9656;" : "&#9662;";
       }
-    };
-    card.addEventListener("click", toggle);
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        toggle();
-      }
+    });
+  });
+
+  // Copy-amount buttons: copy only the Spanish-formatted number (comma decimal,
+  // no "EUR" suffix) so it pastes cleanly into Renta Web fields. The copy button
+  // is a sibling of the trigger, so a click never toggles the card's detail view.
+  container.querySelectorAll<HTMLButtonElement>(".casilla-copy").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const amount = btn.dataset.copy ?? "";
+      void copyToClipboard(amount).then((ok) => {
+        if (!ok) return;
+        btn.classList.add("copied");
+        btn.setAttribute("aria-label", t("casilla.copied"));
+        btn.title = t("casilla.copied");
+        if (liveRegion) liveRegion.textContent = t("casilla.copied");
+        window.setTimeout(() => {
+          btn.classList.remove("copied");
+          btn.setAttribute("aria-label", t("casilla.copy"));
+          btn.title = t("casilla.copy");
+        }, 1500);
+      });
     });
   });
 }

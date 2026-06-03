@@ -12,7 +12,7 @@ const es = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "El broker se detecta automáticamente en la mayoría de los casos.",
   "upload.detecting": "Analizando fichero...",
   "upload.detected": "Broker detectado:",
@@ -142,6 +142,8 @@ const es = {
   "casilla.collapse": "Ocultar detalle",
   "casilla.operations_in": "Operaciones en esta casilla",
   "casilla.no_operations": "Sin operaciones",
+  "casilla.copy": "Copiar importe",
+  "casilla.copied": "¡Copiado!",
 
   // Year comparison
   "compare.title": "Comparativa anual",
@@ -458,6 +460,8 @@ const es = {
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Otros elementos patrimoniales — Divisas»</strong>.",
+  "guide_rw.clave_prereq_title": "¿La casilla del valor de transmisión está bloqueada?",
+  "guide_rw.clave_prereq_hint": "En Renta Web, las casillas <strong>1633</strong> (valor de transmisión) y <strong>1637</strong> (valor de adquisición) <strong>aparecen deshabilitadas hasta que rellenes antes estos campos, en este orden</strong>:<br>1) Casilla <strong>1626 «Tipo de elemento patrimonial. Clave»</strong> → para divisas y opciones suele ser la clave <strong>4</strong> («Otros elementos patrimoniales no afectos a actividades económicas»); para cripto, revisa la clave que el ejercicio asigne a las monedas virtuales. Los fondos de inversión (IIC) <strong>no</strong> usan la clave 4: se declaran como «Participaciones en IIC».<br>2) <strong>«Tipo de transmisión»</strong> → <strong>«Transmisión intervivos onerosa (venta, permuta, etc.)»</strong> — es <strong>onerosa</strong>, no lucrativa/gratuita.<br>3) <strong>Fecha de transmisión</strong> (casillas <strong>1631/1632</strong>) → día/mes/año de la venta.<br>4) <strong>Fecha de adquisición</strong> (casilla <strong>1932</strong>) → día/mes/año de la compra.<br>Una vez rellenados, las casillas 1633 y 1637 se activan y podrás escribir los importes. <em>El número exacto de casilla puede variar según el ejercicio.</em>",
   "guide_rw.gastos_transmision_label": "Gastos de la transmisión",
   "guide_rw.gastos_adquisicion_label": "Gastos de la adquisición",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta ya incluye las comisiones en los valores de transmisión/adquisición. No añadas gastos por separado.",

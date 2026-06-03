@@ -13,7 +13,7 @@ const ca: TranslationKeys = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrossega el teu fitxer aquí o fes clic per seleccionar",
-  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help": "Formats: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "El broker es detecta automàticament en la majoria dels casos.",
   "upload.detecting": "Analitzant fitxer...",
   "upload.detected": "Broker detectat:",
@@ -134,6 +134,8 @@ const ca: TranslationKeys = {
   "casilla.collapse": "Amagar detall",
   "casilla.operations_in": "Operacions en aquesta casella",
   "casilla.no_operations": "Sense operacions",
+  "casilla.copy": "Copiar import",
+  "casilla.copied": "Copiat!",
 
   // Year comparison
   "compare.title": "Comparativa anual",
@@ -425,6 +427,8 @@ const ca: TranslationKeys = {
   "guide_rw.tipo_elemento_label": "Tipus d'element patrimonial",
   "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Accions admeses a negociació»</strong> per a accions cotitzades. Per a fons: «Participacions en IIC». Per a derivats/opcions: «Altres elements patrimonials».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Altres elements patrimonials — Divises»</strong>.",
+  "guide_rw.clave_prereq_title": "La casella del valor de transmissió està bloquejada?",
+  "guide_rw.clave_prereq_hint": "A Renta Web, les caselles <strong>1633</strong> (valor de transmissió) i <strong>1637</strong> (valor d'adquisició) <strong>apareixen deshabilitades fins que omplis abans aquests camps, en aquest ordre</strong>:<br>1) Casella <strong>1626 «Tipus d'element patrimonial. Clau»</strong> → per a divises i opcions sol ser la clau <strong>4</strong> («Altres elements patrimonials no afectes a activitats econòmiques»); per a cripto, revisa la clau que l'exercici assigni a les monedes virtuals. Els fons d'inversió (IIC) <strong>no</strong> fan servir la clau 4: es declaren com a «Participaciones en IIC».<br>2) <strong>«Tipus de transmissió»</strong> → <strong>«Transmissió intervivos onerosa (venda, permuta, etc.)»</strong> — és <strong>onerosa</strong>, no lucrativa/gratuïta.<br>3) <strong>Data de transmissió</strong> (caselles <strong>1631/1632</strong>) → dia/mes/any de la venda.<br>4) <strong>Data d'adquisició</strong> (casella <strong>1932</strong>) → dia/mes/any de la compra.<br>Un cop emplenats, les caselles 1633 i 1637 s'activen i hi podràs escriure els imports. <em>El número exacte de casella pot variar segons l'exercici.</em>",
   "guide_rw.gastos_transmision_label": "Despeses de la transmissió",
   "guide_rw.gastos_adquisicion_label": "Despeses de l'adquisició",
   "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta ja inclou les comissions en els valors de transmissió/adquisició. No afegeixis despeses per separat.",

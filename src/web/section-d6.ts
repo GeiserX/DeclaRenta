@@ -13,10 +13,8 @@ import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "./esc.js";
+import { copyToClipboard } from "./clipboard.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -155,20 +153,22 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   container.querySelectorAll<HTMLButtonElement>(".copy-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const value = btn.dataset.value ?? "";
-      void navigator.clipboard.writeText(value).then(() => {
-        btn.textContent = t("d6.copied");
-        btn.classList.add("copied");
-        setTimeout(() => {
-          btn.textContent = t("d6.copy_btn");
-          btn.classList.remove("copied");
-        }, 1500);
-      }).catch(() => {
-        btn.textContent = t("d6.copy_failed");
-        btn.classList.add("error");
-        setTimeout(() => {
-          btn.textContent = t("d6.copy_btn");
-          btn.classList.remove("error");
-        }, 1500);
+      void copyToClipboard(value).then((ok) => {
+        if (ok) {
+          btn.textContent = t("d6.copied");
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.textContent = t("d6.copy_btn");
+            btn.classList.remove("copied");
+          }, 1500);
+        } else {
+          btn.textContent = t("d6.copy_failed");
+          btn.classList.add("error");
+          setTimeout(() => {
+            btn.textContent = t("d6.copy_btn");
+            btn.classList.remove("error");
+          }, 1500);
+        }
       });
     });
   });
