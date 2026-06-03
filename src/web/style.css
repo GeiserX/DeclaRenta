@@ -127,6 +127,19 @@
   box-sizing: border-box;
 }
 
+/* Visually hidden but exposed to assistive tech (e.g. aria-live status). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Skip link — hidden until focused via keyboard (WCAG 2.1 AA) */
 .skip-link {
   position: absolute;
@@ -1568,6 +1581,34 @@ footer a:hover {
   padding: 0.75rem 1rem;
 }
 
+/* The expand control is a real <button>; reset native styling so it matches
+   the surrounding card layout and stretches across the header. */
+.casilla-trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.casilla-trigger-static {
+  cursor: default;
+}
+
+.casilla-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .casilla-code {
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 0.8rem;
@@ -1602,6 +1643,9 @@ footer a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0.3rem;
   border: 1px solid transparent;
   border-radius: 6px;
