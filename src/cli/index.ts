@@ -11,7 +11,7 @@
  *   declarenta d6 --input flex.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { Command } from "commander";
 import Decimal from "decimal.js";
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
@@ -20,6 +20,7 @@ import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
+import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
@@ -126,7 +127,8 @@ program
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
   .option("--monodivisa", "Disable FX FIFO engine — treat all as EUR (like Autodeclaro/Taxdown)")
   .option("--titulares <n>", "Number of account holders. >1 splits all amounts equally per contribuyente (Art. 11.3 LIRPF)", parseInt)
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; titulares?: number }) => {
+  .option("--crypto-rates <json>", "Manual EUR-per-unit quotes for crypto↔crypto swaps without an ECB rate. Inline JSON or path to a JSON file: [{ \"currency\": \"SOL\", \"date\": \"2024-03-01\", \"eurPerUnit\": \"120.50\" }]")
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; titulares?: number; cryptoRates?: string }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
@@ -160,8 +162,32 @@ program
       }
       console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...years].sort().join(", ")})`);
 
+      // 2b. Parse optional manual crypto rates (--crypto-rates). Inline JSON or
+      //     a path to a JSON file. Used as a fallback for crypto↔crypto permutas
+      //     that have no ECB rate (Binance Convert, etc.).
+      let manualRates: EcbRateMap | undefined;
+      if (opts.cryptoRates) {
+        let parsed: unknown;
+        try {
+          const raw = existsSync(opts.cryptoRates)
+            ? readFileSync(opts.cryptoRates, "utf-8")
+            : opts.cryptoRates;
+          parsed = JSON.parse(raw);
+        } catch {
+          console.error("Error: --crypto-rates no es JSON válido ni un fichero JSON legible.");
+          process.exit(1);
+        }
+        if (!Array.isArray(parsed)) {
+          console.error("Error: --crypto-rates debe ser un array de { currency, date, eurPerUnit }.");
+          process.exit(1);
+        }
+        manualRates = buildManualRateMap(coerceManualQuotes(parsed));
+        const loaded = [...manualRates.values()].reduce((n, m) => n + m.size, 0);
+        console.error(`  Tipos manuales crypto cargados: ${loaded}`);
+      }
+
       // 3. Generate tax report
-      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, titulares: opts.titulares });
+      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, titulares: opts.titulares, manualRates });
       if (opts.titulares && opts.titulares > 1) {
         console.error(`  Titulares: ${opts.titulares} (importes divididos por contribuyente)`);
       }
@@ -244,6 +270,18 @@ program
           console.error(`  ${i.message}`);
           if (i.hint) console.error(`    → ${i.hint}`);
         }
+      }
+
+      // 5b. Surface unresolved crypto↔crypto valuations (no ECB rate, no
+      //     cross-leg). Show only identifying fields, never financial totals.
+      const unresolved = report.unresolvedCryptoValuations;
+      if (unresolved && unresolved.length > 0) {
+        console.error(`\n🪙 ${unresolved.length} permuta(s) crypto sin valoración en EUR:`);
+        for (const u of unresolved) {
+          console.error(`  ${u.symbol} — ${u.quantity} ${u.currency} @ ${u.date}`);
+        }
+        console.error("  → Aporta el valor en EUR por unidad con --crypto-rates");
+        console.error('    Ejemplo: --crypto-rates \'[{"currency":"SOL","date":"2024-03-01","eurPerUnit":"120.50"}]\'');
       }
 
       // 6. Print summary

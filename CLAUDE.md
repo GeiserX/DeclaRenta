@@ -134,6 +134,16 @@ tests/           Vitest tests mirroring src/ structure
 - **NEVER** log financial amounts, NIF, or personal information
 - The only permitted outbound request is to the ECB SDMX API for exchange rates
 
+### Crypto Permuta Valuation (Art. 37.1.h LIRPF)
+- Crypto↔crypto swaps (permutas) are valued via three mechanisms only:
+  - **(A) Skip-and-warn**: trades we cannot value are skipped, the user is warned.
+  - **(D) Cross-leg inference**: the EUR value is inferred from the resolvable side of the swap.
+  - **(B) Manual entry**: the user types an EUR-per-unit value in the crypto-rates panel.
+- We DELIBERATELY do NOT call any live external crypto price API/oracle (this would be "option C"). The set of {coins, dates, amounts} a user holds is a portfolio fingerprint that must never leave their machine.
+- The ONLY permitted outbound call remains the ECB SDMX fiat-rate API.
+- **Shared parsing**: `src/engine/manual-rates.ts` is the single source of truth for turning raw `{currency,date,eurPerUnit}` quotes into an `EcbRateMap` (date→YYYY-MM-DD, currency upper-cased + stablecoin-normalized, rate validated with Decimal). Both the web localStorage path and the CLI `--crypto-rates` flag consume it — never re-implement the validation inline.
+- **Known limitation (cross-date phantom gain)**: dropping an unresolvable BUY leg creates no FIFO lot, so a later *resolvable* SELL of that coin taxes full proceeds as gain (costBasis=0). This is conservative (never understates tax) and the dropped leg is always surfaced for manual entry (B). Intentionally not worked around.
+
 ### Spanish Tax Law References
 - **Art. 37.2 LIRPF**: FIFO mandatory for homogeneous securities
 - **Art. 33.5.f LIRPF**: Anti-churning rule — losses blocked if same security repurchased within 2 calendar months (listed on regulated markets) or 1 year (unlisted, including most crypto)

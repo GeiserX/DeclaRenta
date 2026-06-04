@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getEcbRate, getQ4AverageRate } from "../../src/engine/ecb.js";
+import { getEcbRate, getQ4AverageRate, lookupRateInMap } from "../../src/engine/ecb.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap {
@@ -9,6 +9,47 @@ function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap 
   }
   return map;
 }
+
+describe("lookupRateInMap", () => {
+  it("returns 1 for EUR without consulting the map", () => {
+    const empty: EcbRateMap = new Map();
+    expect(lookupRateInMap(empty, "2025-03-15", "EUR")!.toNumber()).toBe(1);
+  });
+
+  it("normalizes a stablecoin (USDT) to the underlying USD rate", () => {
+    const rates = makeRateMap({ "2025-03-15": { USD: "0.92" } });
+    // USDT is not present in the map, but normalizes to USD.
+    expect(lookupRateInMap(rates, "2025-03-15", "USDT")!.toFixed(2)).toBe("0.92");
+  });
+
+  it("walks backward over a weekend gap to the prior business day", () => {
+    // Friday 2025-03-14 has a rate; Sunday 2025-03-16 must fall back to it.
+    const rates = makeRateMap({ "2025-03-14": { USD: "0.92" } });
+    expect(lookupRateInMap(rates, "2025-03-16", "USD")!.toFixed(2)).toBe("0.92");
+  });
+
+  it("returns null for a currency not in the map (no throw)", () => {
+    const rates = makeRateMap({ "2025-03-15": { USD: "0.92" } });
+    expect(lookupRateInMap(rates, "2025-03-15", "SOL")).toBeNull();
+  });
+
+  it("does NOT gate on ECB membership — returns a synthetic in-map crypto rate", () => {
+    // A synthetic rate injected by the valuation pre-pass for a non-fiat coin.
+    const rates = makeRateMap({ "2025-03-15": { SOL: "0.0123456789" } });
+    const rate = lookupRateInMap(rates, "2025-03-15", "SOL");
+    expect(rate).not.toBeNull();
+    expect(rate!.toFixed(10)).toBe("0.0123456789");
+  });
+});
+
+describe("getEcbRate non-fiat error", () => {
+  it("throws the non-fiat message for an unknown crypto miss", () => {
+    const rates = makeRateMap({ "2025-03-15": { USD: "0.92" } });
+    expect(() => getEcbRate(rates, "2025-03-15", "SOL")).toThrow(
+      "No ECB rate available for non-fiat currency SOL",
+    );
+  });
+});
 
 describe("getEcbRate", () => {
   it("should return 1 for EUR currency", () => {

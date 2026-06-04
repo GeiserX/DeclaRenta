@@ -478,6 +478,20 @@ const gl: TranslationKeys = {
   "pdf.dt_allowed": "Dedución permitida",
   "pdf.ecb_note": "Tipo ECB: tipo de cambio oficial do Banco Central Europeo (EUR por 1 unidade de divisa estranxeira) na data da operación. Fonte: ECB SDMX API.",
   "pdf.footer": "DeclaRenta — https://declarenta.com — Este informe é orientativo e non substitúe o asesoramento fiscal profesional.",
+
+  // Manual crypto valuation
+  "crypto_rates.title": "Valoración manual de criptomoedas",
+  "crypto_rates.description": "Algúns intercambios entre criptomoedas non se puideron valorar automaticamente porque ningunha das dúas divisas ten un tipo de cambio oficial do BCE. Introduce o valor en euros por unidade na data da operación para incluílos.",
+  "crypto_rates.help": "Nunca consultamos prezos de criptomoedas en internet: a túa carteira mantense privada. Busca ti mesmo o valor en euros (p. ex. no historial do teu exchange ou nunha web de prezos) e introdúceo aquí.",
+  "crypto_rates.col_asset": "Activo",
+  "crypto_rates.col_date": "Data",
+  "crypto_rates.col_quantity": "Cantidade",
+  "crypto_rates.col_currency": "Moeda",
+  "crypto_rates.col_eur_per_unit": "EUR por unidade",
+  "crypto_rates.placeholder": "p. ex. 142,50",
+  "crypto_rates.save_btn": "Gardar e recalcular",
+  "crypto_rates.saved": "Gardado",
+  "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
 };
 
 export default gl;

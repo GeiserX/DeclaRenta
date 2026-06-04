@@ -25,6 +25,7 @@ import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
+import { getManualRates, renderManualRatesPanel, bindManualRatesPanel } from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -616,6 +617,7 @@ async function processFiles(): Promise<void> {
     const report = generateTaxReport(merged, allRates, year, {
       skipFx: profileForReport.monodivisa,
       titulares: profileForReport.titulares,
+      manualRates: getManualRates(),
     });
     currentReport = report;
     currentBrokers = detectedBrokers;
@@ -769,6 +771,25 @@ function renderResults(report: TaxSummary) {
         void processFiles();
       }
     });
+  }
+
+  // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
+  // could not be valued automatically (no ECB rate / no cross-leg). Re-rendered
+  // here each time results render, so it stays in sync on locale change too.
+  const resultsSectionEl = document.getElementById("wizard-step-3")!;
+  resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
+  const unresolved = report.unresolvedCryptoValuations;
+  if (unresolved && unresolved.length > 0) {
+    const panelHtml = renderManualRatesPanel(unresolved);
+    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel");
+    if (panel) {
+      bindManualRatesPanel(panel, () => {
+        // Re-run the full pipeline so the newly-entered manual rates take
+        // effect — no re-upload needed (statement is cached in mergedStatement).
+        void processFiles();
+      });
+    }
   }
 
   // Expandable casilla cards (replaces old table)

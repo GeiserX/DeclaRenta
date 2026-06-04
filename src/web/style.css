@@ -2746,6 +2746,94 @@ footer a:hover {
   }
 }
 
+/* Manual crypto-rates panel — actionable warning to value unvaluable swaps */
+.crypto-rates-panel {
+  margin: 1.5rem 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+}
+
+.crypto-rates-panel h3,
+.crypto-rates-panel h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--warning);
+}
+
+.crypto-rates-panel > p {
+  font-size: 0.875rem;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+  line-height: 1.6;
+}
+
+/* Help text (rendered as <p class="muted">) sits below the description. */
+.crypto-rates-panel .muted {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+/* The table itself inherits the global table styles via .table-wrapper. */
+.crypto-rates-panel .table-wrapper {
+  margin-bottom: 1rem;
+}
+
+.crypto-rate-asset {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.crypto-rate-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.crypto-rate-input {
+  width: 11rem;
+  max-width: 100%;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9rem;
+}
+
+#crypto-rates-save-btn {
+  margin: 0;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.crypto-rates-saved-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.crypto-rates-recalculate-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0.75rem 0 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .crypto-rate-input {
+    width: 100%;
+  }
+
+  #crypto-rates-save-btn {
+    width: 100%;
+  }
+}
+
 /* Three-tier message system */
 .msg-section {
   margin-top: 1rem;

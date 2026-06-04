@@ -482,6 +482,20 @@ const en: TranslationKeys = {
   "pdf.dt_allowed": "Deduction allowed",
   "pdf.ecb_note": "ECB rate: official European Central Bank exchange rate (EUR per 1 unit of foreign currency) on the transaction date. Source: ECB SDMX API.",
   "pdf.footer": "DeclaRenta — https://declarenta.com — This report is informational only and does not replace professional tax advice.",
+
+  // Manual crypto valuation
+  "crypto_rates.title": "Manual crypto valuation",
+  "crypto_rates.description": "Some crypto-to-crypto swaps could not be valued automatically because neither currency has an official ECB exchange rate. Enter the value in euros per unit on the trade date to include them.",
+  "crypto_rates.help": "We never look up crypto prices online — your portfolio stays private. Find the EUR value yourself (e.g. from your exchange's history or a price site) and enter it here.",
+  "crypto_rates.col_asset": "Asset",
+  "crypto_rates.col_date": "Date",
+  "crypto_rates.col_quantity": "Quantity",
+  "crypto_rates.col_currency": "Currency",
+  "crypto_rates.col_eur_per_unit": "EUR per unit",
+  "crypto_rates.placeholder": "e.g. 142.50",
+  "crypto_rates.save_btn": "Save and recalculate",
+  "crypto_rates.saved": "Saved",
+  "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
 };
 
 export default en;

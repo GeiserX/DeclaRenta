@@ -16,6 +16,7 @@ import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { getEcbRate, isEcbResolvable } from "../engine/ecb.js";
+import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
@@ -80,6 +81,12 @@ export interface ReportOptions {
    * their proportional share.
    */
   titulares?: number;
+  /**
+   * User-supplied EUR-per-unit quotes (date → currency → rate) for crypto
+   * currencies that have no ECB rate (crypto↔crypto permutas). Consulted as a
+   * fallback by the crypto valuation pre-pass, never overriding ECB rates.
+   */
+  manualRates?: EcbRateMap;
 }
 
 /**
@@ -97,11 +104,27 @@ export function generateTaxReport(
   year: number,
   options?: ReportOptions,
 ): TaxSummary {
+  // 0. Crypto valuation pre-pass (A/D/B). Resolves crypto↔crypto permutas to
+  //    EUR via cross-leg inference or user manual quotes, injecting synthetic
+  //    rates into a cloned map. Unresolvable trades are dropped (and surfaced)
+  //    so the FIFO engine never throws on a non-fiat currency.
+  const valuation = resolveCryptoTradeValues(statement.trades, rateMap, options?.manualRates);
+  const resolvedRateMap = valuation.rateMap;
+  const resolvedTrades = valuation.trades;
+
+  // NOTE: only the FIFO engine consumes `resolvedRateMap` (the clone augmented
+  // with synthetic crypto rates). Dividends, interest and the FX engine below
+  // intentionally read the ORIGINAL `rateMap`: those paths only touch
+  // ECB-resolvable (fiat) currencies — crypto-denominated income has no ECB
+  // rate and is skipped/warned separately (see `unresolvableInterest`). If
+  // crypto income valuation is ever added, switch those callers to
+  // `resolvedRateMap` so the injected synthetic rates apply there too.
+
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
   fifoEngine.processTrades(
-    statement.trades,
-    rateMap,
+    resolvedTrades,
+    resolvedRateMap,
     statement.corporateActions,
     statement.optionExercises,
   );
@@ -224,11 +247,20 @@ export function generateTaxReport(
   const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
   const yearMessages = filterByYear(fifoEngine.messages, yearStr, (m) => m.message, (m) => m.context);
 
+  // Crypto valuation pre-pass messages (filtered to the target year by date).
+  const cryptoValuationMessages = filterByYear(valuation.messages, yearStr, (m) => m.message, (m) => m.context);
+  const yearUnresolvedCrypto = valuation.unresolved.filter((u) => u.date.startsWith(yearStr));
+
   // Prepend parser warnings (unparsed sections, etc.)
-  const allWarnings = [...(statement.parserWarnings ?? []), ...yearWarnings, ...fxWarningsList];
+  const allWarnings = [
+    ...(statement.parserWarnings ?? []),
+    ...yearWarnings,
+    ...fxWarningsList,
+    ...cryptoValuationMessages.map((m) => m.message),
+  ];
 
   // Aggregate structured messages from all sources
-  const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList];
+  const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList, ...cryptoValuationMessages];
 
   // Crypto-denominated income (staking rewards paid in the coin) can't be valued
   // via ECB rates. We skip it rather than crash; the user must value it manually.
@@ -268,6 +300,7 @@ export function generateTaxReport(
     year,
     warnings: allWarnings,
     messages: allMessages,
+    unresolvedCryptoValuations: yearUnresolvedCrypto.length > 0 ? yearUnresolvedCrypto : undefined,
     capitalGains: {
       transmissionValue,
       acquisitionValue,
