@@ -64,18 +64,25 @@ export function getManualRates(): EcbRateMap {
   return buildManualRateMap(readStored());
 }
 
-/** Persist a single manual EUR-per-unit quote for a currency+date pair. */
-export function setManualRate(currency: string, date: string, eurPerUnit: string): void {
+/**
+ * Persist a single manual EUR-per-unit quote for a currency+date pair.
+ * Returns true if the quote was valid and stored, false if it was rejected
+ * (e.g. non-numeric/non-positive rate) so callers can avoid showing a false
+ * "saved" state or reprocessing the report for nothing.
+ */
+export function setManualRate(currency: string, date: string, eurPerUnit: string): boolean {
   // Normalize the key exactly as lookups do (upper-case + stablecoin→fiat +
-  // date to YYYY-MM-DD), so a hand-typed "sol"/"USDT" matches at lookup time
-  // and re-saving the same row upserts instead of duplicating.
+  // date to YYYY-MM-DD) and canonicalize the rate to dot-decimal, so a
+  // hand-typed "sol"/"USDT"/"142,50" matches and parses at lookup time and
+  // re-saving the same row upserts instead of duplicating.
   const norm = normalizeManualQuote({ currency, date, eurPerUnit });
-  if (norm === null) return;
+  if (norm === null) return false;
   const entries = readStored().filter(
     (e) => !(e.currency === norm.currency && e.date === norm.date),
   );
-  entries.push({ currency: norm.currency, date: norm.date, eurPerUnit });
+  entries.push({ currency: norm.currency, date: norm.date, eurPerUnit: norm.eurPerUnit });
   writeStored(entries);
+  return true;
 }
 
 /** Look up the currently-stored quote for a currency+date pair (for prefill). */
@@ -155,12 +162,13 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: () => void)
       const currency = input.dataset.currency ?? "";
       const date = input.dataset.date ?? "";
       if (!currency || !date) continue;
-      setManualRate(currency, date, value);
-      savedCount++;
+      // Only count entries that actually persisted (valid, parseable rate), so
+      // an invalid input doesn't fake a "saved" state or trigger a no-op rerun.
+      if (setManualRate(currency, date, value)) savedCount++;
     }
 
     const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
-    if (msg) msg.hidden = false;
+    if (msg) msg.hidden = savedCount === 0;
 
     if (savedCount > 0) onSave();
   });

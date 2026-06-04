@@ -48,9 +48,20 @@ describe("setManualRate / getManualRates", () => {
   });
 
   it("ignores an invalid (non-positive) rate rather than persisting it", () => {
-    setManualRate("SOL", "2025-04-10", "0");
+    expect(setManualRate("SOL", "2025-04-10", "0")).toBe(false);
     expect(store[KEY]).toBeUndefined();
     expect(getManualRates().size).toBe(0);
+  });
+
+  it("returns true and canonicalizes a comma-decimal rate on persist", () => {
+    expect(setManualRate("SOL", "2025-04-10", "142,50")).toBe(true);
+    const stored = JSON.parse(store[KEY]!) as { eurPerUnit: string }[];
+    expect(stored[0]!.eurPerUnit).toBe("142.50");
+    expect(lookupRateInMap(getManualRates(), "2025-04-10", "SOL")!.toFixed(2)).toBe("142.50");
+  });
+
+  it("returns false for a non-numeric rate", () => {
+    expect(setManualRate("SOL", "2025-04-10", "abc")).toBe(false);
   });
 });
 

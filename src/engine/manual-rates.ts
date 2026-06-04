@@ -28,15 +28,33 @@ export interface ManualRateQuote {
 }
 
 /**
+ * Normalize a human-typed decimal string to the dot-decimal form decimal.js
+ * accepts. Spanish/EU users type "142,50" or "1.234,56"; we strip thousands
+ * separators (spaces, NBSP, thin space) and convert a comma decimal mark to a
+ * dot. A dot-only string (already canonical) passes through untouched.
+ */
+function normalizeDecimalString(raw: string): string {
+  let s = raw.trim().replace(/[\s  ]/g, "");
+  if (s.includes(",")) {
+    // Comma present → treat comma as the decimal mark and dots as thousands.
+    s = s.replace(/\./g, "").replace(",", ".");
+  }
+  return s;
+}
+
+/**
  * Validate and normalize a single quote. Returns null if the quote is unusable
- * (bad shape or non-positive/non-finite rate) so callers can skip it.
+ * (bad shape or non-positive/non-finite rate) so callers can skip it. The
+ * stored eurPerUnit is canonicalized to dot-decimal so every consumer parses it
+ * identically with decimal.js.
  */
 export function normalizeManualQuote(
   quote: ManualRateQuote,
 ): { date: string; currency: string; eurPerUnit: string } | null {
+  const eurPerUnit = normalizeDecimalString(quote.eurPerUnit);
   let rate: Decimal;
   try {
-    rate = new Decimal(quote.eurPerUnit);
+    rate = new Decimal(eurPerUnit);
   } catch {
     return null;
   }
@@ -45,7 +63,7 @@ export function normalizeManualQuote(
   return {
     date: normalizeDate(quote.date),
     currency: normalizeCurrency(quote.currency.toUpperCase()),
-    eurPerUnit: quote.eurPerUnit,
+    eurPerUnit,
   };
 }
 

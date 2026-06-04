@@ -30,9 +30,22 @@ describe("normalizeManualQuote", () => {
     expect(normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "abc" })).toBeNull();
   });
 
-  it("preserves the raw eurPerUnit string (no precision loss)", () => {
+  it("preserves a canonical dot-decimal string (no precision loss)", () => {
     const norm = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "40.1234567890123" });
     expect(norm!.eurPerUnit).toBe("40.1234567890123");
+  });
+
+  it("accepts a comma decimal mark (Spanish/EU input) and canonicalizes to a dot", () => {
+    const norm = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "142,50" });
+    expect(norm).not.toBeNull();
+    expect(norm!.eurPerUnit).toBe("142.50");
+  });
+
+  it("strips thousands separators (dots + spaces) with a comma decimal mark", () => {
+    const norm = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "1.234,56" });
+    expect(norm!.eurPerUnit).toBe("1234.56");
+    const spaced = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "1 234,56" });
+    expect(spaced!.eurPerUnit).toBe("1234.56");
   });
 });
 
