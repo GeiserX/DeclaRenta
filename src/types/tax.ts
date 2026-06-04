@@ -14,6 +14,29 @@ export interface TaxMessage {
   context?: Record<string, string>;
 }
 
+/**
+ * A trade whose value could not be resolved to EUR automatically — i.e. a
+ * crypto-denominated leg (e.g. a crypto↔crypto swap on Binance Convert) with
+ * neither an ECB rate nor a cross-leg inference available. Surfaced to the user
+ * so they can supply a manual EUR-per-unit quote for that currency+date.
+ *
+ * Carries no monetary amounts beyond what the user needs to identify the trade
+ * (symbol, date, quantity, the unresolved currency) — never logs NIF or totals.
+ */
+export interface UnresolvedValuation {
+  /** Currency code that has no resolvable rate (e.g. "SOL") */
+  currency: string;
+  /** Trade date (YYYY-MM-DD) the rate is needed for */
+  date: string;
+  /** Asset symbol/description for the user to recognize the trade */
+  symbol: string;
+  description: string;
+  /** Quantity transacted, as a display string */
+  quantity: string;
+  /** Why it could not be resolved (for the message), e.g. "no-ecb" | "no-cross-leg" */
+  reason: "no-ecb" | "no-cross-leg";
+}
+
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
 export type OptionScenario = "expiration" | "close" | "exercise";
 
@@ -112,6 +135,12 @@ export interface TaxSummary {
   warnings: string[];
   /** Structured three-tier messages (error/warning/info) */
   messages: TaxMessage[];
+  /**
+   * Crypto-denominated trades that could not be valued automatically (no ECB
+   * rate, no cross-leg inference). The web/CLI surfaces these so the user can
+   * provide a manual EUR-per-unit quote. Empty/absent when everything resolved.
+   */
+  unresolvedCryptoValuations?: UnresolvedValuation[];
 
   /**
    * Capital gains: Ganancias y pérdidas patrimoniales. These aggregate totals

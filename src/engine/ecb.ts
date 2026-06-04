@@ -153,16 +153,23 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
 }
 
 /**
- * Get the ECB rate for a specific date and currency.
- * If the exact date is a weekend/holiday, walks backward up to 10 days.
+ * Look up a rate for a specific date and currency without throwing.
+ *
+ * Handles EUR (always 1), stablecoin normalization, date format normalization,
+ * and the 10-day backward walk for weekends/holidays. Returns null on miss so
+ * callers can decide whether a miss is fatal (getEcbRate) or recoverable
+ * (crypto-valuation pre-pass: skip-and-warn / cross-leg inference / manual).
+ *
+ * NOTE: this returns ANY rate present in the map for the resolved currency,
+ * including synthetic crypto rates injected by the valuation pre-pass — it does
+ * NOT gate on ECB_CURRENCIES membership.
  *
  * @param rateMap - Pre-fetched rate map
  * @param date - Date string (YYYY-MM-DD or YYYYMMDD)
  * @param currency - Currency code (e.g. "USD")
- * @returns EUR per 1 unit of foreign currency
- * @throws Error if no rate found within 10 business days
+ * @returns EUR per 1 unit of foreign currency, or null if not found
  */
-export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string): Decimal {
+export function lookupRateInMap(rateMap: EcbRateMap, date: string, currency: string): Decimal | null {
   if (currency === "EUR") return new Decimal(1);
 
   // Normalize stablecoins to their fiat equivalent
@@ -187,6 +194,28 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
     // Walk backward one day
     d.setDate(d.getDate() - 1);
   }
+
+  return null;
+}
+
+/**
+ * Get the ECB rate for a specific date and currency.
+ * If the exact date is a weekend/holiday, walks backward up to 10 days.
+ *
+ * @param rateMap - Pre-fetched rate map
+ * @param date - Date string (YYYY-MM-DD or YYYYMMDD)
+ * @param currency - Currency code (e.g. "USD")
+ * @returns EUR per 1 unit of foreign currency
+ * @throws Error if no rate found within 10 business days
+ */
+export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string): Decimal {
+  const rate = lookupRateInMap(rateMap, date, currency);
+  if (rate !== null) return rate;
+
+  const resolved = normalizeCurrency(currency);
+  const normalizedDate = date.length === 8
+    ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
+    : date;
 
   if (!ECB_CURRENCIES.has(resolved)) {
     throw new Error(`No ECB rate available for non-fiat currency ${currency}. Provide EUR-valued transactions or a supported fiat/stablecoin quote currency.`);

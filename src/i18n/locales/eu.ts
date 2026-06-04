@@ -478,6 +478,20 @@ const eu: TranslationKeys = {
   "pdf.dt_allowed": "Baimendutako kenkaria",
   "pdf.ecb_note": "ECB tasa: Europako Banku Zentralaren truke-tasa ofiziala (EUR 1 atzerriko moneta-unitate bakoitzeko) eragiketa-datan. Iturria: ECB SDMX API.",
   "pdf.footer": "DeclaRenta — https://declarenta.com — Txosten hau informatiboa da eta ez du zerga-aholkularitza profesionala ordezten.",
+
+  // Manual crypto valuation
+  "crypto_rates.title": "Kriptomoneten eskuzko balioespena",
+  "crypto_rates.description": "Kriptomoneten arteko trukaketa batzuk ezin izan dira automatikoki baloratu, bi monetatako batek ere ez baitu BZEren truke-tasa ofizialik. Sartu eragiketaren dataren araberako balioa euroetan unitateko, haiek sartzeko.",
+  "crypto_rates.help": "Inoiz ez ditugu kriptomoneten prezioak interneten kontsultatzen: zure zorroa pribatu mantentzen da. Bilatu zuk zeuk euroetako balioa (adib. zure exchange-aren historian edo prezio-webgune batean) eta sartu hemen.",
+  "crypto_rates.col_asset": "Aktiboa",
+  "crypto_rates.col_date": "Data",
+  "crypto_rates.col_quantity": "Kantitatea",
+  "crypto_rates.col_currency": "Moneta",
+  "crypto_rates.col_eur_per_unit": "EUR unitateko",
+  "crypto_rates.placeholder": "adib. 142,50",
+  "crypto_rates.save_btn": "Gorde eta birkalkulatu",
+  "crypto_rates.saved": "Gordeta",
+  "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
 };
 
 export default eu;

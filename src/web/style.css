@@ -2746,6 +2746,112 @@ footer a:hover {
   }
 }
 
+/* Manual crypto-rates panel — actionable warning to value unvaluable swaps */
+.crypto-rates-panel {
+  margin: 1.5rem 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+}
+
+.crypto-rates-panel h3,
+.crypto-rates-panel h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--warning);
+}
+
+.crypto-rates-panel > p {
+  font-size: 0.875rem;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+  line-height: 1.6;
+}
+
+.crypto-rates-help {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.crypto-rate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.crypto-rate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.crypto-rate-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.crypto-rate-asset {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.crypto-rate-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.crypto-rate-row input[type="text"] {
+  width: 11rem;
+  max-width: 100%;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.9rem;
+}
+
+.crypto-rate-row button {
+  margin: 0;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.crypto-rate-row.saved {
+  border-color: var(--success);
+}
+
+.crypto-rate-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--success);
+}
+
+@media (max-width: 768px) {
+  .crypto-rate-row {
+    grid-template-columns: 1fr;
+  }
+
+  .crypto-rate-row input[type="text"] {
+    width: 100%;
+  }
+
+  .crypto-rate-row button {
+    width: 100%;
+  }
+}
+
 /* Three-tier message system */
 .msg-section {
   margin-top: 1rem;
