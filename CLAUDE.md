@@ -141,6 +141,8 @@ tests/           Vitest tests mirroring src/ structure
   - **(B) Manual entry**: the user types an EUR-per-unit value in the crypto-rates panel.
 - We DELIBERATELY do NOT call any live external crypto price API/oracle (this would be "option C"). The set of {coins, dates, amounts} a user holds is a portfolio fingerprint that must never leave their machine.
 - The ONLY permitted outbound call remains the ECB SDMX fiat-rate API.
+- **Shared parsing**: `src/engine/manual-rates.ts` is the single source of truth for turning raw `{currency,date,eurPerUnit}` quotes into an `EcbRateMap` (date→YYYY-MM-DD, currency upper-cased + stablecoin-normalized, rate validated with Decimal). Both the web localStorage path and the CLI `--crypto-rates` flag consume it — never re-implement the validation inline.
+- **Known limitation (cross-date phantom gain)**: dropping an unresolvable BUY leg creates no FIFO lot, so a later *resolvable* SELL of that coin taxes full proceeds as gain (costBasis=0). This is conservative (never understates tax) and the dropped leg is always surfaced for manual entry (B). Intentionally not worked around.
 
 ### Spanish Tax Law References
 - **Art. 37.2 LIRPF**: FIFO mandatory for homogeneous securities

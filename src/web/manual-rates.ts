@@ -13,17 +13,13 @@
 import { t, type TranslationKey } from "../i18n/index.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import type { UnresolvedValuation } from "../types/tax.js";
+import { buildManualRateMap, coerceManualQuotes, normalizeManualQuote, type ManualRateQuote } from "../engine/manual-rates.js";
 import { esc } from "./esc.js";
-import Decimal from "decimal.js";
 
 const STORAGE_KEY = "declarenta_manual_rates";
 
 /** Shape persisted on disk: a flat array of manual quotes. */
-interface StoredManualRate {
-  currency: string;
-  date: string;
-  eurPerUnit: string;
-}
+type StoredManualRate = ManualRateQuote;
 
 /**
  * Reference the new `crypto_rates.*` i18n keys without a compile-time
@@ -44,17 +40,7 @@ function readStored(): StoredManualRate[] {
   }
   if (!raw) return [];
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((e): e is StoredManualRate => {
-      if (e == null || typeof e !== "object") return false;
-      const rec = e as Record<string, unknown>;
-      return (
-        typeof rec.currency === "string" &&
-        typeof rec.date === "string" &&
-        typeof rec.eurPerUnit === "string"
-      );
-    });
+    return coerceManualQuotes(JSON.parse(raw));
   } catch {
     return [];
   }
@@ -71,50 +57,32 @@ function writeStored(entries: StoredManualRate[]): void {
 
 /**
  * Build an EcbRateMap (date → currency → EUR-per-1-unit) from stored manual
- * quotes. Each rate is validated with Decimal; invalid or non-positive entries
- * are skipped. Returns an empty map if nothing valid is stored.
+ * quotes, delegating all validation/normalization to the shared engine helper
+ * so the web and CLI paths can never diverge.
  */
 export function getManualRates(): EcbRateMap {
-  const map: EcbRateMap = new Map();
-  for (const entry of readStored()) {
-    let rate: Decimal;
-    try {
-      rate = new Decimal(entry.eurPerUnit);
-    } catch {
-      continue;
-    }
-    if (!rate.isFinite() || rate.lessThanOrEqualTo(0)) continue;
-
-    if (!map.has(entry.date)) {
-      map.set(entry.date, new Map());
-    }
-    map.get(entry.date)!.set(entry.currency, entry.eurPerUnit);
-  }
-  return map;
+  return buildManualRateMap(readStored());
 }
 
 /** Persist a single manual EUR-per-unit quote for a currency+date pair. */
 export function setManualRate(currency: string, date: string, eurPerUnit: string): void {
-  // Upper-case to match how trade currencies are stored (and the CLI path),
-  // so a hand-typed "sol" still matches symbol "SOL" in cross-leg inference.
-  const cur = currency.toUpperCase();
-  const entries = readStored().filter((e) => !(e.currency === cur && e.date === date));
-  entries.push({ currency: cur, date, eurPerUnit });
+  // Normalize the key exactly as lookups do (upper-case + stablecoin→fiat +
+  // date to YYYY-MM-DD), so a hand-typed "sol"/"USDT" matches at lookup time
+  // and re-saving the same row upserts instead of duplicating.
+  const norm = normalizeManualQuote({ currency, date, eurPerUnit });
+  if (norm === null) return;
+  const entries = readStored().filter(
+    (e) => !(e.currency === norm.currency && e.date === norm.date),
+  );
+  entries.push({ currency: norm.currency, date: norm.date, eurPerUnit });
   writeStored(entries);
-}
-
-/** Remove all stored manual rates. */
-export function clearManualRates(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* storage unavailable — nothing to clear */
-  }
 }
 
 /** Look up the currently-stored quote for a currency+date pair (for prefill). */
 function storedRateFor(currency: string, date: string): string {
-  const hit = readStored().find((e) => e.currency === currency && e.date === date);
+  const norm = normalizeManualQuote({ currency, date, eurPerUnit: "1" });
+  const key = norm ?? { currency: currency.toUpperCase(), date };
+  const hit = readStored().find((e) => e.currency === key.currency && e.date === key.date);
   return hit?.eurPerUnit ?? "";
 }
 

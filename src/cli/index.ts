@@ -20,6 +20,7 @@ import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
+import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
@@ -180,34 +181,8 @@ program
           console.error("Error: --crypto-rates debe ser un array de { currency, date, eurPerUnit }.");
           process.exit(1);
         }
-        manualRates = new Map();
-        let loaded = 0;
-        for (const raw of parsed as unknown[]) {
-          if (raw == null || typeof raw !== "object") continue;
-          const entry = raw as Record<string, unknown>;
-          if (typeof entry.currency !== "string" || typeof entry.date !== "string" || typeof entry.eurPerUnit !== "string") {
-            continue;
-          }
-          // Normalize YYYYMMDD → YYYY-MM-DD
-          const date = /^\d{8}$/.test(entry.date)
-            ? `${entry.date.slice(0, 4)}-${entry.date.slice(4, 6)}-${entry.date.slice(6, 8)}`
-            : entry.date;
-          let rate: Decimal;
-          try {
-            rate = new Decimal(entry.eurPerUnit);
-          } catch {
-            continue;
-          }
-          if (!rate.isFinite() || rate.lessThanOrEqualTo(0)) continue;
-          const currency = entry.currency.toUpperCase();
-          let byDate = manualRates.get(date);
-          if (!byDate) {
-            byDate = new Map();
-            manualRates.set(date, byDate);
-          }
-          byDate.set(currency, rate.toString());
-          loaded++;
-        }
+        manualRates = buildManualRateMap(coerceManualQuotes(parsed));
+        const loaded = [...manualRates.values()].reduce((n, m) => n + m.size, 0);
         console.error(`  Tipos manuales crypto cargados: ${loaded}`);
       }
 

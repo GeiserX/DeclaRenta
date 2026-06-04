@@ -112,6 +112,14 @@ export function generateTaxReport(
   const resolvedRateMap = valuation.rateMap;
   const resolvedTrades = valuation.trades;
 
+  // NOTE: only the FIFO engine consumes `resolvedRateMap` (the clone augmented
+  // with synthetic crypto rates). Dividends, interest and the FX engine below
+  // intentionally read the ORIGINAL `rateMap`: those paths only touch
+  // ECB-resolvable (fiat) currencies — crypto-denominated income has no ECB
+  // rate and is skipped/warned separately (see `unresolvableInterest`). If
+  // crypto income valuation is ever added, switch those callers to
+  // `resolvedRateMap` so the injected synthetic rates apply there too.
+
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
   fifoEngine.processTrades(

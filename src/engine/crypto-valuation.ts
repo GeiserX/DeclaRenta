@@ -22,6 +22,14 @@
  * We deliberately do NOT consult any live external price API/oracle (see
  * CLAUDE.md): the set of {coins, dates, amounts} is a portfolio fingerprint and
  * must never leave the user's machine.
+ *
+ * KNOWN LIMITATION (cross-date phantom gain): dropping an unresolvable BUY leg
+ * means no FIFO lot is created for the acquired coin. If a LATER, resolvable
+ * SELL of that same coin then runs, the FIFO engine finds no prior lot and
+ * taxes the full proceeds as gain (costBasis = 0). This is conservative — it
+ * never understates tax — and the dropped leg is always surfaced as an
+ * UnresolvedValuation so the user can supply a manual rate (B) and value the
+ * acquisition correctly. It is intentionally NOT worked around here.
  */
 
 import Decimal from "decimal.js";
@@ -29,6 +37,7 @@ import type { Trade } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import type { TaxMessage, UnresolvedValuation } from "../types/tax.js";
 import { lookupRateInMap, normalizeCurrency, isEcbResolvable } from "./ecb.js";
+import { normalizeDate } from "./dates.js";
 
 export interface CryptoValuationResult {
   /** Trades to feed the FIFO engine (unresolvable ones dropped, commissions neutralized). */
@@ -41,11 +50,6 @@ export interface CryptoValuationResult {
   unresolved: UnresolvedValuation[];
 }
 
-/** Normalize a date string to YYYY-MM-DD (accepts YYYYMMDD). */
-function normDate(date: string): string {
-  return date.length === 8 ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}` : date;
-}
-
 function cloneRateMap(map: EcbRateMap): EcbRateMap {
   const clone: EcbRateMap = new Map();
   for (const [date, currencies] of map) {
@@ -56,7 +60,7 @@ function cloneRateMap(map: EcbRateMap): EcbRateMap {
 
 /** Inject a synthetic rate (EUR per 1 unit of currency) at an exact date. */
 function setRate(map: EcbRateMap, date: string, currency: string, rate: Decimal): void {
-  const key = normDate(date);
+  const key = normalizeDate(date);
   const resolved = normalizeCurrency(currency);
   if (!map.has(key)) map.set(key, new Map());
   map.get(key)!.set(resolved, rate.toFixed(10));
@@ -115,12 +119,12 @@ export function resolveCryptoTradeValues(
 
     if (currencyRate === null) {
       // 3. Skip + warn (A). Record once per currency+date for manual entry.
-      const key = `${normalizeCurrency(trade.currency)}|${normDate(date)}`;
+      const key = `${normalizeCurrency(trade.currency)}|${normalizeDate(date)}`;
       if (!seenUnresolved.has(key)) {
         seenUnresolved.add(key);
         unresolved.push({
           currency: trade.currency,
-          date: normDate(date),
+          date: normalizeDate(date),
           symbol: trade.symbol,
           description: trade.description,
           quantity: trade.quantity,
