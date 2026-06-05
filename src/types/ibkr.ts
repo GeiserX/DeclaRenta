@@ -88,6 +88,8 @@ export interface Trade {
   underlyingSymbol?: string;
   /** Underlying ISIN for derivatives */
   underlyingIsin?: string;
+  /** IBKR order ID — same value across partial-fill executions of one order. Used by the parser to collapse executions into one trade. */
+  ibOrderID?: string;
 }
 
 export interface CashTransaction {

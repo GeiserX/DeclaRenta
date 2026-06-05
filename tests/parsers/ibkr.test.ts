@@ -729,3 +729,231 @@ describe("IBKR Summary-option duplicate cash transactions", () => {
     expect(result.parserMessages?.find((m) => m.id === "parser.cash_summary_duplicates")?.context?.skipped).toBe("2");
   });
 });
+
+describe("IBKR partial-fill execution merging", () => {
+  function wrap(tradesXml: string): string {
+    return `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Merge" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U9999999" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>${tradesXml}</Trades>
+          <CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  it("collapses three same-day executions of one ibOrderID into one trade with VWAP price", () => {
+    // Three BUY fills: 100@10.00, 200@10.50, 100@11.00 → 400 shares, VWAP = 10.50
+    // tradeMoney = 1000 + 2100 + 1100 = 4200; 4200 / 400 = 10.50
+    const xml = wrap(`
+      <Trade tradeID="A1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000.50"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="ORDER-1" />
+      <Trade tradeID="A2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="200" tradePrice="10.50" tradeMoney="2100" proceeds="-2100" cost="2100.30"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.30" taxes="0"
+             multiplier="1" ibOrderID="ORDER-1" />
+      <Trade tradeID="A3" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="11.00" tradeMoney="1100" proceeds="-1100" cost="1100.10"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORDER-1" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(1);
+    const t = result.trades[0]!;
+    expect(t.quantity).toBe("400");
+    expect(Number(t.tradePrice)).toBeCloseTo(10.5, 8);
+    expect(t.tradeMoney).toBe("4200");
+    expect(t.proceeds).toBe("-4200");
+    expect(Number(t.commission)).toBeCloseTo(-0.6, 8);
+    expect(t.tradeID).toBe("");
+    expect(t.ibOrderID).toBe("ORDER-1");
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
+      sourceFillCount: "3",
+      mergedGroupCount: "1",
+    });
+  });
+
+  it("splits same ibOrderID across different tradeDate values (GTC overnight)", () => {
+    const xml = wrap(`
+      <Trade tradeID="A1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20251231" settlementDate="20260102"
+             quantity="50" tradePrice="20.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.50" taxes="0"
+             multiplier="1" ibOrderID="GTC-1" />
+      <Trade tradeID="A2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20260102" settlementDate="20260106"
+             quantity="50" tradePrice="20.10" tradeMoney="1005" proceeds="-1005" cost="1005"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.50" taxes="0"
+             multiplier="1" ibOrderID="GTC-1" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    expect(result.trades.map((t) => t.tradeDate).sort()).toEqual(["20251231", "20260102"]);
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
+  });
+
+  it("mixes single-fill and multi-fill orders, leaves single fills untouched", () => {
+    const xml = wrap(`
+      <Trade tradeID="S1" accountId="U9999999" symbol="ALPHA" description="ALPHA" isin="US1111111111"
+             assetCategory="STK" currency="USD" tradeDate="20250410" settlementDate="20250412"
+             quantity="10" tradePrice="100" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ALONE" />
+      <Trade tradeID="M1" accountId="U9999999" symbol="BETA" description="BETA" isin="US2222222222"
+             assetCategory="STK" currency="USD" tradeDate="20250411" settlementDate="20250413"
+             quantity="3" tradePrice="50" tradeMoney="150" proceeds="-150" cost="150"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="MULTI" />
+      <Trade tradeID="M2" accountId="U9999999" symbol="BETA" description="BETA" isin="US2222222222"
+             assetCategory="STK" currency="USD" tradeDate="20250411" settlementDate="20250413"
+             quantity="7" tradePrice="51" tradeMoney="357" proceeds="-357" cost="357"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="MULTI" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const alpha = result.trades.find((t) => t.symbol === "ALPHA")!;
+    const beta = result.trades.find((t) => t.symbol === "BETA")!;
+    expect(alpha.tradeID).toBe("S1"); // unchanged
+    expect(alpha.quantity).toBe("10");
+    expect(beta.tradeID).toBe(""); // merged
+    expect(beta.quantity).toBe("10");
+    expect(beta.tradeMoney).toBe("507"); // 150 + 357
+    expect(Number(beta.tradePrice)).toBeCloseTo(50.7, 8); // VWAP
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
+      sourceFillCount: "2",
+      mergedGroupCount: "1",
+    });
+  });
+
+  it("passes through trades with empty ibOrderID without merging", () => {
+    const xml = wrap(`
+      <Trade tradeID="E1" accountId="U9999999" symbol="GAMMA" description="GAMMA" isin="US3333333333"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="5" tradePrice="40" tradeMoney="200" proceeds="-200" cost="200"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="" />
+      <Trade tradeID="E2" accountId="U9999999" symbol="GAMMA" description="GAMMA" isin="US3333333333"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="5" tradePrice="40" tradeMoney="200" proceeds="-200" cost="200"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    expect(result.trades.every((t) => !t.ibOrderID)).toBe(true);
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
+  });
+
+  it("preserves option-exercise note markers (Ep/Ex) when merging", () => {
+    const xml = wrap(`
+      <Trade tradeID="O1" accountId="U9999999" symbol="OPT1" description="OPT1" isin=""
+             assetCategory="OPT" currency="USD" tradeDate="20250619" settlementDate="20250620"
+             quantity="-1" tradePrice="0.01" tradeMoney="-1" proceeds="1" cost="-1"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="SELL" openCloseIndicator="C"
+             exchange="CBOE" ibCommissionCurrency="USD" ibCommission="-0.50" taxes="0"
+             multiplier="100" notes="Ep" ibOrderID="OPT-EX" />
+      <Trade tradeID="O2" accountId="U9999999" symbol="OPT1" description="OPT1" isin=""
+             assetCategory="OPT" currency="USD" tradeDate="20250619" settlementDate="20250620"
+             quantity="-1" tradePrice="0.01" tradeMoney="-1" proceeds="1" cost="-1"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="SELL" openCloseIndicator="C"
+             exchange="CBOE" ibCommissionCurrency="USD" ibCommission="-0.50" taxes="0"
+             multiplier="100" notes="Ep" ibOrderID="OPT-EX" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.notes).toBe("Ep");
+    expect(result.trades[0]!.quantity).toBe("-2");
+  });
+});
+
+describe("IBKR ORDER-level duplicate filtering", () => {
+  function wrap(tradesXml: string): string {
+    return `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="LOD" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U9999999" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>${tradesXml}</Trades>
+          <CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  it("drops ORDER-level rows when EXECUTION rows for the same ibOrderID are present", () => {
+    // Two EXECUTION fills (100 + 100 = 200) plus one ORDER aggregate (200) for the
+    // same ibOrderID. Without filtering, mergeExecutionsByOrder would sum all three
+    // and emit quantity=400, doubling the real position.
+    const xml = wrap(`
+      <Trade tradeID="E1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="EXECUTION" />
+      <Trade tradeID="E2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="EXECUTION" />
+      <Trade tradeID="O1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="200" tradePrice="10.00" tradeMoney="2000" proceeds="-2000" cost="2000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.40" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="ORDER" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.quantity).toBe("200");
+    expect(result.trades[0]!.tradeMoney).toBe("2000");
+    expect(result.parserMessages?.find((m) => m.id === "parser.order_level_duplicates")?.context).toEqual({
+      skipped: "1",
+    });
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
+      sourceFillCount: "2",
+      mergedGroupCount: "1",
+    });
+  });
+
+  it("keeps ORDER-level rows when no EXECUTION rows are present (ORDER-only export)", () => {
+    // Two ORDER rows with distinct ibOrderIDs and no EXECUTION counterparts. The
+    // export is already aggregated at order level — the filter must be a no-op
+    // and mergeExecutionsByOrder leaves them as singletons.
+    const xml = wrap(`
+      <Trade tradeID="O1" accountId="U9999999" symbol="ALPHA" description="ALPHA" isin="US1111111111"
+             assetCategory="STK" currency="USD" tradeDate="20250410" settlementDate="20250412"
+             quantity="10" tradePrice="100" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORD-A" levelOfDetail="ORDER" />
+      <Trade tradeID="O2" accountId="U9999999" symbol="BETA" description="BETA" isin="US2222222222"
+             assetCategory="STK" currency="USD" tradeDate="20250411" settlementDate="20250413"
+             quantity="5" tradePrice="50" tradeMoney="250" proceeds="-250" cost="250"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="ORD-B" levelOfDetail="ORDER" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    expect(result.parserMessages?.find((m) => m.id === "parser.order_level_duplicates")).toBeUndefined();
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
+  });
+});
