@@ -2,7 +2,7 @@ import type { TaxSummary } from "../types/tax.js";
 import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
-import { combinedNetGainLoss, computeCasillaBlocksWithFx } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
 
@@ -230,26 +230,27 @@ export async function generatePdfWebReport(
     doc.setTextColor(C.header);
     doc.text(t("pdf.section_dividends"), MARGIN, y3);
 
+    // Grouped per issuer + country — the annual-total layout of the AEAT
+    // "Alta Capital mobiliario" form and brokers' fiscal certificates.
     autoTable(doc, {
       startY: y3 + 4,
       head: [[
-        t("table.date"), t("table.isin"), t("table.symbol"),
-        t("table.gross_eur"), t("table.withholding_eur"), t("table.country"), "ECB",
+        t("table.isin"), t("table.symbol"), t("table.country"),
+        t("table.payments"), t("table.gross_eur"), t("table.withholding_eur"),
       ]],
-      body: report.dividends.entries.map((d) => [
-        formatDate(d.payDate),
-        d.isin,
-        d.symbol.slice(0, 10),
-        d.grossAmountEur.toFixed(2),
-        d.withholdingTaxEur.toFixed(2),
-        d.withholdingCountry,
-        d.ecbRate.toFixed(4),
+      body: groupDividendsByIssuer(report.dividends.entries).map((g) => [
+        g.isin,
+        g.symbol.slice(0, 10),
+        g.withholdingCountry,
+        g.paymentCount.toString(),
+        g.grossTotalEur.toFixed(2),
+        g.withholdingTotalEur.toFixed(2),
       ]),
       theme: "striped",
       headStyles: { fillColor: C.headerBg, fontSize: 7, textColor: [255, 255, 255] as [number, number, number] },
       bodyStyles: { fontSize: 7, textColor: C.textRgb },
       alternateRowStyles: { fillColor: C.rowAlt },
-      columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 6: { halign: "right" } },
+      columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" } },
       margin: { left: MARGIN, right: MARGIN },
     });
 

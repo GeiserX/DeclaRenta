@@ -148,6 +148,17 @@ describe("formatCsv", () => {
     expect(divLine).toContain("USD");
   });
 
+  it("should include a per-issuer dividend section alongside the per-payment one", () => {
+    const csv = formatCsv(makeReport());
+    expect(csv).toContain("# DIVIDENDOS");           // per-payment, unchanged
+    expect(csv).toContain("# DIVIDENDOS POR EMISOR"); // new aggregated section
+    expect(csv).toContain("ISIN,Simbolo,Pais,Pagos,Bruto_Anual_EUR,Retencion_Anual_EUR,Divisa");
+    // The single AAPL payment aggregates to a 1-payment, 50.00 EUR issuer row.
+    const issuerLine = csv.split("\n").find((l) => l.startsWith("US0378331005,AAPL,US,1,"))!;
+    expect(issuerLine).toContain("50.00");
+    expect(issuerLine).toContain("7.50");
+  });
+
   it("should include casilla summary values", () => {
     const csv = formatCsv(makeReport());
 

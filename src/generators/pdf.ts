@@ -10,7 +10,7 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
-import { combinedNetGainLoss, computeCasillaBlocksWithFx } from "./casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -221,10 +221,11 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         checkPageBreak(doc);
         sectionHeader(doc, "3. Dividendos");
 
-        for (const d of report.dividends.entries.slice(0, 30)) {
+        // Grouped per issuer + country (annual totals, fiscal-certificate layout).
+        for (const g of groupDividendsByIssuer(report.dividends.entries).slice(0, 30)) {
           doc.fontSize(FONT_SIZE.small).fillColor(COLORS.text)
             .text(
-              `${formatDate(d.payDate)}  ${d.symbol.padEnd(12)}  ${d.isin}  Bruto: ${d.grossAmountEur.toFixed(2)} EUR  Retención: ${d.withholdingTaxEur.toFixed(2)} EUR  (${d.withholdingCountry})  ECB: ${d.ecbRate.toFixed(4)}`,
+              `${g.symbol.padEnd(12)}  ${g.isin}  (${g.withholdingCountry})  ${g.paymentCount} pago(s)  Bruto: ${g.grossTotalEur.toFixed(2)} EUR  Retención: ${g.withholdingTotalEur.toFixed(2)} EUR`,
               MARGIN,
             );
           doc.moveDown(0.2);
