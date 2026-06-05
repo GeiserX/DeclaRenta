@@ -83,7 +83,20 @@ function convertTimestamp(ts: string): string {
 // ---------------------------------------------------------------------------
 
 const SKIP_TYPES = ["send", "receive"];
-const INCOME_TYPES = ["staking income", "rewards income", "learning reward"];
+/**
+ * Crypto income types and their Spanish tax bucket:
+ *  - "ahorro": rendimiento del capital mobiliario (savings base, Casilla 0027) —
+ *    staking / holding rewards (DGT V1766-22).
+ *  - "general": ganancia patrimonial no derivada de transmisión (base general,
+ *    Casilla 0304) — Coinbase Earn "learning rewards" are free crypto received
+ *    for completing lessons, with no capital transmitted (Art. 33.1, like an
+ *    airdrop).
+ */
+const INCOME_BUCKETS: Record<string, "ahorro" | "general"> = {
+  "staking income": "ahorro",
+  "rewards income": "ahorro",
+  "learning reward": "general",
+};
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -124,12 +137,16 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // Skip non-taxable transfers
     if (SKIP_TYPES.includes(txType)) continue;
 
-    // Income transactions (staking, rewards, learning) → interest-like income.
+    // Crypto reward income (staking/rewards → ahorro; learning → base general).
     // These are NOT foreign dividends — no issuer/withholding country and not in
-    // the Art. 80 double-taxation pool. Coinbase reports them with a fiat spot
-    // value (total/subtotal in spotCurrency), so they resolve cleanly via ECB as
-    // Broker Interest Received, keeping them out of calculateDividends().
-    if (INCOME_TYPES.includes(txType)) {
+    // the Art. 80 double-taxation pool. Coinbase reports a fiat spot value
+    // (total/subtotal in spotCurrency), which becomes the EUR cost basis of the
+    // received coins so a later sale isn't double-taxed (Art. 35.1). Routed via
+    // "Crypto Reward Income" + taxBucket so airdrop-like income is never
+    // mis-bucketed into the savings base.
+    const incomeBucket = INCOME_BUCKETS[txType];
+    if (incomeBucket) {
+      const eurAmount = total || subtotal;
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
         accountId: "",
@@ -139,9 +156,12 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         currency: spotCurrency || "EUR",
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: total || subtotal,
+        amount: eurAmount,
         fxRateToBase: "1",
-        type: "Broker Interest Received",
+        type: "Crypto Reward Income",
+        taxBucket: incomeBucket,
+        rewardQuantity: new Decimal(quantity || "0").abs().toString(),
+        rewardCostBasisEur: new Decimal(eurAmount || "0").abs().toString(),
       });
       continue;
     }

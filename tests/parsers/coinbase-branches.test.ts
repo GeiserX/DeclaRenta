@@ -88,7 +88,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     const result = coinbaseParser.parse(input);
     expect(result.trades).toHaveLength(0);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Broker Interest Received");
+    expect(result.cashTransactions[0].type).toBe("Crypto Reward Income");
   });
 
   it("should parse rewards income as cash transaction", () => {
@@ -98,7 +98,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     ].join("\n");
     const result = coinbaseParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Broker Interest Received");
+    expect(result.cashTransactions[0].type).toBe("Crypto Reward Income");
   });
 
   it("should parse learning reward as cash transaction", () => {
