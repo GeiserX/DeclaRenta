@@ -18,6 +18,7 @@ export function createEmptyStatement(): Statement {
     parserWarnings: [],
     parserMessages: [],
     pendingOrderLegs: [],
+    manualRateHints: [],
   };
 }
 
@@ -37,6 +38,7 @@ export function mergeStatement(target: Statement, source: Statement): Statement 
   target.parserWarnings = [...(target.parserWarnings ?? []), ...(source.parserWarnings ?? [])];
   target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
+  target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
 
   return target;
 }

@@ -76,6 +76,7 @@ const ca: TranslationKeys = {
   "casilla.gross_dividends": "Dividends bruts",
   "casilla.interest_earned": "Interessos guanyats",
   "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble — informatiu)",
+  "casilla.general_gains": "Guanys patrimonials no derivats de transmissió (airdrops, comissions de referits)",
   "casilla.double_taxation": "Deducció doble imposició",
   "casilla.blocked_losses": "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",

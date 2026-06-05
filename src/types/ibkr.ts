@@ -23,6 +23,14 @@ export interface FlexStatement {
    * derive the per-trade commission from the gross/net discrepancy, then dropped.
    */
   pendingOrderLegs?: OrderLeg[];
+  /**
+   * Optional EUR-per-unit valuation hints derived from a broker-supplied EUR
+   * value column (e.g. a user-added `EUR_Value` column in a Binance Transaction
+   * History CSV). Fed into the crypto-valuation pre-pass as a manual-rate source
+   * so crypto↔crypto permutas and crypto income can be valued without any live
+   * price oracle. Lower precedence than ECB rates and explicit user manual rates.
+   */
+  manualRateHints?: import("./tax.js").ManualRateQuote[];
 }
 
 /**
@@ -94,6 +102,25 @@ export interface CashTransaction {
   amount: string;
   fxRateToBase: string;
   type: CashTransactionType;
+  /**
+   * Tax bucket for crypto reward income. Distinguishes a rendimiento del capital
+   * mobiliario / interest (`"ahorro"` → savings base, e.g. staking, Simple Earn
+   * interest) from a ganancia patrimonial no derivada de transmisión
+   * (`"general"` → base general, e.g. airdrops, referral commissions). Absent
+   * for ordinary interest/dividends, which keep their existing routing.
+   */
+  taxBucket?: "ahorro" | "general";
+  /**
+   * Quantity of coins received as a reward (drives a synthetic FIFO acquisition
+   * lot so a later sale is not double-taxed). Paired with {@link rewardCostBasisEur}.
+   */
+  rewardQuantity?: string;
+  /**
+   * EUR cost basis to assign to the synthetic acquisition lot — equal to the EUR
+   * value taxed as income. Omitted when the reward could not be valued in EUR
+   * (then no lot is created and the income is surfaced for manual valuation).
+   */
+  rewardCostBasisEur?: string;
 }
 
 export type CashTransactionType =
@@ -106,7 +133,15 @@ export type CashTransactionType =
   | "Bond Interest Received"
   | "Other Fees"
   | "Commission Adjustments"
-  | "Deposits/Withdrawals";
+  | "Deposits/Withdrawals"
+  /**
+   * Crypto reward income (staking, Simple Earn interest, airdrops, referral
+   * commissions). The `taxBucket` field decides whether it lands in the savings
+   * base (rendimiento, Casilla 0027) or the base general (ganancia no derivada
+   * de transmisión). Kept distinct from `Broker Interest Received` so airdrops
+   * are never mis-bucketed into the savings base.
+   */
+  | "Crypto Reward Income";
 
 export interface CorporateAction {
   transactionID: string;

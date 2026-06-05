@@ -114,6 +114,13 @@ export async function generatePdfWebReport(
     // Casilla 0027: Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF)
     ["0027", t("casilla.interest_earned"),     eur(report.interest.earned)],
     [t("pdf.informative"), t("pdf.interest_margin"), eur(report.interest.paid)],
+  );
+  // Casilla 0304: ganancias patrimoniales no derivadas de transmisión (base
+  // general) — crypto airdrops, referral commissions. Only when non-zero.
+  if (report.generalGains.total.greaterThan(0)) {
+    casillasBody.push(["0304", t("casilla.general_gains"), eur(report.generalGains.total)]);
+  }
+  casillasBody.push(
     ["0588", t("casilla.double_taxation"),     eur(report.doubleTaxation.deduction)],
   );
 

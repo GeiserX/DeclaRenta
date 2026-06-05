@@ -17,15 +17,11 @@
 
 import Decimal from "decimal.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { ManualRateQuote } from "../types/tax.js";
 import { normalizeDate } from "./dates.js";
 import { normalizeCurrency } from "./ecb.js";
 
-/** One raw manual quote as typed by the user / stored on disk. */
-export interface ManualRateQuote {
-  currency: string;
-  date: string;
-  eurPerUnit: string;
-}
+export type { ManualRateQuote };
 
 /**
  * Normalize a human-typed decimal string to the dot-decimal form decimal.js

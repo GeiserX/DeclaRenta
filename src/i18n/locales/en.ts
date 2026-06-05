@@ -75,6 +75,7 @@ const en: TranslationKeys = {
   "casilla.gross_dividends": "Gross dividends",
   "casilla.interest_earned": "Interest earned",
   "casilla.interest_paid": "Interest paid to broker (margin, not deductible — informational)",
+  "casilla.general_gains": "Capital gains not arising from transmission (airdrops, referral commissions)",
   "casilla.double_taxation": "Double taxation deduction",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} warning(s)",

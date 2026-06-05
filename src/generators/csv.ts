@@ -85,6 +85,9 @@ export function formatCsv(report: TaxSummary): string {
   lines.push(`0029,Dividendos brutos,${report.dividends.grossIncome.toFixed(2)}`);
   lines.push(`—,Intereses pagados al broker (margen no deducible — informativo),${report.interest.paid.toFixed(2)}`);
   lines.push(`0027,Intereses de cuentas,${report.interest.earned.toFixed(2)}`);
+  if (report.generalGains.total.greaterThan(0)) {
+    lines.push(`0304,Ganancias patrimoniales no derivadas de transmision (base general: airdrops/referidos),${report.generalGains.total.toFixed(2)}`);
+  }
   lines.push(`0588,Deduccion doble imposicion,${report.doubleTaxation.deduction.toFixed(2)}`);
 
   return lines.join("\n") + "\n";
