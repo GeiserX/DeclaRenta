@@ -86,6 +86,7 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
       paid: new Decimal(2),
       entries: [],
     },
+    generalGains: { total: new Decimal(0), entries: [] },
     doubleTaxation: {
       deduction: new Decimal(7.5),
       byCountry: {},

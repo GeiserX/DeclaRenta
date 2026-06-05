@@ -12,7 +12,9 @@
 
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
-import type { Trade } from "../types/ibkr.js";
+import type { CashTransaction, Trade } from "../types/ibkr.js";
+import type { ManualRateQuote } from "../types/tax.js";
+import { isFiat } from "../engine/ecb.js";
 import { parseCsvLine, stripBom } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -159,6 +161,8 @@ interface BinanceTxColumns {
   coin: number;
   change: number;
   remark: number;
+  /** Optional EUR value column (e.g. user-added `EUR_Value`); -1 when absent. */
+  eurValue: number;
 }
 
 function resolveTxColumns(headers: string[]): BinanceTxColumns {
@@ -170,23 +174,132 @@ function resolveTxColumns(headers: string[]): BinanceTxColumns {
     coin: findCol(lower, "coin", "moneda"),
     change: findCol(lower, "change", "cambio"),
     remark: findCol(lower, "remark", "observación", "observacion"),
+    eurValue: findCol(lower, "eur_value", "valor_eur", "valor en eur", "valor eur"),
   };
 }
 
-/** Skip these operations — internal transfers, not taxable events */
+/**
+ * Skip these operations — internal transfers / non-taxable movements.
+ * Simple Earn / Staking subscription & redemption move the SAME principal coin
+ * into/out of the product; they are not disposals (only the INTEREST is income).
+ * Deposits/withdrawals and inter-account transfers are mere custody changes.
+ */
 const TX_SKIP_OPS = new Set([
-  "deposit", "withdraw",
+  "deposit", "withdraw", "fiat deposit", "fiat withdraw", "fiat withdrawal",
   "transfer between main and funding wallet",
   "transfer between spot and strategy account",
   "transfer between main and trading account",
+  "transfer between main account/futures and margin account",
+  "transfer between spot and um futures account",
+  "transfer between spot and cm futures account",
+  "simple earn flexible subscription",
+  "simple earn flexible redemption",
+  "simple earn locked subscription",
+  "simple earn locked redemption",
+  "staking purchase",
+  "staking redemption",
+  "pos savings purchase",
+  "pos savings redemption",
+  // Margin loan/repayment are not income; any disposal of borrowed coins shows
+  // up as a separate Transaction Sold/Buy. Skip the loan bookkeeping itself.
+  "isolated margin loan",
+  "isolated margin repayment",
+  "cross margin loan",
+  "cross margin repayment",
+  "main and funding transfer",
+  "transfer between main and funding account",
+  "asset recovery",
+]);
+
+/**
+ * Income operations whose tax bucket is "ahorro" (rendimiento del capital
+ * mobiliario, savings base — Casilla 0027). Staking / Simple Earn interest.
+ * (DGT V1766-22, Art. 25.2/43.1 LIRPF.)
+ */
+const TX_INCOME_AHORRO_OPS = new Set([
+  "simple earn flexible interest",
+  "simple earn locked rewards",
+  "staking rewards",
+  "eth 2.0 staking rewards",
+  "pos savings interest",
+  "savings interest",
+  "launchpool interest",
+  "bnb vault rewards",
+  "savings distribution",
+]);
+
+/**
+ * Income operations whose tax bucket is "general" (ganancia patrimonial NO
+ * derivada de transmisión, base general — Art. 33.1 LIRPF; DGT V1948-21).
+ * Airdrops, referral commissions, fee rebates, free distributions.
+ */
+const TX_INCOME_GENERAL_OPS = new Set([
+  "referral commission",
+  "referral kickback",
+  "commission rebate",
+  "commission fee shared with you",
+  "strategy trading fee rebate",
+  "hodler airdrops distribution",
+  "launchpool airdrop - system distribution",
+  "launchpool airdrop - user claim distribution",
+  "airdrop assets",
+  "token swap - distribution",
+  "distribution",
+  "cash voucher distribution",
+  "crypto box",
+]);
+
+/** Dust conversion to BNB — taxable permutas (each dust coin → BNB). */
+const TX_DUST_OPS = new Set([
+  "small assets exchange bnb",
 ]);
 
 interface TxRow {
   utcTime: string;
+  /** Seconds since epoch, for ±1s window grouping. */
+  epoch: number;
   tradeDate: string;
   operation: string;
+  account: string;
   coin: string;
   change: Decimal;
+  /** EUR value of this row from an optional broker/user EUR column (null if absent). */
+  eurValue: Decimal | null;
+  remark: string;
+  index: number;
+  /** Set once a row has been consumed by a trade/income so it's never reused. */
+  parsed: boolean;
+}
+
+/** Parse "YYYY-MM-DD HH:MM:SS" / "YY-MM-DD HH:MM:SS" to epoch seconds (UTC). */
+function txEpoch(utcTime: string): number {
+  const m = utcTime.trim().match(/^(\d{2,4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return 0;
+  let year = Number(m[1]);
+  if (year < 100) year += 2000;
+  return Math.floor(
+    Date.UTC(year, Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])) / 1000,
+  );
+}
+
+const CRYPTO_TRADE_BASE = {
+  accountId: "",
+  isin: "",
+  assetCategory: "CRYPTO" as const,
+  fifoPnlRealized: "0",
+  fxRateToBase: "1",
+  exchange: "BINANCE",
+  taxes: "0",
+  multiplier: "1",
+  brokerSource: "Binance",
+};
+
+/** A coin's net position within a paired group (after netting intra-account splits). */
+interface NetLeg {
+  coin: string;
+  qty: Decimal; // signed
+  eur: Decimal | null; // summed EUR value (signed), null if any leg lacked it
+  date: string;
   index: number;
 }
 
@@ -199,8 +312,18 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   }
 
   const trades: Trade[] = [];
+  const cashTransactions: CashTransaction[] = [];
+  const manualRateHints: ManualRateQuote[] = [];
 
-  // Collect all meaningful rows first
+  /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
+  function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
+    if (eur === null || qty.isZero() || isFiat(coin)) return;
+    const perUnit = eur.abs().div(qty.abs());
+    if (!perUnit.isFinite() || perUnit.lessThanOrEqualTo(0)) return;
+    manualRateHints.push({ currency: coin, date, eurPerUnit: perUnit.toString() });
+  }
+
+  // 1. Collect rows, skipping non-taxable internal movements and zero changes.
   const rows: TxRow[] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -211,171 +334,145 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     const operation = (fields[cols.operation] ?? "").trim().toLowerCase();
     const coin = (fields[cols.coin] ?? "").trim().toUpperCase();
     const changeStr = (fields[cols.change] ?? "").trim();
+    const account = (fields[cols.account] ?? "").trim();
+    const remark = cols.remark >= 0 ? (fields[cols.remark] ?? "").trim() : "";
 
     if (!utcTime || !coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
+    // A "--" change (Binance writes this for some zero-fee rows) is not numeric.
+    if (changeStr === "--") continue;
 
-    const tradeDate = convertBinanceDate(utcTime);
-    const change = new Decimal(changeStr);
-    if (change.isZero()) continue;
+    let change: Decimal;
+    try {
+      change = new Decimal(changeStr);
+    } catch {
+      continue;
+    }
+    // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
+    // a malformed cell can't poison totals or stall big-decimal arithmetic.
+    if (!change.isFinite() || change.isZero()) continue;
 
-    rows.push({ utcTime, tradeDate, operation, coin, change, index: i });
-  }
-
-  // Group rows by timestamp to pair operations
-  const groups = new Map<string, TxRow[]>();
-  for (const row of rows) {
-    const key = row.utcTime;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(row);
-  }
-
-  for (const [, group] of groups) {
-    // --- Binance Convert: two rows at same timestamp, one positive, one negative ---
-    if (group.length === 2 && group.every((r) => r.operation === "binance convert")) {
-      const sell = group.find((r) => r.change.isNegative());
-      const buy = group.find((r) => r.change.isPositive());
-      if (sell && buy) {
-        const sellQty = sell.change.abs();
-        const buyQty = buy.change.abs();
-        // Price of sold asset in terms of bought asset
-        const implicitPrice = buyQty.div(sellQty);
-
-        trades.push({
-          tradeID: `binance-tx-sell-${sell.tradeDate}-${sell.coin}-${sell.index}`,
-          accountId: "",
-          symbol: sell.coin,
-          description: `Convert ${sell.coin} to ${buy.coin}`,
-          isin: "",
-          assetCategory: "CRYPTO",
-          currency: buy.coin,
-          tradeDate: sell.tradeDate,
-          settlementDate: sell.tradeDate,
-          quantity: sell.change.toString(),
-          tradePrice: implicitPrice.toString(),
-          tradeMoney: buyQty.toString(),
-          proceeds: buyQty.toString(),
-          cost: "0",
-          fifoPnlRealized: "0",
-          fxRateToBase: "1",
-          buySell: "SELL",
-          openCloseIndicator: "C",
-          exchange: "BINANCE",
-          commissionCurrency: buy.coin,
-          commission: "0",
-          taxes: "0",
-          multiplier: "1",
-          brokerSource: "Binance",
-        });
-        trades.push({
-          tradeID: `binance-tx-buy-${buy.tradeDate}-${buy.coin}-${buy.index}`,
-          accountId: "",
-          symbol: buy.coin,
-          description: `Convert ${sell.coin} to ${buy.coin}`,
-          isin: "",
-          assetCategory: "CRYPTO",
-          currency: sell.coin,
-          tradeDate: buy.tradeDate,
-          settlementDate: buy.tradeDate,
-          quantity: buyQty.toString(),
-          tradePrice: sellQty.div(buyQty).toString(),
-          tradeMoney: sellQty.toString(),
-          proceeds: "0",
-          cost: sellQty.toString(),
-          fifoPnlRealized: "0",
-          fxRateToBase: "1",
-          buySell: "BUY",
-          openCloseIndicator: "O",
-          exchange: "BINANCE",
-          commissionCurrency: sell.coin,
-          commission: "0",
-          taxes: "0",
-          multiplier: "1",
-          brokerSource: "Binance",
-        });
-        continue;
+    let eurValue: Decimal | null = null;
+    if (cols.eurValue >= 0) {
+      const raw = (fields[cols.eurValue] ?? "").trim();
+      if (raw) {
+        try {
+          const parsed = new Decimal(raw);
+          eurValue = parsed.isFinite() ? parsed : null;
+        } catch {
+          eurValue = null;
+        }
       }
     }
 
-    // --- Strategy trades: Transaction Sold/Revenue/Buy/Spend/Fee ---
-    const sold = group.filter((r) => r.operation === "transaction sold");
-    const revenue = group.filter((r) => r.operation === "transaction revenue");
-    const bought = group.filter((r) => r.operation === "transaction buy");
-    const spend = group.filter((r) => r.operation === "transaction spend");
-    const fees = group.filter((r) => r.operation === "transaction fee");
+    rows.push({
+      utcTime,
+      epoch: txEpoch(utcTime),
+      tradeDate: convertBinanceDate(utcTime),
+      operation,
+      account,
+      coin,
+      change,
+      eurValue,
+      remark,
+      index: i,
+      parsed: false,
+    });
+  }
 
-    // Pair Sold + Revenue → SELL trade
-    if (sold.length > 0 && revenue.length > 0) {
-      const soldRow = sold[0]!;
-      const revenueRow = revenue[0]!;
-      const feeRow = fees.find((f) => f.coin === revenueRow.coin);
-      const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
-      const soldQty = soldRow.change.abs();
-      const revenueQty = revenueRow.change.abs();
+  // Stable order by time then file order, so ±1s windows are deterministic.
+  rows.sort((a, b) => (a.epoch - b.epoch) || (a.index - b.index));
 
-      trades.push({
-        tradeID: `binance-tx-sell-${soldRow.tradeDate}-${soldRow.coin}-${soldRow.index}`,
-        accountId: "",
-        symbol: soldRow.coin,
-        description: `Sell ${soldRow.coin} for ${revenueRow.coin}`,
-        isin: "",
-        assetCategory: "CRYPTO",
-        currency: revenueRow.coin,
-        tradeDate: soldRow.tradeDate,
-        settlementDate: soldRow.tradeDate,
-        quantity: soldRow.change.toString(),
-        tradePrice: revenueQty.div(soldQty).toString(),
-        tradeMoney: revenueQty.toString(),
-        proceeds: revenueQty.toString(),
-        cost: "0",
-        fifoPnlRealized: "0",
-        fxRateToBase: "1",
-        buySell: "SELL",
-        openCloseIndicator: "C",
-        exchange: "BINANCE",
-        commissionCurrency: revenueRow.coin,
-        commission: feeAmount.isZero() ? "0" : feeAmount.neg().toString(),
-        taxes: "0",
-        multiplier: "1",
-        brokerSource: "Binance",
-      });
+  // 2. Income rows are single-row events — emit them first (and mark parsed) so
+  //    they never get swept into a trade window.
+  for (const r of rows) {
+    if (r.parsed) continue;
+    const isAhorro = TX_INCOME_AHORRO_OPS.has(r.operation);
+    const isGeneral = TX_INCOME_GENERAL_OPS.has(r.operation);
+    if (!isAhorro && !isGeneral) continue;
+    // Only positive credits are income; a negative (clawback) is rare — skip.
+    if (!r.change.isPositive()) { r.parsed = true; continue; }
+
+    r.parsed = true;
+    addHint(r.coin, r.tradeDate, r.change, r.eurValue);
+    cashTransactions.push({
+      transactionID: `binance-income-${r.tradeDate}-${r.coin}-${r.index}`,
+      accountId: "",
+      symbol: r.coin,
+      description: `${r.operation} - ${r.coin}`,
+      isin: "",
+      currency: r.coin,
+      dateTime: r.tradeDate,
+      settleDate: r.tradeDate,
+      amount: r.change.toString(),
+      fxRateToBase: "1",
+      type: "Crypto Reward Income",
+      taxBucket: isAhorro ? "ahorro" : "general",
+      rewardQuantity: r.change.abs().toString(),
+      ...(r.eurValue !== null ? { rewardCostBasisEur: r.eurValue.abs().toString() } : {}),
+    });
+  }
+
+  // 3. Dust (Small Assets Exchange BNB): negative dust-coin rows + positive BNB
+  //    rows at one timestamp, paired via the Remark ("SCR to BNB"). Each dust
+  //    coin → BNB is a permuta.
+  const dustByTime = new Map<string, TxRow[]>();
+  for (const r of rows) {
+    if (r.parsed || !TX_DUST_OPS.has(r.operation)) continue;
+    if (!dustByTime.has(r.utcTime)) dustByTime.set(r.utcTime, []);
+    dustByTime.get(r.utcTime)!.push(r);
+  }
+  for (const group of dustByTime.values()) {
+    const bnbRows = group.filter((r) => r.coin === "BNB" && r.change.isPositive());
+    for (const dust of group) {
+      if (dust.coin === "BNB" || !dust.change.isNegative()) continue;
+      // Match BNB output by remark (e.g. "SCR to BNB"); fall back to any unused.
+      const bnb = bnbRows.find((b) => !b.parsed && b.remark === dust.remark)
+        ?? bnbRows.find((b) => !b.parsed);
+      dust.parsed = true;
+      addHint(dust.coin, dust.tradeDate, dust.change, dust.eurValue);
+      if (bnb) {
+        bnb.parsed = true;
+        addHint("BNB", bnb.tradeDate, bnb.change, bnb.eurValue);
+        emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index },
+          { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index }, "Dust");
+      }
     }
+    // Any leftover BNB rows (rounding remainders) are immaterial — drop.
+    for (const b of bnbRows) b.parsed = true;
+  }
 
-    // Pair Buy + Spend → BUY trade
-    if (bought.length > 0 && spend.length > 0) {
-      const buyRow = bought[0]!;
-      const spendRow = spend[0]!;
-      const feeRow = fees.find((f) => f.coin === buyRow.coin);
-      const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
-      const buyQty = buyRow.change.abs();
-      const spendQty = spendRow.change.abs();
-
-      trades.push({
-        tradeID: `binance-tx-buy-${buyRow.tradeDate}-${buyRow.coin}-${buyRow.index}`,
-        accountId: "",
-        symbol: buyRow.coin,
-        description: `Buy ${buyRow.coin} with ${spendRow.coin}`,
-        isin: "",
-        assetCategory: "CRYPTO",
-        currency: spendRow.coin,
-        tradeDate: buyRow.tradeDate,
-        settlementDate: buyRow.tradeDate,
-        quantity: buyQty.toString(),
-        tradePrice: spendQty.div(buyQty).toString(),
-        tradeMoney: spendQty.toString(),
-        proceeds: "0",
-        cost: spendQty.toString(),
-        fifoPnlRealized: "0",
-        fxRateToBase: "1",
-        buySell: "BUY",
-        openCloseIndicator: "O",
-        exchange: "BINANCE",
-        commissionCurrency: spendRow.coin,
-        commission: feeAmount.isZero() ? "0" : feeAmount.neg().toString(),
-        taxes: "0",
-        multiplier: "1",
-        brokerSource: "Binance",
-      });
+  // 4. Binance Convert: pair legs within a ±1s window (legs are frequently 1
+  //    second apart). Net per-coin to cancel intra-account split rows, then pair
+  //    the net negative (sold) with the net positive (bought).
+  for (let i = 0; i < rows.length; i++) {
+    const start = rows[i]!;
+    if (start.parsed || start.operation !== "binance convert") continue;
+    const window: TxRow[] = [];
+    for (let j = i; j < rows.length; j++) {
+      const r = rows[j]!;
+      if (r.epoch - start.epoch > 1) break;
+      if (!r.parsed && r.operation === "binance convert") window.push(r);
     }
+    const legs = netLegs(window);
+    window.forEach((r) => (r.parsed = true));
+    pairAndEmit(trades, legs, addHint, "Convert");
+  }
+
+  // 5. Strategy trades: Transaction Sold↔Revenue and Buy↔Spend within ±1s.
+  //    Pair ALL legs (not just the first) so high-frequency same-second groups
+  //    aren't truncated.
+  for (let i = 0; i < rows.length; i++) {
+    const start = rows[i]!;
+    if (start.parsed) continue;
+    if (!["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"].includes(start.operation)) continue;
+    const window: TxRow[] = [];
+    for (let j = i; j < rows.length; j++) {
+      const r = rows[j]!;
+      if (r.epoch - start.epoch > 1) break;
+      if (r.parsed) continue;
+      if (["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"].includes(r.operation)) window.push(r);
+    }
+    emitStrategyTrades(trades, window, addHint);
   }
 
   return {
@@ -384,11 +481,226 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     toDate: "",
     period: "",
     trades,
-    cashTransactions: [],
+    cashTransactions,
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(manualRateHints.length > 0 ? { manualRateHints } : {}),
   };
+}
+
+/** Sum signed quantity and EUR value per coin across a window of paired rows. */
+function netLegs(window: TxRow[]): NetLeg[] {
+  const byCoin = new Map<string, NetLeg>();
+  for (const r of window) {
+    const existing = byCoin.get(r.coin);
+    if (existing) {
+      existing.qty = existing.qty.plus(r.change);
+      existing.eur = existing.eur === null || r.eurValue === null ? null : existing.eur.plus(r.eurValue);
+    } else {
+      byCoin.set(r.coin, { coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index });
+    }
+  }
+  // Drop coins whose net is zero (intra-account split rows that cancel out).
+  return [...byCoin.values()].filter((l) => !l.qty.isZero());
+}
+
+type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) => void;
+
+/**
+ * Pair net negative (sold) legs with net positive (bought) legs and emit.
+ *
+ * The two legs of one conversion have (near-)equal EUR value, so each sell is
+ * matched to its CLOSEST-EUR remaining buy. This disambiguates correctly even if
+ * two independent conversions happen to fall in the same ±1s window (pairing the
+ * larger sell with the larger buy and the smaller with the smaller), rather than
+ * cross-pairing unrelated coins. When EUR values are absent (all 0), the closest
+ * match is the next available buy in order — equivalent to insertion-order
+ * pairing, the previous behavior.
+ */
+function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): void {
+  const sells = legs.filter((l) => l.qty.isNegative());
+  const buys = legs.filter((l) => l.qty.isPositive());
+  const usedBuys = new Set<number>();
+  for (const sell of sells) {
+    let bestIdx = -1;
+    let bestDelta = Infinity;
+    for (let j = 0; j < buys.length; j++) {
+      if (usedBuys.has(j)) continue;
+      const delta = Math.abs(absEur(sell) - absEur(buys[j]!));
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIdx = j;
+      }
+    }
+    if (bestIdx < 0) break; // no buys left
+    usedBuys.add(bestIdx);
+    const buy = buys[bestIdx]!;
+    addHint(sell.coin, sell.date, sell.qty, sell.eur);
+    addHint(buy.coin, buy.date, buy.qty, buy.eur);
+    emitCryptoSwap(trades, sell, buy, label);
+  }
+}
+
+function absEur(l: NetLeg): number {
+  return l.eur ? Math.abs(l.eur.toNumber()) : 0;
+}
+
+/**
+ * Emit a crypto leg-pair. If one side is genuine FIAT (not a stablecoin), the
+ * trade is a plain acquisition/disposal in that fiat currency (NOT a permuta) —
+ * this prevents the FIFO engine from hunting for nonexistent "EUR lots". If both
+ * sides are crypto (incl. stablecoins), emit the two-leg permuta. Both-fiat
+ * conversions are skipped (handled by the FX engine, not capital gains).
+ */
+function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: string): void {
+  const sellQty = sell.qty.abs();
+  const buyQty = buy.qty.abs();
+  if (sellQty.isZero() || buyQty.isZero()) return;
+  const sellFiat = isFiat(sell.coin);
+  const buyFiat = isFiat(buy.coin);
+
+  if (sellFiat && buyFiat) return; // pure fiat conversion — not a capital-gains event
+
+  if (sellFiat && !buyFiat) {
+    // Spent fiat to acquire crypto → single BUY priced in fiat.
+    trades.push({
+      ...CRYPTO_TRADE_BASE,
+      tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.index}`,
+      symbol: buy.coin,
+      description: `${label} ${sell.coin} to ${buy.coin}`,
+      currency: sell.coin,
+      tradeDate: buy.date,
+      settlementDate: buy.date,
+      quantity: buyQty.toString(),
+      tradePrice: sellQty.div(buyQty).toString(),
+      tradeMoney: sellQty.toString(),
+      proceeds: "0",
+      cost: sellQty.toString(),
+      buySell: "BUY",
+      openCloseIndicator: "O",
+      commissionCurrency: sell.coin,
+      commission: "0",
+    });
+    return;
+  }
+
+  if (!sellFiat && buyFiat) {
+    // Sold crypto for fiat → single SELL priced in fiat.
+    trades.push({
+      ...CRYPTO_TRADE_BASE,
+      tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.index}`,
+      symbol: sell.coin,
+      description: `${label} ${sell.coin} to ${buy.coin}`,
+      currency: buy.coin,
+      tradeDate: sell.date,
+      settlementDate: sell.date,
+      quantity: sell.qty.toString(),
+      tradePrice: buyQty.div(sellQty).toString(),
+      tradeMoney: buyQty.toString(),
+      proceeds: buyQty.toString(),
+      cost: "0",
+      buySell: "SELL",
+      openCloseIndicator: "C",
+      commissionCurrency: buy.coin,
+      commission: "0",
+    });
+    return;
+  }
+
+  // Both crypto → permuta: SELL the given-up coin, BUY the received coin.
+  trades.push({
+    ...CRYPTO_TRADE_BASE,
+    tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.index}`,
+    symbol: sell.coin,
+    description: `${label} ${sell.coin} to ${buy.coin}`,
+    currency: buy.coin,
+    tradeDate: sell.date,
+    settlementDate: sell.date,
+    quantity: sell.qty.toString(),
+    tradePrice: buyQty.div(sellQty).toString(),
+    tradeMoney: buyQty.toString(),
+    proceeds: buyQty.toString(),
+    cost: "0",
+    buySell: "SELL",
+    openCloseIndicator: "C",
+    commissionCurrency: buy.coin,
+    commission: "0",
+  });
+  trades.push({
+    ...CRYPTO_TRADE_BASE,
+    tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.index}`,
+    symbol: buy.coin,
+    description: `${label} ${sell.coin} to ${buy.coin}`,
+    currency: sell.coin,
+    tradeDate: buy.date,
+    settlementDate: buy.date,
+    quantity: buyQty.toString(),
+    tradePrice: sellQty.div(buyQty).toString(),
+    tradeMoney: sellQty.toString(),
+    proceeds: "0",
+    cost: sellQty.toString(),
+    buySell: "BUY",
+    openCloseIndicator: "O",
+    commissionCurrency: sell.coin,
+    commission: "0",
+  });
+}
+
+/**
+ * Emit Strategy trades from a window: pair each Transaction Sold with a Revenue,
+ * and each Buy with a Spend (by order, all of them — not just the first). Fees in
+ * the acquired/received coin reduce cost / proceeds.
+ */
+function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint): void {
+  const sold = window.filter((r) => r.operation === "transaction sold");
+  const revenue = window.filter((r) => r.operation === "transaction revenue");
+  const bought = window.filter((r) => r.operation === "transaction buy");
+  const spend = window.filter((r) => r.operation === "transaction spend");
+  const fees = window.filter((r) => r.operation === "transaction fee");
+  window.forEach((r) => (r.parsed = true));
+
+  const nSell = Math.min(sold.length, revenue.length);
+  for (let k = 0; k < nSell; k++) {
+    const soldRow = sold[k]!;
+    const revenueRow = revenue[k]!;
+    const feeRow = fees.find((f) => f.coin === revenueRow.coin && !f.change.isZero());
+    const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
+    addHint(soldRow.coin, soldRow.tradeDate, soldRow.change, soldRow.eurValue);
+    addHint(revenueRow.coin, revenueRow.tradeDate, revenueRow.change, revenueRow.eurValue);
+    emitCryptoSwap(
+      trades,
+      { coin: soldRow.coin, qty: soldRow.change, eur: soldRow.eurValue, date: soldRow.tradeDate, index: soldRow.index },
+      { coin: revenueRow.coin, qty: revenueRow.change, eur: revenueRow.eurValue, date: revenueRow.tradeDate, index: revenueRow.index },
+      "Sell",
+    );
+    applyFee(trades, feeAmount, revenueRow.coin);
+  }
+
+  const nBuy = Math.min(bought.length, spend.length);
+  for (let k = 0; k < nBuy; k++) {
+    const buyRow = bought[k]!;
+    const spendRow = spend[k]!;
+    const feeRow = fees.find((f) => f.coin === buyRow.coin && !f.change.isZero());
+    const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
+    addHint(buyRow.coin, buyRow.tradeDate, buyRow.change, buyRow.eurValue);
+    addHint(spendRow.coin, spendRow.tradeDate, spendRow.change, spendRow.eurValue);
+    emitCryptoSwap(
+      trades,
+      { coin: spendRow.coin, qty: spendRow.change, eur: spendRow.eurValue, date: spendRow.tradeDate, index: spendRow.index },
+      { coin: buyRow.coin, qty: buyRow.change, eur: buyRow.eurValue, date: buyRow.tradeDate, index: buyRow.index },
+      "Buy",
+    );
+    applyFee(trades, feeAmount, buyRow.coin);
+  }
+}
+
+/** Attach a fee to the most recently emitted trade (in the same coin). */
+function applyFee(trades: Trade[], feeAmount: Decimal, feeCoin: string): void {
+  if (feeAmount.isZero() || trades.length === 0) return;
+  const last = trades[trades.length - 1]!;
+  last.commission = feeAmount.neg().toString();
+  last.commissionCurrency = feeCoin;
 }
 
 // ---------------------------------------------------------------------------

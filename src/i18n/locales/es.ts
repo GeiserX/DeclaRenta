@@ -79,6 +79,7 @@ const es = {
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Intereses ganados",
   "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible — informativo)",
+  "casilla.general_gains": "Ganancias patrimoniales no derivadas de transmisión (airdrops, comisiones de referidos)",
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.blocked_losses": "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",

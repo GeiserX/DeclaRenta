@@ -123,6 +123,11 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         ["Casilla 0029", "Dividendos brutos", formatEur(report.dividends.grossIncome)],
         ["Casilla 0027", "Intereses ganados", formatEur(report.interest.earned)],
         ["Informativo", "Intereses margen (no deducible)", formatEur(report.interest.paid)],
+      );
+      if (report.generalGains.total.greaterThan(0)) {
+        casillas.push(["Casilla 0304", "Gananc. patrim. no derivadas de transmisión (airdrops/referidos)", formatEur(report.generalGains.total)]);
+      }
+      casillas.push(
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
       );
 

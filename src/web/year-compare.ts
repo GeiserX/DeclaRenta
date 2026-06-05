@@ -40,6 +40,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
       grossDividends: report.dividends.grossIncome.toNumber(),
       interestEarned: report.interest.earned.toNumber(),
       interestPaid: report.interest.paid.toNumber(),
+      generalGains: report.generalGains.total.toNumber(),
       doubleTaxation: report.doubleTaxation.deduction.toNumber(),
     },
     stats: {
@@ -88,6 +89,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   { label: "casilla.gross_dividends", key: "grossDividends" },
   { label: "casilla.interest_earned", key: "interestEarned" },
   { label: "casilla.interest_paid", key: "interestPaid" },
+  { label: "casilla.general_gains", key: "generalGains" },
   { label: "casilla.double_taxation", key: "doubleTaxation" },
 ];
 
@@ -117,7 +119,8 @@ export function renderYearComparison(container: HTMLElement): void {
 
   // Data rows
   const rows = COMPARISON_ROWS.map((row) => {
-    const values = sorted.map((r) => r.casillas[row.key]);
+    // Coerce undefined (optional/older-snapshot fields like generalGains) to 0.
+    const values = sorted.map((r) => r.casillas[row.key] ?? 0);
     const valueCells = values.map((v) => `<td>${fmtEur(v)}</td>`).join("");
 
     const varCells = values.length >= 2

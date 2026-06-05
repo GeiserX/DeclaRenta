@@ -5,7 +5,7 @@
  * operations (disposals, dividends, interest entries) that compose it.
  */
 
-import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry } from "../types/tax.js";
+import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
@@ -107,6 +107,25 @@ function renderInterestDetail(entries: InterestEntry[], filterType: "earned" | "
         <th>${t("table.date")}</th><th>${t("table.concept")}</th><th>EUR</th>
       </tr></thead>
       <tbody>${filtered.map((e) => `
+        <tr>
+          <td>${formatDate(e.date)}</td>
+          <td>${esc(e.description)}</td>
+          <td>${fmtEur(e.amountEur)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+/** Render a detail table of base-general crypto reward gains (airdrops/referral). */
+function renderGeneralGainsDetail(entries: GeneralGainEntry[]): string {
+  if (entries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  return `
+    <p class="detail-label">${t("casilla.general_gains")} (${entries.length})</p>
+    <table class="detail-table">
+      <thead><tr>
+        <th>${t("table.date")}</th><th>${t("table.concept")}</th><th>EUR</th>
+      </tr></thead>
+      <tbody>${entries.map((e) => `
         <tr>
           <td>${formatDate(e.date)}</td>
           <td>${esc(e.description)}</td>
@@ -233,6 +252,15 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (r) => fmtEur(r.interest.paid),
     getClass: () => "",
     getDetail: (r) => renderInterestDetail(r.interest.entries, "paid"),
+  },
+  {
+    code: "0304",
+    i18nKey: "casilla.general_gains",
+    getValue: (r) => fmtEur(r.generalGains.total),
+    getClass: () => "",
+    getDetail: (r) => renderGeneralGainsDetail(r.generalGains.entries),
+    // Base-general crypto rewards are uncommon — only show the card when present.
+    visible: (r) => r.generalGains.total.greaterThan(0),
   },
   {
     code: "0588",

@@ -23,6 +23,8 @@ export interface StoredReport {
     grossDividends: number;
     interestEarned: number;
     interestPaid: number;
+    /** Base-general crypto reward gains (airdrops/referral). Optional for back-compat with reports saved before this field existed. */
+    generalGains?: number;
     doubleTaxation: number;
   };
   /** Summary stats */

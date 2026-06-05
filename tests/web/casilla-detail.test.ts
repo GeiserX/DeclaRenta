@@ -83,6 +83,7 @@ function makeSummaryWithDisposals(
       paid: new Decimal(0),
       entries: [],
     },
+    generalGains: { total: new Decimal(0), entries: [] },
     doubleTaxation: {
       deduction: new Decimal(0),
       byCountry: {},

@@ -7,16 +7,17 @@
  */
 
 import Decimal from "decimal.js";
-import type { FlexStatement } from "../types/ibkr.js";
-import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry } from "../types/tax.js";
+import type { CashTransaction, FlexStatement, Trade } from "../types/ibkr.js";
+import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry, ManualRateQuote } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
-import { getEcbRate, isEcbResolvable } from "../engine/ecb.js";
+import { getEcbRate, isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
+import { buildManualRateMap } from "../engine/manual-rates.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
@@ -71,6 +72,135 @@ function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
   return n <= 1 ? amountEur : amountEur.div(n);
 }
 
+/**
+ * Merge parser-supplied EUR valuation hints (e.g. a Binance EUR_Value column)
+ * UNDER any explicit user manual rates: a user-typed quote for the same
+ * currency+date wins. Returns undefined when neither source has any entries.
+ */
+function mergeManualRateHints(
+  userManual: EcbRateMap | undefined,
+  hints: ManualRateQuote[] | undefined,
+): EcbRateMap | undefined {
+  if ((!hints || hints.length === 0)) return userManual;
+  const merged = buildManualRateMap(hints);
+  if (userManual) {
+    for (const [date, byCur] of userManual) {
+      const target = merged.get(date) ?? new Map<string, string>();
+      for (const [cur, rate] of byCur) target.set(cur, rate); // user wins
+      merged.set(date, target);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Value a cash income transaction in EUR. Precedence:
+ *   1. An explicit `rewardCostBasisEur` (authoritative — already the EUR value,
+ *      e.g. from a Binance EUR_Value column). Returns rate as amountEur/|amount|.
+ *   2. A rate from the resolved (ECB + synthetic) map, then the manual-rate map,
+ *      for the income currency on the receipt date.
+ * Returns null when the income cannot be valued (caller skips + warns).
+ */
+function valueIncomeEur(
+  t: CashTransaction,
+  resolvedRateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+): { amountEur: Decimal; rate: Decimal } | null {
+  const date = normalizeDate(t.dateTime);
+  const amount = new Decimal(t.amount).abs();
+
+  // An explicit broker-stated EUR value is authoritative — even when it is 0
+  // (Binance reports sub-cent micro-rewards as 0.0 EUR). Valuing at exactly that
+  // amount (including zero) is correct and avoids a false "unvalued" warning.
+  if (t.rewardCostBasisEur !== undefined) {
+    let cost: Decimal | null;
+    try {
+      cost = new Decimal(t.rewardCostBasisEur);
+    } catch {
+      cost = null;
+    }
+    if (cost !== null && cost.isFinite() && cost.greaterThanOrEqualTo(0)) {
+      const rate = amount.isZero() ? new Decimal(0) : cost.div(amount);
+      return { amountEur: cost, rate };
+    }
+  }
+
+  // Fiat/stablecoin or a synthetic rate injected by the crypto-valuation pass.
+  if (isEcbResolvable(t.currency) || lookupRateInMap(resolvedRateMap, date, t.currency) !== null) {
+    const rate = getEcbRate(resolvedRateMap, date, t.currency);
+    return { amountEur: amount.mul(rate).abs(), rate };
+  }
+
+  // A user/EUR_Value manual-rate hint for the coin (never a live price oracle).
+  const manualRate = manualRates ? lookupRateInMap(manualRates, date, t.currency) : null;
+  if (manualRate !== null) {
+    return { amountEur: amount.mul(manualRate).abs(), rate: manualRate };
+  }
+
+  return null;
+}
+
+/**
+ * Build tax-neutral synthetic BUY trades from crypto reward income so the FIFO
+ * engine establishes an acquisition lot at the EUR value already taxed as
+ * income (Art. 35.1 — no double taxation on later sale). Only rewards carrying
+ * BOTH a quantity and an EUR cost basis produce a lot; the BUY's `proceeds` is 0
+ * so the FIFO engine never taxes it (only later SELLs create disposals). The
+ * lot's `currency:"EUR"` means the crypto-valuation pre-pass passes it through.
+ */
+function synthesizeRewardLots(
+  cashTransactions: CashTransaction[],
+  resolvedRateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+): Trade[] {
+  const lots: Trade[] = [];
+  for (const t of cashTransactions) {
+    if (t.type !== "Crypto Reward Income") continue;
+    if (!t.rewardQuantity) continue;
+    let qty: Decimal;
+    try {
+      qty = new Decimal(t.rewardQuantity);
+    } catch {
+      continue;
+    }
+    if (qty.lessThanOrEqualTo(0)) continue;
+    // Cost basis = the EUR value taxed as income. Prefer an explicit broker EUR
+    // value, else value the coin via the resolved/manual rate. If it can't be
+    // valued, create NO lot (a later sale is then conservatively fully taxed).
+    const valued = valueIncomeEur(t, resolvedRateMap, manualRates);
+    if (valued === null) continue;
+    const costEur = valued.amountEur;
+    if (costEur.lessThanOrEqualTo(0)) continue;
+    lots.push({
+      tradeID: `reward-lot-${t.transactionID}`,
+      accountId: "",
+      symbol: t.symbol,
+      description: `Reward acquisition - ${t.symbol}`,
+      isin: "",
+      assetCategory: "CRYPTO",
+      currency: "EUR",
+      tradeDate: normalizeDate(t.dateTime),
+      settlementDate: normalizeDate(t.dateTime),
+      quantity: qty.toString(),
+      tradePrice: costEur.div(qty).toString(),
+      tradeMoney: costEur.toString(),
+      proceeds: "0",
+      cost: costEur.toString(),
+      fifoPnlRealized: "0",
+      fxRateToBase: "1",
+      buySell: "BUY",
+      openCloseIndicator: "O",
+      exchange: "BINANCE",
+      commissionCurrency: "EUR",
+      commission: "0",
+      taxes: "0",
+      multiplier: "1",
+      brokerSource: "Binance",
+    });
+  }
+  return lots;
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
   /**
@@ -104,21 +234,28 @@ export function generateTaxReport(
   year: number,
   options?: ReportOptions,
 ): TaxSummary {
-  // 0. Crypto valuation pre-pass (A/D/B). Resolves crypto↔crypto permutas to
+  // 0a. Merge parser-supplied EUR valuation hints (e.g. a Binance EUR_Value
+  //     column) into the manual-rate map, BELOW any explicit user manual rates
+  //     and ECB rates in precedence. This is the only place a broker-derived EUR
+  //     value enters valuation — no live price oracle is ever consulted.
+  const manualRates = mergeManualRateHints(options?.manualRates, statement.manualRateHints);
+
+  // 0b. Crypto valuation pre-pass (A/D/B). Resolves crypto↔crypto permutas to
   //    EUR via cross-leg inference or user manual quotes, injecting synthetic
   //    rates into a cloned map. Unresolvable trades are dropped (and surfaced)
   //    so the FIFO engine never throws on a non-fiat currency.
-  const valuation = resolveCryptoTradeValues(statement.trades, rateMap, options?.manualRates);
+  const valuation = resolveCryptoTradeValues(statement.trades, rateMap, manualRates);
   const resolvedRateMap = valuation.rateMap;
-  const resolvedTrades = valuation.trades;
 
-  // NOTE: only the FIFO engine consumes `resolvedRateMap` (the clone augmented
-  // with synthetic crypto rates). Dividends, interest and the FX engine below
-  // intentionally read the ORIGINAL `rateMap`: those paths only touch
-  // ECB-resolvable (fiat) currencies — crypto-denominated income has no ECB
-  // rate and is skipped/warned separately (see `unresolvableInterest`). If
-  // crypto income valuation is ever added, switch those callers to
-  // `resolvedRateMap` so the injected synthetic rates apply there too.
+  // 0c. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
+  //     establishes an acquisition lot at the EUR value taxed as income, so a
+  //     later sale is not double-taxed (Art. 35.1). The EUR basis is whatever the
+  //     income is valued at — an explicit broker EUR value, else a rate resolved
+  //     from the (now-augmented) rate map or a manual hint. Synthesize tax-neutral
+  //     BUY trades (FIFO never taxes a BUY); they are EUR-denominated so they need
+  //     no further valuation and go straight to the FIFO engine.
+  const rewardLots = synthesizeRewardLots(statement.cashTransactions, resolvedRateMap, manualRates);
+  const resolvedTrades = [...valuation.trades, ...rewardLots];
 
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();
@@ -161,13 +298,16 @@ export function generateTaxReport(
     new Decimal(0),
   );
 
-  // 3. Interest (already filtered to target year)
+  // 3. Interest (already filtered to target year). Crypto reward income tagged
+  //    taxBucket="ahorro" (staking, Simple Earn interest) is rendimiento del
+  //    capital mobiliario and joins the interest bucket (Casilla 0027).
   const interestTransactions = yearCashTransactions.filter(
     (t) =>
       t.type === "Broker Interest Received" ||
       t.type === "Broker Interest Paid" ||
       t.type === "Bond Interest Received" ||
-      t.type === "Bond Interest Paid",
+      t.type === "Bond Interest Paid" ||
+      (t.type === "Crypto Reward Income" && t.taxBucket === "ahorro"),
   );
 
   let interestEarned = new Decimal(0);
@@ -175,19 +315,14 @@ export function generateTaxReport(
   let unresolvableInterest = 0;
   const interestEntries = interestTransactions
     .filter((t) => {
-      // Crypto-denominated income (e.g. Kraken staking, paid in the staked coin)
-      // has no ECB rate and can't be valued automatically. Skip it and warn so the
-      // user enters its EUR value manually, instead of crashing the whole report.
-      if (!isEcbResolvable(t.currency)) {
-        unresolvableInterest++;
-        return false;
-      }
-      return true;
+      if (valueIncomeEur(t, resolvedRateMap, manualRates) !== null) return true;
+      unresolvableInterest++;
+      return false;
     })
     .map((t) => {
-      const ecbRate = getEcbRate(rateMap, normalizeDate(t.dateTime), t.currency);
-      const amountEur = splitInterestAmount(new Decimal(t.amount).mul(ecbRate).abs(), titulares);
-      const isEarned = t.type.includes("Received");
+      const { amountEur: rawEur, rate } = valueIncomeEur(t, resolvedRateMap, manualRates)!;
+      const amountEur = splitInterestAmount(rawEur, titulares);
+      const isEarned = t.type === "Crypto Reward Income" || t.type.includes("Received");
 
       if (isEarned) {
         interestEarned = interestEarned.plus(amountEur);
@@ -201,7 +336,32 @@ export function generateTaxReport(
         date: normalizeDate(t.dateTime),
         amountEur,
         currency: t.currency,
-        ecbRate,
+        ecbRate: rate,
+      };
+    });
+
+  // 3b. Base-general crypto rewards (airdrops, referral, fee rebates):
+  //     ganancia patrimonial NO derivada de transmisión (Art. 33.1, base general).
+  let generalGainsTotal = new Decimal(0);
+  let unresolvableGeneralGains = 0;
+  const generalGainEntries = yearCashTransactions
+    .filter((t) => t.type === "Crypto Reward Income" && t.taxBucket === "general")
+    .filter((t) => {
+      if (valueIncomeEur(t, resolvedRateMap, manualRates) !== null) return true;
+      unresolvableGeneralGains++;
+      return false;
+    })
+    .map((t) => {
+      const { amountEur: rawEur, rate } = valueIncomeEur(t, resolvedRateMap, manualRates)!;
+      const amountEur = splitInterestAmount(rawEur, titulares);
+      generalGainsTotal = generalGainsTotal.plus(amountEur);
+      return {
+        description: t.description,
+        date: normalizeDate(t.dateTime),
+        amountEur,
+        symbol: t.symbol,
+        currency: t.currency,
+        ecbRate: rate,
       };
     });
 
@@ -275,6 +435,17 @@ export function generateTaxReport(
     allWarnings.push(cryptoMsg);
   }
 
+  if (unresolvableGeneralGains > 0) {
+    const ggMsg = `Hay ${unresolvableGeneralGains} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.`;
+    allMessages.push({
+      id: "report.crypto_general_gain_unvalued",
+      severity: "warning",
+      message: ggMsg,
+      hint: "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
+    });
+    allWarnings.push(ggMsg);
+  }
+
   // Shared-titularity notice: amounts have been split equally per contribuyente.
   if (titulares > 1) {
     allMessages.push({
@@ -317,6 +488,10 @@ export function generateTaxReport(
       earned: interestEarned,
       paid: interestPaid,
       entries: interestEntries,
+    },
+    generalGains: {
+      total: generalGainsTotal,
+      entries: generalGainEntries,
     },
     doubleTaxation: {
       deduction: doubleTaxation.total,

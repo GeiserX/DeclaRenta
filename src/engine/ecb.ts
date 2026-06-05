@@ -44,6 +44,23 @@ export function isEcbResolvable(currency: string): boolean {
 }
 
 /**
+ * Returns true ONLY for a genuine fiat currency (EUR or an ECB-published
+ * national currency) — NOT for stablecoins.
+ *
+ * This is deliberately stricter than {@link isEcbResolvable}: a stablecoin like
+ * USDT resolves to a rate (via USD) but is still a crypto-asset whose swap with
+ * another coin is a taxable permuta (Art. 37.1.h LIRPF). Only a real fiat leg
+ * (e.g. buying USDT with EUR) is a plain acquisition rather than a permuta. Used
+ * by the Binance parser to avoid emitting a phantom CRYPTO disposal for the
+ * fiat side of a Convert.
+ */
+export function isFiat(currency: string): boolean {
+  const upper = currency.trim().toUpperCase();
+  if (upper === "EUR") return true;
+  return ECB_CURRENCIES.has(upper);
+}
+
+/**
  * Fetch ECB daily exchange rates for a given year and currency.
  *
  * The ECB publishes rates as "1 EUR = X FCY". We store the inverse

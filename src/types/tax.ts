@@ -37,6 +37,18 @@ export interface UnresolvedValuation {
   reason: "no-ecb" | "no-cross-leg";
 }
 
+/**
+ * One raw manual EUR-per-unit valuation quote for a currency on a date. Supplied
+ * by the user (manual-rates panel / CLI `--crypto-rates`) or derived from a
+ * broker EUR value column. Consumed by the crypto-valuation pre-pass as a
+ * non-ECB fallback rate source — never sourced from a live price oracle.
+ */
+export interface ManualRateQuote {
+  currency: string;
+  date: string;
+  eurPerUnit: string;
+}
+
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
 export type OptionScenario = "expiration" | "close" | "exercise";
 
@@ -127,6 +139,29 @@ export interface InterestEntry {
   ecbRate: Decimal;
 }
 
+/**
+ * A ganancia patrimonial NO derivada de la transmisión de un elemento
+ * patrimonial (Art. 33.1 LIRPF) — e.g. a crypto airdrop, referral commission or
+ * fee rebate received "out of nowhere". Per DGT (V1948-21 and related), these
+ * integrate into the BASE GENERAL (general tax scale), NOT the savings base,
+ * valued at their market value in EUR on the receipt date. The same EUR value
+ * becomes the acquisition cost of the received coins (so a later sale is taxed
+ * only on subsequent appreciation).
+ */
+export interface GeneralGainEntry {
+  description: string;
+  /** Receipt date (YYYY-MM-DD) */
+  date: string;
+  /** Market value in EUR at receipt (the taxable amount). */
+  amountEur: Decimal;
+  /** Coin/asset received. */
+  symbol: string;
+  /** Currency the reward was paid in (the coin). */
+  currency: string;
+  /** ECB/synthetic rate used to value it (EUR per 1 unit). */
+  ecbRate: Decimal;
+}
+
 /** Aggregated results for Modelo 100 casillas */
 export interface TaxSummary {
   /** Tax year */
@@ -183,6 +218,20 @@ export interface TaxSummary {
     /** Intereses pagados al broker (margen) — informativo, NO deducible (Art. 26.1.a LIRPF) */
     paid: Decimal;
     entries: InterestEntry[];
+  };
+
+  /**
+   * Ganancias patrimoniales NO derivadas de transmisión (Art. 33.1 LIRPF) that
+   * integrate in the BASE GENERAL: crypto airdrops, referral commissions, fee
+   * rebates. Distinct from `capitalGains` (base del ahorro, derived from
+   * transmisión) and from `interest` (rendimientos). MUST NOT be added to the
+   * savings base (`totalSavingsBase`) nor to the 1633/1637 capital-gains blocks.
+   */
+  generalGains: {
+    /** Total market value in EUR received (the taxable amount, base general). */
+    total: Decimal;
+    /** Individual reward events. */
+    entries: GeneralGainEntry[];
   };
 
   /** Double taxation deduction: Deducción por doble imposición internacional */

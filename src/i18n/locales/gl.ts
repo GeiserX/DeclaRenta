@@ -76,6 +76,7 @@ const gl: TranslationKeys = {
   "casilla.gross_dividends": "Dividendos brutos",
   "casilla.interest_earned": "Xuros gañados",
   "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible — informativo)",
+  "casilla.general_gains": "Ganancias patrimoniais non derivadas de transmisión (airdrops, comisións de referidos)",
   "casilla.double_taxation": "Dedución dobre imposición",
   "casilla.blocked_losses": "Perdas bloqueadas pola regra anti-churning (2 meses cotizados / 1 ano non cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",

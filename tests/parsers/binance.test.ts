@@ -211,7 +211,7 @@ describe("binanceParser", () => {
       expect(Number(buy.quantity)).toBeGreaterThan(0);
     });
 
-    it("should parse Strategy Sold+Revenue trades", () => {
+    it("should parse Strategy Sold+Revenue trades (both legs)", () => {
       const csv = [
         TX_HEADER,
         "123,2025-01-13 21:37:46,Strategy,Transaction Revenue,ETH,0.00407900,",
@@ -219,15 +219,18 @@ describe("binanceParser", () => {
         "123,2025-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,",
       ].join("\n");
       const result = binanceParser.parse(csv);
-      expect(result.trades).toHaveLength(1);
-      const trade = result.trades[0]!;
-      expect(trade.buySell).toBe("SELL");
-      expect(trade.symbol).toBe("XRP");
-      expect(Number(trade.quantity)).toBe(-5);
-      expect(trade.currency).toBe("ETH");
+      // SELL XRP for ETH + BUY ETH with XRP (the received coin gets a FIFO lot).
+      expect(result.trades).toHaveLength(2);
+      const sell = result.trades.find((t) => t.buySell === "SELL")!;
+      expect(sell.symbol).toBe("XRP");
+      expect(Number(sell.quantity)).toBe(-5);
+      expect(sell.currency).toBe("ETH");
+      const buy = result.trades.find((t) => t.buySell === "BUY")!;
+      expect(buy.symbol).toBe("ETH");
+      expect(buy.currency).toBe("XRP");
     });
 
-    it("should parse Strategy Buy+Spend trades", () => {
+    it("should parse Strategy Buy+Spend trades (both legs)", () => {
       const csv = [
         TX_HEADER,
         "123,2025-01-13 21:42:04,Strategy,Transaction Buy,XRP,5.00000000,",
@@ -235,12 +238,14 @@ describe("binanceParser", () => {
         "123,2025-01-13 21:42:04,Strategy,Transaction Fee,XRP,-0.00500000,",
       ].join("\n");
       const result = binanceParser.parse(csv);
-      expect(result.trades).toHaveLength(1);
-      const trade = result.trades[0]!;
-      expect(trade.buySell).toBe("BUY");
-      expect(trade.symbol).toBe("XRP");
-      expect(Number(trade.quantity)).toBe(5);
-      expect(trade.currency).toBe("ETH");
+      // BUY XRP with ETH + SELL ETH for XRP.
+      expect(result.trades).toHaveLength(2);
+      const buy = result.trades.find((t) => t.symbol === "XRP")!;
+      expect(buy.buySell).toBe("BUY");
+      expect(Number(buy.quantity)).toBe(5);
+      expect(buy.currency).toBe("ETH");
+      const sell = result.trades.find((t) => t.symbol === "ETH")!;
+      expect(sell.buySell).toBe("SELL");
     });
 
     it("should handle mixed operations in real-world data", () => {
@@ -254,8 +259,8 @@ describe("binanceParser", () => {
         "123,2025-01-13 21:37:46,Strategy,Transaction Sold,XRP,-5.00000000,",
       ].join("\n");
       const result = binanceParser.parse(csv);
-      // 2 from Convert + 1 from Sold/Revenue = 3
-      expect(result.trades).toHaveLength(3);
+      // 2 from Convert (SOL↔USDT) + 2 from Sold/Revenue (XRP↔ETH) = 4
+      expect(result.trades).toHaveLength(4);
     });
   });
 
@@ -381,19 +386,243 @@ describe("binanceParser", () => {
       expect(trade!.tradeDate).toBe("20250113");
     });
 
-    it("should produce 3 trades total (2 Convert + 1 Strategy)", () => {
+    it("should produce 4 trades total (2 Convert + 2 Strategy legs)", () => {
       const result = binanceParser.parse(ES_TX_CSV);
-      expect(result.trades).toHaveLength(3);
+      expect(result.trades).toHaveLength(4);
     });
 
-    it("should parse real fixture file", () => {
+    it("should parse real fixture file (trades + Simple Earn income)", () => {
       const fixture = readFileSync(
         new URL("../fixtures/binance-tx-es-sample.csv", import.meta.url),
         "utf-8",
       );
       expect(binanceParser.detect(fixture)).toBe(true);
       const result = binanceParser.parse(fixture);
-      expect(result.trades).toHaveLength(3);
+      // Convert SOL↔USDT (2) + Strategy Sold XRP/Revenue ETH (2) = 4 trades.
+      expect(result.trades).toHaveLength(4);
+      // Simple Earn Flexible Interest → a crypto reward income cash transaction
+      // (ahorro bucket), no longer silently dropped.
+      const income = result.cashTransactions.filter((c) => c.type === "Crypto Reward Income");
+      expect(income).toHaveLength(1);
+      expect(income[0]!.symbol).toBe("BTC");
+      expect(income[0]!.taxBucket).toBe("ahorro");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Transaction History — fiat legs, ±1s skew, income, dust, EUR_Value
+  // (driven by a real user file that produced 44 errors + 66 unvalued ops)
+  // -------------------------------------------------------------------------
+  describe("transaction history — fiat legs, skew, income, dust", () => {
+    const TX_HEADER = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+
+    it("treats a EUR→USDT Convert as a single fiat acquisition, not a crypto disposal", () => {
+      // EUR is genuine fiat: buying USDT with EUR is a plain acquisition. It must
+      // NOT emit a CRYPTO SELL of EUR (which caused 'Venta sin lotes: EUR').
+      const csv = [
+        TX_HEADER,
+        "1,2025-01-04 12:00:00,Spot,Binance Convert,USDT,106.59,",
+        "1,2025-01-04 12:00:00,Spot,Binance Convert,EUR,-100,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const t = result.trades[0]!;
+      expect(t.buySell).toBe("BUY");
+      expect(t.symbol).toBe("USDT");
+      expect(t.currency).toBe("EUR");
+      // No trade should ever have symbol EUR (the phantom-disposal bug).
+      expect(result.trades.some((x) => x.symbol === "EUR")).toBe(false);
+    });
+
+    it("treats a crypto→EUR Convert as a single fiat disposal (SELL priced in EUR)", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-01 09:00:00,Spot,Binance Convert,EUR,250,",
+        "1,2025-02-01 09:00:00,Spot,Binance Convert,SOL,-2,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const t = result.trades[0]!;
+      expect(t.buySell).toBe("SELL");
+      expect(t.symbol).toBe("SOL");
+      expect(t.currency).toBe("EUR");
+    });
+
+    it("still treats a stablecoin↔crypto Convert as a 2-leg permuta", () => {
+      // USDT is a stablecoin, not fiat — SOL↔USDT remains a taxable permuta.
+      const csv = [
+        TX_HEADER,
+        "1,2025-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+        "1,2025-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+    });
+
+    it("pairs Convert legs that are 1 second apart (timestamp skew)", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2024-07-21 17:36:42,Spot,Binance Convert,BNB,0.0138,",
+        "1,2024-07-21 17:36:43,Spot,Binance Convert,USDT,-8.30,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades.some((t) => t.symbol === "BNB")).toBe(true);
+      expect(result.trades.some((t) => t.symbol === "USDT")).toBe(true);
+    });
+
+    it("classifies Simple Earn Interest as ahorro income and airdrop/referral as general", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Interest,BNB,0.001,Binance Earn",
+        "1,2025-01-23 03:34:44,Spot,HODLer Airdrops Distribution,ANIME,0.87,Binance Launchpool",
+        "1,2025-03-01 10:00:00,Spot,Referral Commission,BTC,0.00001,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      const income = result.cashTransactions.filter((c) => c.type === "Crypto Reward Income");
+      expect(income).toHaveLength(3);
+      expect(income.find((c) => c.symbol === "BNB")!.taxBucket).toBe("ahorro");
+      expect(income.find((c) => c.symbol === "ANIME")!.taxBucket).toBe("general");
+      expect(income.find((c) => c.symbol === "BTC")!.taxBucket).toBe("general");
+      // No income op should leak into trades.
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("skips Simple Earn subscription/redemption (non-taxable principal moves)", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Subscription,BNB,-5,",
+        "1,2025-02-20 04:00:00,Spot,Simple Earn Flexible Redemption,BNB,5,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+    });
+
+    it("handles Small Assets Exchange BNB dust as per-coin permutas", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,TRX,-37.02,TRX to BNB",
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,ANIME,-0.87,ANIME to BNB",
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,BNB,0.0137,TRX to BNB",
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,BNB,0.00005,ANIME to BNB",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // 2 dust coins → 2 permutas → 4 trades (each a SELL dust + BUY BNB).
+      expect(result.trades).toHaveLength(4);
+      expect(result.trades.filter((t) => t.symbol === "TRX")).toHaveLength(1);
+      expect(result.trades.filter((t) => t.symbol === "ANIME")).toHaveLength(1);
+    });
+
+    it("derives EUR_Value valuation hints for crypto coins (not fiat)", () => {
+      const csv = [
+        "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value",
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Interest,SOL,2,Binance Earn,80",
+        "1,2025-01-04 12:00:00,Spot,Binance Convert,USDT,106.59,,99.37",
+        "1,2025-01-04 12:00:00,Spot,Binance Convert,EUR,-100,,-100",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      const hints = result.manualRateHints ?? [];
+      // SOL: 80 EUR / 2 = 40 EUR per unit.
+      const sol = hints.find((h) => h.currency === "SOL");
+      expect(sol).toBeDefined();
+      expect(Number(sol!.eurPerUnit)).toBeCloseTo(40, 6);
+      // EUR is fiat → never a hint.
+      expect(hints.some((h) => h.currency === "EUR")).toBe(false);
+      // The reward income carries the EUR cost basis from EUR_Value.
+      const income = result.cashTransactions.find((c) => c.symbol === "SOL")!;
+      expect(income.rewardCostBasisEur).toBe("80");
+    });
+
+    it("treats Simple Earn subscription/redemption of an airdropped coin as non-taxable moves", () => {
+      // Real-world lifecycle: airdrop ANIME → subscribe to Earn → redeem → dust to
+      // BNB. Only the airdrop (income) and the final dust permuta are taxable; the
+      // subscription/redemption are skipped so no phantom disposals appear.
+      const csv = [
+        "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value",
+        "1,2025-01-23 03:34:44,Spot,HODLer Airdrops Distribution,ANIME,0.874,Binance Launchpool,0.07",
+        "1,2025-01-30 23:32:41,Spot,Simple Earn Flexible Subscription,ANIME,-0.874,Binance Earn,-0.04",
+        "1,2025-01-30 23:36:40,Spot,Simple Earn Flexible Redemption,ANIME,0.874,Binance Earn,0.04",
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,ANIME,-0.874,ANIME to BNB,-0.03",
+        "1,2025-02-01 13:05:11,Spot,Small Assets Exchange BNB,BNB,0.00005726,ANIME to BNB,0.04",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // Income: the airdrop (general bucket). Subscription/redemption skipped.
+      const income = result.cashTransactions.filter((c) => c.type === "Crypto Reward Income");
+      expect(income).toHaveLength(1);
+      expect(income[0]!.symbol).toBe("ANIME");
+      expect(income[0]!.taxBucket).toBe("general");
+      // Dust permuta: ANIME → BNB = 2 trades (SELL ANIME + BUY BNB).
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades.some((t) => t.symbol === "ANIME" && t.buySell === "SELL")).toBe(true);
+    });
+
+    it("emits BOTH trades when two independent Buy/Spend pairs share one timestamp", () => {
+      // Regression for the [0]-truncation bug: each filtered leg group must be
+      // paired fully, not just the first element.
+      const csv = [
+        TX_HEADER,
+        "1,2025-01-13 21:42:04,Strategy,Transaction Buy,XRP,5,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Spend,ETH,-0.004,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Buy,ADA,100,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Spend,ETH,-0.006,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // 2 buys × (BUY received + SELL given-up) = 4 trades.
+      const buys = result.trades.filter((t) => t.buySell === "BUY").map((t) => t.symbol);
+      expect(buys).toContain("XRP");
+      expect(buys).toContain("ADA");
+    });
+
+    it("skips a pure fiat EUR↔USD Convert (no capital-gains trade)", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-03-01 10:00:00,Spot,Binance Convert,EUR,-100,",
+        "1,2025-03-01 10:00:00,Spot,Binance Convert,USD,108,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("does not cross-pair two independent Converts colliding in the same second", () => {
+      // Two unrelated conversions at the same timestamp: USDT→SOL (~200 EUR) and
+      // BTC→ETH (~60000 EUR). Closest-EUR pairing must keep them separate, never
+      // emit a phantom 'USDT to ETH' / 'BTC to SOL'.
+      const csv = [
+        "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,USDT,-200,,-200",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,SOL,2,,198",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,BTC,-1,,-60000",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,ETH,20,,59800",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      const descs = result.trades.map((t) => t.description);
+      // SOL pairs with USDT, ETH pairs with BTC — never the cross product.
+      expect(descs.some((d) => d.includes("USDT") && d.includes("SOL"))).toBe(true);
+      expect(descs.some((d) => d.includes("BTC") && d.includes("ETH"))).toBe(true);
+      expect(descs.some((d) => d.includes("USDT") && d.includes("ETH"))).toBe(false);
+      expect(descs.some((d) => d.includes("BTC") && d.includes("SOL"))).toBe(false);
+    });
+
+    it("rejects non-finite change values (Infinity/NaN) without poisoning output", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Interest,BNB,Infinity,Binance Earn",
+        "1,2025-02-11 04:00:00,Spot,Simple Earn Flexible Interest,BNB,0.001,Binance Earn",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.cashTransactions).toHaveLength(1);
+      expect(result.cashTransactions[0]!.amount).toBe("0.001");
+    });
+
+    it("ignores a '--' change value without throwing", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Interest,BNB,--,Binance Earn",
+        "1,2025-02-11 04:00:00,Spot,Simple Earn Flexible Interest,BNB,0.001,Binance Earn",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.cashTransactions).toHaveLength(1);
     });
   });
 });

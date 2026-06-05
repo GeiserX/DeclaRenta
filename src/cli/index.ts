@@ -482,6 +482,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       "0029_dividendos_brutos": report.dividends.grossIncome.toFixed(2),
       "intereses_margen_no_deducible_informativo": report.interest.paid.toFixed(2),
       "0027_intereses_cuentas": report.interest.earned.toFixed(2),
+      "0304_ganancias_no_derivadas_transmision_base_general": report.generalGains.total.toFixed(2),
       // Acciones negociadas en mercados regulados (Art. 37.1.a LIRPF)
       "0328_valor_transmision_acciones": blocks.listedShares.transmissionValue.toFixed(2),
       "0331_valor_adquisicion_acciones": blocks.listedShares.acquisitionValue.toFixed(2),
@@ -573,6 +574,11 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error(`    Casilla 0029 (Dividendos brutos):  ${report.dividends.grossIncome.toFixed(2)} EUR`);
   console.error(`    Casilla 0027 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
   console.error(`    Intereses margen (no deducible, informativo):   ${report.interest.paid.toFixed(2)} EUR`);
+  if (report.generalGains.total.greaterThan(0)) {
+    console.error("");
+    console.error("  GANANCIAS PATRIMONIALES NO DERIVADAS DE TRANSMISIÓN (base general)");
+    console.error(`    Casilla 0304 (airdrops/comisiones referidos):   ${report.generalGains.total.toFixed(2)} EUR`);
+  }
   console.error("");
   console.error("  DOBLE IMPOSICIÓN INTERNACIONAL");
   console.error(`    Casilla 0588 (Deducción):          ${report.doubleTaxation.deduction.toFixed(2)} EUR`);

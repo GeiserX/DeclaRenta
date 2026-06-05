@@ -76,6 +76,7 @@ const eu: TranslationKeys = {
   "casilla.gross_dividends": "Dibidendu gordinak",
   "casilla.interest_earned": "Jasotako interesak",
   "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria — informatiboa)",
+  "casilla.general_gains": "Transmisiotik eratortzen ez diren ondare-irabaziak (airdropak, lagunak gomendatzeagatiko komisioak)",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
   "casilla.blocked_losses": "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",

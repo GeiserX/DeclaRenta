@@ -85,8 +85,11 @@ describe("fixture file integration", () => {
 
     it("should parse converts and strategy trades", () => {
       const r = binanceParser.parse(csv);
-      // Convert SOL/USDT = 2 trades, Sold+Revenue = 1, Buy+Spend = 1 → 4 total
-      expect(r.trades).toHaveLength(4);
+      // Each crypto↔crypto leg-pair produces BOTH a SELL (given-up coin) and a
+      // BUY (received coin) so the FIFO engine has an acquisition lot for the
+      // received side. Convert SOL↔USDT = 2; Strategy Sold XRP/Revenue ETH = 2;
+      // Strategy Buy XRP/Spend ETH = 2 → 6 total.
+      expect(r.trades).toHaveLength(6);
       expect(r.trades.every((t) => t.assetCategory === "CRYPTO")).toBe(true);
     });
   });
@@ -324,7 +327,10 @@ describe("fixture file integration", () => {
 
     it("should parse converts and strategy trades", () => {
       const r = binanceParser.parse(csv);
-      expect(r.trades).toHaveLength(12);
+      // 9 crypto↔crypto leg-pairs (3 Converts + 4 Strategy sells + 2 Strategy
+      // buys), each emitting a SELL + a BUY so the received coin gets a FIFO lot
+      // → 18 trades. Internal transfers and orphan fees are skipped.
+      expect(r.trades).toHaveLength(18);
       expect(r.trades.every((t) => t.assetCategory === "CRYPTO")).toBe(true);
     });
 
