@@ -91,6 +91,14 @@ const SKIP_TYPES = ["send", "receive"];
  *    Casilla 0304) — Coinbase Earn "learning rewards" are free crypto received
  *    for completing lessons, with no capital transmitted (Art. 33.1, like an
  *    airdrop).
+ *
+ * CAVEAT: "rewards income" is a generic Coinbase label. For holding/staking-style
+ * yield (the common case) ahorro is correct. But Coinbase also uses it for card
+ * cashback / promotional bonuses, which the DGT treats as ganancia patrimonial no
+ * derivada de transmisión (base general). We default the whole label to ahorro:
+ * it covers the majority case and the savings rate (19–28%) is generally ≤ the
+ * general scale, so the bias is conservative-to-neutral. Users with large
+ * promotional "rewards income" should verify its nature (see info message below).
  */
 const INCOME_BUCKETS: Record<string, "ahorro" | "general"> = {
   "staking income": "ahorro",
@@ -112,6 +120,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  let rewardsIncomeCount = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -146,6 +155,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // mis-bucketed into the savings base.
     const incomeBucket = INCOME_BUCKETS[txType];
     if (incomeBucket) {
+      if (txType === "rewards income") rewardsIncomeCount++;
       const eurAmount = total || subtotal;
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
@@ -274,6 +284,18 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     });
   }
 
+  // "rewards income" is treated as savings-base income by default, but it can
+  // also cover promotional cashback that is legally base-general. Nudge the user
+  // to verify if any is present (info — no action needed for the common case).
+  const parserMessages = rewardsIncomeCount > 0
+    ? [{
+        id: "coinbase.rewards_income_classification",
+        severity: "info" as const,
+        message: `Se han clasificado ${rewardsIncomeCount} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).`,
+        hint: "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+      }]
+    : undefined;
+
   return {
     accountId: "",
     fromDate: "",
@@ -284,6 +306,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages ? { parserMessages } : {}),
   };
 }
 
