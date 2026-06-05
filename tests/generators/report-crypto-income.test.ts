@@ -107,4 +107,73 @@ describe("generateTaxReport — crypto reward income", () => {
     expect(report.interest.earned.toFixed(2)).toBe("0.00");
     expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(true);
   });
+
+  it("prefers a user manual rate over a Binance EUR_Value hint for the same coin+date", () => {
+    // Hint says 40 EUR/SOL; user manual rate says 60 EUR/SOL → user wins (2×60=120).
+    const statement = makeStatement(
+      [],
+      [income({ rewardCostBasisEur: undefined, amount: "2", rewardQuantity: "2", currency: "SOL", symbol: "SOL", dateTime: "2025-03-01" })],
+      [{ currency: "SOL", date: "2025-03-01", eurPerUnit: "40" }],
+    );
+    const manualRates = makeRateMap({ "2025-03-01": { SOL: "60" } });
+    const report = generateTaxReport(statement, new Map(), 2025, { manualRates });
+    expect(report.interest.earned.toFixed(2)).toBe("120.00");
+  });
+
+  it("values an explicit 0-EUR micro-reward at zero with no unvalued warning", () => {
+    const statement = makeStatement([], [
+      income({ rewardCostBasisEur: "0", amount: "0.00000002", rewardQuantity: "0.00000002", currency: "BTC", symbol: "BTC" }),
+    ]);
+    const report = generateTaxReport(statement, new Map(), 2025);
+    expect(report.interest.earned.toFixed(2)).toBe("0.00");
+    expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(false);
+  });
+
+  it("creates a reward lot even when income is valued via rate (not explicit EUR), avoiding double-tax", () => {
+    // Income in SOL valued ONLY via a manual-rate hint (no rewardCostBasisEur).
+    // A later sale must still be taxed only on appreciation.
+    const sell: Trade = {
+      tradeID: "sell-sol", accountId: "ACC", symbol: "SOL", description: "Sell SOL",
+      isin: "", assetCategory: "CRYPTO", currency: "EUR", tradeDate: "2025-09-01",
+      settlementDate: "2025-09-01", quantity: "-2", tradePrice: "60", tradeMoney: "120",
+      proceeds: "120", cost: "0", fifoPnlRealized: "0", fxRateToBase: "1",
+      buySell: "SELL", openCloseIndicator: "C", exchange: "BINANCE",
+      commissionCurrency: "EUR", commission: "0", taxes: "0", multiplier: "1",
+    };
+    const statement = makeStatement(
+      [sell],
+      [income({ rewardCostBasisEur: undefined, dateTime: "2025-03-01", currency: "SOL", symbol: "SOL", amount: "2", rewardQuantity: "2" })],
+      [{ currency: "SOL", date: "2025-03-01", eurPerUnit: "40" }],
+    );
+    const report = generateTaxReport(statement, makeRateMap({ "2025-09-01": { EUR: "1" } }), 2025);
+    // Income 2×40 = 80 taxed; sale 120 − 80 cost basis = 40 gain (not full 120).
+    expect(report.interest.earned.toFixed(2)).toBe("80.00");
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("80.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("40.00");
+  });
+
+  it("excludes prior-year income from the target year and taxes only appreciation on a later sale", () => {
+    // Income received 2024, sold 2025. The 2025 report must NOT count 2024 income
+    // as 2025 interest, but the cost-basis lot must persist across years.
+    const sell: Trade = {
+      tradeID: "sell-sol", accountId: "ACC", symbol: "SOL", description: "Sell SOL",
+      isin: "", assetCategory: "CRYPTO", currency: "EUR", tradeDate: "2025-09-01",
+      settlementDate: "2025-09-01", quantity: "-2", tradePrice: "50", tradeMoney: "100",
+      proceeds: "100", cost: "0", fifoPnlRealized: "0", fxRateToBase: "1",
+      buySell: "SELL", openCloseIndicator: "C", exchange: "BINANCE",
+      commissionCurrency: "EUR", commission: "0", taxes: "0", multiplier: "1",
+    };
+    const statement = makeStatement([sell], [
+      income({ dateTime: "2024-03-01", currency: "SOL", symbol: "SOL", amount: "2", rewardQuantity: "2", rewardCostBasisEur: "80" }),
+    ]);
+    const report2025 = generateTaxReport(statement, makeRateMap({ "2025-09-01": { EUR: "1" } }), 2025);
+    expect(report2025.interest.earned.toFixed(2)).toBe("0.00"); // 2024 income excluded
+    expect(report2025.capitalGains.disposals).toHaveLength(1);
+    expect(report2025.capitalGains.netGainLoss.toFixed(2)).toBe("20.00"); // 100 − 80
+
+    const report2024 = generateTaxReport(statement, new Map(), 2024);
+    expect(report2024.interest.earned.toFixed(2)).toBe("80.00");
+    expect(report2024.capitalGains.disposals).toHaveLength(0);
+  });
 });

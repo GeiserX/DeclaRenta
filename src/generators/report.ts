@@ -148,20 +148,29 @@ function valueIncomeEur(
  * so the FIFO engine never taxes it (only later SELLs create disposals). The
  * lot's `currency:"EUR"` means the crypto-valuation pre-pass passes it through.
  */
-function synthesizeRewardLots(cashTransactions: CashTransaction[]): Trade[] {
+function synthesizeRewardLots(
+  cashTransactions: CashTransaction[],
+  resolvedRateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+): Trade[] {
   const lots: Trade[] = [];
   for (const t of cashTransactions) {
     if (t.type !== "Crypto Reward Income") continue;
-    if (!t.rewardQuantity || !t.rewardCostBasisEur) continue;
+    if (!t.rewardQuantity) continue;
     let qty: Decimal;
-    let costEur: Decimal;
     try {
       qty = new Decimal(t.rewardQuantity);
-      costEur = new Decimal(t.rewardCostBasisEur);
     } catch {
       continue;
     }
     if (qty.lessThanOrEqualTo(0)) continue;
+    // Cost basis = the EUR value taxed as income. Prefer an explicit broker EUR
+    // value, else value the coin via the resolved/manual rate. If it can't be
+    // valued, create NO lot (a later sale is then conservatively fully taxed).
+    const valued = valueIncomeEur(t, resolvedRateMap, manualRates);
+    if (valued === null) continue;
+    const costEur = valued.amountEur;
+    if (costEur.lessThanOrEqualTo(0)) continue;
     lots.push({
       tradeID: `reward-lot-${t.transactionID}`,
       accountId: "",
@@ -231,19 +240,22 @@ export function generateTaxReport(
   //     value enters valuation — no live price oracle is ever consulted.
   const manualRates = mergeManualRateHints(options?.manualRates, statement.manualRateHints);
 
-  // 0b. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
-  //     establishes an acquisition lot at the EUR value taxed as income, so a
-  //     later sale is not double-taxed. Synthesize tax-neutral BUY trades (FIFO
-  //     never taxes a BUY) from those cash transactions and feed them to FIFO.
-  const rewardLots = synthesizeRewardLots(statement.cashTransactions);
-
-  // 0c. Crypto valuation pre-pass (A/D/B). Resolves crypto↔crypto permutas to
+  // 0b. Crypto valuation pre-pass (A/D/B). Resolves crypto↔crypto permutas to
   //    EUR via cross-leg inference or user manual quotes, injecting synthetic
   //    rates into a cloned map. Unresolvable trades are dropped (and surfaced)
   //    so the FIFO engine never throws on a non-fiat currency.
-  const valuation = resolveCryptoTradeValues([...statement.trades, ...rewardLots], rateMap, manualRates);
+  const valuation = resolveCryptoTradeValues(statement.trades, rateMap, manualRates);
   const resolvedRateMap = valuation.rateMap;
-  const resolvedTrades = valuation.trades;
+
+  // 0c. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
+  //     establishes an acquisition lot at the EUR value taxed as income, so a
+  //     later sale is not double-taxed (Art. 35.1). The EUR basis is whatever the
+  //     income is valued at — an explicit broker EUR value, else a rate resolved
+  //     from the (now-augmented) rate map or a manual hint. Synthesize tax-neutral
+  //     BUY trades (FIFO never taxes a BUY); they are EUR-denominated so they need
+  //     no further valuation and go straight to the FIFO engine.
+  const rewardLots = synthesizeRewardLots(statement.cashTransactions, resolvedRateMap, manualRates);
+  const resolvedTrades = [...valuation.trades, ...rewardLots];
 
   // 1. FIFO capital gains (process ALL years, filter to target year)
   const fifoEngine = new FifoEngine();

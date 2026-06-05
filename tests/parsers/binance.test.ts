@@ -557,6 +557,64 @@ describe("binanceParser", () => {
       expect(result.trades.some((t) => t.symbol === "ANIME" && t.buySell === "SELL")).toBe(true);
     });
 
+    it("emits BOTH trades when two independent Buy/Spend pairs share one timestamp", () => {
+      // Regression for the [0]-truncation bug: each filtered leg group must be
+      // paired fully, not just the first element.
+      const csv = [
+        TX_HEADER,
+        "1,2025-01-13 21:42:04,Strategy,Transaction Buy,XRP,5,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Spend,ETH,-0.004,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Buy,ADA,100,",
+        "1,2025-01-13 21:42:04,Strategy,Transaction Spend,ETH,-0.006,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // 2 buys × (BUY received + SELL given-up) = 4 trades.
+      const buys = result.trades.filter((t) => t.buySell === "BUY").map((t) => t.symbol);
+      expect(buys).toContain("XRP");
+      expect(buys).toContain("ADA");
+    });
+
+    it("skips a pure fiat EUR↔USD Convert (no capital-gains trade)", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-03-01 10:00:00,Spot,Binance Convert,EUR,-100,",
+        "1,2025-03-01 10:00:00,Spot,Binance Convert,USD,108,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("does not cross-pair two independent Converts colliding in the same second", () => {
+      // Two unrelated conversions at the same timestamp: USDT→SOL (~200 EUR) and
+      // BTC→ETH (~60000 EUR). Closest-EUR pairing must keep them separate, never
+      // emit a phantom 'USDT to ETH' / 'BTC to SOL'.
+      const csv = [
+        "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,USDT,-200,,-200",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,SOL,2,,198",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,BTC,-1,,-60000",
+        "1,2025-04-01 12:00:00,Spot,Binance Convert,ETH,20,,59800",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      const descs = result.trades.map((t) => t.description);
+      // SOL pairs with USDT, ETH pairs with BTC — never the cross product.
+      expect(descs.some((d) => d.includes("USDT") && d.includes("SOL"))).toBe(true);
+      expect(descs.some((d) => d.includes("BTC") && d.includes("ETH"))).toBe(true);
+      expect(descs.some((d) => d.includes("USDT") && d.includes("ETH"))).toBe(false);
+      expect(descs.some((d) => d.includes("BTC") && d.includes("SOL"))).toBe(false);
+    });
+
+    it("rejects non-finite change values (Infinity/NaN) without poisoning output", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-10 04:00:00,Spot,Simple Earn Flexible Interest,BNB,Infinity,Binance Earn",
+        "1,2025-02-11 04:00:00,Spot,Simple Earn Flexible Interest,BNB,0.001,Binance Earn",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.cashTransactions).toHaveLength(1);
+      expect(result.cashTransactions[0]!.amount).toBe("0.001");
+    });
+
     it("ignores a '--' change value without throwing", () => {
       const csv = [
         TX_HEADER,

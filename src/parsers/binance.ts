@@ -347,14 +347,17 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     } catch {
       continue;
     }
-    if (change.isZero()) continue;
+    // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
+    // a malformed cell can't poison totals or stall big-decimal arithmetic.
+    if (!change.isFinite() || change.isZero()) continue;
 
     let eurValue: Decimal | null = null;
     if (cols.eurValue >= 0) {
       const raw = (fields[cols.eurValue] ?? "").trim();
       if (raw) {
         try {
-          eurValue = new Decimal(raw);
+          const parsed = new Decimal(raw);
+          eurValue = parsed.isFinite() ? parsed : null;
         } catch {
           eurValue = null;
         }
@@ -504,14 +507,35 @@ function netLegs(window: TxRow[]): NetLeg[] {
 
 type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) => void;
 
-/** Pair net negative (sold) legs with net positive (bought) legs and emit. */
+/**
+ * Pair net negative (sold) legs with net positive (bought) legs and emit.
+ *
+ * The two legs of one conversion have (near-)equal EUR value, so each sell is
+ * matched to its CLOSEST-EUR remaining buy. This disambiguates correctly even if
+ * two independent conversions happen to fall in the same ±1s window (pairing the
+ * larger sell with the larger buy and the smaller with the smaller), rather than
+ * cross-pairing unrelated coins. When EUR values are absent (all 0), the closest
+ * match is the next available buy in order — equivalent to insertion-order
+ * pairing, the previous behavior.
+ */
 function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): void {
-  const sells = legs.filter((l) => l.qty.isNegative()).sort((a, b) => absEur(b) - absEur(a));
-  const buys = legs.filter((l) => l.qty.isPositive()).sort((a, b) => absEur(b) - absEur(a));
-  const n = Math.min(sells.length, buys.length);
-  for (let k = 0; k < n; k++) {
-    const sell = sells[k]!;
-    const buy = buys[k]!;
+  const sells = legs.filter((l) => l.qty.isNegative());
+  const buys = legs.filter((l) => l.qty.isPositive());
+  const usedBuys = new Set<number>();
+  for (const sell of sells) {
+    let bestIdx = -1;
+    let bestDelta = Infinity;
+    for (let j = 0; j < buys.length; j++) {
+      if (usedBuys.has(j)) continue;
+      const delta = Math.abs(absEur(sell) - absEur(buys[j]!));
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestIdx = j;
+      }
+    }
+    if (bestIdx < 0) break; // no buys left
+    usedBuys.add(bestIdx);
+    const buy = buys[bestIdx]!;
     addHint(sell.coin, sell.date, sell.qty, sell.eur);
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
     emitCryptoSwap(trades, sell, buy, label);
