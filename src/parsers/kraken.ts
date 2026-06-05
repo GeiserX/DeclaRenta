@@ -289,10 +289,12 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       const netAmount = amountDec.minus(feeLedgerDec);
 
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,
-      // not in the Art. 80 double-taxation pool). They are income in the staked
-      // crypto. Classify as interest-like income (Broker Interest Received) so
-      // they never enter calculateDividends() — which would try to resolve a
-      // crypto "currency" against ECB rates and fail.
+      // not in the Art. 80 double-taxation pool). They are rendimiento del capital
+      // mobiliario (savings base, Casilla 0027 — DGT V1766-22). Routed via
+      // "Crypto Reward Income" (taxBucket "ahorro") so they never enter
+      // calculateDividends(). Paid in the staked coin with no fiat value here, so
+      // rewardCostBasisEur is omitted — the report values it via ECB/manual rate
+      // (and creates the cost-basis lot) or surfaces it for manual entry.
       cashTransactions.push({
         transactionID: `kraken-staking-${txid}`,
         accountId: "",
@@ -304,7 +306,9 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         settleDate: tradeDate,
         amount: netAmount.toString(),
         fxRateToBase: "1",
-        type: "Broker Interest Received",
+        type: "Crypto Reward Income",
+        taxBucket: "ahorro",
+        rewardQuantity: netAmount.abs().toString(),
       });
     }
   }

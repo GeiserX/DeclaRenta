@@ -174,12 +174,17 @@ describe("krakenParser", () => {
       const result = krakenParser.parse(LEDGERS_CSV);
       const ethStake = result.cashTransactions.find((t) => t.symbol === "ETH");
       expect(ethStake).toBeDefined();
-      // Staking is income, not a foreign dividend — classified as interest-like
-      // income so it stays out of the double-taxation/withholding-country pool.
-      expect(ethStake!.type).toBe("Broker Interest Received");
+      // Staking = rendimiento del capital mobiliario (savings base, Casilla
+      // 0027) — routed via Crypto Reward Income/ahorro so it stays out of the
+      // double-taxation/withholding-country pool and isn't mis-bucketed.
+      expect(ethStake!.type).toBe("Crypto Reward Income");
+      expect(ethStake!.taxBucket).toBe("ahorro");
       expect(ethStake!.description).toBe("Staking reward - ETH");
       expect(ethStake!.dateTime).toBe("20240601");
       expect(parseFloat(ethStake!.amount)).toBeCloseTo(0.0249, 4);
+      // Paid in the coin with no fiat value → quantity carried, EUR basis omitted.
+      expect(ethStake!.rewardQuantity).toBeDefined();
+      expect(ethStake!.rewardCostBasisEur).toBeUndefined();
     });
 
     it("should map staking DOT reward with clean symbol", () => {

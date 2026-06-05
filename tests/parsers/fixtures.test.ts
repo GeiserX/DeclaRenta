@@ -115,10 +115,11 @@ describe("fixture file integration", () => {
       const r = coinbaseParser.parse(csv);
       // Convert (sell+buy) + Buy ETH + Sell ETH = 4 trades; Send/Receive skipped
       expect(r.trades).toHaveLength(4);
-      // Staking Income = 1 cash transaction (crypto staking is interest-like
-      // income, not a foreign dividend with withholding)
+      // Staking Income = 1 cash transaction (crypto reward income, ahorro
+      // bucket — not a foreign dividend with withholding)
       expect(r.cashTransactions).toHaveLength(1);
-      expect(r.cashTransactions[0]!.type).toBe("Broker Interest Received");
+      expect(r.cashTransactions[0]!.type).toBe("Crypto Reward Income");
+      expect(r.cashTransactions[0]!.taxBucket).toBe("ahorro");
     });
 
     it("should handle euro currency symbols in values", () => {
