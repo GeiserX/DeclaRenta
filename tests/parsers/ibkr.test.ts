@@ -956,4 +956,53 @@ describe("IBKR ORDER-level duplicate filtering", () => {
     expect(result.parserMessages?.find((m) => m.id === "parser.order_level_duplicates")).toBeUndefined();
     expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
   });
+
+  it("keeps ORDER rows without an EXECUTION counterpart in a mixed export", () => {
+    // Hybrid statement: ORD-X has 2 EXECUTION fills + matching ORDER aggregate
+    // (drop ORDER, merge EXECUTIONs). ORD-Y is a standalone ORDER row with no
+    // EXECUTION counterpart and must be preserved — a per-ibOrderID match
+    // prevents collateral data loss when both LODs are mixed in one statement.
+    const xml = wrap(`
+      <Trade tradeID="E1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="EXECUTION" />
+      <Trade tradeID="E2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="EXECUTION" />
+      <Trade tradeID="O1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="200" tradePrice="10.00" tradeMoney="2000" proceeds="-2000" cost="2000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.40" taxes="0"
+             multiplier="1" ibOrderID="ORD-X" levelOfDetail="ORDER" />
+      <Trade tradeID="O2" accountId="U9999999" symbol="BETA" description="BETA" isin="US2222222222"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="20.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORD-Y" levelOfDetail="ORDER" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const ordX = result.trades.find((t) => t.ibOrderID === "ORD-X");
+    expect(ordX?.quantity).toBe("200");
+    expect(ordX?.tradeMoney).toBe("2000");
+    const ordY = result.trades.find((t) => t.ibOrderID === "ORD-Y");
+    expect(ordY).toBeDefined();
+    expect(ordY?.quantity).toBe("50");
+    expect(ordY?.tradeMoney).toBe("1000");
+    expect(result.parserMessages?.find((m) => m.id === "parser.order_level_duplicates")?.context).toEqual({
+      skipped: "1",
+    });
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
+      sourceFillCount: "2",
+      mergedGroupCount: "1",
+    });
+  });
 });

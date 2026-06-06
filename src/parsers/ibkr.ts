@@ -334,25 +334,42 @@ const LEVEL_OF_DETAIL_ORDER = "ORDER";
 const LEVEL_OF_DETAIL_EXECUTION = "EXECUTION";
 
 /**
- * Drop ORDER-level Trade rows when EXECUTION-level rows are also present in the
- * same FlexStatement. IBKR Flex Query allows multiple `levelOfDetail` selections
- * on the Trades section: enabling both "Executions" (per-fill) and "Orders"
- * (aggregated) emits the same activity twice — once per fill, once aggregated.
- * Since {@link mergeExecutionsByOrder} groups by `ibOrderID|tradeDate`, leaving
- * the ORDER row in would double-count quantity, money and commission.
+ * Drop ORDER-level Trade rows when an EXECUTION-level counterpart exists for
+ * the same `ibOrderID`. IBKR Flex Query allows multiple `levelOfDetail`
+ * selections on the Trades section: enabling both "Executions" (per-fill) and
+ * "Orders" (aggregated) emits the same activity twice — once per fill, once
+ * aggregated. Since {@link mergeExecutionsByOrder} groups by
+ * `ibOrderID|tradeDate`, leaving the ORDER row in would double-count quantity,
+ * money and commission.
+ *
+ * The match is per `ibOrderID` rather than a global flag so a hybrid statement
+ * (some orders with both LODs, others with only ORDER — e.g. BookTrade /
+ * internal-transfer rows that may bypass execution detail) keeps the
+ * ORDER-only rows. ORDER rows with no `ibOrderID` are always kept; they cannot
+ * be a duplicate of a keyed EXECUTION row.
  *
  * Symmetric to {@link isCashSummaryRow} for the CashTransactions section, but
  * kept separate because the markers differ (SUMMARY vs ORDER), cash carries a
  * `transactionID/accountId` fallback signal that does not apply to trades, and
- * trades only drop ORDER when EXECUTION is also present (an ORDER-only export
- * remains valid input).
+ * trades only drop ORDER when a matching EXECUTION is also present (a pure
+ * ORDER-only export remains valid input).
  */
 function filterDuplicateLevelOfDetail(rawTrades: Record<string, string>[]): Record<string, string>[] {
-  const hasExecution = rawTrades.some(
-    (t) => (t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_EXECUTION,
+  const executionOrderIds = new Set<string>();
+  for (const t of rawTrades) {
+    if ((t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_EXECUTION && t.ibOrderID) {
+      executionOrderIds.add(t.ibOrderID);
+    }
+  }
+  if (executionOrderIds.size === 0) return rawTrades;
+  return rawTrades.filter(
+    (t) =>
+      !(
+        (t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_ORDER &&
+        t.ibOrderID &&
+        executionOrderIds.has(t.ibOrderID)
+      ),
   );
-  if (!hasExecution) return rawTrades;
-  return rawTrades.filter((t) => (t.levelOfDetail ?? "").toUpperCase() !== LEVEL_OF_DETAIL_ORDER);
 }
 
 /**
