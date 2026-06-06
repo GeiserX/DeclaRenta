@@ -129,6 +129,34 @@ export interface DividendEntry {
   ecbRate: Decimal;
 }
 
+/**
+ * Dividends of one issuer (and one source country) aggregated for the year — the
+ * shape Spanish brokers' fiscal certificates and the AEAT Renta Web "Alta Capital
+ * mobiliario" form use (one record per company with the annual totals). This is a
+ * PRESENTATION-only view computed from {@link DividendEntry}[]; the underlying
+ * per-payment entries remain the source of truth for Casilla 0029 (grossIncome)
+ * and Casilla 0588 (double taxation), which are never re-derived from these
+ * groups. Grouped by issuer AND withholdingCountry so each group maps 1:1 to a
+ * country contribution in the double-taxation breakdown.
+ */
+export interface IssuerDividendGroup {
+  /** ISIN when present, else "" (issuer identified by symbol/description). */
+  isin: string;
+  symbol: string;
+  description: string;
+  withholdingCountry: string;
+  /** Representative currency, or "—" when payments span multiple currencies. */
+  currency: string;
+  /** Sum of the per-payment gross amounts (EUR). */
+  grossTotalEur: Decimal;
+  /** Sum of the per-payment withholding amounts (EUR). */
+  withholdingTotalEur: Decimal;
+  /** Number of payments aggregated. */
+  paymentCount: number;
+  /** The individual payments, preserved for drill-down (sorted by payDate asc). */
+  payments: DividendEntry[];
+}
+
 /** Interest income (cash, bonds, margin) */
 export interface InterestEntry {
   type: "earned" | "paid";

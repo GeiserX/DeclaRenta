@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { generateTaxReport } from "../../src/generators/report.js";
+import { groupDividendsByIssuer } from "../../src/generators/casillas.js";
 import type { FlexStatement, Trade, CashTransaction } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -725,5 +727,47 @@ describe("generateTaxReport", () => {
         solo.doubleTaxation.deduction.toFixed(2),
       );
     });
+  });
+});
+
+describe("dividend grouping reconciles with the tax engine (presentation-only)", () => {
+  it("Σ group gross/withholding equals grossIncome and the flat withholding total", () => {
+    // Two AAPL dividends + their withholdings, run through the real engine.
+    const rates = makeRateMap({ "2025-02-13": "0.9200", "2025-05-15": "0.9200" });
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({ transactionID: "d1", dateTime: "20250213", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "d2", dateTime: "20250515", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w1", dateTime: "20250213", amount: "-15", type: "Withholding Tax" }),
+        makeCashTx({ transactionID: "w2", dateTime: "20250515", amount: "-15", type: "Withholding Tax" }),
+      ],
+    });
+    const report = generateTaxReport(statement, rates, 2025);
+    const groups = groupDividendsByIssuer(report.dividends.entries);
+    const sumGross = groups.reduce((s, g) => s.plus(g.grossTotalEur), new Decimal(0));
+    const sumWht = groups.reduce((s, g) => s.plus(g.withholdingTotalEur), new Decimal(0));
+    // Casilla 0029 is byte-identical whether or not grouping is applied.
+    expect(sumGross.toFixed(2)).toBe(report.dividends.grossIncome.toFixed(2));
+    // Withholding (feeds Casilla 0588) reconciles with the flat per-payment sum.
+    const flatWht = report.dividends.entries.reduce((s, d) => s.plus(d.withholdingTaxEur), new Decimal(0));
+    expect(sumWht.toFixed(2)).toBe(flatWht.toFixed(2));
+    // One issuer (AAPL/US), two payments.
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.paymentCount).toBe(2);
+  });
+
+  it("grouping totals reconcile with the per-titular split (no double-division)", () => {
+    const rates = makeRateMap({ "2025-02-13": "0.9200", "2025-05-15": "0.9200" });
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({ transactionID: "d1", dateTime: "20250213", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "d2", dateTime: "20250515", amount: "100", type: "Dividends" }),
+      ],
+    });
+    const split = generateTaxReport(statement, rates, 2025, { titulares: 2 });
+    const sumGross = groupDividendsByIssuer(split.dividends.entries)
+      .reduce((s, g) => s.plus(g.grossTotalEur), new Decimal(0));
+    // Grouping runs on already-split entries; it must not re-divide.
+    expect(sumGross.toFixed(2)).toBe(split.dividends.grossIncome.toFixed(2));
   });
 });

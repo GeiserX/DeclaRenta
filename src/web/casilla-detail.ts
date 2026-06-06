@@ -10,7 +10,7 @@ import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
-import { combinedNetGainLoss, computeCasillaBlocksWithFx, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
+import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
 
 /** Format a date string (YYYYMMDD or YYYY-MM-DD) to DD/MM/YYYY display format. */
 function formatDate(d: string): string {
@@ -74,23 +74,49 @@ function renderDisposalsDetail(
     </table>`;
 }
 
-/** Render a detail table of dividend entries for a casilla drill-down. */
+/**
+ * Render dividends grouped per issuer (one row per company + source country,
+ * matching the AEAT "Alta Capital mobiliario" form and brokers' fiscal
+ * certificates), with the individual payments preserved in a collapsible
+ * drill-down. Presentation-only: totals reconcile exactly with grossIncome.
+ */
 function renderDividendsDetail(entries: DividendEntry[]): string {
   if (entries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  const groups = groupDividendsByIssuer(entries);
   return `
-    <p class="detail-label">${t("results.dividends")} (${entries.length})</p>
+    <p class="detail-label">${t("casilla.dividends_by_issuer")} (${groups.length})</p>
     <table class="detail-table">
       <thead><tr>
-        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.date")}</th>
-        <th>${t("table.gross_eur")}</th><th>${t("table.country")}</th>
+        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.country")}</th>
+        <th>${t("table.payments")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th>
       </tr></thead>
-      <tbody>${entries.map((d) => `
+      <tbody>${groups.map((g) => `
         <tr>
-          <td class="mono">${esc(d.isin)}</td>
-          <td>${esc(d.symbol)}</td>
-          <td>${formatDate(d.payDate)}</td>
-          <td>${fmtEur(d.grossAmountEur)}</td>
-          <td>${esc(d.withholdingCountry)}</td>
+          <td class="mono">${esc(g.isin)}</td>
+          <td>${esc(g.symbol)}</td>
+          <td>${esc(g.withholdingCountry)}</td>
+          <td>${g.paymentCount}</td>
+          <td>${fmtEur(g.grossTotalEur)}</td>
+          <td>${fmtEur(g.withholdingTotalEur)}</td>
+        </tr>
+        <tr class="detail-subrow">
+          <td colspan="6">
+            <details>
+              <summary>${t("casilla.dividends_per_payment")} (${g.paymentCount})</summary>
+              <table class="detail-table">
+                <thead><tr>
+                  <th>${t("table.date")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th>
+                </tr></thead>
+                <tbody>${g.payments.map((d) => `
+                  <tr>
+                    <td>${formatDate(d.payDate)}</td>
+                    <td>${fmtEur(d.grossAmountEur)}</td>
+                    <td>${fmtEur(d.withholdingTaxEur)}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>
+            </details>
+          </td>
         </tr>`).join("")}
       </tbody>
     </table>`;

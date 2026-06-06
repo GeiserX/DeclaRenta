@@ -28,7 +28,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { FifoDisposal, TaxSummary } from "../types/tax.js";
+import type { DividendEntry, FifoDisposal, IssuerDividendGroup, TaxSummary } from "../types/tax.js";
 
 /**
  * Asset categories routed to the "acciones negociadas" block (listed shares).
@@ -155,4 +155,63 @@ export function computeCasillaBlocksWithFx(report: TaxSummary): CasillaBlocks {
  */
 export function combinedNetGainLoss(blocks: CasillaBlocks): Decimal {
   return blocks.listedShares.netGainLoss.plus(blocks.otherElements.netGainLoss);
+}
+
+/**
+ * Aggregate per-payment dividend entries into one group per issuer + source
+ * country — the layout of Spanish brokers' fiscal certificates and the AEAT
+ * "Alta Capital mobiliario" form (one record per company with annual totals).
+ *
+ * PRESENTATION-ONLY. Renderers call this on demand (like
+ * {@link computeCasillaBlocksWithFx}); it is never stored on TaxSummary and the
+ * tax figures (Casilla 0029 grossIncome, Casilla 0588) are computed from the raw
+ * per-payment `entries` independently. The sum of `grossTotalEur` across groups
+ * therefore equals `report.dividends.grossIncome` exactly.
+ *
+ * Grouping key: `(isin || symbol || description)` + `withholdingCountry`. Country
+ * is part of the key so each group maps 1:1 to a double-taxation country line and
+ * can never display a single country for payments taxed under two (the rare
+ * same-issuer/two-country case shows as two blocks — honest and reconcilable).
+ * Input entries must already be titulares-split (renderers receive
+ * `report.dividends.entries`, which report.ts splits before storing).
+ */
+export function groupDividendsByIssuer(entries: DividendEntry[]): IssuerDividendGroup[] {
+  const groups = new Map<string, IssuerDividendGroup>();
+  for (const d of entries) {
+    const identity = d.isin || d.symbol || d.description;
+    const key = `${identity}|${d.withholdingCountry}`;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        isin: d.isin,
+        symbol: d.symbol,
+        description: d.description,
+        withholdingCountry: d.withholdingCountry,
+        currency: d.currency,
+        grossTotalEur: new Decimal(0),
+        withholdingTotalEur: new Decimal(0),
+        paymentCount: 0,
+        payments: [],
+      };
+      groups.set(key, g);
+    }
+    g.grossTotalEur = g.grossTotalEur.plus(d.grossAmountEur);
+    g.withholdingTotalEur = g.withholdingTotalEur.plus(d.withholdingTaxEur);
+    g.paymentCount += 1;
+    g.payments.push(d);
+    // Distinct currencies within a group are still summed correctly (all EUR),
+    // but no single currency label is meaningful → mark as mixed.
+    if (g.currency !== "—" && g.currency !== d.currency) g.currency = "—";
+  }
+
+  for (const g of groups.values()) {
+    g.payments.sort((a, b) => a.payDate.localeCompare(b.payDate));
+  }
+
+  // Largest issuer first (how a user scans a fiscal certificate); a stable key
+  // (issuer identity + country) breaks ties for deterministic output (snapshots).
+  const tieKey = (g: IssuerDividendGroup) => `${g.isin || g.symbol || g.description}|${g.withholdingCountry}`;
+  return [...groups.values()].sort(
+    (a, b) => b.grossTotalEur.minus(a.grossTotalEur).toNumber() || tieKey(a).localeCompare(tieKey(b)),
+  );
 }

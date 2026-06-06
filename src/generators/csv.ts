@@ -5,7 +5,7 @@
  */
 
 import type { TaxSummary } from "../types/tax.js";
-import { computeCasillaBlocksWithFx } from "./casillas.js";
+import { computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 export function escapeCsv(val: string): string {
   // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in Excel/Sheets)
@@ -40,7 +40,8 @@ export function formatCsv(report: TaxSummary): string {
 
   lines.push("");
 
-  // Dividends section
+  // Dividends section — one row per payment (unchanged; existing consumers rely
+  // on this exact shape).
   lines.push("# DIVIDENDOS");
   lines.push("ISIN,Simbolo,Descripcion,Fecha,Bruto_EUR,Retencion_EUR,Pais,Divisa");
   for (const d of report.dividends.entries) {
@@ -52,6 +53,23 @@ export function formatCsv(report: TaxSummary): string {
   }
 
   lines.push("");
+
+  // Per-issuer aggregation — annual totals per company+country, the shape the
+  // AEAT "Alta Capital mobiliario" form expects. Separate section (NOT mixed
+  // with per-payment rows) so summing either section's amounts is unambiguous.
+  const dividendGroups = groupDividendsByIssuer(report.dividends.entries);
+  if (dividendGroups.length > 0) {
+    lines.push("# DIVIDENDOS POR EMISOR");
+    lines.push("ISIN,Simbolo,Pais,Pagos,Bruto_Anual_EUR,Retencion_Anual_EUR,Divisa");
+    for (const g of dividendGroups) {
+      lines.push([
+        escapeCsv(g.isin), escapeCsv(g.symbol), escapeCsv(g.withholdingCountry),
+        g.paymentCount.toString(), g.grossTotalEur.toFixed(2), g.withholdingTotalEur.toFixed(2),
+        escapeCsv(g.currency),
+      ].join(","));
+    }
+    lines.push("");
+  }
 
   // FX gains section
   if (report.fxGains.disposals.length > 0) {
