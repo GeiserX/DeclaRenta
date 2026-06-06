@@ -183,7 +183,6 @@ export function groupDividendsByIssuer(entries: DividendEntry[]): IssuerDividend
     let g = groups.get(key);
     if (!g) {
       g = {
-        key,
         isin: d.isin,
         symbol: d.symbol,
         description: d.description,
@@ -209,9 +208,10 @@ export function groupDividendsByIssuer(entries: DividendEntry[]): IssuerDividend
     g.payments.sort((a, b) => a.payDate.localeCompare(b.payDate));
   }
 
-  // Largest issuer first (how a user scans a fiscal certificate); key asc breaks
-  // ties for deterministic output (stable snapshots).
+  // Largest issuer first (how a user scans a fiscal certificate); a stable key
+  // (issuer identity + country) breaks ties for deterministic output (snapshots).
+  const tieKey = (g: IssuerDividendGroup) => `${g.isin || g.symbol || g.description}|${g.withholdingCountry}`;
   return [...groups.values()].sort(
-    (a, b) => b.grossTotalEur.minus(a.grossTotalEur).toNumber() || a.key.localeCompare(b.key),
+    (a, b) => b.grossTotalEur.minus(a.grossTotalEur).toNumber() || tieKey(a).localeCompare(tieKey(b)),
   );
 }

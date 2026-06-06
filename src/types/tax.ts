@@ -140,8 +140,6 @@ export interface DividendEntry {
  * country contribution in the double-taxation breakdown.
  */
 export interface IssuerDividendGroup {
-  /** Stable grouping key: `${isin||symbol||description}|${withholdingCountry}`. */
-  key: string;
   /** ISIN when present, else "" (issuer identified by symbol/description). */
   isin: string;
   symbol: string;

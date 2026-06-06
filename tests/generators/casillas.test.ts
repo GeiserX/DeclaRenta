@@ -306,8 +306,23 @@ describe("groupDividendsByIssuer", () => {
       makeDividend({ isin: "", symbol: "FOO", description: "Foo", grossAmountEur: new Decimal("7.10") }),
     ];
     const flatTotal = entries.reduce((s, d) => s.plus(d.grossAmountEur), new Decimal(0));
-    const groupedTotal = groupDividendsByIssuer(entries).reduce((s, g) => s.plus(g.grossTotalEur), new Decimal(0));
+    const groups = groupDividendsByIssuer(entries);
+    const groupedTotal = groups.reduce((s, g) => s.plus(g.grossTotalEur), new Decimal(0));
     expect(groupedTotal.toFixed(2)).toBe(flatTotal.toFixed(2));
+    // Withholding must reconcile too — Casilla 0588 depends on it.
+    const flatWht = entries.reduce((s, d) => s.plus(d.withholdingTaxEur), new Decimal(0));
+    const groupedWht = groups.reduce((s, g) => s.plus(g.withholdingTotalEur), new Decimal(0));
+    expect(groupedWht.toFixed(2)).toBe(flatWht.toFixed(2));
+  });
+
+  it("breaks gross-total ties deterministically by issuer identity + country", () => {
+    const entries = [
+      makeDividend({ isin: "US1912161007", symbol: "KO", grossAmountEur: new Decimal("50") }),
+      makeDividend({ isin: "US0378331005", symbol: "AAPL", grossAmountEur: new Decimal("50") }),
+    ];
+    // Equal gross → AAPL (US0378…) sorts before KO (US1912…) by identity asc.
+    const groups = groupDividendsByIssuer(entries);
+    expect(groups.map((g) => g.symbol)).toEqual(["AAPL", "KO"]);
   });
 
   it("returns an empty array for no dividends", () => {
