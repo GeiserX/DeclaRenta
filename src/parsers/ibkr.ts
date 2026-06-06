@@ -231,6 +231,11 @@ function mapTrade(raw: Record<string, string>): Trade {
  * (the key includes `tradeDate`), so a year-boundary GTC fill lands in the
  * correct tax year.
  *
+ * Heterogeneous `buySell` (a BUY-then-SELL flip in one ibOrderID) or mixed
+ * `openCloseIndicator` (Open + Close fills under one id) also stay split:
+ * VWAP across opposite sides is meaningless, and `openCloseIndicator` is
+ * tax-relevant — `fifo.ts` branches on it for cost basis vs proceeds.
+ *
  * Trades with no `ibOrderID` pass through un-merged (rare; only carry-forward
  * edge cases — real IBKR data always populates the field).
  */
@@ -242,7 +247,7 @@ function mergeExecutionsByOrder(
 
   for (const trade of trades) {
     const key = trade.ibOrderID
-      ? `${trade.ibOrderID}|${trade.tradeDate}`
+      ? `${trade.ibOrderID}|${trade.tradeDate}|${trade.buySell}|${trade.openCloseIndicator}`
       : `__ungrouped_${ungroupedCounter++}__`;
     let bucket = groups.get(key);
     if (!bucket) {
@@ -307,9 +312,17 @@ function mergeTradeGroup(group: Trade[]): Trade {
     ? new Decimal(first.tradePrice)
     : money.abs().dividedBy(qtyAbs.mul(multiplier));
 
+  // Stable synthetic tradeID covering the full bucket key
+  // (ibOrderID, tradeDate, buySell, openCloseIndicator). Must mirror
+  // the bucket dimensions in mergeExecutionsByOrder — otherwise two
+  // distinct merged orders would alias to the same ID, re-triggering
+  // the validator's composite-key dedup misflag and breaking the
+  // merge.ts sort tiebreaker.
+  const syntheticTradeId = `merged-${first.ibOrderID}-${first.tradeDate}-${first.buySell}-${first.openCloseIndicator}`;
+
   return {
     ...first,
-    tradeID: "",
+    tradeID: syntheticTradeId,
     quantity: qty.toString(),
     tradePrice: vwap.toString(),
     tradeMoney: money.toString(),
@@ -335,18 +348,23 @@ const LEVEL_OF_DETAIL_EXECUTION = "EXECUTION";
 
 /**
  * Drop ORDER-level Trade rows when an EXECUTION-level counterpart exists for
- * the same `ibOrderID`. IBKR Flex Query allows multiple `levelOfDetail`
- * selections on the Trades section: enabling both "Executions" (per-fill) and
- * "Orders" (aggregated) emits the same activity twice — once per fill, once
- * aggregated. Since {@link mergeExecutionsByOrder} groups by
- * `ibOrderID|tradeDate`, leaving the ORDER row in would double-count quantity,
- * money and commission.
+ * the same `ibOrderID` AND `tradeDate`. IBKR Flex Query allows multiple
+ * `levelOfDetail` selections on the Trades section: enabling both "Executions"
+ * (per-fill) and "Orders" (aggregated) emits the same activity twice — once
+ * per fill, once aggregated. Since {@link mergeExecutionsByOrder} groups by
+ * `ibOrderID|tradeDate|...`, leaving the ORDER row in would double-count
+ * quantity, money and commission.
  *
- * The match is per `ibOrderID` rather than a global flag so a hybrid statement
- * (some orders with both LODs, others with only ORDER — e.g. BookTrade /
- * internal-transfer rows that may bypass execution detail) keeps the
- * ORDER-only rows. ORDER rows with no `ibOrderID` are always kept; they cannot
- * be a duplicate of a keyed EXECUTION row.
+ * The match is per `(ibOrderID, tradeDate)` rather than a global flag, or per
+ * `ibOrderID` alone, so that:
+ *  - hybrid statements (some orders with both LODs, others with only ORDER —
+ *    e.g. BookTrade / internal-transfer rows that may bypass execution detail)
+ *    keep their ORDER-only rows, and
+ *  - a GTC order whose `ibOrderID` carries across days never silently drops an
+ *    ORDER row for a date that has no matching EXECUTION row.
+ *
+ * ORDER rows with no `ibOrderID` are always kept; they cannot be a duplicate
+ * of a keyed EXECUTION row.
  *
  * Symmetric to {@link isCashSummaryRow} for the CashTransactions section, but
  * kept separate because the markers differ (SUMMARY vs ORDER), cash carries a
@@ -355,19 +373,19 @@ const LEVEL_OF_DETAIL_EXECUTION = "EXECUTION";
  * ORDER-only export remains valid input).
  */
 function filterDuplicateLevelOfDetail(rawTrades: Record<string, string>[]): Record<string, string>[] {
-  const executionOrderIds = new Set<string>();
+  const executionKeys = new Set<string>();
   for (const t of rawTrades) {
     if ((t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_EXECUTION && t.ibOrderID) {
-      executionOrderIds.add(t.ibOrderID);
+      executionKeys.add(`${t.ibOrderID}|${t.tradeDate ?? ""}`);
     }
   }
-  if (executionOrderIds.size === 0) return rawTrades;
+  if (executionKeys.size === 0) return rawTrades;
   return rawTrades.filter(
     (t) =>
       !(
         (t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_ORDER &&
         t.ibOrderID &&
-        executionOrderIds.has(t.ibOrderID)
+        executionKeys.has(`${t.ibOrderID}|${t.tradeDate ?? ""}`)
       ),
   );
 }

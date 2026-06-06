@@ -774,7 +774,7 @@ describe("IBKR partial-fill execution merging", () => {
     expect(t.tradeMoney).toBe("4200");
     expect(t.proceeds).toBe("-4200");
     expect(Number(t.commission)).toBeCloseTo(-0.6, 8);
-    expect(t.tradeID).toBe("");
+    expect(t.tradeID).toBe("merged-ORDER-1-20250515-BUY-O");
     expect(t.ibOrderID).toBe("ORDER-1");
     expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
       sourceFillCount: "3",
@@ -830,7 +830,7 @@ describe("IBKR partial-fill execution merging", () => {
     const beta = result.trades.find((t) => t.symbol === "BETA")!;
     expect(alpha.tradeID).toBe("S1"); // unchanged
     expect(alpha.quantity).toBe("10");
-    expect(beta.tradeID).toBe(""); // merged
+    expect(beta.tradeID).toBe("merged-MULTI-20250411-BUY-O"); // merged
     expect(beta.quantity).toBe("10");
     expect(beta.tradeMoney).toBe("507"); // 150 + 357
     expect(Number(beta.tradePrice)).toBeCloseTo(50.7, 8); // VWAP
@@ -1003,6 +1003,221 @@ describe("IBKR ORDER-level duplicate filtering", () => {
     expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
       sourceFillCount: "2",
       mergedGroupCount: "1",
+    });
+  });
+});
+
+describe("IBKR heterogeneous-order safeguards", () => {
+  function wrap(tradesXml: string): string {
+    return `<?xml version="1.0"?>
+    <FlexQueryResponse queryName="Heter" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U9999999" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>${tradesXml}</Trades>
+          <CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  it("keeps BUY and SELL fills of the same ibOrderID split (no VWAP across opposite sides)", () => {
+    // Pathological but legal: one ibOrderID with a BUY fill and a SELL fill on
+    // the same day. VWAP across opposite sides would be meaningless; both fills
+    // must land in the report as separate trades.
+    const xml = wrap(`
+      <Trade tradeID="B1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="FLIP-1" />
+      <Trade tradeID="S1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="-40" tradePrice="10.50" tradeMoney="-420" proceeds="420" cost="-420"
+             fifoPnlRealized="20" fxRateToBase="0.92" buySell="SELL" openCloseIndicator="C"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="FLIP-1" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const buy = result.trades.find((t) => t.buySell === "BUY")!;
+    const sell = result.trades.find((t) => t.buySell === "SELL")!;
+    expect(buy.quantity).toBe("100");
+    expect(buy.tradeID).toBe("B1"); // single-fill bucket, unchanged
+    expect(sell.quantity).toBe("-40");
+    expect(sell.tradeID).toBe("S1");
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
+  });
+
+  it("keeps Open and Close fills of the same ibOrderID split (O/C is tax-relevant)", () => {
+    // FIFO branches on openCloseIndicator (fifo.ts:80). A mixed O/C group must
+    // not be flattened or the cost-basis/proceeds attribution would be wrong.
+    const xml = wrap(`
+      <Trade tradeID="O1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="OC-1" />
+      <Trade tradeID="C1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.05" tradeMoney="502.5" proceeds="-502.5" cost="502.5"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="C"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="OC-1" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const open = result.trades.find((t) => t.openCloseIndicator === "O")!;
+    const close = result.trades.find((t) => t.openCloseIndicator === "C")!;
+    expect(open.quantity).toBe("50");
+    expect(close.quantity).toBe("50");
+    expect(open.tradeID).toBe("O1");
+    expect(close.tradeID).toBe("C1");
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")).toBeUndefined();
+  });
+
+  it("gives distinct, non-empty tradeIDs to two merged orders that match on date/symbol/qty/price/side", () => {
+    // Two different ibOrderIDs each fill in 2 partials for the same symbol, day,
+    // total quantity, VWAP and side. The validator in src/web/validation.ts
+    // falls back to a composite key when tradeID is empty — empty IDs here
+    // would alias the two merged orders into a spurious "duplicate" warning.
+    // The synthetic `merged-${ibOrderID}-${tradeDate}` id keeps them distinct.
+    const xml = wrap(`
+      <Trade tradeID="A1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORDER-A" />
+      <Trade tradeID="A2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORDER-A" />
+      <Trade tradeID="B1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORDER-B" />
+      <Trade tradeID="B2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="ORDER-B" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const ordA = result.trades.find((t) => t.ibOrderID === "ORDER-A")!;
+    const ordB = result.trades.find((t) => t.ibOrderID === "ORDER-B")!;
+    expect(ordA.tradeID).toBe("merged-ORDER-A-20250515-BUY-O");
+    expect(ordB.tradeID).toBe("merged-ORDER-B-20250515-BUY-O");
+    expect(ordA.tradeID).not.toBe(ordB.tradeID);
+    expect(ordA.tradeID).not.toBe("");
+    expect(ordB.tradeID).not.toBe("");
+    // Same (symbol, isin, tradeDate, quantity, tradePrice, buySell) — the
+    // composite-key fallback would collide; the synthetic tradeID prevents it.
+    expect(ordA.quantity).toBe(ordB.quantity);
+    expect(ordA.tradePrice).toBe(ordB.tradePrice);
+    expect(ordA.tradeDate).toBe(ordB.tradeDate);
+  });
+
+  it("keeps ORDER row on a date where no EXECUTION counterpart exists for the same ibOrderID", () => {
+    // GTC id-reuse / cross-date safety: ORDER row on date B must survive when
+    // EXECUTION rows only exist on date A for the same ibOrderID. Per-ibOrderID
+    // matching would silently drop the date-B ORDER row.
+    const xml = wrap(`
+      <Trade tradeID="E1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="REUSE-1" levelOfDetail="EXECUTION" />
+      <Trade tradeID="E2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="REUSE-1" levelOfDetail="EXECUTION" />
+      <Trade tradeID="O-A" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="100" tradePrice="10.00" tradeMoney="1000" proceeds="-1000" cost="1000"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.20" taxes="0"
+             multiplier="1" ibOrderID="REUSE-1" levelOfDetail="ORDER" />
+      <Trade tradeID="O-B" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250516" settlementDate="20250520"
+             quantity="30" tradePrice="11.00" tradeMoney="330" proceeds="-330" cost="330"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="REUSE-1" levelOfDetail="ORDER" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    // Expect 2 trades: merged executions on day A, standalone ORDER on day B.
+    expect(result.trades).toHaveLength(2);
+    const dayA = result.trades.find((t) => t.tradeDate === "20250515")!;
+    const dayB = result.trades.find((t) => t.tradeDate === "20250516")!;
+    expect(dayA.quantity).toBe("100"); // 50 + 50 merged executions
+    expect(dayA.tradeID).toBe("merged-REUSE-1-20250515-BUY-O");
+    expect(dayB.quantity).toBe("30"); // ORDER row preserved
+    expect(dayB.tradeID).toBe("O-B");
+    expect(result.parserMessages?.find((m) => m.id === "parser.order_level_duplicates")?.context).toEqual({
+      skipped: "1", // only the day-A ORDER row is a duplicate
+    });
+  });
+
+  it("gives distinct synthetic tradeIDs to Open and Close multi-fill buckets under one ibOrderID (position flip)", () => {
+    // Position-flip case: one ibOrderID covers both closing a short and opening
+    // a new long (or vice versa) — same buySell, different openCloseIndicator.
+    // Each side multi-fills. The bucket key splits on openCloseIndicator, so we
+    // get two merged trades for the same (ibOrderID, tradeDate). The synthetic
+    // tradeID MUST also split on openCloseIndicator (and buySell) — otherwise
+    // both merged trades would alias to the same `merged-${ibOrderID}-${date}`
+    // ID, re-triggering the validation.ts:80 dedup misflag and breaking the
+    // merge.ts sort tiebreaker — i.e. the exact bug the synthetic ID prevents.
+    const xml = wrap(`
+      <Trade tradeID="O1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="OC-MULTI" />
+      <Trade tradeID="O2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="50" tradePrice="10.00" tradeMoney="500" proceeds="-500" cost="500"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.10" taxes="0"
+             multiplier="1" ibOrderID="OC-MULTI" />
+      <Trade tradeID="C1" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="30" tradePrice="10.00" tradeMoney="300" proceeds="-300" cost="300"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="C"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="OC-MULTI" />
+      <Trade tradeID="C2" accountId="U9999999" symbol="ACME" description="ACME" isin="US0000000001"
+             assetCategory="STK" currency="USD" tradeDate="20250515" settlementDate="20250517"
+             quantity="20" tradePrice="10.00" tradeMoney="200" proceeds="-200" cost="200"
+             fifoPnlRealized="0" fxRateToBase="0.92" buySell="BUY" openCloseIndicator="C"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-0.05" taxes="0"
+             multiplier="1" ibOrderID="OC-MULTI" />
+    `);
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades).toHaveLength(2);
+    const open = result.trades.find((t) => t.openCloseIndicator === "O")!;
+    const close = result.trades.find((t) => t.openCloseIndicator === "C")!;
+    expect(open.quantity).toBe("100"); // 50 + 50 merged
+    expect(close.quantity).toBe("50"); // 30 + 20 merged
+    expect(open.tradeID).toBe("merged-OC-MULTI-20250515-BUY-O");
+    expect(close.tradeID).toBe("merged-OC-MULTI-20250515-BUY-C");
+    expect(open.tradeID).not.toBe(close.tradeID);
+    expect(open.tradeID).not.toBe("");
+    expect(close.tradeID).not.toBe("");
+    expect(result.parserMessages?.find((m) => m.id === "parser.executions_merged")?.context).toEqual({
+      sourceFillCount: "4",
+      mergedGroupCount: "2",
     });
   });
 });
