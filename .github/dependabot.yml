@@ -1,79 +1,75 @@
 version: 2
-
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: npm
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "deps"
+      prefix: deps
     labels:
-      - "dependencies"
-      - "automated"
+      - dependencies
+      - automated
     groups:
       minor-and-patch:
         patterns:
-          - "*"
+          - '*'
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
       npm-security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "monthly"
+      interval: monthly
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "ci"
+      prefix: ci
     labels:
-      - "ci"
-      - "automated"
+      - ci
+      - automated
     groups:
       minor-and-patch:
         patterns:
-          - "*"
+          - '*'
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
       actions-security:
         applies-to: security-updates
         patterns:
-          - "*"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: "docker"
-    directory: "/"
+          - '*'
+  - package-ecosystem: docker
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "docker"
+      prefix: docker
     labels:
-      - "dependencies"
-      - "automated"
+      - dependencies
+      - automated
     groups:
       minor-and-patch:
         patterns:
-          - "*"
+          - '*'
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
       docker-security:
         applies-to: security-updates
         patterns:
-          - "*"
+          - '*'
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
