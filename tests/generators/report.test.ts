@@ -771,3 +771,58 @@ describe("dividend grouping reconciles with the tax engine (presentation-only)",
     expect(sumGross.toFixed(2)).toBe(split.dividends.grossIncome.toFixed(2));
   });
 });
+
+describe("crypto reward income valuation degrades gracefully when its rate is missing", () => {
+  // Repro for "No ECB rate found for USDT": a USDT-denominated reward whose year
+  // has no ECB rate in the map. USDT normalizes to USD (resolvable), so the old
+  // code entered the throwing getEcbRate branch on isEcbResolvable() alone and
+  // crashed the whole report. It must instead skip+warn (like an unvaluable
+  // coin), never throw.
+  it("does NOT throw when a USDT reward has no USD rate in the map", () => {
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "earn-1",
+          symbol: "USDT",
+          currency: "USDT",
+          dateTime: "20250115",
+          amount: "50",
+          type: "Crypto Reward Income",
+          taxBucket: "ahorro",
+          rewardQuantity: "50",
+        }),
+      ],
+    });
+    // Rate map has NO USD entry for 2025-01-15 (simulates the unfetched year).
+    const emptyRates: EcbRateMap = new Map();
+    let report!: ReturnType<typeof generateTaxReport>;
+    expect(() => {
+      report = generateTaxReport(statement, emptyRates, 2025);
+    }).not.toThrow();
+    // Unvalued income is excluded from the total and surfaced as a warning.
+    expect(report.interest.earned.toFixed(2)).toBe("0.00");
+    expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(true);
+  });
+
+  it("values the USDT reward once the USD rate IS present (USDT→USD)", () => {
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "earn-2",
+          symbol: "USDT",
+          currency: "USDT",
+          dateTime: "20250115",
+          amount: "50",
+          type: "Crypto Reward Income",
+          taxBucket: "ahorro",
+          rewardQuantity: "50",
+        }),
+      ],
+    });
+    const rates = makeRateMap({ "2025-01-15": "0.92" }); // USD rate present
+    const report = generateTaxReport(statement, rates, 2025);
+    // 50 USDT × 0.92 EUR/USD = 46.00, taxed as savings-base income (0027).
+    expect(report.interest.earned.toFixed(2)).toBe("46.00");
+    expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(false);
+  });
+});
