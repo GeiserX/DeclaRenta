@@ -80,15 +80,25 @@ function renderDisposalsDetail(
  * certificates), with the individual payments preserved in a collapsible
  * drill-down. Presentation-only: totals reconcile exactly with grossIncome.
  */
-function renderDividendsDetail(entries: DividendEntry[]): string {
+export function renderDividendsDetail(entries: DividendEntry[]): string {
   if (entries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   const groups = groupDividendsByIssuer(entries);
+  // Foreign withholding is intentionally NOT shown here: this card feeds the
+  // Renta Web "Alta Capital mobiliario" form, whose "Retenciones" field is for
+  // Spanish IRPF retentions only (Casillas 0030/0031). Foreign withholding is
+  // recovered solely via Casilla 0588 (Art. 80 LIRPF) and is shown there. A user
+  // pasting it into "Retenciones" would double-count it against 0588. The note
+  // below redirects them; it only renders when there is foreign withholding.
+  const hasWithholding = groups.some((g) => g.withholdingTotalEur.greaterThan(0));
+  const note = hasWithholding
+    ? `<p class="muted detail-note">${esc(t("casilla.dividends_withholding_note"))}</p>`
+    : "";
   return `
     <p class="detail-label">${t("casilla.dividends_by_issuer")} (${groups.length})</p>
     <table class="detail-table">
       <thead><tr>
         <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.country")}</th>
-        <th>${t("table.payments")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th>
+        <th>${t("table.payments")}</th><th>${t("table.gross_eur")}</th>
       </tr></thead>
       <tbody>${groups.map((g) => `
         <tr>
@@ -97,21 +107,19 @@ function renderDividendsDetail(entries: DividendEntry[]): string {
           <td>${esc(g.withholdingCountry)}</td>
           <td>${g.paymentCount}</td>
           <td>${fmtEur(g.grossTotalEur)}</td>
-          <td>${fmtEur(g.withholdingTotalEur)}</td>
         </tr>
         <tr class="detail-subrow">
-          <td colspan="6">
+          <td colspan="5">
             <details>
               <summary>${t("casilla.dividends_per_payment")} (${g.paymentCount})</summary>
               <table class="detail-table">
                 <thead><tr>
-                  <th>${t("table.date")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th>
+                  <th>${t("table.date")}</th><th>${t("table.gross_eur")}</th>
                 </tr></thead>
                 <tbody>${g.payments.map((d) => `
                   <tr>
                     <td>${formatDate(d.payDate)}</td>
                     <td>${fmtEur(d.grossAmountEur)}</td>
-                    <td>${fmtEur(d.withholdingTaxEur)}</td>
                   </tr>`).join("")}
                 </tbody>
               </table>
@@ -119,7 +127,8 @@ function renderDividendsDetail(entries: DividendEntry[]): string {
           </td>
         </tr>`).join("")}
       </tbody>
-    </table>`;
+    </table>
+    ${note}`;
 }
 
 /** Render a detail table of interest entries (earned or paid) for a casilla drill-down. */

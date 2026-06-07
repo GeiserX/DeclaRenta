@@ -63,6 +63,7 @@ const es = {
   "table.payments": "Pagos",
   "casilla.dividends_by_issuer": "Dividendos por emisor",
   "casilla.dividends_per_payment": "Pagos individuales",
+  "casilla.dividends_withholding_note": "La retención extranjera no se declara aquí. En el formulario «Alta Capital mobiliario» de Renta Web, deja el campo «Retenciones» en 0 — la retención extranjera se deduce por separado en la casilla 0588 (deducción por doble imposición internacional, Art. 80 LIRPF).",
   "table.casilla": "Casilla",
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
