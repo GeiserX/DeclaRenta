@@ -15,7 +15,7 @@ import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
-import { getEcbRate, isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
+import { lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
 import { normalizeDate } from "../engine/dates.js";
@@ -125,10 +125,15 @@ function valueIncomeEur(
     }
   }
 
-  // Fiat/stablecoin or a synthetic rate injected by the crypto-valuation pass.
-  if (isEcbResolvable(t.currency) || lookupRateInMap(resolvedRateMap, date, t.currency) !== null) {
-    const rate = getEcbRate(resolvedRateMap, date, t.currency);
-    return { amountEur: amount.mul(rate).abs(), rate };
+  // A rate present in the resolved map (ECB fiat, a normalized stablecoin like
+  // USDT→USD, or a synthetic crypto rate injected by the valuation pass). We
+  // gate on lookupRateInMap !== null rather than isEcbResolvable() so that a
+  // resolvable currency whose rate was never fetched (e.g. a USDT reward in a
+  // year with no trades) degrades to the manual/skip path below instead of
+  // throwing inside getEcbRate and crashing the whole report.
+  const mapRate = lookupRateInMap(resolvedRateMap, date, t.currency);
+  if (mapRate !== null) {
+    return { amountEur: amount.mul(mapRate).abs(), rate: mapRate };
   }
 
   // A user/EUR_Value manual-rate hint for the coin (never a live price oracle).

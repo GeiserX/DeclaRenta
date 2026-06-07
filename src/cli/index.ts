@@ -21,6 +21,7 @@ import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
+import { normalizeDate } from "../engine/dates.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
@@ -148,9 +149,16 @@ program
       console.error("  Obteniendo tipos de cambio ECB...");
 
       const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
+      // Cash transactions (dividends, interest, crypto reward income) can fall in
+      // a year with NO trades — e.g. USDT Simple Earn interest in a year the user
+      // didn't trade. Fetch their years too, or valuation throws "No ECB rate".
+      for (const c of merged.cashTransactions) {
+        const y = parseInt(normalizeDate(c.dateTime).slice(0, 4));
+        if (Number.isFinite(y)) years.add(y);
+      }
       years.add(opts.year);
-      // Fetch previous year for the earliest trade year so the 10-day lookback
-      // can find late-December rates for early-January trades (e.g. Jan 1-2).
+      // Fetch previous year for the earliest year so the 10-day lookback can find
+      // late-December rates for early-January transactions (e.g. Jan 1-2).
       const minYear = Math.min(...years);
       years.add(minYear - 1);
       const allRates: EcbRateMap = new Map();

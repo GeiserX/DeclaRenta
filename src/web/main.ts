@@ -600,9 +600,17 @@ async function processFiles(): Promise<void> {
     currencies.delete("EUR");
 
     const years = new Set(merged.trades.map((tr) => parseInt(tr.tradeDate.slice(0, 4))));
+    // Cash transactions (dividends, interest, crypto reward income) can fall in
+    // a year with NO trades — e.g. USDT Simple Earn interest in a year the user
+    // didn't trade. Their currency's rate must still be fetched for that year,
+    // or valuation throws "No ECB rate found". Add their years too.
+    for (const c of merged.cashTransactions) {
+      const y = parseInt(normalizeDate(c.dateTime).slice(0, 4));
+      if (Number.isFinite(y)) years.add(y);
+    }
     years.add(year);
-    // Fetch previous year for the earliest trade year so the 10-day lookback
-    // can find late-December rates for early-January trades (e.g. Jan 1-2).
+    // Fetch previous year for the earliest year so the 10-day lookback can find
+    // late-December rates for early-January transactions (e.g. Jan 1-2).
     const minYear = Math.min(...years);
     years.add(minYear - 1);
     const allRates: EcbRateMap = new Map();

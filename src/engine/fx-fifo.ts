@@ -10,7 +10,7 @@ import Decimal from "decimal.js";
 import type { FxLot, FxDisposal, FxTrigger, TaxMessage } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate, isEcbResolvable } from "./ecb.js";
+import { getEcbRate, isEcbResolvable, lookupRateInMap } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
 export interface FxEvent {
@@ -166,13 +166,24 @@ export class FxFifoEngine {
       const amount = new Decimal(tx.amount);
       if (amount.isZero()) continue;
 
+      // Crypto reward income (staking, Simple Earn interest, airdrops, referral)
+      // is valued and taxed entirely on the income path in report.ts; it must
+      // never generate an FX event here. Skip it BEFORE any rate lookup — its
+      // currency may be a coin (e.g. USDT) whose ECB/USD rate was not fetched,
+      // and getEcbRate would otherwise throw and crash the whole report.
+      if (tx.type === "Crypto Reward Income") continue;
+
       // Crypto-denominated income (e.g. Kraken staking, reported in the staked
       // coin) has no ECB rate. It can't generate an FX event — skip it here.
       // report.ts surfaces a warning so the user values it manually.
       if (!isEcbResolvable(tx.currency)) continue;
 
       const date = normalizeDate(tx.settleDate || tx.dateTime);
-      const ecbRate = getEcbRate(rateMap, date, tx.currency);
+      // A resolvable currency whose rate was not fetched (e.g. an FCY income in
+      // a year with no trades) must not throw — skip the event and let report.ts
+      // surface it. lookupRateInMap returns null instead of throwing.
+      const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
+      if (ecbRate === null) continue;
 
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
         events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "dividend" });
