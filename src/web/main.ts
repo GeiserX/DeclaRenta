@@ -986,9 +986,6 @@ function renderDividendsTable(report: TaxSummary) {
       </tbody>
     </table>
     <p class="table-count">${t("results.dividends_count", { count: String(entries.length) })}</p>
-    ${entries.some((d) => d.withholdingTaxEur.greaterThan(0))
-      ? `<p class="muted">${esc(t("casilla.dividends_withholding_note"))}</p>`
-      : ""}
   `;
 }
 

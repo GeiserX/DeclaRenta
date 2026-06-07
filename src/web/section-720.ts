@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getEcbRate, getQ4AverageRate } from "../engine/ecb.js";
+import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
 import { checkModelo720Thresholds } from "../generators/modelo720.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -125,24 +125,31 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   );
 
   if (positions.length > 0) {
+    let unvaluedCount = 0;
     html += `<h3>${t("m720.positions_title")}</h3>
     <div class="table-wrapper"><table>
       <thead><tr>
         <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.country")}</th><th>${t("table.amount_eur")}</th>
       </tr></thead>
       <tbody>${positions.map((p) => {
-        let rate: Decimal;
-        try {
-          rate = p.assetCategory === "STK"
-            ? getQ4AverageRate(rateMap, year, p.currency)
-            : getEcbRate(rateMap, dateForRates, p.currency);
-        } catch {
-          rate = getEcbRate(rateMap, dateForRates, p.currency);
+        let rate: Decimal | null = null;
+        if (p.assetCategory === "STK") {
+          try {
+            rate = getQ4AverageRate(rateMap, year, p.currency);
+          } catch {
+            rate = lookupPositionRate(rateMap, dateForRates, p.currency);
+          }
+        } else {
+          rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
-        const val = fmtEur(new Decimal(p.positionValue).mul(rate));
+        if (rate === null) unvaluedCount++;
+        const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(p.isin.slice(0, 2))}</td><td>${val}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
+    if (unvaluedCount > 0) {
+      html += `<div class="banner banner-warning">${esc(t("m720.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
+    }
 
     // Exchange rates display
     const uniqueCurrencies = [...new Set(positions.map((p) => p.currency))].filter((c) => c !== "EUR").sort();
@@ -150,8 +157,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
       html += `<div class="rates-display">
         <h4>${t("m720.rates_title")}</h4>
         <div class="rates-grid">${uniqueCurrencies.map((cur) => {
-          const rate = getEcbRate(rateMap, `${year}-12-31`, cur);
-          return `<span class="rate-item">${esc(cur)}: ${rate.toFixed(4)} &euro;</span>`;
+          const rate = lookupPositionRate(rateMap, `${year}-12-31`, cur);
+          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
         }).join("")}</div>
       </div>`;
     }
@@ -168,9 +175,9 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         <th>${t("table.currency")}</th><th>${t("table.amount_eur")}</th><th>${t("m720.q4_average")}</th>
       </tr></thead>
       <tbody>${cashBalances.map((cb) => {
-        const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, dateForRates, cb.currency);
-        const val = fmtEur(new Decimal(cb.endingCash).mul(ecbRate));
-        const avg = cb.averageQ4Cash ? fmtEur(new Decimal(cb.averageQ4Cash).mul(ecbRate)) : "—";
+        const ecbRate = lookupPositionRate(rateMap, dateForRates, cb.currency);
+        const val = ecbRate === null ? "—" : fmtEur(new Decimal(cb.endingCash).mul(ecbRate));
+        const avg = ecbRate !== null && cb.averageQ4Cash ? fmtEur(new Decimal(cb.averageQ4Cash).mul(ecbRate)) : "—";
         return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;

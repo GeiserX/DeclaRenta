@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getEcbRate } from "../engine/ecb.js";
+import { lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -95,12 +95,18 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // 10% threshold reminder (Orden ICT/1408/2021)
   html += `<div class="banner banner-warning">${t("d6.no_minimum")}</div>`;
 
-  // Total value
+  // Total value (positions without a resolvable year-end rate are excluded and
+  // surfaced via the warning banner below).
+  let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = getEcbRate(rateMap, yearEnd, p.currency);
+    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    if (rate === null) { unvaluedCount++; return sum; }
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
   html += `<p><strong>${t("d6.total_value", { amount: fmtEur(totalValue) })}</strong></p>`;
+  if (unvaluedCount > 0) {
+    html += `<div class="banner banner-warning">${esc(t("d6.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
+  }
 
   // Positions table
   html += `<h3>${t("d6.positions_title")}</h3>
@@ -111,8 +117,8 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = getEcbRate(rateMap, yearEnd, p.currency);
-        const val = fmtEur(new Decimal(p.positionValue).mul(rate));
+        const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+        const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
         <td>${esc(p.isin.slice(0, 2))}</td><td>${new Decimal(p.quantity).toString()}</td><td>${val}</td>
@@ -127,8 +133,8 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     html += `<div class="rates-display">
       <h4>${t("d6.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
-        const rate = getEcbRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate.toFixed(4)} &euro;</span>`;
+        const rate = lookupPositionRate(rateMap, yearEnd, cur);
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
   }
@@ -193,8 +199,8 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = getEcbRate(rateMap, yearEnd, p.currency);
-    const val = fmtEur(new Decimal(p.positionValue).mul(rate));
+    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField("ISIN", p.isin);
     html += aforixField("Denominación", p.description);

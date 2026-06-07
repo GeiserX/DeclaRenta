@@ -5,6 +5,7 @@
  * operations (disposals, dividends, interest entries) that compose it.
  */
 
+import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
@@ -89,9 +90,9 @@ export function renderDividendsDetail(entries: DividendEntry[]): string {
   // recovered solely via Casilla 0588 (Art. 80 LIRPF) and is shown there. A user
   // pasting it into "Retenciones" would double-count it against 0588. The note
   // below redirects them; it only renders when there is foreign withholding.
-  const hasWithholding = groups.some((g) => g.withholdingTotalEur.greaterThan(0));
-  const note = hasWithholding
-    ? `<p class="muted detail-note">${esc(t("casilla.dividends_withholding_note"))}</p>`
+  const totalWithholding = groups.reduce((sum, g) => sum.plus(g.withholdingTotalEur), new Decimal(0));
+  const note = totalWithholding.greaterThan(0)
+    ? `<p class="detail-note">${esc(t("casilla.dividends_withholding_note"))}</p>`
     : "";
   return `
     <p class="detail-label">${t("casilla.dividends_by_issuer")} (${groups.length})</p>

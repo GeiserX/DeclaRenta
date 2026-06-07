@@ -397,9 +397,10 @@ describe("Modelo 720 Generator", () => {
       expect(lines).toHaveLength(2);
     });
 
-    it("should throw when STK currency has no rates in Q4 and no walkback rates", () => {
-      // Rate map with Q4 dates that have GBP but NOT CHF
-      // getQ4AverageRate throws for CHF, fallback getEcbRate also throws
+    it("degrades (does not throw, skips the position) when an STK currency has no Q4 nor walkback rates", () => {
+      // Rate map with Q4 dates that have GBP but NOT CHF. getQ4AverageRate has no
+      // CHF data and the year-end fallback also has none → the position can't be
+      // valued. It must be SKIPPED (excluded from the file), not crash.
       const noChfRateMap: EcbRateMap = new Map([
         ["2025-12-31", new Map([["GBP", new Decimal("1.15")]])],
         ["2025-12-30", new Map([["GBP", new Decimal("1.15")]])],
@@ -407,9 +408,10 @@ describe("Modelo 720 Generator", () => {
 
       const positions = [makePosition({ positionValue: "60000", assetCategory: "STK", currency: "CHF" })];
 
-      expect(() => generateModelo720(positions, noChfRateMap, baseConfig)).toThrow(
-        /No ECB rate found for CHF/,
-      );
+      let result!: string;
+      expect(() => { result = generateModelo720(positions, noChfRateMap, baseConfig); }).not.toThrow();
+      // Only the unvaluable CHF position exists → nothing to declare → empty file.
+      expect(result).toBe("");
     });
   });
 
@@ -528,5 +530,46 @@ describe("Modelo 720 Generator", () => {
       expect(stkLines.length).toBeGreaterThanOrEqual(2);
       expect(fundLines.length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe("Modelo 720 — unvaluable position (missing year-end rate) degrades, does not throw", () => {
+  it("does NOT throw when a position currency has no rate in the map", () => {
+    // A crypto/FCY position whose year-end rate was never fetched. getEcbRate
+    // would throw "No ECB rate found / non-fiat" and crash the generator.
+    const positions = [makePosition({
+      symbol: "BTC", description: "Bitcoin", isin: "", currency: "BTC",
+      assetCategory: "STK", positionValue: "60000",
+    })];
+    expect(() => generateModelo720(positions, rateMap, baseConfig)).not.toThrow();
+  });
+
+  it("does NOT throw on checkModelo720Thresholds with an unvaluable position", () => {
+    const positions = [makePosition({ currency: "BTC", isin: "", positionValue: "60000" })];
+    expect(() => checkModelo720Thresholds(positions, rateMap, 2025)).not.toThrow();
+  });
+
+  it("does NOT mark a still-held but unvaluable position as cancelled (C)", () => {
+    // Position with a real ISIN declared last year, still held this year, but its
+    // currency has no year-end rate → skipped from records. It must NOT appear as
+    // a "C" (cancelled) record (which would tell AEAT it was sold).
+    const heldUnvaluable = makePosition({
+      isin: "US0000000099", symbol: "ZZZ", description: "Held FCY", currency: "ZZZ", positionValue: "60000",
+    });
+    // A valued GBP position keeps the file non-empty so records ARE generated.
+    const valued = makePosition({ isin: "GB0000000001", symbol: "GBX", currency: "GBP", positionValue: "60000" });
+    const result = generateModelo720([heldUnvaluable, valued], rateMap, {
+      ...baseConfig,
+      previousYearIsins: ["US0000000099"], // declared last year
+    });
+    // The still-held (but unvaluable) ISIN must NOT be emitted as a cancelled
+    // record. It's skipped from detail records entirely, so a cancelled record is
+    // the ONLY way it could appear — assert it appears in no detail record.
+    // (declType is at offset 423; ISIN at 131-143, per the --previous-720 parser.)
+    const detailLines = result.split("\n").filter((l) => l.startsWith("2"));
+    const heldIsinRecords = detailLines.filter((l) => l.slice(131, 143).trim() === "US0000000099");
+    expect(heldIsinRecords).toHaveLength(0);
+    // Sanity: the valued GBP position IS declared.
+    expect(detailLines.some((l) => l.slice(131, 143).trim() === "GB0000000001")).toBe(true);
   });
 });

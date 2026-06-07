@@ -242,6 +242,20 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 }
 
 /**
+ * Non-throwing year-end valuation rate for an open position's currency.
+ * Returns EUR=1, a rate from the map (fiat or stablecoin→USD), or null when the
+ * currency has no resolvable rate (e.g. a crypto coin like BTC, or a fiat whose
+ * year-end rate was never fetched). Callers in the Modelo 720/721/D-6 generators
+ * use this to SKIP an unvaluable position from EUR totals and surface it for
+ * manual valuation, instead of letting getEcbRate throw and crash the whole
+ * declaration.
+ */
+export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: string): Decimal | null {
+  if (currency === "EUR") return new Decimal(1);
+  return lookupRateInMap(rateMap, date, currency);
+}
+
+/**
  * Calculate the Q4 (Oct 1 - Dec 31) average exchange rate for a given currency.
  *
  * Modelo 720 requires STK positions to use the Q4 average FX rate
