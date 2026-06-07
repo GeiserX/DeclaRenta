@@ -19,8 +19,24 @@ import {
   computeCasillaBlocksWithFx,
   combinedNetGainLoss,
 } from "../../src/generators/casillas.js";
+import { renderDividendsDetail } from "../../src/web/casilla-detail.js";
 import Decimal from "decimal.js";
-import type { TaxSummary, FifoDisposal } from "../../src/types/tax.js";
+import type { TaxSummary, FifoDisposal, DividendEntry } from "../../src/types/tax.js";
+
+function makeDividend(overrides: Partial<DividendEntry> = {}): DividendEntry {
+  return {
+    isin: "US0378331005",
+    symbol: "AAPL",
+    description: "APPLE INC dividend",
+    payDate: "20250213",
+    grossAmountEur: new Decimal("24.50"),
+    withholdingTaxEur: new Decimal("3.68"),
+    withholdingCountry: "US",
+    currency: "USD",
+    ecbRate: new Decimal("0.92"),
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -272,5 +288,41 @@ describe("combinedNetGainLoss — net gain/loss card value", () => {
     expect(net.toFixed(2)).toBe("-200.00");
     // The net gain/loss card CSS class logic: loss → "loss" class
     expect(net.greaterThanOrEqualTo(0)).toBe(false);
+  });
+});
+
+describe("renderDividendsDetail (Casilla 0029 card)", () => {
+  it("does NOT render a withholding/Retención column", () => {
+    const html = renderDividendsDetail([makeDividend()]);
+    // The per-issuer table header has 5 columns: ISIN, Symbol, Country, Payments, Gross.
+    const headerRow = html.slice(html.indexOf("<thead>"), html.indexOf("</thead>"));
+    expect(headerRow).not.toContain("Retención");
+    expect(headerRow).not.toContain("Retencion");
+    // Gross is still shown; withholding is not. fmtEur renders Spanish "24,50".
+    expect(html).toContain("24,50");
+    expect(html).not.toContain("3,68");
+  });
+
+  it("appends the foreign-withholding redirect note when withholding > 0", () => {
+    const html = renderDividendsDetail([makeDividend({ withholdingTaxEur: new Decimal("3.68") })]);
+    expect(html).toContain("0588");
+    expect(html).toMatch(/Retenciones/); // references the Renta Web field name in the note
+  });
+
+  it("omits the note when there is no foreign withholding (no noise on clean reports)", () => {
+    const html = renderDividendsDetail([makeDividend({ withholdingTaxEur: new Decimal("0") })]);
+    expect(html).not.toContain("0588");
+  });
+
+  it("uses colspan=5 for the per-payment drill-down subrow after dropping the column", () => {
+    const html = renderDividendsDetail([makeDividend()]);
+    expect(html).toContain('colspan="5"');
+    expect(html).not.toContain('colspan="6"');
+  });
+
+  it("renders the empty-state when there are no dividends", () => {
+    const html = renderDividendsDetail([]);
+    expect(html).not.toContain("0588"); // note guarded behind the early return
+    expect(html).not.toContain("<table");
   });
 });

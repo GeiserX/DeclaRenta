@@ -61,6 +61,7 @@ const eu: TranslationKeys = {
   "table.payments": "Ordainketak",
   "casilla.dividends_by_issuer": "Dibidenduak jaulkitzaileka",
   "casilla.dividends_per_payment": "Banakako ordainketak",
+  "casilla.dividends_withholding_note": "Atzerriko atxikipena ez da hemen aitortzen. Renta Web-eko «Alta Capital mobiliario» formularioan, utzi «Retenciones» eremua 0 balioan — atzerriko atxikipena bereiz kentzen da 0588 gelaxkan (nazioarteko zergapetze bikoitzaren kenkaria, IRPF Legearen 80. art.).",
   "table.casilla": "Laukia",
   "table.concept": "Kontzeptua",
   "table.amount_eur": "Zenbatekoa (EUR)",

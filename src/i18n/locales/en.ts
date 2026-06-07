@@ -60,6 +60,7 @@ const en: TranslationKeys = {
   "table.payments": "Payments",
   "casilla.dividends_by_issuer": "Dividends by issuer",
   "casilla.dividends_per_payment": "Individual payments",
+  "casilla.dividends_withholding_note": "Foreign withholding tax is not declared here. In the AEAT Renta Web \"Alta Capital mobiliario\" form, leave the \"Retenciones\" field at 0 — foreign withholding is deducted separately in box 0588 (deduction for international double taxation, Art. 80 LIRPF).",
   "table.casilla": "Box",
   "table.concept": "Concept",
   "table.amount_eur": "Amount (EUR)",

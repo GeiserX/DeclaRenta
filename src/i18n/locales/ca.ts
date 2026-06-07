@@ -61,6 +61,7 @@ const ca: TranslationKeys = {
   "table.payments": "Pagaments",
   "casilla.dividends_by_issuer": "Dividends per emissor",
   "casilla.dividends_per_payment": "Pagaments individuals",
+  "casilla.dividends_withholding_note": "La retenció estrangera no es declara aquí. En el formulari «Alta Capital mobiliario» de Renta Web, deixa el camp «Retencions» a 0 — la retenció estrangera es dedueix per separat a la casella 0588 (deducció per doble imposició internacional, Art. 80 LIRPF).",
   "table.casilla": "Casella",
   "table.concept": "Concepte",
   "table.amount_eur": "Import (EUR)",
