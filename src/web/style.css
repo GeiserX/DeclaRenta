@@ -1715,6 +1715,18 @@ footer a:hover {
   padding: 0.3rem 0.5rem;
 }
 
+/* Foreign-withholding redirect note under the Casilla 0029 dividends detail. */
+.detail-note {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--surface, rgba(127, 127, 127, 0.08));
+  border-left: 3px solid var(--border);
+  border-radius: 4px;
+}
+
 /* Year comparison */
 .year-compare {
   margin-top: 2rem;

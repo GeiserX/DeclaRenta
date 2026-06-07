@@ -9,7 +9,7 @@ import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate } from "../engine/ecb.js";
+import { lookupPositionRate } from "../engine/ecb.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 
@@ -93,9 +93,13 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
-  // Threshold check (50,000 EUR)
+  // Threshold check (50,000 EUR). Positions whose currency (often the crypto
+  // coin itself) has no resolvable year-end rate are excluded from the EUR total
+  // and surfaced below for manual valuation, instead of crashing the section.
+  let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = getEcbRate(rateMap, yearEnd, p.currency);
+    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    if (rate === null) { unvaluedCount++; return sum; }
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
 
@@ -125,8 +129,8 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <th>${t("table.units")}</th><th>${t("table.amount_eur")}</th>
     </tr></thead>
     <tbody>${positions.map((p) => {
-      const rate = getEcbRate(rateMap, yearEnd, p.currency);
-      const val = fmtEur(new Decimal(p.positionValue).mul(rate));
+      const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+      const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
       const exchange = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "—";
       return `<tr>
         <td class="mono">${esc(p.description || p.isin || p.symbol)}</td>
@@ -143,10 +147,14 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     html += `<div class="rates-display">
       <h4>${t("m721.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
-        const rate = getEcbRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate.toFixed(4)} &euro;</span>`;
+        const rate = lookupPositionRate(rateMap, yearEnd, cur);
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
+  }
+
+  if (unvaluedCount > 0) {
+    html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
 
   html += `<div class="banner banner-warning">${t("m721.format_notice")}</div>`;

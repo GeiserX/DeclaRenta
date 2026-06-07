@@ -225,3 +225,19 @@ describe("D-6 Guide Generator", () => {
     });
   });
 });
+
+describe("D-6 — unvaluable position (missing year-end rate) degrades, does not throw", () => {
+  it("does NOT throw and skips a position whose currency has no rate", () => {
+    const positions = [
+      makePosition({ isin: "US78462F1030", currency: "USD", positionValue: "25000" }), // valued
+      makePosition({ isin: "US0000000001", symbol: "XYZ", description: "Unfetched FCY", currency: "ZZZ", positionValue: "9999" }), // no rate
+    ];
+    let report!: ReturnType<typeof generateD6Report>;
+    expect(() => {
+      report = generateD6Report(positions, rateMap, 2025, "García López, Juan", "12345678A");
+    }).not.toThrow();
+    // The unvaluable position is excluded; the valuable USD one remains.
+    expect(report.positions.every((p) => p.currency !== "ZZZ")).toBe(true);
+    expect(report.positions.some((p) => p.currency === "USD")).toBe(true);
+  });
+});

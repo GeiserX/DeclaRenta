@@ -9,19 +9,26 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate, getQ4AverageRate } from "../engine/ecb.js";
+import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
 
-/** Get the correct valuation rate for a position: Q4 average for STK, year-end spot for others. */
-function getValuationRate(rateMap: EcbRateMap, year: number, currency: string, assetCategory: string): Decimal {
+/**
+ * Get the valuation rate for a position: Q4 average for STK, year-end spot for
+ * others. Returns null when the currency has no resolvable rate (e.g. a crypto
+ * coin, or a fiat whose year-end rate was never fetched) so callers can skip the
+ * position from EUR totals and surface it for manual valuation rather than
+ * crashing the whole declaration.
+ */
+function getValuationRate(rateMap: EcbRateMap, year: number, currency: string, assetCategory: string): Decimal | null {
   const yearEnd = `${year}-12-31`;
   if (assetCategory !== "STK") {
-    return getEcbRate(rateMap, yearEnd, currency);
+    return lookupPositionRate(rateMap, yearEnd, currency);
   }
   try {
     return getQ4AverageRate(rateMap, year, currency);
   } catch (error: unknown) {
-    if (error instanceof Error && error.message.startsWith("No ECB Q4 rates found")) {
-      return getEcbRate(rateMap, yearEnd, currency);
+    // No Q4 data (or non-fiat) → fall back to the non-throwing year-end spot.
+    if (error instanceof Error && (error.message.startsWith("No ECB Q4 rates found") || error.message.startsWith("No ECB Q4 rate available"))) {
+      return lookupPositionRate(rateMap, yearEnd, currency);
     }
     throw error;
   }
@@ -37,7 +44,10 @@ export interface Modelo720ThresholdResult {
 function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal } | undefined {
   if (!cb.averageQ4Cash) return undefined;
   const yearEnd = `${year}-12-31`;
-  const ecbRate = cb.currency === "EUR" ? new Decimal(1) : getEcbRate(rateMap, yearEnd, cb.currency);
+  const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
+  // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
+  // for manual review) rather than crash the threshold check / file generation.
+  if (ecbRate === null) return undefined;
   return {
     ending: new Decimal(cb.endingCash).mul(ecbRate),
     averageQ4: new Decimal(cb.averageQ4Cash).mul(ecbRate),
@@ -73,6 +83,8 @@ export function checkModelo720Thresholds(
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .reduce((sum, p) => {
       const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
+      // Unvaluable position (no resolvable rate) — excluded from the EUR total.
+      if (ecbRate === null) return sum;
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
@@ -132,8 +144,12 @@ export function generateModelo720(
   // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
   const entries = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-    .map((p) => {
+    .flatMap((p) => {
       const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
+      // Unvaluable position (no resolvable rate): cannot be written to the
+      // fixed-width record without an EUR value — skip it. The caller surfaces a
+      // warning so the user values and declares it manually.
+      if (ecbRate === null) return [];
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
       const costEur = new Decimal(p.costBasisMoney).abs().mul(ecbRate);
 
@@ -151,12 +167,20 @@ export function generateModelo720(
       // Declaration type: A (new), M (existing), C (cancelled/sold)
       const declType: "A" | "M" | "C" = previousIsins.has(p.isin) ? "M" : "A";
 
-      return { position: p, valueEur, costEur, firstAcquisitionDate, declType };
+      return [{ position: p, valueEur, costEur, firstAcquisitionDate, declType }];
     });
 
-  // Build "C" (cancelled) records for ISINs in previous year but not in current positions
-  const currentIsins = new Set(entries.map((e) => e.position.isin));
-  const cancelledIsins = [...previousIsins].filter((isin) => !currentIsins.has(isin));
+  // Build "C" (cancelled) records for ISINs in previous year but no longer HELD.
+  // Use the held set (all V-category positions), NOT `entries` — a position that
+  // is still held but couldn't be valued (no year-end rate) is skipped from
+  // `entries`, yet it must NOT be reported as cancelled/sold (that would tell
+  // AEAT the user liquidated an asset they still hold).
+  const heldIsins = new Set(
+    positions
+      .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+      .map((p) => p.isin),
+  );
+  const cancelledIsins = [...previousIsins].filter((isin) => !heldIsins.has(isin));
   const cancelledEntries = cancelledIsins.map((isin) => ({
     isin,
     declType: "C" as const,

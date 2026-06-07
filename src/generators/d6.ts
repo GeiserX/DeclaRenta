@@ -17,7 +17,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate } from "../engine/ecb.js";
+import { lookupPositionRate } from "../engine/ecb.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -100,11 +100,13 @@ export function generateD6Report(
       return country !== "ES";
     })
     .filter((p) => new Decimal(p.quantity).greaterThan(0)) // Exclude short positions
-    .map((p) => {
-      const ecbRate = getEcbRate(rateMap, yearEnd, p.currency);
+    .flatMap((p) => {
+      const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
+      // No resolvable year-end rate → can't value in EUR; skip rather than crash.
+      if (ecbRate === null) return [];
       const valueEur = new Decimal(p.positionValue).mul(ecbRate);
 
-      return {
+      return [{
         isin: p.isin,
         description: p.description,
         countryCode: p.isin.slice(0, 2).toUpperCase(),
@@ -112,14 +114,23 @@ export function generateD6Report(
         sharesAtYearEnd: new Decimal(p.quantity).toString(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,
-      };
+      }];
     });
 
-  // Build cancellation list: ISINs in previousYearIsins NOT in current positions
-  const currentIsins = new Set(d6Positions.map((p) => p.isin));
+  // Build cancellation list: ISINs in previousYearIsins no longer HELD. Use the
+  // held foreign-position set, NOT `d6Positions` — a still-held position that
+  // couldn't be valued (no year-end rate) is skipped from d6Positions but must
+  // NOT be reported as sold/liquidated.
+  const heldIsins = new Set(
+    positions
+      .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+      .filter((p) => p.isin.slice(0, 2).toUpperCase() !== "ES")
+      .filter((p) => new Decimal(p.quantity).greaterThan(0))
+      .map((p) => p.isin),
+  );
   const previousIsins = new Set(previousYearIsins ?? []);
   const cancelled: D6Cancellation[] = [...previousIsins]
-    .filter((isin) => !currentIsins.has(isin))
+    .filter((isin) => !heldIsins.has(isin))
     .map((isin) => ({
       isin,
       reason: "Posición vendida o liquidada durante el ejercicio",

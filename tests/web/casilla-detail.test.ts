@@ -314,6 +314,15 @@ describe("renderDividendsDetail (Casilla 0029 card)", () => {
     expect(html).not.toContain("0588");
   });
 
+  it("omits the note when withholdings net to zero across entries (aggregated total)", () => {
+    // Same issuer+country, offsetting entries → net withholding 0 → no note.
+    const html = renderDividendsDetail([
+      makeDividend({ payDate: "20250213", withholdingTaxEur: new Decimal("3.68") }),
+      makeDividend({ payDate: "20250515", withholdingTaxEur: new Decimal("-3.68") }),
+    ]);
+    expect(html).not.toContain("0588");
+  });
+
   it("uses colspan=5 for the per-payment drill-down subrow after dropping the column", () => {
     const html = renderDividendsDetail([makeDividend()]);
     expect(html).toContain('colspan="5"');
