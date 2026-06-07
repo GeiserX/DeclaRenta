@@ -22,7 +22,7 @@ jobs:
       new_tag: ${{ steps.version.outputs.new_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -178,7 +178,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout for changelog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
