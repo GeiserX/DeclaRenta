@@ -5,6 +5,7 @@
  * into structured TypeScript objects.
  */
 
+import Decimal from "decimal.js";
 import { XMLParser } from "fast-xml-parser";
 import type {
   FlexStatement,
@@ -79,9 +80,19 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   // double-count dividends, withholding, fees and deposits, so they are
   // dropped here before mapping.
   let cashSummaryDuplicatesSkipped = 0;
+  let executionsMergedGroups = 0;
+  let executionsMergedSources = 0;
+  let orderLevelDetailDuplicatesSkipped = 0;
 
   for (const stmt of statements) {
-    trades.push(...ensureArray(stmt.Trades?.Trade).map(mapTrade));
+    const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
+    const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
+    orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
+    const stmtTrades = filteredRawTrades.map(mapTrade);
+    const { merged, mergedGroupCount, sourceFillCount } = mergeExecutionsByOrder(stmtTrades);
+    trades.push(...merged);
+    executionsMergedGroups += mergedGroupCount;
+    executionsMergedSources += sourceFillCount;
     const rawCash = ensureArray(stmt.CashTransactions?.CashTransaction) as Record<string, string>[];
     const detailCash = rawCash.filter((raw) => !isCashSummaryRow(raw));
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
@@ -124,6 +135,26 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       message: `Se omitieron ${cashSummaryDuplicatesSkipped} filas resumen duplicadas en las transacciones de efectivo.`,
       hint: 'Tu Flex Query tiene activada la opción "Summary" en la sección Cash Transactions, lo que duplica cada movimiento. Puedes desactivarla, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar dividendos, retenciones y comisiones.',
       context: { skipped: String(cashSummaryDuplicatesSkipped) },
+    });
+  }
+
+  if (executionsMergedGroups > 0) {
+    parserMessages.push({
+      id: "parser.executions_merged",
+      severity: "info",
+      message: `Se agruparon ${executionsMergedSources} ejecuciones parciales en ${executionsMergedGroups} órdenes.`,
+      hint: "Las órdenes con varias ejecuciones parciales se han combinado en una sola operación, igual que hacen los brokers que informan a Hacienda. El cálculo fiscal no cambia: cantidad total, precio medio ponderado y comisiones suman lo mismo.",
+      context: { sourceFillCount: String(executionsMergedSources), mergedGroupCount: String(executionsMergedGroups) },
+    });
+  }
+
+  if (orderLevelDetailDuplicatesSkipped > 0) {
+    parserMessages.push({
+      id: "parser.order_level_duplicates",
+      severity: "info",
+      message: `Se omitieron ${orderLevelDetailDuplicatesSkipped} filas agregadas de tipo ORDER duplicadas en las operaciones.`,
+      hint: 'Tu Flex Query tiene activado el nivel de detalle "Orders" además de "Executions" en la sección Trades, lo que duplica cada operación. Puedes desactivar "Orders" en la configuración del Flex Query, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar cantidades, importes y comisiones.',
+      context: { skipped: String(orderLevelDetailDuplicatesSkipped) },
     });
   }
 
@@ -182,6 +213,126 @@ function mapTrade(raw: Record<string, string>): Trade {
     expiry: raw.expiry || undefined,
     underlyingSymbol: raw.underlyingSymbol || undefined,
     underlyingIsin: raw.underlyingIsin || undefined,
+    ibOrderID: raw.ibOrderID || undefined,
+  };
+}
+
+/**
+ * Collapse same-order partial-fill executions into a single synthetic Trade.
+ *
+ * IBKR emits one `<Trade levelOfDetail="EXECUTION">` per fill; an order that
+ * fills in 3 partials yields 3 Trades sharing the same `ibOrderID` + `tradeDate`.
+ * Hacienda-facing brokers report at the order level, so we mirror that here:
+ * quantities and money sum, price becomes the VWAP. Tax math is unchanged
+ * because FIFO consumes `quantity × tradePrice × multiplier + taxes + commission`,
+ * and the merged values preserve that identity exactly.
+ *
+ * GTC orders that span multiple `tradeDate`s split back into one row per day
+ * (the key includes `tradeDate`), so a year-boundary GTC fill lands in the
+ * correct tax year.
+ *
+ * Heterogeneous `buySell` (a BUY-then-SELL flip in one ibOrderID) or mixed
+ * `openCloseIndicator` (Open + Close fills under one id) also stay split:
+ * VWAP across opposite sides is meaningless, and `openCloseIndicator` is
+ * tax-relevant — `fifo.ts` branches on it for cost basis vs proceeds.
+ *
+ * Trades with no `ibOrderID` pass through un-merged (rare; only carry-forward
+ * edge cases — real IBKR data always populates the field).
+ */
+function mergeExecutionsByOrder(
+  trades: Trade[],
+): { merged: Trade[]; mergedGroupCount: number; sourceFillCount: number } {
+  const groups = new Map<string, Trade[]>();
+  let ungroupedCounter = 0;
+
+  for (const trade of trades) {
+    const key = trade.ibOrderID
+      ? `${trade.ibOrderID}|${trade.tradeDate}|${trade.buySell}|${trade.openCloseIndicator}`
+      : `__ungrouped_${ungroupedCounter++}__`;
+    let bucket = groups.get(key);
+    if (!bucket) {
+      bucket = [];
+      groups.set(key, bucket);
+    }
+    bucket.push(trade);
+  }
+
+  const merged: Trade[] = [];
+  let mergedGroupCount = 0;
+  let sourceFillCount = 0;
+  for (const bucket of groups.values()) {
+    if (bucket.length === 1) {
+      merged.push(bucket[0]!);
+      continue;
+    }
+    mergedGroupCount++;
+    sourceFillCount += bucket.length;
+    merged.push(mergeTradeGroup(bucket));
+  }
+  return { merged, mergedGroupCount, sourceFillCount };
+}
+
+function mergeTradeGroup(group: Trade[]): Trade {
+  const first = group[0]!;
+  let qty = new Decimal(0);
+  let qtyAbs = new Decimal(0);
+  let money = new Decimal(0);
+  let proceeds = new Decimal(0);
+  let cost = new Decimal(0);
+  let commission = new Decimal(0);
+  let taxes = new Decimal(0);
+  let fifoPnl = new Decimal(0);
+  const notes = new Set<string>();
+  let exchange = first.exchange;
+
+  for (const t of group) {
+    const q = new Decimal(t.quantity);
+    qty = qty.plus(q);
+    qtyAbs = qtyAbs.plus(q.abs());
+    money = money.plus(new Decimal(t.tradeMoney || "0"));
+    proceeds = proceeds.plus(new Decimal(t.proceeds || "0"));
+    cost = cost.plus(new Decimal(t.cost || "0"));
+    commission = commission.plus(new Decimal(t.commission || "0"));
+    taxes = taxes.plus(new Decimal(t.taxes || "0"));
+    fifoPnl = fifoPnl.plus(new Decimal(t.fifoPnlRealized || "0"));
+    if (!exchange) exchange = t.exchange;
+    if (t.notes) {
+      for (const n of t.notes.split(";")) {
+        const trimmed = n.trim();
+        if (trimmed) notes.add(trimmed);
+      }
+    }
+  }
+
+  // VWAP per unit, consistent with IBKR's tradePrice semantics:
+  //   tradeMoney = quantity × tradePrice × multiplier
+  // All fills share the same multiplier (invariant within an order).
+  const multiplier = new Decimal(first.multiplier || "1");
+  const vwap = qtyAbs.isZero() || multiplier.isZero()
+    ? new Decimal(first.tradePrice)
+    : money.abs().dividedBy(qtyAbs.mul(multiplier));
+
+  // Stable synthetic tradeID covering the full bucket key
+  // (ibOrderID, tradeDate, buySell, openCloseIndicator). Must mirror
+  // the bucket dimensions in mergeExecutionsByOrder — otherwise two
+  // distinct merged orders would alias to the same ID, re-triggering
+  // the validator's composite-key dedup misflag and breaking the
+  // merge.ts sort tiebreaker.
+  const syntheticTradeId = `merged-${first.ibOrderID}-${first.tradeDate}-${first.buySell}-${first.openCloseIndicator}`;
+
+  return {
+    ...first,
+    tradeID: syntheticTradeId,
+    quantity: qty.toString(),
+    tradePrice: vwap.toString(),
+    tradeMoney: money.toString(),
+    proceeds: proceeds.toString(),
+    cost: cost.toString(),
+    commission: commission.toString(),
+    taxes: taxes.toString(),
+    fifoPnlRealized: fifoPnl.toString(),
+    exchange,
+    notes: notes.size > 0 ? Array.from(notes).join(";") : undefined,
   };
 }
 
@@ -189,6 +340,55 @@ function mapTrade(raw: Record<string, string>): Trade {
 const LEVEL_OF_DETAIL_SUMMARY = "SUMMARY";
 /** Placeholder accountId IBKR writes on summary rows that omit the official attribute. */
 const SUMMARY_ACCOUNT_PLACEHOLDER = "-";
+/** IBKR's aggregated marker for the Trades section; emitted when the Flex Query
+ *  selects the "Orders" level of detail alongside "Executions". */
+const LEVEL_OF_DETAIL_ORDER = "ORDER";
+/** IBKR's per-fill marker for the Trades section; the default level of detail. */
+const LEVEL_OF_DETAIL_EXECUTION = "EXECUTION";
+
+/**
+ * Drop ORDER-level Trade rows when an EXECUTION-level counterpart exists for
+ * the same `ibOrderID` AND `tradeDate`. IBKR Flex Query allows multiple
+ * `levelOfDetail` selections on the Trades section: enabling both "Executions"
+ * (per-fill) and "Orders" (aggregated) emits the same activity twice — once
+ * per fill, once aggregated. Since {@link mergeExecutionsByOrder} groups by
+ * `ibOrderID|tradeDate|...`, leaving the ORDER row in would double-count
+ * quantity, money and commission.
+ *
+ * The match is per `(ibOrderID, tradeDate)` rather than a global flag, or per
+ * `ibOrderID` alone, so that:
+ *  - hybrid statements (some orders with both LODs, others with only ORDER —
+ *    e.g. BookTrade / internal-transfer rows that may bypass execution detail)
+ *    keep their ORDER-only rows, and
+ *  - a GTC order whose `ibOrderID` carries across days never silently drops an
+ *    ORDER row for a date that has no matching EXECUTION row.
+ *
+ * ORDER rows with no `ibOrderID` are always kept; they cannot be a duplicate
+ * of a keyed EXECUTION row.
+ *
+ * Symmetric to {@link isCashSummaryRow} for the CashTransactions section, but
+ * kept separate because the markers differ (SUMMARY vs ORDER), cash carries a
+ * `transactionID/accountId` fallback signal that does not apply to trades, and
+ * trades only drop ORDER when a matching EXECUTION is also present (a pure
+ * ORDER-only export remains valid input).
+ */
+function filterDuplicateLevelOfDetail(rawTrades: Record<string, string>[]): Record<string, string>[] {
+  const executionKeys = new Set<string>();
+  for (const t of rawTrades) {
+    if ((t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_EXECUTION && t.ibOrderID) {
+      executionKeys.add(`${t.ibOrderID}|${t.tradeDate ?? ""}`);
+    }
+  }
+  if (executionKeys.size === 0) return rawTrades;
+  return rawTrades.filter(
+    (t) =>
+      !(
+        (t.levelOfDetail ?? "").toUpperCase() === LEVEL_OF_DETAIL_ORDER &&
+        t.ibOrderID &&
+        executionKeys.has(`${t.ibOrderID}|${t.tradeDate ?? ""}`)
+      ),
+  );
+}
 
 /**
  * Detect a duplicate "Summary" cash-transaction row produced when the user
