@@ -78,11 +78,11 @@
     "fast-xml-parser": "^5.8.0",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",
-    "pdfkit": "^0.18.0",
+    "pdfkit": "^0.19.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@types/node": "^22.19.19",
+    "@types/node": "^22.19.20",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.25.0",
     "jsdom": "^29.1.1",
