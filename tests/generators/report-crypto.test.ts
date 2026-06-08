@@ -120,8 +120,11 @@ describe("generateTaxReport — crypto↔crypto permutas", () => {
     expect(report.capitalGains.disposals).toHaveLength(1);
     // Proceeds: 100 × 0.0006 BTC × 62000 EUR/BTC = 3720 EUR
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("3720.00");
-    // Cost: 100 × 0.0005 BTC × 60000 EUR/BTC = 3000 EUR
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("3000.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("720.00");
+    // Cost in BTC (FCY): 100 × 0.0005 = 0.05 BTC. Under DGT V2422-20 the cost is
+    // converted at the SALE-date BTC rate (62000 EUR/BTC), not the buy-date rate:
+    // 0.05 × 62000 = 3100 EUR
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("3100.00");
+    // Gain in BTC = 0.01 BTC, × 62000 = 620.00 EUR
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("620.00");
   });
 });

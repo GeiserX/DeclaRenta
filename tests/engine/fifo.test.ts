@@ -59,12 +59,13 @@ describe("FifoEngine", () => {
     expect(disposals).toHaveLength(1);
     const d = disposals[0]!;
 
-    // Cost: 10 * 100 USD * 0.92 = 920 EUR
-    expect(d.costBasisEur.toFixed(2)).toBe("920.00");
+    // Cost in USD (1000) converted at the SALE-date rate (DGT V2422-20):
+    // 10 * 100 USD * 0.91 = 910 EUR
+    expect(d.costBasisEur.toFixed(2)).toBe("910.00");
     // Proceeds: 10 * 120 USD * 0.91 = 1092 EUR
     expect(d.proceedsEur.toFixed(2)).toBe("1092.00");
-    // Gain: 1092 - 920 = 172 EUR
-    expect(d.gainLossEur.toFixed(2)).toBe("172.00");
+    // Gain: 1092 - 910 = 182 EUR (gain computed in USD = 200, × 0.91 sale rate)
+    expect(d.gainLossEur.toFixed(2)).toBe("182.00");
   });
 
   it("should consume lots in FIFO order", () => {
@@ -147,11 +148,12 @@ describe("FifoEngine", () => {
     const disposals = engine.processTrades(trades, rates);
 
     expect(disposals).toHaveLength(1);
-    // Cost: 5 × 3.00 × 100 × 0.92 = 1380.00 EUR
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1380.00");
+    // Cost in USD (1500) converted at the SALE-date rate: 5 × 3.00 × 100 × 0.91 = 1365.00 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1365.00");
     // Proceeds: 5 × 5.00 × 100 × 0.91 = 2275.00 EUR
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("2275.00");
-    expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("895.00");
+    // Gain in USD = 1000, × 0.91 sale rate = 910.00 EUR
+    expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("910.00");
   });
 
   it("should group options by symbol when ISIN is blank", () => {
@@ -185,8 +187,8 @@ describe("FifoEngine", () => {
     const disposals = engine.processTrades(trades, rates);
 
     expect(disposals).toHaveLength(1);
-    // Cost from call lot: 5 × 3.00 × 100 × 0.92 = 1380.00
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1380.00");
+    // Cost from call lot in USD (1500) converted at the SALE-date rate (0.91): 5 × 3.00 × 100 × 0.91 = 1365.00
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1365.00");
     expect(engine.warnings).toHaveLength(0);
   });
 
@@ -222,8 +224,9 @@ describe("FifoEngine", () => {
     // After split: 10 shares → 100 shares at 100/share → costPerShare = 100
     // Sell 50 × $110 × 0.91 = $5005 EUR
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("5005.00");
-    // Cost: 50/100 of original cost (10 × 1000 × 0.92 = 9200), so 4600
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("4600.00");
+    // Cost in USD: 50/100 of original 10000 USD = 5000 USD, converted at the
+    // SALE-date rate (0.91): 5000 × 0.91 = 4550.00 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("4550.00");
     // Split application generates an informational warning
     expect(engine.warnings).toHaveLength(1);
     expect(engine.warnings[0]).toContain("Split");
@@ -263,19 +266,21 @@ describe("FifoEngine", () => {
     const disposals = engine.processTrades(trades, rates);
 
     expect(disposals).toHaveLength(1);
-    // Buy cost: (100 × 50 + 10) × 0.92 = 4609.20 EUR for 100 shares
-    // Cost per share: 4609.20 / 100 = 46.092
-    // Disposal cost: 30 × 46.092 = 1382.76
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1382.76");
+    // Buy cost in USD: 100 × 50 + 10 = 5010 USD for 100 shares
+    // Cost per share: 5010 / 100 = 50.1 USD
+    // Disposal cost in USD: 30 × 50.1 = 1503 USD, converted at the SALE-date rate
+    // (0.91): 1503 × 0.91 = 1367.73 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("1367.73");
     // Proceeds: (30 × 60 - 3) × 0.91 = 1635.27
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1635.27");
 
-    // Remaining lot should have 70 shares with proportional cost
+    // Remaining lot should have 70 shares with proportional cost (in FCY/USD)
     const remaining = engine.getRemainingLots();
     const lots = remaining.get("US0378331005")!;
     expect(lots).toHaveLength(1);
     expect(lots[0]!.quantity.toNumber()).toBe(70);
-    expect(lots[0]!.costInEur.toFixed(2)).toBe("3226.44");
+    // 70 × 50.1 = 3507.00 USD
+    expect(lots[0]!.costInFcy.toFixed(2)).toBe("3507.00");
   });
 
   it("should apply reverse split correctly", () => {
@@ -301,8 +306,9 @@ describe("FifoEngine", () => {
 
     expect(disposals).toHaveLength(1);
     // After 1:10 reverse split: 100 shares → 10 shares at $100/share
-    // Sell 5 of 10 → cost = 5/10 * (100*10*0.92) = 460
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("460.00");
+    // Sell 5 of 10 → cost in USD = 5/10 * (100*10) = 500 USD, converted at the
+    // SALE-date rate (0.91): 500 × 0.91 = 455.00 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("455.00");
     // Proceeds: 5 × $200 × 0.91 = 910
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("910.00");
 
@@ -337,9 +343,10 @@ describe("FifoEngine", () => {
     const totalSold = disposals.reduce((sum, d) => sum.plus(d.quantity), new Decimal(0));
     expect(totalSold.toString()).toBe("12");
 
-    // Total cost: 920.00 (buy: 10×100×0.92) + 180.00 (scrip: 200×0.90)
+    // Cost basis is converted at the SALE-date rate (0.91, DGT V2422-20):
+    // buy 10 × 100 USD = 1000 USD × 0.91 = 910.00; scrip 2 shares = 200 USD × 0.91 = 182.00
     const totalCost = disposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
-    expect(totalCost.toFixed(2)).toBe("1100.00");
+    expect(totalCost.toFixed(2)).toBe("1092.00");
     expect(engine.warnings.some((w) => w.includes("Scrip dividend"))).toBe(true);
   });
 
@@ -475,8 +482,9 @@ describe("FifoEngine", () => {
     const disposals = engine.processTrades(trades, rates);
 
     expect(disposals).toHaveLength(1);
-    // Cost: (10 × 100 + 5 + 2) × 0.92 = 1007 × 0.92 = 926.44
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("926.44");
+    // Cost in USD: 10 × 100 + 5 + 2 = 1007 USD, converted at the SALE-date rate
+    // (0.91): 1007 × 0.91 = 916.37 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("916.37");
     // Proceeds: (10 × 120 - 5 - 3) × 0.91 = 1192 × 0.91 = 1084.72
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("1084.72");
   });
@@ -629,14 +637,14 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
 
-      // Cost: 10 × 100 USD × 0.92 EUR/USD = 920.00 EUR
-      expect(d.costBasisEur.toFixed(2)).toBe("920.00");
+      // Cost in USD (1000) converted at the SALE-date rate (DGT V2422-20):
+      // 10 × 100 USD × 0.88 EUR/USD = 880.00 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("880.00");
       // Proceeds: 10 × 110 USD × 0.88 EUR/USD = 968.00 EUR
       expect(d.proceedsEur.toFixed(2)).toBe("968.00");
-      // Gain: 968 - 920 = 48.00 EUR
-      // Note: USD gained 10% in price but EUR/USD dropped from 0.92 to 0.88,
-      // so the EUR gain is smaller than the USD gain would suggest
-      expect(d.gainLossEur.toFixed(2)).toBe("48.00");
+      // Gain: the USD stock gain (100 USD) converted at the sale-date rate:
+      // 100 × 0.88 = 88.00 EUR. FX drift on the cost is a SEPARATE currency gain.
+      expect(d.gainLossEur.toFixed(2)).toBe("88.00");
 
       // ECB rates in disposal should reflect the USD rates used
       expect(d.acquireEcbRate.toFixed(4)).toBe("0.9200");
@@ -681,12 +689,13 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
 
-      // Cost: 10 × 25 GBP × 1.15 EUR/GBP = 287.50 EUR
-      expect(d.costBasisEur.toFixed(2)).toBe("287.50");
+      // Cost in GBP (250) converted at the SALE-date rate (DGT V2422-20):
+      // 10 × 25 GBP × 1.13 EUR/GBP = 282.50 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("282.50");
       // Proceeds: 10 × 28 GBP × 1.13 EUR/GBP = 316.40 EUR
       expect(d.proceedsEur.toFixed(2)).toBe("316.40");
-      // Gain: 316.40 - 287.50 = 28.90 EUR
-      expect(d.gainLossEur.toFixed(2)).toBe("28.90");
+      // Gain: GBP stock gain (30 GBP) × sale-date rate 1.13 = 33.90 EUR
+      expect(d.gainLossEur.toFixed(2)).toBe("33.90");
       expect(d.currency).toBe("GBP");
     });
 
@@ -723,17 +732,21 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
 
-      // Cost: 10 × 100 × 0.92 = 920.00 EUR
-      expect(d.costBasisEur.toFixed(2)).toBe("920.00");
+      // Under DGT V2422-20 the stock gain is computed in USD (1000 − 1000 = 0)
+      // and converted at the sale-date rate, so the STOCK gain is exactly 0.
+      // The FX move (0.92 → 0.95) is a SEPARATE currency gain handled by the FX
+      // engine — it no longer leaks into the stock gain.
+      // Cost: 10 × 100 × 0.95 (sale-date rate) = 950.00 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("950.00");
       // Proceeds: 10 × 100 × 0.95 = 950.00 EUR
       expect(d.proceedsEur.toFixed(2)).toBe("950.00");
-      // Gain is purely from FX: 950 - 920 = 30.00 EUR
-      expect(d.gainLossEur.toFixed(2)).toBe("30.00");
+      // Stock gain is exactly 0 (FX gain is tracked separately).
+      expect(d.gainLossEur.toFixed(2)).toBe("0.00");
     });
   });
 
   describe("Commission in different currency", () => {
-    it("should convert commission separately when commissionCurrency differs from trade currency", () => {
+    it("should homogenize commission into the share currency when commissionCurrency differs from trade currency", () => {
       const rates: EcbRateMap = new Map();
       rates.set("2025-03-15", new Map([["USD", "0.92"], ["GBP", "1.15"]]));
       rates.set("2025-09-20", new Map([["USD", "0.88"], ["GBP", "1.12"]]));
@@ -766,9 +779,12 @@ describe("FifoEngine", () => {
 
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
-      // BUY cost: 10×100×0.92 + 5×1.15 = 920 + 5.75 = 925.75
-      expect(d.costBasisEur.toFixed(2)).toBe("925.75");
-      // SELL proceeds: 10×110×0.88 - 5×1.12 = 968 - 5.60 = 962.40
+      // BUY cost in USD: 10×100 + commission homogenized to USD via the trade-date
+      // cross-rate (5 GBP × 1.15/0.92 = 6.25 USD) = 1006.25 USD. Converted at the
+      // SALE-date rate (0.88, DGT V2422-20): 1006.25 × 0.88 = 885.50 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("885.50");
+      // SELL proceeds in USD: 10×110 − commission homogenized to USD
+      // (5 GBP × 1.12/0.88 = 6.3636 USD) = 1093.6364 USD. × 0.88 = 962.40 EUR
       expect(d.proceedsEur.toFixed(2)).toBe("962.40");
     });
   });
@@ -905,12 +921,14 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
       expect(d.isShort).toBe(true);
-      // proceeds = premium received = 10 * 150 * 0.92 = 1380
-      expect(d.proceedsEur.toFixed(2)).toBe("1380.00");
-      // cost = buy-to-close = 10 * 140 * 0.91 = 1274
+      // Gain computed in the share currency (USD), converted at the CLOSE-date
+      // rate (DGT V2422-20): gain_usd = 10*150 - 10*140 = 100 USD; ×0.91 = 91.
+      expect(d.gainLossFcy.toFixed(2)).toBe("100.00");
+      // Both legs displayed at the close-date rate (0.91): proceeds 1500×0.91,
+      // cost 1400×0.91, so proceeds − cost === gain exactly.
+      expect(d.proceedsEur.toFixed(2)).toBe("1365.00");
       expect(d.costBasisEur.toFixed(2)).toBe("1274.00");
-      // gain = 1380 - 1274 = 106
-      expect(d.gainLossEur.toFixed(2)).toBe("106.00");
+      expect(d.gainLossEur.toFixed(2)).toBe("91.00");
     });
 
     it("should handle short sale at a loss", () => {
@@ -932,12 +950,13 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
       expect(d.isShort).toBe(true);
-      // proceeds = 10 * 100 * 0.92 = 920
-      expect(d.proceedsEur.toFixed(2)).toBe("920.00");
-      // cost = 10 * 130 * 0.91 = 1183
+      // Short gain computed in USD, converted at the CLOSE-date rate (0.91):
+      // open proceeds = 10 * 100 * 0.91 = 910
+      expect(d.proceedsEur.toFixed(2)).toBe("910.00");
+      // close cost = 10 * 130 * 0.91 = 1183
       expect(d.costBasisEur.toFixed(2)).toBe("1183.00");
-      // loss = 920 - 1183 = -263
-      expect(d.gainLossEur.toFixed(2)).toBe("-263.00");
+      // loss in USD = 1000 - 1300 = -300, × 0.91 = -273.00
+      expect(d.gainLossEur.toFixed(2)).toBe("-273.00");
     });
 
     it("should consume short lots in FIFO order", () => {
@@ -965,10 +984,11 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(2);
       // First disposal consumes the Jan short lot
       expect(disposals[0]!.acquireDate).toBe("2025-01-10");
-      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("450.00"); // 5*100*0.90
+      // Open proceeds converted at the CLOSE-date rate (0.91): 5*100*0.91
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("455.00");
       // Second disposal consumes the Mar short lot
       expect(disposals[1]!.acquireDate).toBe("2025-03-15");
-      expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("506.00"); // 5*110*0.92
+      expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("500.50"); // 5*110*0.91
     });
 
     it("should fall back to addLot when BUY+C has no short lots", () => {
@@ -1033,11 +1053,13 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
       expect(d.isShort).toBe(true);
-      // proceeds = 1 * 5 * 100 * 0.92 = 460
-      expect(d.proceedsEur.toFixed(2)).toBe("460.00");
-      // cost = 1 * 2 * 100 * 0.91 = 182
+      // Short gain computed in USD, converted at the CLOSE-date rate (0.91):
+      // open proceeds = 1 * 5 * 100 * 0.91 = 455
+      expect(d.proceedsEur.toFixed(2)).toBe("455.00");
+      // close cost = 1 * 2 * 100 * 0.91 = 182
       expect(d.costBasisEur.toFixed(2)).toBe("182.00");
-      expect(d.gainLossEur.toFixed(2)).toBe("278.00");
+      // gain in USD = 500 - 200 = 300, × 0.91 = 273.00
+      expect(d.gainLossEur.toFixed(2)).toBe("273.00");
     });
 
     it("should handle short option expiring worthless (BUY+C at price 0)", () => {
@@ -1061,12 +1083,13 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       const d = disposals[0]!;
       expect(d.isShort).toBe(true);
-      // proceeds = 1 * 3.50 * 100 * 0.92 = 322.00
-      expect(d.proceedsEur.toFixed(2)).toBe("322.00");
-      // cost = 1 * 0 * 100 * 0.91 = 0
+      // Short gain converted at the CLOSE-date rate (0.91, DGT V2422-20):
+      // open proceeds = 1 * 3.50 * 100 * 0.91 = 318.50
+      expect(d.proceedsEur.toFixed(2)).toBe("318.50");
+      // close cost = 1 * 0 * 100 * 0.91 = 0
       expect(d.costBasisEur.toFixed(2)).toBe("0.00");
-      // gain = full premium
-      expect(d.gainLossEur.toFixed(2)).toBe("322.00");
+      // gain = full premium in USD (350) × 0.91 = 318.50
+      expect(d.gainLossEur.toFixed(2)).toBe("318.50");
     });
   });
 
@@ -1094,8 +1117,9 @@ describe("FifoEngine", () => {
       expect(disposals).toHaveLength(1);
       expect(disposals[0]!.acquireDate).toBe("2025-01-10");
       expect(disposals[0]!.quantity.toString()).toBe("10");
-      // Cost basis = January lot: 10 × 100 × 0.90 = 900.00 (not the 200-priced same-day buy)
-      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("900.00");
+      // Cost basis = January lot in USD (1000), converted at the SALE-date rate
+      // (0.91, DGT V2422-20): 10 × 100 × 0.91 = 910.00 (not the 200-priced same-day buy)
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("910.00");
 
       // The same-day BUY lot remains untouched (10 @ 200)
       const remaining = engine.getRemainingLots().get("US0378331005") ?? [];
@@ -1126,13 +1150,64 @@ describe("FifoEngine", () => {
       const engine = new FifoEngine();
       engine.processTrades(trades, rates, corporateActions);
 
-      // Original total cost: 25 × 10 × 0.92 = 230.00 EUR
+      // Original total cost in USD (FCY): 25 × 10 = 250.00 USD
       const remaining = engine.getRemainingLots().get("US1234567890") ?? [];
       // 2.5 shares → 2 whole shares survive, 0.5 becomes cash-in-lieu
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.quantity.toString()).toBe("2.5");
-      // Total cost basis must be fully conserved on the surviving lot (230.00)
-      expect(remaining[0]!.costInEur.toFixed(2)).toBe("230.00");
+      // Total cost basis (in FCY/USD) must be fully conserved on the surviving lot
+      expect(remaining[0]!.costInFcy.toFixed(2)).toBe("250.00");
     });
+  });
+});
+
+describe("FCY-denominated stock gain (DGT V2422-20 / V0152-26, issue #219)", () => {
+  it("yields 0 EUR gain when a USD stock is sold flat in USD despite an FX rate change", () => {
+    // The V2422-20 worked example: buy 10 GOOG @120 USD (1200 USD), sell 10 @120
+    // USD (1200 USD). Stock P&L in USD = 0 → EUR gain MUST be 0, even though the
+    // USD/EUR rate moved 1.3 → 1.5 between buy and sell. The FX move is a SEPARATE
+    // currency gain (Art. 33, handled by the FX engine), not a stock gain.
+    const rates = makeRateMap({
+      "2025-10-08": "1.30", // buy date
+      "2025-10-15": "1.50", // sell date (rate moved, must NOT leak into stock gain)
+    });
+    const engine = new FifoEngine();
+    engine.processTrades(
+      [
+        makeTrade({ symbol: "GOOG", isin: "US02079K1079", buySell: "BUY", openCloseIndicator: "O",
+          tradeDate: "2025-10-08", quantity: "10", tradePrice: "120", currency: "USD" }),
+        makeTrade({ symbol: "GOOG", isin: "US02079K1079", buySell: "SELL", openCloseIndicator: "C",
+          tradeDate: "2025-10-15", quantity: "10", tradePrice: "120", currency: "USD" }),
+      ],
+      rates, [], [],
+    );
+    const disposals = engine.getDisposals();
+    expect(disposals).toHaveLength(1);
+    const d = disposals[0]!;
+    // Gain in the share currency is exactly 0 → EUR gain is exactly 0.
+    expect(d.gainLossFcy.toFixed(2)).toBe("0.00");
+    expect(d.gainLossEur.toFixed(2)).toBe("0.00");
+    // proceeds and cost are presented at the SAME (sale-date) rate, so
+    // proceedsEur - costBasisEur === gainLossEur exactly.
+    expect(d.proceedsEur.minus(d.costBasisEur).toFixed(2)).toBe("0.00");
+    expect(d.proceedsEur.toFixed(2)).toBe("1800.00"); // 1200 USD × 1.50
+    expect(d.costBasisEur.toFixed(2)).toBe("1800.00"); // 1200 USD × 1.50 (sale-date rate)
+  });
+
+  it("converts a real USD stock gain at the sale-date rate (not the buy-date rate)", () => {
+    // Buy 10 @100 USD (1000 USD), sell 10 @130 USD (1300 USD) → +300 USD stock gain.
+    // Convert the DIFFERENCE at the sale-date rate: 300 × 1.10 = 330 EUR.
+    const rates = makeRateMap({ "2025-03-15": "0.90", "2025-09-20": "1.10" });
+    const engine = new FifoEngine();
+    engine.processTrades(
+      [
+        makeTrade({ buySell: "BUY", openCloseIndicator: "O", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", currency: "USD" }),
+        makeTrade({ buySell: "SELL", openCloseIndicator: "C", tradeDate: "2025-09-20", quantity: "10", tradePrice: "130", currency: "USD" }),
+      ],
+      rates, [], [],
+    );
+    const d = engine.getDisposals()[0]!;
+    expect(d.gainLossFcy.toFixed(2)).toBe("300.00");
+    expect(d.gainLossEur.toFixed(2)).toBe("330.00");
   });
 });

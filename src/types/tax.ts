@@ -61,8 +61,18 @@ export interface Lot {
   acquireDate: string;
   quantity: Decimal;
   pricePerShare: Decimal;
-  costInEur: Decimal;
+  /**
+   * Total acquisition cost in the lot's OWN currency (FCY), commission and taxes
+   * included (a foreign-currency commission is homogenized to this currency at
+   * the trade-date cross-rate). Kept in FCY — NOT EUR — so the gain is computed
+   * in the share's currency and only the difference is converted to EUR at the
+   * disposal-date rate (DGT V2422-20 / V0152-26). Storing it in EUR at the
+   * buy-date rate would leak the currency's FX drift into the stock gain.
+   */
+  costInFcy: Decimal;
   currency: string;
+  /** ECB rate at acquisition — informational only (audit column); never used to
+   *  compute the gain, which converts the FCY difference at the disposal date. */
   ecbRate: Decimal;
   /** True for short lots (opened via SELL+O) */
   isShort?: boolean;
@@ -86,15 +96,30 @@ export interface FifoDisposal {
   sellDate: string;
   acquireDate: string;
   quantity: Decimal;
+  /**
+   * Gain/loss computed IN THE SHARE'S CURRENCY (proceedsFcy − costBasisFcy), the
+   * fiscally-correct base per DGT V2422-20 before EUR conversion.
+   */
+  gainLossFcy: Decimal;
+  /** Transmission value in the share's currency. */
+  proceedsFcy: Decimal;
+  /** Acquisition value in the share's currency (commission/taxes homogenized). */
+  costBasisFcy: Decimal;
+  /**
+   * EUR figures. ALL derived at the DISPOSAL-date ECB rate so that
+   * proceedsEur − costBasisEur === gainLossEur exactly and no FX drift leaks into
+   * the stock gain. proceedsEur/costBasisEur are therefore the sale-date EUR
+   * presentation of the FCY values, NOT the historical buy-date EUR cost.
+   */
   proceedsEur: Decimal;
   costBasisEur: Decimal;
   gainLossEur: Decimal;
   holdingPeriodDays: number;
   /** Original currency of the trade */
   currency: string;
-  /** ECB rate (EUR per 1 FCY) used for the sale */
+  /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */
   sellEcbRate: Decimal;
-  /** ECB rate (EUR per 1 FCY) used for the acquisition */
+  /** ECB rate (EUR per 1 FCY) at acquisition — informational/audit only. */
   acquireEcbRate: Decimal;
   /** Asset category (STK, OPT, FUND, etc.) */
   assetCategory: string;

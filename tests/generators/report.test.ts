@@ -125,9 +125,11 @@ describe("generateTaxReport", () => {
     expect(report.year).toBe(2025);
     // Proceeds: 10 × 120 × 0.91 = 1092
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1092.00");
-    // Cost: 10 × 100 × 0.92 = 920
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("920.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+    // Cost in USD (1000) converted at the SALE-date rate (DGT V2422-20):
+    // 10 × 100 × 0.91 = 910
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("910.00");
+    // Gain in USD = 200, × 0.91 = 182.00 EUR
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("182.00");
     expect(report.capitalGains.disposals).toHaveLength(1);
     expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
   });
@@ -259,9 +261,10 @@ describe("generateTaxReport", () => {
     expect(report.fxGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.acquisitionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
-    // Capital gains still computed normally
+    // Capital gains still computed normally — gain in USD (200) converted at the
+    // SALE-date rate (0.91, DGT V2422-20): 200 × 0.91 = 182.00 EUR
     expect(report.capitalGains.disposals).toHaveLength(1);
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("182.00");
   });
 
   it("should produce non-zero FX gains when skipFx is false with manual CASH trades", () => {

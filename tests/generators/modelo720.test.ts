@@ -100,8 +100,8 @@ describe("Modelo 720 Generator", () => {
     const positions = [makePosition()];
     const lots: Map<string, Lot[]> = new Map([
       ["US78462F1030", [
-        { id: "1", isin: "US78462F1030", symbol: "SPY", description: "", acquireDate: "20230115", quantity: new Decimal(50), pricePerShare: new Decimal(380), costInEur: new Decimal(17480), currency: "USD", ecbRate: new Decimal("0.92") },
-        { id: "2", isin: "US78462F1030", symbol: "SPY", description: "", acquireDate: "20240601", quantity: new Decimal(50), pricePerShare: new Decimal(420), costInEur: new Decimal(19320), currency: "USD", ecbRate: new Decimal("0.92") },
+        { id: "1", isin: "US78462F1030", symbol: "SPY", description: "", acquireDate: "20230115", quantity: new Decimal(50), pricePerShare: new Decimal(380), costInFcy: new Decimal(19000), currency: "USD", ecbRate: new Decimal("0.92") },
+        { id: "2", isin: "US78462F1030", symbol: "SPY", description: "", acquireDate: "20240601", quantity: new Decimal(50), pricePerShare: new Decimal(420), costInFcy: new Decimal(21000), currency: "USD", ecbRate: new Decimal("0.92") },
       ]],
     ]);
     const result = generateModelo720(positions, rateMap, baseConfig, lots);

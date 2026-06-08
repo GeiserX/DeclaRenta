@@ -118,10 +118,11 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(d.putCall).toBe("C");
       expect(d.strike).toBe("200");
       expect(d.proceedsEur.toFixed(2)).toBe("0.00");
-      // Cost = 1 contract × $5.50 × 100 multiplier × 0.92 + $1.50 commission × 0.92
-      // = 550 * 0.92 + 1.50 * 0.92 = 506.00 + 1.38 = 507.38
-      expect(d.costBasisEur.toFixed(2)).toBe("507.38");
-      expect(d.gainLossEur.toFixed(2)).toBe("-507.38");
+      // Premium cost in USD (FCY): 1 × 5.50 × 100 + 1.50 commission = 551.50 USD.
+      // On expiration the premium is converted at the EXPIRATION-date rate
+      // (2025-03-21 = 0.94, DGT V2422-20): 551.50 × 0.94 = 518.41 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("518.41");
+      expect(d.gainLossEur.toFixed(2)).toBe("-518.41");
     });
 
     it("writer: option expires worthless → full premium gain", () => {
@@ -145,10 +146,12 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(d.assetCategory).toBe("OPT");
       expect(d.optionScenario).toBe("expiration");
       expect(d.isShort).toBe(true);
-      // Writer received premium: 1 × 5.50 × 100 × 0.92 - 1.50 × 0.92 = 506.00 - 1.38 = 504.62
-      expect(d.proceedsEur.toFixed(2)).toBe("504.62");
+      // Writer's premium received in USD (FCY): 1 × 5.50 × 100 − 1.50 = 548.50 USD.
+      // Converted at the EXPIRATION-date rate (2025-03-21 = 0.94, DGT V2422-20):
+      // 548.50 × 0.94 = 515.59 EUR
+      expect(d.proceedsEur.toFixed(2)).toBe("515.59");
       expect(d.costBasisEur.toFixed(2)).toBe("0.00");
-      expect(d.gainLossEur.toFixed(2)).toBe("504.62");
+      expect(d.gainLossEur.toFixed(2)).toBe("515.59");
     });
   });
 
@@ -179,8 +182,9 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(d.putCall).toBe("C");
       // Proceeds: 1 × 8.00 × 100 × 0.94 - 1.50 × 0.94 = 752.00 - 1.41 = 750.59
       expect(d.proceedsEur.toFixed(2)).toBe("750.59");
-      // Cost: 507.38 (as calculated above)
-      expect(d.costBasisEur.toFixed(2)).toBe("507.38");
+      // Cost: premium in USD (551.50) converted at the SALE-date rate (0.94,
+      // DGT V2422-20): 551.50 × 0.94 = 518.41 EUR
+      expect(d.costBasisEur.toFixed(2)).toBe("518.41");
       expect(d.gainLossEur.greaterThan(0)).toBe(true);
     });
 
@@ -211,9 +215,10 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       const d = disposals[0]!;
       expect(d.isShort).toBe(true);
       expect(d.assetCategory).toBe("OPT");
-      // Writer opened at $5.50: proceeds = 504.62 (premium received minus commission)
-      // Writer closed at $3.00: cost = 1 × 3.00 × 100 × 0.93 + 1.50 × 0.93 = 279.00 + 1.395 = 280.395
-      expect(d.proceedsEur.toFixed(2)).toBe("504.62");
+      // Writer opened at $5.50: open proceeds in USD = 5.50 × 100 − 1.50 = 548.50 USD.
+      // Short close converts at the CLOSE-date rate (2025-02-01 = 0.93, DGT V2422-20):
+      // 548.50 × 0.93 = 510.11 EUR. Close cost in USD = 3.00 × 100 + 1.50 = 301.50 USD.
+      expect(d.proceedsEur.toFixed(2)).toBe("510.11");
       expect(d.gainLossEur.greaterThan(0)).toBe(true);
     });
   });
@@ -234,9 +239,10 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(lots).toHaveLength(1);
       expect(lots![0]!.quantity.toString()).toBe("100");
       expect(lots![0]!.pricePerShare.toString()).toBe("200");
-      // Cost > bare strike cost (18800) because premium is integrated
-      const bareStrikeCost = new Decimal("18800");
-      expect(lots![0]!.costInEur.greaterThan(bareStrikeCost)).toBe(true);
+      // Cost (now in FCY/USD) > bare strike cost in USD (100 × 200 = 20000)
+      // because the premium is integrated.
+      const bareStrikeCost = new Decimal("20000");
+      expect(lots![0]!.costInFcy.greaterThan(bareStrikeCost)).toBe(true);
     });
 
     it("call buyer exercises → uses STRIKE for share cost, ignores market price", () => {
@@ -256,11 +262,11 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(lots).toHaveLength(1);
       // Share price = strike ($200), NOT market price ($220)
       expect(lots![0]!.pricePerShare.toString()).toBe("200");
-      // Base cost at strike: 100 × $200 × 0.94 = 18800, plus integrated premium
-      const bareStrikeCost = new Decimal("18800");
-      expect(lots![0]!.costInEur.greaterThan(bareStrikeCost)).toBe(true);
-      // Must be well below the market-priced cost (100 × $220 × 0.94 = 20680)
-      expect(lots![0]!.costInEur.lessThan(new Decimal("20680"))).toBe(true);
+      // Base cost at strike in USD (FCY): 100 × $200 = 20000, plus integrated premium
+      const bareStrikeCost = new Decimal("20000");
+      expect(lots![0]!.costInFcy.greaterThan(bareStrikeCost)).toBe(true);
+      // Must be well below the market-priced cost in USD (100 × $220 = 22000)
+      expect(lots![0]!.costInFcy.lessThan(new Decimal("22000"))).toBe(true);
     });
 
     it("put buyer exercises → no OPT disposal, premium reduces sale proceeds", () => {
@@ -294,7 +300,9 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       // Proceeds < bare strike proceeds (18800) because premium is subtracted
       const bareStrikeProceeds = new Decimal("18800");
       expect(disposals[0]!.proceedsEur.lessThan(bareStrikeProceeds)).toBe(true);
-      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("16560.92");
+      // Stock cost basis in USD: 100 × 180 + 1 commission = 18001 USD. Converted at
+      // the EXERCISE-date rate (2025-03-21 = 0.94, DGT V2422-20): 18001 × 0.94 = 16920.94 EUR
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("16920.94");
     });
 
     it("call writer assigned → no OPT disposal, premium adds to sale proceeds", () => {
@@ -356,9 +364,10 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(lots).toHaveLength(1);
       expect(lots![0]!.quantity.toString()).toBe("100");
       expect(lots![0]!.pricePerShare.toString()).toBe("200");
-      // Cost < bare strike cost (18800) because writer's premium reduces it
-      const bareStrikeCost = new Decimal("18800");
-      expect(lots![0]!.costInEur.lessThan(bareStrikeCost)).toBe(true);
+      // Cost (now in FCY/USD) < bare strike cost in USD (100 × 200 = 20000)
+      // because the writer's premium reduces it.
+      const bareStrikeCost = new Decimal("20000");
+      expect(lots![0]!.costInFcy.lessThan(bareStrikeCost)).toBe(true);
     });
   });
 
