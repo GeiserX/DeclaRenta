@@ -71,6 +71,7 @@ const gl: TranslationKeys = {
   "casilla.acquisition_value": "Valor de adquisición (total transmisións)",
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",
+  "casilla.acquisition_sale_rate_note": "O valor de adquisición móstrase ao tipo de cambio do BCE da data de VENDA, de xeito que transmisión − adquisición coincide exactamente coa ganancia ou perda (DGT V2422-20: a ganancia calcúlase na moeda da acción e só a diferenza se converte a euros). En valores en moeda estranxeira este importe difire do custo histórico en euros da data de compra e pode non coincidir con cifras gardadas en versións anteriores.",
   "casilla.other_transmission_value": "Valor de transmisión (outros elementos: opcións/cripto/fondos/divisa)",
   "casilla.other_acquisition_value": "Valor de adquisición (outros elementos: opcións/cripto/fondos/divisa)",
   "casilla.fx_transmission_value": "Valor de transmisión FX (moeda estranxeira)",

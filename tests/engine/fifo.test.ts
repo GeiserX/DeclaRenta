@@ -1210,4 +1210,42 @@ describe("FCY-denominated stock gain (DGT V2422-20 / V0152-26, issue #219)", () 
     expect(d.gainLossFcy.toFixed(2)).toBe("300.00");
     expect(d.gainLossEur.toFixed(2)).toBe("330.00");
   });
+
+  it("converts every FIFO lot's FCY cost at the SINGLE sale-date rate", () => {
+    // Two lots bought at very different rates (0.80, 1.20); both must convert at
+    // the ONE sale-date rate (1.00), never at their own buy rates — the crux of
+    // V2422-20. Old method would mix per-lot buy rates into the EUR cost.
+    const rates = makeRateMap({ "2025-01-10": "0.80", "2025-03-15": "1.20", "2025-09-20": "1.00" });
+    const engine = new FifoEngine();
+    const ds = engine.processTrades(
+      [
+        makeTrade({ tradeID: "1", tradeDate: "2025-01-10", quantity: "5", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-03-15", quantity: "5", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "3", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "150", buySell: "SELL" }),
+      ],
+      rates, [], [],
+    );
+    expect(ds).toHaveLength(2);
+    for (const d of ds) {
+      expect(d.costBasisFcy.toFixed(2)).toBe("500.00"); // 5 × 100 USD
+      expect(d.costBasisEur.toFixed(2)).toBe("500.00"); // × 1.00 sale rate (NOT 0.80/1.20)
+      expect(d.proceedsFcy.toFixed(2)).toBe("750.00");
+      expect(d.gainLossEur.toFixed(2)).toBe("250.00"); // 250 USD × 1.00
+    }
+  });
+
+  it("converts an FCY LOSS at the sale-date rate (not the buy rate)", () => {
+    // Buy 10 @100 USD (1000 USD), sell 10 @70 USD (700 USD) → −300 USD; rate 0.90→1.10.
+    const rates = makeRateMap({ "2025-03-15": "0.90", "2025-09-20": "1.10" });
+    const d = new FifoEngine().processTrades(
+      [
+        makeTrade({ buySell: "BUY", openCloseIndicator: "O", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", currency: "USD" }),
+        makeTrade({ buySell: "SELL", openCloseIndicator: "C", tradeDate: "2025-09-20", quantity: "10", tradePrice: "70", currency: "USD" }),
+      ],
+      rates, [], [],
+    )[0]!;
+    expect(d.gainLossFcy.toFixed(2)).toBe("-300.00");
+    // −300 × 1.10 = −330. Old buy/sell-mixed method gave 770−900 = −130 → fails on revert.
+    expect(d.gainLossEur.toFixed(2)).toBe("-330.00");
+  });
 });

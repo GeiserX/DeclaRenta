@@ -44,6 +44,11 @@ function splitDisposal(d: FifoDisposal, n: number): FifoDisposal {
     proceedsEur: d.proceedsEur.div(n),
     costBasisEur: d.costBasisEur.div(n),
     gainLossEur: d.gainLossEur.div(n),
+    // The FCY figures must split too, or a >1-titulares declaration over-counts
+    // them by ×n once any consumer reads them.
+    proceedsFcy: d.proceedsFcy.div(n),
+    costBasisFcy: d.costBasisFcy.div(n),
+    gainLossFcy: d.gainLossFcy.div(n),
   };
 }
 

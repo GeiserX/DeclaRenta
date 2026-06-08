@@ -517,6 +517,14 @@ describe("generateTaxReport", () => {
         .toBe(solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2));
       expect(split.capitalGains.disposals[0]!.quantity.toFixed(2))
         .toBe(solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2));
+      // FCY figures must split too (or a >1-titulares declaration over-counts
+      // them by ×n once any surface reads the FCY fields).
+      expect(split.capitalGains.disposals[0]!.proceedsFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.proceedsFcy.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.costBasisFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.costBasisFcy.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.gainLossFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.gainLossFcy.div(2).toFixed(2));
     });
 
     it("should emit an info message about shared titularity when titulares > 1", () => {

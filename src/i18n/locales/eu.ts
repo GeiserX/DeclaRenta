@@ -71,6 +71,7 @@ const eu: TranslationKeys = {
   "casilla.acquisition_value": "Eskuratze-balioa (transmisio guztiak)",
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
+  "casilla.acquisition_sale_rate_note": "Eskuratze-balioa SALMENTA-dataren BCE kanbio-tasan erakusten da, eskualdaketa − eskuratzea irabazi edo galerarekin zehazki bat etor dadin (DGT V2422-20: irabazia akzioaren monetan kalkulatzen da eta diferentzia bakarrik bihurtzen da eurotara). Atzerriko monetako baloreetan zenbateko hau erosketa-datako euro-kostu historikotik desberdina da eta baliteke aurreko bertsioetan gordetako zifrekin bat ez etortzea.",
   "casilla.other_transmission_value": "Transmisio-balioa (beste elementuak: opzioak/kripto/funtsak/dibisa)",
   "casilla.other_acquisition_value": "Eskuratze-balioa (beste elementuak: opzioak/kripto/funtsak/dibisa)",
   "casilla.fx_transmission_value": "FX transmisio-balioa (atzerriko moneta)",

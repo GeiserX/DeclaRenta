@@ -71,6 +71,7 @@ const ca: TranslationKeys = {
   "casilla.acquisition_value": "Valor d'adquisició (total transmissions)",
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
+  "casilla.acquisition_sale_rate_note": "El valor d'adquisició es mostra al tipus de canvi del BCE de la data de VENDA, de manera que transmissió − adquisició coincideix exactament amb el guany o la pèrdua (DGT V2422-20: el guany es calcula en la moneda de l'acció i només la diferència es converteix a euros). En valors en moneda estrangera aquest import difereix del cost històric en euros de la data de compra i pot no coincidir amb xifres desades en versions anteriors.",
   "casilla.other_transmission_value": "Valor de transmissió (altres elements: opcions/cripto/fons/divisa)",
   "casilla.other_acquisition_value": "Valor d'adquisició (altres elements: opcions/cripto/fons/divisa)",
   "casilla.fx_transmission_value": "Valor de transmissió FX (moneda estrangera)",
