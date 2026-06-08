@@ -103,8 +103,9 @@ describe("Corporate Actions in FIFO Engine", () => {
       engine.processTrades(trades, rateMap, corporateActions);
 
       const newLots = engine.getRemainingLots().get("US2222222222")!;
-      // Cost = 100 * 50 + 10 commission = 5010 EUR (rate = 1)
-      expect(newLots[0]!.costInEur.toFixed(2)).toBe("5010.00");
+      // Cost basis (in FCY) preserved through the tax-neutral merger:
+      // 100 * 50 + 10 commission = 5010 USD
+      expect(newLots[0]!.costInFcy.toFixed(2)).toBe("5010.00");
     });
 
     it("should apply merger ratio to quantity", () => {
@@ -251,9 +252,9 @@ describe("Corporate Actions in FIFO Engine", () => {
       const parentLots = engine.getRemainingLots().get("US1111111111")!;
       const spinLots = engine.getRemainingLots().get("US3333333333")!;
 
-      // Total original cost = 100 * 100 = 10000
-      const parentCost = parentLots[0]!.costInEur.toNumber();
-      const spinCost = spinLots[0]!.costInEur.toNumber();
+      // Total original cost (in FCY) = 100 * 100 = 10000
+      const parentCost = parentLots[0]!.costInFcy.toNumber();
+      const spinCost = spinLots[0]!.costInFcy.toNumber();
 
       // Total cost must be preserved
       expect(parentCost + spinCost).toBeCloseTo(10000, 2);

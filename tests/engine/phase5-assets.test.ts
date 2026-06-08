@@ -170,12 +170,13 @@ describe("Phase 5 — Bonds (BOND)", () => {
     expect(disposals).toHaveLength(1);
     const d = disposals[0]!;
 
-    // Cost: 10 * 98 * 1 * 0.92 = 901.60 EUR
-    expect(d.costBasisEur.toFixed(2)).toBe("901.60");
+    // Cost in USD (980) converted at the SALE-date rate (DGT V2422-20):
+    // 10 * 98 * 1 * 0.91 = 891.80 EUR
+    expect(d.costBasisEur.toFixed(2)).toBe("891.80");
     // Proceeds: 10 * 102 * 1 * 0.91 = 928.20 EUR
     expect(d.proceedsEur.toFixed(2)).toBe("928.20");
-    // Gain: 928.20 - 901.60 = 26.60 EUR
-    expect(d.gainLossEur.toFixed(2)).toBe("26.60");
+    // Gain in USD = 40, × 0.91 = 36.40 EUR
+    expect(d.gainLossEur.toFixed(2)).toBe("36.40");
     expect(d.assetCategory).toBe("BOND");
   });
 
@@ -362,12 +363,13 @@ describe("Phase 5 — Options (OPT)", () => {
     expect(disposals).toHaveLength(1);
     const d = disposals[0]!;
 
-    // Cost: 5 * 3.00 * 100 * 0.92 = 1,380.00 EUR
-    expect(d.costBasisEur.toFixed(2)).toBe("1380.00");
+    // Cost in USD (1500) converted at the SALE-date rate (DGT V2422-20):
+    // 5 * 3.00 * 100 * 0.91 = 1,365.00 EUR
+    expect(d.costBasisEur.toFixed(2)).toBe("1365.00");
     // Proceeds: 5 * 5.00 * 100 * 0.91 = 2,275.00 EUR
     expect(d.proceedsEur.toFixed(2)).toBe("2275.00");
-    // Gain: 2275 - 1380 = 895.00 EUR
-    expect(d.gainLossEur.toFixed(2)).toBe("895.00");
+    // Gain in USD = 1000, × 0.91 = 910.00 EUR
+    expect(d.gainLossEur.toFixed(2)).toBe("910.00");
     expect(d.assetCategory).toBe("OPT");
   });
 
@@ -507,12 +509,15 @@ describe("Phase 5 — Multi-divisa (cross-currency)", () => {
     expect(disposals).toHaveLength(1);
     const d = disposals[0]!;
 
-    // Buy cost: (100 * 25 * 1 * 1.15) + (10 * 0.92) = 2875.00 + 9.20 = 2884.20 EUR
-    expect(d.costBasisEur.toFixed(2)).toBe("2884.20");
-    // Sell proceeds: (100 * 28 * 1 * 1.13) - (10 * 0.91) = 3164.00 - 9.10 = 3154.90 EUR
+    // Buy cost in GBP: 100*25 + commission homogenized to GBP via the trade-date
+    // cross-rate (10 USD × 0.92/1.15 = 8.0 GBP) = 2508 GBP. Converted at the
+    // SALE-date rate (1.13, DGT V2422-20): 2508 * 1.13 = 2834.04 EUR
+    expect(d.costBasisEur.toFixed(2)).toBe("2834.04");
+    // Sell proceeds in GBP: 100*28 − (10 USD × 0.91/1.13 = 8.0531 GBP) = 2791.9469 GBP
+    // × 1.13 = 3154.90 EUR
     expect(d.proceedsEur.toFixed(2)).toBe("3154.90");
-    // Gain: 3154.90 - 2884.20 = 270.70 EUR
-    expect(d.gainLossEur.toFixed(2)).toBe("270.70");
+    // Gain = 3154.90 − 2834.04 = 320.86 EUR
+    expect(d.gainLossEur.toFixed(2)).toBe("320.86");
 
     // ECB rates should reflect trade currency (GBP), not commission currency
     expect(d.acquireEcbRate.toFixed(4)).toBe("1.1500");
@@ -628,8 +633,9 @@ describe("Phase 5 — Short positions", () => {
 
     // First disposal: 10 shares consumed from lot
     expect(disposals[0]!.quantity.toNumber()).toBe(10);
-    // Cost: 10 * 100 * 0.92 = 920.00 EUR
-    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("920.00");
+    // Cost in USD (1000) converted at the SALE-date rate (DGT V2422-20):
+    // 10 * 100 * 0.91 = 910.00 EUR
+    expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("910.00");
     // Proceeds: (10 * 120) * 0.91 * (10/25) share... actually full per consumed
     // Proceeds: 10/25 fraction of total: (10 * 120 * 0.91) = 1092 * (10/25)...
     // No: proceeds per consumed = consumed * price * mult * ecbRate - commShare

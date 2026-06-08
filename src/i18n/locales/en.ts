@@ -70,6 +70,7 @@ const en: TranslationKeys = {
   "casilla.acquisition_value": "Acquisition value (all disposals)",
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
+  "casilla.acquisition_sale_rate_note": "The acquisition value is shown at the ECB rate on the SALE date, so transmission − acquisition equals the gain or loss exactly (DGT V2422-20: the gain is computed in the share's currency and only the difference is converted to euros). For foreign-currency holdings this differs from the historical euro cost at the purchase date and may not match figures saved in earlier versions.",
   "casilla.other_transmission_value": "Transmission value (other elements: options/crypto/funds/FX)",
   "casilla.other_acquisition_value": "Acquisition value (other elements: options/crypto/funds/FX)",
   "casilla.fx_transmission_value": "FX transmission value (foreign currency)",

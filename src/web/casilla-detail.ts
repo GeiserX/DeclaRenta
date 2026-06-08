@@ -56,6 +56,13 @@ function renderDisposalsDetail(
 ): string {
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   const dateHeader = mode === "acquisition" ? t("table.buy_date") : t("table.sell_date");
+  // The acquisition value (0331/1637) is shown at the SALE-date ECB rate so that
+  // transmisión − adquisición equals the gain exactly (DGT V2422-20). For a
+  // foreign-currency holding this differs from the historical buy-date EUR cost,
+  // and from acquisition figures saved in earlier app versions / prior snapshots.
+  const note = mode === "acquisition"
+    ? `<p class="detail-note">${esc(t("casilla.acquisition_sale_rate_note"))}</p>`
+    : "";
   return `
     <p class="detail-label">${esc(label)} (${disposals.length})</p>
     <table class="detail-table">
@@ -72,7 +79,8 @@ function renderDisposalsDetail(
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
-    </table>`;
+    </table>
+    ${note}`;
 }
 
 /**

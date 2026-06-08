@@ -125,9 +125,11 @@ describe("generateTaxReport", () => {
     expect(report.year).toBe(2025);
     // Proceeds: 10 × 120 × 0.91 = 1092
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1092.00");
-    // Cost: 10 × 100 × 0.92 = 920
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("920.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+    // Cost in USD (1000) converted at the SALE-date rate (DGT V2422-20):
+    // 10 × 100 × 0.91 = 910
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("910.00");
+    // Gain in USD = 200, × 0.91 = 182.00 EUR
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("182.00");
     expect(report.capitalGains.disposals).toHaveLength(1);
     expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
   });
@@ -259,9 +261,10 @@ describe("generateTaxReport", () => {
     expect(report.fxGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.acquisitionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
-    // Capital gains still computed normally
+    // Capital gains still computed normally — gain in USD (200) converted at the
+    // SALE-date rate (0.91, DGT V2422-20): 200 × 0.91 = 182.00 EUR
     expect(report.capitalGains.disposals).toHaveLength(1);
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("182.00");
   });
 
   it("should produce non-zero FX gains when skipFx is false with manual CASH trades", () => {
@@ -514,6 +517,14 @@ describe("generateTaxReport", () => {
         .toBe(solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2));
       expect(split.capitalGains.disposals[0]!.quantity.toFixed(2))
         .toBe(solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2));
+      // FCY figures must split too (or a >1-titulares declaration over-counts
+      // them by ×n once any surface reads the FCY fields).
+      expect(split.capitalGains.disposals[0]!.proceedsFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.proceedsFcy.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.costBasisFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.costBasisFcy.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.gainLossFcy.toFixed(2))
+        .toBe(solo.capitalGains.disposals[0]!.gainLossFcy.div(2).toFixed(2));
     });
 
     it("should emit an info message about shared titularity when titulares > 1", () => {
