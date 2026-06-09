@@ -209,6 +209,15 @@ const TX_SKIP_OPS = new Set([
   "main and funding transfer",
   "transfer between main and funding account",
   "asset recovery",
+  // Copy Trading: Create/Close move the SAME principal between the Spot and
+  // "Spot Copy" sub-accounts (each coin nets to zero across the two legs) — a
+  // custody change, not a disposal. The lead trader's mirrored trades, when
+  // present, arrive as their own Transaction Buy/Spend/Sold/Revenue rows.
+  "copy portfolio (spot) - create",
+  "copy portfolio (spot) - close",
+  // BNB Fee Deduction: a micro fee settled in BNB (sub-cent dust). Immaterial;
+  // explicit trading fees already reduce cost/proceeds via "Transaction Fee".
+  "bnb fee deduction",
 ]);
 
 /**
@@ -252,6 +261,20 @@ const TX_INCOME_GENERAL_OPS = new Set([
 /** Dust conversion to BNB — taxable permutas (each dust coin → BNB). */
 const TX_DUST_OPS = new Set([
   "small assets exchange bnb",
+]);
+
+/**
+ * Paired-leg swaps: a positive (received) leg + a negative (given-up) leg within
+ * a ±1s window. `Binance Convert` is crypto↔crypto (or crypto↔fiat); `Buy Crypto
+ * With Fiat` (the "Comprar con tarjeta/saldo" flow) spends EUR/USD to acquire a
+ * coin. Both route through the same netLegs → pairAndEmit → emitCryptoSwap path,
+ * which already emits a single fiat-priced BUY when one leg is genuine fiat — so
+ * the acquired coin gets its FIFO lot (otherwise later disposals fabricate a
+ * phantom "Venta sin lotes" with cost basis 0).
+ */
+const TX_CONVERT_OPS = new Set([
+  "binance convert",
+  "buy crypto with fiat",
 ]);
 
 interface TxRow {
@@ -441,21 +464,41 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     for (const b of bnbRows) b.parsed = true;
   }
 
-  // 4. Binance Convert: pair legs within a ±1s window (legs are frequently 1
-  //    second apart). Net per-coin to cancel intra-account split rows, then pair
-  //    the net negative (sold) with the net positive (bought).
+  // 4. Convert-style swaps (Binance Convert, Buy Crypto With Fiat): pair legs
+  //    within a ±1s window (legs are frequently 1 second apart). Net per-coin to
+  //    cancel intra-account split rows, then pair the net negative (sold/spent)
+  //    with the net positive (bought). Windows are grouped by the SAME operation
+  //    so a Convert and a fiat purchase in the same second never cross-mix.
   for (let i = 0; i < rows.length; i++) {
     const start = rows[i]!;
-    if (start.parsed || start.operation !== "binance convert") continue;
+    if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
     const window: TxRow[] = [];
     for (let j = i; j < rows.length; j++) {
       const r = rows[j]!;
       if (r.epoch - start.epoch > 1) break;
-      if (!r.parsed && r.operation === "binance convert") window.push(r);
+      if (!r.parsed && r.operation === start.operation) window.push(r);
     }
-    const legs = netLegs(window);
     window.forEach((r) => (r.parsed = true));
-    pairAndEmit(trades, legs, addHint, "Convert");
+    if (start.operation === "buy crypto with fiat") {
+      // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
+      // funded in the same coin (EUR/USD), so two independent buys in one second
+      // would otherwise net into a single fiat leg → `pairAndEmit` sees 1 sell
+      // vs N buys and DROPS all but one coin's lot (re-creating the phantom
+      // "Venta sin lotes" this op was added to fix). Each purchase carries a
+      // unique Remark (e.g. "Via CashBalance - Wallet/N…") shared by both legs,
+      // so per-Remark grouping keeps them separate. Convert (empty remark) is
+      // deliberately left on the whole-window path below — provably unchanged.
+      const byRemark = new Map<string, TxRow[]>();
+      for (const r of window) {
+        if (!byRemark.has(r.remark)) byRemark.set(r.remark, []);
+        byRemark.get(r.remark)!.push(r);
+      }
+      for (const group of byRemark.values()) {
+        pairAndEmit(trades, netLegs(group), addHint, "Buy");
+      }
+    } else {
+      pairAndEmit(trades, netLegs(window), addHint, "Convert");
+    }
   }
 
   // 5. Strategy trades: Transaction Sold↔Revenue and Buy↔Spend within ±1s.
@@ -511,12 +554,16 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * Pair net negative (sold) legs with net positive (bought) legs and emit.
  *
  * The two legs of one conversion have (near-)equal EUR value, so each sell is
- * matched to its CLOSEST-EUR remaining buy. This disambiguates correctly even if
- * two independent conversions happen to fall in the same ±1s window (pairing the
- * larger sell with the larger buy and the smaller with the smaller), rather than
- * cross-pairing unrelated coins. When EUR values are absent (all 0), the closest
- * match is the next available buy in order — equivalent to insertion-order
- * pairing, the previous behavior.
+ * matched to its CLOSEST-EUR remaining buy. This disambiguates two independent
+ * conversions in the same ±1s window ONLY when their given-up (sell-side) coins
+ * differ, so `netLegs` keeps them as separate sells (e.g. two Converts spending
+ * different coins). When several disposals share one given-up coin — notably
+ * `Buy Crypto With Fiat`, always funded in EUR/USD — `netLegs` merges them into
+ * a single sell leg, leaving 1 sell vs N buys and dropping all but one buy. The
+ * caller must therefore pre-split such windows (step 4 sub-groups fiat buys by
+ * funding-wallet Remark) before calling here. When EUR values are absent (all
+ * 0), the closest match is the next available buy in order — equivalent to
+ * insertion-order pairing, the previous behavior.
  */
 function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): void {
   const sells = legs.filter((l) => l.qty.isNegative());
