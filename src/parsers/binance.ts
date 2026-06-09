@@ -469,16 +469,6 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   //    cancel intra-account split rows, then pair the net negative (sold/spent)
   //    with the net positive (bought). Windows are grouped by the SAME operation
   //    so a Convert and a fiat purchase in the same second never cross-mix.
-  //
-  //    Within a window, sub-group by Remark before netting. `Buy Crypto With
-  //    Fiat` purchases are ALL funded in the same fiat coin (EUR/USD), so two
-  //    independent buys in one second would otherwise net into a single fiat leg
-  //    (1 sell vs 2 buys → `pairAndEmit` drops a coin's lot → the very phantom
-  //    "Venta sin lotes" this op was added to fix). Each purchase carries a
-  //    unique funding-wallet Remark (e.g. "Via CashBalance - Wallet/N…") shared
-  //    by both its legs, so per-Remark sub-grouping keeps them separate. Binance
-  //    Convert legs have an empty Remark → they all share one ("") sub-group,
-  //    preserving the original whole-window netting exactly.
   for (let i = 0; i < rows.length; i++) {
     const start = rows[i]!;
     if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
@@ -490,9 +480,14 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     }
     window.forEach((r) => (r.parsed = true));
     if (start.operation === "buy crypto with fiat") {
-      // Sub-group by funding-wallet Remark so two same-second EUR-funded buys
-      // don't net into one fiat leg (which would drop a coin's lot). Convert is
-      // left on the original whole-window path below — provably unchanged.
+      // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
+      // funded in the same coin (EUR/USD), so two independent buys in one second
+      // would otherwise net into a single fiat leg → `pairAndEmit` sees 1 sell
+      // vs N buys and DROPS all but one coin's lot (re-creating the phantom
+      // "Venta sin lotes" this op was added to fix). Each purchase carries a
+      // unique Remark (e.g. "Via CashBalance - Wallet/N…") shared by both legs,
+      // so per-Remark grouping keeps them separate. Convert (empty remark) is
+      // deliberately left on the whole-window path below — provably unchanged.
       const byRemark = new Map<string, TxRow[]>();
       for (const r of window) {
         if (!byRemark.has(r.remark)) byRemark.set(r.remark, []);
