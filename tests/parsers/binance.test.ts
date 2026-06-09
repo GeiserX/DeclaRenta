@@ -286,6 +286,70 @@ describe("binanceParser", () => {
       expect(result.trades.some((t) => t.symbol === "EUR")).toBe(false);
     });
 
+    it("should price a 'Buy Crypto With Fiat' in USD (fix is not EUR-specific)", () => {
+      // The fiat leg can be any genuine fiat; USD must still produce a single
+      // BUY priced in USD (converted to EUR later via ECB), never a permuta.
+      const csv = [
+        TX_HEADER,
+        "123,2025-02-01 10:00:00,Spot,Buy Crypto With Fiat,BTC,0.01,Via Card/W1",
+        "123,2025-02-01 10:00:00,Spot,Buy Crypto With Fiat,USD,-700,Via Card/W1",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const buy = result.trades[0]!;
+      expect(buy.buySell).toBe("BUY");
+      expect(buy.symbol).toBe("BTC");
+      expect(buy.currency).toBe("USD");
+      expect(Number(buy.cost)).toBeCloseTo(700, 6);
+      expect(result.trades.some((t) => t.symbol === "USD")).toBe(false);
+    });
+
+    it("should keep two same-second 'Buy Crypto With Fiat' purchases separate (no dropped lot)", () => {
+      // Regression for the lot-drop bug: both purchases are EUR-funded, so a
+      // naive per-coin netting would merge the two EUR legs into one and emit
+      // only ONE crypto BUY — silently dropping the other coin's FIFO lot and
+      // recreating the phantom "Venta sin lotes" this op exists to prevent.
+      // Each purchase carries its own funding-wallet Remark → kept separate.
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-10 23:03:54,Spot,Buy Crypto With Fiat,BTC,0.0269,Via CashBalance - Wallet/N001",
+        "123,2025-01-10 23:03:54,Spot,Buy Crypto With Fiat,EUR,-2499,Via CashBalance - Wallet/N001",
+        "123,2025-01-10 23:03:55,Spot,Buy Crypto With Fiat,ETH,0.5,Via CashBalance - Wallet/N002",
+        "123,2025-01-10 23:03:55,Spot,Buy Crypto With Fiat,EUR,-1500,Via CashBalance - Wallet/N002",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+      const btc = result.trades.find((t) => t.symbol === "BTC")!;
+      const eth = result.trades.find((t) => t.symbol === "ETH")!;
+      expect(btc.buySell).toBe("BUY");
+      expect(eth.buySell).toBe("BUY");
+      expect(Number(btc.cost)).toBeCloseTo(2499, 6);
+      expect(Number(eth.cost)).toBeCloseTo(1500, 6);
+    });
+
+    it("should not cross-mix a Binance Convert and a Buy Crypto With Fiat in the same second", () => {
+      // The window is keyed on `r.operation === start.operation`, so a Convert
+      // (SOL↔USDT permuta) and a fiat purchase (BTC bought with EUR) landing in
+      // the same ±1s second must stay in separate windows: 2 permuta legs + 1
+      // fiat BUY = 3 trades, with no SOL↔BTC or USDT↔EUR cross-pairing.
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+        "123,2025-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+        "123,2025-01-04 11:20:13,Spot,Buy Crypto With Fiat,BTC,0.003,Via Card/W9",
+        "123,2025-01-04 11:20:13,Spot,Buy Crypto With Fiat,EUR,-280,Via Card/W9",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(3);
+      const btc = result.trades.find((t) => t.symbol === "BTC")!;
+      expect(btc.buySell).toBe("BUY");
+      expect(btc.currency).toBe("EUR");
+      expect(Number(btc.cost)).toBeCloseTo(280, 6);
+      // The Convert is a SOL↔USDT permuta (SELL USDT + BUY SOL), untouched.
+      expect(result.trades.some((t) => t.symbol === "SOL" && t.buySell === "BUY")).toBe(true);
+      expect(result.trades.some((t) => t.symbol === "USDT" && t.buySell === "SELL")).toBe(true);
+    });
+
     it("should skip Copy Portfolio create/close and BNB Fee Deduction (net-zero/dust)", () => {
       // Copy Trading Create/Close move the same principal between Spot and the
       // Spot Copy sub-account (each coin nets to zero); BNB Fee Deduction is a
@@ -297,6 +361,19 @@ describe("binanceParser", () => {
         "123,2024-06-28 10:57:52,Spot,Copy Portfolio (Spot) - Close,BTC,0.00000952,Binance Copy Trading",
         "123,2024-06-28 10:57:52,Spot Copy,Copy Portfolio (Spot) - Close,BTC,-0.00000952,Binance Copy Trading",
         "123,2025-05-11 06:00:45,Spot,BNB Fee Deduction,BNB,-0.00028503,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+    });
+
+    it("should skip a Copy Portfolio leg even if its counter-leg is absent (never a one-sided phantom)", () => {
+      // Guard the TX_SKIP_OPS invariant: every Copy Portfolio row is dropped at
+      // intake, so even a lone unmatched leg (e.g. a date-range cut) can never
+      // be emitted as a one-sided phantom disposal.
+      const csv = [
+        TX_HEADER,
+        "123,2024-06-24 13:13:16,Spot,Copy Portfolio (Spot) - Create,USDT,-50,Binance Copy Trading",
       ].join("\n");
       const result = binanceParser.parse(csv);
       expect(result.trades).toHaveLength(0);
