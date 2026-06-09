@@ -98,18 +98,29 @@ export interface FifoDisposal {
   quantity: Decimal;
   /**
    * Gain/loss computed IN THE SHARE'S CURRENCY (proceedsFcy − costBasisFcy), the
-   * fiscally-correct base per DGT V2422-20 before EUR conversion.
+   * fiscally-correct base per DGT V2422-20 before EUR conversion — for a
+   * SAME-CURRENCY security only.
+   *
+   * ⚠️ NOT a coherent single-currency gain for a cross-currency crypto permuta
+   * (acquired paying coin X, disposed receiving coin Y): there proceedsFcy is in
+   * coin Y and costBasisFcy in coin X, so this subtraction mixes currencies and
+   * is meaningless. Use the EUR fields for ALL tax math — never derive a casilla
+   * from gainLossFcy/proceedsFcy/costBasisFcy. (These FCY fields exist only for
+   * the same-currency audit trail and titular splitting.)
    */
   gainLossFcy: Decimal;
-  /** Transmission value in the share's currency. */
+  /** Transmission value in the share's currency (coin received for a permuta). */
   proceedsFcy: Decimal;
-  /** Acquisition value in the share's currency (commission/taxes homogenized). */
+  /** Acquisition value in the share's currency (coin paid for a permuta; commission/taxes homogenized). */
   costBasisFcy: Decimal;
   /**
-   * EUR figures. ALL derived at the DISPOSAL-date ECB rate so that
-   * proceedsEur − costBasisEur === gainLossEur exactly and no FX drift leaks into
-   * the stock gain. proceedsEur/costBasisEur are therefore the sale-date EUR
-   * presentation of the FCY values, NOT the historical buy-date EUR cost.
+   * EUR figures — the ONLY fields safe for tax math. Always satisfy
+   * proceedsEur − costBasisEur === gainLossEur. For a same-currency security both
+   * legs use the DISPOSAL-date rate (V2422-20, FX drift excluded); for a
+   * cross-currency crypto permuta the cost uses the ACQUISITION-date rate (real
+   * EUR paid, Art. 35.1) and proceeds the disposal-date rate. So costBasisEur is
+   * the sale-date presentation for a security, but the historical EUR paid for a
+   * permuta — see disposalEur() in fifo.ts.
    */
   proceedsEur: Decimal;
   costBasisEur: Decimal;

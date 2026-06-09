@@ -10,7 +10,7 @@ import Decimal from "decimal.js";
 import type { Lot, FifoDisposal, TaxMessage } from "../types/tax.js";
 import type { Trade, CorporateAction, OptionExercise } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getEcbRate } from "./ecb.js";
+import { getEcbRate, isEcbResolvable } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
 /** Known asset categories — warn on unknown values to catch future IBKR additions */
@@ -398,6 +398,48 @@ export class FifoEngine {
     return commission.mul(commEcbRate).dividedBy(shareEcbRate);
   }
 
+  /**
+   * Convert a disposal's FCY proceeds/cost to EUR. `lot`/`sell` each carry the
+   * ECB rate (EUR per 1 unit) and the currency of that leg.
+   *
+   * DGT V2422-20 (the #219 fix): for a foreign-currency SECURITY, acquisition
+   * and disposal are in the SAME fiat currency (buy a USD stock, sell it in USD),
+   * so the gain is computed in that currency and converted to EUR at the SALE-date
+   * rate only — the buy↔sale FX drift is a separate patrimonial element (Art. 33),
+   * handled by the FX engine, and must not leak into the security gain. There we
+   * apply `sell.rate` to BOTH legs (proceedsEur − costBasisEur === gainLossEur).
+   *
+   * That rule is valid ONLY when the shared currency is a genuine fiat/stablecoin
+   * whose buy↔sale move is a separately-taxed FX element. Crypto breaks it two ways:
+   *  - Cross-currency permuta (buy USDC paying EUR, sell USDC for BTC): the legs
+   *    are in different coins, so there is no shared currency to defer.
+   *  - SAME volatile coin on both legs (a coin acquired via ETH→X and later
+   *    disposed via X→ETH carries `currency:"ETH"` on both sides): the currencies
+   *    match by string, but "ETH" is not a currency whose drift is deferred — its
+   *    price move IS part of the permuta gain.
+   * In both crypto cases the cost is the EUR actually paid at acquisition
+   * (Art. 35.1 valor de adquisición) = `costBasisFcy × lot.rate` — NOT scaled by
+   * the disposal coin's huge EUR price (which fabricated a multi-million cost
+   * basis). So the sale-date rate is used for the cost ONLY when both legs share a
+   * currency AND that currency is genuinely ECB-resolvable (fiat/stablecoin);
+   * otherwise the acquisition-date rate is used. Proceeds always use the sale-date
+   * rate; the gain is their difference (Art. 37.1.h).
+   */
+  private disposalEur(
+    proceedsFcy: Decimal, costBasisFcy: Decimal,
+    lot: { rate: Decimal; currency: string },
+    sell: { rate: Decimal; currency: string },
+  ): { proceedsEur: Decimal; costBasisEur: Decimal; gainLossEur: Decimal } {
+    const proceedsEur = proceedsFcy.mul(sell.rate);
+    // V2422-20 (cost at the sale-date rate) applies only to a genuine fiat/
+    // stablecoin security where both legs share that currency. Any crypto leg
+    // (cross-currency permuta, or the same VOLATILE coin on both sides) → cost
+    // at the acquisition-date rate (the real EUR paid, Art. 35.1).
+    const sameFiat = lot.currency === sell.currency && isEcbResolvable(sell.currency);
+    const costBasisEur = costBasisFcy.mul(sameFiat ? sell.rate : lot.rate);
+    return { proceedsEur, costBasisEur, gainLossEur: proceedsEur.minus(costBasisEur) };
+  }
+
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
     const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const quantity = new Decimal(trade.quantity).abs();
@@ -499,11 +541,15 @@ export class FifoEngine {
       const costBasisFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
       const gainLossFcy = proceedsFcy.minus(costBasisFcy);
 
-      // EUR presentation: BOTH legs at the sale-date rate so
-      // proceedsEur − costBasisEur === gainLossEur exactly (no re-leaking of FX).
-      const proceedsEur = proceedsFcy.mul(ecbRate);
-      const costBasisEur = costBasisFcy.mul(ecbRate);
-      const gainLossEur = gainLossFcy.mul(ecbRate);
+      // EUR presentation: same-currency security → both legs at the sale-date
+      // rate (V2422-20, FX-clean); cross-currency permuta → cost at the lot's
+      // acquisition rate so a EUR-paid cost isn't scaled by the received coin's
+      // EUR price. See disposalEur().
+      const { proceedsEur, costBasisEur, gainLossEur } = this.disposalEur(
+        proceedsFcy, costBasisFcy,
+        { rate: lot.ecbRate, currency: lot.currency },
+        { rate: ecbRate, currency: trade.currency },
+      );
 
       const sellDate = trade.tradeDate;
       const acquireDate = lot.acquireDate;
@@ -640,6 +686,13 @@ export class FifoEngine {
 
       // Short close: gain = open proceeds − close cost, both in the share
       // currency (FCY); convert the difference at the close-date rate only.
+      // INVARIANT: this both-legs-at-close-rate (V2422-20) conversion is correct
+      // ONLY because a short is opened and closed in the SAME currency, so
+      // `lot.currency === trade.currency` here. A hypothetical cross-currency
+      // short (open in coin X, close in coin Y — not produced by any current
+      // parser path; a bare short comes from the missing-lots path, not
+      // addShortLot) would need the lot-rate treatment in disposalEur(); it must
+      // NOT silently reuse the close-date rate on the open-proceeds leg.
       const closeCostFcy = consumed.mul(pricePerShare).mul(multiplier).plus(taxesShare).plus(commissionShareFcy);
       const openProceedsFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
       const gainLossFcy = openProceedsFcy.minus(closeCostFcy);
@@ -1038,8 +1091,11 @@ export class FifoEngine {
       const fraction = consumed.dividedBy(shares);
       const partialProceedsFcy = proceedsFcy.mul(fraction);
       const costBasisFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
-      const partialProceedsEur = partialProceedsFcy.mul(ecbRate);
-      const costBasisEur = costBasisFcy.mul(ecbRate);
+      const { proceedsEur: partialProceedsEur, costBasisEur, gainLossEur } = this.disposalEur(
+        partialProceedsFcy, costBasisFcy,
+        { rate: lot.ecbRate, currency: lot.currency },
+        { rate: ecbRate, currency: ex.currency },
+      );
 
       this.disposals.push({
         isin: ex.underlyingIsin,
@@ -1053,7 +1109,7 @@ export class FifoEngine {
         costBasisFcy,
         proceedsEur: partialProceedsEur,
         costBasisEur,
-        gainLossEur: partialProceedsEur.minus(costBasisEur),
+        gainLossEur,
         holdingPeriodDays: daysBetween(lot.acquireDate, date),
         currency: ex.currency,
         sellEcbRate: ecbRate,
