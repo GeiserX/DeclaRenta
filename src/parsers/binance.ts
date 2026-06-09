@@ -209,6 +209,15 @@ const TX_SKIP_OPS = new Set([
   "main and funding transfer",
   "transfer between main and funding account",
   "asset recovery",
+  // Copy Trading: Create/Close move the SAME principal between the Spot and
+  // "Spot Copy" sub-accounts (each coin nets to zero across the two legs) — a
+  // custody change, not a disposal. The lead trader's mirrored trades, when
+  // present, arrive as their own Transaction Buy/Spend/Sold/Revenue rows.
+  "copy portfolio (spot) - create",
+  "copy portfolio (spot) - close",
+  // BNB Fee Deduction: a micro fee settled in BNB (sub-cent dust). Immaterial;
+  // explicit trading fees already reduce cost/proceeds via "Transaction Fee".
+  "bnb fee deduction",
 ]);
 
 /**
@@ -253,6 +262,26 @@ const TX_INCOME_GENERAL_OPS = new Set([
 const TX_DUST_OPS = new Set([
   "small assets exchange bnb",
 ]);
+
+/**
+ * Paired-leg swaps: a positive (received) leg + a negative (given-up) leg within
+ * a ±1s window. `Binance Convert` is crypto↔crypto (or crypto↔fiat); `Buy Crypto
+ * With Fiat` (the "Comprar con tarjeta/saldo" flow) spends EUR/USD to acquire a
+ * coin. Both route through the same netLegs → pairAndEmit → emitCryptoSwap path,
+ * which already emits a single fiat-priced BUY when one leg is genuine fiat — so
+ * the acquired coin gets its FIFO lot (otherwise later disposals fabricate a
+ * phantom "Venta sin lotes" with cost basis 0).
+ */
+const TX_CONVERT_OPS = new Set([
+  "binance convert",
+  "buy crypto with fiat",
+]);
+
+/** Human-readable label per convert-style operation, used in trade descriptions. */
+const TX_CONVERT_LABELS: Record<string, string> = {
+  "binance convert": "Convert",
+  "buy crypto with fiat": "Buy",
+};
 
 interface TxRow {
   utcTime: string;
@@ -441,21 +470,23 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     for (const b of bnbRows) b.parsed = true;
   }
 
-  // 4. Binance Convert: pair legs within a ±1s window (legs are frequently 1
-  //    second apart). Net per-coin to cancel intra-account split rows, then pair
-  //    the net negative (sold) with the net positive (bought).
+  // 4. Convert-style swaps (Binance Convert, Buy Crypto With Fiat): pair legs
+  //    within a ±1s window (legs are frequently 1 second apart). Net per-coin to
+  //    cancel intra-account split rows, then pair the net negative (sold/spent)
+  //    with the net positive (bought). Windows are grouped by the SAME operation
+  //    so a Convert and a fiat purchase in the same second never cross-mix.
   for (let i = 0; i < rows.length; i++) {
     const start = rows[i]!;
-    if (start.parsed || start.operation !== "binance convert") continue;
+    if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
     const window: TxRow[] = [];
     for (let j = i; j < rows.length; j++) {
       const r = rows[j]!;
       if (r.epoch - start.epoch > 1) break;
-      if (!r.parsed && r.operation === "binance convert") window.push(r);
+      if (!r.parsed && r.operation === start.operation) window.push(r);
     }
     const legs = netLegs(window);
     window.forEach((r) => (r.parsed = true));
-    pairAndEmit(trades, legs, addHint, "Convert");
+    pairAndEmit(trades, legs, addHint, TX_CONVERT_LABELS[start.operation] ?? "Convert");
   }
 
   // 5. Strategy trades: Transaction Sold↔Revenue and Buy↔Spend within ±1s.

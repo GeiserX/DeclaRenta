@@ -262,6 +262,46 @@ describe("binanceParser", () => {
       // 2 from Convert (SOL↔USDT) + 2 from Sold/Revenue (XRP↔ETH) = 4
       expect(result.trades).toHaveLength(4);
     });
+
+    it("should create a BUY lot for 'Buy Crypto With Fiat' (fiat → crypto)", () => {
+      // Regression: the EUR-funded card/balance purchase fell through every
+      // handler, so the acquired coin got NO FIFO lot — a later disposal then
+      // fabricated a phantom "Venta sin lotes" with cost basis 0. The fiat leg
+      // (negative EUR) is ±1s from the crypto leg.
+      const csv = [
+        TX_HEADER,
+        "123,2025-01-10 23:03:54,Spot,Buy Crypto With Fiat,BTC,0.02692821,Via CashBalance",
+        "123,2025-01-10 23:03:55,Spot,Buy Crypto With Fiat,EUR,-2499,Via CashBalance",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // One BUY of BTC priced in EUR — NOT a permuta SELL of EUR.
+      expect(result.trades).toHaveLength(1);
+      const buy = result.trades[0]!;
+      expect(buy.buySell).toBe("BUY");
+      expect(buy.symbol).toBe("BTC");
+      expect(buy.quantity).toBe("0.02692821");
+      expect(buy.currency).toBe("EUR");
+      // EUR spent is recorded as cost; no phantom EUR disposal is emitted.
+      expect(Number(buy.cost)).toBeCloseTo(2499, 6);
+      expect(result.trades.some((t) => t.symbol === "EUR")).toBe(false);
+    });
+
+    it("should skip Copy Portfolio create/close and BNB Fee Deduction (net-zero/dust)", () => {
+      // Copy Trading Create/Close move the same principal between Spot and the
+      // Spot Copy sub-account (each coin nets to zero); BNB Fee Deduction is a
+      // sub-cent fee. None are taxable disposals → no trades, no phantom lots.
+      const csv = [
+        TX_HEADER,
+        "123,2024-06-24 13:13:16,Spot Copy,Copy Portfolio (Spot) - Create,USDT,50,Binance Copy Trading",
+        "123,2024-06-24 13:13:16,Spot,Copy Portfolio (Spot) - Create,USDT,-50,Binance Copy Trading",
+        "123,2024-06-28 10:57:52,Spot,Copy Portfolio (Spot) - Close,BTC,0.00000952,Binance Copy Trading",
+        "123,2024-06-28 10:57:52,Spot Copy,Copy Portfolio (Spot) - Close,BTC,-0.00000952,Binance Copy Trading",
+        "123,2025-05-11 06:00:45,Spot,BNB Fee Deduction,BNB,-0.00028503,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+    });
   });
 
   // -------------------------------------------------------------------------
