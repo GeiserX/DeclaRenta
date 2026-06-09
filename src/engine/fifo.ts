@@ -398,6 +398,39 @@ export class FifoEngine {
     return commission.mul(commEcbRate).dividedBy(shareEcbRate);
   }
 
+  /**
+   * Convert a disposal's FCY proceeds/cost to EUR.
+   *
+   * DGT V2422-20 (the #219 fix): for a foreign-currency SECURITY, acquisition
+   * and disposal are in the SAME currency, so the gain is computed in that
+   * currency and converted to EUR at the SALE-date rate only — the buy↔sale FX
+   * drift is a separate patrimonial element (Art. 33), handled by the FX engine,
+   * and must not leak into the security gain. Here `lot.currency === sellCurrency`
+   * and we apply `sellEcbRate` to BOTH legs (proceedsEur − costBasisEur ===
+   * gainLossEur exactly).
+   *
+   * Crypto PERMUTAS break that assumption: you acquire a coin paying ONE coin and
+   * dispose of it receiving ANOTHER (e.g. buy USDC with EUR, sell USDC for BTC),
+   * so `lot.currency !== sellCurrency`. The cost is the EUR actually paid at
+   * acquisition (Art. 35.1 valor de adquisición) = `costBasisFcy × lot.ecbRate`,
+   * NOT `costBasisFcy × sellEcbRate` (which would multiply a EUR-denominated cost
+   * by the received coin's huge EUR price → a fabricated multi-million cost
+   * basis). Proceeds stay at the sale-date rate; the gain is their difference.
+   * (Art. 37.1.h: a permuta's gain is market value received − acquisition value.)
+   */
+  private disposalEur(
+    proceedsFcy: Decimal, costBasisFcy: Decimal,
+    lotEcbRate: Decimal, lotCurrency: string,
+    sellEcbRate: Decimal, sellCurrency: string,
+  ): { proceedsEur: Decimal; costBasisEur: Decimal; gainLossEur: Decimal } {
+    const proceedsEur = proceedsFcy.mul(sellEcbRate);
+    // Same-currency security → V2422-20 (cost at the sale-date rate, FX-clean).
+    // Cross-currency permuta → cost at the acquisition-date rate (real EUR paid).
+    const costEcbRate = lotCurrency === sellCurrency ? sellEcbRate : lotEcbRate;
+    const costBasisEur = costBasisFcy.mul(costEcbRate);
+    return { proceedsEur, costBasisEur, gainLossEur: proceedsEur.minus(costBasisEur) };
+  }
+
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
     const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const quantity = new Decimal(trade.quantity).abs();
@@ -499,11 +532,13 @@ export class FifoEngine {
       const costBasisFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
       const gainLossFcy = proceedsFcy.minus(costBasisFcy);
 
-      // EUR presentation: BOTH legs at the sale-date rate so
-      // proceedsEur − costBasisEur === gainLossEur exactly (no re-leaking of FX).
-      const proceedsEur = proceedsFcy.mul(ecbRate);
-      const costBasisEur = costBasisFcy.mul(ecbRate);
-      const gainLossEur = gainLossFcy.mul(ecbRate);
+      // EUR presentation: same-currency security → both legs at the sale-date
+      // rate (V2422-20, FX-clean); cross-currency permuta → cost at the lot's
+      // acquisition rate so a EUR-paid cost isn't scaled by the received coin's
+      // EUR price. See disposalEur().
+      const { proceedsEur, costBasisEur, gainLossEur } = this.disposalEur(
+        proceedsFcy, costBasisFcy, lot.ecbRate, lot.currency, ecbRate, trade.currency,
+      );
 
       const sellDate = trade.tradeDate;
       const acquireDate = lot.acquireDate;
@@ -1038,8 +1073,9 @@ export class FifoEngine {
       const fraction = consumed.dividedBy(shares);
       const partialProceedsFcy = proceedsFcy.mul(fraction);
       const costBasisFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
-      const partialProceedsEur = partialProceedsFcy.mul(ecbRate);
-      const costBasisEur = costBasisFcy.mul(ecbRate);
+      const { proceedsEur: partialProceedsEur, costBasisEur, gainLossEur } = this.disposalEur(
+        partialProceedsFcy, costBasisFcy, lot.ecbRate, lot.currency, ecbRate, ex.currency,
+      );
 
       this.disposals.push({
         isin: ex.underlyingIsin,
@@ -1053,7 +1089,7 @@ export class FifoEngine {
         costBasisFcy,
         proceedsEur: partialProceedsEur,
         costBasisEur,
-        gainLossEur: partialProceedsEur.minus(costBasisEur),
+        gainLossEur,
         holdingPeriodDays: daysBetween(lot.acquireDate, date),
         currency: ex.currency,
         sellEcbRate: ecbRate,
