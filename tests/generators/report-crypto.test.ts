@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
+import { binanceParser } from "../../src/parsers/binance.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -156,5 +157,52 @@ describe("generateTaxReport — crypto↔crypto permutas", () => {
     expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("277.50");   // NOT €21.9M
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("297.97");
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("20.47");          // NOT −€35M
+  });
+});
+
+describe("Binance plain SPOT trades → FIFO lots end-to-end (the ~€200 acquisition bug)", () => {
+  const TX = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+
+  function binanceToStatement(csv: string): FlexStatement {
+    const p = binanceParser.parse(csv);
+    return {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades: p.trades, cashTransactions: p.cashTransactions,
+      corporateActions: [], openPositions: [], securitiesInfo: [],
+      ...(p.manualRateHints ? { manualRateHints: p.manualRateHints } : {}),
+    };
+  }
+
+  it("THE BUG: a 2021 spot Buy (EUR) gives a lot the 2025 Sell consumes — no sin-lotes, real cost basis", () => {
+    // Reproduces the user's symptom: spot buys were dropped → 2025 sell had cost
+    // basis 0 → acquisition value collapsed to ~€200. Now the lot is found.
+    const csv = [
+      TX,
+      "1,2021-05-01 10:00:00,Spot,Buy,DOGE,250,",
+      "1,2021-05-01 10:00:00,Spot,Sell,EUR,-11.75,",
+      "1,2021-05-01 10:00:00,Spot,Fee,DOGE,-0.25,",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,DOGE,-250,Via CashBalance - Wallet/NX",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,EUR,100,Via CashBalance - Wallet/NX",
+    ].join("\n");
+    const rateMap = makeRateMap({ "2021-05-01": { EUR: "1" }, "2025-03-01": { EUR: "1" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    // The regression guard: NO "Venta sin lotes" (the user's exact error).
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    // Acquisition = the real EUR paid in 2021 (11.75), NOT 0 (the ~€200 collapse).
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("11.75");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("100.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("88.25");
+  });
+
+  it("Commission History income lands in base general (Casilla 0304), valued via USD rate", () => {
+    // USDT normalizes to USD → key the rate map on USD, never USDT.
+    const csv = [TX, "1,2025-06-01 00:00:00,Spot,Commission History,USDT,10,Affiliate"].join("\n");
+    const rateMap = makeRateMap({ "2025-06-01": { USD: "0.93" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+    // 10 USDT × 0.93 = 9.30 EUR as a general gain; not interest, not a disposal.
+    expect(report.generalGains.total.toFixed(2)).toBe("9.30");
+    expect(report.capitalGains.disposals).toHaveLength(0);
   });
 });
