@@ -17,10 +17,9 @@
  * parsing, use the parseEtoroXlsx() function with the xlsx library.
  */
 
-import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
-import { findColumn, parseNumber } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
 type WorkBook = import("xlsx").WorkBook;
@@ -191,6 +190,11 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     // We create both the opening buy and the closing sell
     const absUnits = Math.abs(unitsNum);
 
+    // Normalize the invested amount the SAME way on both legs (the SELL leg
+    // parses it via Decimal too), so an EU-formatted amount can't yield a
+    // different cost on the BUY leg than proceeds on the SELL leg.
+    const buyMoney = toFiniteDecimal(amount).neg().toString();
+
     // Buy leg (opening)
     trades.push({
       tradeID: `etoro-open-${openDate}-${symbol}-${i}`,
@@ -204,9 +208,9 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       settlementDate: openDate,
       quantity: `${absUnits}`,
       tradePrice: openRate,
-      tradeMoney: `-${amount}`,
+      tradeMoney: buyMoney,
       proceeds: "0",
-      cost: `-${amount}`,
+      cost: buyMoney,
       fifoPnlRealized: "0",
       fxRateToBase: "1",
       buySell: direction === "SELL" ? "SELL" : "BUY",
@@ -219,8 +223,8 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     });
 
     // Sell leg (closing)
-    const amountDec = new Decimal(parseNumber(amount) || "0");
-    const profitDec = new Decimal(profit || "0");
+    const amountDec = toFiniteDecimal(amount);
+    const profitDec = toFiniteDecimal(profit);
     const proceeds = amountDec.plus(profitDec).toString();
 
     trades.push({

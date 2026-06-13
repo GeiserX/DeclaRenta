@@ -10,12 +10,12 @@
  *   Z prefix = fiat   (ZEUR = EUR, ZUSD = USD)
  */
 
-import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import {
   parseCsvLine,
   parseNumber,
+  toFiniteDecimal,
   convertDateISO,
   findColumn,
   stripBom,
@@ -197,19 +197,20 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const pair = (fields[cols.pair] ?? "").trim();
     const timeStr = (fields[cols.time] ?? "").trim();
     const type = (fields[cols.type] ?? "").trim().toLowerCase();
+    // Money/quantity that feeds tax totals is finiteness-guarded: a malformed
+    // cell yields "0", never a non-finite Decimal that silently poisons totals
+    // (see toFiniteDecimal in csv-utils). The display price is stored verbatim
+    // as the lossless parseNumber string (trailing zeros preserved; never summed).
+    const volDec = toFiniteDecimal(fields[cols.vol] ?? "0").abs();
+    const costDec = toFiniteDecimal(fields[cols.cost] ?? "0").abs();
+    const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
     const price = parseNumber(fields[cols.price] ?? "0");
-    const cost = parseNumber(fields[cols.cost] ?? "0");
-    const fee = parseNumber(fields[cols.fee] ?? "0");
-    const vol = parseNumber(fields[cols.vol] ?? "0");
 
     if (!txid || !pair) continue;
 
     const { base, quote } = splitPair(pair);
     const tradeDate = krakenDate(timeStr);
     const isSell = type === "sell";
-    const volDec = new Decimal(vol || "0").abs();
-    const costDec = new Decimal(cost || "0").abs();
-    const feeDec = new Decimal(fee || "0");
 
     trades.push({
       tradeID: txid,
@@ -275,8 +276,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     const timeStr = (fields[cols.time] ?? "").trim();
     const type = (fields[cols.type] ?? "").trim().toLowerCase();
     const asset = (fields[cols.asset] ?? "").trim();
-    const amount = parseNumber(fields[cols.amount] ?? "0");
-    const fee = parseNumber(fields[cols.fee] ?? "0");
+    const amountDec = toFiniteDecimal(fields[cols.amount] ?? "0");
+    const feeLedgerDec = toFiniteDecimal(fields[cols.fee] ?? "0").abs();
 
     if (!txid) continue;
 
@@ -284,8 +285,6 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     if (type === "staking") {
       const symbol = cleanSymbol(asset);
       const tradeDate = krakenDate(timeStr);
-      const amountDec = new Decimal(amount || "0");
-      const feeLedgerDec = new Decimal(fee || "0").abs();
       const netAmount = amountDec.minus(feeLedgerDec);
 
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,

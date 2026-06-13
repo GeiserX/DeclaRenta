@@ -240,6 +240,27 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
   return value.slice(0, length).padEnd(length, char);
 }
 
+/**
+ * Format a free-text field (names, addresses, entity descriptions) into a
+ * fixed-width column.
+ *
+ * Unlike numeric/coded fields, free text can come straight from a broker export
+ * (e.g. a security/entity name) and may contain control characters or newlines.
+ * Those bytes would corrupt the fixed-width 500-byte AEAT record (a newline ends
+ * the record early; a control char shifts the visible glyph stream and can inject
+ * into adjacent fields). We replace every control character — C0 (\x00-\x1F incl.
+ * TAB/CR/LF), DEL (\x7F) and C1 (\x80-\x9F) — with a single space BEFORE slicing
+ * and padding, so column widths and positions are identical to a clean value.
+ *
+ * @param value - Raw text (possibly broker-supplied)
+ * @param length - Fixed column width in characters
+ * @param alignRight - Right-align (pad on the left) instead of left-align
+ */
+function fixedWidthText(value: string, length: number, alignRight = false): string {
+  const sanitized = value.replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+  return pad(sanitized, length, " ", alignRight);
+}
+
 function numPad(value: string, intLen: number, decLen: number): string {
   // Round to `decLen` decimals (ROUND_HALF_UP) BEFORE splitting int/frac, so
   // AEAT receives rounded values (not truncated) and any rounding that bumps
@@ -270,10 +291,10 @@ function buildSummaryRecord(
   record += "720";                                            // 2-4: Model
   record += config.year.toString();                           // 5-8: Year
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
-  record += pad(config.surname + " " + config.name, 40);     // 18-57: Name
+  record += fixedWidthText(config.surname + " " + config.name, 40); // 18-57: Name
   record += "T";                                              // 58: Transmission type
   record += pad(config.phone, 9, "0", true);                  // 59-67: Phone
-  record += pad(config.contactName, 40);                      // 68-107: Contact
+  record += fixedWidthText(config.contactName, 40);           // 68-107: Contact
   record += pad(config.declarationId, 13, "0", true);         // 108-120: Declaration ID
   record += config.isComplementary ? "C" : " ";               // 121: Complementary
   record += config.isReplacement ? "S" : " ";                 // 122: Replacement
@@ -306,7 +327,7 @@ function buildDetailRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += pad(config.surname + " " + config.name, 40);     // 36-75: Name (declarant/holder)
+  record += fixedWidthText(config.surname + " " + config.name, 40); // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
   record += "V";                                              // 102: Asset type (stocks)
@@ -315,7 +336,7 @@ function buildDetailRecord(
   record += "1";                                              // 131: ID type (ISIN)
   record += pad(pos.isin, 12);                                // 132-143: ISIN
   record += pad("", 46);                                      // 144-189: Reserved
-  record += pad(pos.description, 41);                         // 190-230: Entity name
+  record += fixedWidthText(pos.description, 41);              // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
   record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
@@ -395,7 +416,7 @@ function buildCashAccountRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += pad(brokerName, 40);                              // 36-75: Entity name
+  record += fixedWidthText(brokerName, 40);                   // 36-75: Entity name
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
   record += "C";                                              // 102: Asset type (accounts)
@@ -404,7 +425,7 @@ function buildCashAccountRecord(
   record += "5";                                              // 131: ID type (other)
   record += pad(cb.accountId || config.nif, 12);              // 132-143: Account identifier
   record += pad("", 46);                                      // 144-189: Reserved
-  record += pad(brokerName, 41);                              // 190-230: Entity name
+  record += fixedWidthText(brokerName, 41);                   // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad((cb.openedDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: Opening date
   record += "A";                                              // 423: Type (A=new)

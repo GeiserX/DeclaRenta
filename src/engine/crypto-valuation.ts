@@ -171,6 +171,7 @@ export function resolveCryptoTradeValues(
       severity: "warning",
       message: `Hay ${unresolved.length} operación(es) en criptomoneda cuyo valor en euros no se ha podido determinar automáticamente y se han excluido de los cálculos.`,
       hint: "Sucede en permutas cripto-cripto (p. ej. Binance Convert) cuando ninguna de las dos monedas tiene tipo de cambio oficial del BCE. Introduce manualmente el valor en euros por unidad de cada moneda en la fecha indicada para incluir estas operaciones.",
+      context: { count: String(unresolved.length) },
     });
   }
 
@@ -180,6 +181,7 @@ export function resolveCryptoTradeValues(
       severity: "info",
       message: `Se ha ignorado la comisión de ${neutralizedCommissions} operación(es) por estar denominada en una criptomoneda sin tipo de cambio disponible.`,
       hint: "El valor principal de la operación sí se ha calculado; solo se omite la pequeña comisión, cuyo impacto fiscal es mínimo.",
+      context: { count: String(neutralizedCommissions) },
     });
   }
 

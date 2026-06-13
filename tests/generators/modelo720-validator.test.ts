@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
+import { validateModelo720Records, validateModelo720TextFields } from "../../src/generators/modelo720-validator.js";
 
 /** Build a 500-char record with given content at specific positions */
 function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): string {
@@ -174,5 +174,55 @@ describe("validateModelo720Records", () => {
       expect(results[0]!.valid).toBe(false);
       expect(results[0]!.errors).toContainEqual(expect.stringContaining("Total valoración"));
     });
+  });
+
+  describe("Control-character detection in records", () => {
+    it("flags a record containing a control character (LF) as invalid", () => {
+      // Inject a newline into the entity-name area (190-230 → index 189).
+      const record = buildRecord("2", { 189: "AC\nME" });
+      const results = validateModelo720Records([record]);
+      expect(results[0]!.valid).toBe(false);
+      expect(results[0]!.errors).toContainEqual(expect.stringContaining("caracteres de control"));
+    });
+
+    it("does NOT flag a clean record", () => {
+      const record = buildRecord("2");
+      const results = validateModelo720Records([record]);
+      const ctrlErrors = results[0]!.errors.filter((e) => e.includes("caracteres de control"));
+      expect(ctrlErrors).toHaveLength(0);
+    });
+  });
+});
+
+describe("validateModelo720TextFields", () => {
+  it("flags a text field containing control chars (CR/LF) with a Spanish warning", () => {
+    const issues = validateModelo720TextFields([
+      { label: "descripción", value: "ACME\r\nCORP" },
+    ]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain("caracteres de control");
+    expect(issues[0]).toContain("«descripción»");
+  });
+
+  it("flags TAB and DEL control characters", () => {
+    expect(validateModelo720TextFields([{ label: "nombre", value: "A\tB" }])).toHaveLength(1);
+    expect(validateModelo720TextFields([{ label: "nombre", value: "A\x7FB" }])).toHaveLength(1);
+  });
+
+  it("returns no issues for clean text (accents and ñ are allowed)", () => {
+    const issues = validateModelo720TextFields([
+      { label: "nombre", value: "JOSÉ MUÑOZ PEÑA" },
+      { label: "entidad", value: "Société Générale" },
+    ]);
+    expect(issues).toHaveLength(0);
+  });
+
+  it("returns one issue per offending field and skips clean ones", () => {
+    const issues = validateModelo720TextFields([
+      { label: "campo limpio", value: "OK" },
+      { label: "campo sucio", value: "BAD\x01VALUE" },
+    ]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toContain("«campo sucio»");
   });
 });

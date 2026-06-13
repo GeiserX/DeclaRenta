@@ -12,6 +12,49 @@ export interface ValidationResult {
   errors: string[];
 }
 
+/**
+ * Matches any control character: C0 (\x00-\x1F incl. TAB/CR/LF), DEL (\x7F)
+ * and C1 (\x80-\x9F). These bytes must never reach the fixed-width AEAT record —
+ * a newline ends the 500-byte record early and other control bytes shift / inject
+ * into adjacent fields. The generator sanitizes them, but we also surface them so
+ * the user is WARNED that a broker-supplied name/description carried them rather
+ * than silently dropping characters.
+ */
+const CONTROL_CHAR_RE = /[\x00-\x1F\x7F-\x9F]/;
+
+/** A free-text input field to validate before generating the fixed-width file. */
+export interface Modelo720TextField {
+  /** Human-readable Spanish label of the field (e.g. "nombre", "descripción"). */
+  label: string;
+  /** Raw value as supplied (possibly from a broker export). */
+  value: string;
+}
+
+/**
+ * Validate the raw free-text input fields (taxpayer name, contact, entity/broker
+ * names, security descriptions) BEFORE they are formatted into the fixed-width
+ * record.
+ *
+ * The generator sanitizes control characters into spaces so the AEAT file is
+ * never corrupted, but that sanitization is silent. This check lets the caller
+ * WARN the user that one of their inputs contained control characters (so they
+ * can fix the source value if the replacement is not what they want).
+ *
+ * @param fields - Free-text fields with their labels and raw values
+ * @returns A non-empty array of Spanish warning messages, one per offending field
+ */
+export function validateModelo720TextFields(fields: Modelo720TextField[]): string[] {
+  const issues: string[] = [];
+  for (const field of fields) {
+    if (CONTROL_CHAR_RE.test(field.value)) {
+      issues.push(
+        `El campo «${field.label}» contiene caracteres de control no válidos que se han sustituido por espacios en el fichero. Revisa el valor de origen.`,
+      );
+    }
+  }
+  return issues;
+}
+
 /** Valid ISO 3166-1 alpha-2 country codes (commonly used in securities) */
 const ISO_COUNTRY_CODES = new Set([
   "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT",
@@ -101,6 +144,14 @@ export function validateModelo720Records(records: string[]): ValidationResult[] 
     // 1. Length check: exactly 500 characters
     if (record.length !== 500) {
       errors.push(`Longitud incorrecta: ${record.length} caracteres (esperados 500)`);
+    }
+
+    // 1b. Control-character check: a control char (CR/LF/TAB/DEL/C1) in the
+    // record corrupts the fixed-width layout. The generator sanitizes text
+    // fields, so this should never fire on generated output — it catches any
+    // control char that slipped through (e.g. a manually-built record).
+    if (CONTROL_CHAR_RE.test(record)) {
+      errors.push("El registro contiene caracteres de control no válidos (CR, LF, TAB u otros)");
     }
 
     // Even if length is wrong, validate what we can

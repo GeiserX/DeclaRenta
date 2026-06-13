@@ -78,6 +78,45 @@ function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
 }
 
 /**
+ * Defense-in-depth boundary guard for the final report totals (audit [HIGH/ERR]).
+ *
+ * Every parser already rejects non-finite (`NaN`/`Infinity`) amounts at the
+ * source (csv-utils `parseDecimal`, the per-broker guards), so in normal
+ * operation this is a strict no-op. But a `Decimal` can still go non-finite
+ * deep inside a future code path (a `div` by an unexpected zero, an overflow,
+ * an unvalidated manual rate) and that poison would otherwise flow silently
+ * into a casilla and render as a literal "NaN"/"Infinito" in the user's tax
+ * declaration. This is the LAST line of defense at the integration boundary:
+ * it scans the computed top-level monetary totals (the values that become
+ * casillas / summary figures), replaces any non-finite one with `0` so the
+ * rendered casilla shows 0 (never "NaN"), and reports the offending field
+ * names so the caller can emit ONE loud error — the failure is never silent.
+ *
+ * Pure: it does not mutate its input. The caller threads the returned
+ * `sanitized` map back into the report and, when `offendingFields` is
+ * non-empty, pushes a single `report.non_finite_total` error message.
+ *
+ * @param totals - Named top-level monetary totals destined for casillas.
+ * @returns The same totals with non-finite values coerced to `new Decimal(0)`,
+ *          plus the (possibly empty) list of field names that were non-finite.
+ */
+export function guardNonFiniteTotals<K extends string>(
+  totals: Record<K, Decimal>,
+): { sanitized: Record<K, Decimal>; offendingFields: K[] } {
+  const sanitized = {} as Record<K, Decimal>;
+  const offendingFields: K[] = [];
+  for (const [field, value] of Object.entries(totals) as [K, Decimal][]) {
+    if (value.isFinite()) {
+      sanitized[field] = value;
+    } else {
+      sanitized[field] = new Decimal(0);
+      offendingFields.push(field);
+    }
+  }
+  return { sanitized, offendingFields };
+}
+
+/**
  * Merge parser-supplied EUR valuation hints (e.g. a Binance EUR_Value column)
  * UNDER any explicit user manual rates: a user-typed quote for the same
  * currency+date wins. Returns undefined when neither source has any entries.
@@ -441,6 +480,7 @@ export function generateTaxReport(
       severity: "warning",
       message: cryptoMsg,
       hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+      context: { count: String(unresolvableInterest) },
     });
     allWarnings.push(cryptoMsg);
   }
@@ -452,6 +492,7 @@ export function generateTaxReport(
       severity: "warning",
       message: ggMsg,
       hint: "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
+      context: { count: String(unresolvableGeneralGains) },
     });
     allWarnings.push(ggMsg);
   }
@@ -463,7 +504,7 @@ export function generateTaxReport(
       severity: "info",
       message: `Los importes mostrados están divididos entre ${titulares} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los ${titulares} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.`,
       hint: `El reparto a partes iguales (${titulares} × ${(100 / titulares).toFixed(titulares === 3 ? 2 : 0)} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.`,
-      context: { titulares: String(titulares) },
+      context: { titulares: String(titulares), percent: (100 / titulares).toFixed(titulares === 3 ? 2 : 0) },
     });
   }
 
@@ -477,40 +518,68 @@ export function generateTaxReport(
     });
   }
 
+  // Final boundary guard (audit [HIGH/ERR]): scan every top-level monetary total
+  // destined for a casilla and coerce any non-finite (NaN/Infinity) value to 0,
+  // so a corrupt source amount can never render as a literal "NaN"/"Infinito" in
+  // the declaration. A strict no-op when every total is finite (the normal case).
+  // Derived figures (netGainLoss) are computed from the SANITIZED legs below so
+  // they stay finite too. Emits exactly ONE error when anything was non-finite.
+  const { sanitized: t, offendingFields: nonFiniteFields } = guardNonFiniteTotals({
+    transmissionValue,
+    acquisitionValue,
+    blockedLosses,
+    grossDividends,
+    interestEarned,
+    interestPaid,
+    generalGainsTotal,
+    doubleTaxationDeduction: doubleTaxation.total,
+    fxTransmissionValue,
+    fxAcquisitionValue,
+  });
+  if (nonFiniteFields.length > 0) {
+    allMessages.push({
+      id: "report.non_finite_total",
+      severity: "error",
+      message: "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
+      hint: "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
+      context: { field: nonFiniteFields.join(", ") },
+    });
+  }
+
   return {
     year,
     warnings: allWarnings,
     messages: allMessages,
     unresolvedCryptoValuations: yearUnresolvedCrypto.length > 0 ? yearUnresolvedCrypto : undefined,
     capitalGains: {
-      transmissionValue,
-      acquisitionValue,
-      netGainLoss: transmissionValue.minus(acquisitionValue),
-      blockedLosses,
+      transmissionValue: t.transmissionValue,
+      acquisitionValue: t.acquisitionValue,
+      netGainLoss: t.transmissionValue.minus(t.acquisitionValue),
+      blockedLosses: t.blockedLosses,
       disposals,
     },
     dividends: {
-      grossIncome: grossDividends,
+      grossIncome: t.grossDividends,
       deductibleExpenses: new Decimal(0),
       entries: dividendEntries,
     },
     interest: {
-      earned: interestEarned,
-      paid: interestPaid,
+      earned: t.interestEarned,
+      paid: t.interestPaid,
       entries: interestEntries,
     },
     generalGains: {
-      total: generalGainsTotal,
+      total: t.generalGainsTotal,
       entries: generalGainEntries,
     },
     doubleTaxation: {
-      deduction: doubleTaxation.total,
+      deduction: t.doubleTaxationDeduction,
       byCountry: doubleTaxation.byCountry,
     },
     fxGains: {
-      transmissionValue: fxTransmissionValue,
-      acquisitionValue: fxAcquisitionValue,
-      netGainLoss: fxTransmissionValue.minus(fxAcquisitionValue),
+      transmissionValue: t.fxTransmissionValue,
+      acquisitionValue: t.fxAcquisitionValue,
+      netGainLoss: t.fxTransmissionValue.minus(t.fxAcquisitionValue),
       disposals: fxDisposals,
     },
   };

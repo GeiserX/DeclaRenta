@@ -8,12 +8,12 @@
  * Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes
  */
 
-import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import {
   parseCsvLine,
   parseNumber,
+  toFiniteDecimal,
   findColumn,
   stripBom,
 } from "./csv-utils.js";
@@ -170,8 +170,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         fxRateToBase: "1",
         type: "Crypto Reward Income",
         taxBucket: incomeBucket,
-        rewardQuantity: new Decimal(quantity || "0").abs().toString(),
-        rewardCostBasisEur: new Decimal(eurAmount || "0").abs().toString(),
+        rewardQuantity: toFiniteDecimal(quantity).abs().toString(),
+        rewardCostBasisEur: toFiniteDecimal(eurAmount).abs().toString(),
       });
       continue;
     }
@@ -181,8 +181,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // The Notes field typically contains "Converted X ASSET1 to Y ASSET2"
       const convertMatch = notes.match(/Converted\s+[\d.,]+\s+\w+\s+to\s+([\d.,]+)\s+(\w+)/i);
 
-      const quantityDec = new Decimal(quantity || "0").abs();
-      const feeDec = new Decimal(fees || "0");
+      const quantityDec = toFiniteDecimal(quantity).abs();
+      const feeDec = toFiniteDecimal(fees);
 
       // Close (sell) the source asset
       trades.push({
@@ -214,8 +214,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // Open (buy) the destination asset
       if (convertMatch) {
         const destAsset = convertMatch[2]!;
-        const destQuantityDec = new Decimal(parseNumber(convertMatch[1]!)).abs();
-        const subtotalDec = new Decimal(subtotal || "0").abs();
+        const destQuantityDec = toFiniteDecimal(convertMatch[1]!).abs();
+        const subtotalDec = toFiniteDecimal(subtotal).abs();
         const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
 
         trades.push({
@@ -252,10 +252,10 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const isBuy = txType === "buy";
     if (!isSell && !isBuy) continue;
 
-    const qtyDec = new Decimal(quantity || "0").abs();
+    const qtyDec = toFiniteDecimal(quantity).abs();
     if (qtyDec.isZero()) continue;
 
-    const feeDec2 = new Decimal(fees || "0");
+    const feeDec2 = toFiniteDecimal(fees);
 
     trades.push({
       tradeID: `coinbase-${txType}-${tradeDate}-${asset}-${i}`,
@@ -293,6 +293,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         severity: "info" as const,
         message: `Se han clasificado ${rewardsIncomeCount} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).`,
         hint: "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+        context: { count: String(rewardsIncomeCount) },
       }]
     : undefined;
 

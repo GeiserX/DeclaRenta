@@ -20,8 +20,8 @@ import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
+import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
-import { normalizeDate } from "../engine/dates.js";
 import { generateTaxReport } from "../generators/report.js";
 import { generateModelo720 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
@@ -139,36 +139,14 @@ program
       console.error(`  Brokers: ${uniqueBrokers.join(", ")}`);
       console.error(`  Total: ${merged.trades.length} operaciones, ${merged.cashTransactions.length} transacciones`);
 
-      // 2. Detect currencies and fetch ECB rates
-      const currencies = new Set<string>();
-      for (const t of merged.trades) currencies.add(t.currency);
-      for (const c of merged.cashTransactions) currencies.add(c.currency);
-      currencies.delete("EUR");
-
-      console.error(`  Divisas detectadas: ${[...currencies].join(", ") || "solo EUR"}`);
+      // 2. Detect currencies and fetch ECB rates (shared orchestrator: derive
+      //    needed (currency, year) pairs → fetch per-year → merge into one map).
+      const needs = deriveEcbNeeds(merged, opts.year);
+      console.error(`  Divisas detectadas: ${needs.currencies.join(", ") || "solo EUR"}`);
       console.error("  Obteniendo tipos de cambio ECB...");
 
-      const years = new Set(merged.trades.map((t) => parseInt(t.tradeDate.slice(0, 4))));
-      // Cash transactions (dividends, interest, crypto reward income) can fall in
-      // a year with NO trades — e.g. USDT Simple Earn interest in a year the user
-      // didn't trade. Fetch their years too, or valuation throws "No ECB rate".
-      for (const c of merged.cashTransactions) {
-        const y = parseInt(normalizeDate(c.dateTime).slice(0, 4));
-        if (Number.isFinite(y)) years.add(y);
-      }
-      years.add(opts.year);
-      // Fetch previous year for the earliest year so the 10-day lookback can find
-      // late-December rates for early-January transactions (e.g. Jan 1-2).
-      const minYear = Math.min(...years);
-      years.add(minYear - 1);
-      const allRates: EcbRateMap = new Map();
-      for (const yr of years) {
-        const rates = await fetchEcbRates(yr, [...currencies]);
-        for (const [date, ratesByDate] of rates) {
-          allRates.set(date, ratesByDate);
-        }
-      }
-      console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...years].sort().join(", ")})`);
+      const allRates = await buildEcbRateMap(needs);
+      console.error(`  Tipos ECB cargados: ${allRates.size} fechas (${[...needs.years].sort((a, b) => a - b).join(", ")})`);
 
       // 2b. Parse optional manual crypto rates (--crypto-rates). Inline JSON or
       //     a path to a JSON file. Used as a fallback for crypto↔crypto permutas
@@ -202,9 +180,17 @@ program
 
       // 3b. Apply loss carryforward if prior losses provided
       if (opts.priorLosses) {
-        const priorData = JSON.parse(readFileSync(opts.priorLosses, "utf-8")) as Array<{
+        let priorData: Array<{
           year: number; amount: string; remaining: string; category: "gains" | "income";
         }>;
+        try {
+          priorData = JSON.parse(readFileSync(opts.priorLosses, "utf-8")) as Array<{
+            year: number; amount: string; remaining: string; category: "gains" | "income";
+          }>;
+        } catch {
+          console.error(`Error: No se pudo leer el archivo ${opts.priorLosses}: JSON inválido.`);
+          process.exit(1);
+        }
         const priorLosses: LossCarryforward[] = priorData.map((l) => ({
           year: l.year,
           amount: new Decimal(l.amount),
@@ -336,7 +322,13 @@ program
       // Extract ISINs from previous year's 720 file (detail records start with "2", ISIN at positions 131-142)
       let previousYearIsins: string[] | undefined;
       if (opts.previous720) {
-        const prev = readFileSync(opts.previous720, "utf-8");
+        let prev: string;
+        try {
+          prev = readFileSync(opts.previous720, "utf-8");
+        } catch {
+          console.error(`Error: No se pudo leer el archivo ${opts.previous720}.`);
+          process.exit(1);
+        }
         previousYearIsins = prev.split("\n")
           .filter((line) => line.startsWith("2"))
           .map((line) => line.slice(131, 143).trim())
@@ -419,7 +411,13 @@ program
       // Extract ISINs from previous year's D-6 JSON output
       let previousYearIsins: string[] | undefined;
       if (opts.previousD6) {
-        const prevJson = JSON.parse(readFileSync(opts.previousD6, "utf-8")) as { positions?: Array<{ isin: string }> };
+        let prevJson: { positions?: Array<{ isin: string }> };
+        try {
+          prevJson = JSON.parse(readFileSync(opts.previousD6, "utf-8")) as { positions?: Array<{ isin: string }> };
+        } catch {
+          console.error(`Error: No se pudo leer el archivo ${opts.previousD6}: JSON inválido.`);
+          process.exit(1);
+        }
         previousYearIsins = (prevJson.positions ?? []).map((p) => p.isin);
       }
 

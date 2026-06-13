@@ -99,7 +99,9 @@ describe("scalableParser", () => {
       const result = scalableParser.parse(SCALABLE_CSV);
       const divs = result.cashTransactions.filter((t) => t.type === "Dividends");
       expect(divs).toHaveLength(1);
-      expect(divs[0]!.amount).toBe("15.50");
+      // Amount is normalized through Decimal (toFiniteDecimalString), so the
+      // trailing zero is dropped: "15,50" → "15.5" (numerically identical).
+      expect(divs[0]!.amount).toBe("15.5");
       expect(divs[0]!.isin).toBe("IE00BK5BQT80");
     });
 

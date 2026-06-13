@@ -7,26 +7,17 @@ import Decimal from "decimal.js";
 import { t } from "../i18n/index.js";
 import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur } from "./format.js";
+import { assetLabel } from "./asset-labels.js";
+import { esc } from "./esc.js";
 
-const ASSET_LABELS: Record<string, string> = {
-  STK: "Acciones cotizadas",
-  FUND: "Fondos / ETFs",
-  OPT: "Opciones (Art. 37.1.m LIRPF)",
-  FOP: "Opciones sobre futuros",
-  FSFOP: "Opciones sobre futuros",
-  CRYPTO: "Criptomonedas",
-  BOND: "Bonos",
-};
-
+// TODO(i18n): needs keys "option.expiration" / "option.close" / "option.exercise"
+// in all 5 locales — kept as Spanish literals for now so the 4 non-Spanish
+// locales don't crash on a missing key.
 const OPTION_SCENARIO_LABELS: Record<string, string> = {
   expiration: "Expiración",
   close: "Cierre anticipado",
   exercise: "Ejercicio/Asignación",
 };
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function fmtDate(d: string): string {
   // YYYYMMDD or YYYY-MM-DD -> DD/MM/YYYY
@@ -53,7 +44,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     <p class="annex-subtitle">${esc(t("annex.subtitle"))}</p>`;
 
   for (const [cat, ops] of groups) {
-    const label = ASSET_LABELS[cat] ?? cat;
+    const label = assetLabel(cat);
     const subtotalProceeds = ops.reduce((s, d) => s.plus(d.proceedsEur), new Decimal(0));
     const subtotalCost = ops.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
     const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));

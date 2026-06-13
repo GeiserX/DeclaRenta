@@ -23,6 +23,7 @@ import {
   detectDelimiter,
   parseCsvLine,
   parseNumber,
+  toFiniteDecimal,
   convertDateDMYDot,
   findColumn,
 } from "./csv-utils.js";
@@ -121,10 +122,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
 
     const isin = (fields[isinCol] ?? "").trim();
     const info = infoCol >= 0 ? (fields[infoCol] ?? "").trim() : "";
-    const qtyRaw = parseNumber(fields[qtyCol] ?? "0");
     const price = parseNumber(fields[priceCol] ?? "0");
 
-    const qtyNum = new Decimal(qtyRaw);
+    const qtyNum = toFiniteDecimal(fields[qtyCol] ?? "0");
     if (!isin || qtyNum.isZero()) continue;
 
     // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
@@ -134,12 +134,13 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     }
 
     // Skip zero-price rows (non-tradeable conversions, rights).
-    if (new Decimal(price).isZero()) continue;
+    const priceDec = toFiniteDecimal(price);
+    if (priceDec.isZero()) continue;
 
     // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
     const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
     const absQty = qtyNum.abs();
-    const tradeMoney = absQty.mul(new Decimal(price)).toFixed();
+    const tradeMoney = absQty.mul(priceDec).toFixed();
 
     const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
     const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";

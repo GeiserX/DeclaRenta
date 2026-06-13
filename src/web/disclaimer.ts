@@ -6,6 +6,7 @@
  */
 
 import { t } from "../i18n/index.js";
+import { esc } from "./esc.js";
 
 let dialog: HTMLDialogElement | null = null;
 
@@ -43,8 +44,4 @@ function renderDialog(): HTMLDialogElement {
 export function openDisclaimer(): void {
   const d = renderDialog();
   d.showModal();
-}
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

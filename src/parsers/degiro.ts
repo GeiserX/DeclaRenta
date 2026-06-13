@@ -14,10 +14,12 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import {
   detectDelimiter,
   parseCsvLine,
   parseNumber,
+  toFiniteDecimal,
   convertDateDMY,
   findColumn,
 } from "./csv-utils.js";
@@ -189,6 +191,13 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
   }
 
   const trades: Trade[] = [];
+  // Count NON-EMPTY rows that look like real trades (carry a quantity or price)
+  // but get dropped because they have no ISIN or no usable amount. A column-
+  // mapping drift would silently discard many such rows; we surface ONE info
+  // message so the user notices instead of getting a too-low report. Genuine
+  // non-trade lines (deposits, cash sweeps: no qty, no price) are NOT counted,
+  // nor are documented zero-price rights assignments.
+  let tradeLikeRowsSkipped = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -210,10 +219,13 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       const next = (fields[cols.orderId + 1] ?? "").trim();
       if (next && /^[0-9a-f]{8}-/.test(next)) orderId = next;
     }
-    const txCosts = parseFloat(parseNumber(fields[cols.costs] ?? "0"));
-    const autoFx = cols.autoFxCosts >= 0 ? parseFloat(parseNumber(fields[cols.autoFxCosts] ?? "0")) : 0;
-    const rawComm = Math.round((txCosts + autoFx) * 100) / 100;
-    const commission = rawComm === 0 ? "0" : rawComm.toFixed(2);
+    // Commission via decimal.js (no float round-trip). toFiniteDecimal guards
+    // against a garbled cell emitting the literal "NaN"/"Infinity" into the
+    // commission field, which would poison every downstream cost-basis total.
+    const txCosts = toFiniteDecimal(fields[cols.costs] ?? "0");
+    const autoFx = cols.autoFxCosts >= 0 ? toFiniteDecimal(fields[cols.autoFxCosts] ?? "0") : toFiniteDecimal("0");
+    const commDec = txCosts.plus(autoFx);
+    const commission = commDec.isZero() ? "0" : commDec.toFixed(2);
     // When header already embeds "EUR" (costsCurrency = -1), default to EUR
     const commCurrency = cols.costsCurrency >= 0 ? (fields[cols.costsCurrency] ?? "EUR").trim() : "EUR";
 
@@ -226,15 +238,26 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
-    if (!isin || quantity === "0") continue;
+    if (!isin || quantity === "0") {
+      // Trade-like row (carries a real quantity or price) dropped for lack of
+      // ISIN / amount → suspicious (likely column drift). Plain non-trade lines
+      // (deposits/sweeps with no qty and no price) are expected → not counted.
+      const hasQty = quantity !== "0";
+      const hasPrice = price !== "0" && price !== "0.0000";
+      if (hasQty || hasPrice) tradeLikeRowsSkipped++;
+      continue;
+    }
 
     // Skip zero-price rows (rights assignments, non-tradeable conversions)
     if (price === "0" || price === "0.0000") continue;
 
-    // Determine buy/sell: negative local value = you paid = buy; or negative quantity = sell
-    const valueNum = parseFloat(value);
-    const qtyNum = parseFloat(quantity);
-    const isSell = valueNum > 0 || qtyNum < 0;
+    // Determine buy/sell: negative local value = you paid = buy; or negative
+    // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a
+    // garbled value/quantity cell can't misclassify the leg via NaN.
+    const valueDec = toFiniteDecimal(value);
+    const qtyDec = toFiniteDecimal(quantity);
+    const isSell = valueDec.greaterThan(0) || qtyDec.lessThan(0);
+    const absQtyStr = qtyDec.abs().toString();
 
     trades.push({
       tradeID: orderId,
@@ -246,7 +269,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       currency: currency || "EUR",
       tradeDate,
       settlementDate: tradeDate, // T+2 estimated, but we use tradeDate for FIFO
-      quantity: isSell ? `-${Math.abs(qtyNum)}` : `${Math.abs(qtyNum)}`,
+      quantity: isSell ? `-${absQtyStr}` : absQtyStr,
       tradePrice: price,
       tradeMoney: value,
       proceeds: isSell ? value : "0",
@@ -263,6 +286,17 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = [];
+  if (tradeLikeRowsSkipped > 0) {
+    parserMessages.push({
+      id: "degiro.rows_skipped",
+      severity: "warning",
+      message: `Se omitieron ${tradeLikeRowsSkipped} filas sin ISIN/sin importe.`,
+      hint: "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
+      context: { count: String(tradeLikeRowsSkipped) },
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -273,6 +307,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
 }
 

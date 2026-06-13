@@ -10,12 +10,10 @@ import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { lookupPositionRate } from "../engine/ecb.js";
+import { buildModelo721Entries } from "../generators/modelo721.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "./esc.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -23,9 +21,6 @@ function effectiveYearEnd(year: number): string {
   const yearEnd = `${year}-12-31`;
   return yearEnd <= today ? yearEnd : today;
 }
-
-/** Crypto asset categories recognized by DeclaRenta parsers */
-const CRYPTO_CATEGORIES = new Set(["CRYPTO"]);
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
@@ -57,10 +52,9 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   const year = profile.year;
   const yearEnd = effectiveYearEnd(year);
 
-  // Filter crypto positions
-  const positions = statement.openPositions.filter(
-    (p) => CRYPTO_CATEGORIES.has(p.assetCategory) && new Decimal(p.positionValue).greaterThan(0),
-  );
+  // Build valued crypto positions via the single 721 valuation source of truth.
+  const valuation = buildModelo721Entries(statement.openPositions, rateMap, yearEnd);
+  const positions = valuation.positions;
 
   if (positions.length === 0) {
     container.innerHTML = `<p class="muted">${t("m721.no_positions")}</p>`;
@@ -96,12 +90,8 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
   // coin itself) has no resolvable year-end rate are excluded from the EUR total
   // and surfaced below for manual valuation, instead of crashing the section.
-  let unvaluedCount = 0;
-  const totalValue = positions.reduce((sum, p) => {
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
-    if (rate === null) { unvaluedCount++; return sum; }
-    return sum.plus(new Decimal(p.positionValue).mul(rate));
-  }, new Decimal(0));
+  const unvaluedCount = valuation.unvaluedCount;
+  const totalValue = valuation.totalValueEur;
 
   const exceeds = totalValue.greaterThanOrEqualTo(50000);
   const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
@@ -129,20 +119,26 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <th>${t("table.units")}</th><th>${t("table.amount_eur")}</th>
     </tr></thead>
     <tbody>${positions.map((p) => {
-      const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
-      const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
-      const exchange = p.isin && p.isin.length >= 2 ? p.isin.slice(0, 2) : "—";
+      const val = p.valuationEur === null ? "—" : fmtEur(p.valuationEur);
+      // Exchange/country are not derived from the ISIN prefix (forbidden for
+      // crypto); open positions carry no reliable exchange, so render blank.
+      const exchange = p.entry.exchangeName || "—";
       return `<tr>
-        <td class="mono">${esc(p.description || p.isin || p.symbol)}</td>
+        <td class="mono">${esc(p.entry.description)}</td>
         <td>${esc(exchange)}</td>
-        <td>${new Decimal(p.quantity).toString()}</td>
+        <td>${p.entry.quantity.toString()}</td>
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
 
-  // Exchange rates display
-  const uniqueCurrencies = [...new Set(positions.map((p) => p.currency))].filter((c) => c !== "EUR").sort();
+  // Exchange rates display. Currencies come from the raw crypto positions
+  // (valuation entries don't carry currency); same crypto filter the generator uses.
+  const uniqueCurrencies = [...new Set(
+    statement.openPositions
+      .filter((p) => p.assetCategory === "CRYPTO" && new Decimal(p.positionValue).greaterThan(0))
+      .map((p) => p.currency),
+  )].filter((c) => c !== "EUR").sort();
   if (uniqueCurrencies.length > 0) {
     html += `<div class="rates-display">
       <h4>${t("m721.rates_title")}</h4>

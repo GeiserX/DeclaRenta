@@ -4,9 +4,12 @@
 
 import { t } from "../i18n/index.js";
 import type { Statement } from "../types/broker.js";
+import type { MessageSeverity } from "../types/tax.js";
+import { esc } from "./esc.js";
 
 export interface ValidationIssue {
-  level: "error" | "warning" | "info";
+  /** Shares the engine's three-tier severity vocabulary (see {@link MessageSeverity}). */
+  level: MessageSeverity;
   message: string;
 }
 
@@ -103,7 +106,6 @@ export function renderValidationIssues(issues: ValidationIssue[]): string {
   if (issues.length === 0) return "";
 
   const icons: Record<string, string> = { error: "\u26D4", warning: "\u26A0\uFE0F", info: "\u2139\uFE0F" };
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const items = issues
     .map((i) => `<li class="validation-${i.level}">${icons[i.level]} ${esc(i.message)}</li>`)
     .join("");

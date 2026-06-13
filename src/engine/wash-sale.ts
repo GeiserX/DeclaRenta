@@ -55,18 +55,29 @@ export function addMonths(date: Date, months: number): Date {
  * @returns Disposals with washSaleBlocked flag set
  */
 export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): FifoDisposal[] {
-  const buysByAsset = new Map<string, Date[]>();
+  // Index buy *timestamps* by homogeneous-asset key. Each key's array is sorted
+  // once below so per-disposal lookups can binary-search the date window instead
+  // of scanning every buy of that security (the old O(n²) worst case when many
+  // losses share a heavily-traded ISIN). Behavior is identical — we still answer
+  // the boolean "is there any qualifying repurchase in the window?".
+  const buysByAsset = new Map<string, number[]>();
 
-  // Index all buy dates by homogeneous-asset key.
   for (const trade of allTrades) {
     if (trade.buySell === "BUY" && !WASH_SALE_EXEMPT.has(trade.assetCategory)) {
       const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
       if (!key) continue;
-      if (!buysByAsset.has(key)) {
-        buysByAsset.set(key, []);
+      let times = buysByAsset.get(key);
+      if (!times) {
+        times = [];
+        buysByAsset.set(key, times);
       }
-      buysByAsset.get(key)!.push(parseDate(trade.tradeDate));
+      times.push(parseDate(trade.tradeDate).getTime());
     }
+  }
+
+  // Sort each key's buy timestamps ascending once, enabling binary-search lookups.
+  for (const times of buysByAsset.values()) {
+    times.sort((a, b) => a - b);
   }
 
   return disposals.map((disposal) => {
@@ -87,16 +98,26 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
 
     const sellDate = parseDate(disposal.sellDate);
     const months = windowMonths(disposal.assetCategory, disposal.isin);
-    const windowStart = addMonths(sellDate, -months);
-    const windowEnd = addMonths(sellDate, months);
+    const windowStart = addMonths(sellDate, -months).getTime();
+    const windowEnd = addMonths(sellDate, months).getTime();
+    const sellTime = sellDate.getTime();
 
-    const buys = buysByAsset.get(key) ?? [];
-    const hasRepurchase = buys.some((buyDate) => {
-      // Exclude buys that are BEFORE the sell (those are the lots being sold)
-      // We only care about repurchases: buys that happen in the 2-month window
-      // AFTER the sale, or buys in the 2 months before that still have open lots
-      return buyDate >= windowStart && buyDate <= windowEnd && buyDate.getTime() !== sellDate.getTime();
-    });
+    // A repurchase blocks the loss if ANY buy of the same security falls in the
+    // window [windowStart, windowEnd] on a day OTHER than the sale day itself
+    // (a buy ON the sell date is a same-day lot being sold, not a repurchase).
+    // The buy timestamps are pre-sorted, so we binary-search the window: the
+    // qualifying buys are the slice [lo, hi) minus any that fall exactly on the
+    // sell date. This is exactly the old `buys.some(...)` predicate, just indexed.
+    const buyTimes = buysByAsset.get(key) ?? [];
+    const lo = lowerBound(buyTimes, windowStart);
+    const hi = upperBound(buyTimes, windowEnd);
+    let inWindowCount = hi - lo;
+    // Subtract buys landing exactly on the sell day (only possible if the sell
+    // day is inside the window, which it always is, but guard anyway).
+    if (inWindowCount > 0 && sellTime >= windowStart && sellTime <= windowEnd) {
+      inWindowCount -= upperBound(buyTimes, sellTime) - lowerBound(buyTimes, sellTime);
+    }
+    const hasRepurchase = inWindowCount > 0;
 
     // DEFERRAL NOTE (Art. 33.5.f LIRPF): a blocked loss is NOT forfeited — it is
     // deferred and integrates into the taxable base when the replacement (repurchased)
@@ -143,6 +164,30 @@ function windowMonths(assetCategory: string, isin: string): number {
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
   return isin ? 2 : 12;
+}
+
+/** First index `i` in the ascending array where `arr[i] >= target` (else arr.length). */
+function lowerBound(arr: readonly number[], target: number): number {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid]! < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** First index `i` in the ascending array where `arr[i] > target` (else arr.length). */
+function upperBound(arr: readonly number[], target: number): number {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid]! <= target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {

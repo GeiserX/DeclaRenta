@@ -255,6 +255,39 @@ describe("trading212Parser", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Unresolved-price skip counter (parserMessages)
+  // -------------------------------------------------------------------------
+
+  describe("unresolved-price skip counter", () => {
+    it("should not emit parserMessages when every row resolves", () => {
+      const result = trading212Parser.parse(TRADING212_CSV);
+      expect(result.parserMessages).toBeUndefined();
+    });
+
+    it("should skip a buy with no price and a Total in a different currency, and report it once", () => {
+      const csv = [
+        HEADER,
+        // price empty, instrument currency USD, Total in EUR → unresolvable value
+        "Market buy,2024-01-15 09:30:00,US0378331005,AAPL,Apple Inc,10,,USD,0.92,,,1706.60,EUR,,trade001",
+        // a normal resolvable row alongside it
+        "Market buy,2024-02-10 10:15:00,US5949181045,MSFT,Microsoft Corp,5,415.00,USD,0.93,,,1929.75,EUR,,trade002",
+      ].join("\n");
+      const result = trading212Parser.parse(csv);
+
+      // Only the resolvable MSFT row becomes a trade
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.symbol).toBe("MSFT");
+
+      expect(result.parserMessages).toBeDefined();
+      expect(result.parserMessages).toHaveLength(1);
+      const msg = result.parserMessages![0]!;
+      expect(msg.id).toBe("parser.trading212.unresolved_price_skipped");
+      expect(msg.severity).toBe("warning");
+      expect(msg.context?.skipped).toBe("1");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Trade counts
   // -------------------------------------------------------------------------
 
@@ -393,6 +426,154 @@ describe("trading212Parser", () => {
       expect(buy.currency).toBe("GBP");
       expect(buy.tradePrice).toBe("1.855");
       expect(buy.cost).toBe("-185.5");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Additional committed fixtures (cash / dividends / extended / v2)
+  // These use the newer Trading 212 header (extra Notes/ID/fee/merchant cols).
+  // Pin structural outcomes: trade direction counts, cash-transaction types.
+  // -------------------------------------------------------------------------
+
+  describe("trading212-cash-sample.csv (cash-only: interest, cashback, FX, card)", () => {
+    const csv = readFileSync(
+      new URL("../fixtures/trading212-cash-sample.csv", import.meta.url),
+      "utf-8",
+    );
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse 0 trades and 5 interest payments (skip deposit/withdrawal/cashback/FX/card)", () => {
+      const result = trading212Parser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      const interest = result.cashTransactions.filter((c) => c.type === "Broker Interest Received");
+      expect(interest).toHaveLength(5);
+      // Cashback, currency conversion, deposit, withdrawal and card debit are all skipped.
+      expect(result.cashTransactions).toHaveLength(5);
+      expect(result.cashTransactions.every((c) => c.currency === "EUR")).toBe(true);
+    });
+
+    it("should not classify any cash row as dividend or withholding", () => {
+      const result = trading212Parser.parse(csv);
+      expect(result.cashTransactions.filter((c) => c.type === "Dividends")).toHaveLength(0);
+      expect(result.cashTransactions.filter((c) => c.type === "Withholding Tax")).toHaveLength(0);
+    });
+  });
+
+  describe("trading212-dividends-sample.csv (buys + dividends + withholdings)", () => {
+    const csv = readFileSync(
+      new URL("../fixtures/trading212-dividends-sample.csv", import.meta.url),
+      "utf-8",
+    );
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse 4 buy trades (ORIO, NOVA, HELI, VEGA), no sells", () => {
+      const result = trading212Parser.parse(csv);
+      const buys = result.trades.filter((t) => t.buySell === "BUY");
+      const sells = result.trades.filter((t) => t.buySell === "SELL");
+      expect(buys).toHaveLength(4);
+      expect(sells).toHaveLength(0);
+      expect(new Set(buys.map((t) => t.symbol))).toEqual(new Set(["ORIO", "NOVA", "HELI", "VEGA"]));
+    });
+
+    it("should parse 5 dividends and 3 withholdings (2 dividends carry no WHT)", () => {
+      const result = trading212Parser.parse(csv);
+      const divs = result.cashTransactions.filter((c) => c.type === "Dividends");
+      const whts = result.cashTransactions.filter((c) => c.type === "Withholding Tax");
+      expect(divs).toHaveLength(5);
+      expect(whts).toHaveLength(3);
+    });
+
+    it("should keep withholding amounts negative and dividend amounts positive", () => {
+      const result = trading212Parser.parse(csv);
+      const divs = result.cashTransactions.filter((c) => c.type === "Dividends");
+      const whts = result.cashTransactions.filter((c) => c.type === "Withholding Tax");
+      expect(divs.every((d) => parseFloat(d.amount) > 0)).toBe(true);
+      expect(whts.every((w) => parseFloat(w.amount) < 0)).toBe(true);
+    });
+  });
+
+  describe("trading212-extended-sample.csv (edge-case quotes, fractional, partial closes)", () => {
+    const csv = readFileSync(
+      new URL("../fixtures/trading212-extended-sample.csv", import.meta.url),
+      "utf-8",
+    );
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse 3 buys + 4 sells (QUOT closed in two partial sells)", () => {
+      const result = trading212Parser.parse(csv);
+      const buys = result.trades.filter((t) => t.buySell === "BUY");
+      const sells = result.trades.filter((t) => t.buySell === "SELL");
+      expect(buys).toHaveLength(3);
+      expect(sells).toHaveLength(4);
+      // QUOT is bought once and sold twice (partial closes).
+      expect(result.trades.filter((t) => t.symbol === "QUOT" && t.buySell === "SELL")).toHaveLength(2);
+    });
+
+    it("should parse 1 dividend, 1 withholding, 1 interest payment", () => {
+      const result = trading212Parser.parse(csv);
+      expect(result.cashTransactions.filter((c) => c.type === "Dividends")).toHaveLength(1);
+      expect(result.cashTransactions.filter((c) => c.type === "Withholding Tax")).toHaveLength(1);
+      expect(result.cashTransactions.filter((c) => c.type === "Broker Interest Received")).toHaveLength(1);
+    });
+
+    it("should preserve a quoted company name containing both a comma and escaped quotes", () => {
+      const result = trading212Parser.parse(csv);
+      const quot = result.trades.find((t) => t.symbol === "QUOT")!;
+      expect(quot.description).toContain("Quoted");
+      expect(quot.description).toContain("Holdings");
+    });
+
+    it("should keep high-precision fractional quantities for MICR", () => {
+      const result = trading212Parser.parse(csv);
+      const micrBuy = result.trades.find((t) => t.symbol === "MICR" && t.buySell === "BUY")!;
+      expect(micrBuy.quantity).toBe("0.123456789");
+    });
+  });
+
+  describe("trading212-v2-sample.csv (interleaved card debits, deposits, multi-fill)", () => {
+    const csv = readFileSync(
+      new URL("../fixtures/trading212-v2-sample.csv", import.meta.url),
+      "utf-8",
+    );
+
+    it("should detect", () => {
+      expect(trading212Parser.detect(csv)).toBe(true);
+    });
+
+    it("should parse 9 trades (4 buys + 5 sells) across ALFA/BRAV/CYGN", () => {
+      const result = trading212Parser.parse(csv);
+      const buys = result.trades.filter((t) => t.buySell === "BUY");
+      const sells = result.trades.filter((t) => t.buySell === "SELL");
+      expect(result.trades).toHaveLength(9);
+      expect(buys).toHaveLength(4);
+      expect(sells).toHaveLength(5);
+      expect(new Set(result.trades.map((t) => t.symbol))).toEqual(new Set(["ALFA", "BRAV", "CYGN"]));
+    });
+
+    it("should parse 2 interest payments and no dividends/withholdings", () => {
+      const result = trading212Parser.parse(csv);
+      expect(result.cashTransactions.filter((c) => c.type === "Broker Interest Received")).toHaveLength(2);
+      expect(result.cashTransactions).toHaveLength(2);
+    });
+
+    it("should skip every card debit, cashback and deposit row", () => {
+      const result = trading212Parser.parse(csv);
+      const allIds = [
+        ...result.trades.map((t) => t.tradeID),
+        ...result.cashTransactions.map((c) => c.transactionID),
+      ];
+      expect(allIds.some((id) => id.toLowerCase().includes("card-"))).toBe(false);
+      expect(allIds.some((id) => id.toLowerCase().includes("cb-"))).toBe(false);
+      expect(allIds.some((id) => id.toLowerCase().includes("dep-"))).toBe(false);
     });
   });
 });

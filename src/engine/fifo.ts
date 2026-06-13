@@ -339,7 +339,7 @@ export class FifoEngine {
     }
     this.lots.get(merger.newIsin)!.push(...newLots);
 
-    this.emit({ id: "fifo.merger_applied", severity: "info", message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`, hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.", context: { oldIsin: merger.oldIsin, newIsin: merger.newIsin, date: merger.date, ratio: `${merger.ratio}:1` } });
+    this.emit({ id: "fifo.merger_applied", severity: "info", message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`, hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.", context: { oldIsin: merger.oldIsin, newIsin: merger.newIsin, date: merger.date, ratio: `${merger.ratio}:1`, lotsTransferred: String(oldLots.length) } });
   }
 
   private applySpinOff(spinOff: { date: string; parentIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number; costFraction: number }): void {
@@ -380,7 +380,7 @@ export class FifoEngine {
     }
     this.lots.get(spinOff.newIsin)!.push(...newLots);
 
-    this.emit({ id: "fifo.spinoff_applied", severity: "info", message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`, hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.", context: { parentIsin: spinOff.parentIsin, newIsin: spinOff.newIsin, date: spinOff.date, ratio: `${spinOff.ratio}:1` } });
+    this.emit({ id: "fifo.spinoff_applied", severity: "info", message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`, hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.", context: { parentIsin: spinOff.parentIsin, newIsin: spinOff.newIsin, date: spinOff.date, ratio: `${spinOff.ratio}:1`, costPercent: (spinOff.costFraction * 100).toFixed(0) } });
   }
 
   /**
@@ -492,6 +492,44 @@ export class FifoEngine {
     // acquisition cost, so proceeds and cost net cleanly in one currency.
     const commissionFcy = this.homogenizeCommission(commission, trade, ecbRate, rateMap);
 
+    // Build a disposal record sharing this trade's identity fields. The three
+    // call sites below (no lots, FIFO-consumed lot, remaining shortfall) only
+    // vary in the per-lot numeric fields and the optional option metadata, so the
+    // ~20 constant fields are filled once here to avoid 3 near-duplicate literals.
+    const buildDisposal = (parts: {
+      acquireDate: string;
+      quantity: Decimal;
+      gainLossFcy: Decimal;
+      proceedsFcy: Decimal;
+      costBasisFcy: Decimal;
+      proceedsEur: Decimal;
+      costBasisEur: Decimal;
+      gainLossEur: Decimal;
+      holdingPeriodDays: number;
+      acquireEcbRate: Decimal;
+      optionFields?: Partial<FifoDisposal>;
+    }): FifoDisposal => ({
+      isin: trade.isin,
+      symbol: trade.symbol,
+      description: trade.description,
+      sellDate: trade.tradeDate,
+      acquireDate: parts.acquireDate,
+      quantity: parts.quantity,
+      gainLossFcy: parts.gainLossFcy,
+      proceedsFcy: parts.proceedsFcy,
+      costBasisFcy: parts.costBasisFcy,
+      proceedsEur: parts.proceedsEur,
+      costBasisEur: parts.costBasisEur,
+      gainLossEur: parts.gainLossEur,
+      holdingPeriodDays: parts.holdingPeriodDays,
+      currency: trade.currency,
+      sellEcbRate: ecbRate,
+      acquireEcbRate: parts.acquireEcbRate,
+      assetCategory: trade.assetCategory,
+      washSaleBlocked: false, // Set later by wash sale detection
+      ...(parts.optionFields ?? {}),
+    });
+
     const key = lotKey(trade);
     const lots = this.lots.get(key);
     if (!lots || lots.length === 0) {
@@ -499,11 +537,7 @@ export class FifoEngine {
       this.emit({ id: "fifo.sell_without_lots", severity: "error", message: `⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`, hint: "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.", context: { symbol: trade.symbol, isin: trade.isin, date: normalizeDate(trade.tradeDate), quantity: remaining.toString() } });
       const proceedsFcy = remaining.mul(pricePerShare).mul(multiplier).minus(taxes).minus(commissionFcy);
       const proceedsEur = proceedsFcy.mul(ecbRate);
-      this.disposals.push({
-        isin: trade.isin,
-        symbol: trade.symbol,
-        description: trade.description,
-        sellDate: trade.tradeDate,
+      this.disposals.push(buildDisposal({
         acquireDate: trade.tradeDate,
         quantity: remaining,
         gainLossFcy: proceedsFcy,
@@ -513,12 +547,8 @@ export class FifoEngine {
         costBasisEur: new Decimal(0),
         gainLossEur: proceedsEur,
         holdingPeriodDays: 0,
-        currency: trade.currency,
-        sellEcbRate: ecbRate,
         acquireEcbRate: ecbRate,
-        assetCategory: trade.assetCategory,
-        washSaleBlocked: false,
-      });
+      }));
       return;
     }
 
@@ -555,11 +585,7 @@ export class FifoEngine {
       const acquireDate = lot.acquireDate;
       const holdingDays = daysBetween(acquireDate, sellDate);
 
-      this.disposals.push({
-        isin: trade.isin,
-        symbol: trade.symbol,
-        description: trade.description,
-        sellDate,
+      this.disposals.push(buildDisposal({
         acquireDate,
         quantity: consumed,
         gainLossFcy,
@@ -569,20 +595,16 @@ export class FifoEngine {
         costBasisEur,
         gainLossEur,
         holdingPeriodDays: holdingDays,
-        currency: trade.currency,
-        sellEcbRate: ecbRate,
         acquireEcbRate: lot.ecbRate,
-        assetCategory: trade.assetCategory,
-        washSaleBlocked: false, // Set later by wash sale detection
-        ...(trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP" ? {
+        optionFields: (trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP") ? {
           optionScenario: "close",
           putCall: trade.putCall ?? lot.putCall,
           strike: trade.strike ?? lot.strike,
           expiry: trade.expiry ?? lot.expiry,
           underlyingSymbol: trade.underlyingSymbol ?? lot.underlyingSymbol,
           underlyingIsin: trade.underlyingIsin ?? lot.underlyingIsin,
-        } : {}),
-      });
+        } : undefined,
+      }));
 
       // Reduce lot (in FCY)
       lot.quantity = lot.quantity.minus(consumed);
@@ -603,11 +625,7 @@ export class FifoEngine {
       const taxesShare = taxes.mul(fractionOfSale);
       const proceedsFcy = remaining.mul(pricePerShare).mul(multiplier).minus(taxesShare).minus(commissionShareFcy);
       const proceedsEur = proceedsFcy.mul(ecbRate);
-      this.disposals.push({
-        isin: trade.isin,
-        symbol: trade.symbol,
-        description: trade.description,
-        sellDate: trade.tradeDate,
+      this.disposals.push(buildDisposal({
         acquireDate: trade.tradeDate,
         quantity: remaining,
         gainLossFcy: proceedsFcy,
@@ -617,12 +635,8 @@ export class FifoEngine {
         costBasisEur: new Decimal(0),
         gainLossEur: proceedsEur,
         holdingPeriodDays: 0,
-        currency: trade.currency,
-        sellEcbRate: ecbRate,
         acquireEcbRate: ecbRate,
-        assetCategory: trade.assetCategory,
-        washSaleBlocked: false,
-      });
+      }));
     }
   }
 
@@ -908,14 +922,39 @@ export class FifoEngine {
     this.emit({ id: "fifo.option_expiry_no_lots", severity: "warning", message: `⚠ Expiración de opción sin lotes: ${ex.symbol} × ${quantity} el ${date}.`, hint: "La opción expiró pero no se encontraron lotes de compra. ¿Incluiste el año de compra en el Flex Query?", context: { symbol: ex.symbol, date, quantity: quantity.toString() } });
   }
 
+  /**
+   * Append a synthetic underlying acquisition lot produced by an option
+   * exercise/assignment. The lot's identity (ISIN, symbol, currency, ECB rate)
+   * and acquireDate are constant across the three call sites (call buyer, put
+   * writer, no-lots fallback); only quantity, per-share strike price, total FCY
+   * cost and the description verb differ — so those are the parameters.
+   */
+  private addUnderlyingLot(
+    underlyingKey: string, ex: OptionExercise, date: string, ecbRate: Decimal,
+    parts: { quantity: Decimal; pricePerShare: Decimal; costInFcy: Decimal; description: string },
+  ): void {
+    const underlyingLot: Lot = {
+      id: `LOT-${this.nextLotId++}`,
+      isin: ex.underlyingIsin,
+      symbol: ex.underlyingSymbol,
+      description: parts.description,
+      acquireDate: date,
+      quantity: parts.quantity,
+      pricePerShare: parts.pricePerShare,
+      costInFcy: parts.costInFcy,
+      currency: ex.currency,
+      ecbRate,
+    };
+    if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
+    this.lots.get(underlyingKey)!.push(underlyingLot);
+  }
+
   private processOptionExercise(
     ex: OptionExercise, date: string, ecbRate: Decimal,
     quantity: Decimal, multiplier: Decimal,
   ): void {
     const optionKey = this.optionLotKey(ex);
-    const strike = new Decimal(ex.strike);
     const sharesPerContract = multiplier;
-    const totalShares = quantity.mul(sharesPerContract);
     const underlyingKey = this.resolveUnderlyingKey(ex);
 
     // Determine if we're the buyer (long lots) or writer (short lots)
@@ -923,127 +962,138 @@ export class FifoEngine {
     const shortLots = this.shortLots.get(optionKey);
 
     if (longLots && longLots.length > 0) {
-      // BUYER exercising: consume option lots, integrate premium into underlying cost basis
-      // Per DGT V0137-23: no separate option disposal — premium integrates into stock cost.
-      // The share acquisition/disposal price is the STRIKE (the contractual price actually
-      // paid/received on exercise), never the market price. Market price at exercise is
-      // irrelevant to the cost basis: a call buyer pays strike for the shares.
-      const priceForUnderlying = strike;
-
-      let remaining = quantity;
-      while (remaining.greaterThan(0) && longLots.length > 0) {
-        const lot = longLots[0]!;
-        const consumed = Decimal.min(remaining, lot.quantity);
-        const costPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
-        const optionPremiumFcy = costPerUnitFcy.mul(consumed);
-
-        if (ex.putCall === "C") {
-          // Call buyer: acquires shares at strike + premium (DGT V0137-23). Cost
-          // is kept in the share currency (FCY); strike and premium share that
-          // currency, so the lot stays single-currency.
-          const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
-          const totalCostFcy = baseShareCostFcy.plus(optionPremiumFcy);
-          const underlyingLot: Lot = {
-            id: `LOT-${this.nextLotId++}`,
-            isin: ex.underlyingIsin,
-            symbol: ex.underlyingSymbol,
-            description: `${ex.underlyingSymbol} [via ejercicio ${ex.symbol}]`,
-            acquireDate: date,
-            quantity: consumed.mul(sharesPerContract),
-            pricePerShare: priceForUnderlying,
-            costInFcy: totalCostFcy,
-            currency: ex.currency,
-            ecbRate,
-          };
-          if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
-          this.lots.get(underlyingKey)!.push(underlyingLot);
-        } else {
-          // Put buyer exercising: sells shares at strike, premium reduces proceeds
-          // (all in FCY; consumeLotsForExercise converts at the exercise date).
-          const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
-          const netProceedsFcy = shareProceedsFcy.minus(optionPremiumFcy);
-          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
-        }
-
-        lot.quantity = lot.quantity.minus(consumed);
-        lot.costInFcy = lot.costInFcy.minus(optionPremiumFcy);
-        if (lot.quantity.isZero()) longLots.shift();
-        remaining = remaining.minus(consumed);
-      }
-      if (longLots.length === 0) this.lots.delete(optionKey);
-
+      this.exerciseLongOption(ex, date, ecbRate, quantity, sharesPerContract, optionKey, underlyingKey, longLots);
     } else if (shortLots && shortLots.length > 0) {
-      // WRITER assigned: consume short option lots, integrate premium into underlying event
-      // Per DGT V0137-23: no separate option disposal — premium integrates into stock event.
-      // The share disposal/acquisition price is the STRIKE (the contractual price actually
-      // received/paid on assignment), never the market price.
-      const priceForUnderlying = strike;
-
-      let remaining = quantity;
-      while (remaining.greaterThan(0) && shortLots.length > 0) {
-        const lot = shortLots[0]!;
-        const consumed = Decimal.min(remaining, lot.quantity);
-        const proceedsPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
-        const optionPremiumFcy = proceedsPerUnitFcy.mul(consumed);
-
-        // Call writer assigned: SELL shares at strike, premium adds to proceeds
-        // Put writer assigned: BUY shares at strike, premium reduces cost.
-        // All amounts in FCY; conversion happens at the exercise date downstream.
-        if (ex.putCall === "C") {
-          const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
-          const netProceedsFcy = shareProceedsFcy.plus(optionPremiumFcy);
-          this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
-        } else {
-          const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
-          const totalCostFcy = baseShareCostFcy.minus(optionPremiumFcy);
-          const underlyingLot: Lot = {
-            id: `LOT-${this.nextLotId++}`,
-            isin: ex.underlyingIsin,
-            symbol: ex.underlyingSymbol,
-            description: `${ex.underlyingSymbol} [via asignación ${ex.symbol}]`,
-            acquireDate: date,
-            quantity: consumed.mul(sharesPerContract),
-            pricePerShare: priceForUnderlying,
-            costInFcy: totalCostFcy,
-            currency: ex.currency,
-            ecbRate,
-          };
-          if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
-          this.lots.get(underlyingKey)!.push(underlyingLot);
-        }
-
-        lot.quantity = lot.quantity.minus(consumed);
-        lot.costInFcy = lot.costInFcy.minus(optionPremiumFcy);
-        if (lot.quantity.isZero()) shortLots.shift();
-        remaining = remaining.minus(consumed);
-      }
-      if (shortLots.length === 0) this.shortLots.delete(optionKey);
-
+      this.assignShortOption(ex, date, ecbRate, quantity, sharesPerContract, optionKey, underlyingKey, shortLots);
     } else {
-      this.emit({ id: "fifo.option_exercise_no_lots", severity: "warning", message: `⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`, hint: "Ejercicio registrado con prima = 0 porque no se encontró la compra de la opción. Amplía el periodo del Flex Query.", context: { symbol: ex.symbol, date, quantity: quantity.toString() } });
-      // Still process underlying position even without option lot data
-      if ((ex.action === "Exercise" && ex.putCall === "C") || (ex.action === "Assignment" && ex.putCall === "P")) {
-        // Call exercise / Put assignment: acquire shares at strike (cost in FCY)
-        const shareCostFcy = strike.mul(quantity).mul(sharesPerContract);
-        const underlyingLot: Lot = {
-          id: `LOT-${this.nextLotId++}`,
-          isin: ex.underlyingIsin,
-          symbol: ex.underlyingSymbol,
-          description: `${ex.underlyingSymbol} [via ${ex.action.toLowerCase()} ${ex.symbol}]`,
-          acquireDate: date,
-          quantity: totalShares,
-          pricePerShare: strike,
-          costInFcy: shareCostFcy,
-          currency: ex.currency,
-          ecbRate,
-        };
-        if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
-        this.lots.get(underlyingKey)!.push(underlyingLot);
+      this.exerciseOptionWithoutLots(ex, date, ecbRate, quantity, sharesPerContract, underlyingKey);
+    }
+  }
+
+  /**
+   * BUYER exercising: consume the long option lots, integrate the premium into
+   * the underlying cost basis. Per DGT V0137-23 there is no separate option
+   * disposal — the premium folds into the stock cost. The share
+   * acquisition/disposal price is always the STRIKE (the contractual price
+   * actually paid/received on exercise), never the market price.
+   */
+  private exerciseLongOption(
+    ex: OptionExercise, date: string, ecbRate: Decimal,
+    quantity: Decimal, sharesPerContract: Decimal,
+    optionKey: string, underlyingKey: string, longLots: Lot[],
+  ): void {
+    const priceForUnderlying = new Decimal(ex.strike);
+
+    let remaining = quantity;
+    while (remaining.greaterThan(0) && longLots.length > 0) {
+      const lot = longLots[0]!;
+      const consumed = Decimal.min(remaining, lot.quantity);
+      const costPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
+      const optionPremiumFcy = costPerUnitFcy.mul(consumed);
+
+      if (ex.putCall === "C") {
+        // Call buyer: acquires shares at strike + premium (DGT V0137-23). Cost
+        // is kept in the share currency (FCY); strike and premium share that
+        // currency, so the lot stays single-currency.
+        const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
+        const totalCostFcy = baseShareCostFcy.plus(optionPremiumFcy);
+        this.addUnderlyingLot(underlyingKey, ex, date, ecbRate, {
+          quantity: consumed.mul(sharesPerContract),
+          pricePerShare: priceForUnderlying,
+          costInFcy: totalCostFcy,
+          description: `${ex.underlyingSymbol} [via ejercicio ${ex.symbol}]`,
+        });
       } else {
-        // Put exercise / Call assignment: sell shares at strike (proceeds in FCY)
-        const shareProceedsFcy = strike.mul(quantity).mul(sharesPerContract);
-        this.consumeLotsForExercise(underlyingKey, totalShares, shareProceedsFcy, date, ecbRate, ex);
+        // Put buyer exercising: sells shares at strike, premium reduces proceeds
+        // (all in FCY; consumeLotsForExercise converts at the exercise date).
+        const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
+        const netProceedsFcy = shareProceedsFcy.minus(optionPremiumFcy);
+        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
       }
+
+      lot.quantity = lot.quantity.minus(consumed);
+      lot.costInFcy = lot.costInFcy.minus(optionPremiumFcy);
+      if (lot.quantity.isZero()) longLots.shift();
+      remaining = remaining.minus(consumed);
+    }
+    if (longLots.length === 0) this.lots.delete(optionKey);
+  }
+
+  /**
+   * WRITER assigned: consume the short option lots, integrate the premium into
+   * the underlying event. Per DGT V0137-23 there is no separate option disposal
+   * — the premium folds into the stock event. The share disposal/acquisition
+   * price is always the STRIKE (the contractual price actually received/paid on
+   * assignment), never the market price.
+   */
+  private assignShortOption(
+    ex: OptionExercise, date: string, ecbRate: Decimal,
+    quantity: Decimal, sharesPerContract: Decimal,
+    optionKey: string, underlyingKey: string, shortLots: Lot[],
+  ): void {
+    const priceForUnderlying = new Decimal(ex.strike);
+
+    let remaining = quantity;
+    while (remaining.greaterThan(0) && shortLots.length > 0) {
+      const lot = shortLots[0]!;
+      const consumed = Decimal.min(remaining, lot.quantity);
+      const proceedsPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
+      const optionPremiumFcy = proceedsPerUnitFcy.mul(consumed);
+
+      // Call writer assigned: SELL shares at strike, premium adds to proceeds
+      // Put writer assigned: BUY shares at strike, premium reduces cost.
+      // All amounts in FCY; conversion happens at the exercise date downstream.
+      if (ex.putCall === "C") {
+        const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
+        const netProceedsFcy = shareProceedsFcy.plus(optionPremiumFcy);
+        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
+      } else {
+        const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
+        const totalCostFcy = baseShareCostFcy.minus(optionPremiumFcy);
+        this.addUnderlyingLot(underlyingKey, ex, date, ecbRate, {
+          quantity: consumed.mul(sharesPerContract),
+          pricePerShare: priceForUnderlying,
+          costInFcy: totalCostFcy,
+          description: `${ex.underlyingSymbol} [via asignación ${ex.symbol}]`,
+        });
+      }
+
+      lot.quantity = lot.quantity.minus(consumed);
+      lot.costInFcy = lot.costInFcy.minus(optionPremiumFcy);
+      if (lot.quantity.isZero()) shortLots.shift();
+      remaining = remaining.minus(consumed);
+    }
+    if (shortLots.length === 0) this.shortLots.delete(optionKey);
+  }
+
+  /**
+   * Exercise/assignment with NO matching option lots (premium data missing).
+   * The premium is treated as 0 and only the underlying position is processed:
+   * a call exercise / put assignment acquires shares at strike; a put exercise /
+   * call assignment delivers shares at strike.
+   */
+  private exerciseOptionWithoutLots(
+    ex: OptionExercise, date: string, ecbRate: Decimal,
+    quantity: Decimal, sharesPerContract: Decimal, underlyingKey: string,
+  ): void {
+    const strike = new Decimal(ex.strike);
+    const totalShares = quantity.mul(sharesPerContract);
+
+    this.emit({ id: "fifo.option_exercise_no_lots", severity: "warning", message: `⚠ Ejercicio/asignación sin lotes de opción: ${ex.symbol} × ${quantity} el ${date}. Coste de prima = 0.`, hint: "Ejercicio registrado con prima = 0 porque no se encontró la compra de la opción. Amplía el periodo del Flex Query.", context: { symbol: ex.symbol, date, quantity: quantity.toString() } });
+    // Still process underlying position even without option lot data
+    if ((ex.action === "Exercise" && ex.putCall === "C") || (ex.action === "Assignment" && ex.putCall === "P")) {
+      // Call exercise / Put assignment: acquire shares at strike (cost in FCY)
+      const shareCostFcy = strike.mul(quantity).mul(sharesPerContract);
+      this.addUnderlyingLot(underlyingKey, ex, date, ecbRate, {
+        quantity: totalShares,
+        pricePerShare: strike,
+        costInFcy: shareCostFcy,
+        description: `${ex.underlyingSymbol} [via ${ex.action.toLowerCase()} ${ex.symbol}]`,
+      });
+    } else {
+      // Put exercise / Call assignment: sell shares at strike (proceeds in FCY)
+      const shareProceedsFcy = strike.mul(quantity).mul(sharesPerContract);
+      this.consumeLotsForExercise(underlyingKey, totalShares, shareProceedsFcy, date, ecbRate, ex);
     }
   }
 

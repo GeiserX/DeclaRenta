@@ -12,7 +12,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
-import { parseNumber } from "./csv-utils.js";
+import { toFiniteDecimal } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // JSON structure types
@@ -58,7 +58,7 @@ interface Freedom24Report {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseDate(dateStr: string): string {
+function convertFreedom24Date(dateStr: string): string {
   // "YYYY-MM-DD HH:MM:SS" → "YYYYMMDD"
   return dateStr.trim().slice(0, 10).replace(/-/g, "");
 }
@@ -107,7 +107,7 @@ function parseFreedom24(input: string): Statement {
   const rawTrades = root.trades?.detailed ?? [];
   for (let i = 0; i < rawTrades.length; i++) {
     const t = rawTrades[i]!;
-    const tradeDate = parseDate(t.date);
+    const tradeDate = convertFreedom24Date(t.date);
     const { symbol, exchange } = parseSymbol(t.ticker);
     const isin = t.isin ?? "";
     const quantity = str(t.q);
@@ -118,10 +118,10 @@ function parseFreedom24(input: string): Statement {
     const operation = t.operation.toLowerCase();
     const isSell = operation === "sell";
 
-    const qtyNum = Math.abs(parseFloat(parseNumber(quantity)));
-    if (qtyNum === 0) continue;
+    const qtyDec = toFiniteDecimal(quantity).abs();
+    if (qtyDec.isZero()) continue;
 
-    const commNum = parseFloat(parseNumber(commission));
+    const commDec = toFiniteDecimal(commission);
 
     trades.push({
       tradeID: `freedom24-${tradeDate}-${i}`,
@@ -133,18 +133,18 @@ function parseFreedom24(input: string): Statement {
       currency,
       tradeDate,
       settlementDate: tradeDate,
-      quantity: isSell ? `-${qtyNum}` : `${qtyNum}`,
+      quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: price,
       tradeMoney: amount || "0",
       proceeds: isSell ? amount || "0" : "0",
       cost: isSell ? "0" : amount || "0",
       fifoPnlRealized: "0",
-      fxRateToBase: currency === "EUR" ? "1" : "1",
+      fxRateToBase: "1",
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange: t.exchange || exchange,
       commissionCurrency: currency,
-      commission: commNum !== 0 ? `-${Math.abs(commNum)}` : "0",
+      commission: commDec.isZero() ? "0" : commDec.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
     });
@@ -157,7 +157,7 @@ function parseFreedom24(input: string): Statement {
     const typeId = ca.type_id.toLowerCase();
     if (!typeId.includes("dividend") && !typeId.includes("coupon")) continue;
 
-    const tradeDate = parseDate(ca.date);
+    const tradeDate = convertFreedom24Date(ca.date);
     const { symbol } = parseSymbol(ca.ticker);
     const isin = ca.isin ?? "";
     const amount = str(ca.amount);
@@ -177,13 +177,13 @@ function parseFreedom24(input: string): Statement {
       dateTime: tradeDate,
       settleDate: tradeDate,
       amount,
-      fxRateToBase: currency === "EUR" ? "1" : "1",
+      fxRateToBase: "1",
       type: "Dividends",
     });
 
     // Withholding tax (if present)
-    const taxNum = parseFloat(parseNumber(taxAmount));
-    if (taxNum !== 0) {
+    const taxDec = toFiniteDecimal(taxAmount);
+    if (!taxDec.isZero()) {
       cashTransactions.push({
         transactionID: `freedom24-wht-${tradeDate}-${isin}-${i}`,
         accountId: "",
@@ -193,8 +193,8 @@ function parseFreedom24(input: string): Statement {
         currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: taxNum > 0 ? `-${taxNum}` : taxAmount,
-        fxRateToBase: currency === "EUR" ? "1" : "1",
+        amount: taxDec.isPositive() ? taxDec.neg().toString() : taxDec.toString(),
+        fxRateToBase: "1",
         type: "Withholding Tax",
       });
     }

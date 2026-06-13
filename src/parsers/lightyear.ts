@@ -29,6 +29,8 @@ import type { Trade, CashTransaction } from "../types/ibkr.js";
 import {
   parseCsvLine,
   parseNumber,
+  toFiniteDecimal,
+  toFiniteDecimalString,
   findColumn,
   stripBom,
 } from "./csv-utils.js";
@@ -134,8 +136,7 @@ function parseLightyearCsv(lines: string[]): Statement {
     const fields = parseCsvLine(line, ",");
     const txType = (fields[cols.type] ?? "").trim().toLowerCase();
     if (txType !== "conversion") continue;
-    const feeVal = parseNumber(fields[cols.fee] ?? "0");
-    const feeDec = new Decimal(feeVal);
+    const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
     if (feeDec.isZero()) continue;
     const dateRaw = (fields[cols.date] ?? "").trim();
     const ccy = (fields[cols.ccy] ?? "EUR").trim();
@@ -156,13 +157,17 @@ function parseLightyearCsv(lines: string[]): Statement {
     const ticker = (fields[cols.ticker] ?? "").trim();
     const isin = (fields[cols.isin] ?? "").trim();
     const txType = (fields[cols.type] ?? "").trim().toLowerCase();
-    const quantityStr = parseNumber(fields[cols.quantity] ?? "0");
+    // Money/quantity that feeds tax totals is finiteness-guarded: a malformed
+    // cell yields "0", never a non-finite Decimal that silently poisons totals.
+    // The display price is stored verbatim as the lossless parseNumber string
+    // (trailing zeros preserved; never summed).
+    const quantityStr = toFiniteDecimalString(fields[cols.quantity] ?? "0");
     const currency = (fields[cols.ccy] ?? "EUR").trim();
     const pricePerShare = parseNumber(fields[cols.pricePerShare] ?? "0");
-    const grossAmount = parseNumber(fields[cols.grossAmount] ?? "0");
-    const fee = parseNumber(fields[cols.fee] ?? "0");
-    const netAmount = parseNumber(fields[cols.netAmount] ?? "0");
-    const taxAmount = parseNumber(fields[cols.taxAmount] ?? "0");
+    const grossAmount = toFiniteDecimalString(fields[cols.grossAmount] ?? "0");
+    const fee = toFiniteDecimalString(fields[cols.fee] ?? "0");
+    const netAmount = toFiniteDecimalString(fields[cols.netAmount] ?? "0");
+    const taxAmount = toFiniteDecimalString(fields[cols.taxAmount] ?? "0");
 
     if (!dateRaw) continue;
     const tradeDate = convertLightyearDate(dateRaw);

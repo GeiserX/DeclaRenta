@@ -28,9 +28,26 @@ describe("escapeCsv", () => {
     expect(escapeCsv(" =indirect")).toBe("' =indirect");
   });
 
+  it("should neutralize formula injection led by tab/newline control chars", () => {
+    // Excel still interprets a cell as a formula after skipping leading
+    // tab/CR/LF/space, so these must be apostrophe-prefixed too. The injected
+    // newline then triggers RFC-4180 quote-wrapping.
+    expect(escapeCsv("\n=cmd")).toBe('"\'\n=cmd"');
+    expect(escapeCsv("\t+1+1")).toBe("'\t+1+1");
+    expect(escapeCsv("\r-cmd")).toBe('"\'\r-cmd"');
+    expect(escapeCsv("\n@SUM(A1)")).toBe('"\'\n@SUM(A1)"');
+  });
+
   it("should not inject-protect safe strings", () => {
     expect(escapeCsv("APPLE INC")).toBe("APPLE INC");
     expect(escapeCsv("US0378331005")).toBe("US0378331005");
+  });
+
+  it("should leave benign date strings unquoted", () => {
+    // Plain dates have no dangerous leading char and no comma/quote/newline,
+    // so routing them through escapeCsv must not add quoting (RFC 4180).
+    expect(escapeCsv("20250315")).toBe("20250315");
+    expect(escapeCsv("2025-01-15")).toBe("2025-01-15");
   });
 });
 
@@ -239,6 +256,26 @@ describe("formatCsv", () => {
     const csv = formatCsv(report);
 
     expect(csv).toContain('"BERKSHIRE HATHAWAY, CL B"');
+  });
+
+  it("should write benign date cells unquoted in the disposal row", () => {
+    // Date columns now go through escapeCsv; a plain YYYYMMDD date must remain
+    // bare (no quotes) so existing consumers keep parsing it unchanged.
+    const csv = formatCsv(makeReport());
+    const dataLine = csv.split("\n").find((l) => l.startsWith("US0378331005,AAPL"))!;
+    const cols = dataLine.split(",");
+    expect(cols[4]).toBe("20250315"); // Fecha_Compra — unquoted
+    expect(cols[5]).toBe("20250920"); // Fecha_Venta — unquoted
+  });
+
+  it("should neutralize a formula-injection payload smuggled into a date field", () => {
+    // A malicious broker export could place a control-char-led formula in any
+    // string cell, including dates. It must be apostrophe-prefixed and, because
+    // of the embedded newline, RFC-4180 quote-wrapped.
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.acquireDate = "\n=HYPERLINK(0)";
+    const csv = formatCsv(report);
+    expect(csv).toContain('"\'\n=HYPERLINK(0)"');
   });
 
   it("should show SI for wash-sale blocked disposals", () => {

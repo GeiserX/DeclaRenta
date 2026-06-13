@@ -9,11 +9,7 @@ import type { TaxSummary } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { saveReport, loadAllReports, clearAllReports, type StoredReport } from "./storage.js";
 import { fmtEur } from "./format.js";
-
-/** Escape HTML special characters to prevent XSS in rendered strings. */
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "./esc.js";
 
 /**
  * Convert a TaxSummary into a StoredReport and save to localStorage.
