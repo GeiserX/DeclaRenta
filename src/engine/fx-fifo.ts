@@ -1,9 +1,15 @@
 /**
- * FX FIFO engine — tracks currency lots per Art. 37.1.l LIRPF.
+ * FX FIFO engine — tracks foreign-currency holdings as patrimonial elements
+ * (Art. 33.1 LIRPF: gain/loss = valor de transmisión − valor de adquisición of
+ * the divisa; NOT Art. 37.1.l, which governs "incorporaciones que no derivan de
+ * una transmisión" — an unrelated rule). DGT V2422-20 / V1613-25 / V0463-21:
+ * the FX gain crystallizes only on the effective conversion to euros (cobro/pago,
+ * Art. 14.2.e).
  *
  * Each EUR→FCY conversion creates a lot; each FCY disposal (conversion
  * back to EUR, or spending FCY on stock purchases) consumes lots via FIFO.
- * DGT V2324-10 confirms FIFO applies to foreign currency holdings.
+ * Dividend/interest withholding is a pago a cuenta, NOT a disposal — see
+ * extractCashFxEvents (issue #225).
  */
 
 import Decimal from "decimal.js";
@@ -160,6 +166,60 @@ export class FxFifoEngine {
 
     const events: FxEvent[] = [];
 
+    // Withholding tax (retención en origen) on a foreign-currency dividend/interest
+    // is a PAGO A CUENTA: it is deducted at source, the withheld FCY never enters
+    // the taxpayer's spendable balance, and it is not a "conversión de divisas a
+    // euros" — so it must NOT create an FX disposal (issue #225). The DGT timing
+    // doctrine (V2422-20, V1613-25, V0463-21) crystallizes an FX gain only on the
+    // effective conversion to EUR (cobro/pago); a withholding is neither. The
+    // GROSS income is still declared independently on the income path (casilla
+    // 0029) and the withholding still credits double-taxation (0588) — those read
+    // the raw cashTransactions, never these FX events, so they are untouched.
+    //
+    // Instead of emitting a phantom disposal that FIFO-consumes an OLDER lot at a
+    // different rate (the bug), we net each withholding into its income lot: the
+    // acquisition lot reflects the NET FCY actually received. FX lots are fungible
+    // per currency, so netting by (currency, date) is equivalent to exact issuer
+    // pairing and far simpler. A withholding with no same-(currency,date) income
+    // (orphan / cross-date reclaim) is dropped — still never a disposal.
+    //
+    // The orphan drop is intentionally SILENT (no warning): extractCashFxEvents is
+    // static with no `emit`/messages channel, and the condition is non-actionable —
+    // the gross income (0029) and the 0588 credit are declared by the income path
+    // regardless; the only effect is a marginally-gross FX lot. Surfacing it would
+    // add anxiety for nothing. If a diagnostic is ever wanted, aggregate it in
+    // report.ts after processEvents, not here.
+    const whtByKey = new Map<string, Decimal>();
+    for (const tx of cashTransactions) {
+      if (tx.type !== "Withholding Tax" || tx.currency === "EUR") continue;
+      const amt = new Decimal(tx.amount);
+      if (!amt.isNegative()) continue; // a positive WHT (refund) is FCY received, not a deduction
+      const key = `${tx.currency}|${normalizeDate(tx.settleDate || tx.dateTime)}`;
+      whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).plus(amt.abs()));
+    }
+    /**
+     * Reduce an income inflow by any withholding pending for its (currency,date),
+     * returning the NET FCY received. STATEFUL: it draws down the shared `whtByKey`
+     * bucket, so two same-(currency,date) incomes split one withholding total rather
+     * than each netting it in full; order within a key doesn't change the total netted.
+     * NOTE: this keys on the EXACT same-date (currency,date), deliberately coarser
+     * AND stricter than the income path's matcher in dividends.ts (ISIN + currency +
+     * ≤7-day window). Coarser is safe for FX because lots are fungible per currency
+     * (the net-per-currency total is what matters, not which issuer). Stricter on the
+     * date means a withholding booked on a DIFFERENT settle-date than its dividend
+     * isn't matched here → it's an orphan, dropped, and the lot stays gross. That is
+     * conservative (no phantom disposal; the extra FCY only ever yields real drift on
+     * currency actually received) and immaterial — accepted deliberately.
+     */
+    const consumeWithholding = (currency: string, date: string, gross: Decimal): Decimal => {
+      const key = `${currency}|${date}`;
+      const pending = whtByKey.get(key);
+      if (!pending || pending.isZero()) return gross;
+      const applied = Decimal.min(pending, gross);
+      whtByKey.set(key, pending.minus(applied));
+      return gross.minus(applied);
+    };
+
     for (const tx of cashTransactions) {
       if (tx.currency === "EUR") continue;
 
@@ -186,11 +246,27 @@ export class FxFifoEngine {
       if (ecbRate === null) continue;
 
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
-        events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "dividend" });
+        // Net the same-(currency,date) withholding into the dividend lot.
+        const net = consumeWithholding(tx.currency, date, amount.abs());
+        // `greaterThan(0)`, not `isPositive()` — decimal.js treats +0 as positive,
+        // and a zero-quantity event would make addLot compute 0/0 = NaN.
+        if (net.greaterThan(0)) {
+          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "dividend" });
+        }
       } else if (tx.type === "Withholding Tax") {
-        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "dividend" });
+        // Netted into its income inflow above (or dropped if orphan). Never a
+        // disposal. A positive-amount WHT (a refund) IS currency received → acquire.
+        // Defensive: not observed in current broker exports, but symmetric and cheap.
+        if (amount.greaterThan(0)) {
+          events.push({ date, currency: tx.currency, quantity: amount, ecbRate, trigger: "dividend" });
+        }
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
-        events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "interest" });
+        // Interest can also carry withholding (e.g. "WITHHOLDING ON CREDIT INT");
+        // net it the same way — a withholding is a pago a cuenta whatever the income.
+        const net = consumeWithholding(tx.currency, date, amount.abs());
+        if (net.greaterThan(0)) {
+          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "interest" });
+        }
       } else if (tx.type === "Broker Interest Paid" || tx.type === "Bond Interest Paid") {
         events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest" });
       } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
@@ -215,6 +291,9 @@ export class FxFifoEngine {
   }
 
   private addLot(event: FxEvent): void {
+    // Defense-in-depth: never create a lot for a non-positive quantity — costPerUnit
+    // would be 0/0 = NaN and silently poison all later FIFO math for this currency.
+    if (!event.quantity.greaterThan(0)) return;
     // Commission increases the EUR cost of acquiring the lot
     const baseCost = event.quantity.mul(event.ecbRate);
     const totalCost = event.commissionEur ? baseCost.plus(event.commissionEur) : baseCost;

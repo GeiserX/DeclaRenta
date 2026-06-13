@@ -270,6 +270,13 @@ When adding a new section (like 721), follow this checklist:
 - `extractCashFxEvents()` always processes dividends/interest (no `autoConvert` param) — FCY income creates acquisition lots
 - **Impact**: Pure auto-convert accounts still correct (all CASH trades have AFx → all skipped). Hybrid accounts now correct (manual conversions processed, AFx skipped). The only "loss" is theoretical implicit FX from holding FCY across stock trades — but that was phantom gains anyway due to missing lots.
 
+### FX dividend/interest withholding = pago a cuenta, NOT a disposal (Hard Trace — issue #225)
+- **Symptom**: a FCY dividend with withholding created a GROSS acquisition lot AND a separate WITHHOLDING disposal that FIFO-consumed the OLDEST FCY lot (often a prior conversion at a different rate), fabricating a phantom Art. 33 FX gain into casillas 1633/1637 on currency the taxpayer never converted to EUR.
+- **Why wrong**: withholding (retención en origen) is a **pago a cuenta** — deducted at source, the withheld FCY never enters the taxpayer's spendable balance, and it is **not a conversión a euros**. The DGT FX-timing doctrine (V2422-20, V1613-25, V0463-21) crystallizes an FX gain ONLY on the effective conversion to euros (cobro/pago, Art. 14.2.e). No competitor/tool (Taxdown/Autodeclaro run monodivisa; IBKR's Forex worksheet covers only completed conversions) books an FX gain on withholding. No binding consulta is squarely on point — this is a reasoned, conservative position (removes a phantom disposal of money never received).
+- **Fix** (`extractCashFxEvents`): a pre-pass sums withholding per `(currency, date)`; each `Dividends`/`Payment In Lieu`/`Interest Received` inflow is emitted as a lot for the **NET** (gross − matched withholding) FCY actually received; the `Withholding Tax` row emits **no disposal**. FX lots are fungible per currency, so (currency,date) netting equals exact issuer pairing. Guards: a **positive** withholding (refund) is FCY *received* (acquire, not dispose); an **orphan** withholding (no same-(currency,date) income — cross-date reclaim) is dropped, never a disposal; interest withholding nets too.
+- **Income path is untouched**: gross dividend → 0029 and withholding → 0588 are computed in `dividends.ts`/`double-taxation.ts` from the raw cashTransactions, never from FX events. Only 1633/1637 (and marginally `totalSavingsBase`'s positive-FX term) change.
+- **Citation correction**: the FX engine tracks divisa under **Art. 33.1** (transmisión − adquisición), NOT Art. 37.1.l (which is "incorporaciones que no derivan de transmisión" — unrelated). Header comment + this section corrected. This closes the Art.37.1.l→Art.33/V2466-08 follow-up deferred in #220.
+
 ## Project Philosophy
 
 ### Correctness with User Comfort

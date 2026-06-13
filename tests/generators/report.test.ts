@@ -242,6 +242,40 @@ describe("generateTaxReport", () => {
     expect(report.dividends.grossIncome.toFixed(2)).toBe("0.00");
   });
 
+  it("issue #225: dividend withholding generates no FX disposal, income/0588 unchanged", () => {
+    // A prior USD lot exists (CASH FX SELL acquires 1000 USD @ 0.90 on Jan 10).
+    // Then a USD dividend (gross 100) with withholding (15) on Jun 1 @ 0.92.
+    // OLD behavior: the withholding FIFO-consumed the Jan-10 lot → a phantom FX
+    // gain of 15×(0.92−0.90)=0.30 in casillas 1633/1637. After the fix: the
+    // withholding nets into the dividend lot (net 85 USD), NO FX disposal fires,
+    // and the income path (0029 gross, 0588 credit) is untouched.
+    const rates = makeRateMap({ "2025-01-10": "0.9000", "2025-06-01": "0.9200" });
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
+          currency: "USD", quantity: "-1000", tradePrice: "1.1111", tradeMoney: "-1111",
+          proceeds: "1111", buySell: "SELL", exchange: "IDEALFX",
+        }),
+      ],
+      cashTransactions: [
+        makeCashTx({ transactionID: "d1", dateTime: "20250601", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w1", dateTime: "20250601", amount: "-15", type: "Withholding Tax" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    // FX: no disposal triggered by the withholding → no phantom dividend FX gain.
+    expect(report.fxGains.disposals.some((d) => d.trigger === "dividend")).toBe(false);
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+    // Income path UNCHANGED: gross dividend → 0029 (100 × 0.92 = 92.00).
+    expect(report.dividends.grossIncome.toFixed(2)).toBe("92.00");
+    // Withholding → 0588 double-taxation credit (15 × 0.92 = 13.80).
+    expect(report.doubleTaxation.deduction.toFixed(2)).toBe("13.80");
+  });
+
   it("should skip FX engine when skipFx is true (monodivisa mode)", () => {
     const rates = makeRateMap({
       "2025-03-15": "0.9200",
