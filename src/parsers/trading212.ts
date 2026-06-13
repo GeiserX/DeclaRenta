@@ -302,7 +302,7 @@ function parseTrading212Csv(lines: string[]): Statement {
   if (unresolvedPriceSkipped > 0) {
     parserMessages.push({
       id: "parser.trading212.unresolved_price_skipped",
-      severity: "info",
+      severity: "warning",
       message: `Se omitieron ${unresolvedPriceSkipped} operaciones sin precio por acción y con importe en otra divisa.`,
       hint: "Estas filas no tenían precio por acción y su importe (Total) estaba en una divisa distinta a la del instrumento, por lo que no se pudo calcular el valor de la operación. Vuelve a exportar el histórico desde Trading 212 asegurándote de incluir la columna \"Price / share\".",
       context: { skipped: String(unresolvedPriceSkipped) },

@@ -761,7 +761,7 @@ describe("binanceParser", () => {
       // Surfaced exactly once with the right count.
       const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
       expect(msg).toBeDefined();
-      expect(msg!.severity).toBe("info");
+      expect(msg!.severity).toBe("warning");
       expect(msg!.message).toContain("1 fila");
     });
 

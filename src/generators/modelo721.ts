@@ -127,6 +127,28 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
   return value.slice(0, length).padEnd(length, char);
 }
 
+/**
+ * Format a free-text field (names, descriptions, exchange names) into a
+ * fixed-width column.
+ *
+ * Unlike numeric/coded fields, free text can come straight from a broker export
+ * (e.g. a crypto/asset description or exchange name) and may contain control
+ * characters or newlines. Those bytes would corrupt the fixed-width AEAT record
+ * (a newline ends the record early; a control char shifts the visible glyph
+ * stream and can inject into adjacent fields). We replace every control
+ * character — C0 (\x00-\x1F incl. TAB/CR/LF), DEL (\x7F) and C1 (\x80-\x9F) —
+ * with a single space BEFORE slicing and padding, so column widths and positions
+ * are identical to a clean value. Mirrors `fixedWidthText` in modelo720.ts.
+ *
+ * @param value - Raw text (possibly broker-supplied)
+ * @param length - Fixed column width in characters
+ * @param alignRight - Right-align (pad on the left) instead of left-align
+ */
+function fixedWidthText(value: string, length: number, alignRight = false): string {
+  const sanitized = value.replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+  return pad(sanitized, length, " ", alignRight);
+}
+
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
   const intPart = dec.floor().toString().padStart(intLen, "0");
@@ -170,10 +192,10 @@ function buildSummaryRecord721(config: Modelo721Config, entries: Modelo721Entry[
   record += "721";                                            // 2-4: Model
   record += config.year.toString();                           // 5-8: Year
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
-  record += pad(config.surname + " " + config.name, 40);     // 18-57: Name
+  record += fixedWidthText(config.surname + " " + config.name, 40); // 18-57: Name
   record += "T";                                              // 58: Transmission type
   record += pad(config.phone, 9, "0", true);                  // 59-67: Phone
-  record += pad(config.contactName, 40);                      // 68-107: Contact
+  record += fixedWidthText(config.contactName, 40);           // 68-107: Contact
   record += pad(config.declarationId, 13, "0", true);         // 108-120: Declaration ID
   record += config.isComplementary ? "C" : " ";               // 121: Complementary
   record += config.isReplacement ? "S" : " ";                 // 122: Replacement
@@ -199,7 +221,7 @@ function buildDetailRecord721(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += pad(entry.description, 40);                       // 36-75: Description
+  record += fixedWidthText(entry.description, 40);            // 36-75: Description
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
   record += "C";                                              // 102: Asset type (C=crypto)
@@ -208,7 +230,7 @@ function buildDetailRecord721(
   record += "9";                                              // 131: ID type (9=other)
   record += pad(entry.assetId, 12);                           // 132-143: Asset ID
   record += pad("", 46);                                      // 144-189: Reserved
-  record += pad(entry.exchangeName, 41);                      // 190-230: Exchange name
+  record += fixedWidthText(entry.exchangeName, 41);           // 190-230: Exchange name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad("", 8);                                       // 415-422: Acquisition date
   record += "M";                                              // 423: Type (M=existing)

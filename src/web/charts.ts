@@ -385,7 +385,11 @@ function renderBreakdown(b: TaxBaseBreakdown): string {
 // ---------------------------------------------------------------------------
 
 function escSvg(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Escapes all five chars (incl. the single quote), matching the canonical
+  // web/esc.ts. Today escSvg output only lands in SVG text content and
+  // double-quoted attributes, but escaping ' too future-proofs against a
+  // single-quoted-attribute sink ever being added.
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function formatCompact(n: number): string {

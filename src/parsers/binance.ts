@@ -631,7 +631,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const parserMessages: TaxMessage[] = skippedNoTimestamp > 0
     ? [{
         id: "binance.unparseable_timestamp",
-        severity: "info",
+        severity: "warning",
         message: `Se ${skippedNoTimestamp === 1 ? "ha omitido 1 fila" : `han omitido ${skippedNoTimestamp} filas`} del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.`,
         hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
         context: { count: String(skippedNoTimestamp) },

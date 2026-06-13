@@ -85,7 +85,11 @@ export function t(key: TranslationKey, params?: Record<string, string>): string 
   let text = translations[key as string] ?? (es as Record<string, string>)[key as string] ?? key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {
-      text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
+      // Function replacer: insert `v` verbatim. A plain string replacement would
+      // let `$&`/`$'`/`` $` ``/`$n` in a broker-controlled value (e.g. a ticker
+      // symbol) trigger String.replace's special-pattern expansion and corrupt
+      // the rendered message. The replacer form treats `v` as a literal.
+      text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), () => v);
     }
   }
   return text;

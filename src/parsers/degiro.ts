@@ -290,7 +290,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
   if (tradeLikeRowsSkipped > 0) {
     parserMessages.push({
       id: "degiro.rows_skipped",
-      severity: "info",
+      severity: "warning",
       message: `Se omitieron ${tradeLikeRowsSkipped} filas sin ISIN/sin importe.`,
       hint: "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
       context: { count: String(tradeLikeRowsSkipped) },

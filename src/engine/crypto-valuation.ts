@@ -50,83 +50,20 @@ export interface CryptoValuationResult {
   unresolved: UnresolvedValuation[];
 }
 
-/**
- * Per-source memoization of the read-only base clone.
- *
- * `resolveCryptoTradeValues` deep-copies the entire ECB map every call only to
- * then inject a few synthetic crypto rates into it (cross-leg D / commission).
- * Rebuilding the whole structure on every re-run (e.g. the web pipeline re-runs
- * when the user adds a manual rate) is wasteful on large multi-year maps.
- *
- * We cache, keyed by SOURCE-MAP IDENTITY (WeakMap → GC-safe, auto-invalidates
- * when a different map reference is passed), a canonical base whose inner
- * per-date Maps the working clone shares BY REFERENCE. The clone then uses
- * copy-on-write: `setRate` copies the one date bucket it is about to mutate
- * before touching it, so the cached base (and the caller's source map) are
- * NEVER mutated and stay reusable across calls.
- *
- * Why the cached base must be treated as strictly read-only: `tryResolve`
- * consults the map BEFORE the user's manual rates. If a call-specific synthetic
- * (D) rate ever leaked into the cached base, a later call would find that stale
- * guess and silently outrank a user's authoritative manual (B) quote — the very
- * thing a re-run is meant to let the user fix. Copy-on-write in `setRate` is the
- * load-bearing guarantee that this never happens.
- *
- * `Object.freeze` does NOT protect Map mutation (Maps use internal slots), so
- * read-only-ness is enforced structurally by copy-on-write, not by freezing.
- */
-const baseCloneCache = new WeakMap<EcbRateMap, EcbRateMap>();
-
-/** A working clone plus the set of date buckets it has already copied-on-write. */
-interface WorkingClone {
-  map: EcbRateMap;
-  /** Date keys whose inner Map is a fresh, clone-owned copy (safe to mutate). */
-  owned: Set<string>;
-}
-
-/**
- * Build a working clone of `source` that shares the cached base's inner Maps by
- * reference. The outer Map is always freshly allocated (cheap — one slot per
- * date), so adding brand-new date buckets never touches the base; existing
- * buckets are copy-on-written lazily by `setRate`.
- */
-function makeWorkingClone(source: EcbRateMap): WorkingClone {
-  let base = baseCloneCache.get(source);
-  if (base === undefined) {
-    base = new Map();
-    for (const [date, currencies] of source) {
-      base.set(date, new Map(currencies));
-    }
-    baseCloneCache.set(source, base);
+function cloneRateMap(map: EcbRateMap): EcbRateMap {
+  const clone: EcbRateMap = new Map();
+  for (const [date, currencies] of map) {
+    clone.set(date, new Map(currencies));
   }
-  // Fresh outer Map sharing the base's inner Maps by reference (no per-bucket copy).
-  return { map: new Map(base), owned: new Set() };
+  return clone;
 }
 
-/**
- * Inject a synthetic rate (EUR per 1 unit of currency) at an exact date.
- * Copy-on-write: clones the target date bucket before mutating it the first
- * time, so the shared/cached base bucket is never modified.
- */
-function setRate(clone: WorkingClone, date: string, currency: string, rate: Decimal): void {
+/** Inject a synthetic rate (EUR per 1 unit of currency) at an exact date. */
+function setRate(map: EcbRateMap, date: string, currency: string, rate: Decimal): void {
   const key = normalizeDate(date);
   const resolved = normalizeCurrency(currency);
-  const existing = clone.map.get(key);
-  if (existing === undefined) {
-    // Brand-new bucket — clone-owned by construction, never shared with the base.
-    clone.map.set(key, new Map([[resolved, rate.toFixed(10)]]));
-    clone.owned.add(key);
-    return;
-  }
-  if (!clone.owned.has(key)) {
-    // First mutation of a base-shared bucket: copy-on-write so the base stays read-only.
-    const copy = new Map(existing);
-    clone.map.set(key, copy);
-    clone.owned.add(key);
-    copy.set(resolved, rate.toFixed(10));
-    return;
-  }
-  existing.set(resolved, rate.toFixed(10));
+  if (!map.has(key)) map.set(key, new Map());
+  map.get(key)!.set(resolved, rate.toFixed(10));
 }
 
 /** Try ECB/synthetic map first (authoritative), then the user's manual quotes. */
@@ -150,7 +87,7 @@ export function resolveCryptoTradeValues(
   rateMap: EcbRateMap,
   manualRates?: EcbRateMap,
 ): CryptoValuationResult {
-  const cloned = makeWorkingClone(rateMap);
+  const cloned = cloneRateMap(rateMap);
   const outTrades: Trade[] = [];
   const unresolved: UnresolvedValuation[] = [];
   const seenUnresolved = new Set<string>();
@@ -160,7 +97,7 @@ export function resolveCryptoTradeValues(
     const date = trade.tradeDate;
 
     // 1. Resolve the trade's quote currency.
-    let currencyRate = tryResolve(cloned.map, manualRates, date, trade.currency);
+    let currencyRate = tryResolve(cloned, manualRates, date, trade.currency);
     let crossLegTried = false;
 
     if (currencyRate === null && !isEcbResolvable(trade.currency)) {
@@ -174,7 +111,7 @@ export function resolveCryptoTradeValues(
           return new Decimal(0);
         }
       })();
-      const symbolRate = tryResolve(cloned.map, manualRates, date, trade.symbol);
+      const symbolRate = tryResolve(cloned, manualRates, date, trade.symbol);
       if (symbolRate !== null && tradePrice.greaterThan(0)) {
         currencyRate = symbolRate.div(tradePrice);
       }
@@ -198,7 +135,7 @@ export function resolveCryptoTradeValues(
     }
 
     // Inject the resolved rate so the FIFO engine finds it via getEcbRate.
-    if (lookupRateInMap(cloned.map, date, trade.currency) === null) {
+    if (lookupRateInMap(cloned, date, trade.currency) === null) {
       setRate(cloned, date, trade.currency, currencyRate);
     }
 
@@ -212,13 +149,13 @@ export function resolveCryptoTradeValues(
     }
     const commCur = trade.commissionCurrency;
     if (!commission.isZero() && commCur && commCur !== trade.currency) {
-      const commRate = tryResolve(cloned.map, manualRates, date, commCur);
+      const commRate = tryResolve(cloned, manualRates, date, commCur);
       if (commRate === null) {
         neutralizedCommissions++;
         outTrades.push({ ...trade, commission: "0", commissionCurrency: trade.currency });
         continue;
       }
-      if (lookupRateInMap(cloned.map, date, commCur) === null) {
+      if (lookupRateInMap(cloned, date, commCur) === null) {
         setRate(cloned, date, commCur, commRate);
       }
     }
@@ -248,5 +185,5 @@ export function resolveCryptoTradeValues(
     });
   }
 
-  return { trades: outTrades, rateMap: cloned.map, messages, unresolved };
+  return { trades: outTrades, rateMap: cloned, messages, unresolved };
 }

@@ -156,6 +156,116 @@ describe("Modelo 721 Generator", () => {
     expect(parseInt(count)).toBe(2);
   });
 
+  describe("Fixed-width text sanitization (control chars)", () => {
+    it("replaces control chars in description/exchange with a space, keeping column positions", () => {
+      // Broker-supplied free text carrying a newline + tab — these would corrupt
+      // the fixed-width record (a newline ends it early) if written raw.
+      const entries = [makeEntry({
+        description: "Bit\ncoin",
+        exchangeName: "Coin\tbase",
+      })];
+      const result = generateModelo721(entries, baseConfig);
+      const detail = result.split("\n")[1]!;
+
+      // Description column 36-75 (0-indexed slice 35..75): the \n is replaced by
+      // a space, so the field is "Bit coin" left-padded to 40 — same width.
+      const descField = detail.slice(35, 75);
+      expect(descField).toBe("Bit coin".padEnd(40, " "));
+      expect(descField).not.toContain("\n");
+
+      // Exchange column 190-230 (0-indexed slice 189..230): the \t is replaced by
+      // a space, so "Coin base" padded to 41 — same width.
+      const exchField = detail.slice(189, 230);
+      expect(exchField).toBe("Coin base".padEnd(41, " "));
+      expect(exchField).not.toContain("\t");
+
+      // Whole record must still be exactly one line (no embedded newline split it).
+      expect(result.split("\n")).toHaveLength(2);
+      // Each record is exactly 500 bytes — positions of every later field intact.
+      expect(detail.length).toBe(500);
+    });
+
+    it("replaces control chars in summary name/contact, keeping column positions", () => {
+      const entries = [makeEntry()];
+      const config = {
+        ...baseConfig,
+        surname: "GARCIA\nLOPEZ",
+        name: "JUAN",
+        contactName: "GARCIA\tLOPEZ, JUAN",
+      };
+      const result = generateModelo721(entries, config);
+      const summary = result.split("\n")[0]!;
+
+      // Name column 18-57 (0-indexed slice 17..57): "GARCIA LOPEZ JUAN" (the \n in
+      // surname becomes a space) padded to 40.
+      const nameField = summary.slice(17, 57);
+      expect(nameField).toBe("GARCIA LOPEZ JUAN".padEnd(40, " "));
+      expect(nameField).not.toContain("\n");
+
+      // Contact column 68-107 (0-indexed slice 67..107): \t becomes a space.
+      const contactField = summary.slice(67, 107);
+      expect(contactField).toBe("GARCIA LOPEZ, JUAN".padEnd(40, " "));
+      expect(contactField).not.toContain("\t");
+
+      expect(summary.length).toBe(500);
+    });
+
+    it("is byte-identical for clean (control-char-free) input — regression", () => {
+      // A clean record must be unchanged by sanitization. These literals are the
+      // exact fixed-width output for makeEntry()/baseConfig BEFORE fixedWidthText
+      // was introduced — any drift in column positions/widths fails here.
+      const entries = [makeEntry()];
+      const result = generateModelo721(entries, baseConfig);
+      const [summary, detail] = result.split("\n");
+
+      const expectedSummary =
+        "1" + "721" + "2025" +
+        "12345678A" +                       // NIF (9, right)
+        "GARCIA LOPEZ JUAN".padEnd(40, " ") + // Name (18-57)
+        "T" +
+        "600123456" +                       // Phone (9, right "0")
+        "GARCIA LOPEZ, JUAN".padEnd(40, " ") + // Contact (68-107)
+        "0000000000001" +                   // Declaration ID
+        " " + " " +                          // Complementary, Replacement
+        "0000000000000" +                   // Previous ID
+        "000000001" +                       // Detail count
+        " " + "000000000030000" + "00" +     // Acq sign + value (15,2): 30000.00
+        " " + "000000000060000" + "00" +     // Val sign + value (15,2): 60000.00
+        "".padEnd(320, " ");                 // Blank 181-500
+      expect(summary).toBe(expectedSummary);
+      expect(summary!.length).toBe(500);
+
+      const expectedDetail =
+        "2" + "721" + "2025" +
+        "12345678A" +                       // NIF (9, right)
+        "12345678A" +                       // Declared NIF (9, right)
+        "".padEnd(9, " ") +                  // Proxy NIF (27-35)
+        "Bitcoin".padEnd(40, " ") +          // Description (36-75)
+        "1" +                                // Declaration type
+        "".padEnd(25, " ") +                 // Reserved 77-101
+        "C" +                                // Asset type (crypto)
+        "".padEnd(26, " ") +                 // Reserved 103-128
+        "US" +                               // Country code (129-130)
+        "9" +                                // ID type
+        "BTC".padEnd(12, " ") +              // Asset ID (132-143)
+        "".padEnd(46, " ") +                 // Reserved 144-189
+        "Coinbase".padEnd(41, " ") +         // Exchange name (190-230)
+        "".padEnd(184, " ") +                // Reserved 231-414
+        "".padEnd(8, " ") +                  // Acquisition date (415-422)
+        "M" +                                // Type
+        "".padEnd(8, " ") +                  // Sell date (424-431)
+        " " + "0000000030000" + "00" +       // Acq sign + value (13,2): 30000.00
+        " " + "0000000060000" + "00" +       // Val sign + value (13,2): 60000.00
+        " " +                                // Reserved 463
+        "000000001" + "500" +                // Quantity (9,3): 1.500
+        "".padEnd(1, " ") +                  // Reserved 476
+        "10000" +                            // Ownership % (3,2): 100.00
+        "".padEnd(18, " ");                  // Blank 483-500
+      expect(detail).toBe(expectedDetail);
+      expect(detail!.length).toBe(500);
+    });
+  });
+
   describe("Negative value sign fields", () => {
     it("should set acquisition sign to N for negative acquisition cost", () => {
       const entries = [makeEntry({

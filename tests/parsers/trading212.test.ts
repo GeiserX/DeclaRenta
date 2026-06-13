@@ -282,7 +282,7 @@ describe("trading212Parser", () => {
       expect(result.parserMessages).toHaveLength(1);
       const msg = result.parserMessages![0]!;
       expect(msg.id).toBe("parser.trading212.unresolved_price_skipped");
-      expect(msg.severity).toBe("info");
+      expect(msg.severity).toBe("warning");
       expect(msg.context?.skipped).toBe("1");
     });
   });

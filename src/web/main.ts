@@ -611,11 +611,26 @@ function renderSectionSafely(containerId: string, render: () => void): void {
   }
 }
 
+/**
+ * Monotonic run token. `processFiles` is triggered from four places (wizard
+ * Next, year-select change, manual-rate apply, monodivisa toggle) and is async
+ * (it awaits the ECB fetch and a paint yield), so two runs can overlap — e.g.
+ * the user changes the year and immediately edits a manual rate. Without a guard
+ * the slower run would resolve last and clobber `currentReport`/the rendered
+ * sections with stale numbers. Each run captures the token at entry; after every
+ * await it checks whether a newer run has started and, if so, bails before
+ * touching shared state. The latest run always wins.
+ */
+let processRunToken = 0;
+
 async function processFiles(): Promise<void> {
   if (!mergedStatement) {
     await parseFiles();
   }
   if (!mergedStatement) return;
+
+  const runToken = ++processRunToken;
+  const isStale = () => runToken !== processRunToken;
 
   try {
     const merged = mergedStatement;
@@ -634,6 +649,7 @@ async function processFiles(): Promise<void> {
     // monodivisa toggle) reuse already-fetched rates instead of refetching
     // everything each time.
     const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year });
+    if (isStale()) return; // a newer run started while fetching — let it win
 
     // Yield a macrotask so the browser can paint the processing overlay/spinner
     // (added by the wizardNext handler) BEFORE the heavy synchronous engine run
@@ -651,6 +667,7 @@ async function processFiles(): Promise<void> {
     // single yield point gives the needed UI responsiveness at zero risk — do
     // not "upgrade" this into a Worker.
     await new Promise<void>((r) => setTimeout(r, 0));
+    if (isStale()) return; // superseded during the paint yield — discard this run
 
     const profileForReport = getProfile();
     const report = generateTaxReport(merged, allRates, year, {

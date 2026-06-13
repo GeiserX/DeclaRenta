@@ -21,6 +21,11 @@ import Decimal from "decimal.js";
  * Returns the normalized decimal STRING (so callers keep the lossless-string →
  * Decimal pattern); falls back to `fallback` (default "0") on any non-finite or
  * unparseable input. `parseEu` runs the EU/US `parseNumber` normalization first.
+ *
+ * WHICH VARIANT TO USE: call `toFiniteDecimalString` when the result is stored
+ * verbatim into a `Trade`/`CashTransaction` STRING field; call `toFiniteDecimal`
+ * when you immediately do Decimal arithmetic (`.plus`/`.mul`/`.abs`/…). Don't
+ * wrap one in the other (`new Decimal(toFiniteDecimalString(x))` === `toFiniteDecimal(x)`).
  */
 export function toFiniteDecimalString(val: string, fallback = "0", parseEu = true): string {
   const raw = parseEu ? parseNumber(val) : val.trim();

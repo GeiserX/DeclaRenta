@@ -150,7 +150,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: new Decimal(toFiniteDecimalString(tax)).abs().neg().toString(),
+          amount: new Decimal(tax).abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
