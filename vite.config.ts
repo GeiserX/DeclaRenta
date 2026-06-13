@@ -35,6 +35,11 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, "dist/web"),
     emptyOutDir: true,
+    // Explicit target (matches tsconfig ES2022). Pins the browser baseline so it
+    // doesn't drift with Vite's default, and stops the bundler trying to down-level
+    // modern destructuring (from jspdf/jspdf-autotable) to an old target — the
+    // failure mode that bit the earlier standalone esbuild bump under Vite 6.
+    target: "es2022",
     rollupOptions: {
       input: {
         main: resolve(__dirname, "src/web/index.html"),

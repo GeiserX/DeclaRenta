@@ -71,10 +71,11 @@ tests/           Vitest tests mirroring src/ structure
 - **XLSX parsing**: `xlsx` (eToro)
 - **Decimal math**: `decimal.js` (financial precision, never raw Number)
 - **CLI**: `commander`
-- **Build**: `tsup` (library/CLI), `vite` (web)
+- **Build**: `tsup` (library/CLI), `vite` 8 (web — Rolldown/Oxc bundler; `build.target: es2022`)
 - **Test**: `vitest`
-- **CI**: GitHub Actions (Node 20 + 22)
-- **Docker**: Multi-stage Dockerfile.web (node build → nginx:1.27-alpine)
+- **CI**: GitHub Actions (Node 22)
+- **Docker**: Multi-stage Dockerfile.web (node:22.12-alpine build → nginx:1.31-alpine)
+- **Node**: requires `^20.19.0 || >=22.12.0` (Vite 8 floor)
 
 ## Web UI Architecture
 
