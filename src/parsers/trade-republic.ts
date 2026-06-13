@@ -11,10 +11,10 @@
  * payment_reference,mcc_code
  */
 
-import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
-import { parseCsvLine, parseNumber, stripBom } from "./csv-utils.js";
+import type { TaxMessage } from "../types/tax.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, stripBom } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -122,6 +122,7 @@ function parseTrCsv(lines: string[]): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  let skippedNoAmount = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -156,10 +157,18 @@ function parseTrCsv(lines: string[]): Statement {
       if (shares === 0) continue;
 
       const isSell = type === "SELL";
-      const absShares = new Decimal(sharesStr).abs().toString();
-      const absAmount = new Decimal(amountStr).abs().toString();
-      const absFee = new Decimal(feeStr).abs();
-      const absTax = new Decimal(taxStr).abs();
+      const absAmountDec = toFiniteDecimal(amountStr).abs();
+      // A real BUY/SELL with no usable amount (missing/garbage) would produce a
+      // 0-cost / 0-proceeds trade (phantom gain). Skip it and count it instead of
+      // aborting the whole file, mirroring the Degiro skip-and-warn pattern.
+      if (absAmountDec.isZero()) {
+        skippedNoAmount++;
+        continue;
+      }
+      const absShares = toFiniteDecimal(sharesStr).abs().toString();
+      const absAmount = absAmountDec.toString();
+      const absFee = toFiniteDecimal(feeStr).abs();
+      const absTax = toFiniteDecimal(taxStr).abs();
 
       trades.push({
         tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
@@ -223,7 +232,7 @@ function parseTrCsv(lines: string[]): Statement {
           currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: tax > 0 ? new Decimal(taxStr).abs().neg().toString() : taxStr,
+          amount: tax > 0 ? toFiniteDecimal(taxStr).abs().neg().toString() : taxStr,
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
@@ -272,6 +281,15 @@ function parseTrCsv(lines: string[]): Statement {
     // Skip: CUSTOMER_INBOUND, CUSTOMER_OUTBOUND, TRANSFER_*, CORPORATE_ACTION, DELIVERY
   }
 
+  const parserMessages: TaxMessage[] = skippedNoAmount > 0
+    ? [{
+        id: "trade_republic.trade_skipped_no_amount",
+        severity: "info" as const,
+        message: `Se ha(n) omitido ${skippedNoAmount} operación(es) de compraventa de Trade Republic sin importe utilizable.`,
+        hint: "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
+      }]
+    : [];
+
   return {
     accountId: "",
     fromDate: "",
@@ -282,6 +300,7 @@ function parseTrCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

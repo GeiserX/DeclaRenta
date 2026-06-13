@@ -5,6 +5,39 @@
  * Handles EU/US number formats, quoted fields, and date conversion.
  */
 
+import Decimal from "decimal.js";
+
+// ---------------------------------------------------------------------------
+// Finiteness-guarded money parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a (possibly EU-formatted) numeric string into a FINITE Decimal string,
+ * never `NaN`/`Infinity`. `new Decimal("NaN"|"Infinity")` does NOT throw and a
+ * non-finite value silently poisons every downstream total → a literal "NaN"/
+ * "Infinity" (or a wildly inflated figure) in a tax casilla with no warning.
+ * This is the single guard all parser money/quantity parsing must route through.
+ *
+ * Returns the normalized decimal STRING (so callers keep the lossless-string →
+ * Decimal pattern); falls back to `fallback` (default "0") on any non-finite or
+ * unparseable input. `parseEu` runs the EU/US `parseNumber` normalization first.
+ */
+export function toFiniteDecimalString(val: string, fallback = "0", parseEu = true): string {
+  const raw = parseEu ? parseNumber(val) : val.trim();
+  if (!raw) return fallback;
+  try {
+    const d = new Decimal(raw);
+    return d.isFinite() ? d.toString() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Same as {@link toFiniteDecimalString} but returns a Decimal (guaranteed finite). */
+export function toFiniteDecimal(val: string, fallback = "0", parseEu = true): Decimal {
+  return new Decimal(toFiniteDecimalString(val, fallback, parseEu));
+}
+
 // ---------------------------------------------------------------------------
 // Delimiter detection
 // ---------------------------------------------------------------------------

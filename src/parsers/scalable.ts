@@ -10,9 +10,11 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import Decimal from "decimal.js";
 import {
   parseCsvLine,
   parseNumber,
+  toFiniteDecimalString,
   convertDateISO,
   findColumn,
   stripBom,
@@ -110,9 +112,9 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const description = (fields[cols.description] ?? "").trim();
     const shares = parseNumber(fields[cols.shares] ?? "0");
     const price = parseNumber(fields[cols.price] ?? "0");
-    const amount = parseNumber(fields[cols.amount] ?? "0");
-    const fee = parseNumber(fields[cols.fee] ?? "0");
-    const tax = parseNumber(fields[cols.tax] ?? "0");
+    const amount = toFiniteDecimalString(fields[cols.amount] ?? "0");
+    const fee = toFiniteDecimalString(fields[cols.fee] ?? "0");
+    const tax = toFiniteDecimalString(fields[cols.tax] ?? "0");
     const currency = (fields[cols.currency] ?? "EUR").trim();
     const reference = (fields[cols.reference] ?? "").trim();
 
@@ -132,7 +134,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
         dateTime: tradeDate,
         settleDate: tradeDate,
         amount,
-        fxRateToBase: currency === "EUR" ? "1" : "1",
+        fxRateToBase: "1",
         type: "Dividends",
       });
 
@@ -148,7 +150,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: taxNum > 0 ? `-${Math.abs(taxNum)}` : tax,
+          amount: new Decimal(toFiniteDecimalString(tax)).abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });

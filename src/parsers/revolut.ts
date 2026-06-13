@@ -26,7 +26,7 @@
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
-import { findColumn, parseNumber } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -149,24 +149,22 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
     const fees = feesCol >= 0 ? (row[feesCol] ?? "0").trim() : "0";
     const currency = currencyCol >= 0 ? (row[currencyCol] ?? "USD").trim() : "USD";
 
-    const qty = parseFloat(parseNumber(quantity));
-    if (qty === 0 || isNaN(qty)) continue;
+    // All money/quantity parsing routes through toFiniteDecimal so a garbled
+    // cell can never yield NaN/Infinity (which would poison cost basis). The
+    // emitted strings are decimal.js .toString()/.toFixed(), losslessly parsed.
+    const absQty = toFiniteDecimal(quantity).abs();
+    if (absQty.isZero()) continue;
 
-    const absQty = Math.abs(qty);
     const assetCategory = detectAssetCategory(symbol);
-    const costNum = parseFloat(parseNumber(costBasis));
-    const proceedsNum = parseFloat(parseNumber(grossProceeds));
-    const pnlNum = parseFloat(parseNumber(grossPnl));
-    const feesNum = parseFloat(parseNumber(fees));
-
     // Use absolute values to avoid double-negative if input is already negative
-    const absCost = isNaN(costNum) ? 0 : Math.abs(costNum);
-    const absProceeds = isNaN(proceedsNum) ? 0 : Math.abs(proceedsNum);
-    const absFees = isNaN(feesNum) ? 0 : Math.abs(feesNum);
+    const absCost = toFiniteDecimal(costBasis).abs();
+    const absProceeds = toFiniteDecimal(grossProceeds).abs();
+    const pnl = toFiniteDecimal(grossPnl);
+    const absFees = toFiniteDecimal(fees).abs();
 
     // Revolut reports per-trade cost/proceeds, compute price per unit
-    const buyPrice = absQty > 0 ? (absCost / absQty).toFixed(8) : "0";
-    const sellPrice = absQty > 0 ? (absProceeds / absQty).toFixed(8) : "0";
+    const buyPrice = absQty.greaterThan(0) ? absCost.div(absQty).toFixed(8) : "0";
+    const sellPrice = absQty.greaterThan(0) ? absProceeds.div(absQty).toFixed(8) : "0";
 
     // Assign full fee to SELL leg (consistent with eToro and IBKR patterns)
     const feeStr = absFees.toFixed(2);
@@ -182,11 +180,11 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
       currency,
       tradeDate: dateAcquired,
       settlementDate: dateAcquired,
-      quantity: `${absQty}`,
+      quantity: absQty.toString(),
       tradePrice: buyPrice,
-      tradeMoney: `-${absCost}`,
+      tradeMoney: `-${absCost.toString()}`,
       proceeds: "0",
-      cost: `-${absCost}`,
+      cost: `-${absCost.toString()}`,
       fifoPnlRealized: "0",
       fxRateToBase: "1",
       buySell: "BUY",
@@ -209,12 +207,12 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
       currency,
       tradeDate: dateSold,
       settlementDate: dateSold,
-      quantity: `-${absQty}`,
+      quantity: `-${absQty.toString()}`,
       tradePrice: sellPrice,
-      tradeMoney: `${absProceeds}`,
-      proceeds: `${absProceeds}`,
+      tradeMoney: absProceeds.toString(),
+      proceeds: absProceeds.toString(),
       cost: "0",
-      fifoPnlRealized: isNaN(pnlNum) ? "0" : `${pnlNum}`,
+      fifoPnlRealized: pnl.toString(),
       fxRateToBase: "1",
       buySell: "SELL",
       openCloseIndicator: "C",

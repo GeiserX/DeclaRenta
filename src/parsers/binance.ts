@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom } from "./csv-utils.js";
+import { parseCsvLine, stripBom, toFiniteDecimal } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -347,6 +347,30 @@ interface NetLeg {
   index: number;
 }
 
+/**
+ * The triplicated ±1s forward-scan, extracted verbatim (phases 4/5/6 each ran an
+ * identical copy). From `startIdx`, walk forward while the row stays within the
+ * 1-second window (`epoch − start.epoch ≤ 1`); collect every still-unparsed row
+ * that satisfies `predicate`. `rows` MUST already be sorted by (epoch, index) so
+ * the window is contiguous and the `> 1` break is correct. The single-consume
+ * `parsed` flag is honoured here (parsed rows are never re-collected); marking the
+ * window parsed is left to each caller, matching the original per-phase behavior
+ * (phase 4 marked the window itself; phases 5/6 marked it inside their emitter).
+ */
+function collectWindow(rows: TxRow[], startIdx: number, predicate: (r: TxRow) => boolean): TxRow[] {
+  const start = rows[startIdx]!;
+  const window: TxRow[] = [];
+  for (let j = startIdx; j < rows.length; j++) {
+    const r = rows[j]!;
+    if (r.epoch - start.epoch > 1) break;
+    if (!r.parsed && predicate(r)) window.push(r);
+  }
+  return window;
+}
+
+/** Strategy-vocabulary ops (Transaction Sold/Revenue/Buy/Spend/Fee). */
+const STRATEGY_OPS = ["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"];
+
 function parseBinanceTxCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
   const cols = resolveTxColumns(headers);
@@ -358,6 +382,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   const manualRateHints: ManualRateQuote[] = [];
+  /** Shared accumulator: all taxable rows, sorted by (epoch, index) in collectRows. */
+  const rows: TxRow[] = [];
 
   /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
   function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
@@ -368,121 +394,126 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   }
 
   // 1. Collect rows, skipping non-taxable internal movements and zero changes.
-  const rows: TxRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i]!.trim();
-    if (!line) continue;
+  function collectRows(): void {
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i]!.trim();
+      if (!line) continue;
 
-    const fields = parseCsvLine(line, ",");
-    const utcTime = (fields[cols.utcTime] ?? "").trim();
-    const operation = (fields[cols.operation] ?? "").trim().toLowerCase();
-    const coin = (fields[cols.coin] ?? "").trim().toUpperCase();
-    const changeStr = (fields[cols.change] ?? "").trim();
-    const account = (fields[cols.account] ?? "").trim();
-    const remark = cols.remark >= 0 ? (fields[cols.remark] ?? "").trim() : "";
+      const fields = parseCsvLine(line, ",");
+      const utcTime = (fields[cols.utcTime] ?? "").trim();
+      const operation = (fields[cols.operation] ?? "").trim().toLowerCase();
+      const coin = (fields[cols.coin] ?? "").trim().toUpperCase();
+      const changeStr = (fields[cols.change] ?? "").trim();
+      const account = (fields[cols.account] ?? "").trim();
+      const remark = cols.remark >= 0 ? (fields[cols.remark] ?? "").trim() : "";
 
-    if (!utcTime || !coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
-    // A "--" change (Binance writes this for some zero-fee rows) is not numeric.
-    if (changeStr === "--") continue;
+      if (!utcTime || !coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
+      // A "--" change (Binance writes this for some zero-fee rows) is not numeric.
+      if (changeStr === "--") continue;
 
-    let change: Decimal;
-    try {
-      change = new Decimal(changeStr);
-    } catch {
-      continue;
-    }
-    // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
-    // a malformed cell can't poison totals or stall big-decimal arithmetic.
-    if (!change.isFinite() || change.isZero()) continue;
+      let change: Decimal;
+      try {
+        change = new Decimal(changeStr);
+      } catch {
+        continue;
+      }
+      // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
+      // a malformed cell can't poison totals or stall big-decimal arithmetic.
+      if (!change.isFinite() || change.isZero()) continue;
 
-    let eurValue: Decimal | null = null;
-    if (cols.eurValue >= 0) {
-      const raw = (fields[cols.eurValue] ?? "").trim();
-      if (raw) {
-        try {
-          const parsed = new Decimal(raw);
-          eurValue = parsed.isFinite() ? parsed : null;
-        } catch {
-          eurValue = null;
+      let eurValue: Decimal | null = null;
+      if (cols.eurValue >= 0) {
+        const raw = (fields[cols.eurValue] ?? "").trim();
+        if (raw) {
+          try {
+            const parsed = new Decimal(raw);
+            eurValue = parsed.isFinite() ? parsed : null;
+          } catch {
+            eurValue = null;
+          }
         }
       }
+
+      rows.push({
+        utcTime,
+        epoch: txEpoch(utcTime),
+        tradeDate: convertBinanceDate(utcTime),
+        operation,
+        account,
+        coin,
+        change,
+        eurValue,
+        remark,
+        index: i,
+        parsed: false,
+      });
     }
 
-    rows.push({
-      utcTime,
-      epoch: txEpoch(utcTime),
-      tradeDate: convertBinanceDate(utcTime),
-      operation,
-      account,
-      coin,
-      change,
-      eurValue,
-      remark,
-      index: i,
-      parsed: false,
-    });
+    // Stable order by time then file order, so ±1s windows are deterministic.
+    rows.sort((a, b) => (a.epoch - b.epoch) || (a.index - b.index));
   }
-
-  // Stable order by time then file order, so ±1s windows are deterministic.
-  rows.sort((a, b) => (a.epoch - b.epoch) || (a.index - b.index));
 
   // 2. Income rows are single-row events — emit them first (and mark parsed) so
   //    they never get swept into a trade window.
-  for (const r of rows) {
-    if (r.parsed) continue;
-    const isAhorro = TX_INCOME_AHORRO_OPS.has(r.operation);
-    const isGeneral = TX_INCOME_GENERAL_OPS.has(r.operation);
-    if (!isAhorro && !isGeneral) continue;
-    // Only positive credits are income; a negative (clawback) is rare — skip.
-    if (!r.change.isPositive()) { r.parsed = true; continue; }
+  function emitIncome(): void {
+    for (const r of rows) {
+      if (r.parsed) continue;
+      const isAhorro = TX_INCOME_AHORRO_OPS.has(r.operation);
+      const isGeneral = TX_INCOME_GENERAL_OPS.has(r.operation);
+      if (!isAhorro && !isGeneral) continue;
+      // Only positive credits are income; a negative (clawback) is rare — skip.
+      if (!r.change.isPositive()) { r.parsed = true; continue; }
 
-    r.parsed = true;
-    addHint(r.coin, r.tradeDate, r.change, r.eurValue);
-    cashTransactions.push({
-      transactionID: `binance-income-${r.tradeDate}-${r.coin}-${r.index}`,
-      accountId: "",
-      symbol: r.coin,
-      description: `${r.operation} - ${r.coin}`,
-      isin: "",
-      currency: r.coin,
-      dateTime: r.tradeDate,
-      settleDate: r.tradeDate,
-      amount: r.change.toString(),
-      fxRateToBase: "1",
-      type: "Crypto Reward Income",
-      taxBucket: isAhorro ? "ahorro" : "general",
-      rewardQuantity: r.change.abs().toString(),
-      ...(r.eurValue !== null ? { rewardCostBasisEur: r.eurValue.abs().toString() } : {}),
-    });
+      r.parsed = true;
+      addHint(r.coin, r.tradeDate, r.change, r.eurValue);
+      cashTransactions.push({
+        transactionID: `binance-income-${r.tradeDate}-${r.coin}-${r.index}`,
+        accountId: "",
+        symbol: r.coin,
+        description: `${r.operation} - ${r.coin}`,
+        isin: "",
+        currency: r.coin,
+        dateTime: r.tradeDate,
+        settleDate: r.tradeDate,
+        amount: r.change.toString(),
+        fxRateToBase: "1",
+        type: "Crypto Reward Income",
+        taxBucket: isAhorro ? "ahorro" : "general",
+        rewardQuantity: r.change.abs().toString(),
+        ...(r.eurValue !== null ? { rewardCostBasisEur: r.eurValue.abs().toString() } : {}),
+      });
+    }
   }
 
   // 3. Dust (Small Assets Exchange BNB): negative dust-coin rows + positive BNB
   //    rows at one timestamp, paired via the Remark ("SCR to BNB"). Each dust
   //    coin → BNB is a permuta.
-  const dustByTime = new Map<string, TxRow[]>();
-  for (const r of rows) {
-    if (r.parsed || !TX_DUST_OPS.has(r.operation)) continue;
-    if (!dustByTime.has(r.utcTime)) dustByTime.set(r.utcTime, []);
-    dustByTime.get(r.utcTime)!.push(r);
-  }
-  for (const group of dustByTime.values()) {
-    const bnbRows = group.filter((r) => r.coin === "BNB" && r.change.isPositive());
-    for (const dust of group) {
-      if (dust.coin === "BNB" || !dust.change.isNegative()) continue;
-      // Match BNB output by remark (e.g. "SCR to BNB"); fall back to any unused.
-      const bnb = bnbRows.find((b) => !b.parsed && b.remark === dust.remark)
-        ?? bnbRows.find((b) => !b.parsed);
-      dust.parsed = true;
-      addHint(dust.coin, dust.tradeDate, dust.change, dust.eurValue);
-      if (bnb) {
-        bnb.parsed = true;
-        addHint("BNB", bnb.tradeDate, bnb.change, bnb.eurValue);
-        emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index },
-          { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index }, "Dust");
-      }
+  function emitDust(): void {
+    const dustByTime = new Map<string, TxRow[]>();
+    for (const r of rows) {
+      if (r.parsed || !TX_DUST_OPS.has(r.operation)) continue;
+      if (!dustByTime.has(r.utcTime)) dustByTime.set(r.utcTime, []);
+      dustByTime.get(r.utcTime)!.push(r);
     }
-    // Any leftover BNB rows (rounding remainders) are immaterial — drop.
-    for (const b of bnbRows) b.parsed = true;
+    for (const group of dustByTime.values()) {
+      const bnbRows = group.filter((r) => r.coin === "BNB" && r.change.isPositive());
+      for (const dust of group) {
+        if (dust.coin === "BNB" || !dust.change.isNegative()) continue;
+        // Match BNB output by remark (e.g. "SCR to BNB"); fall back to any unused.
+        const bnb = bnbRows.find((b) => !b.parsed && b.remark === dust.remark)
+          ?? bnbRows.find((b) => !b.parsed);
+        dust.parsed = true;
+        addHint(dust.coin, dust.tradeDate, dust.change, dust.eurValue);
+        if (bnb) {
+          bnb.parsed = true;
+          addHint("BNB", bnb.tradeDate, bnb.change, bnb.eurValue);
+          emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index },
+            { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index }, "Dust");
+        }
+      }
+      // Any leftover BNB rows (rounding remainders) are immaterial — drop.
+      for (const b of bnbRows) b.parsed = true;
+    }
   }
 
   // 4. Convert-style swaps (Binance Convert, Buy Crypto With Fiat): pair legs
@@ -490,53 +521,48 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   //    cancel intra-account split rows, then pair the net negative (sold/spent)
   //    with the net positive (bought). Windows are grouped by the SAME operation
   //    so a Convert and a fiat purchase in the same second never cross-mix.
-  for (let i = 0; i < rows.length; i++) {
-    const start = rows[i]!;
-    if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
-    const window: TxRow[] = [];
-    for (let j = i; j < rows.length; j++) {
-      const r = rows[j]!;
-      if (r.epoch - start.epoch > 1) break;
-      if (!r.parsed && r.operation === start.operation) window.push(r);
-    }
-    window.forEach((r) => (r.parsed = true));
-    if (start.operation === "buy crypto with fiat") {
-      // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
-      // funded in the same coin (EUR/USD), so two independent buys in one second
-      // would otherwise net into a single fiat leg → `pairAndEmit` sees 1 sell
-      // vs N buys and DROPS all but one coin's lot (re-creating the phantom
-      // "Venta sin lotes" this op was added to fix). Each purchase carries a
-      // unique Remark (e.g. "Via CashBalance - Wallet/N…") shared by both legs,
-      // so per-Remark grouping keeps them separate. Convert (empty remark) is
-      // deliberately left on the whole-window path below — provably unchanged.
-      const byRemark = new Map<string, TxRow[]>();
-      for (const r of window) {
-        if (!byRemark.has(r.remark)) byRemark.set(r.remark, []);
-        byRemark.get(r.remark)!.push(r);
+  function emitConverts(): void {
+    for (let i = 0; i < rows.length; i++) {
+      const start = rows[i]!;
+      if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
+      // Window keys on the SAME operation so a Convert and a fiat-buy in one
+      // second never cross-mix.
+      const window = collectWindow(rows, i, (r) => r.operation === start.operation);
+      window.forEach((r) => (r.parsed = true));
+      if (start.operation === "buy crypto with fiat") {
+        // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
+        // funded in the same coin (EUR/USD), so two independent buys in one second
+        // would otherwise net into a single fiat leg → `pairAndEmit` sees 1 sell
+        // vs N buys and DROPS all but one coin's lot (re-creating the phantom
+        // "Venta sin lotes" this op was added to fix). Each purchase carries a
+        // unique Remark (e.g. "Via CashBalance - Wallet/N…") shared by both legs,
+        // so per-Remark grouping keeps them separate. Convert (empty remark) is
+        // deliberately left on the whole-window path below — provably unchanged.
+        const byRemark = new Map<string, TxRow[]>();
+        for (const r of window) {
+          if (!byRemark.has(r.remark)) byRemark.set(r.remark, []);
+          byRemark.get(r.remark)!.push(r);
+        }
+        for (const group of byRemark.values()) {
+          pairAndEmit(trades, netLegs(group), addHint, "Buy");
+        }
+      } else {
+        pairAndEmit(trades, netLegs(window), addHint, "Convert");
       }
-      for (const group of byRemark.values()) {
-        pairAndEmit(trades, netLegs(group), addHint, "Buy");
-      }
-    } else {
-      pairAndEmit(trades, netLegs(window), addHint, "Convert");
     }
   }
 
   // 5. Strategy trades: Transaction Sold↔Revenue and Buy↔Spend within ±1s.
   //    Pair ALL legs (not just the first) so high-frequency same-second groups
   //    aren't truncated.
-  for (let i = 0; i < rows.length; i++) {
-    const start = rows[i]!;
-    if (start.parsed) continue;
-    if (!["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"].includes(start.operation)) continue;
-    const window: TxRow[] = [];
-    for (let j = i; j < rows.length; j++) {
-      const r = rows[j]!;
-      if (r.epoch - start.epoch > 1) break;
-      if (r.parsed) continue;
-      if (["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"].includes(r.operation)) window.push(r);
+  function emitStrategy(): void {
+    for (let i = 0; i < rows.length; i++) {
+      const start = rows[i]!;
+      if (start.parsed) continue;
+      if (!STRATEGY_OPS.includes(start.operation)) continue;
+      const window = collectWindow(rows, i, (r) => STRATEGY_OPS.includes(r.operation));
+      emitStrategyTrades(trades, window, addHint);
     }
-    emitStrategyTrades(trades, window, addHint);
   }
 
   // 6. Plain SPOT trades (Buy/Sell/Fee, Sell Crypto to Fiat) within ±1s. Runs
@@ -544,19 +570,26 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   //    consumed and never swept into the trade window. Legs are paired by SIGN
   //    (netLegs/pairAndEmit), not op name, because `Sell` is the given-up leg of
   //    both a buy and a sale. Fees are pulled aside and attached, not paired.
-  for (let i = 0; i < rows.length; i++) {
-    const start = rows[i]!;
-    if (start.parsed) continue;
-    if (!SPOT_TRADE_OPS.has(start.operation) && start.operation !== SPOT_FEE_OP) continue;
-    const window: TxRow[] = [];
-    for (let j = i; j < rows.length; j++) {
-      const r = rows[j]!;
-      if (r.epoch - start.epoch > 1) break;
-      if (r.parsed) continue;
-      if (SPOT_TRADE_OPS.has(r.operation) || r.operation === SPOT_FEE_OP) window.push(r);
+  function emitSpot(): void {
+    for (let i = 0; i < rows.length; i++) {
+      const start = rows[i]!;
+      if (start.parsed) continue;
+      if (!SPOT_TRADE_OPS.has(start.operation) && start.operation !== SPOT_FEE_OP) continue;
+      const window = collectWindow(rows, i, (r) => SPOT_TRADE_OPS.has(r.operation) || r.operation === SPOT_FEE_OP);
+      emitSpotTrades(trades, window, addHint);
     }
-    emitSpotTrades(trades, window, addHint);
   }
+
+  // Phase order is LOAD-BEARING (4 documented phantom-lot fixes depend on it):
+  // collect → income → dust → convert → strategy → spot. Income runs before the
+  // trade phases so a same-second Referral Commission is consumed (never swept
+  // into a trade window); the single-consume `parsed` flag enforces the rest.
+  collectRows();
+  emitIncome();
+  emitDust();
+  emitConverts();
+  emitStrategy();
+  emitSpot();
 
   return {
     accountId: "",
@@ -929,12 +962,16 @@ function parseBinanceCsv(lines: string[]): Statement {
     if (sideLower !== "buy" && sideLower !== "sell") continue;
     const isBuy = sideLower === "buy";
 
-    const price = new Decimal((fields[cols.price] ?? "0").trim() || "0");
-    const executed = new Decimal(parseAmountWithSuffix((fields[cols.executed] ?? "0").trim()).amount || "0");
-    const amount = new Decimal(parseAmountWithSuffix((fields[cols.amount] ?? "0").trim()).amount || "0");
+    // Guard against new Decimal("NaN"/"Infinity") — it does NOT throw and a
+    // non-finite price/qty silently poisons every casilla total. parseEu=false
+    // keeps the original raw-string parse (these cells are plain decimals; the
+    // suffix-parsed ones are already normalized to [0-9.]+).
+    const price = toFiniteDecimal((fields[cols.price] ?? "0").trim() || "0", "0", false);
+    const executed = toFiniteDecimal(parseAmountWithSuffix((fields[cols.executed] ?? "0").trim()).amount || "0", "0", false);
+    const amount = toFiniteDecimal(parseAmountWithSuffix((fields[cols.amount] ?? "0").trim()).amount || "0", "0", false);
 
     const fee = parseFee((fields[cols.fee] ?? "").trim());
-    const feeAmount = new Decimal(fee.amount || "0");
+    const feeAmount = toFiniteDecimal(fee.amount || "0", "0", false);
 
     trades.push({
       tradeID: `binance-${tradeDate}-${symbol}-${i}`,

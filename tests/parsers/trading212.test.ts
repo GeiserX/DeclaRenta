@@ -255,6 +255,39 @@ describe("trading212Parser", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Unresolved-price skip counter (parserMessages)
+  // -------------------------------------------------------------------------
+
+  describe("unresolved-price skip counter", () => {
+    it("should not emit parserMessages when every row resolves", () => {
+      const result = trading212Parser.parse(TRADING212_CSV);
+      expect(result.parserMessages).toBeUndefined();
+    });
+
+    it("should skip a buy with no price and a Total in a different currency, and report it once", () => {
+      const csv = [
+        HEADER,
+        // price empty, instrument currency USD, Total in EUR → unresolvable value
+        "Market buy,2024-01-15 09:30:00,US0378331005,AAPL,Apple Inc,10,,USD,0.92,,,1706.60,EUR,,trade001",
+        // a normal resolvable row alongside it
+        "Market buy,2024-02-10 10:15:00,US5949181045,MSFT,Microsoft Corp,5,415.00,USD,0.93,,,1929.75,EUR,,trade002",
+      ].join("\n");
+      const result = trading212Parser.parse(csv);
+
+      // Only the resolvable MSFT row becomes a trade
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.symbol).toBe("MSFT");
+
+      expect(result.parserMessages).toBeDefined();
+      expect(result.parserMessages).toHaveLength(1);
+      const msg = result.parserMessages![0]!;
+      expect(msg.id).toBe("parser.trading212.unresolved_price_skipped");
+      expect(msg.severity).toBe("info");
+      expect(msg.context?.skipped).toBe("1");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Trade counts
   // -------------------------------------------------------------------------
 

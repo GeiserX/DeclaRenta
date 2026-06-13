@@ -25,7 +25,8 @@
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
-import { parseCsvLine, parseNumber, findColumn, stripBom } from "./csv-utils.js";
+import type { TaxMessage } from "../types/tax.js";
+import { parseCsvLine, toFiniteDecimalString, findColumn, stripBom } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -149,6 +150,11 @@ function parseTrading212Csv(lines: string[]): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  const parserMessages: TaxMessage[] = [];
+  // Count buy/sell rows dropped because the price cell is empty/zero while the
+  // Total is in a currency that differs from the instrument's — we can derive
+  // neither a per-share price nor usable trade money, so the row is unresolvable.
+  let unresolvedPriceSkipped = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -161,8 +167,10 @@ function parseTrading212Csv(lines: string[]): Statement {
     const isin = (fields[cols.isin] ?? "").trim();
     const ticker = (fields[cols.ticker] ?? "").trim();
     const name = (fields[cols.name] ?? "").trim();
-    const sharesStr = parseNumber(fields[cols.shares] ?? "0");
-    const priceStr = parseNumber(fields[cols.pricePerShare] ?? "0");
+    // Finiteness-guarded money/quantity: a malformed cell yields "0", never a
+    // non-finite Decimal that would silently poison downstream tax totals.
+    const sharesStr = toFiniteDecimalString(fields[cols.shares] ?? "0");
+    const priceStr = toFiniteDecimalString(fields[cols.pricePerShare] ?? "0");
     const rawCurrency = (fields[cols.priceCurrency] ?? "").trim() || "EUR";
     const { currency: priceCurrency, divisor: priceDivisor } = normalizeCurrency(rawCurrency);
     const currency = priceCurrency;
@@ -170,7 +178,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     // the Total column holds the credited EUR amount, not the instrument's native currency.
     const rawCashCurrency = (fields[cols.totalCurrency] ?? "").trim() || rawCurrency;
     const { currency: cashCurrency, divisor: cashDivisor } = normalizeCurrency(rawCashCurrency);
-    const totalStr = parseNumber(fields[cols.total] ?? "0");
+    const totalStr = toFiniteDecimalString(fields[cols.total] ?? "0");
     const txId = (fields[cols.id] ?? "").trim();
 
     if (!timeRaw) continue;
@@ -257,6 +265,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     const priceDec = new Decimal(priceStr).div(priceDivisor);
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
     if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
+      unresolvedPriceSkipped++;
       continue;
     }
     const grossDec = priceDec.isZero()
@@ -290,6 +299,16 @@ function parseTrading212Csv(lines: string[]): Statement {
     });
   }
 
+  if (unresolvedPriceSkipped > 0) {
+    parserMessages.push({
+      id: "parser.trading212.unresolved_price_skipped",
+      severity: "info",
+      message: `Se omitieron ${unresolvedPriceSkipped} operaciones sin precio por acción y con importe en otra divisa.`,
+      hint: "Estas filas no tenían precio por acción y su importe (Total) estaba en una divisa distinta a la del instrumento, por lo que no se pudo calcular el valor de la operación. Vuelve a exportar el histórico desde Trading 212 asegurándote de incluir la columna \"Price / share\".",
+      context: { skipped: String(unresolvedPriceSkipped) },
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -300,6 +319,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
 }
 
