@@ -69,7 +69,7 @@
     "url": "https://github.com/GeiserX/DeclaRenta/issues"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
     "@types/pdfkit": "^0.17.6",
@@ -90,7 +90,11 @@
     "tsx": "^4.22.4",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.60.1",
-    "vite": "^6.4.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
+  },
+  "overrides__comment": "esbuild pinned to clear GHSA-gv7w-rqvm-qjhr (High) + GHSA-g7r4-m6w7-qqqr (Low), both <0.28.1. tsup/tsx pull esbuild transitively below the fix; this dedupes all copies to 0.28.1. Vite 8 uses Rolldown/Oxc (not esbuild) for the web build, so this can't re-trigger the v6 destructuring-target failure. Drop this override once tsup/tsx/vite raise their own esbuild floor to >=0.28.1.",
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }
