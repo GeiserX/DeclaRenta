@@ -229,4 +229,122 @@ describe("detectWashSales", () => {
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.washSaleBlocked).toBe(false); // Options excluded
   });
+
+  it("should skip a disposal with a blank security key (no ISIN, no symbol) without blocking or crashing", () => {
+    // homogeneousKey("", "", "STK") === "" → the empty-key guard must return the
+    // disposal unchanged, never matching it against unrelated buys.
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol: "",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      // A repurchase that WOULD match if the blank disposal were keyed wrongly.
+      { ...makeTrade("", "2025-07-01", "BUY"), symbol: "", isin: "" },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("should skip buys with a blank security key during indexing (buy-side empty-key guard)", () => {
+    // A keyed loss must not be blocked by a repurchase that itself has no usable
+    // key — the blank-key BUY is dropped from the index, so it can never match.
+    const disposals = [makeDisposal({
+      isin: "US0378331005",
+      symbol: "AAPL",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      makeTrade("US0378331005", "2025-06-15", "SELL"),
+      // Blank ISIN + blank symbol → homogeneousKey returns "" → not indexed.
+      { ...makeTrade("", "2025-07-01", "BUY"), symbol: "", isin: "" },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("blocks the loss when a qualifying repurchase falls inside the window (deferral case)", () => {
+    // Loss + repurchase 16 days later (inside the 2-month listed window) → the
+    // loss is disallowed now (deferred to the replacement lot's basis).
+    const disposals = [makeDisposal({
+      isin: "US0378331005",
+      symbol: "AAPL",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-250),
+    })];
+    const trades = [
+      makeTrade("US0378331005", "2025-06-15", "SELL"),
+      makeTrade("US0378331005", "2025-07-01", "BUY"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("does NOT block the symmetric case when the repurchase falls just outside the window", () => {
+    // Same loss, but the only repurchase is > 2 months after the sale → allowed.
+    const disposals = [makeDisposal({
+      isin: "US0378331005",
+      symbol: "AAPL",
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-250),
+    })];
+    const trades = [
+      makeTrade("US0378331005", "2025-06-15", "SELL"),
+      makeTrade("US0378331005", "2025-08-16", "BUY"), // 2025-06-15 + 2mo = 2025-08-15; one day past
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("matches the expected disallowed set on a large indexed input (50+ ops, guards the refactor)", () => {
+    // Three securities traded heavily so the per-key index has many candidate
+    // buys; only the buys inside each loss's window must block it. This asserts
+    // the indexed (binary-search) matcher reproduces the exact disallowed set.
+    const AAPL = "US0378331005";
+    const MSFT = "US5949181045";
+    const TSLA = "US88160R1014";
+
+    const trades: Trade[] = [];
+    // AAPL: monthly buys across the whole year (12 buys) — dense window candidates.
+    for (let m = 1; m <= 12; m++) {
+      const mm = String(m).padStart(2, "0");
+      trades.push(makeTrade(AAPL, `2025-${mm}-10`, "BUY"));
+    }
+    // MSFT: only two buys, both far from the June sale (Jan and Dec) → no repurchase in window.
+    trades.push(makeTrade(MSFT, "2025-01-05", "BUY"));
+    trades.push(makeTrade(MSFT, "2025-12-20", "BUY"));
+    // TSLA: a single buy on the exact sell date (same-day lot, must NOT count as a repurchase).
+    trades.push(makeTrade(TSLA, "2025-06-15", "BUY"));
+    // Pad with unrelated SELLs and exempt-category noise to push the op count past 50.
+    for (let i = 0; i < 40; i++) {
+      const day = String((i % 28) + 1).padStart(2, "0");
+      trades.push(makeTrade(AAPL, `2025-03-${day}`, "SELL"));
+      const opt = makeTrade(AAPL, `2025-03-${day}`, "BUY");
+      trades.push({ ...opt, assetCategory: "OPT" }); // exempt → ignored by the index
+    }
+    expect(trades.length).toBeGreaterThan(50);
+
+    const disposals = [
+      // 0: AAPL loss in June → blocked (e.g. the 2025-06-10 / 2025-07-10 buys are in window).
+      makeDisposal({ isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
+      // 1: MSFT loss in June → NOT blocked (nearest buys are Jan/Dec, outside 2mo).
+      makeDisposal({ isin: MSFT, symbol: "MSFT", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
+      // 2: TSLA loss in June → NOT blocked (only buy is same-day → excluded).
+      makeDisposal({ isin: TSLA, symbol: "TSLA", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
+      // 3: AAPL GAIN in June → never blocked regardless of repurchases.
+      makeDisposal({ isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", gainLossEur: new Decimal(50) }),
+      // 4: AAPL loss in January → blocked (2025-01-10 and 2025-02-10 buys are in window).
+      makeDisposal({ isin: AAPL, symbol: "AAPL", sellDate: "2025-01-20", gainLossEur: new Decimal(-100) }),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const blocked = result.map((d) => d.washSaleBlocked);
+    expect(blocked).toEqual([true, false, false, false, true]);
+  });
 });
