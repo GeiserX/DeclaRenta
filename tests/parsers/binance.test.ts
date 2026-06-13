@@ -859,6 +859,106 @@ describe("binanceParser", () => {
       expect(income[0]!.taxBucket).toBe("general");
     });
 
+    it("keeps two DIFFERENT same-second spot buys sharing one fiat as SEPARATE lots (no drop)", () => {
+      // The lot-drop hazard, reproduced from the real file (ADA+BTC at one second
+      // both paying EUR). Netting the two EUR sells into one would leave 1 sell vs
+      // 2 buys → pairAndEmit drops a coin. Both coins MUST keep a real cost basis.
+      const csv = [
+        TX_HEADER,
+        "1,2021-05-19 21:44:03,Spot,Buy,BTC,0.003,",
+        "1,2021-05-19 21:44:03,Spot,Sell,EUR,-100,",
+        "1,2021-05-19 21:44:03,Spot,Buy,ADA,30,",
+        "1,2021-05-19 21:44:03,Spot,Sell,EUR,-38,",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(2);
+      const btc = r.trades.find((t) => t.symbol === "BTC")!;
+      const ada = r.trades.find((t) => t.symbol === "ADA")!;
+      expect(btc.buySell).toBe("BUY");
+      expect(ada.buySell).toBe("BUY");
+      expect(Number(btc.cost)).toBeCloseTo(100, 6);
+      expect(Number(ada.cost)).toBeCloseTo(38, 6);
+      expect(r.trades.some((t) => t.symbol === "EUR")).toBe(false);
+    });
+
+    it("nets same-second multi-fills of the SAME coin into one lot", () => {
+      // 3 partial Buy DOGE fills paying EUR in one second → ONE merged DOGE lot.
+      const csv = [
+        TX_HEADER,
+        "1,2021-04-17 10:08:46,Spot,Buy,DOGE,1.7,",
+        "1,2021-04-17 10:08:46,Spot,Buy,DOGE,43.8,",
+        "1,2021-04-17 10:08:46,Spot,Buy,DOGE,148.5,",
+        "1,2021-04-17 10:08:46,Spot,Sell,EUR,-11.106366,",
+        "1,2021-04-17 10:08:46,Spot,Sell,EUR,-0.430984,",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(1);
+      expect(r.trades[0]!.symbol).toBe("DOGE");
+      expect(Number(r.trades[0]!.quantity)).toBeCloseTo(194, 6);
+      expect(Number(r.trades[0]!.cost)).toBeCloseTo(11.53735, 5);
+    });
+
+    it("parses plain SPOT Buy/Sell from a SPANISH-header transaction file", () => {
+      const csv = [
+        "ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación",
+        "1,21-05-01 10:00:00,Spot,Buy,DOGE,250,",
+        "1,21-05-01 10:00:00,Spot,Sell,EUR,-11.75,",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(1);
+      expect(r.trades[0]!.symbol).toBe("DOGE");
+      expect(r.trades[0]!.buySell).toBe("BUY");
+      expect(r.trades[0]!.currency).toBe("EUR");
+      expect(r.trades[0]!.tradeDate).toBe("20210501");
+    });
+
+    it("pairs a 'Sell Crypto to Fiat' whose EUR and crypto legs are 1 second apart", () => {
+      // The real file shows the EUR leg at :27 and the crypto leg at :28.
+      const csv = [
+        TX_HEADER,
+        "1,2025-04-10 13:55:27,Spot,Sell Crypto to Fiat,EUR,100.3,Via CashBalance - Wallet/N1",
+        "1,2025-04-10 13:55:28,Spot,Sell Crypto to Fiat,XRP,-39.4,Via CashBalance - Wallet/N1",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(1);
+      expect(r.trades[0]!.symbol).toBe("XRP");
+      expect(r.trades[0]!.buySell).toBe("SELL");
+      expect(Number(r.trades[0]!.proceeds)).toBeCloseTo(100.3, 6);
+    });
+
+    it("drops a same-coin spot-buy fee (Fee DOGE on Buy DOGE) without disturbing the EUR cost", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2021-05-01 10:00:00,Spot,Buy,DOGE,250,",
+        "1,2021-05-01 10:00:00,Spot,Sell,EUR,-11.75,",
+        "1,2021-05-01 10:00:00,Spot,Fee,DOGE,-0.25,",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(1);
+      expect(Number(r.trades[0]!.cost)).toBeCloseTo(11.75, 6); // unchanged by the dropped fee
+      expect(r.trades[0]!.commission).toBe("0");
+    });
+
+    it("attaches a stablecoin fee to the permuta leg priced in that stablecoin", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2024-02-01 09:00:00,Spot,Buy,SOL,3,",
+        "1,2024-02-01 09:00:00,Spot,Sell,USDT,-300,",
+        "1,2024-02-01 09:00:00,Spot,Fee,USDT,-0.3,",
+      ].join("\n");
+      const r = binanceParser.parse(csv);
+      const usdtLeg = r.trades.find((t) => t.commissionCurrency === "USDT");
+      expect(usdtLeg).toBeDefined();
+      expect(Number(usdtLeg!.commission)).toBeCloseTo(-0.3, 6);
+    });
+
+    it("drops a negative Commission History (clawback), neither income nor trade", () => {
+      const csv = [TX_HEADER, "1,2025-06-01 00:00:00,Spot,Commission History,USDT,-5,Affiliate"].join("\n");
+      const r = binanceParser.parse(csv);
+      expect(r.trades).toHaveLength(0);
+      expect(r.cashTransactions).toHaveLength(0);
+    });
+
     it("REGRESSION: spot 'Buy' and Strategy 'Transaction Buy' are distinct, never cross-classified", () => {
       const csv = [
         TX_HEADER,

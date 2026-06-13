@@ -196,6 +196,26 @@ describe("Binance plain SPOT trades → FIFO lots end-to-end (the ~€200 acquis
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("88.25");
   });
 
+  it("a coin bought via Convert is later sold via Sell Crypto to Fiat with a real cost basis (phases compose)", () => {
+    // Lot created by phase 4 (Convert, paying USDT) and consumed by phase 6
+    // (Sell Crypto to Fiat → EUR). Proves the new spot phase composes with the
+    // pre-existing convert path — no sin-lotes, cost = the permuta acquisition value.
+    const csv = [
+      TX,
+      "1,2024-01-10 10:00:00,Spot,Binance Convert,SOL,3,",
+      "1,2024-01-10 10:00:00,Spot,Binance Convert,USDT,-300,",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,SOL,-3,Via CashBalance - Wallet/NZ",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,EUR,600,Via CashBalance - Wallet/NZ",
+    ].join("\n");
+    const rateMap = makeRateMap({ "2024-01-10": { USD: "0.9" }, "2025-03-01": { EUR: "1" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    // cost ≈ 300 USDT × 0.9 = €270; proceeds €600.
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("270.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("600.00");
+  });
+
   it("Commission History income lands in base general (Casilla 0304), valued via USD rate", () => {
     // USDT normalizes to USD → key the rate map on USD, never USDT.
     const csv = [TX, "1,2025-06-01 00:00:00,Spot,Commission History,USDT,10,Affiliate"].join("\n");
