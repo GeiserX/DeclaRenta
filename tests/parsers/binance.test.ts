@@ -741,6 +741,54 @@ describe("binanceParser", () => {
       const result = binanceParser.parse(csv);
       expect(result.cashTransactions).toHaveLength(1);
     });
+
+    it("drops a row with an unparseable timestamp instead of mis-grouping it (txEpoch NaN guard)", () => {
+      // The empty-UTC_Time Convert leg has no real epoch. If txEpoch returned 0
+      // (the old bug), it would falsely sit within the ±1s window of unrelated
+      // rows and could mis-pair. With the NaN sentinel it is dropped+counted, so
+      // ONLY the valid same-second SOL↔USDT permuta emits (2 legs), and the bad
+      // row never cross-pairs with the BTC Convert.
+      const csv = [
+        TX_HEADER,
+        "1,2025-01-04 11:20:13,Spot,Binance Convert,SOL,10,",
+        "1,2025-01-04 11:20:13,Spot,Binance Convert,USDT,-200,",
+        "1,,Spot,Binance Convert,BTC,0.01,", // malformed: empty timestamp
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // Only the valid permuta → exactly 2 trades; the BTC ghost leg is gone.
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades.some((t) => t.symbol === "BTC")).toBe(false);
+      // Surfaced exactly once with the right count.
+      const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.message).toContain("1 fila");
+    });
+
+    it("keeps the row order deterministic when a bad timestamp is interleaved (comparator not NaN-poisoned)", () => {
+      // A NaN epoch in the sort comparator would give undefined order and could
+      // break the contiguous-window invariant for the VALID rows. The dropped bad
+      // row must leave the two real same-second permutas fully intact (4 legs),
+      // proving valid grouping is unaffected and the count is right (2 dropped).
+      const csv = [
+        TX_HEADER,
+        "1,not-a-date,Spot,Binance Convert,BTC,0.01,", // malformed: textual garbage
+        "1,2025-02-01 09:00:00,Spot,Binance Convert,SOL,5,",
+        "1,2025-02-01 09:00:00,Spot,Binance Convert,USDT,-100,",
+        "1,2025-03-15 14:30:00,Spot,Binance Convert,ETH,2,",
+        "1,2025-03-15 14:30:00,Spot,Binance Convert,USDT,-300,",
+        "1,2025-03-15,Spot,Binance Convert,DOGE,50,", // malformed: date with no time → regex miss
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      // Both valid permutas emit (2 legs each); neither malformed row appears.
+      expect(result.trades).toHaveLength(4);
+      expect(result.trades.some((t) => t.symbol === "BTC")).toBe(false);
+      expect(result.trades.some((t) => t.symbol === "DOGE")).toBe(false);
+      expect(result.trades.filter((t) => t.symbol === "SOL")).toHaveLength(1);
+      expect(result.trades.filter((t) => t.symbol === "ETH")).toHaveLength(1);
+      const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
+      expect(msg!.message).toContain("2 filas");
+    });
   });
 
   describe("transaction history — plain SPOT trades (Buy/Sell/Fee, Sell Crypto to Fiat)", () => {

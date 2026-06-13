@@ -13,7 +13,7 @@
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
-import type { ManualRateQuote } from "../types/tax.js";
+import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
 import { parseCsvLine, stripBom, toFiniteDecimal } from "./csv-utils.js";
 
@@ -315,10 +315,21 @@ interface TxRow {
   parsed: boolean;
 }
 
-/** Parse "YYYY-MM-DD HH:MM:SS" / "YY-MM-DD HH:MM:SS" to epoch seconds (UTC). */
+/**
+ * Parse "YYYY-MM-DD HH:MM:SS" / "YY-MM-DD HH:MM:SS" to epoch seconds (UTC).
+ *
+ * Hard Trace (regex-miss degeneration): returns `NaN` — NOT `0` — when the
+ * timestamp can't be parsed. The ±1s window phases (collectWindow) compare
+ * epochs; a row that fell back to `0` would falsely sit within 1s of every
+ * other unparseable row AND drive the forward-scan toward O(n²)/mis-grouping.
+ * `NaN` is an explicit out-of-band sentinel: it never compares within a window
+ * (every `>` / `<=` against NaN is false — see collectWindow's `> 1` test),
+ * and collectRows both sorts it deterministically and drops+counts it, so a
+ * timestamp-less row can never be silently clustered with real rows.
+ */
 function txEpoch(utcTime: string): number {
   const m = utcTime.trim().match(/^(\d{2,4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return 0;
+  if (!m) return NaN;
   let year = Number(m[1]);
   if (year < 100) year += 2000;
   return Math.floor(
@@ -362,7 +373,12 @@ function collectWindow(rows: TxRow[], startIdx: number, predicate: (r: TxRow) =>
   const window: TxRow[] = [];
   for (let j = startIdx; j < rows.length; j++) {
     const r = rows[j]!;
-    if (r.epoch - start.epoch > 1) break;
+    // A NaN epoch (unparseable timestamp) is OUT of every window: `diff > 1` is
+    // false for NaN (it would NOT break — driving an O(n²) full-scan), so test
+    // for it explicitly. collectRows already drops NaN-epoch rows, so this is a
+    // defensive backstop that keeps the window contiguous even if one slips in.
+    const diff = r.epoch - start.epoch;
+    if (Number.isNaN(diff) || diff > 1) break;
     if (!r.parsed && predicate(r)) window.push(r);
   }
   return window;
@@ -384,6 +400,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const manualRateHints: ManualRateQuote[] = [];
   /** Shared accumulator: all taxable rows, sorted by (epoch, index) in collectRows. */
   const rows: TxRow[] = [];
+  /** Rows dropped because their UTC_Time was unparseable (counted, surfaced once). */
+  let skippedNoTimestamp = 0;
 
   /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
   function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
@@ -407,9 +425,22 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       const account = (fields[cols.account] ?? "").trim();
       const remark = cols.remark >= 0 ? (fields[cols.remark] ?? "").trim() : "";
 
-      if (!utcTime || !coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
+      // Note: an empty/missing utcTime is NOT short-circuited here — it falls
+      // through to the txEpoch NaN guard below so it's counted+surfaced like any
+      // other unparseable timestamp (a single, uniform code path), never silently
+      // dropped.
+      if (!coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
       // A "--" change (Binance writes this for some zero-fee rows) is not numeric.
       if (changeStr === "--") continue;
+
+      // A row whose UTC_Time can't be parsed has no real epoch. txEpoch returns
+      // NaN (not 0) for it; dropping+counting it here is the safe fix — keeping
+      // it would let the ±1s window phases falsely cluster every NaN-epoch row
+      // together (all "within 1s") and degrade the forward-scan. Count it and
+      // surface ONE info message rather than mis-group it. (Empty/missing
+      // UTC_Time also fails the regex → NaN → handled by this same path.)
+      const epoch = txEpoch(utcTime);
+      if (Number.isNaN(epoch)) { skippedNoTimestamp++; continue; }
 
       let change: Decimal;
       try {
@@ -436,7 +467,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
 
       rows.push({
         utcTime,
-        epoch: txEpoch(utcTime),
+        epoch,
         tradeDate: convertBinanceDate(utcTime),
         operation,
         account,
@@ -450,6 +481,9 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     }
 
     // Stable order by time then file order, so ±1s windows are deterministic.
+    // NaN epochs are dropped above, so (a.epoch - b.epoch) is always a real
+    // number here — a NaN difference would make the comparator non-deterministic
+    // (undefined sort order), defeating the contiguous-window invariant.
     rows.sort((a, b) => (a.epoch - b.epoch) || (a.index - b.index));
   }
 
@@ -591,6 +625,18 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   emitStrategy();
   emitSpot();
 
+  // Surface dropped timestamp-less rows ONCE (info — they were excluded from
+  // every phase, so they can't be silently mis-grouped). Actionable hint per the
+  // three-tier message policy: the usual cause is a corrupted/edited export.
+  const parserMessages: TaxMessage[] = skippedNoTimestamp > 0
+    ? [{
+        id: "binance.unparseable_timestamp",
+        severity: "info",
+        message: `Se ${skippedNoTimestamp === 1 ? "ha omitido 1 fila" : `han omitido ${skippedNoTimestamp} filas`} del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.`,
+        hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
+      }]
+    : [];
+
   return {
     accountId: "",
     fromDate: "",
@@ -602,6 +648,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(manualRateHints.length > 0 ? { manualRateHints } : {}),
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

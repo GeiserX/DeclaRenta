@@ -45,6 +45,13 @@ export default defineConfig({
         main: resolve(__dirname, "src/web/index.html"),
         docs: resolve(__dirname, "src/web/docs.html"),
       },
+      // jspdf lists html2canvas as an OPTIONAL dependency and only `import()`s it
+      // lazily on its `.html()` DOM-to-PDF path — which DeclaRenta never uses (we
+      // build PDFs programmatically via jspdf + jspdf-autotable). Marking it
+      // external drops the ~195KB html2canvas chunk from the web output. The
+      // bare dynamic import left behind is never executed, so the non-.html PDF
+      // generation is unaffected.
+      external: ["html2canvas"],
     },
   },
   server: {

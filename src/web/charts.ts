@@ -9,6 +9,7 @@ import Decimal from "decimal.js";
 import { t } from "../i18n/index.js";
 import { getSavingsBands } from "../engine/tax-brackets.js";
 import { fmtEur } from "./format.js";
+import { assetLabel } from "./asset-labels.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -187,7 +188,7 @@ export function extractChartData(report: {
     byAsset.set(cat, (byAsset.get(cat) ?? 0) + Math.abs(d.proceedsEur.toNumber()));
   }
   const assetDistribution = [...byAsset.entries()].map(([label, value]) => ({
-    label: ASSET_LABELS[label] ?? label,
+    label: assetLabel(label),
     value: new Decimal(value),
   }));
 
@@ -230,16 +231,6 @@ export function extractChartData(report: {
 
   return { assetDistribution, currencyComposition, withholdingsByCountry, monthlyGainLoss };
 }
-
-const ASSET_LABELS: Record<string, string> = {
-  STK: "Acciones",
-  FUND: "Fondos/ETF",
-  OPT: "Opciones",
-  FOP: "Opciones s/ Futuros",
-  FSFOP: "Opciones s/ Futuros",
-  CRYPTO: "Crypto",
-  BOND: "Bonos",
-};
 
 // ---------------------------------------------------------------------------
 // Tax Bracket Stacked Bar + Estimate Card

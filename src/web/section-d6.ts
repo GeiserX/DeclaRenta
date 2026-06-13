@@ -75,6 +75,9 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   </div>`;
 
   // Profile data source
+  // TODO(i18n): "NIF:" / "Tel:" prefixes need keys "d6.profile_nif_prefix" /
+  // "d6.profile_phone_prefix" in all 5 locales (existing config.nif_label is a
+  // full form label, not a short inline prefix) — kept as Spanish literals.
   const profileParts = [
     profile.nif ? `NIF: ${esc(profile.nif)}` : null,
     profile.apellidos || profile.nombre ? `${esc(profile.apellidos)} ${esc(profile.nombre)}`.trim() : null,
@@ -189,6 +192,17 @@ function renderAforixGuide(
   const yearEnd = effectiveYearEnd(year);
   let html = `<div class="filing-guide"><h3>${t("d6.aforix_title")}</h3>`;
 
+  // AFORIX field labels mirror the exact AEAT D-6 form field names, so they
+  // need dedicated keys rather than reusing the looser generic table headers
+  // (e.g. "País emisor" ≠ table.country "País", "Nº títulos" ≠ table.units
+  // "Uds.", "Valor EUR" ≠ table.amount_eur "Importe (EUR)", "Denominación" ≠
+  // table.symbol "Símbolo"). Where an EXACT existing key matches (ISIN, Divisa)
+  // we route through t(); the rest stay Spanish literals until keyed.
+  // TODO(i18n): needs keys "d6.aforix_nif", "d6.aforix_name",
+  // "d6.aforix_year", "d6.aforix_denomination", "d6.aforix_issuer_country",
+  // "d6.aforix_units" and "d6.aforix_value_eur" in all 5 locales — keep the
+  // AEAT field semantics exact, don't reuse table.* keys.
+
   // Declarant info
   html += `<div style="margin-bottom:1rem">`;
   html += aforixField("NIF", profile.nif || "—");
@@ -202,12 +216,12 @@ function renderAforixGuide(
     const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
     const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
-    html += aforixField("ISIN", p.isin);
+    html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
     html += aforixField("Nº títulos", new Decimal(p.quantity).toString());
     html += aforixField("Valor EUR", val);
-    html += aforixField("Divisa", p.currency);
+    html += aforixField(t("table.currency"), p.currency);
   }
 
   html += `</div>`;

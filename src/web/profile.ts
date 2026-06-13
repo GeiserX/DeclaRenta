@@ -6,6 +6,7 @@
  */
 
 import { t } from "../i18n/index.js";
+import { esc } from "./esc.js";
 
 const PROFILE_KEY = "declarenta_profile";
 
@@ -94,10 +95,6 @@ export function validateNif(value: string): boolean {
 export function isProfileComplete(): boolean {
   const p = getProfile();
   return p.nif.trim().length > 0 && p.apellidos.trim().length > 0 && p.nombre.trim().length > 0;
-}
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 /** Initialize the profile form */

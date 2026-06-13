@@ -1,7 +1,33 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { generateModelo721 } from "../../src/generators/modelo721.js";
+import { generateModelo721, buildModelo721Entries } from "../../src/generators/modelo721.js";
 import type { Modelo721Entry } from "../../src/generators/modelo721.js";
+import type { OpenPosition } from "../../src/types/ibkr.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
+
+function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
+  return {
+    accountId: "U111",
+    symbol: "BTC",
+    description: "Bitcoin",
+    isin: "",
+    currency: "USD",
+    assetCategory: "CRYPTO",
+    quantity: "1.5",
+    costBasisMoney: "30000",
+    costBasisPrice: "20000",
+    markPrice: "40000",
+    positionValue: "60000",
+    fifoPnlUnrealized: "30000",
+    fxRateToBase: "1",
+    ...overrides,
+  };
+}
+
+/** date -> currency -> rate (EUR per 1 FCY). */
+function makeRateMap(date: string, rates: Record<string, string>): EcbRateMap {
+  return new Map([[date, new Map(Object.entries(rates))]]);
+}
 
 function makeEntry(overrides: Partial<Modelo721Entry> = {}): Modelo721Entry {
   return {
@@ -163,5 +189,69 @@ describe("Modelo 721 Generator", () => {
       // Valuation sign at position 448 (0-indexed: 447)
       expect(detail[447]).toBe("N");
     });
+  });
+});
+
+describe("buildModelo721Entries — 721 valuation source of truth", () => {
+  const yearEnd = "2025-12-31";
+  // 1 USD = 0.9 EUR for the year-end date.
+  const rateMap = makeRateMap(yearEnd, { USD: "0.9" });
+
+  it("values a crypto position at the year-end ECB rate", () => {
+    const pos = makePosition({ currency: "USD", positionValue: "60000", costBasisMoney: "30000" });
+    const { positions, unvaluedCount, totalValueEur } = buildModelo721Entries([pos], rateMap, yearEnd);
+    expect(positions).toHaveLength(1);
+    expect(unvaluedCount).toBe(0);
+    // 60000 USD * 0.9 = 54000 EUR
+    expect(totalValueEur.toString()).toBe("54000");
+    expect(positions[0]!.valuationEur!.toString()).toBe("54000");
+    expect(positions[0]!.entry.valuationEur.toString()).toBe("54000");
+    // costBasisMoney 30000 USD * 0.9 = 27000 EUR
+    expect(positions[0]!.entry.acquisitionCostEur.toString()).toBe("27000");
+  });
+
+  it("excludes CASH (fiat) positions — those belong in Modelo 720", () => {
+    const crypto = makePosition({ assetCategory: "CRYPTO", currency: "USD" });
+    const cash = makePosition({ assetCategory: "CASH", currency: "USD", symbol: "USD", description: "US Dollar" });
+    const { positions } = buildModelo721Entries([crypto, cash], rateMap, yearEnd);
+    expect(positions).toHaveLength(1);
+    expect(positions[0]!.entry.assetId).toBe("BTC");
+  });
+
+  it("excludes positions with non-positive value", () => {
+    const zero = makePosition({ positionValue: "0" });
+    const negative = makePosition({ positionValue: "-100" });
+    const { positions } = buildModelo721Entries([zero, negative], rateMap, yearEnd);
+    expect(positions).toHaveLength(0);
+  });
+
+  it("counts positions whose currency has no resolvable rate as unvalued (null valuation)", () => {
+    // BTC has no ECB rate → null. USD resolves.
+    const btc = makePosition({ currency: "BTC", symbol: "BTC", description: "Bitcoin", positionValue: "1" });
+    const usdc = makePosition({ currency: "USD", symbol: "ADA", description: "Cardano", positionValue: "1000" });
+    const { positions, unvaluedCount, totalValueEur } = buildModelo721Entries([btc, usdc], rateMap, yearEnd);
+    expect(positions).toHaveLength(2);
+    expect(unvaluedCount).toBe(1);
+    const btcEntry = positions.find((p) => p.entry.assetId === "BTC")!;
+    expect(btcEntry.valuationEur).toBeNull();
+    expect(btcEntry.entry.valuationEur.toString()).toBe("0");
+    expect(btcEntry.entry.acquisitionCostEur.toString()).toBe("0");
+    // Only the resolvable USD position contributes: 1000 * 0.9 = 900
+    expect(totalValueEur.toString()).toBe("900");
+  });
+
+  it("leaves exchange and country blank (never derived from the ISIN prefix)", () => {
+    // An ISIN starting with "US" must NOT leak into exchange/country.
+    const pos = makePosition({ isin: "US0000000000", currency: "USD" });
+    const { positions } = buildModelo721Entries([pos], rateMap, yearEnd);
+    expect(positions[0]!.entry.exchangeName).toBe("");
+    expect(positions[0]!.entry.countryCode).toBe("");
+  });
+
+  it("falls back to description/isin when symbol is empty", () => {
+    const pos = makePosition({ symbol: "", description: "", isin: "CRYPTO-XYZ", currency: "USD" });
+    const { positions } = buildModelo721Entries([pos], rateMap, yearEnd);
+    expect(positions[0]!.entry.assetId).toBe("CRYPTO-XYZ");
+    expect(positions[0]!.entry.description).toBe("CRYPTO-XYZ");
   });
 });

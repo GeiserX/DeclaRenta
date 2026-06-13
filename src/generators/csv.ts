@@ -8,8 +8,11 @@ import type { TaxSummary } from "../types/tax.js";
 import { computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 export function escapeCsv(val: string): string {
-  // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in Excel/Sheets)
-  const safe = /^[\t\r ]*[=+\-@]/.test(val) ? `'${val}` : val;
+  // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in
+  // Excel/Sheets). Leading tab/CR/LF/space are stripped before the dangerous
+  // char is matched, because Excel still interprets a cell like "\n=cmd" or
+  // "\t+..." as a formula after skipping leading control chars.
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(val) ? `'${val}` : val;
   if (/[",\r\n]/.test(safe)) {
     return `"${safe.replace(/"/g, '""')}"`;
   }
@@ -25,7 +28,7 @@ export function formatCsv(report: TaxSummary): string {
   for (const d of report.capitalGains.disposals) {
     lines.push([
       escapeCsv(d.isin), escapeCsv(d.symbol), escapeCsv(d.description),
-      escapeCsv(d.assetCategory), d.acquireDate, d.sellDate,
+      escapeCsv(d.assetCategory), escapeCsv(d.acquireDate), escapeCsv(d.sellDate),
       d.quantity.toString(), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
       d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
       escapeCsv(d.currency), d.acquireEcbRate.toFixed(6), d.sellEcbRate.toFixed(6),
@@ -46,7 +49,7 @@ export function formatCsv(report: TaxSummary): string {
   lines.push("ISIN,Simbolo,Descripcion,Fecha,Bruto_EUR,Retencion_EUR,Pais,Divisa");
   for (const d of report.dividends.entries) {
     lines.push([
-      escapeCsv(d.isin), escapeCsv(d.symbol), escapeCsv(d.description), d.payDate,
+      escapeCsv(d.isin), escapeCsv(d.symbol), escapeCsv(d.description), escapeCsv(d.payDate),
       d.grossAmountEur.toFixed(2), d.withholdingTaxEur.toFixed(2),
       escapeCsv(d.withholdingCountry), escapeCsv(d.currency),
     ].join(","));
@@ -77,7 +80,7 @@ export function formatCsv(report: TaxSummary): string {
     lines.push("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen,Lote_FIFO");
     for (const d of report.fxGains.disposals) {
       lines.push([
-        escapeCsv(d.currency), d.acquireDate, d.disposeDate,
+        escapeCsv(d.currency), escapeCsv(d.acquireDate), escapeCsv(d.disposeDate),
         d.quantity.toFixed(2), d.costBasisEur.toFixed(2), d.proceedsEur.toFixed(2),
         d.gainLossEur.toFixed(2), d.holdingPeriodDays.toString(),
         escapeCsv(d.trigger), escapeCsv(d.lotId),

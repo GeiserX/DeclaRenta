@@ -10,6 +10,9 @@
  */
 
 import Decimal from "decimal.js";
+import type { OpenPosition } from "../types/ibkr.js";
+import type { EcbRateMap } from "../types/ecb.js";
+import { lookupPositionRate } from "../engine/ecb.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -25,6 +28,81 @@ export interface Modelo721Entry {
   valuationEur: Decimal;
   /** Acquisition cost in EUR */
   acquisitionCostEur: Decimal;
+}
+
+/** Crypto asset categories that qualify for Modelo 721 (never CASH — fiat belongs in 720). */
+const CRYPTO_CATEGORIES = new Set(["CRYPTO"]);
+
+/** A valued 721 position plus the per-position EUR valuation for display. */
+export interface Modelo721ValuedPosition {
+  entry: Modelo721Entry;
+  /** Year-end EUR valuation, or null when the currency has no resolvable rate. */
+  valuationEur: Decimal | null;
+}
+
+export interface Modelo721Valuation {
+  positions: Modelo721ValuedPosition[];
+  /** Positions whose currency had no resolvable year-end rate (surfaced for manual valuation). */
+  unvaluedCount: number;
+  /** Sum of all resolvable year-end valuations (EUR). */
+  totalValueEur: Decimal;
+}
+
+/**
+ * Build valued Modelo 721 entries from open positions — the single source of
+ * truth for 721 crypto valuation (web section and any future generator consume this).
+ *
+ * Only `assetCategory === "CRYPTO"` positions with a positive value qualify
+ * (fiat/CASH belongs in Modelo 720). Each position is valued at the year-end
+ * ECB rate via {@link lookupPositionRate}; positions whose currency has no
+ * resolvable rate (e.g. the crypto coin itself) are kept with `valuationEur: null`
+ * and counted in `unvaluedCount` so callers can surface them for manual valuation.
+ *
+ * Exchange name and country code are left blank: open positions carry no reliable
+ * exchange/country data, and deriving them from the ISIN prefix is forbidden for
+ * crypto (Art. — see Modelo 721 Crypto Filtering rules). The acquisition cost is
+ * taken from `costBasisMoney` (already in EUR) when present.
+ */
+export function buildModelo721Entries(
+  openPositions: OpenPosition[],
+  rateMap: EcbRateMap,
+  yearEnd: string,
+): Modelo721Valuation {
+  const positions: Modelo721ValuedPosition[] = [];
+  let unvaluedCount = 0;
+  let totalValueEur = new Decimal(0);
+
+  for (const p of openPositions) {
+    if (!CRYPTO_CATEGORIES.has(p.assetCategory)) continue;
+    if (!new Decimal(p.positionValue).greaterThan(0)) continue;
+
+    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const valuationEur = rate === null ? null : new Decimal(p.positionValue).mul(rate);
+    if (valuationEur === null) {
+      unvaluedCount++;
+    } else {
+      totalValueEur = totalValueEur.plus(valuationEur);
+    }
+
+    const acquisitionCostEur = rate === null
+      ? new Decimal(0)
+      : new Decimal(p.costBasisMoney || "0").mul(rate);
+
+    positions.push({
+      entry: {
+        assetId: p.symbol || p.description || p.isin,
+        description: p.description || p.symbol || p.isin,
+        exchangeName: "",
+        countryCode: "",
+        quantity: new Decimal(p.quantity),
+        valuationEur: valuationEur ?? new Decimal(0),
+        acquisitionCostEur,
+      },
+      valuationEur,
+    });
+  }
+
+  return { positions, unvaluedCount, totalValueEur };
 }
 
 interface Modelo721Config {

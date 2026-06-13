@@ -1221,3 +1221,69 @@ describe("IBKR heterogeneous-order safeguards", () => {
     });
   });
 });
+
+describe("parseIbkrFlexXml — XML entity hardening (XXE / billion-laughs)", () => {
+  it("rejects external-entity (XXE) payloads", () => {
+    // The classic XXE file/SSRF read. fast-xml-parser refuses to resolve
+    // SYSTEM/PUBLIC external entities — uploads can never exfiltrate files.
+    const xml = `<?xml version="1.0"?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<FlexQueryResponse queryName="Test" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="&xxe;" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades /><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>`;
+    expect(() => parseIbkrFlexXml(xml)).toThrow(/external entit/i);
+  });
+
+  it("does not explode a billion-laughs entity bomb", () => {
+    // Nested internal entities are capped by maxExpandedLength/maxEntityCount, so
+    // the deepest reference is never expanded into a multi-megabyte string.
+    const xml = `<?xml version="1.0"?>
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+  <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+  <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+  <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
+]>
+<FlexQueryResponse queryName="Test" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="&lol6;" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades /><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(xml);
+    // accountId must NOT have ballooned into the fully-expanded 10^6 "lol" string.
+    expect(result.accountId.length).toBeLessThan(10000);
+  });
+
+  it("still decodes the 5 predefined XML entities in legitimate fields", () => {
+    // Hardening must not corrupt real data: an ampersand in a description (e.g.
+    // "E-MINI S&P 500") arrives as "&amp;" on the wire and must decode to "&".
+    const xml = `<?xml version="1.0"?>
+<FlexQueryResponse queryName="Test" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades>
+        <Trade tradeID="FUT001" accountId="U1234567" symbol="ESU5"
+               description="E-MINI S&amp;P 500 &lt;CME&gt;" isin="" assetCategory="FUT" currency="USD"
+               tradeDate="20250601" settlementDate="20250601"
+               quantity="1" tradePrice="5500.00" tradeMoney="275000.00"
+               proceeds="275000.00" cost="0" fifoPnlRealized="0"
+               fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
+               exchange="CME" ibCommissionCurrency="USD" ibCommission="-2.10" taxes="0"
+               multiplier="50" />
+      </Trades>
+      <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>`;
+    const result = parseIbkrFlexXml(xml);
+    expect(result.trades[0]!.description).toBe("E-MINI S&P 500 <CME>");
+  });
+});

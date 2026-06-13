@@ -24,6 +24,22 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "",
   parseAttributeValue: false,
+  // XXE / billion-laughs hardening. IBKR Flex XML is user-uploaded and
+  // attacker-influenceable. fast-xml-parser already rejects external entities
+  // (SYSTEM/PUBLIC → "External entities are not supported") regardless of this
+  // option, so the classic XXE file/SSRF read is not reachable. What remains is
+  // internal-entity (billion-laughs) expansion; we pin conservative limits to
+  // bound it explicitly rather than relying on library defaults that a future
+  // bump could relax. NB: a bare `processEntities: false` would ALSO stop
+  // decoding the 5 predefined XML entities (&amp; &lt; &gt; &quot; &apos;) in
+  // fast-xml-parser v5, corrupting legitimate fields like "E-MINI S&amp;P 500";
+  // keeping `enabled: true` preserves that decoding while still capping expansion.
+  processEntities: {
+    enabled: true,
+    maxEntityCount: 1000,
+    maxExpansionDepth: 20,
+    maxExpandedLength: 100000,
+  },
   isArray: (_name, jpath) => {
     const arrayPaths = [
       "FlexQueryResponse.FlexStatements.FlexStatement",

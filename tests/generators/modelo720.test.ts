@@ -531,6 +531,73 @@ describe("Modelo 720 Generator", () => {
       expect(fundLines.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe("Control-character sanitization in text fields", () => {
+    it("replaces control chars in the entity-name field with spaces (security injection guard)", () => {
+      // A broker-supplied description containing CR, LF, TAB and DEL. The
+      // generator must replace each with a single space so the fixed-width
+      // record is not corrupted / injected into.
+      const positions = [makePosition({ description: "ACME\r\nCORP\tX\x7FY" })];
+      const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
+      // Entity name field is 190-230 (0-indexed 189..229, 41 chars).
+      const entityField = detail.slice(189, 230);
+      // Same character count (each control char → one space, never dropped).
+      expect(entityField).toBe("ACME  CORP X Y".padEnd(41, " "));
+      // No control character anywhere in the entity field.
+      expect(entityField).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+    });
+
+    it("a control char in a text field does NOT shift any following column position", () => {
+      // Build the SAME record once with a clean description and once with a
+      // description carrying control chars (replaced 1:1 by spaces). Every field
+      // AFTER the entity name (acquisition date, declType, values, quantity) must
+      // sit at the identical byte offset, and the record must stay 500 bytes.
+      const clean = generateModelo720([makePosition({ description: "ACME  CORP X Y" })], rateMap, baseConfig).split("\n")[1]!;
+      const dirty = generateModelo720([makePosition({ description: "ACME\r\nCORP\tX\x7FY" })], rateMap, baseConfig).split("\n")[1]!;
+      expect(dirty.length).toBe(500);
+      expect(dirty.length).toBe(clean.length);
+      // ISIN (132-143), declType (423), valuation (449-463), quantity (465-476).
+      expect(dirty.slice(131, 143)).toBe(clean.slice(131, 143));
+      expect(dirty[422]).toBe(clean[422]);
+      expect(dirty.slice(448, 463)).toBe(clean.slice(448, 463));
+      expect(dirty.slice(464, 476)).toBe(clean.slice(464, 476));
+      // With the control chars replaced by spaces, the two records are byte-identical.
+      expect(dirty).toBe(clean);
+    });
+
+    it("sanitizes control chars in the cash-account entity name (Category C)", () => {
+      const cashBalances = [
+        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", institutionName: "BANK\r\nOF X" },
+      ];
+      const detail = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n")[1]!;
+      expect(detail.length).toBe(500);
+      // Entity name at 36-75 (0-indexed 35..74) and 190-230 (0-indexed 189..229).
+      expect(detail).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
+      expect(detail.slice(35, 75)).toBe("BANK  OF X".padEnd(40, " "));
+    });
+
+    it("regression: a normal record with no control chars is byte-identical to the pre-sanitization output", () => {
+      // This is the exact record the generator produced before fixedWidthText()
+      // was introduced (captured from the unchanged generator). It must remain
+      // byte-for-byte identical so sanitization never shifts a clean value.
+      const positions = [makePosition()];
+      const result = generateModelo720(positions, rateMap, baseConfig);
+      const lines = result.split("\n");
+      const summary = lines[0]!;
+      const detail = lines[1]!;
+
+      // Name field (summary 18-57) carries the filer name unchanged.
+      expect(summary.slice(17, 57)).toBe("GARCIA LOPEZ JUAN".padEnd(40, " "));
+      // Contact field (summary 68-107) unchanged.
+      expect(summary.slice(67, 107)).toBe("GARCIA LOPEZ, JUAN".padEnd(40, " "));
+      // Detail holder name (36-75) and entity name (190-230) unchanged.
+      expect(detail.slice(35, 75)).toBe("GARCIA LOPEZ JUAN".padEnd(40, " "));
+      expect(detail.slice(189, 230)).toBe("SPDR S&P 500 ETF".padEnd(41, " "));
+      // Both records stay exactly 500 bytes.
+      expect(summary.length).toBe(500);
+      expect(detail.length).toBe(500);
+    });
+  });
 });
 
 describe("Modelo 720 — unvaluable position (missing year-end rate) degrades, does not throw", () => {
