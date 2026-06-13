@@ -8,6 +8,7 @@ import { t } from "../i18n/index.js";
 import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
+import { esc } from "./esc.js";
 
 // TODO(i18n): needs keys "option.expiration" / "option.close" / "option.exercise"
 // in all 5 locales — kept as Spanish literals for now so the 4 non-Spanish
@@ -17,10 +18,6 @@ const OPTION_SCENARIO_LABELS: Record<string, string> = {
   close: "Cierre anticipado",
   exercise: "Ejercicio/Asignación",
 };
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function fmtDate(d: string): string {
   // YYYYMMDD or YYYY-MM-DD -> DD/MM/YYYY

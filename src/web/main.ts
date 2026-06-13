@@ -11,12 +11,13 @@ import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { fetchEcbRates } from "../engine/ecb.js";
+import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
+import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
-import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard, type TaxBaseBreakdown } from "./charts.js";
+import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
@@ -585,6 +586,31 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
 // Step 3: Process
 // ---------------------------------------------------------------------------
 
+/**
+ * Run a section render, surfacing any failure instead of swallowing it. A throw
+ * is logged to the console and shown as a small inline notice inside that
+ * section's content container, so a blank section is never silent. One section
+ * failing must not abort the others or the main flow — hence the local catch.
+ * Only the section id and the error message are logged (never amounts/NIF).
+ */
+function renderSectionSafely(containerId: string, render: () => void): void {
+  try {
+    render();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[DeclaRenta] render failed for #${containerId}:`, msg);
+    const container = document.getElementById(containerId);
+    if (container && !container.querySelector(".section-render-error")) {
+      const notice = document.createElement("div");
+      notice.className = "banner banner-warning section-render-error";
+      // No dedicated locale key exists for a section-render failure (edge/error
+      // path); reuse the existing error prefix + a concise Spanish notice.
+      notice.innerHTML = `<span>${t("error.prefix")}${esc(msg)}</span>`;
+      container.prepend(notice);
+    }
+  }
+}
+
 async function processFiles(): Promise<void> {
   if (!mergedStatement) {
     await parseFiles();
@@ -594,32 +620,37 @@ async function processFiles(): Promise<void> {
   try {
     const merged = mergedStatement;
     const year = activeYear ?? getProfile().year;
-    const currencies = new Set<string>();
-    for (const tr of merged.trades) currencies.add(tr.currency);
-    for (const c of merged.cashTransactions) currencies.add(c.currency);
-    currencies.delete("EUR");
+    // Build the ECB rate map via the shared orchestrator. `deriveEcbNeeds`
+    // (inside buildEcbRateMap) replicates exactly the (currency, year) set this
+    // block used to build by hand: trade + cashTransaction currencies (minus
+    // EUR); every year with a trade OR a cash transaction (cash income can fall
+    // in a year with no trades); the declaration year; and `minYear - 1` for the
+    // 10-day late-December lookback on early-January transactions. The fetched
+    // pair-set is therefore identical to the old inline loop.
+    //
+    // We deliberately do NOT pass `noCache` — ECB rates are immutable historical
+    // data, so the orchestrator's per-(currency, year) memoization makes the
+    // repeated processFiles() runs (year-select change, manual-rate entry,
+    // monodivisa toggle) reuse already-fetched rates instead of refetching
+    // everything each time.
+    const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year });
 
-    const years = new Set(merged.trades.map((tr) => parseInt(tr.tradeDate.slice(0, 4))));
-    // Cash transactions (dividends, interest, crypto reward income) can fall in
-    // a year with NO trades — e.g. USDT Simple Earn interest in a year the user
-    // didn't trade. Their currency's rate must still be fetched for that year,
-    // or valuation throws "No ECB rate found". Add their years too.
-    for (const c of merged.cashTransactions) {
-      const y = parseInt(normalizeDate(c.dateTime).slice(0, 4));
-      if (Number.isFinite(y)) years.add(y);
-    }
-    years.add(year);
-    // Fetch previous year for the earliest year so the 10-day lookback can find
-    // late-December rates for early-January transactions (e.g. Jan 1-2).
-    const minYear = Math.min(...years);
-    years.add(minYear - 1);
-    const allRates: EcbRateMap = new Map();
-    for (const yr of years) {
-      const rates = await fetchEcbRates(yr, [...currencies]);
-      for (const [date, ratesByDate] of rates) {
-        allRates.set(date, ratesByDate);
-      }
-    }
+    // Yield a macrotask so the browser can paint the processing overlay/spinner
+    // (added by the wizardNext handler) BEFORE the heavy synchronous engine run
+    // below. generateTaxReport + renderResults + the 720/721/D-6 renders run
+    // synchronously and would otherwise block the event loop, leaving the
+    // spinner unpainted and the tab visibly frozen.
+    //
+    // DECISION: we intentionally do NOT move the engine into a Web Worker.
+    // generateTaxReport returns a deeply decimal.js-nested TaxSummary, and
+    // Decimal instances do not survive structuredClone across a worker boundary
+    // (they'd deserialize to plain objects, breaking every .toNumber()/.minus()
+    // downstream). Broker files here are KB–MB (the 50 MB cap is only a DoS
+    // guard), and this is a static GitHub Pages SPA where a worker bundle adds
+    // build/deploy complexity for no real-world gain at these data sizes. A
+    // single yield point gives the needed UI responsiveness at zero risk — do
+    // not "upgrade" this into a Worker.
+    await new Promise<void>((r) => setTimeout(r, 0));
 
     const profileForReport = getProfile();
     const report = generateTaxReport(merged, allRates, year, {
@@ -636,10 +667,12 @@ async function processFiles(): Promise<void> {
     unlockStep(3);
     renderResults(report);
 
-    // Render 720 and D-6 sections with processed data (non-blocking)
-    try { renderSection720(merged, allRates); } catch { /* 720 render failed — section stays in empty state */ }
-    try { renderSection721(merged, allRates); } catch { /* 721 render failed — section stays in empty state */ }
-    try { renderSectionD6(merged, allRates); } catch { /* D-6 render failed — section stays in empty state */ }
+    // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
+    // failure in one is logged and shown inline in that section, without
+    // aborting the others or the main flow.
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates));
+    renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
+    renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -805,22 +838,12 @@ function renderResults(report: TaxSummary) {
 
   // Charts
   const chartData = extractChartData(report);
-  // netGainLoss includes wash-sale-blocked losses — add them back so they
-  // don't reduce the taxable base (they are deferred, not deductible now).
-  const taxBaseBreakdown: TaxBaseBreakdown = {
-    capitalGains: report.capitalGains.netGainLoss.toNumber(),
-    fxGains: report.fxGains.netGainLoss.toNumber(),
-    dividends: report.dividends.grossIncome.toNumber(),
-    interest: report.interest.earned.toNumber(),
-    blockedLosses: report.capitalGains.blockedLosses.toNumber(),
-  };
-  const taxableBase = Math.max(0,
-    taxBaseBreakdown.capitalGains
-    + taxBaseBreakdown.blockedLosses
-    + taxBaseBreakdown.fxGains
-    + taxBaseBreakdown.dividends
-    + taxBaseBreakdown.interest
-  );
+  // Taxable-base breakdown + clamped total for the estimate chart. The math
+  // (netGainLoss includes wash-sale-blocked losses, so they're added back —
+  // they're deferred, not deductible now — and the whole sum is clamped at 0)
+  // lives in the shared decimal.js helper so the money math never round-trips
+  // through a lossy Number mid-calculation.
+  const { breakdown: taxBaseBreakdown, taxableBase } = computeTaxableBaseBreakdown(report);
   const dtDeduction = report.doubleTaxation.deduction.toNumber();
   const chartsHtml = [
     renderDonutChart(t("chart.asset_distribution"), chartData.assetDistribution),

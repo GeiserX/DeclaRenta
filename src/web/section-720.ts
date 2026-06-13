@@ -8,15 +8,13 @@
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
-import { checkModelo720Thresholds } from "../generators/modelo720.js";
+import { checkModelo720Thresholds, generateModelo720 } from "../generators/modelo720.js";
+import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
-
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { esc } from "./esc.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -206,7 +204,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
   // Bind generate button
   document.getElementById("m720-generate-btn")?.addEventListener("click", () => {
-    void generate720File();
+    generate720File();
   });
 }
 
@@ -229,7 +227,7 @@ function encodeISO885915(str: string): Uint8Array {
   return bytes;
 }
 
-async function generate720File(): Promise<void> {
+function generate720File(): void {
   if (!cachedStatement || !cachedRateMap) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("m720-content");
@@ -242,8 +240,6 @@ async function generate720File(): Promise<void> {
     return;
   }
 
-  const { generateModelo720 } = await import("../generators/modelo720.js");
-  const { validateModelo720TextFields } = await import("../generators/modelo720-validator.js");
   const profile = getProfile();
   const fullName = `${profile.apellidos} ${profile.nombre}`.trim();
 
