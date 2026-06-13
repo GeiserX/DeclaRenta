@@ -287,6 +287,7 @@ function parseTrCsv(lines: string[]): Statement {
         severity: "info" as const,
         message: `Se ha(n) omitido ${skippedNoAmount} operación(es) de compraventa de Trade Republic sin importe utilizable.`,
         hint: "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
+        context: { count: String(skippedNoAmount) },
       }]
     : [];
 

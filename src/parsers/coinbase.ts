@@ -293,6 +293,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         severity: "info" as const,
         message: `Se han clasificado ${rewardsIncomeCount} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).`,
         hint: "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+        context: { count: String(rewardsIncomeCount) },
       }]
     : undefined;
 

@@ -339,7 +339,7 @@ export class FifoEngine {
     }
     this.lots.get(merger.newIsin)!.push(...newLots);
 
-    this.emit({ id: "fifo.merger_applied", severity: "info", message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`, hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.", context: { oldIsin: merger.oldIsin, newIsin: merger.newIsin, date: merger.date, ratio: `${merger.ratio}:1` } });
+    this.emit({ id: "fifo.merger_applied", severity: "info", message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`, hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.", context: { oldIsin: merger.oldIsin, newIsin: merger.newIsin, date: merger.date, ratio: `${merger.ratio}:1`, lotsTransferred: String(oldLots.length) } });
   }
 
   private applySpinOff(spinOff: { date: string; parentIsin: string; newIsin: string; newSymbol: string; newDescription: string; ratio: number; costFraction: number }): void {
@@ -380,7 +380,7 @@ export class FifoEngine {
     }
     this.lots.get(spinOff.newIsin)!.push(...newLots);
 
-    this.emit({ id: "fifo.spinoff_applied", severity: "info", message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`, hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.", context: { parentIsin: spinOff.parentIsin, newIsin: spinOff.newIsin, date: spinOff.date, ratio: `${spinOff.ratio}:1` } });
+    this.emit({ id: "fifo.spinoff_applied", severity: "info", message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`, hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.", context: { parentIsin: spinOff.parentIsin, newIsin: spinOff.newIsin, date: spinOff.date, ratio: `${spinOff.ratio}:1`, costPercent: (spinOff.costFraction * 100).toFixed(0) } });
   }
 
   /**

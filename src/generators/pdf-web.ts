@@ -2,6 +2,7 @@ import type { TaxSummary } from "../types/tax.js";
 import type Decimal from "decimal.js";
 import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
+import { localizeMessage, localizeHint } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
@@ -312,7 +313,8 @@ export async function generatePdfWebReport(
       doc.setFontSize(7);
       for (const m of items) {
         doc.setTextColor(...color);
-        const text = m.message + (m.hint ? ` → ${m.hint}` : "");
+        const hint = localizeHint(m);
+        const text = localizeMessage(m) + (hint ? ` → ${hint}` : "");
         const lines = doc.splitTextToSize(text, CONTENT_W) as string[];
         const blockH = lines.length * 4;
         if (wy + blockH > PAGE_H - MARGIN - 20) { doc.addPage(); wy = MARGIN + 10; }

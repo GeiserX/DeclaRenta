@@ -480,6 +480,7 @@ export function generateTaxReport(
       severity: "warning",
       message: cryptoMsg,
       hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+      context: { count: String(unresolvableInterest) },
     });
     allWarnings.push(cryptoMsg);
   }
@@ -491,6 +492,7 @@ export function generateTaxReport(
       severity: "warning",
       message: ggMsg,
       hint: "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
+      context: { count: String(unresolvableGeneralGains) },
     });
     allWarnings.push(ggMsg);
   }
@@ -502,7 +504,7 @@ export function generateTaxReport(
       severity: "info",
       message: `Los importes mostrados están divididos entre ${titulares} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los ${titulares} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.`,
       hint: `El reparto a partes iguales (${titulares} × ${(100 / titulares).toFixed(titulares === 3 ? 2 : 0)} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.`,
-      context: { titulares: String(titulares) },
+      context: { titulares: String(titulares), percent: (100 / titulares).toFixed(titulares === 3 ? 2 : 0) },
     });
   }
 

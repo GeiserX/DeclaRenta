@@ -7,7 +7,7 @@
 
 import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
-import { t } from "../i18n/index.js";
+import { t, localizeMessage, localizeHint } from "../i18n/index.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
@@ -370,21 +370,21 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
   if (errors.length > 0) {
     messagesHtml += `<div class="msg-section msg-error" role="alert">
       <div class="msg-header"><span class="msg-icon" role="img" aria-label="${esc(t("messages.errors_title", { count: String(errors.length) }))}">⛔</span> ${t("messages.errors_title", { count: String(errors.length) })}</div>
-      <ul>${errors.map((e) => `<li>${esc(e.message)}${e.hint ? `<span class="msg-hint">${esc(e.hint)}</span>` : ""}</li>`).join("")}</ul>
+      <ul>${errors.map((e) => { const h = localizeHint(e); return `<li>${esc(localizeMessage(e))}${h ? `<span class="msg-hint">${esc(h)}</span>` : ""}</li>`; }).join("")}</ul>
     </div>`;
   }
 
   if (warns.length > 0) {
     messagesHtml += `<details class="msg-section msg-warning" open>
       <summary><span class="msg-icon">⚠️</span> ${t("messages.warnings_title", { count: String(warns.length) })}</summary>
-      <ul>${warns.map((w) => `<li>${esc(w.message)}${w.hint ? `<span class="msg-hint">${esc(w.hint)}</span>` : ""}</li>`).join("")}</ul>
+      <ul>${warns.map((w) => { const h = localizeHint(w); return `<li>${esc(localizeMessage(w))}${h ? `<span class="msg-hint">${esc(h)}</span>` : ""}</li>`; }).join("")}</ul>
     </details>`;
   }
 
   if (infos.length > 0) {
     messagesHtml += `<details class="msg-section msg-info">
       <summary><span class="msg-icon">ℹ️</span> ${t("messages.info_title", { count: String(infos.length) })}</summary>
-      <ul>${infos.map((i) => `<li>${esc(i.message)}${i.hint ? `<span class="msg-hint">${esc(i.hint)}</span>` : ""}</li>`).join("")}</ul>
+      <ul>${infos.map((i) => { const h = localizeHint(i); return `<li>${esc(localizeMessage(i))}${h ? `<span class="msg-hint">${esc(h)}</span>` : ""}</li>`; }).join("")}</ul>
     </details>`;
   }
 

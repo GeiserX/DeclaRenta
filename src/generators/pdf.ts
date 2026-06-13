@@ -10,6 +10,7 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
+import { localizeMessage } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
@@ -258,7 +259,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         for (const m of report.messages.slice(0, 20)) {
           const prefix = m.severity === "error" ? "⛔ " : m.severity === "warning" ? "⚠ " : "ℹ ";
           const color = m.severity === "error" ? COLORS.accent : COLORS.muted;
-          doc.fontSize(FONT_SIZE.small).fillColor(color).text(prefix + m.message, MARGIN);
+          doc.fontSize(FONT_SIZE.small).fillColor(color).text(prefix + localizeMessage(m), MARGIN);
           doc.moveDown(0.2);
         }
       }
