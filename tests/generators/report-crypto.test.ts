@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
+import { binanceParser } from "../../src/parsers/binance.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -156,5 +157,72 @@ describe("generateTaxReport — crypto↔crypto permutas", () => {
     expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("277.50");   // NOT €21.9M
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("297.97");
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("20.47");          // NOT −€35M
+  });
+});
+
+describe("Binance plain SPOT trades → FIFO lots end-to-end (the ~€200 acquisition bug)", () => {
+  const TX = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+
+  function binanceToStatement(csv: string): FlexStatement {
+    const p = binanceParser.parse(csv);
+    return {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades: p.trades, cashTransactions: p.cashTransactions,
+      corporateActions: [], openPositions: [], securitiesInfo: [],
+      ...(p.manualRateHints ? { manualRateHints: p.manualRateHints } : {}),
+    };
+  }
+
+  it("THE BUG: a 2021 spot Buy (EUR) gives a lot the 2025 Sell consumes — no sin-lotes, real cost basis", () => {
+    // Reproduces the user's symptom: spot buys were dropped → 2025 sell had cost
+    // basis 0 → acquisition value collapsed to ~€200. Now the lot is found.
+    const csv = [
+      TX,
+      "1,2021-05-01 10:00:00,Spot,Buy,DOGE,250,",
+      "1,2021-05-01 10:00:00,Spot,Sell,EUR,-11.75,",
+      "1,2021-05-01 10:00:00,Spot,Fee,DOGE,-0.25,",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,DOGE,-250,Via CashBalance - Wallet/NX",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,EUR,100,Via CashBalance - Wallet/NX",
+    ].join("\n");
+    const rateMap = makeRateMap({ "2021-05-01": { EUR: "1" }, "2025-03-01": { EUR: "1" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    // The regression guard: NO "Venta sin lotes" (the user's exact error).
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    // Acquisition = the real EUR paid in 2021 (11.75), NOT 0 (the ~€200 collapse).
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("11.75");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("100.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("88.25");
+  });
+
+  it("a coin bought via Convert is later sold via Sell Crypto to Fiat with a real cost basis (phases compose)", () => {
+    // Lot created by phase 4 (Convert, paying USDT) and consumed by phase 6
+    // (Sell Crypto to Fiat → EUR). Proves the new spot phase composes with the
+    // pre-existing convert path — no sin-lotes, cost = the permuta acquisition value.
+    const csv = [
+      TX,
+      "1,2024-01-10 10:00:00,Spot,Binance Convert,SOL,3,",
+      "1,2024-01-10 10:00:00,Spot,Binance Convert,USDT,-300,",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,SOL,-3,Via CashBalance - Wallet/NZ",
+      "1,2025-03-01 12:00:00,Spot,Sell Crypto to Fiat,EUR,600,Via CashBalance - Wallet/NZ",
+    ].join("\n");
+    const rateMap = makeRateMap({ "2024-01-10": { USD: "0.9" }, "2025-03-01": { EUR: "1" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    // cost ≈ 300 USDT × 0.9 = €270; proceeds €600.
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("270.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("600.00");
+  });
+
+  it("Commission History income lands in base general (Casilla 0304), valued via USD rate", () => {
+    // USDT normalizes to USD → key the rate map on USD, never USDT.
+    const csv = [TX, "1,2025-06-01 00:00:00,Spot,Commission History,USDT,10,Affiliate"].join("\n");
+    const rateMap = makeRateMap({ "2025-06-01": { USD: "0.93" } });
+    const report = generateTaxReport(binanceToStatement(csv), rateMap, 2025);
+    // 10 USDT × 0.93 = 9.30 EUR as a general gain; not interest, not a disposal.
+    expect(report.generalGains.total.toFixed(2)).toBe("9.30");
+    expect(report.capitalGains.disposals).toHaveLength(0);
   });
 });

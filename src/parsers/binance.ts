@@ -14,7 +14,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote } from "../types/tax.js";
-import { isFiat } from "../engine/ecb.js";
+import { isFiat, isEcbResolvable } from "../engine/ecb.js";
 import { parseCsvLine, stripBom } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -246,6 +246,7 @@ const TX_INCOME_GENERAL_OPS = new Set([
   "referral commission",
   "referral kickback",
   "commission rebate",
+  "commission history",
   "commission fee shared with you",
   "strategy trading fee rebate",
   "hodler airdrops distribution",
@@ -276,6 +277,26 @@ const TX_CONVERT_OPS = new Set([
   "binance convert",
   "buy crypto with fiat",
 ]);
+
+/**
+ * Plain SPOT-market trade legs (the older / "Generate all statements" vocabulary,
+ * distinct from the `Transaction *` Strategy vocabulary). A spot trade is a group
+ * of same-timestamp rows: `Buy <received +>` + `Sell <given-up −>` + optional
+ * `Fee` + (the income `Referral Commission` may share the timestamp but is already
+ * consumed by the income phase). `Sell Crypto to Fiat` is the cash-out flow
+ * (`<crypto −>` + `<EUR +>`). All are paired by SIGN (not op name — `Sell` is the
+ * given-up leg of BOTH a buy and a sell), netted per coin, and routed through the
+ * same emitCryptoSwap path as Convert: a fiat leg → a single fiat-priced trade; a
+ * crypto-only pair → a permuta. Without this, a user's spot buys create no FIFO
+ * lot and later sells fabricate phantom "Venta sin lotes" (cost basis 0).
+ */
+const SPOT_TRADE_OPS = new Set([
+  "buy",
+  "sell",
+  "sell crypto to fiat",
+]);
+/** The spot trading-commission leg (kept separate: attached as commission, not paired). */
+const SPOT_FEE_OP = "fee";
 
 interface TxRow {
   utcTime: string;
@@ -518,6 +539,25 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     emitStrategyTrades(trades, window, addHint);
   }
 
+  // 6. Plain SPOT trades (Buy/Sell/Fee, Sell Crypto to Fiat) within ±1s. Runs
+  //    AFTER income (phase 2), so a same-timestamp Referral Commission is already
+  //    consumed and never swept into the trade window. Legs are paired by SIGN
+  //    (netLegs/pairAndEmit), not op name, because `Sell` is the given-up leg of
+  //    both a buy and a sale. Fees are pulled aside and attached, not paired.
+  for (let i = 0; i < rows.length; i++) {
+    const start = rows[i]!;
+    if (start.parsed) continue;
+    if (!SPOT_TRADE_OPS.has(start.operation) && start.operation !== SPOT_FEE_OP) continue;
+    const window: TxRow[] = [];
+    for (let j = i; j < rows.length; j++) {
+      const r = rows[j]!;
+      if (r.epoch - start.epoch > 1) break;
+      if (r.parsed) continue;
+      if (SPOT_TRADE_OPS.has(r.operation) || r.operation === SPOT_FEE_OP) window.push(r);
+    }
+    emitSpotTrades(trades, window, addHint);
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -748,6 +788,115 @@ function applyFee(trades: Trade[], feeAmount: Decimal, feeCoin: string): void {
   const last = trades[trades.length - 1]!;
   last.commission = feeAmount.neg().toString();
   last.commissionCurrency = feeCoin;
+}
+
+/**
+ * Emit plain SPOT trades from a ±1s window of `Buy`/`Sell`/`Sell Crypto to Fiat`
+ * (+ `Fee`) rows. Pairs by SIGN via netLegs/pairAndEmit (the same path as Convert),
+ * so a fiat leg yields a single fiat-priced trade and a crypto-only pair yields a
+ * permuta. `Sell Crypto to Fiat` carries a unique funding-wallet Remark per cash-out,
+ * so those rows are sub-grouped by Remark first (two same-second cash-outs of
+ * different coins each get their own EUR leg, never merged). Bare `Buy`/`Sell` have
+ * an empty Remark; their same-second multi-fills are of the SAME bought coin paying
+ * the SAME fiat, so per-coin netting is correct. Fees are attached to the matching
+ * emitted trade; a fee in a coin with no ECB rate (e.g. BNB third-coin fee) is
+ * dropped as immaterial dust, consistent with the `BNB Fee Deduction` policy.
+ */
+function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): void {
+  window.forEach((r) => (r.parsed = true));
+  const fees = window.filter((r) => r.operation === SPOT_FEE_OP && !r.change.isZero());
+  const tradeRows = window.filter((r) => r.operation !== SPOT_FEE_OP);
+
+  // Sub-group so unrelated legs never net together. `Sell Crypto to Fiat` carries a
+  // unique funding-wallet Remark per cash-out → key by it (namespaced so an EMPTY
+  // remark can't collide with bare Buy/Sell). Bare `Buy`/`Sell` share one bucket.
+  const byRemark = new Map<string, TxRow[]>();
+  for (const r of tradeRows) {
+    const key = r.operation === "sell crypto to fiat" ? `scf:${r.remark}` : "spot:";
+    if (!byRemark.has(key)) byRemark.set(key, []);
+    byRemark.get(key)!.push(r);
+  }
+
+  const before = trades.length;
+  for (const group of byRemark.values()) {
+    emitBareSpotGroup(trades, group, addHint);
+  }
+
+  // Attach each fee to the emitted trade whose coin matches the fee coin. The FIFO
+  // engine homogenizes a commission to EUR via its ECB rate, so only a fee in a
+  // genuinely ECB-resolvable coin (fiat or stablecoin) can be valued — attach those
+  // (a fiat/stablecoin sell/buy fee correctly adjusts cost/proceeds, Art. 35.1.b/35.2,
+  // DGT V1604-18). A fee in a non-resolvable coin (a BNB third-coin fee, or the bought
+  // alt-coin itself) has no EUR rate and is sub-cent dust → drop it, consistent with the
+  // `BNB Fee Deduction` policy; dropping a buy fee only understates cost → overstates
+  // gain (conservative, never underpays). Fees ACCUMULATE (a trade can carry several
+  // partial-fill fee rows). The `before` scope confines matching to THIS window's trades.
+  for (const f of fees) {
+    if (!isEcbResolvable(f.coin)) continue; // crypto/dust fee — immaterial, no rate
+    const feeAmount = f.change.abs();
+    const target = trades.slice(before).reverse().find(
+      (t) => t.symbol === f.coin || t.currency === f.coin,
+    );
+    if (target) {
+      const prior = new Decimal(target.commission || "0"); // emitCryptoSwap sets "0"
+      target.commission = prior.minus(feeAmount).toString();
+      target.commissionCurrency = f.coin;
+    }
+  }
+}
+
+/**
+ * Emit the trades for one spot sub-group, pairing received (positive) legs with
+ * given-up (negative) legs. Same-coin multi-fills are netted per coin first.
+ *
+ * The hazard this guards against (the documented lot-drop bug): when TWO different
+ * coins are bought in the same second BOTH paying the same fiat (e.g. `Buy BTC` +
+ * `Buy ADA` + two `Sell EUR`), a single `netLegs`+`pairAndEmit` would merge the two
+ * EUR sells into one leg → 1 sell vs 2 buys → `pairAndEmit` drops a coin's lot (the
+ * very phantom "Venta sin lotes" this parser exists to prevent). So when >1 distinct
+ * coin is received against a single given-up fiat, we pair each received coin with an
+ * individual given-up leg BY ORDER (the real export lists N buys against N sells), and
+ * never drop: every bought coin keeps a real, non-zero cost basis. The aggregate fiat
+ * spent is exact; only the per-coin split is approximate when the export doesn't link
+ * order-to-order — acceptable, and vastly better than a cost-basis-0 phantom gain.
+ */
+function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): void {
+  const recv = netLegs(rows.filter((r) => r.change.isPositive())).sort((a, b) => a.index - b.index);
+  const give = netLegs(rows.filter((r) => r.change.isNegative())).sort((a, b) => a.index - b.index);
+
+  // One (or zero) received coin, or a multi-currency given-up side → the existing
+  // closest-EUR pairing is correct (and merges same-coin multi-fills cleanly).
+  const giveSingleFiat = give.length === 1 && isFiat(give[0]!.coin);
+  if (recv.length <= 1 || !giveSingleFiat) {
+    pairAndEmit(trades, [...give, ...recv], addHint, "Spot");
+    return;
+  }
+
+  // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them
+  // so none is dropped: 1:1 by order when the export gives one fiat row per coin (the
+  // common case), else an equal split of the netted fiat as a conservative fallback.
+  const fiatRows = rows
+    .filter((r) => r.change.isNegative() && isFiat(r.coin))
+    .sort((a, b) => a.index - b.index);
+  if (fiatRows.length === recv.length) {
+    for (let k = 0; k < recv.length; k++) {
+      const r = recv[k]!;
+      const g = fiatRows[k]!;
+      const sell: NetLeg = { coin: g.coin, qty: g.change, eur: g.eurValue, date: g.tradeDate, index: g.index };
+      addHint(sell.coin, sell.date, sell.qty, sell.eur);
+      addHint(r.coin, r.date, r.qty, r.eur);
+      emitCryptoSwap(trades, sell, r, "Spot");
+    }
+    return;
+  }
+  // Count mismatch (rare): split the total fiat equally across the received coins.
+  const totalFiat = give[0]!.qty; // negative
+  const share = totalFiat.div(recv.length);
+  for (const r of recv) {
+    const sell: NetLeg = { coin: give[0]!.coin, qty: share, eur: null, date: give[0]!.date, index: give[0]!.index };
+    addHint(r.coin, r.date, r.qty, r.eur);
+    emitCryptoSwap(trades, sell, r, "Spot");
+  }
 }
 
 // ---------------------------------------------------------------------------
