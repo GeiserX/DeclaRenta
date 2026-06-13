@@ -407,16 +407,73 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.trigger).toBe("dividend");
     });
 
-    it("should extract withholding tax as negative FX event (disposing FCY)", () => {
+    it("should NOT emit an FX disposal for withholding tax (pago a cuenta, issue #225)", () => {
+      // A withholding with no matching same-(currency,date) income is an orphan
+      // (cross-date reclaim, or income outside the file) — it must never create a
+      // disposal. The withheld FCY never entered the taxpayer's spendable balance.
       const txs = [{
         transactionID: "2", accountId: "U1", symbol: "AAPL", description: "US WHT",
         isin: "US0378331005", currency: "USD", dateTime: "20250315",
         settleDate: "20250317", amount: "-15", fxRateToBase: "0.92", type: "Withholding Tax" as const,
       }];
       const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("should net withholding into the dividend lot — one NET event, no disposal (issue #225)", () => {
+      // USD dividend gross 100 + withholding 15 on the same date → ONE acquisition
+      // lot for the net 85 (the FCY actually received), and NO negative/disposal
+      // event for the withholding.
+      const txs = [
+        {
+          transactionID: "1", accountId: "U1", symbol: "AAPL", description: "AAPL dividend",
+          isin: "US0378331005", currency: "USD", dateTime: "20250315",
+          settleDate: "20250317", amount: "100", fxRateToBase: "0.92", type: "Dividends" as const,
+        },
+        {
+          transactionID: "2", accountId: "U1", symbol: "AAPL", description: "US WHT",
+          isin: "US0378331005", currency: "USD", dateTime: "20250315",
+          settleDate: "20250317", amount: "-15", fxRateToBase: "0.92", type: "Withholding Tax" as const,
+        },
+      ];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
       expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("-15");
+      expect(events[0]!.quantity.toString()).toBe("85");
       expect(events[0]!.trigger).toBe("dividend");
+      expect(events.some((e) => e.quantity.isNegative())).toBe(false);
+    });
+
+    it("should net interest withholding too (withholding on credit interest)", () => {
+      // IBKR also withholds on credit interest ("WITHHOLDING ON CREDIT INT") — a
+      // pago a cuenta just like dividend withholding → net it, no disposal.
+      const txs = [
+        {
+          transactionID: "3", accountId: "U1", symbol: "", description: "USD Interest",
+          isin: "", currency: "USD", dateTime: "20250315",
+          settleDate: "20250317", amount: "25", fxRateToBase: "0.92", type: "Broker Interest Received" as const,
+        },
+        {
+          transactionID: "3w", accountId: "U1", symbol: "", description: "WITHHOLDING ON CREDIT INT",
+          isin: "", currency: "USD", dateTime: "20250315",
+          settleDate: "20250317", amount: "-5", fxRateToBase: "0.92", type: "Withholding Tax" as const,
+        },
+      ];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("20");
+      expect(events[0]!.trigger).toBe("interest");
+    });
+
+    it("should treat a positive withholding (refund) as FCY received, not a disposal", () => {
+      const txs = [{
+        transactionID: "2r", accountId: "U1", symbol: "AAPL", description: "WHT refund",
+        isin: "US0378331005", currency: "USD", dateTime: "20250315",
+        settleDate: "20250317", amount: "3", fxRateToBase: "0.92", type: "Withholding Tax" as const,
+      }];
+      const events = FxFifoEngine.extractCashFxEvents(txs, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("3");
+      expect(events.some((e) => e.quantity.isNegative())).toBe(false);
     });
 
     it("should extract interest received as positive FX event", () => {
