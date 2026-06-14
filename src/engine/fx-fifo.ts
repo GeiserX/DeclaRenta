@@ -355,6 +355,18 @@ export class FxFifoEngine {
     for (const d of disposals) {
       if (d.currency === "EUR") continue;
       if (!SECURITY_CATEGORIES.has(d.assetCategory)) continue; // exclude crypto permutas, options/FOP, CASH conversions
+      // A SHORT close (BUY+C covering a SELL+O) must NOT seed a lot here. Its
+      // FifoDisposal carries the OPEN proceeds (the FCY received when the short
+      // was opened, possibly a prior year) but is dated at the CLOSE — and a
+      // cover SPENDS foreign currency to buy the shares back, it does not receive
+      // it. Booking an acquisition lot at the close date/rate for the gross open
+      // proceeds would mis-date, mis-rate, and over-state held FCY (a phantom lot
+      // that could absorb unrelated later conversions at a fabricated basis).
+      // A short's divisa leg is genuinely different (the inflow is at open, the
+      // outflow at close); the long-side full-proceeds model can't represent it,
+      // so we skip it. A later conversion of the real short profit then hits the
+      // conservative missing-lot floor (gain = 0) rather than a fabricated gain.
+      if (d.isShort) continue;
       if (!isEcbResolvable(d.currency)) continue;               // genuine fiat FCY only
       if (!d.proceedsFcy.greaterThan(0)) continue;              // skip non-positive (defensive)
       events.push({
