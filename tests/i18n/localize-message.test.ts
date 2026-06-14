@@ -22,11 +22,11 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         // The engine's Spanish fallback — must be IGNORED because the id is a known key.
-        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 37.1.l LIRPF).",
+        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       };
       const out = localizeMessage(m);
       expect(out).toBe(
-        "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 37.1.l LIRPF).",
+        "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
       );
       // Crucially NOT the Spanish fallback.
       expect(out).not.toBe(m.message);
@@ -35,7 +35,7 @@ describe("localizeMessage / localizeHint", () => {
     it("renders the Spanish locale text (byte-identical to the engine) when locale is es", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
-        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 37.1.l LIRPF).",
+        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       };
       // es locale text equals the engine's emitted Spanish message exactly.
       expect(localizeMessage(m)).toBe(m.message);

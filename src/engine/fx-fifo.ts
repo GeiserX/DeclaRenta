@@ -13,7 +13,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { FxLot, FxDisposal, FxTrigger, TaxMessage } from "../types/tax.js";
+import type { FxLot, FxDisposal, FxTrigger, FifoDisposal, TaxMessage } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, isEcbResolvable, lookupRateInMap } from "./ecb.js";
@@ -278,6 +278,105 @@ export class FxFifoEngine {
       }
     }
 
+    return events;
+  }
+
+  /**
+   * Extract FX ACQUISITION events from the foreign-currency PROCEEDS of stock
+   * (security) sales — the divisa-side effect of selling a foreign-currency
+   * security, deferred to its eventual conversion to euros (issue #230, "Model D").
+   *
+   * WHY THIS EXISTS — the two FIFO engines are decoupled. The stock FIFO
+   * (fifo.ts) converts a security's gain at the disposal-date rate (V2422-20),
+   * which deliberately STRIPS the buy↔sale FX drift out of the stock gain so the
+   * currency can be taxed separately as its own patrimonial element (Art. 33.1
+   * LIRPF). But selling a foreign-currency stock is exactly how the taxpayer
+   * ACQUIRES that foreign currency: sell a $1200 USD stock and you now hold $1200
+   * of real dollars. Until this producer existed, that inflow created no FX lot,
+   * so a later USD→EUR conversion had nothing to consume and the currency drift
+   * went untaxed. This method feeds those proceeds into the FX FIFO as an
+   * acquisition lot so the eventual conversion correctly taxes the EUR/FX gain.
+   *
+   * FULL NET PROCEEDS, NOT THE GAIN (load-bearing fiscal decision). The lot
+   * quantity is `proceedsFcy` — the WHOLE amount of foreign currency received
+   * (already net of commission and taxes per fifo.ts), NOT `gainLossFcy`. The
+   * dollars you receive selling a $1200 stock are $1200 of real currency, not the
+   * $200 profit; sizing the lot to the gain would track only a fraction of the
+   * currency actually held and systematically UNDER-declare the later FX gain.
+   *
+   * GAINS AND LOSSES ALIKE — no forced disposal, no "destruction". The stock's
+   * P&L sign is irrelevant to the currency received: a loss-making sale still
+   * hands you dollars. So a sale produces an acquisition lot whether the stock
+   * made a profit or a loss. There is NO disposal emitted here and nothing is
+   * destroyed on a loss — this is purely an ACQUISITION producer.
+   *
+   * NO BUY-SIDE HANDLING — buys neither create nor consume FX lots here. A stock
+   * PURCHASE spends foreign currency, but per the FX-engine simplification
+   * (v0.39.2) securities trades do not emit implicit FX disposals (that produced
+   * phantom gains from missing prior-year lots and double-counted the broker's
+   * AFx settlement). Symmetrically, only the SALE side is modelled — as a pure
+   * positive (acquisition) event. The existing `processEvents` routes positive
+   * quantities to `addLot`; this producer emits nothing negative.
+   *
+   * DEFERRED TO CONVERSION (Art. 14.2.e LIRPF; DGT V2422-20 / V1613-25 /
+   * V0463-21). Receiving the foreign currency is NOT itself a taxable event for
+   * the divisa — the FX gain crystallizes only on the effective conversion to
+   * euros (cobro/pago). So this method only ADDS a lot; the gain is realized
+   * later when a conversion disposal consumes it. With no subsequent conversion,
+   * the lot simply sits in the queue and is never taxed — exactly the deferral
+   * the law requires.
+   *
+   * V2324-10 SYMMETRIC CRITERION. DGT V2324-10 confirms FIFO for foreign currency
+   * as a homogeneous patrimonial element. We apply the SAME resolvability and
+   * category filter on the producer side as the consumer side uses, so a currency
+   * we would track on conversion is the same set we create lots for on a sale —
+   * no asymmetry that could orphan a conversion against a missing acquisition.
+   *
+   * WHY PHANTOM/ORPHAN LOTS ARE BENIGN. Because `processEvents` consumes
+   * FIFO-oldest-first and a missing-lot disposal is floored to a zero FX gain
+   * (the "sin lotes previos" path, never a fabricated profit), an extra
+   * acquisition lot from a sale can only ever (a) be matched by a real later
+   * conversion — the intended behavior — or (b) sit unconsumed and untaxed
+   * (correct deferral). It can never manufacture a phantom gain.
+   *
+   * Events returned here are designed to be concatenated into the SAME
+   * `processEvents` call as the conversion/dividend/interest events, so the
+   * stock-sale acquisition lots are present in the FIFO queue by the time a later
+   * USD→EUR conversion disposal consumes them.
+   */
+  static extractStockProceedsFxEvents(disposals: FifoDisposal[]): FxEvent[] {
+    const events: FxEvent[] = [];
+    // Only genuine securities produce a foreign-currency cash inflow we track as
+    // divisa. CRYPTO is excluded (a crypto↔crypto permuta's proceedsFcy is in a
+    // coin, not fiat — handled by the crypto valuation path); OPT/FOP/FSFOP and
+    // CASH conversions are excluded too (the latter are already the FX engine's
+    // own conversion events — including them here would double-count).
+    const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
+    for (const d of disposals) {
+      if (d.currency === "EUR") continue;
+      if (!SECURITY_CATEGORIES.has(d.assetCategory)) continue; // exclude crypto permutas, options/FOP, CASH conversions
+      // A SHORT close (BUY+C covering a SELL+O) must NOT seed a lot here. Its
+      // FifoDisposal carries the OPEN proceeds (the FCY received when the short
+      // was opened, possibly a prior year) but is dated at the CLOSE — and a
+      // cover SPENDS foreign currency to buy the shares back, it does not receive
+      // it. Booking an acquisition lot at the close date/rate for the gross open
+      // proceeds would mis-date, mis-rate, and over-state held FCY (a phantom lot
+      // that could absorb unrelated later conversions at a fabricated basis).
+      // A short's divisa leg is genuinely different (the inflow is at open, the
+      // outflow at close); the long-side full-proceeds model can't represent it,
+      // so we skip it. A later conversion of the real short profit then hits the
+      // conservative missing-lot floor (gain = 0) rather than a fabricated gain.
+      if (d.isShort) continue;
+      if (!isEcbResolvable(d.currency)) continue;               // genuine fiat FCY only
+      if (!d.proceedsFcy.greaterThan(0)) continue;              // skip non-positive (defensive)
+      events.push({
+        date: normalizeDate(d.sellDate),
+        currency: d.currency,
+        quantity: d.proceedsFcy,        // FULL net proceeds in FCY (already net of commission/taxes)
+        ecbRate: d.sellEcbRate,         // sale-date ECB rate
+        trigger: "stock_sale",
+      });
+    }
     return events;
   }
 

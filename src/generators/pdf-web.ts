@@ -103,7 +103,7 @@ export async function generatePdfWebReport(
     casillasBody.push(["0331", t("casilla.listed_acquisition_value"),  eur(blocks.listedShares.acquisitionValue)]);
   }
 
-  // Otros elementos: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l) → 1633/1637
+  // Otros elementos: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 33.1) → 1633/1637
   if (blocks.otherElements.count > 0) {
     casillasBody.push(["1633", t("casilla.other_transmission_value"), eur(blocks.otherElements.transmissionValue)]);
     casillasBody.push(["1637", t("casilla.other_acquisition_value"),  eur(blocks.otherElements.acquisitionValue)]);

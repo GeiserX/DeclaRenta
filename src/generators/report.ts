@@ -414,8 +414,14 @@ export function generateTaxReport(
       };
     });
 
-  // 4. FX gains (Art. 37.1.l LIRPF — currency conversions as taxable events)
-  // FXCONV/AFx trades filtered per-trade by isFxconv(); securities trades don't generate FX events
+  // 4. FX gains (Art. 33.1 LIRPF — la divisa es un elemento patrimonial:
+  //    ganancia = valor de transmisión − valor de adquisición; NOT Art. 37.1.l,
+  //    que regula "incorporaciones que no derivan de una transmisión"). Timing
+  //    per Art. 14.2.e (la ganancia se imputa en la conversión efectiva a euros);
+  //    DGT V2422-20 / V2324-10. THREE event sources feed the FX FIFO engine:
+  //    explicit CASH conversions, dividend/interest FCY inflows, and (issue #230)
+  //    foreign-stock sale proceeds. FXCONV/AFx trades filtered per-trade by
+  //    isFxconv(); only manual CASH/income/stock-proceeds events accrue FCY lots.
   // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
@@ -427,7 +433,14 @@ export function generateTaxReport(
     const fxEngine = new FxFifoEngine();
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
-    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents]);
+    // Foreign-stock sale proceeds (issue #230): a FCY security disposal injects the
+    // full net proceeds as an acquisition lot at the sale-date rate. Use the FULL,
+    // unfiltered, unsplit, pre-wash-sale disposals across ALL years (FX lots must
+    // accrue before consumption) — NOT the year-filtered/titulares-split `disposals`.
+    // These events produce no disposals themselves; only a later USD→EUR conversion
+    // consumes them (deferred per Art. 14.2.e). FX disposals are split at splitFxDisposal.
+    const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
+    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents, ...stockProceedsFxEvents]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
@@ -513,7 +526,7 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.competitor_reconciliation",
       severity: "info",
-      message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 37.1.l LIRPF).",
+      message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
     });
   }

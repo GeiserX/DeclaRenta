@@ -492,7 +492,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       // Acciones negociadas en mercados regulados (Art. 37.1.a LIRPF)
       "0328_valor_transmision_acciones": blocks.listedShares.transmissionValue.toFixed(2),
       "0331_valor_adquisicion_acciones": blocks.listedShares.acquisitionValue.toFixed(2),
-      // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l)
+      // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 33.1)
       "1633_valor_transmision_otros": blocks.otherElements.transmissionValue.toFixed(2),
       "1637_valor_adquisicion_otros": blocks.otherElements.acquisitionValue.toFixed(2),
       "0588_deduccion_doble_imposicion": report.doubleTaxation.deduction.toFixed(2),
@@ -567,7 +567,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   }
   if (blocks.otherElements.count > 0) {
     console.error("");
-    console.error("  OTROS ELEMENTOS PATRIMONIALES — opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 37.1.l)");
+    console.error("  OTROS ELEMENTOS PATRIMONIALES — opciones/cripto/fondos (Art. 37.1.m) + divisa (Art. 33.1)");
     console.error(`    Casilla 1633 (Valor transmisión):  ${blocks.otherElements.transmissionValue.toFixed(2)} EUR`);
     console.error(`    Casilla 1637 (Valor adquisición):  ${blocks.otherElements.acquisitionValue.toFixed(2)} EUR`);
     console.error(`    Ganancia/Pérdida neta:             ${blocks.otherElements.netGainLoss.toFixed(2)} EUR`);

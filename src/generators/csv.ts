@@ -76,7 +76,7 @@ export function formatCsv(report: TaxSummary): string {
 
   // FX gains section
   if (report.fxGains.disposals.length > 0) {
-    lines.push("# GANANCIAS FX (Art. 37.1.l LIRPF)");
+    lines.push("# GANANCIAS FX (Art. 33.1 LIRPF)");
     lines.push("Divisa,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Origen,Lote_FIFO");
     for (const d of report.fxGains.disposals) {
       lines.push([
@@ -91,7 +91,7 @@ export function formatCsv(report: TaxSummary): string {
 
   // Summary section. "Otros elementos patrimoniales" (1633/1637) combines
   // non-listed disposals (options, crypto, funds) and foreign-currency gains
-  // (Art. 37.1.l) — the FX merge is owned by computeCasillaBlocksWithFx().
+  // (Art. 33.1) — the FX merge is owned by computeCasillaBlocksWithFx().
   const blocks = computeCasillaBlocksWithFx(report);
   lines.push("# RESUMEN CASILLAS");
   lines.push("Casilla,Concepto,Valor_EUR");

@@ -14,7 +14,7 @@
  *       0339 = Suma de ganancias  /  0340 = Suma de pérdidas
  *
  *  2. "Otros elementos patrimoniales" (página 17 I) — options (Art. 37.1.m),
- *     crypto, non-listed funds, and foreign-currency gains (Art. 37.1.l):
+ *     crypto, non-listed funds, and foreign-currency gains (Art. 33.1):
  *       1626 = Tipo de elemento patrimonial. Clave (use 5 = otros elementos no afectos)
  *       1633 = Valor de transmisión
  *       1637 = Valor de adquisición
@@ -125,7 +125,7 @@ export function computeCasillaBlocks(disposals: FifoDisposal[]): CasillaBlocks {
  * `report.fxGains.*` to `otherElements` by hand, which is easy to get wrong and
  * drifts between formats.
  *
- * FX gains (Art. 37.1.l LIRPF) are reported in the same 1633/1637 block as
+ * FX gains (Art. 33.1 LIRPF) are reported in the same 1633/1637 block as
  * options/crypto/non-listed funds (Art. 37.1.m). `listedShares` is returned
  * unchanged.
  */
