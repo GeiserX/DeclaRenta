@@ -319,7 +319,7 @@ export interface TaxSummary {
   };
 }
 
-/** A single lot in the FX FIFO queue (Art. 37.1.l LIRPF) */
+/** A single lot in the FX FIFO queue (Art. 33.1 LIRPF) */
 export interface FxLot {
   id: string;
   currency: string;
@@ -331,8 +331,8 @@ export interface FxLot {
   costInEur: Decimal;
 }
 
-/** What triggered an FX disposal */
-export type FxTrigger = "conversion" | "dividend" | "interest" | "commission";
+/** What triggered an FX event (acquisition or disposal of foreign currency) */
+export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_sale";
 
 /** Result of consuming FX lots via FIFO for a currency disposal */
 export interface FxDisposal {

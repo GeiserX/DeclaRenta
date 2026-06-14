@@ -248,7 +248,7 @@ const CASILLAS: CasillaConfig[] = [
     visible: (_r, blocks) => blocks.listedShares.count > 0,
   },
   // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa
-  // (Art. 37.1.l) → 1633/1637. The FX merge is owned by computeCasillaBlocksWithFx().
+  // (Art. 33.1) → 1633/1637. The FX merge is owned by computeCasillaBlocksWithFx().
   {
     code: "1633",
     i18nKey: "casilla.other_transmission_value",

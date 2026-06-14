@@ -239,7 +239,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       continue;
     }
 
-    // FX conversions → CASH trades for the FX FIFO engine (Art. 37.1.l LIRPF)
+    // FX conversions → CASH trades for the FX FIFO engine (Art. 33.1 LIRPF)
     // Lightyear emits a pair: one leg per currency (e.g. USD +64.50, EUR -59.24).
     // Positive gross = acquiring that currency (BUY), negative = spending it (SELL).
     if (txType === "conversion") {
