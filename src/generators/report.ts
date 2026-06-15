@@ -418,10 +418,15 @@ export function generateTaxReport(
   //    ganancia = valor de transmisión − valor de adquisición; NOT Art. 37.1.l,
   //    que regula "incorporaciones que no derivan de una transmisión"). Timing
   //    per Art. 14.2.e (la ganancia se imputa en la conversión efectiva a euros);
-  //    DGT V2422-20 / V2324-10. THREE event sources feed the FX FIFO engine:
-  //    explicit CASH conversions, dividend/interest FCY inflows, and (issue #230)
-  //    foreign-stock sale proceeds. FXCONV/AFx trades filtered per-trade by
-  //    isFxconv(); only manual CASH/income/stock-proceeds events accrue FCY lots.
+  //    DGT V2422-20 / V2324-10. FOUR event sources feed the FX FIFO engine in one
+  //    processEvents call: explicit CASH conversions, dividend/interest FCY
+  //    inflows, and (issue #230, carry-basis-defer model) foreign-stock BUYS and
+  //    SELLS. A stock BUY silently CONSUMES the FCY it spends from the pool and
+  //    PARKS the carried basis; a stock SELL re-adds that principal at its carried
+  //    basis plus the profit at the sale rate. Neither a buy nor a sell emits an
+  //    FX disposal — only a real FCY→EUR conversion realizes the deferred gain.
+  //    FXCONV/AFx trades filtered per-trade by isFxconv(); only manual CASH/income
+  //    events and tracked stock round-trips accrue/move FCY lots.
   // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
@@ -433,14 +438,19 @@ export function generateTaxReport(
     const fxEngine = new FxFifoEngine();
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
-    // Foreign-stock sale proceeds (issue #230): a FCY security disposal injects the
-    // full net proceeds as an acquisition lot at the sale-date rate. Use the FULL,
-    // unfiltered, unsplit, pre-wash-sale disposals across ALL years (FX lots must
-    // accrue before consumption) — NOT the year-filtered/titulares-split `disposals`.
-    // These events produce no disposals themselves; only a later USD→EUR conversion
-    // consumes them (deferred per Art. 14.2.e). FX disposals are split at splitFxDisposal.
+    // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
+    // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
+    // stock SELL re-adds that principal at its carried basis plus the profit at the
+    // sale rate. The BUY producer reads the FULL, unfiltered, all-year
+    // `statement.trades` (a buy must park before its matching sell re-adds — the
+    // 4-phase + date sort in processEvents handles same-day ordering); the SELL
+    // producer reads the FULL, unsplit, pre-wash-sale disposals across ALL years —
+    // NOT the year-filtered/titulares-split `disposals`. Neither emits a disposal;
+    // only a later USD→EUR conversion realizes the deferred gain (Art. 14.2.e). FX
+    // disposals are year-filtered below and split at splitFxDisposal.
+    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap);
     const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
-    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents, ...stockProceedsFxEvents]);
+    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...stockProceedsFxEvents]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 

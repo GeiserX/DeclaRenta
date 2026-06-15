@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -175,16 +176,26 @@ describe("issue #230 e2e: USD stock sale + later USD→EUR conversion → FX gai
   });
 
   it("realizes the deferred FX gain on the conversion (1633/1637)", () => {
-    expect(report.fxGains.disposals.length).toBeGreaterThan(0);
-    // The conversion disposal consumes the stock-sale acquisition lot.
-    const conv = report.fxGains.disposals.find((d) => d.trigger === "conversion")!;
-    expect(conv).toBeDefined();
-    expect(conv.currency).toBe("USD");
-    expect(conv.disposeDate).toBe("2024-09-10");
-    expect(conv.acquireDate).toBe("2024-06-20"); // the sale-date lot, not the buy date
-    expect(conv.proceedsEur.toFixed(2)).toBe("21000.00");
-    expect(conv.costBasisEur.toFixed(2)).toBe("19000.00");
-    expect(conv.gainLossEur.toFixed(2)).toBe("2000.00");
+    // The conversion consumes the FCY re-added by the sell. Under the carry-basis
+    // model an UNCOVERED buy (no tracked EUR→USD funding here) parks the $15 000
+    // principal at the sale rate and the $5 000 profit at the sale rate, so the
+    // sell re-adds TWO same-rate (0.95) lots; the conversion therefore produces
+    // two "conversion" disposals (€15 750 + €5 250) summing to the same €21 000 /
+    // €19 000 / €2 000 the single-lot model produced. Assert on the SUM, not on a
+    // single .find()-ed row — the per-disposal split is the intended carry-basis
+    // granularity; the aggregate is what the casilla pins (next test).
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    expect(convs.length).toBeGreaterThan(0);
+    for (const c of convs) {
+      expect(c.currency).toBe("USD");
+      expect(c.disposeDate).toBe("2024-09-10");
+      expect(c.acquireDate).toBe("2024-06-20"); // the sale-date lot, not the buy date
+    }
+    const sum = (pick: (d: typeof convs[number]) => Decimal) =>
+      convs.reduce((s, d) => s.plus(pick(d)), new Decimal(0));
+    expect(sum((d) => d.proceedsEur).toFixed(2)).toBe("21000.00");
+    expect(sum((d) => d.costBasisEur).toFixed(2)).toBe("19000.00");
+    expect(sum((d) => d.gainLossEur).toFixed(2)).toBe("2000.00");
   });
 
   it("pins the FX casilla totals: 1633 = 21000.00, 1637 = 19000.00, net = 2000.00", () => {

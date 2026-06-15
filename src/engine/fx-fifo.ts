@@ -19,16 +19,63 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, isEcbResolvable, lookupRateInMap } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
 
+/**
+ * One foreign-currency event fed to {@link FxFifoEngine.processEvents}.
+ *
+ * ENCODING (three shapes share this one interface, discriminated by `kind`):
+ *
+ *  1. ACQUIRE/DISPOSE (the original shape; `kind` absent). Signed `quantity`
+ *     drives it: positive = acquiring FCY (EUR→FCY conversion, dividend, interest
+ *     received) → a pool lot; negative = disposing FCY (FCY→EUR conversion, fee,
+ *     interest paid) → consume the pool FIFO and realize an FX gain (emits a
+ *     FxDisposal). `commissionEur` adjusts the EUR cost/proceeds. UNCHANGED — all
+ *     existing producers (extractFxEvents, extractCashFxEvents) still emit this.
+ *
+ *  2. STOCK_BUY (`kind: "stock_buy"`). The divisa-side of a foreign-currency
+ *     stock PURCHASE: it spends `costFcy` of foreign currency. It silently
+ *     CONSUMES that `costFcy` from the pool FIFO and PARKS the carried basis
+ *     inside the open position (any shortfall parks "uncovered"). It realizes NO
+ *     gain and emits NO disposal. `quantity` is unused (set to 0) — the amount
+ *     spent is `costFcy`.
+ *
+ *  3. STOCK_SELL (`kind: "stock_sell"`). The divisa-side of a foreign-currency
+ *     stock SALE: it received `proceedsFcy`, of which `costFcy` is the principal
+ *     that had been parked at the matching buy. It re-adds the carried principal
+ *     (up to the proceeds) plus the profit at the sale rate. It emits NO disposal
+ *     — the FX gain defers to the eventual EUR conversion. `quantity` is unused.
+ *
+ * Buys/sells never appear as a signed `quantity`, so the existing positive/
+ * negative routing in processEvents is untouched by them — they are dispatched
+ * solely on `kind`. See the carry-basis-defer doc on processEvents.
+ */
 export interface FxEvent {
   date: string;
   currency: string;
-  /** Positive = acquiring FCY (EUR→FCY), Negative = disposing FCY (FCY→EUR or FCY spent) */
+  /**
+   * For acquire/dispose events (kind absent): Positive = acquiring FCY (EUR→FCY),
+   * Negative = disposing FCY (FCY→EUR or FCY spent). For stock_buy/stock_sell the
+   * spent/received amounts live in costFcy/proceedsFcy and this is unused (0).
+   */
   quantity: Decimal;
   /** EUR rate at event time (EUR per 1 FCY) */
   ecbRate: Decimal;
   trigger: FxTrigger;
   /** Commission in EUR (positive = cost paid). Increases cost basis on BUY, reduces proceeds on SELL. */
   commissionEur?: Decimal;
+  /**
+   * Discriminator for the carry-basis stock events. Absent → a plain
+   * acquire/dispose driven by signed `quantity` (the original behavior).
+   */
+  kind?: "stock_buy" | "stock_sell";
+  /**
+   * Stock buy/sell: the foreign-currency PRINCIPAL of the position. On a buy it
+   * is the FCY cash outflow consumed from the pool and parked; on a sell it is
+   * the parked principal pulled back and re-added (the part of the proceeds that
+   * is "the same dollars" returning, not new profit).
+   */
+  costFcy?: Decimal;
+  /** Stock sell only: the total FCY received (principal + profit). */
+  proceedsFcy?: Decimal;
 }
 
 export class FxFifoEngine {
@@ -47,25 +94,77 @@ export class FxFifoEngine {
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
   /**
+   * PARKED FIFO per currency — the foreign-currency PRINCIPAL currently locked
+   * inside OPEN foreign-stock positions, carrying its EUR acquisition basis.
+   *
+   * A stock BUY moves `costFcy` out of the spendable pool (`this.lots`) and into
+   * here, preserving each consumed pool lot's `rate` (EUR per 1 FCY). A `rate` of
+   * `null` is an "uncovered" parking: the FCY the buy spent had no tracked
+   * acquisition lot (funding outside the data window — AFx settlement, a
+   * single-year export), so there is no basis to carry; a later sell re-adds that
+   * portion at the SALE rate, which is exactly what reproduces the pre-#230
+   * full-proceeds behavior (the funding-absent no-op safety property).
+   *
+   * Transient, like `fxMissing`: cleared at the start of every processEvents run.
+   * Whatever stays parked at the end is principal in positions still open at the
+   * period boundary — correctly never converted, never taxed.
+   */
+  private parked: Map<string, { q: Decimal; rate: Decimal | null }[]> = new Map();
+
+  /**
+   * Same-day processing phase (CRITICAL ordering). Generalizes the original
+   * 2-phase "acquisitions before disposals" sort to 4 phases so the carry-basis
+   * stock events interleave correctly when they fall on the same date:
+   *
+   *   (0) pool ACQUISITIONS — positive non-stock (conversion-in / dividend /
+   *       interest received). FCY must be in the pool before a buy can spend it.
+   *   (1) STOCK_BUY — park/consume. Removes spent FCY from the pool and parks it.
+   *   (2) STOCK_SELL — re-add. A same-day sell of a just-bought position needs the
+   *       buy's parked principal already present (1 < 2).
+   *   (3) DISPOSALS — negative non-stock (conversion-out / fee / interest paid). A
+   *       same-day conversion must see the sell's re-added proceeds (2 < 3).
+   *
+   * EQUIVALENCE TO THE OLD SORT: with NO stock events, only phases 0 and 3 occur,
+   * and 0 < 3 reproduces "positive (acquire) before negative (dispose)" exactly —
+   * so CASH-only / dividend-only / interest-only flows are byte-identical. Verified
+   * by the existing fx-fifo / cash / conversion suites staying green.
+   */
+  private static phaseOf(event: FxEvent): number {
+    if (event.kind === "stock_buy") return 1;
+    if (event.kind === "stock_sell") return 2;
+    return event.quantity.greaterThan(0) ? 0 : 3;
+  }
+
+  /**
    * Process FX events extracted from trades.
    * CASH trades with assetCategory="CASH" that represent actual forex conversions
    * (not automatic FXCONV) generate FX lots and disposals.
+   *
+   * Carry-basis-defer model (issue #230 follow-up). The full event set is the
+   * concatenation of conversion, dividend/interest, stock-buy and stock-sell
+   * producers, processed in (date, phase) order — see {@link phaseOf}. Only the
+   * acquire/dispose (signed-quantity) events emit FxDisposals; stock buys/sells
+   * move principal between the spendable pool and the parked FIFO and realize
+   * nothing (the divisa gain defers to the conversion that consumes the pool).
    */
   processEvents(events: FxEvent[]): FxDisposal[] {
     this.fxMissing.clear();
+    this.parked.clear();
     const sorted = [...events].sort((a, b) => {
       const cmp = a.date.localeCompare(b.date);
       if (cmp !== 0) return cmp;
-      // Same date: acquisitions (positive qty) before disposals (negative qty)
-      const aPhase = a.quantity.greaterThan(0) ? 0 : 1;
-      const bPhase = b.quantity.greaterThan(0) ? 0 : 1;
-      return aPhase - bPhase;
+      // Same date: 4-phase rank (acquire < stock_buy < stock_sell < dispose).
+      return FxFifoEngine.phaseOf(a) - FxFifoEngine.phaseOf(b);
     });
 
     for (const event of sorted) {
       if (event.currency === "EUR") continue;
 
-      if (event.quantity.greaterThan(0)) {
+      if (event.kind === "stock_buy") {
+        this.parkPrincipal(event);
+      } else if (event.kind === "stock_sell") {
+        this.unparkAndReadd(event);
+      } else if (event.quantity.greaterThan(0)) {
         this.addLot(event);
       } else if (event.quantity.lessThan(0)) {
         this.consumeLots(event);
@@ -282,67 +381,55 @@ export class FxFifoEngine {
   }
 
   /**
-   * Extract FX ACQUISITION events from the foreign-currency PROCEEDS of stock
-   * (security) sales — the divisa-side effect of selling a foreign-currency
-   * security, deferred to its eventual conversion to euros (issue #230, "Model D").
+   * Extract the SELL-side carry-basis FX events from foreign-currency stock
+   * (security) disposals — the divisa-side effect of SELLING a foreign-currency
+   * security under the carry-basis-defer model (issue #230 follow-up, supersedes
+   * the v0.49.0 full-proceeds model).
    *
    * WHY THIS EXISTS — the two FIFO engines are decoupled. The stock FIFO
    * (fifo.ts) converts a security's gain at the disposal-date rate (V2422-20),
-   * which deliberately STRIPS the buy↔sale FX drift out of the stock gain so the
-   * currency can be taxed separately as its own patrimonial element (Art. 33.1
-   * LIRPF). But selling a foreign-currency stock is exactly how the taxpayer
-   * ACQUIRES that foreign currency: sell a $1200 USD stock and you now hold $1200
-   * of real dollars. Until this producer existed, that inflow created no FX lot,
-   * so a later USD→EUR conversion had nothing to consume and the currency drift
-   * went untaxed. This method feeds those proceeds into the FX FIFO as an
-   * acquisition lot so the eventual conversion correctly taxes the EUR/FX gain.
+   * deliberately STRIPPING the buy↔sale FX drift out of the stock gain so the
+   * currency is taxed separately as its own patrimonial element (Art. 33.1
+   * LIRPF). Selling a foreign-currency stock returns the dollars that were
+   * spent buying it (the principal) plus a profit/loss; those dollars must
+   * re-enter the divisa pool so a later USD→EUR conversion taxes the right FX
+   * gain. The matching BUY removed (parked) that principal — see
+   * {@link extractStockPurchaseFxEvents}; this method re-adds it.
    *
-   * FULL NET PROCEEDS, NOT THE GAIN (load-bearing fiscal decision). The lot
-   * quantity is `proceedsFcy` — the WHOLE amount of foreign currency received
-   * (already net of commission and taxes per fifo.ts), NOT `gainLossFcy`. The
-   * dollars you receive selling a $1200 stock are $1200 of real currency, not the
-   * $200 profit; sizing the lot to the gain would track only a fraction of the
-   * currency actually held and systematically UNDER-declare the later FX gain.
+   * CARRY-BASIS, NOT FULL PROCEEDS (the v0.49.0 → follow-up correction). The old
+   * model pushed the WHOLE `proceedsFcy` as a fresh acquisition lot at the sale
+   * rate and did NO buy-side accounting. Across multiple same-currency
+   * round-trips the FX FIFO balance DIVERGED from the real spendable balance and
+   * a later conversion consumed the wrong "oldest" dollars (proven: €450 reported
+   * vs €320 correct on a two-round-trip account, off by €130). The fix splits the
+   * proceeds into PRINCIPAL (`costBasisFcy`) re-added at its CARRIED basis (set by
+   * the buy that parked it) and PROFIT (`proceedsFcy − costBasisFcy`, when
+   * positive) added at the sale rate. So this method emits a `stock_sell` event
+   * carrying BOTH `costFcy` (= `costBasisFcy`) and `proceedsFcy`; the parked-FIFO
+   * re-add logic lives in {@link unparkAndReadd}.
    *
-   * GAINS AND LOSSES ALIKE — no forced disposal, no "destruction". The stock's
-   * P&L sign is irrelevant to the currency received: a loss-making sale still
-   * hands you dollars. So a sale produces an acquisition lot whether the stock
-   * made a profit or a loss. There is NO disposal emitted here and nothing is
-   * destroyed on a loss — this is purely an ACQUISITION producer.
+   * GAINS AND LOSSES ALIKE, STILL NO DISPOSAL. The stock P&L sign does not make
+   * this a disposal: a sale only MOVES principal back into the pool (at its carry)
+   * and tops up profit. On a LOSS the principal beyond the proceeds is discarded
+   * by `unparkAndReadd` (those dollars left the patrimony in the losing trade).
+   * No FxDisposal is emitted — the divisa gain defers to the EUR conversion
+   * (Art. 14.2.e LIRPF; DGT V2422-20 / V1613-25 / V0463-21).
    *
-   * NO BUY-SIDE HANDLING — buys neither create nor consume FX lots here. A stock
-   * PURCHASE spends foreign currency, but per the FX-engine simplification
-   * (v0.39.2) securities trades do not emit implicit FX disposals (that produced
-   * phantom gains from missing prior-year lots and double-counted the broker's
-   * AFx settlement). Symmetrically, only the SALE side is modelled — as a pure
-   * positive (acquisition) event. The existing `processEvents` routes positive
-   * quantities to `addLot`; this producer emits nothing negative.
+   * UNMATCHED SELL = FULL-PROCEEDS NO-OP. If the sold position was bought OUTSIDE
+   * the data window (no parked principal), `unparkAndReadd` re-adds at the sale
+   * rate — reproducing the pre-#230 full-proceeds behavior exactly. This is the
+   * load-bearing safety property: nothing changes for single-year/AFx files.
    *
-   * DEFERRED TO CONVERSION (Art. 14.2.e LIRPF; DGT V2422-20 / V1613-25 /
-   * V0463-21). Receiving the foreign currency is NOT itself a taxable event for
-   * the divisa — the FX gain crystallizes only on the effective conversion to
-   * euros (cobro/pago). So this method only ADDS a lot; the gain is realized
-   * later when a conversion disposal consumes it. With no subsequent conversion,
-   * the lot simply sits in the queue and is never taxed — exactly the deferral
-   * the law requires.
+   * SAME FILTERS AS THE BUY/CONSUMER SIDE (V2324-10 symmetry). STK/FUND/BOND only
+   * (CRYPTO permutas' proceedsFcy is a coin, not fiat → crypto path; OPT/FOP/CASH
+   * excluded — CASH conversions are the FX engine's own events). `currency ≠ EUR`,
+   * ECB-resolvable, `proceedsFcy > 0`, and NOT a short close (`isShort`): a cover
+   * SPENDS FCY (its FifoDisposal carries the OPEN proceeds dated at the CLOSE), so
+   * it is neither a buy nor a sell of held dollars here.
    *
-   * V2324-10 SYMMETRIC CRITERION. DGT V2324-10 confirms FIFO for foreign currency
-   * as a homogeneous patrimonial element. We apply the SAME resolvability and
-   * category filter on the producer side as the consumer side uses, so a currency
-   * we would track on conversion is the same set we create lots for on a sale —
-   * no asymmetry that could orphan a conversion against a missing acquisition.
-   *
-   * WHY PHANTOM/ORPHAN LOTS ARE BENIGN. Because `processEvents` consumes
-   * FIFO-oldest-first and a missing-lot disposal is floored to a zero FX gain
-   * (the "sin lotes previos" path, never a fabricated profit), an extra
-   * acquisition lot from a sale can only ever (a) be matched by a real later
-   * conversion — the intended behavior — or (b) sit unconsumed and untaxed
-   * (correct deferral). It can never manufacture a phantom gain.
-   *
-   * Events returned here are designed to be concatenated into the SAME
-   * `processEvents` call as the conversion/dividend/interest events, so the
-   * stock-sale acquisition lots are present in the FIFO queue by the time a later
-   * USD→EUR conversion disposal consumes them.
+   * Concatenated into the SAME `processEvents` call as the conversion, dividend/
+   * interest, and stock-buy events; the 4-phase + date sort guarantees the buy
+   * parks before this sell re-adds and before a conversion consumes the result.
    */
   static extractStockProceedsFxEvents(disposals: FifoDisposal[]): FxEvent[] {
     const events: FxEvent[] = [];
@@ -355,26 +442,104 @@ export class FxFifoEngine {
     for (const d of disposals) {
       if (d.currency === "EUR") continue;
       if (!SECURITY_CATEGORIES.has(d.assetCategory)) continue; // exclude crypto permutas, options/FOP, CASH conversions
-      // A SHORT close (BUY+C covering a SELL+O) must NOT seed a lot here. Its
+      // A SHORT close (BUY+C covering a SELL+O) must NOT seed a sell here. Its
       // FifoDisposal carries the OPEN proceeds (the FCY received when the short
       // was opened, possibly a prior year) but is dated at the CLOSE — and a
       // cover SPENDS foreign currency to buy the shares back, it does not receive
-      // it. Booking an acquisition lot at the close date/rate for the gross open
-      // proceeds would mis-date, mis-rate, and over-state held FCY (a phantom lot
-      // that could absorb unrelated later conversions at a fabricated basis).
-      // A short's divisa leg is genuinely different (the inflow is at open, the
-      // outflow at close); the long-side full-proceeds model can't represent it,
-      // so we skip it. A later conversion of the real short profit then hits the
-      // conservative missing-lot floor (gain = 0) rather than a fabricated gain.
+      // it. Re-adding the gross open proceeds at the close date/rate would
+      // mis-date, mis-rate, and over-state held FCY. A short's divisa leg is
+      // genuinely different (inflow at open, outflow at close); the carry-basis
+      // long-round-trip model can't represent it, so we skip it. A later
+      // conversion of the real short profit then hits the conservative missing-lot
+      // floor (gain = 0) rather than a fabricated gain.
       if (d.isShort) continue;
       if (!isEcbResolvable(d.currency)) continue;               // genuine fiat FCY only
       if (!d.proceedsFcy.greaterThan(0)) continue;              // skip non-positive (defensive)
       events.push({
+        kind: "stock_sell",
         date: normalizeDate(d.sellDate),
         currency: d.currency,
-        quantity: d.proceedsFcy,        // FULL net proceeds in FCY (already net of commission/taxes)
-        ecbRate: d.sellEcbRate,         // sale-date ECB rate
+        quantity: new Decimal(0),       // unused for stock_sell (amounts are in costFcy/proceedsFcy)
+        costFcy: d.costBasisFcy,        // principal that was parked at the matching buy
+        proceedsFcy: d.proceedsFcy,     // FULL net proceeds in FCY (already net of commission/taxes)
+        ecbRate: d.sellEcbRate,         // sale-date ECB rate (for the profit and uncovered/unmatched re-add)
         trigger: "stock_sale",
+      });
+    }
+    return events;
+  }
+
+  /**
+   * Extract the BUY-side carry-basis FX events from foreign-currency stock
+   * (security) PURCHASES — the divisa-side effect of BUYING a foreign-currency
+   * security (issue #230 follow-up). The companion of
+   * {@link extractStockProceedsFxEvents}.
+   *
+   * A foreign-currency stock BUY spends `costFcy` of foreign currency. The
+   * resulting `stock_buy` event makes {@link parkPrincipal} silently CONSUME that
+   * FCY from the spendable pool (FIFO oldest-first) and PARK the carried EUR basis
+   * inside the open position — NO disposal, NO realized gain (the buy never
+   * reaches the disposal path, so it cannot re-arm the missing-prior-year-lots
+   * phantom gain that PR #143/#171 removed). The matching SELL later re-adds that
+   * principal at its carry; an UNCOVERED buy (no tracked funding) is a safe no-op
+   * against an empty pool and the sell re-adds at the sale rate (full-proceeds
+   * equivalence).
+   *
+   * costFcy MIRRORS fifo.ts addLot EXACTLY — `quantity × tradePrice × multiplier
+   * + taxes + commissionFcy`, where a commission in a different currency is
+   * homogenized to the share currency via the trade-date cross-rate
+   * (`commission × rate(commCcy) / rate(shareCcy)`). This is the SAME FCY cash
+   * outflow that `fifo.ts` books as the lot's `costInFcy`, so the principal parked
+   * here equals the principal the SELL re-adds via `costBasisFcy` — the two sides
+   * reconcile.
+   *
+   * SAME FILTERS AS THE SELL SIDE (V2324-10 symmetry): `buySell === "BUY"`,
+   * STK/FUND/BOND only, `currency ≠ EUR`, ECB-resolvable, NOT an FXCONV/AFx trade.
+   * EXCLUDES short-cover buys (`openCloseIndicator === "C"`): a cover is the CLOSE
+   * of a short, not a fresh FCY outflow to acquire a long position — mirroring the
+   * `isShort` guard on the sell side (`extractStockProceedsFxEvents` skips short
+   * closes). Uses `trade.tradeDate` for the rate, exactly like `addLot`.
+   */
+  static extractStockPurchaseFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
+    const events: FxEvent[] = [];
+    const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
+    for (const trade of trades) {
+      if (trade.buySell !== "BUY") continue;
+      if (!SECURITY_CATEGORIES.has(trade.assetCategory)) continue;
+      if (trade.currency === "EUR") continue;
+      if (!isEcbResolvable(trade.currency)) continue;
+      if (FxFifoEngine.isFxconv(trade)) continue;
+      // A short COVER (BUY to close, openCloseIndicator "C" or "C;O") is not a
+      // fresh FCY outflow acquiring a long — it closes a short opened by a prior
+      // SELL. Mirrors the isShort skip on the sell side. A plain long buy has
+      // openCloseIndicator "O" (or, for some exports, absent) → not skipped.
+      if (trade.openCloseIndicator === "C" || trade.openCloseIndicator === "C;O") continue;
+
+      const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
+      // costFcy = the FCY cash outflow, MIRRORING fifo.ts addLot's costInFcy:
+      // quantity × tradePrice × multiplier + taxes + commission (homogenized to
+      // the share currency via the trade-date cross-rate when in another currency).
+      const quantity = new Decimal(trade.quantity).abs();
+      const pricePerShare = new Decimal(trade.tradePrice);
+      const multiplier = new Decimal(trade.multiplier || "1");
+      const taxes = new Decimal(trade.taxes || "0").abs();
+      const commission = new Decimal(trade.commission).abs();
+      let commissionFcy = commission;
+      if (commission.greaterThan(0) && trade.commissionCurrency && trade.commissionCurrency !== trade.currency) {
+        const commEcbRate = getEcbRate(rateMap, trade.tradeDate, trade.commissionCurrency);
+        commissionFcy = commission.mul(commEcbRate).dividedBy(ecbRate);
+      }
+      const costFcy = quantity.mul(pricePerShare).mul(multiplier).plus(taxes).plus(commissionFcy);
+      if (!costFcy.greaterThan(0)) continue; // defensive: nothing to park
+
+      events.push({
+        kind: "stock_buy",
+        date: normalizeDate(trade.tradeDate),
+        currency: trade.currency,
+        quantity: new Decimal(0),       // unused for stock_buy (the amount spent is costFcy)
+        costFcy,
+        ecbRate,
+        trigger: "stock_purchase",
       });
     }
     return events;
@@ -501,11 +666,163 @@ export class FxFifoEngine {
     }
   }
 
+  /**
+   * Epsilon for the carry-basis FIFO loops. The reference algorithm advances/
+   * shifts a queue entry while `remaining > 1e-9` (not `> 0`), so that
+   * floating-point dust never leaves a phantom sub-nano sliver behind. Decimal is
+   * exact, but we mirror the same threshold so the TS reproduces the reference
+   * numbers byte-for-byte and never parks/re-adds a meaningless residue.
+   */
+  private static readonly EPS = new Decimal("1e-9");
+
+  /**
+   * Push a re-added principal/profit slice back onto the spendable pool as a new
+   * FX lot at EUR rate `rate` (EUR per 1 FCY). Mirrors {@link addLot}'s lot shape
+   * (costPerUnit = rate, costInEur = q × rate) so a later conversion consumes it
+   * exactly like any acquisition lot. Skips non-positive `q` (defense-in-depth:
+   * a zero-quantity lot would make a later costPerUnit 0/0 = NaN).
+   */
+  private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal): void {
+    if (!q.greaterThan(0)) return;
+    const lot: FxLot = {
+      id: `FX-${this.nextLotId++}`,
+      currency,
+      acquireDate: date,
+      quantity: q,
+      costPerUnit: rate,
+      costInEur: q.mul(rate),
+    };
+    if (!this.lots.has(currency)) this.lots.set(currency, []);
+    this.lots.get(currency)!.push(lot);
+  }
+
+  /**
+   * STOCK_BUY — silently CONSUME the FCY a foreign-stock purchase spends from the
+   * spendable pool and PARK the carried basis inside the open position.
+   *
+   * Consumes `event.costFcy` from the pool FIFO oldest-first. For each consumed
+   * pool lot it parks `{q: consumed, rate: lot.rate}` (carrying that lot's EUR
+   * acquisition basis); any shortfall (the pool ran out) parks `{q: shortfall,
+   * rate: null}` — "uncovered", funded outside the data window. The pool lots are
+   * mutated exactly as {@link consumeLots} would (quantity and costInEur reduced
+   * proportionally, depleted lots shifted) so a later conversion sees the correct
+   * remaining balance.
+   *
+   * EMITS NO FxDisposal and realizes NO gain — the divisa gain on these dollars
+   * defers, carried in the parked basis, until a conversion realizes it
+   * (Art. 14.2.e LIRPF). This is why re-arming the missing-prior-year-lots phantom
+   * GAIN is impossible here: a buy never reaches the disposal path.
+   */
+  private parkPrincipal(event: FxEvent): void {
+    const cost = event.costFcy;
+    if (!cost || !cost.greaterThan(0)) return;
+    let remaining = cost;
+    const EPS = FxFifoEngine.EPS;
+    const lots = this.lots.get(event.currency);
+    if (!this.parked.has(event.currency)) this.parked.set(event.currency, []);
+    const park = this.parked.get(event.currency)!;
+
+    if (lots) {
+      while (remaining.greaterThan(EPS) && lots.length > 0) {
+        const lot = lots[0]!;
+        const consumed = Decimal.min(remaining, lot.quantity);
+        park.push({ q: consumed, rate: lot.costPerUnit });
+        // Reduce the pool lot in lockstep (quantity + EUR cost), shift when empty.
+        const costPortion = consumed.mul(lot.costPerUnit);
+        lot.quantity = lot.quantity.minus(consumed);
+        lot.costInEur = lot.costInEur.minus(costPortion);
+        if (lot.quantity.lessThan(EPS)) lots.shift();
+        remaining = remaining.minus(consumed);
+      }
+    }
+
+    // Shortfall: the pool had no (more) tracked dollars → park uncovered.
+    if (remaining.greaterThan(EPS)) {
+      park.push({ q: remaining, rate: null });
+    }
+  }
+
+  /**
+   * STOCK_SELL — re-add the carried principal of a foreign-stock SALE to the
+   * spendable pool at its PARKED basis, plus the trade's profit at the sale rate.
+   *
+   * Pulls `event.costFcy` of principal from the parked FIFO oldest-first and
+   * re-adds it to the pool up to `min(costFcy, proceedsFcy)` worth: a parked lot
+   * with a carried basis re-adds at that basis; a `null` (uncovered) parked lot
+   * re-adds at the SALE rate. Any parked principal BEYOND the proceeds (a stock
+   * LOSS: you got back fewer dollars than the principal) is DISCARDED — those FCY
+   * genuinely left the patrimony in the losing trade, so no FX event attaches to
+   * them. If the parked FIFO has no match for this sell (a sale of a position
+   * bought OUTSIDE the data — `need` remains after the parked queue is exhausted),
+   * the remainder is re-added at the SALE rate; that is precisely what makes an
+   * unmatched sell reduce to the pre-#230 full-proceeds behavior. Finally the
+   * profit (`proceedsFcy − costFcy`, when positive) is added at the sale rate as
+   * fresh dollars.
+   *
+   * EMITS NO FxDisposal — the FX gain defers to the eventual EUR conversion that
+   * consumes these re-added pool lots (Art. 14.2.e LIRPF).
+   *
+   * Mirrors the reference `sell` closure exactly (REFERENCE.mjs): `placed` tracks
+   * how much of `readd = min(cost, proc)` has been re-added so far; the loop
+   * re-adds `give = min(parkedSlice, readd − placed)` from each parked lot and
+   * always fully consumes that parked slice (the part above `readd` is the
+   * discarded loss); a post-loop top-up covers an unmatched sell; the profit tail
+   * adds `proc − placed`.
+   */
+  private unparkAndReadd(event: FxEvent): void {
+    const cost = event.costFcy ?? new Decimal(0);
+    const proc = event.proceedsFcy ?? new Decimal(0);
+    const saleRate = event.ecbRate;
+    const EPS = FxFifoEngine.EPS;
+
+    let need = cost;
+    const readd = Decimal.min(cost, proc);
+    let placed = new Decimal(0);
+    const park = this.parked.get(event.currency);
+
+    if (park) {
+      while (need.greaterThan(EPS) && park.length > 0) {
+        const p = park[0]!;
+        const x = Decimal.min(need, p.q);
+        const give = Decimal.min(x, readd.minus(placed));
+        if (give.greaterThan(EPS)) {
+          this.pushPoolLot(event.currency, event.date, give, p.rate === null ? saleRate : p.rate);
+          placed = placed.plus(give);
+        }
+        // Consume the whole parked slice `x`; any part above `give` (i.e. above
+        // `readd`) is the loss portion — discarded, not re-added.
+        p.q = p.q.minus(x);
+        need = need.minus(x);
+        if (p.q.lessThan(EPS)) park.shift();
+      }
+    }
+
+    // Unmatched sell (no parked principal left, e.g. position bought outside the
+    // data window): re-add the remainder of `readd` at the sale rate. This is the
+    // branch that makes a sell-without-tracked-buy equal the full-proceeds model.
+    if (need.greaterThan(EPS) && placed.lessThan(readd.minus(EPS))) {
+      const g = Decimal.min(need, readd.minus(placed));
+      this.pushPoolLot(event.currency, event.date, g, saleRate);
+      placed = placed.plus(g);
+    }
+
+    // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
+    const profit = proc.minus(placed);
+    if (profit.greaterThan(EPS)) {
+      this.pushPoolLot(event.currency, event.date, profit, saleRate);
+    }
+  }
+
   getDisposals(): FxDisposal[] {
     return this.disposals;
   }
 
   getRemainingLots(): Map<string, FxLot[]> {
     return this.lots;
+  }
+
+  /** Remaining PARKED principal per currency (principal in still-open foreign-stock positions). */
+  getParked(): Map<string, { q: Decimal; rate: Decimal | null }[]> {
+    return this.parked;
   }
 }

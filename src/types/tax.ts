@@ -331,8 +331,20 @@ export interface FxLot {
   costInEur: Decimal;
 }
 
-/** What triggered an FX event (acquisition or disposal of foreign currency) */
-export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_sale";
+/**
+ * What triggered an FX event (acquisition or disposal of foreign currency).
+ *
+ * `stock_purchase` / `stock_sale` label the divisa-side effect of a
+ * foreign-currency SECURITY trade under the carry-basis-defer model (issue #230
+ * follow-up): a stock BUY silently CONSUMES the FCY it spends (parking the
+ * carried basis inside the open position) and a stock SELL re-adds that carried
+ * principal plus the trade's profit. Neither emits an FX disposal — the divisa
+ * gain crystallizes only on the eventual conversion to euros (Art. 14.2.e LIRPF;
+ * DGT V2422-20 / V2324-10). `stock_purchase` was removed in #171 (the old
+ * buy-side consumption produced phantom prior-year-lot gains) and re-added here
+ * for the parked-basis encoding, which never emits a disposal on a buy.
+ */
+export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_purchase" | "stock_sale";
 
 /** Result of consuming FX lots via FIFO for a currency disposal */
 export interface FxDisposal {
