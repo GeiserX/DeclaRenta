@@ -591,6 +591,17 @@ export class FxFifoEngine {
       // openCloseIndicator "O" (or, for some exports, absent) → not skipped.
       if (trade.openCloseIndicator === "C" || trade.openCloseIndicator === "C;O") continue;
 
+      // The FCY actually LEAVES the account on the cash settlement date, so the
+      // park event must be DATED there (matching how CASH conversions date on
+      // settlementDate||tradeDate, extractFxEvents above). Otherwise, with normal
+      // T+2 stock settlement, a manual funding conversion that settles AFTER the
+      // stock trade date would sort after the buy in processEvents → the buy parks
+      // `rate: null` (uncovered) and silently degrades to full-proceeds even though
+      // the account IS tracked. The RATE math, however, mirrors fifo.ts addLot's
+      // costInFcy exactly — including the commission cross-rate — which keys on the
+      // TRADE date, so costFcy stays byte-equal to the disposal's costBasisFcy the
+      // matching sell unparks. So: rate lookups on tradeDate, event dated on settle.
+      const cashDate = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
       // costFcy = the FCY cash outflow, MIRRORING fifo.ts addLot's costInFcy:
       // quantity × tradePrice × multiplier + taxes + commission (homogenized to
@@ -610,7 +621,7 @@ export class FxFifoEngine {
 
       events.push({
         kind: "stock_buy",
-        date: normalizeDate(trade.tradeDate),
+        date: cashDate,
         currency: trade.currency,
         quantity: new Decimal(0),       // unused for stock_buy (the amount spent is costFcy)
         costFcy,

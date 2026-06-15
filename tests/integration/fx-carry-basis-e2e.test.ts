@@ -532,3 +532,72 @@ describe("carry-basis e2e #4: monodivisa (skipFx) zeroes the carry-basis FX, kee
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("100.00");
   });
 });
+
+// ===========================================================================
+// 5. T+2 SETTLEMENT TIMING — the buy must park on the cash SETTLEMENT date, not
+//    the trade date, or a funding conversion that settles AFTER the stock trade
+//    date sorts too late and the buy parks "uncovered" (silent regression to
+//    full-proceeds even though the account IS tracked). (CodeRabbit #232 finding.)
+// ===========================================================================
+//
+// Funding EUR→USD $2000: trade-dated 2024-02-01 but SETTLES 2024-02-05 @ 0.90.
+// Two stock BUYs ($1000 each): trade-dated 2024-02-03 (BEFORE funding settles)
+//   but settling 2024-02-07 (AFTER). AAPL is sold; MSFT stays OPEN at year end.
+// Dating the park on the buys' SETTLEMENT (02-07 > 02-05) lets them consume the
+// funding lot → AAPL carries 0.90, MSFT's $1000 defers → conv $1100 = €155.
+// Dating it on the TRADE date (02-03 < 02-05) would sort BOTH buys before the
+// funding acquire → the pool is empty → both park UNCOVERED → the conversion
+// eats the funding lot at 0.90 directly → €165 (the silent T+2 regression).
+// The open MSFT position is what makes the two datings DIVERGE in the final
+// number (a single position nets to €155 either way — the gap only surfaces when
+// principal is left parked/deferred). This is the multi-position construction
+// that actually exercises CodeRabbit #232's settlement-timing finding.
+describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is still consumed (T+2)", () => {
+  const rates = makeRateMap({
+    "2024-02-05": { USD: "0.90" }, // funding SETTLEMENT date (the tracked lot)
+    "2024-02-03": { USD: "0.92" }, // stock buy TRADE date (rate lookup only; never the carried basis)
+    "2024-02-07": { USD: "0.93" }, // stock buy SETTLEMENT date (where the park is dated)
+    "2024-06-20": { USD: "1.00" }, // sale
+    "2024-09-10": { USD: "1.05" }, // conversion
+  });
+  // Funding: trade 02-01, settle 02-05.
+  const fund = makeTrade({
+    tradeID: "fund", symbol: "EUR.USD", description: "EUR.USD", isin: "",
+    assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
+    settlementDate: "2024-02-05", quantity: "2000", tradePrice: "1",
+    tradeMoney: "2000", proceeds: "2000", cost: "2000",
+    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+  });
+  // Both buys: trade 02-03 (before funding settles), settle 02-07 (after).
+  const buyAapl = makeTrade({
+    tradeID: "buy-aapl", isin: ISIN_AAPL, symbol: "AAPL", description: "AAPL",
+    tradeDate: "2024-02-03", settlementDate: "2024-02-07", buySell: "BUY",
+    quantity: "10", tradePrice: "100", tradeMoney: "1000", proceeds: "-1000", cost: "1000",
+  });
+  const buyMsft = makeTrade({
+    tradeID: "buy-msft", isin: ISIN_MSFT, symbol: "MSFT", description: "MSFT",
+    tradeDate: "2024-02-03", settlementDate: "2024-02-07", buySell: "BUY",
+    quantity: "10", tradePrice: "100", tradeMoney: "1000", proceeds: "-1000", cost: "1000",
+  });
+  const statement = makeStatement([
+    fund, buyAapl, buyMsft,
+    stockSell("sell", ISIN_AAPL, "AAPL", "2024-06-20", "10", "110"),
+    convUsd("conv", "2024-09-10", "1100"),
+  ]);
+  const report = generateTaxReport(statement, rates, 2024);
+
+  it("parks on settlement → consumes the late-settling funding → carried €155, not uncovered €165", () => {
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("155.00");
+    // The regression guard: trade-date parking would sort both buys before the
+    // funding acquire, leaving them uncovered, and the conversion would eat the
+    // funding lot directly → €165.00. Verified to flip exactly that way.
+    expect(report.fxGains.netGainLoss.toFixed(2)).not.toBe("165.00");
+  });
+
+  it("the conversion's principal leg carries the 0.90 funding basis (proves coverage)", () => {
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const principal = convs.find((c) => c.quantity.toFixed(0) === "1000")!;
+    expect(principal).toBeDefined();
+    expect(principal.costBasisEur.toFixed(2)).toBe("900.00"); // 1000 × 0.90 carried funding basis
+  });
+});

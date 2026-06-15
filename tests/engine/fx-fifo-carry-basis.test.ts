@@ -212,7 +212,7 @@ describe("FX carry-basis-defer engine — reference scenarios (issue #230 follow
       expect(disposals.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2)).toBe("160.00");
     });
 
-    it("S8's single conversion yields a single disposal despite two round-trips", () => {
+    it("S8: disposals come only from the conversion — the buys/sells emit none", () => {
       const ops: Op[] = [
         ["fund", "USD", 2000, 0.9],
         ["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0],

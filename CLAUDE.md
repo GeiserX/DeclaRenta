@@ -291,6 +291,11 @@ When adding a new section (like 721), follow this checklist:
 
 ## Project Philosophy
 
+### Rigorous by default, with an opt-out checkbox when warranted (product posture)
+- **Default = maximum fiscal rigor.** When Spanish law/DGT doctrine supports computing something (e.g. the divisa/FX element under Art. 33.1), DeclaRenta computes it by default — even when it is legally soft (inferred from general norms, no binding consulta) and even when no competitor does it. Being the most correct tool is the point.
+- **BUT** when a computation is (a) not strictly needed for a correct return, (b) rests on genuinely-unsettled doctrine, or (c) is something other tools (Taxdown/Autodeclaro/etc.) deliberately omit — provide a **profile checkbox** to turn it off, exactly like the **monodivisa toggle** does for the FX engine (`profile.monodivisa` → `skipFx`). Rigorous on, but one click to match the simpler/market-standard treatment and reconcile with other tools.
+- Pattern to follow for any future "should we compute this aggressive/contested thing?" question: ship it ON by default, expose an OFF checkbox in the fiscal profile (persisted in localStorage, threaded as a `ReportOptions` flag), and add a Competitor-Reconciliation-style note explaining when to use it. Never silently drop rigor; never force a contested computation with no escape hatch.
+
 ### Correctness with User Comfort
 - DeclaRenta must be 100% fiscally correct by default
 - BUT users should not be alarmed by non-critical warnings or confusing technical output
