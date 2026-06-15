@@ -33,16 +33,17 @@ import { daysBetween, normalizeDate } from "./dates.js";
  *
  *  2. STOCK_BUY (`kind: "stock_buy"`). The divisa-side of a foreign-currency
  *     stock PURCHASE: it spends `costFcy` of foreign currency. It silently
- *     CONSUMES that `costFcy` from the pool FIFO and PARKS the carried basis
- *     inside the open position (any shortfall parks "uncovered"). It realizes NO
- *     gain and emits NO disposal. `quantity` is unused (set to 0) — the amount
- *     spent is `costFcy`.
+ *     CONSUMES that `costFcy` from the per-currency pool FIFO and PARKS the
+ *     carried basis under its `positionKey` (any shortfall parks "uncovered").
+ *     It realizes NO gain and emits NO disposal. `quantity` is unused (set to
+ *     0) — the amount spent is `costFcy`.
  *
  *  3. STOCK_SELL (`kind: "stock_sell"`). The divisa-side of a foreign-currency
  *     stock SALE: it received `proceedsFcy`, of which `costFcy` is the principal
- *     that had been parked at the matching buy. It re-adds the carried principal
- *     (up to the proceeds) plus the profit at the sale rate. It emits NO disposal
- *     — the FX gain defers to the eventual EUR conversion. `quantity` is unused.
+ *     that had been parked at the matching buy UNDER THE SAME `positionKey`. It
+ *     re-adds that position's carried principal (up to the proceeds) plus the
+ *     profit at the sale rate. It emits NO disposal — the FX gain defers to the
+ *     eventual EUR conversion. `quantity` is unused.
  *
  * Buys/sells never appear as a signed `quantity`, so the existing positive/
  * negative routing in processEvents is untouched by them — they are dispatched
@@ -76,6 +77,19 @@ export interface FxEvent {
   costFcy?: Decimal;
   /** Stock sell only: the total FCY received (principal + profit). */
   proceedsFcy?: Decimal;
+  /**
+   * Stock buy/sell ONLY: the stable identity of the position whose principal is
+   * being parked (buy) or unparked (sell). Both producers derive it IDENTICALLY
+   * — `isin || symbol`, mirroring fifo.ts `lotKey` for the STK/FUND/BOND case
+   * these events cover — so a SELL only ever reclaims the principal ITS OWN
+   * position parked. This makes the parked FIFO per-(currency, position), not
+   * per-currency: an option-exercise/assignment STK disposal (fifo.ts emits these
+   * with `assetCategory:"STK"` and the underlying's isin/symbol but NO backing BUY
+   * trade) finds no parked principal under its key and cleanly degrades to the
+   * "unmatched sell → re-add at sale rate" path, instead of wrongly draining a
+   * DIFFERENT same-currency position's parked basis. Absent for acquire/dispose.
+   */
+  positionKey?: string;
 }
 
 export class FxFifoEngine {
@@ -94,13 +108,36 @@ export class FxFifoEngine {
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
   /**
-   * PARKED FIFO per currency — the foreign-currency PRINCIPAL currently locked
-   * inside OPEN foreign-stock positions, carrying its EUR acquisition basis.
+   * PARKED FIFO per (currency, position) — the foreign-currency PRINCIPAL
+   * currently locked inside OPEN foreign-stock positions, carrying its EUR
+   * acquisition basis.
    *
-   * A stock BUY moves `costFcy` out of the spendable pool (`this.lots`) and into
-   * here, preserving each consumed pool lot's `rate` (EUR per 1 FCY). A `rate` of
-   * `null` is an "uncovered" parking: the FCY the buy spent had no tracked
-   * acquisition lot (funding outside the data window — AFx settlement, a
+   * KEYED PER POSITION, NOT PER CURRENCY (the carry-basis review fix). The map
+   * key is the composite `${currency}|${positionKey}` ({@link parkKey}), where
+   * `positionKey` is the stock's identity (`isin || symbol` — see
+   * {@link positionKey}, mirroring fifo.ts `lotKey`). The BUY producer
+   * ({@link FxFifoEngine.extractStockPurchaseFxEvents}) and the SELL producer
+   * ({@link FxFifoEngine.extractStockProceedsFxEvents}) derive the SAME
+   * `positionKey` for the same position, so a SELL only ever reclaims the
+   * principal ITS OWN position parked. WHY this matters: option exercises and
+   * assignments emit `assetCategory:"STK"` disposals (fifo.ts) with the
+   * underlying's isin/symbol but NO backing BUY trade — with per-CURRENCY keying
+   * such a sell could unpark, and mis-rate, a DIFFERENT same-currency position's
+   * parked basis. Per-position keying confines each unpark to its own queue; an
+   * option-delivered-share sale finds nothing parked under its key and cleanly
+   * degrades to the "unmatched sell → re-add at sale rate" path (the
+   * funding-absent no-op). For every SINGLE-position scenario per-position keying
+   * is identical to per-currency, so the validated invariants (S1/S2/S6/S8 and
+   * the A* no-ops) are unchanged — the fix only bites multi-position-same-currency
+   * cases.
+   *
+   * NOTE the SPENDABLE pool (`this.lots`) stays PER CURRENCY — FCY is fungible
+   * for SPENDING, so a buy still consumes the shared currency pool oldest-first;
+   * it merely PARKS the carried basis under its position key so the matching
+   * sell reclaims its own principal.
+   *
+   * A `rate` of `null` is an "uncovered" parking: the FCY the buy spent had no
+   * tracked acquisition lot (funding outside the data window — AFx settlement, a
    * single-year export), so there is no basis to carry; a later sell re-adds that
    * portion at the SALE rate, which is exactly what reproduces the pre-#230
    * full-proceeds behavior (the funding-absent no-op safety property).
@@ -110,6 +147,39 @@ export class FxFifoEngine {
    * period boundary — correctly never converted, never taxed.
    */
   private parked: Map<string, { q: Decimal; rate: Decimal | null }[]> = new Map();
+
+  /**
+   * Stable identity of a foreign-stock POSITION for the parked FIFO. `isin ||
+   * symbol`, mirroring fifo.ts `lotKey` for the STK/FUND/BOND case the carry-basis
+   * stock events cover (those producers already exclude CRYPTO/OPT/FOP, so the
+   * conid/CRYPTO branches of `lotKey` are out of scope here). Both the BUY and the
+   * SELL producer call this so the same position yields the same key on both
+   * sides — the load-bearing requirement for a sell to reclaim only its own
+   * parked principal.
+   */
+  private static positionKey(ref: { isin: string; symbol: string }): string {
+    return ref.isin || ref.symbol;
+  }
+
+  /**
+   * Composite key for the parked FIFO. With a positionKey: `${currency}|${positionKey}`
+   * — the per-position queue. WITHOUT one: the BARE currency (`${currency}`,
+   * unchanged from the old per-currency keying). The bare-currency fallback is
+   * deliberate and load-bearing in two ways:
+   *   1. Every PRODUCTION stock_buy/stock_sell sets positionKey, so real data
+   *      always partitions per position.
+   *   2. A buy and a sell that BOTH omit positionKey collapse to the SAME bare
+   *      `${currency}` queue, so they still park/unpark against each other — this
+   *      is exactly the old per-currency behavior, which is what the
+   *      reference/unit harnesses (no positionKey) exercise. Falling back to the
+   *      bare currency (not `${currency}|`) also keeps `getParked().get(currency)`
+   *      working for those harnesses.
+   * For a given run the two forms never collide: a position's isin/symbol is
+   * non-empty, so `${currency}|${positionKey}` is always distinct from `${currency}`.
+   */
+  private static parkKey(currency: string, positionKey: string | undefined): string {
+    return positionKey ? `${currency}|${positionKey}` : currency;
+  }
 
   /**
    * Same-day processing phase (CRITICAL ordering). Generalizes the original
@@ -464,6 +534,12 @@ export class FxFifoEngine {
         proceedsFcy: d.proceedsFcy,     // FULL net proceeds in FCY (already net of commission/taxes)
         ecbRate: d.sellEcbRate,         // sale-date ECB rate (for the profit and uncovered/unmatched re-add)
         trigger: "stock_sale",
+        // Per-position key (isin || symbol) — IDENTICAL derivation to the buy
+        // producer, so this sell unparks ONLY its own position's principal. An
+        // option-exercise/assignment STK disposal carries the underlying's
+        // isin/symbol but parked nothing (no backing BUY) → no match under this
+        // key → it falls through to the safe sale-rate re-add (full-proceeds).
+        positionKey: FxFifoEngine.positionKey(d),
       });
     }
     return events;
@@ -540,6 +616,10 @@ export class FxFifoEngine {
         costFcy,
         ecbRate,
         trigger: "stock_purchase",
+        // Per-position key (isin || symbol) — IDENTICAL derivation to the sell
+        // producer (extractStockProceedsFxEvents), so the SELL of this exact
+        // position reclaims the principal parked here and no other.
+        positionKey: FxFifoEngine.positionKey(trade),
       });
     }
     return events;
@@ -698,15 +778,21 @@ export class FxFifoEngine {
 
   /**
    * STOCK_BUY — silently CONSUME the FCY a foreign-stock purchase spends from the
-   * spendable pool and PARK the carried basis inside the open position.
+   * spendable pool and PARK the carried basis under the buy's POSITION key.
    *
-   * Consumes `event.costFcy` from the pool FIFO oldest-first. For each consumed
-   * pool lot it parks `{q: consumed, rate: lot.rate}` (carrying that lot's EUR
-   * acquisition basis); any shortfall (the pool ran out) parks `{q: shortfall,
-   * rate: null}` — "uncovered", funded outside the data window. The pool lots are
-   * mutated exactly as {@link consumeLots} would (quantity and costInEur reduced
-   * proportionally, depleted lots shifted) so a later conversion sees the correct
-   * remaining balance.
+   * Consumes `event.costFcy` from the per-currency pool FIFO oldest-first (FCY is
+   * fungible for spending). For each consumed pool lot it parks `{q: consumed,
+   * rate: lot.rate}` (carrying that lot's EUR acquisition basis) under the
+   * composite `(currency, positionKey)` queue; any shortfall (the pool ran out)
+   * parks `{q: shortfall, rate: null}` — "uncovered", funded outside the data
+   * window. The pool lots are mutated exactly as {@link consumeLots} would
+   * (quantity and costInEur reduced proportionally, depleted lots shifted) so a
+   * later conversion sees the correct remaining balance.
+   *
+   * PER-POSITION PARKING: the parked basis lands under THIS position's key
+   * ({@link parkKey}), so ONLY the matching SELL ({@link unparkAndReadd}) of the
+   * same position reclaims it. The spendable POOL it draws from is still shared
+   * per-currency — only the parked principal is partitioned by position.
    *
    * EMITS NO FxDisposal and realizes NO gain — the divisa gain on these dollars
    * defers, carried in the parked basis, until a conversion realizes it
@@ -719,8 +805,9 @@ export class FxFifoEngine {
     let remaining = cost;
     const EPS = FxFifoEngine.EPS;
     const lots = this.lots.get(event.currency);
-    if (!this.parked.has(event.currency)) this.parked.set(event.currency, []);
-    const park = this.parked.get(event.currency)!;
+    const parkKey = FxFifoEngine.parkKey(event.currency, event.positionKey);
+    if (!this.parked.has(parkKey)) this.parked.set(parkKey, []);
+    const park = this.parked.get(parkKey)!;
 
     if (lots) {
       while (remaining.greaterThan(EPS) && lots.length > 0) {
@@ -746,18 +833,30 @@ export class FxFifoEngine {
    * STOCK_SELL — re-add the carried principal of a foreign-stock SALE to the
    * spendable pool at its PARKED basis, plus the trade's profit at the sale rate.
    *
-   * Pulls `event.costFcy` of principal from the parked FIFO oldest-first and
-   * re-adds it to the pool up to `min(costFcy, proceedsFcy)` worth: a parked lot
-   * with a carried basis re-adds at that basis; a `null` (uncovered) parked lot
-   * re-adds at the SALE rate. Any parked principal BEYOND the proceeds (a stock
-   * LOSS: you got back fewer dollars than the principal) is DISCARDED — those FCY
-   * genuinely left the patrimony in the losing trade, so no FX event attaches to
-   * them. If the parked FIFO has no match for this sell (a sale of a position
-   * bought OUTSIDE the data — `need` remains after the parked queue is exhausted),
-   * the remainder is re-added at the SALE rate; that is precisely what makes an
-   * unmatched sell reduce to the pre-#230 full-proceeds behavior. Finally the
-   * profit (`proceedsFcy − costFcy`, when positive) is added at the sale rate as
-   * fresh dollars.
+   * Pulls `event.costFcy` of principal from THIS POSITION's parked FIFO
+   * (`(currency, positionKey)`, {@link parkKey}) oldest-first and re-adds it to
+   * the shared per-currency pool up to `min(costFcy, proceedsFcy)` worth: a
+   * parked lot with a carried basis re-adds at that basis; a `null` (uncovered)
+   * parked lot re-adds at the SALE rate. Any parked principal BEYOND the proceeds
+   * (a stock LOSS: you got back fewer dollars than the principal) is DISCARDED —
+   * those FCY genuinely left the patrimony in the losing trade, so no FX event
+   * attaches to them. If THIS POSITION's parked FIFO has no match for the sell
+   * (`need` remains after the position's parked queue is exhausted), the remainder
+   * is re-added at the SALE rate; that is precisely what makes an unmatched sell
+   * reduce to the pre-#230 full-proceeds behavior. Finally the profit
+   * (`proceedsFcy − costFcy`, when positive) is added at the sale rate as fresh
+   * dollars.
+   *
+   * PER-POSITION UNPARK (the review fix): the parked queue is looked up by THIS
+   * sell's `(currency, positionKey)`, never the bare currency, so the sell can
+   * only ever reclaim the principal ITS OWN matching buy parked. A sell whose
+   * position parked NOTHING — the canonical case being an OPTION
+   * EXERCISE/ASSIGNMENT STK disposal (fifo.ts emits these with the underlying's
+   * isin/symbol and `assetCategory:"STK"` but with NO backing BUY trade, so
+   * extractStockPurchaseFxEvents never parked for it) — finds an empty/absent
+   * queue under its key and falls cleanly through to the unmatched-sell sale-rate
+   * re-add below (the funding-absent no-op). It can no longer drain, and mis-rate,
+   * a DIFFERENT same-currency position's parked basis.
    *
    * EMITS NO FxDisposal — the FX gain defers to the eventual EUR conversion that
    * consumes these re-added pool lots (Art. 14.2.e LIRPF).
@@ -767,7 +866,9 @@ export class FxFifoEngine {
    * re-adds `give = min(parkedSlice, readd − placed)` from each parked lot and
    * always fully consumes that parked slice (the part above `readd` is the
    * discarded loss); a post-loop top-up covers an unmatched sell; the profit tail
-   * adds `proc − placed`.
+   * adds `proc − placed`. (The reference is single-position, so its per-currency
+   * `pk` queue and this per-position queue are the same queue for every case it
+   * covers — the keying refinement is invisible to it.)
    */
   private unparkAndReadd(event: FxEvent): void {
     const cost = event.costFcy ?? new Decimal(0);
@@ -778,7 +879,7 @@ export class FxFifoEngine {
     let need = cost;
     const readd = Decimal.min(cost, proc);
     let placed = new Decimal(0);
-    const park = this.parked.get(event.currency);
+    const park = this.parked.get(FxFifoEngine.parkKey(event.currency, event.positionKey));
 
     if (park) {
       while (need.greaterThan(EPS) && park.length > 0) {
@@ -821,7 +922,13 @@ export class FxFifoEngine {
     return this.lots;
   }
 
-  /** Remaining PARKED principal per currency (principal in still-open foreign-stock positions). */
+  /**
+   * Remaining PARKED principal (principal in still-open foreign-stock positions).
+   * Keyed per position by {@link parkKey}: `${currency}|${positionKey}` for
+   * production events, or the bare `${currency}` for positionKey-less events
+   * (reference/unit harnesses). Whatever stays here at the end is principal in
+   * positions still open at the period boundary — never converted, never taxed.
+   */
   getParked(): Map<string, { q: Decimal; rate: Decimal | null }[]> {
     return this.parked;
   }
