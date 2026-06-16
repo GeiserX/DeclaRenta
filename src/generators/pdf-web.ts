@@ -129,6 +129,10 @@ export async function generatePdfWebReport(
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     casillasBody.push([t("pdf.informative"), t("pdf.blocked_losses"), eur(report.capitalGains.blockedLosses)]);
   }
+  // Reintegrated losses: previously-blocked losses released this year (surviving repurchased shares sold) — informative
+  if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
+    casillasBody.push([t("pdf.informative"), t("pdf.reintegrated_losses"), eur(report.capitalGains.reintegratedLosses)]);
+  }
 
   autoTable(doc, {
     startY: MARGIN + 30,

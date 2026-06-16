@@ -402,6 +402,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const rows: TxRow[] = [];
   /** Rows dropped because their UTC_Time was unparseable (counted, surfaced once). */
   let skippedNoTimestamp = 0;
+  /** Rows dropped because their Change amount was unparseable (counted, surfaced once). */
+  let skippedBadAmount = 0;
 
   /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
   function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
@@ -446,6 +448,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       try {
         change = new Decimal(changeStr);
       } catch {
+        skippedBadAmount++;
         continue;
       }
       // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
@@ -628,15 +631,25 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   // Surface dropped timestamp-less rows ONCE (info — they were excluded from
   // every phase, so they can't be silently mis-grouped). Actionable hint per the
   // three-tier message policy: the usual cause is a corrupted/edited export.
-  const parserMessages: TaxMessage[] = skippedNoTimestamp > 0
-    ? [{
-        id: "binance.unparseable_timestamp",
-        severity: "warning",
-        message: `Se ${skippedNoTimestamp === 1 ? "ha omitido 1 fila" : `han omitido ${skippedNoTimestamp} filas`} del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.`,
-        hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
-        context: { count: String(skippedNoTimestamp) },
-      }]
-    : [];
+  const parserMessages: TaxMessage[] = [];
+  if (skippedNoTimestamp > 0) {
+    parserMessages.push({
+      id: "binance.unparseable_timestamp",
+      severity: "warning",
+      message: `Se ${skippedNoTimestamp === 1 ? "ha omitido 1 fila" : `han omitido ${skippedNoTimestamp} filas`} del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.`,
+      hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
+      context: { count: String(skippedNoTimestamp) },
+    });
+  }
+  if (skippedBadAmount > 0) {
+    parserMessages.push({
+      id: "binance.unparseable_amount",
+      severity: "warning",
+      message: `Se ${skippedBadAmount === 1 ? "ha omitido 1 fila" : `han omitido ${skippedBadAmount} filas`} del CSV de Binance por tener un importe (Change) no numérico.`,
+      hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
+      context: { count: String(skippedBadAmount) },
+    });
+  }
 
   return {
     accountId: "",
@@ -1086,11 +1099,11 @@ export const binanceParser: BrokerParser = {
     const headerIdx = tradeIdx >= 0 ? tradeIdx : txIdx;
     if (headerIdx === -1) {
       const hasContent = allLines.some((l) => l.trim());
-      throw new Error(hasContent ? "Binance CSV: formato no reconocido" : "Binance CSV: fichero vacio o sin datos");
+      throw new Error(hasContent ? "Binance CSV: formato no reconocido" : "Binance CSV: fichero vacío o sin datos");
     }
     const lines = allLines.slice(headerIdx).filter((l) => l.trim());
     if (lines.length < 2) {
-      throw new Error("Binance CSV: fichero vacio o sin datos");
+      throw new Error("Binance CSV: fichero vacío o sin datos");
     }
 
     return txIdx >= 0 && tradeIdx < 0 ? parseBinanceTxCsv(lines) : parseBinanceCsv(lines);

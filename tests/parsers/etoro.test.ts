@@ -36,48 +36,44 @@ describe("etoroParser", () => {
   });
 
   describe("text mode parse", () => {
-    it("should not crash on text input", () => {
-      // Text mode is a fallback — returns empty structure for now
-      // Primary path is parseEtoroXlsx for binary XLSX
-      const result = etoroParser.parse(ETORO_TEXT);
-      expect(result).toBeDefined();
-      expect(result.trades).toBeDefined();
-      expect(result.cashTransactions).toBeDefined();
+    it("throws on text/CSV input instead of silently returning an empty statement", () => {
+      // The text BrokerParser.parse() was a non-functional stub that returned an
+      // empty statement (silent total data loss on a CSV upload). It now throws
+      // an honest error directing the user to eToro's XLSX export — the only
+      // supported path (parseEtoroXlsx). Avoids a CSV "succeeding" with 0 trades.
+      expect(() => etoroParser.parse(ETORO_TEXT)).toThrow("XLSX");
     });
   });
 
   describe("text mode parse — section detection", () => {
-    it("should parse trades from text with section markers", () => {
+    it("throws on a Closed Positions text block (XLSX is the supported path)", () => {
       const text = [
         "Closed Positions",
         "Action,Amount,Units,Open Rate,Close Rate,Profit(USD),Open Date,Close Date,Type,Leverage,ISIN",
         "Buy AAPL,1000.00,5.5,180.00,195.00,82.50,15/03/2025 09:30:00,20/09/2025 14:00:00,Stocks,1,US0378331005",
       ].join("\n");
 
-      const result = etoroParser.parse(text);
-      expect(result.trades.length).toBeGreaterThanOrEqual(0);
+      expect(() => etoroParser.parse(text)).toThrow("XLSX");
     });
 
-    it("should parse dividend section markers", () => {
+    it("throws on a Dividends text block", () => {
       const text = [
         "Dividends",
         "Date of Payment,Instrument Name,Net Dividend Received (USD),Withholding Tax Amount (USD),ISIN",
         "15/06/2025,AAPL,42.50,7.50,US0378331005",
       ].join("\n");
 
-      const result = etoroParser.parse(text);
-      expect(result).toBeDefined();
+      expect(() => etoroParser.parse(text)).toThrow("XLSX");
     });
 
-    it("should handle Spanish section markers", () => {
+    it("throws on Spanish section markers too", () => {
       const text = [
         "Posiciones cerradas",
         "Acción,Importe,Unidades,Tipo de apertura,Tipo de cierre,Ganancia,Fecha de apertura,Fecha de cierre,Tipo,Apalancamiento,ISIN",
         "Comprar AAPL,1000.00,5,180.00,195.00,82.50,15/03/2025,20/09/2025,Stocks,1,US0378331005",
       ].join("\n");
 
-      const result = etoroParser.parse(text);
-      expect(result).toBeDefined();
+      expect(() => etoroParser.parse(text)).toThrow("XLSX");
     });
 
     it("should detect Spanish headers in detect()", () => {

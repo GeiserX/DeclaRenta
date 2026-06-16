@@ -12,11 +12,13 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import {
   parseCsvLine,
   parseNumber,
   toFiniteDecimal,
   convertDateISO,
+  detectDelimiter,
   findColumn,
   stripBom,
 } from "./csv-utils.js";
@@ -66,8 +68,13 @@ function cleanSymbol(raw: string): string {
 /**
  * Split a Kraken pair into base and quote symbols.
  * Kraken pairs can be: XBTEUR, XXBTXETH, ETHEUR, DOTUSD, etc.
+ *
+ * `assumedQuote` is true only when the pair matched no known quote suffix AND is
+ * too short (<6 chars) for the last-3-chars heuristic, so the quote is silently
+ * defaulted to EUR. The caller surfaces a warning in that case because the trade
+ * may be mis-valued (its ECB conversion would wrongly assume EUR).
  */
-function splitPair(pair: string): { base: string; quote: string } {
+function splitPair(pair: string): { base: string; quote: string; assumedQuote: boolean } {
   const p = pair.trim().toUpperCase();
 
   // Try well-known quote suffixes — fiat first, then crypto (longer first to avoid partial matches)
@@ -80,16 +87,16 @@ function splitPair(pair: string): { base: string; quote: string } {
   for (const suffix of quoteSuffixes) {
     if (p.endsWith(suffix) && p.length > suffix.length) {
       const baseRaw = p.slice(0, p.length - suffix.length);
-      return { base: cleanSymbol(baseRaw), quote: cleanSymbol(suffix) };
+      return { base: cleanSymbol(baseRaw), quote: cleanSymbol(suffix), assumedQuote: false };
     }
   }
 
   // Fallback: assume last 3 chars are quote
   if (p.length >= 6) {
-    return { base: cleanSymbol(p.slice(0, p.length - 3)), quote: cleanSymbol(p.slice(-3)) };
+    return { base: cleanSymbol(p.slice(0, p.length - 3)), quote: cleanSymbol(p.slice(-3)), assumedQuote: false };
   }
 
-  return { base: cleanSymbol(p), quote: "EUR" };
+  return { base: cleanSymbol(p), quote: "EUR", assumedQuote: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +193,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
   }
 
   const trades: Trade[] = [];
+  // Pairs whose quote we could not recognize and defaulted to EUR (may be
+  // mis-valued — the ECB conversion wrongly assumes the quote is EUR).
+  const unrecognizedPairs = new Set<string>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -208,7 +218,8 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
 
     if (!txid || !pair) continue;
 
-    const { base, quote } = splitPair(pair);
+    const { base, quote, assumedQuote } = splitPair(pair);
+    if (assumedQuote) unrecognizedPairs.add(pair);
     const tradeDate = krakenDate(timeStr);
     const isSell = type === "sell";
 
@@ -239,6 +250,19 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
+  // A pair we couldn't split (no known quote suffix, too short for the last-3
+  // heuristic) was valued assuming EUR — warn so the user knows that trade may
+  // be mis-valued and can verify it (skip-and-warn, three-tier message policy).
+  const parserMessages: TaxMessage[] = unrecognizedPairs.size > 0
+    ? [{
+        id: "kraken.unrecognized_pair",
+        severity: "warning" as const,
+        message: `No se ha reconocido la divisa de cotización de ${unrecognizedPairs.size === 1 ? "el par" : "los pares"} ${[...unrecognizedPairs].join(", ")} de Kraken; se ha asumido EUR, por lo que esa(s) operación(es) podría(n) estar mal valorada(s).`,
+        hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la cotización no era en euros, corrige su valor manualmente.",
+        context: { count: String(unrecognizedPairs.size) },
+      }]
+    : [];
+
   return {
     accountId: "",
     fromDate: "",
@@ -249,6 +273,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 
@@ -346,7 +371,7 @@ export const krakenParser: BrokerParser = {
     }
 
     const headerLine = lines[0]!;
-    const delimiter = headerLine.includes(";") ? ";" : ",";
+    const delimiter = detectDelimiter(headerLine);
 
     if (isTradesCsv(headerLine)) {
       return parseTradesCsv(lines, delimiter);

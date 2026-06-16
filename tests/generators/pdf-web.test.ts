@@ -16,6 +16,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
       acquisitionValue: new Decimal("8000"),
       netGainLoss: new Decimal("2000"),
       blockedLosses: new Decimal("0"),
+      reintegratedLosses: new Decimal("0"),
       disposals: [
         {
           isin: "US78462F1030",
@@ -118,6 +119,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
     });
@@ -150,6 +152,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal("8000"),
         netGainLoss: new Decimal("2000"),
         blockedLosses: new Decimal("300"),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
     });
@@ -165,6 +168,7 @@ describe("generatePdfWebReport", () => {
           acquisitionValue: new Decimal(0),
           netGainLoss: new Decimal(0),
           blockedLosses: new Decimal(0),
+          reintegratedLosses: new Decimal(0),
           disposals: [],
         },
       }),
@@ -180,6 +184,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal("600"),
         netGainLoss: new Decimal("-100"),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [
           {
             isin: "US0231351067",
@@ -282,6 +287,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal("44000"),
         netGainLoss: new Decimal("11000"),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals,
       },
     });
@@ -298,6 +304,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
       dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
@@ -315,6 +322,7 @@ describe("generatePdfWebReport", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
       dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },

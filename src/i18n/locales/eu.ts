@@ -84,6 +84,7 @@ const eu: TranslationKeys = {
   "casilla.general_gains": "Transmisiotik eratortzen ez diren ondare-irabaziak (airdropak, lagunak gomendatzeagatiko komisioak)",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
   "casilla.blocked_losses": "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
+  "casilla.reintegrated_losses": "Aurreko urteetako galera atzeratuak orain kengarriak (berrerositako balioak saldu ziren): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",
   "messages.errors_title": "{{count}} errore — arreta behar du",
   "messages.warnings_title": "{{count}} abisu — berrikusi",
@@ -469,7 +470,7 @@ const eu: TranslationKeys = {
   "guide_rw.interest_note": "Broker-aren interesak (saldoaren ordainketa) kapital higigarriaren errendimendu gisa aitortzen dira. Ordaindutako marjina interesak EZ dira kengarriak (26.1.a art. LIRPF).",
   "guide_rw.double_taxation_note": "Zergapetze bikoitzagatiko kenkariak dibidendo berberengatik bi aldiz zerga ordaintzea ekiditen du. Atzerrian ordaindutakoaren eta Espainiako kuotaren arteko txikienera mugatzen da. Zergapetze bikoitza saihesteko hitzarmenak tasa maximo txikiagoa baimentzen badu (adib. %15 AEB), kopuru horretaraino bakarrik da kengarria.",
   "guide_rw.blocked_losses_title": "Blokeatutako galerak (anti-churning)",
-  "guide_rw.blocked_losses_hint": "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egozteko ondare galerak»</strong> gelaxka Renta Web-en. Galera hauek hurrengo ekitaldira atzeratzen dira balio bera 2 hilabetetan (kotizatuak) edo urtebetean (kotizatu gabeak) berrerosi zelako. Zenbatekoa posizio berriaren eskuraketa kostuari gehitzen zaio.",
+  "guide_rw.blocked_losses_hint": "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egozteko ondare galerak»</strong> gelaxka Renta Web-en zenbateko horretarako. 2 hilabetetan (kotizatuak) edo urtebetean (kotizatu gabeak) berrerositako akzioei dagokien zati proportzionala bakarrik blokeatzen da; gainerako galera modu arruntean egozten da. Blokeatutako galera EZ zaio posizio berriaren kostuari gehitzen: atzeratuta geratzen da eta berrerositako balio horiek saltzen dituzunean berrintegratzen da.",
   "guide_rw.closing_tip": "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek (Autodeclaro, Taxdown) ondare irabazietan zenbateko desberdina erakusten badu, kanbio-tasagatiko irabaziak bereizita kalkulatzen ez dituelako izan daiteke — aktibatu monodibisa modua zure profilean konparatzeko.",
 
   // PDF report
@@ -477,6 +478,7 @@ const eu: TranslationKeys = {
   "pdf.generated": "Sortua",
   "pdf.informative": "Informatibo",
   "pdf.blocked_losses": "Anti-churning blokeatutako galerak",
+  "pdf.reintegrated_losses": "Berreskuratutako galerak (anti-churning)",
   "pdf.interest_margin": "Marjina interesak (ez kengarria)",
   "pdf.section_casillas": "1. Laukien Laburpena — 100 Eredua",
   "pdf.section_operations": "2. Eragiketen Xehetasuna",

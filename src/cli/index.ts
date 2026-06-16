@@ -180,23 +180,58 @@ program
 
       // 3b. Apply loss carryforward if prior losses provided
       if (opts.priorLosses) {
-        let priorData: Array<{
-          year: number; amount: string; remaining: string; category: "gains" | "income";
-        }>;
+        // Parse + validate exactly like --crypto-rates above: never trust the
+        // file's shape. A bad entry is dropped with a warning; an unparseable
+        // amount/remaining can't reach new Decimal() unguarded (it would throw
+        // outside this block and abort with a cryptic stack instead of a clear
+        // Spanish message).
+        let parsedLosses: unknown;
         try {
-          priorData = JSON.parse(readFileSync(opts.priorLosses, "utf-8")) as Array<{
-            year: number; amount: string; remaining: string; category: "gains" | "income";
-          }>;
+          parsedLosses = JSON.parse(readFileSync(opts.priorLosses, "utf-8"));
         } catch {
           console.error(`Error: No se pudo leer el archivo ${opts.priorLosses}: JSON inválido.`);
           process.exit(1);
         }
-        const priorLosses: LossCarryforward[] = priorData.map((l) => ({
-          year: l.year,
-          amount: new Decimal(l.amount),
-          remaining: new Decimal(l.remaining),
-          category: l.category,
-        }));
+        if (!Array.isArray(parsedLosses)) {
+          console.error("Error: --prior-losses debe ser un array de { year, amount, remaining, category }.");
+          process.exit(1);
+        }
+
+        const priorLosses: LossCarryforward[] = [];
+        for (const raw of parsedLosses as unknown[]) {
+          if (raw == null || typeof raw !== "object") {
+            console.error("Aviso: se ha omitido una entrada de --prior-losses con formato no válido.");
+            continue;
+          }
+          const l = raw as Record<string, unknown>;
+          if (typeof l.amount !== "string" || typeof l.remaining !== "string") {
+            console.error("Aviso: se ha omitido una entrada de --prior-losses sin \"amount\"/\"remaining\" de tipo cadena.");
+            continue;
+          }
+          if (l.category !== "gains" && l.category !== "income") {
+            console.error('Aviso: se ha omitido una entrada de --prior-losses con "category" no válida (debe ser "gains" o "income").');
+            continue;
+          }
+          const year = typeof l.year === "number" && Number.isFinite(l.year) ? l.year : NaN;
+          if (Number.isNaN(year)) {
+            console.error('Aviso: se ha omitido una entrada de --prior-losses con "year" no numérico.');
+            continue;
+          }
+          let amount: Decimal;
+          let remaining: Decimal;
+          try {
+            amount = new Decimal(l.amount);
+            remaining = new Decimal(l.remaining);
+          } catch {
+            console.error(`Aviso: se ha omitido una entrada de --prior-losses con importes no numéricos (year ${year}).`);
+            continue;
+          }
+          if (!amount.isFinite() || !remaining.isFinite()) {
+            console.error(`Aviso: se ha omitido una entrada de --prior-losses con importes no finitos (year ${year}).`);
+            continue;
+          }
+          priorLosses.push({ year, amount, remaining, category: l.category });
+        }
 
         const netGains = report.capitalGains.netGainLoss;
         const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
@@ -500,6 +535,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
     resumen: {
       ganancia_neta: report.capitalGains.netGainLoss.toFixed(2),
       perdidas_bloqueadas_antichurning: report.capitalGains.blockedLosses.toFixed(2),
+      perdidas_reintegradas_antichurning: report.capitalGains.reintegratedLosses.toFixed(2),
       ganancia_neta_fx: report.fxGains.netGainLoss.toFixed(2),
       num_operaciones: report.capitalGains.disposals.length,
       num_operaciones_fx: report.fxGains.disposals.length,
@@ -574,6 +610,9 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   }
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
+  }
+  if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
+    console.error(`    ↩ Pérdidas reintegradas (diferidas de años anteriores): ${report.capitalGains.reintegratedLosses.toFixed(2)} EUR`);
   }
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");

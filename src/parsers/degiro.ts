@@ -22,6 +22,7 @@ import {
   toFiniteDecimal,
   convertDateDMY,
   findColumn,
+  stripBom,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -460,12 +461,12 @@ export const degiroParser: BrokerParser = {
   formats: ["Transactions CSV", "Account CSV"],
 
   detect(input: string): boolean {
-    const firstLine = input.split(/\r?\n/)[0] ?? "";
+    const firstLine = stripBom(input).split(/\r?\n/)[0] ?? "";
     return isDegiroTransactions(firstLine) || isDegiroAccount(firstLine);
   },
 
   parse(input: string): Statement {
-    const lines = input.split(/\r?\n/).filter((l) => l.trim());
+    const lines = stripBom(input).split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) {
       throw new Error("Degiro CSV: fichero vacío o sin datos");
     }

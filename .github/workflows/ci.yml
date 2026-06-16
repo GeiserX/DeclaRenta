@@ -9,6 +9,13 @@ on:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     # Public fork PRs run arbitrary dependency scripts and test code. Keep this
@@ -28,7 +35,9 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npm run typecheck
+        run: |
+          npm run typecheck
+          npm run typecheck:tests
 
       - name: Lint
         run: npm run lint

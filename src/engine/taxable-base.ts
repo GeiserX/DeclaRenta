@@ -8,16 +8,14 @@
  * (DeclaRenta's hard rule). The chart API still wants plain numbers, so we
  * convert to `Number` only at the very end.
  *
- * IMPORTANT — this is a PRESENTATION figure, NOT the engine's fiscal savings
- * base. The engine (`generators/report.ts`) computes `totalSavingsBase` by
- * clamping each savings bucket SEPARATELY —
- *   max(0, capitalGains) + max(0, fxGains) + dividends + interest
- * — and does NOT add wash-sale `blockedLosses`. This chart deliberately clamps
- * the WHOLE sum (and adds `blockedLosses` back, since blocked losses are
- * deferred, not deductible now). The two can diverge for a taxpayer with a net
- * loss in one savings bucket. This helper preserves the chart's historical
- * formula verbatim; it does NOT try to reconcile with the engine. Any fiscal
- * correction is a separate, deliberate decision.
+ * This is the PRESENTATION figure for the chart. It applies the SAME
+ * anti-churning adjustment the engine uses for `totalSavingsBase`: the
+ * proportionally-blocked loss is added back (deferred, not deductible now) and
+ * the reintegrated prior deferred loss is subtracted (now deductible). The chart
+ * clamps the WHOLE sum at zero, while the engine clamps each savings bucket
+ * separately — so the two can still differ for a taxpayer with a net loss in one
+ * bucket, but they now agree on the anti-churning treatment (no more silent
+ * blocked-loss divergence).
  */
 
 import Decimal from "decimal.js";
@@ -47,7 +45,7 @@ export interface TaxableBaseResult {
  * minimal surface.
  */
 export interface TaxableBaseReport {
-  capitalGains: { netGainLoss: Decimal; blockedLosses: Decimal };
+  capitalGains: { netGainLoss: Decimal; blockedLosses: Decimal; reintegratedLosses: Decimal };
   fxGains: { netGainLoss: Decimal };
   dividends: { grossIncome: Decimal };
   interest: { earned: Decimal };
@@ -71,9 +69,11 @@ export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableB
   const dividends = report.dividends.grossIncome;
   const interest = report.interest.earned;
   const blockedLosses = report.capitalGains.blockedLosses;
+  const reintegratedLosses = report.capitalGains.reintegratedLosses;
 
   const sum = capitalGains
     .plus(blockedLosses)
+    .minus(reintegratedLosses)
     .plus(fxGains)
     .plus(dividends)
     .plus(interest);

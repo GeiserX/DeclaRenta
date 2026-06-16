@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  IBKR · Degiro · Scalable Capital · eToro · Freedom24 · Trade Republic · Revolut · Lightyear · Coinbase · Binance · Kraken · Trading 212 → Modelo 100 · Modelo 720 · Modelo 721 · D-6
+  IBKR · Degiro · Flatex · Scalable Capital · eToro · Freedom24 · Trade Republic · Revolut · Lightyear · Coinbase · Binance · Kraken · Trading 212 → Modelo 100 · Modelo 720 · Modelo 721 · D-6
 </p>
 
 <p align="center">
@@ -60,11 +60,16 @@ DeclaRenta automatiza todo esto.
 |---|---|---|
 | Interactive Brokers | Flex Query XML | Trades, dividendos, corporate actions, posiciones |
 | Degiro | CSV (transacciones + cartera) | Delimitador auto-detectado (coma/punto y coma) |
+| Flatex | CSV (Depotumsätze + Kontoumsätze) | Dos ficheros: operaciones y movimientos de caja (dividendos/comisiones) |
 | Scalable Capital | CSV (14 columnas) | Incluye savings plans y distribuciones |
 | eToro | XLSX (cuenta completa) | Posiciones cerradas + dividendos + CFDs, 6+ versiones de cabeceras |
 | Freedom24 | JSON (report export) | Trades, dividendos, retenciones |
+| Revolut | XLSX (Trading Account Statement) | Posiciones cerradas (acciones y cripto) con PnL y comisiones |
+| Lightyear | CSV (Transaction Report) | Compras, ventas, dividendos, distribuciones, intereses |
+| Trade Republic | CSV (Actividad) | Operaciones de compraventa y dividendos |
+| Trading 212 | CSV (Historial de transacciones) | Operaciones de compraventa y dividendos |
 | Coinbase | CSV (historial de transacciones) | Crypto trades y conversiones |
-| Binance | CSV (historial de trades) | Spot trades de criptomonedas |
+| Binance | CSV (historial de transacciones) | Spot trades, conversiones e ingresos cripto |
 | Kraken | CSV (trades/ledger) | Crypto trades y staking |
 
 Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO cruzado.
@@ -73,7 +78,7 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 | Modelo | Descripción | Formato |
 |---|---|---|
-| **Modelo 100** (IRPF) | Casillas 0327, 0328, 0029, 0027, 0588 (pérdidas bloqueadas: informativo) | JSON, CSV, PDF (con tipos ECB) |
+| **Modelo 100** (IRPF) | Casillas 0328, 0331, 1633, 1637, 0029, 0027, 0588 (pérdidas bloqueadas: informativo) | JSON, CSV, PDF (con tipos ECB) |
 | **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR), tipos A/M/C | Fixed-width AEAT (validado contra spec BOE) |
 | **Modelo 721** | Revisión orientativa de criptomonedas en el extranjero (>50.000 EUR) | Generación oficial pendiente: AEAT exige XML |
 | **Modelo D-6** | Guía orientativa para participaciones significativas (Banco de España / AFORIX) | JSON o guía paso a paso |
@@ -82,13 +87,17 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 | Casilla | Concepto |
 |---|---|
-| 0327 | Valor de transmisión (importe total de ventas) |
-| 0328 | Valor de adquisición (coste total FIFO con tipos ECB) |
+| 0328 | Valor de transmisión — acciones negociadas (importe total de ventas) |
+| 0331 | Valor de adquisición — acciones negociadas (coste total FIFO con tipos ECB) |
+| 1633 | Valor de transmisión — otros elementos (opciones, cripto, fondos no cotizados) y divisa (FX) |
+| 1637 | Valor de adquisición — otros elementos y divisa (FX) |
 | 0029 | Dividendos brutos de acciones extranjeras |
 | 0027 | Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF) |
 | — | Intereses pagados al broker (margen, no deducible — informativo) |
-| — | Pérdidas bloqueadas por regla anti-churning (Art. 33.5.f) — informativo, no hay casilla agregada en Renta Web |
+| — | Pérdidas bloqueadas por regla anti-churning (Art. 33.5.f/g) — informativo, no hay casilla agregada en Renta Web |
 | 0588 | Deducción por doble imposición internacional |
+
+> La casilla **0327** es un campo de texto (denominación de los valores), no un importe. Las ganancias por tipo de cambio (Art. 33.1 LIRPF) se declaran junto a los «otros elementos patrimoniales» en las casillas 1633/1637.
 
 ## Interfaz web
 
@@ -163,7 +172,7 @@ El broker se auto-detecta a partir del contenido del fichero. Se puede forzar co
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
-- **Regla anti-churning** (Art. 33.5.f LIRPF): bloqueo de pérdidas si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto). Excluye derivados y forex
+- **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto) — solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se reintegra al transmitir los valores recomprados. Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
@@ -201,7 +210,7 @@ node dist/cli.js convert --input test.xml --year 2025
 
 Las contribuciones son bienvenidas. Áreas donde más ayuda se necesita:
 
-- **Parsers de brokers**: Trade Republic, Revolut, XTB, MyInvestor
+- **Parsers de brokers**: XTB, MyInvestor
 - **Reglas fiscales**: casos edge de FIFO, convenios de doble imposición por país
 - **Tests**: más fixtures con operaciones reales anonimizadas
 - **Traducciones**: las traducciones a catalán, euskera y gallego son automáticas — se necesita revisión por hablantes nativos

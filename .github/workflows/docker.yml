@@ -1,8 +1,9 @@
 name: Docker Build & Push
 
 on:
-  push:
-    tags: ["v*"]
+  # No `push: tags` trigger — release.yml owns the release build via the
+  # workflow_call below (it creates the tag, then calls this workflow). A tag
+  # trigger here would double-build the same image on every release.
   workflow_call:
     inputs:
       version:

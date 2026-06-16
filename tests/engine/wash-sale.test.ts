@@ -25,11 +25,18 @@ function makeDisposal(overrides: Partial<FifoDisposal>): FifoDisposal {
   };
 }
 
-function makeTrade(isin: string, date: string, buySell: "BUY" | "SELL"): Trade {
+/**
+ * Build a Trade. `quantity` defaults to "10" so every pre-existing call (which
+ * passes only isin/date/buySell, where proportional blocking == whole-loss
+ * because the repurchase covers the full sold quantity) keeps working unchanged.
+ * The proportional-blocking tests pass an explicit quantity to vary the
+ * repurchased size against the sold quantity.
+ */
+function makeTrade(isin: string, date: string, buySell: "BUY" | "SELL", quantity = "10"): Trade {
   return {
     tradeID: "1", accountId: "U1", symbol: "AAPL", description: "APPLE INC",
     isin, assetCategory: "STK", currency: "USD", tradeDate: date,
-    settlementDate: date, quantity: "10", tradePrice: "100",
+    settlementDate: date, quantity, tradePrice: "100",
     tradeMoney: "1000", proceeds: "1000", cost: "1000",
     fifoPnlRealized: "0", fxRateToBase: "1", buySell,
     openCloseIndicator: buySell === "BUY" ? "O" : "C",
@@ -346,5 +353,241 @@ describe("detectWashSales", () => {
     const result = detectWashSales(disposals, trades);
     const blocked = result.map((d) => d.washSaleBlocked);
     expect(blocked).toEqual([true, false, false, false, true]);
+  });
+});
+
+describe("proportional blocking + reintegration", () => {
+  const AAPL = "US0378331005";
+
+  it("blocks loss PROPORTIONAL to the repurchased quantity (sell 100, rebuy 30 → 30%)", () => {
+    // Sell 100 sh at a €1000 loss; rebuy only 30 within the 2-month window.
+    // blockedLossEur = |loss| × 30/100 = €300. The loss on the other 70 is
+    // deductible now (DGT V0913-08 "por paquetes").
+    const disposals = [makeDisposal({
+      isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+      quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+    })];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-07-01", "BUY", "30"), // repurchase 30 sh, 16 days later
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("300.00");
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("caps the block at the whole loss when the repurchase ≥ the sold quantity (rebuy 120 ≥ sell 100)", () => {
+    // Repurchasing MORE than was sold cannot block more than the loss itself:
+    // absorbed is capped at the sold quantity → blockedLossEur === |loss|.
+    const disposals = [makeDisposal({
+      isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+      quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+    })];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-07-01", "BUY", "120"), // rebuy 120 > 100 sold
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("1000.00");
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("blocks NOTHING when there is no repurchase at all", () => {
+    const disposals = [makeDisposal({
+      isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+      quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+    })];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("blocks NOTHING when the repurchase falls outside the window (listed ISIN, 2-month window)", () => {
+    // Listed STK with a real ISIN → 2-month window. A repurchase 3 months later
+    // is outside it, so the proportional block is zero.
+    const disposals = [makeDisposal({
+      isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+      quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+    })];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-09-16", "BUY", "30"), // 2025-06-15 + 2mo = 2025-08-15; ~3 months out
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
+  it("consumes ONE repurchase budget across TWO loss-sales without double-counting (50-sh budget → 500 total)", () => {
+    // Two €1000 loss-sales of 100 sh each (same ISIN), but only ONE 50-share
+    // repurchase inside both windows. The 50-share budget absorbs 50 sh of loss
+    // ONCE (DGT V2481-20: "no puede una misma compra determinar la no imputación
+    // de varias pérdidas"). Total blocked = |loss| × 50/100 of ONE sale = €500,
+    // NOT €1000. The budget is consumed chronologically: the EARLIER sale
+    // (2025-06-15) gets the €500 block; the LATER sale (2025-07-20) gets €0.
+    const disposals = [
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-07-20",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-07-20", "SELL", "100"),
+      // One 50-sh repurchase on 2025-07-01: within 2mo of BOTH sales.
+      makeTrade(AAPL, "2025-07-01", "BUY", "50"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const earliest = result.find((d) => d.sellDate === "2025-06-15")!;
+    const later = result.find((d) => d.sellDate === "2025-07-20")!;
+    expect(earliest.blockedLossEur.toFixed(2)).toBe("500.00");
+    expect(later.blockedLossEur.toFixed(2)).toBe("0.00");
+    // Total blocked across both disposals === one sale's 50% (no double-count).
+    const total = result.reduce((s, d) => s.plus(d.blockedLossEur), new Decimal(0));
+    expect(total.toFixed(2)).toBe("500.00");
+  });
+
+  it("DEFERS then RELEASES the loss when the repurchased lot is later sold (full reintegration, cross-year)", () => {
+    // (a) BUY 100 (2024-01-10), (b) SELL 100 at €1000 loss (2024-06-01),
+    // (c) BUY 100 — the repurchase — (2024-07-01) inside the 2-month window →
+    // blocks the whole €1000; (d) SELL 100 (2025-03-01) of shares whose
+    // acquireDate === the repurchase date (2024-07-01) → releases the €1000.
+    const disposals = [
+      // The loss-sale disposal (sold the original lot acquired 2024-01-10).
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2024-06-01", acquireDate: "2024-01-10",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+      // The later disposal sells the repurchased lot (acquireDate = 2024-07-01).
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-03-01", acquireDate: "2024-07-01",
+        quantity: new Decimal(100), gainLossEur: new Decimal(200), // gain or loss irrelevant to release
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2024-01-10", "BUY", "100"),  // original lot
+      makeTrade(AAPL, "2024-06-01", "SELL", "100"), // the loss-sale
+      makeTrade(AAPL, "2024-07-01", "BUY", "100"),  // the repurchase (blocks the loss)
+      makeTrade(AAPL, "2025-03-01", "SELL", "100"), // sells the repurchased lot
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const lossSale = result.find((d) => d.sellDate === "2024-06-01")!;
+    const release = result.find((d) => d.sellDate === "2025-03-01")!;
+    expect(lossSale.blockedLossEur.toFixed(2)).toBe("1000.00");
+    expect(release.reintegratedLossEur.toFixed(2)).toBe("1000.00");
+  });
+
+  it("releases the deferred loss PROPORTIONALLY across partial sales of the repurchased lot", () => {
+    // Same block as above (€1000 deferred onto the 100-sh repurchase of 2024-07-01),
+    // but the surviving lot is sold in two halves: 50 sh (2025-03-01) releases
+    // €500, the remaining 50 sh (2025-05-01) releases the other €500.
+    const disposals = [
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2024-06-01", acquireDate: "2024-01-10",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-03-01", acquireDate: "2024-07-01",
+        quantity: new Decimal(50), gainLossEur: new Decimal(100),
+      }),
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-05-01", acquireDate: "2024-07-01",
+        quantity: new Decimal(50), gainLossEur: new Decimal(100),
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2024-01-10", "BUY", "100"),
+      makeTrade(AAPL, "2024-06-01", "SELL", "100"),
+      makeTrade(AAPL, "2024-07-01", "BUY", "100"),
+      makeTrade(AAPL, "2025-03-01", "SELL", "50"),
+      makeTrade(AAPL, "2025-05-01", "SELL", "50"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const lossSale = result.find((d) => d.sellDate === "2024-06-01")!;
+    const release1 = result.find((d) => d.sellDate === "2025-03-01")!;
+    const release2 = result.find((d) => d.sellDate === "2025-05-01")!;
+    expect(lossSale.blockedLossEur.toFixed(2)).toBe("1000.00");
+    expect(release1.reintegratedLossEur.toFixed(2)).toBe("500.00");
+    expect(release2.reintegratedLossEur.toFixed(2)).toBe("500.00");
+  });
+
+  it("blocks proportionally for CRYPTO using the 12-month window (sell 100, rebuy 25 → 25%)", () => {
+    // CRYPTO → 12-month window. A partial repurchase 6 months later is in-window
+    // and blocks proportionally: |loss| × 25/100 = €125.
+    const disposals = [makeDisposal({
+      isin: "", symbol: "BTC", assetCategory: "CRYPTO", sellDate: "2025-06-15",
+      quantity: new Decimal(100), gainLossEur: new Decimal(-500),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL", "100"), symbol: "BTC", isin: "", assetCategory: "CRYPTO" as const },
+      { ...makeTrade("", "2025-12-01", "BUY", "25"), symbol: "BTC", isin: "", assetCategory: "CRYPTO" as const },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("125.00");
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("regression: a FULL repurchase (sell 10, rebuy 10) still blocks the WHOLE loss (backward compat)", () => {
+    // The old boolean behavior == proportional with absorbed == sold quantity.
+    // Sell 10 at €100 loss, rebuy 10 → blockedLossEur === |loss| === €100.
+    const disposals = [makeDisposal({
+      isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15",
+      quantity: new Decimal(10), gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      makeTrade(AAPL, "2025-06-15", "SELL", "10"),
+      makeTrade(AAPL, "2025-07-01", "BUY", "10"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("100.00");
+    expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it("keys the deferred loss on the SURVIVING post-sale repurchase, not an in-window pre-sale buy (reintegration regression)", () => {
+    // Both a pre-sale buy (2025-05-01, the lot FIFO sells) AND a genuine post-sale
+    // repurchase (2025-07-01, which survives) fall inside the 2-month window. The
+    // budget must attach the deferred loss to the SURVIVING 2025-07-01 lot so that
+    // selling it later (2025-12-01) reintegrates the loss — not strand it on the
+    // already-sold 2025-05-01 date. Regression for the review's HIGH finding.
+    const disposals = [
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", acquireDate: "2025-05-01",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-12-01", acquireDate: "2025-07-01",
+        quantity: new Decimal(100), gainLossEur: new Decimal(50),
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-05-01", "BUY", "100"), // pre-sale, in-window, becomes the sold lot
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-07-01", "BUY", "100"), // genuine surviving repurchase
+      makeTrade(AAPL, "2025-12-01", "SELL", "100"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const lossSale = result.find((d) => d.sellDate === "2025-06-15")!;
+    const laterSale = result.find((d) => d.sellDate === "2025-12-01")!;
+    // Whole loss blocked (a repurchase covers all 100 sold)…
+    expect(lossSale.blockedLossEur.toFixed(2)).toBe("1000.00");
+    // …and it RELEASES when the surviving repurchased lot is sold — not stranded.
+    expect(laterSale.reintegratedLossEur.toFixed(2)).toBe("1000.00");
   });
 });

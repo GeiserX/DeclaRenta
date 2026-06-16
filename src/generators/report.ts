@@ -49,6 +49,10 @@ function splitDisposal(d: FifoDisposal, n: number): FifoDisposal {
     proceedsFcy: d.proceedsFcy.div(n),
     costBasisFcy: d.costBasisFcy.div(n),
     gainLossFcy: d.gainLossFcy.div(n),
+    // Anti-churning amounts must split too, or a >1-titulares declaration
+    // over-counts the deferred/released loss by ×n.
+    blockedLossEur: d.blockedLossEur.div(n),
+    reintegratedLossEur: d.reintegratedLossEur.div(n),
   };
 }
 
@@ -322,8 +326,15 @@ export function generateTaxReport(
   const titulares = Number.isFinite(titularesRaw) && titularesRaw >= 1 ? titularesRaw : 1;
 
   const yearStr = year.toString();
-  let disposals = fifoEngine.getDisposals().filter((d) => d.sellDate.startsWith(yearStr));
-  disposals = detectWashSales(disposals, statement.trades);
+  // Run anti-churning on the FULL (all-year) disposal set BEFORE year-filtering,
+  // so a loss blocked in one year and released when the surviving repurchased
+  // shares are sold in a LATER year are matched in a merged multi-file run
+  // (cross-year reintegration). For a single-year file the full set == the year
+  // set, so this is identical to before. Then keep only the target year's
+  // disposals for the figures (a block/release is attributed to the year of the
+  // disposal that carries it).
+  const allDisposals = detectWashSales(fifoEngine.getDisposals(), statement.trades);
+  let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
 
   const transmissionValue = disposals.reduce(
@@ -334,9 +345,14 @@ export function generateTaxReport(
     (sum, d) => sum.plus(d.costBasisEur),
     new Decimal(0),
   );
-  const blockedLosses = disposals
-    .filter((d) => d.washSaleBlocked)
-    .reduce((sum, d) => sum.plus(d.gainLossEur.abs()), new Decimal(0));
+  // Anti-churning (Art. 33.5.f/g LIRPF), PROPORTIONAL: blocked = the portion of
+  // each loss deferred now (Σ blockedLossEur); reintegrated = previously-deferred
+  // losses released this year because the surviving repurchased shares were sold
+  // (Σ reintegratedLossEur). The fiscal capital-gains contribution adds the
+  // blocked portion BACK (not deductible now) and SUBTRACTS the reintegrated
+  // portion (now deductible) — see totalSavingsBase below.
+  const blockedLosses = disposals.reduce((sum, d) => sum.plus(d.blockedLossEur), new Decimal(0));
+  const reintegratedLosses = disposals.reduce((sum, d) => sum.plus(d.reintegratedLossEur), new Decimal(0));
 
   // 2. Dividends (filter to target year)
   const yearCashTransactions = statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
@@ -469,7 +485,15 @@ export function generateTaxReport(
   // 5. Double taxation. Art. 80 caps the deduction by the effective average
   // Spanish rate on the relevant savings-tax base, not by standalone country
   // brackets computed in isolation.
-  const totalSavingsBase = Decimal.max(transmissionValue.minus(acquisitionValue), 0)
+  // Anti-churning adjusts the capital-gains bucket: add back the proportionally
+  // blocked (deferred) loss so it is NOT deducted now, and subtract the
+  // reintegrated (now-released) prior deferred loss. This is the fiscal base, not
+  // the raw netGainLoss — blocked losses no longer silently reduce the base.
+  const fiscalCapitalGains = transmissionValue
+    .minus(acquisitionValue)
+    .plus(blockedLosses)
+    .minus(reintegratedLosses);
+  const totalSavingsBase = Decimal.max(fiscalCapitalGains, 0)
     .plus(Decimal.max(fxTransmissionValue.minus(fxAcquisitionValue), 0))
     .plus(grossDividends)
     .plus(interestEarned);
@@ -551,6 +575,7 @@ export function generateTaxReport(
     transmissionValue,
     acquisitionValue,
     blockedLosses,
+    reintegratedLosses,
     grossDividends,
     interestEarned,
     interestPaid,
@@ -579,6 +604,7 @@ export function generateTaxReport(
       acquisitionValue: t.acquisitionValue,
       netGainLoss: t.transmissionValue.minus(t.acquisitionValue),
       blockedLosses: t.blockedLosses,
+      reintegratedLosses: t.reintegratedLosses,
       disposals,
     },
     dividends: {

@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, stripBom } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -46,7 +46,7 @@ interface TrColumns {
 }
 
 function resolveColumns(headers: string[]): TrColumns {
-  const idx = (names: string[]) => headers.findIndex((h) => names.includes(h.toLowerCase().trim()));
+  const idx = (names: string[]) => findColumn(headers, names);
   return {
     datetime: idx(["datetime"]),
     date: idx(["date"]),
@@ -201,9 +201,14 @@ function parseTrCsv(lines: string[]): Statement {
     // --- CASH: DIVIDEND ---
     if (category === "CASH" && type === "DIVIDEND") {
       const isinCountry = symbol.length >= 2 ? symbol.slice(0, 2).toUpperCase() : "";
-      const divAmount = originalAmount && originalCurrency
-        ? originalAmount
-        : amountStr;
+      // `originalAmount` is a RAW trimmed field (never normalized) and `amountStr`
+      // is parseNumber-only (no finiteness check), so route the emitted amount
+      // through toFiniteDecimalString — a literal "NaN"/"Infinity" or unparseable
+      // value would otherwise reach `new Decimal(div.amount)` in dividends.ts and
+      // poison Casilla 0029. Mirrors the TRADING branch's toFiniteDecimal usage.
+      const divAmount = toFiniteDecimalString(
+        originalAmount && originalCurrency ? originalAmount : amountStr,
+      );
       const divCurrency = originalCurrency || currency;
       const fxToBase = fxRate || "1";
 
@@ -251,7 +256,10 @@ function parseTrCsv(lines: string[]): Statement {
         currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: amountStr,
+        // numStr is parseNumber-only (no finiteness check); guard the emitted
+        // amount so a non-finite value can't reach new Decimal() in the
+        // interest engine and poison Casilla 0027 (mirrors the TRADING branch).
+        amount: toFiniteDecimalString(amountStr),
         fxRateToBase: "1",
         type: "Broker Interest Received",
       });

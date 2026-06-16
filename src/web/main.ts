@@ -359,6 +359,14 @@ function getFileBytes(file: File): Promise<Uint8Array> {
   let p = fileBytesCache.get(file);
   if (!p) {
     p = file.arrayBuffer().then((buf) => new Uint8Array(buf));
+    // Don't cache a rejected read: a transient failure would otherwise become
+    // permanent (every retry returns the same rejected promise). Evict on
+    // rejection so a later attempt re-reads. The detached .catch only cleans
+    // the cache and swallows nothing for callers — they await `p` and still
+    // observe the rejection.
+    p.catch(() => {
+      if (fileBytesCache.get(file) === p) fileBytesCache.delete(file);
+    });
     fileBytesCache.set(file, p);
   }
   return p;
@@ -502,13 +510,23 @@ async function parseFiles(): Promise<void> {
     mergedStatement = finalizeMergedStatement(merged);
     detectedBrokers = [...new Set(brokerNames)];
 
-    // Detect years from trades + cash transactions
+    // Detect years from trades + cash transactions. A corrupt date would make
+    // parseInt() return NaN (or an absurd year), which then poisons activeYear
+    // and is persisted to localStorage — so only accept plausible years, exactly
+    // like the year-selector handler below guards with isNaN.
     const yearSet = new Set<number>();
-    for (const tr of merged.trades) yearSet.add(parseInt(tr.tradeDate.slice(0, 4)));
-    for (const ct of merged.cashTransactions) yearSet.add(parseInt(ct.dateTime.slice(0, 4)));
+    const addYear = (raw: string): void => {
+      const y = parseInt(raw.slice(0, 4));
+      if (Number.isFinite(y) && y >= 1900 && y < 3000) yearSet.add(y);
+    };
+    for (const tr of merged.trades) addYear(tr.tradeDate);
+    for (const ct of merged.cashTransactions) addYear(ct.dateTime);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
-    if (detectedYears.length > 0 && !activeYear) {
-      activeYear = detectedYears[0]!;
+    if (!activeYear) {
+      // detectedYears[0] is undefined when no valid year was found (all dates
+      // corrupt / empty file) — fall back to the current calendar year so we
+      // never persist NaN as the active year.
+      activeYear = detectedYears[0] ?? new Date().getFullYear();
       // Sync profile so 720/721/D-6 use the same year
       const profile = getProfile();
       profile.year = activeYear;

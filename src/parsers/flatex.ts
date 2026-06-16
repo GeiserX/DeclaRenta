@@ -26,6 +26,7 @@ import {
   toFiniteDecimal,
   convertDateDMYDot,
   findColumn,
+  stripBom,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -317,12 +318,12 @@ export const flatexParser: BrokerParser = {
   formats: ["Depotumsätze CSV", "Kontoumsätze CSV"],
 
   detect(input: string): boolean {
-    const firstLine = input.split(/\r?\n/)[0] ?? "";
+    const firstLine = stripBom(input).split(/\r?\n/)[0] ?? "";
     return isFlatexDepot(firstLine) || isFlatexKonto(firstLine);
   },
 
   parse(input: string): Statement {
-    const lines = input.split(/\r?\n/).filter((l) => l.trim());
+    const lines = stripBom(input).split(/\r?\n/).filter((l) => l.trim());
     if (lines.length < 2) {
       throw new Error("Flatex CSV: fichero vacío o sin datos");
     }

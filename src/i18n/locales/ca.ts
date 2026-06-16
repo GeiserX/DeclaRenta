@@ -84,6 +84,7 @@ const ca: TranslationKeys = {
   "casilla.general_gains": "Guanys patrimonials no derivats de transmissió (airdrops, comissions de referits)",
   "casilla.double_taxation": "Deducció doble imposició",
   "casilla.blocked_losses": "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
+  "casilla.reintegrated_losses": "Pèrdues diferides d'anys anteriors ara deduïbles (es van vendre els valors recomprats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",
   "messages.errors_title": "{{count}} error(s) — requereix atenció",
   "messages.warnings_title": "{{count}} avís(os) — revisa",
@@ -469,7 +470,7 @@ const ca: TranslationKeys = {
   "guide_rw.interest_note": "Els interessos del broker (remuneració de saldo) es declaren com a rendiments del capital mobiliari. Els interessos de marge pagats NO són deduïbles (Art. 26.1.a LIRPF).",
   "guide_rw.double_taxation_note": "La deducció per doble imposició evita pagar dues vegades impostos sobre els mateixos dividends. Es limita al menor entre el pagat a l'origen i la quota espanyola. Si el conveni de doble imposició permet un tipus màxim inferior (ex. 15% EUA), només és deduïble fins a aquest límit.",
   "guide_rw.blocked_losses_title": "Pèrdues bloquejades (anti-churning)",
-  "guide_rw.blocked_losses_hint": "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web. Aquestes pèrdues es difereixen a l'exercici següent perquè es va recomprar el mateix valor en els 2 mesos posteriors (cotitzats) o 1 any (no cotitzats). L'import se suma a l'adquisició de la nova posició.",
+  "guide_rw.blocked_losses_hint": "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web per aquest import. Només es bloqueja la part proporcional a les accions recomprades dins dels 2 mesos (cotitzats) o 1 any (no cotitzats); la resta de la pèrdua s'imputa amb normalitat. La pèrdua bloquejada NO se suma al cost de la nova posició: queda diferida i es reintegra quan transmetis aquests valors recomprats.",
   "guide_rw.closing_tip": "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina (Autodeclaro, Taxdown) mostra un import diferent en guanys patrimonials, pot ser perquè no calcula els guanys per tipus de canvi per separat — activa el mode monodivisa al teu perfil per comparar.",
 
   // PDF report
@@ -477,6 +478,7 @@ const ca: TranslationKeys = {
   "pdf.generated": "Generat el",
   "pdf.informative": "Informatiu",
   "pdf.blocked_losses": "Pèrdues bloquejades anti-churning",
+  "pdf.reintegrated_losses": "Pèrdues reintegrades (anti-churning)",
   "pdf.interest_margin": "Interessos marge (no deduïble)",
   "pdf.section_casillas": "1. Resum de Caselles — Model 100",
   "pdf.section_operations": "2. Detall d'Operacions",

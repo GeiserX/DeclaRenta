@@ -87,6 +87,7 @@ const es = {
   "casilla.general_gains": "Ganancias patrimoniales no derivadas de transmisión (airdrops, comisiones de referidos)",
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.blocked_losses": "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
+  "casilla.reintegrated_losses": "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
   "messages.errors_title": "{{count}} error(es) — requiere atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
@@ -502,7 +503,7 @@ const es = {
   "guide_rw.interest_note": "Los intereses del broker (remuneración de saldo) se declaran como rendimientos del capital mobiliario. Los intereses de margen pagados NO son deducibles (Art. 26.1.a LIRPF).",
   "guide_rw.double_taxation_note": "La deducción por doble imposición evita pagar dos veces impuestos sobre los mismos dividendos. Se limita al menor entre lo pagado en origen y la cuota española. Si el convenio de doble imposición permite un tipo máximo inferior (ej. 15% EE.UU.), solo es deducible hasta ese límite.",
   "guide_rw.blocked_losses_title": "Pérdidas bloqueadas (anti-churning)",
-  "guide_rw.blocked_losses_hint": "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Estas pérdidas se difieren al ejercicio siguiente porque se recompró el mismo valor en los 2 meses posteriores (cotizados) o 1 año (no cotizados). El importe se suma a la adquisición de la nueva posición.",
+  "guide_rw.blocked_losses_hint": "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web por ese importe. Se bloquea solo la parte proporcional a las acciones recompradas dentro de los 2 meses (cotizados) o 1 año (no cotizados); el resto de la pérdida se imputa con normalidad. La pérdida bloqueada NO se suma al coste de la nueva posición: queda diferida y se reintegra cuando transmitas esos valores recomprados.",
   "guide_rw.closing_tip": "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que no calcula las ganancias por tipo de cambio por separado — activa el modo monodivisa en tu perfil para comparar.",
 
   // PDF report
@@ -510,6 +511,7 @@ const es = {
   "pdf.generated": "Generado el",
   "pdf.informative": "Informativo",
   "pdf.blocked_losses": "Pérdidas bloqueadas anti-churning",
+  "pdf.reintegrated_losses": "Pérdidas reintegradas (anti-churning)",
   "pdf.interest_margin": "Intereses margen (no deducible)",
   "pdf.section_casillas": "1. Resumen de Casillas — Modelo 100",
   "pdf.section_operations": "2. Detalle de Operaciones",
