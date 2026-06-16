@@ -35,12 +35,14 @@
 |---------|----------|------------------------|------------------|
 | **0029** | Ingresos íntegros (dividendos brutos) | Σ dividendo_bruto × tipo_ECB_fecha_pago | Art. 25.1.a LIRPF |
 | **—** | Intereses pagados al broker (margen, **no deducible** — informativo) | Σ intereses_pagados_al_broker × tipo_ECB | Art. 26.1.a LIRPF (solo admite gastos de administración y custodia) |
-| **0033** | Intereses de cuentas y depósitos | Σ intereses_recibidos × tipo_ECB | Art. 25.2 LIRPF |
+| **0027** | Intereses de cuentas, depósitos y activos financieros en general | Σ intereses_recibidos × tipo_ECB | Art. 25.2 LIRPF |
 
 **Notas:**
 - Los dividendos incluyen tanto dividendos ordinarios como "Payment In Lieu of Dividends" (dividendos sustitutivos en operaciones de préstamo de valores).
 - Las retenciones extranjeras NO se deducen aquí — se declaran en la casilla 0588.
 - La conversión a EUR usa el tipo de cambio ECB oficial del día de pago (DGT V0583-16, PGC NRV 11a).
+- Los gastos genuinos de administración y depósito de valores negociables (cuando el bróker los detalla) sí son deducibles en la **Casilla 0037** (Art. 26.1.a LIRPF); la casilla 0027 recoge ingresos íntegros, nunca gastos.
+- Las cuotas de suscripción del bróker (p. ej. planes de trading de tarifa plana) NO son «gastos de administración y depósito de valores negociables», por lo que no son deducibles.
 
 ## Deducciones
 

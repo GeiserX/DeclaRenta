@@ -78,6 +78,10 @@ function resolveColumns(headers: string[]): ScalableColumns {
 const DIVIDEND_TYPES = ["distribution", "dividend", "dividendo", "ausschüttung"];
 const SELL_TYPES = ["sell", "venta", "verkauf"];
 const BUY_TYPES = ["buy", "savings plan", "compra", "sparplan", "kauf"];
+// Cash/savings-account interest (KKT-Abschluss). "interes" matches both EN
+// "interest" and ES "intereses"; "zins" matches DE "zinsen". None of the
+// dividend/buy/sell type tokens contain these substrings, so there is no clash.
+const INTEREST_TYPES = ["interes", "zins"];
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -117,6 +121,36 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const tax = toFiniteDecimalString(fields[cols.tax] ?? "0");
     const currency = (fields[cols.currency] ?? "EUR").trim();
     const reference = (fields[cols.reference] ?? "").trim();
+
+    // Cash/savings-account interest (KKT-Abschluss). Match ONLY the `type`
+    // column (already lowercased above) with a tight keyword set — matching the
+    // description risks sweeping a security named "…Interest…ETF". This branch
+    // MUST stay ABOVE the `if (!isin) continue` guard below: interest rows carry
+    // no ISIN, so the guard would silently drop them before classification.
+    if (INTEREST_TYPES.some((k) => type.includes(k))) {
+      // Sign decides the IRPF treatment (split downstream by type, abs()'d):
+      //   positive → interest credited → Casilla 0027 (Art. 25.2 LIRPF)
+      //   negative → cash-account charge → "intereses pagados al broker"
+      //              (Art. 26.1.a, informational only, not deductible)
+      //   zero     → no economic event → skip
+      const signed = new Decimal(amount);
+      if (signed.isZero()) continue;
+      // NOTE: foreign withholding on interest (Casilla 0588) is not yet handled — Scalable cash interest to non-residents is typically paid gross; follow-up if a real file shows otherwise.
+      cashTransactions.push({
+        transactionID: reference || `scalable-int-${tradeDate}-${i}`,
+        accountId: "",
+        symbol: "CASH",
+        description: description || "Interest - Scalable Capital",
+        isin: "",
+        currency: currency || "EUR",
+        dateTime: tradeDate,
+        settleDate: tradeDate,
+        amount,
+        fxRateToBase: "1",
+        type: signed.isPositive() ? "Broker Interest Received" : "Broker Interest Paid",
+      });
+      continue;
+    }
 
     if (!isin) continue;
 
