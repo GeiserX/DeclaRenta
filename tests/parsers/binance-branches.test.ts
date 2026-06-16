@@ -172,12 +172,12 @@ describe("binanceParser.parse - empty/error cases", () => {
   });
 
   it("should throw on completely empty file", () => {
-    expect(() => binanceParser.parse("")).toThrow("fichero vacio o sin datos");
+    expect(() => binanceParser.parse("")).toThrow("fichero vacío o sin datos");
   });
 
   it("should throw on header-only file (tx format)", () => {
     const input = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
-    expect(() => binanceParser.parse(input)).toThrow("fichero vacio o sin datos");
+    expect(() => binanceParser.parse(input)).toThrow("fichero vacío o sin datos");
   });
 });
 

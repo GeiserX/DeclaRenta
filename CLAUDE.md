@@ -242,11 +242,6 @@ When adding a new section (like 721), follow this checklist:
 - **NEVER** use `favicon.svg` as the `src` for `.splash-logo` or `.brand-logo` in index.html. Those must reference `logo.png`.
 - `docs/images/logo.png` and `src/web/assets/logo.png` are copies of the same logo for docs/README.
 
-### CLI Build Gotcha
-- `tsup` config produces both lib and CLI entries to `dist/` — CLI entry `dist/index.js` collides with lib entry
-- `package.json` `bin.declarenta` points to `./dist/cli.js` which doesn't exist
-- **Workaround**: Use `npx tsx src/cli/index.ts` to run CLI directly during development
-
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"
 - We store the inverse: "1 FCY = X EUR" for direct multiplication with broker amounts

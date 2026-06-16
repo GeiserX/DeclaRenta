@@ -24,14 +24,14 @@ import type { Trade } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { parseDate } from "./dates.js";
 
-/** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f) */
+/** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
 
 /** Asset categories that, when backed by a real ISIN, are treated as listed (2-month window). */
 const LISTED_CATEGORIES: ReadonlySet<string> = new Set(["STK", "FUND", "BOND"]);
 
 /**
- * Add/subtract calendar months (Art. 33.5.f says "dos meses"/"un año", not 60/365 days).
+ * Add/subtract calendar months (Art. 33.5.f/g says "dos meses"/"un año", not 60/365 days).
  *
  * Plain `Date.setMonth(getMonth()+n)` overflows when the source day-of-month does
  * not exist in the target month (e.g. Jan 31 + 1mo → Mar 2/3, because February has
@@ -252,7 +252,7 @@ function normalizeDay(date: string): string {
 /**
  * Choose the anti-churning window length in calendar months.
  *
- * Art. 33.5.f LIRPF distinguishes by whether the security is admitted to
+ * Art. 33.5.f/g LIRPF distinguishes by whether the security is admitted to
  * trading on a regulated market:
  *  - **2 months** for listed securities (regulated markets).
  *  - **1 year (12 months)** for securities NOT admitted to trading

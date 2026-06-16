@@ -143,12 +143,12 @@ describe("binanceParser", () => {
 
   describe("empty and edge cases", () => {
     it("should throw on empty input", () => {
-      expect(() => binanceParser.parse("")).toThrow("vacio");
+      expect(() => binanceParser.parse("")).toThrow("vacío");
     });
 
     it("should throw on header-only input", () => {
       const csv = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
-      expect(() => binanceParser.parse(csv)).toThrow("vacio");
+      expect(() => binanceParser.parse(csv)).toThrow("vacío");
     });
 
     it("should skip rows with unknown side", () => {

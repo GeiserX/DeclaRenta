@@ -17,9 +17,11 @@
  * parsing, use the parseEtoroXlsx() function with the xlsx library.
  */
 
+import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
-import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
+import type { TaxMessage } from "../types/tax.js";
+import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
 type WorkBook = import("xlsx").WorkBook;
@@ -105,7 +107,11 @@ function parseAction(action: string): { direction: "BUY" | "SELL"; symbol: strin
 // Closed Positions parser
 // ---------------------------------------------------------------------------
 
-function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
+function parseClosedPositions(
+  xlsx: typeof import("xlsx"),
+  sheet: WorkSheet,
+  parserMessages: TaxMessage[],
+): Trade[] {
   const rows = sheetToRows(xlsx, sheet);
   if (rows.length < 2) return [];
 
@@ -124,9 +130,26 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
   const isinCol = findColumn(headers, ISIN_HEADERS);
   const directionCol = findColumn(headers, DIRECTION_HEADERS);
 
-  if (actionCol < 0 || unitsCol < 0) return [];
+  if (actionCol < 0 || unitsCol < 0) {
+    // Column detection failed but the sheet HAS data rows → emit an error rather
+    // than silently dropping every trade (eToro renamed/removed the columns).
+    parserMessages.push({
+      id: "etoro.closed_columns_not_detected",
+      severity: "error",
+      message:
+        "No se han podido detectar las columnas de la hoja \"Posiciones cerradas\" de eToro (acción y/o unidades). No se ha importado ninguna operación.",
+      hint: "eToro cambia el formato de exportación; vuelve a descargar el informe XLSX completo de la cuenta.",
+    });
+    return [];
+  }
 
   const trades: Trade[] = [];
+
+  // Count DATA-BEARING rows that were dropped (action/units present but
+  // unparsable) — genuinely-empty rows are NOT counted.
+  let skippedDataRows = 0;
+  // Count rows whose Long/Short direction value was non-empty but unrecognized.
+  let unrecognizedDirection = 0;
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
@@ -159,15 +182,32 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
       // Spanish format: Acción = name, Long/Short = direction
       symbol = actionStr.trim();
       const dirStr = (row[directionCol] ?? "").toLowerCase().trim();
-      direction = dirStr === "short" ? "SELL" : "BUY";
+      // Recognized values: short → SELL; long/buy/real/empty → BUY. Flag any
+      // other non-empty value instead of silently treating it as BUY.
+      if (dirStr === "short") {
+        direction = "SELL";
+      } else {
+        direction = "BUY";
+        if (dirStr && dirStr !== "long" && dirStr !== "buy" && dirStr !== "real") {
+          unrecognizedDirection++;
+        }
+      }
     } else {
       const parsed = parseAction(actionStr);
-      if (!parsed) continue;
+      if (!parsed) {
+        // Action column present but its value is not a parsable Buy/Sell+symbol.
+        if (actionStr.trim()) skippedDataRows++;
+        continue;
+      }
       symbol = parsed.symbol;
       direction = parsed.direction;
     }
 
-    if (!symbol) continue;
+    if (!symbol) {
+      // Direction-column format with an empty instrument name → data dropped.
+      skippedDataRows++;
+      continue;
+    }
 
     const isin = isinCol >= 0 ? (row[isinCol] ?? "").trim() : "";
     const units = (row[unitsCol] ?? "0").trim();
@@ -184,7 +224,11 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
 
     const unitsNum = parseFloat(parseNumber(units));
-    if (unitsNum === 0 || isNaN(unitsNum)) continue;
+    if (unitsNum === 0 || isNaN(unitsNum)) {
+      // Symbol resolved (data-bearing row) but units are zero/non-numeric.
+      skippedDataRows++;
+      continue;
+    }
 
     // eToro closed positions represent a round-trip: buy then sell
     // We create both the opening buy and the closing sell
@@ -254,6 +298,26 @@ function parseClosedPositions(xlsx: typeof import("xlsx"), sheet: WorkSheet): Tr
     });
   }
 
+  if (skippedDataRows > 0) {
+    parserMessages.push({
+      id: "etoro.closed_rows_skipped",
+      severity: "warning",
+      message: `Se ha(n) omitido ${skippedDataRows} fila(s) de "Posiciones cerradas" de eToro con datos no interpretables (acción, símbolo o unidades inválidos).`,
+      hint: "eToro cambia el formato de exportación; vuelve a descargar el informe XLSX completo de la cuenta. Si faltan operaciones, revisa que las columnas de acción y unidades estén presentes.",
+      context: { count: String(skippedDataRows) },
+    });
+  }
+
+  if (unrecognizedDirection > 0) {
+    parserMessages.push({
+      id: "etoro.direction_not_recognized",
+      severity: "info",
+      message: `Dirección eToro no reconocida en ${unrecognizedDirection} fila(s); se ha(n) tratado como compra (Long).`,
+      hint: "eToro usa \"Long\"/\"Short\" en la columna de dirección; un valor distinto se interpreta como posición larga. Verifica esas operaciones si el resultado no cuadra.",
+      context: { count: String(unrecognizedDirection) },
+    });
+  }
+
   return trades;
 }
 
@@ -300,6 +364,8 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
 
     const netNum = parseFloat(parseNumber(netAmount));
     if (isNaN(netNum) || netNum === 0) continue;
+    // All money arithmetic below uses Decimal (never JS Number).
+    const net = toFiniteDecimal(netAmount);
 
     // Compute gross dividend and withholding tax
     let grossAmount: string;
@@ -311,9 +377,11 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
       const whtNum = parseFloat(parseNumber(whtRaw));
 
       if (!isNaN(whtNum) && whtNum !== 0) {
-        const absWht = Math.abs(whtNum);
-        grossAmount = (netNum + absWht).toFixed(4);
-        taxAmount = whtNum > 0 ? `-${whtNum}` : `${whtNum}`;
+        const wht = toFiniteDecimal(whtRaw);
+        grossAmount = net.plus(wht.abs()).toFixed(4);
+        // A positive WHT column is tax withheld → emit as negative; a negative
+        // value (refund/credit) is passed through unchanged. Decimal, never Number.
+        taxAmount = whtNum > 0 ? wht.neg().toString() : wht.toString();
       } else {
         grossAmount = netAmount;
       }
@@ -322,9 +390,10 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
       const pctRaw = (row[whtRateCol] ?? "0").replace(/%/g, "").trim();
       const pctNum = parseFloat(parseNumber(pctRaw));
       if (!isNaN(pctNum) && pctNum > 0) {
-        const grossNum = netNum / (1 - pctNum / 100);
-        grossAmount = grossNum.toFixed(4);
-        taxAmount = `-${(grossNum * (pctNum / 100)).toFixed(4)}`;
+        const pct = toFiniteDecimal(pctRaw);
+        const gross = net.div(new Decimal(1).minus(pct.div(100)));
+        grossAmount = gross.toFixed(4);
+        taxAmount = `-${gross.mul(pct.div(100)).toFixed(4)}`;
       } else {
         grossAmount = netAmount;
       }
@@ -405,6 +474,8 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
     const amountStr = (row[amountCol] ?? "0").trim();
     const amountNum = parseFloat(parseNumber(amountStr));
     if (isNaN(amountNum) || amountNum === 0) continue;
+    // Emit a finiteness-guarded decimal string (never a raw JS Number).
+    const amount = toFiniteDecimalString(amountStr);
 
     cashTransactions.push({
       transactionID: `etoro-interest-${tradeDate}-${i}`,
@@ -415,7 +486,7 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
       currency: "USD", // eToro pays interest in USD regardless of interface language
       dateTime: tradeDate,
       settleDate: tradeDate,
-      amount: `${amountNum}`,
+      amount,
       fxRateToBase: "1",
       type: "Broker Interest Received",
     });
@@ -440,7 +511,8 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
   const dividendSheet = getSheet(wb, ["dividends", "dividendos"]);
   const activitySheet = getSheet(wb, ["account activity", "actividad de la cuenta"]);
 
-  const trades = closedSheet ? parseClosedPositions(xlsx, closedSheet) : [];
+  const parserMessages: TaxMessage[] = [];
+  const trades = closedSheet ? parseClosedPositions(xlsx, closedSheet, parserMessages) : [];
   const dividends = dividendSheet ? parseDividends(xlsx, dividendSheet) : [];
   const interest = activitySheet ? parseAccountActivity(xlsx, activitySheet) : [];
 
@@ -454,6 +526,7 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 
@@ -501,50 +574,11 @@ export const etoroParser: BrokerParser = {
       throw new Error("eToro: fichero vacío o sin datos");
     }
 
-    // Text mode: parse as tab-separated or comma-separated sections
-    // This is a fallback — primary path is parseEtoroXlsx for binary XLSX
-    const lines = input.split(/\r?\n/);
-
-    // Try to find section markers
-    const trades: Trade[] = [];
-    const cashTransactions: CashTransaction[] = [];
-
-    let currentSection = "";
-    let sectionHeaders: string[] = [];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      // Detect section headers
-      const lower = trimmed.toLowerCase();
-      if (lower.includes("closed position") || lower.includes("posiciones cerradas")) {
-        currentSection = "trades";
-        continue;
-      }
-      if (lower.includes("dividend")) {
-        currentSection = "dividends";
-        continue;
-      }
-
-      // Detect column headers
-      if (currentSection && !sectionHeaders.length) {
-        const delimiter = trimmed.includes("\t") ? "\t" : ",";
-        sectionHeaders = trimmed.split(delimiter).map((h) => h.trim());
-        continue;
-      }
-    }
-
-    return {
-      accountId: "",
-      fromDate: "",
-      toDate: "",
-      period: "",
-      trades,
-      cashTransactions,
-      corporateActions: [],
-      openPositions: [],
-      securitiesInfo: [],
-    };
+    // The text/CSV path never extracted any trades or cash transactions — it only
+    // detected section/column markers and returned an empty Statement, so a CSV
+    // upload "succeeded" with total data loss. eToro's real export is an XLSX
+    // workbook parsed by parseEtoroXlsx(); refuse text/CSV explicitly rather than
+    // silently dropping every row.
+    throw new Error("eToro: usa el export XLSX, no CSV/texto");
   },
 };

@@ -13,6 +13,7 @@ import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import Decimal from "decimal.js";
 import {
+  detectDelimiter,
   parseCsvLine,
   parseNumber,
   toFiniteDecimalString,
@@ -287,7 +288,7 @@ export const scalableParser: BrokerParser = {
 
     const headerLine = lines[0]!;
     // Scalable always uses semicolons
-    const delimiter = headerLine.includes(";") ? ";" : ",";
+    const delimiter = detectDelimiter(headerLine);
 
     if (!isScalableCsv(headerLine)) {
       throw new Error("Scalable Capital CSV: formato no reconocido");

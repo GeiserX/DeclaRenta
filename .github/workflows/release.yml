@@ -58,8 +58,12 @@ jobs:
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH=$(echo "$VERSION" | cut -d. -f3)
 
-          # Check commit messages since last tag for bump type
+          # Check commit messages since last tag for bump type.
+          # COMMITS = subject lines (drives the no-bump exit + feat/fix detection).
+          # BODIES  = full messages (subject + body) so a "BREAKING CHANGE:" footer
+          #           in the body is detected, not only a "!" in the subject.
           COMMITS=$(git log "$LATEST"..HEAD --pretty=format:"%s" 2>/dev/null | grep -v "\[skip ci\]" || true)
+          BODIES=$(git log "$LATEST"..HEAD --pretty=format:"%B" 2>/dev/null || true)
 
           if [ -z "$COMMITS" ]; then
             echo "No meaningful commits since $LATEST — skipping release"
@@ -67,14 +71,18 @@ jobs:
             exit 0
           fi
 
-          if echo "$COMMITS" | grep -qiE "^feat(\(|:|\!)"; then
-            # feat: or feat!: → minor bump
-            NEW_MINOR=$((MINOR + 1))
-            NEW_TAG="v${MAJOR}.${NEW_MINOR}.0"
-          elif echo "$COMMITS" | grep -qiE "^(break|BREAKING)"; then
-            # BREAKING CHANGE → major bump
+          # Breaking changes MUST win → test them FIRST. A breaking change is
+          # either a "!" in a conventional subject (e.g. "feat!:", "fix(api)!:")
+          # OR a "BREAKING CHANGE" / "BREAKING-CHANGE" token anywhere in a body.
+          if echo "$COMMITS" | grep -qE "^(feat|fix|refactor|perf|chore)(\(.+\))?!:" \
+            || echo "$BODIES" | grep -qE "BREAKING[ -]CHANGE"; then
+            # Breaking change → major bump
             NEW_MAJOR=$((MAJOR + 1))
             NEW_TAG="v${NEW_MAJOR}.0.0"
+          elif echo "$COMMITS" | grep -qiE "^feat(\(|:)"; then
+            # feat: or feat(scope): → minor bump
+            NEW_MINOR=$((MINOR + 1))
+            NEW_TAG="v${MAJOR}.${NEW_MINOR}.0"
           else
             # fix/chore/docs/etc → patch bump
             NEW_PATCH=$((PATCH + 1))

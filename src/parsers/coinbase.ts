@@ -10,6 +10,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import {
   parseCsvLine,
   parseNumber,
@@ -121,6 +122,9 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   let rewardsIncomeCount = 0;
+  // Conversions whose Notes we couldn't parse: the SELL leg is emitted but the
+  // received coin gets NO BUY leg → no FIFO lot → phantom gain on a later sale.
+  let convertNoDestCount = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -243,6 +247,9 @@ function parseCoinbaseCsv(lines: string[]): Statement {
           taxes: "0",
           multiplier: "1",
         });
+      } else {
+        // No parseable destination in Notes: the acquired coin gets no BUY lot.
+        convertNoDestCount++;
       }
       continue;
     }
@@ -284,18 +291,31 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = [];
   // "rewards income" is treated as savings-base income by default, but it can
   // also cover promotional cashback that is legally base-general. Nudge the user
   // to verify if any is present (info — no action needed for the common case).
-  const parserMessages = rewardsIncomeCount > 0
-    ? [{
-        id: "coinbase.rewards_income_classification",
-        severity: "info" as const,
-        message: `Se han clasificado ${rewardsIncomeCount} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).`,
-        hint: "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
-        context: { count: String(rewardsIncomeCount) },
-      }]
-    : undefined;
+  if (rewardsIncomeCount > 0) {
+    parserMessages.push({
+      id: "coinbase.rewards_income_classification",
+      severity: "info" as const,
+      message: `Se han clasificado ${rewardsIncomeCount} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).`,
+      hint: "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+      context: { count: String(rewardsIncomeCount) },
+    });
+  }
+  // A Convert whose destination coin couldn't be parsed got a SELL leg but no
+  // BUY leg, so the acquired coin has no acquisition cost — a later sale taxaría
+  // su importe íntegro como ganancia (Art. 35.1). Warn so the user can corregirlo.
+  if (convertNoDestCount > 0) {
+    parserMessages.push({
+      id: "coinbase.convert_dest_unparsed",
+      severity: "warning" as const,
+      message: `No se pudo interpretar el destino de ${convertNoDestCount === 1 ? "una conversión" : `${convertNoDestCount} conversiones`} Coinbase; la moneda adquirida no tendrá coste de adquisición.`,
+      hint: "Suele deberse a que la columna \"Notes\" no incluye el texto \"Converted ... to ...\" esperado. Vuelve a descargar el informe original desde Coinbase sin editarlo, o añade manualmente la compra de la moneda recibida para que tenga coste de adquisición.",
+      context: { count: String(convertNoDestCount) },
+    });
+  }
 
   return {
     accountId: "",
@@ -307,7 +327,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
-    ...(parserMessages ? { parserMessages } : {}),
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 
@@ -331,11 +351,11 @@ export const coinbaseParser: BrokerParser = {
     const headerIdx = allLines.findIndex((l) => isCoinbaseCsv(l));
     if (headerIdx === -1) {
       const hasContent = allLines.some((l) => l.trim());
-      throw new Error(hasContent ? "Coinbase CSV: formato no reconocido" : "Coinbase CSV: fichero vacio o sin datos");
+      throw new Error(hasContent ? "Coinbase CSV: formato no reconocido" : "Coinbase CSV: fichero vacío o sin datos");
     }
     const lines = allLines.slice(headerIdx).filter((l) => l.trim());
     if (lines.length < 2) {
-      throw new Error("Coinbase CSV: fichero vacio o sin datos");
+      throw new Error("Coinbase CSV: fichero vacío o sin datos");
     }
 
     return parseCoinbaseCsv(lines);

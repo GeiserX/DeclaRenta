@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";

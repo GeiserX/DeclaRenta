@@ -175,11 +175,14 @@ describe("fixture file integration", () => {
   describe("etoro-sample.csv", () => {
     const csv = fixture("etoro-sample.csv");
 
-    it("should detect and parse", () => {
+    it("detects eToro section headers but rejects CSV/text parsing (XLSX is the supported path)", () => {
+      // eToro's real account statement export is XLSX (parseEtoroXlsx). The
+      // text/CSV BrokerParser.parse() was a non-functional stub that silently
+      // returned an empty statement (total data loss); it now throws an honest
+      // error directing the user to the XLSX export instead of accepting an
+      // empty result.
       expect(etoroParser.detect(csv)).toBe(true);
-      const r = etoroParser.parse(csv);
-      expect(r).toBeDefined();
-      expect(r.trades).toBeDefined();
+      expect(() => etoroParser.parse(csv)).toThrow("XLSX");
     });
   });
 
@@ -427,6 +430,71 @@ describe("fixture file integration", () => {
       const taxedTrade = r.trades.find((t) => t.isin === "ES0000003001" && t.buySell === "BUY");
       expect(taxedTrade).toBeDefined();
       expect(taxedTrade!.taxes).toBe("-5");
+    });
+
+    it("should parse exact trade quantities, prices, and amounts (no decimal/sign misparse)", () => {
+      const r = tradeRepublicParser.parse(csv);
+
+      // BUY: tx-buy-001 — Acme, 1 share @ 179.88, amount -179.88 → cost (no sign).
+      const acmeBuy = r.trades.find((t) => t.tradeID === "tx-buy-001")!;
+      expect(acmeBuy).toBeDefined();
+      expect(acmeBuy.buySell).toBe("BUY");
+      expect(acmeBuy.quantity).toBe("1");
+      expect(acmeBuy.tradePrice).toBe("179.880000");
+      expect(acmeBuy.cost).toBe("179.88");
+      expect(acmeBuy.proceeds).toBe("0");
+
+      // SELL: tx-sell-001 — Acme, 2 shares @ 190.08, proceeds 380.16. Sell
+      // quantity must be NEGATIVE; proceeds positive; cost zero.
+      const acmeSell = r.trades.find((t) => t.tradeID === "tx-sell-001")!;
+      expect(acmeSell).toBeDefined();
+      expect(acmeSell.buySell).toBe("SELL");
+      expect(acmeSell.quantity).toBe("-2");
+      expect(acmeSell.tradePrice).toBe("190.080000");
+      expect(acmeSell.proceeds).toBe("380.16");
+      expect(acmeSell.cost).toBe("0");
+
+      // BUY with fee + Spanish ITF tax: tx-buy-005 — 210.260723 sh @ 11.89,
+      // amount -2500, fee -1, tax -5. fee/tax kept as negative strings.
+      const iberBuy = r.trades.find((t) => t.tradeID === "tx-buy-005")!;
+      expect(iberBuy).toBeDefined();
+      expect(iberBuy.quantity).toBe("210.260723");
+      expect(iberBuy.tradePrice).toBe("11.890000");
+      expect(iberBuy.cost).toBe("2500");
+      expect(iberBuy.commission).toBe("-1");
+      expect(iberBuy.taxes).toBe("-5");
+
+      // Crypto BUY: tx-buy-004 — 0.001049 BTC @ 95302.75, amount -99.97.
+      const btcBuy = r.trades.find((t) => t.tradeID === "tx-buy-004")!;
+      expect(btcBuy).toBeDefined();
+      expect(btcBuy.assetCategory).toBe("CRYPTO");
+      expect(btcBuy.quantity).toBe("0.001049");
+      expect(btcBuy.tradePrice).toBe("95302.750000");
+      expect(btcBuy.cost).toBe("99.97");
+    });
+
+    it("should parse exact dividend amounts and withholding tax values", () => {
+      const r = tradeRepublicParser.parse(csv);
+
+      // Dividend with no tax: tx-div-001 — original 0.02 USD.
+      const div1 = r.cashTransactions.find((t) => t.transactionID === "tx-div-001")!;
+      expect(div1).toBeDefined();
+      expect(div1.type).toBe("Dividends");
+      expect(div1.amount).toBe("0.02");
+      expect(div1.currency).toBe("USD");
+
+      // Dividend WITH withholding: tx-div-002 — gross original 0.54 USD,
+      // WHT 0.07 → emitted as a negative Withholding Tax row.
+      const div2 = r.cashTransactions.find((t) => t.transactionID === "tx-div-002")!;
+      expect(div2).toBeDefined();
+      expect(div2.type).toBe("Dividends");
+      expect(div2.amount).toBe("0.54");
+      expect(div2.currency).toBe("USD");
+
+      const wht2 = r.cashTransactions.find((t) => t.transactionID === "tx-div-002-wht")!;
+      expect(wht2).toBeDefined();
+      expect(wht2.type).toBe("Withholding Tax");
+      expect(wht2.amount).toBe("-0.07");
     });
   });
 });

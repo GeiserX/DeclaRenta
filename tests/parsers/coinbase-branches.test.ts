@@ -20,7 +20,7 @@ describe("coinbaseParser.detect", () => {
 
 describe("coinbaseParser.parse - edge cases", () => {
   it("should throw on empty input", () => {
-    expect(() => coinbaseParser.parse("")).toThrow("fichero vacio o sin datos");
+    expect(() => coinbaseParser.parse("")).toThrow("fichero vacío o sin datos");
   });
 
   it("should throw on non-Coinbase content", () => {
@@ -29,7 +29,7 @@ describe("coinbaseParser.parse - edge cases", () => {
 
   it("should throw when only header, no data rows", () => {
     const input = "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
-    expect(() => coinbaseParser.parse(input)).toThrow("fichero vacio o sin datos");
+    expect(() => coinbaseParser.parse(input)).toThrow("fichero vacío o sin datos");
   });
 
   it("should skip preamble lines before header", () => {

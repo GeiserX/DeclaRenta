@@ -190,7 +190,7 @@ describe("coinbaseParser", () => {
     });
 
     it("should throw on empty input", () => {
-      expect(() => coinbaseParser.parse("")).toThrow("vacio");
+      expect(() => coinbaseParser.parse("")).toThrow("vacío");
     });
 
     it("should skip rows with unknown transaction types", () => {

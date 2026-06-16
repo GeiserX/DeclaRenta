@@ -23,11 +23,6 @@ export function onStepChange(cb: StepChangeCallback): void {
   listeners.push(cb);
 }
 
-/** Get the current wizard step */
-export function getCurrentStep(): WizardStep {
-  return currentStep;
-}
-
 /** Navigate to a specific step (only if reachable) */
 export function goToStep(step: WizardStep): void {
   if (step < 1 || step > TOTAL_STEPS) return;
@@ -59,14 +54,6 @@ export function prevStep(): void {
 export function unlockStep(step: WizardStep): void {
   if (step > maxReachedStep) maxReachedStep = step;
   updateProgressIndicator();
-}
-
-/** Reset wizard to step 1 */
-export function resetWizard(): void {
-  currentStep = 1;
-  maxReachedStep = 1;
-  isInitialRender = true;
-  updateDOM();
 }
 
 // ---------------------------------------------------------------------------

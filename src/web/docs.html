@@ -380,21 +380,25 @@
         </ol>
 
         <h3>Uso de la línea de comandos (CLI)</h3>
-        <p>Instala DeclaRenta globalmente con <code>npm install -g declarenta</code> o ejecútalo con <code>npx declarenta</code>. Los tres comandos principales son:</p>
-        <pre><code># Convertir informes a valores del Modelo 100
-declarenta convert --input informe.xml --year 2025
-declarenta convert --input ibkr.xml --input degiro.csv --year 2025
+        <p>DeclaRenta no se publica en npm. Clona el repositorio y compílalo; luego ejecuta el CLI con <code>node dist/cli.js</code>:</p>
+        <pre><code># Clonar y compilar
+git clone https://github.com/GeiserX/DeclaRenta.git
+cd DeclaRenta &amp;&amp; npm install &amp;&amp; npm run build
+
+# Convertir informes a valores del Modelo 100
+node dist/cli.js convert --input informe.xml --year 2025
+node dist/cli.js convert --input ibkr.xml --input degiro.csv --year 2025
 
 # Generar fichero Modelo 720
-declarenta modelo720 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
+node dist/cli.js modelo720 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
 
 # Generar guía D-6
-declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"</code></pre>
+node dist/cli.js d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"</code></pre>
         <p>Opciones adicionales del comando <code>convert</code>:</p>
         <ul>
           <li><code>--output fichero.json</code> &mdash; Guardar resultado en un fichero en vez de stdout.</li>
           <li><code>--format pdf|csv|json</code> &mdash; Formato de salida (por defecto JSON).</li>
-          <li><code>--broker ibkr|degiro|scalable|etoro|revolut|lightyear|freedom24|coinbase|binance|kraken|traderepublic|trading212|mexem|swissquote</code> &mdash; Forzar broker si la auto-detección falla.</li>
+          <li><code>--broker ibkr|degiro|flatex|scalable|etoro|revolut|lightyear|freedom24|coinbase|binance|kraken|traderepublic|trading212</code> &mdash; Forzar broker si la auto-detección falla.</li>
           <li><code>--prior-losses fichero.json</code> &mdash; Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF).</li>
         </ul>
 
@@ -411,6 +415,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
             <tbody>
               <tr><td>Interactive Brokers</td><td>Flex Query XML</td><td>.xml</td></tr>
               <tr><td>Degiro</td><td>CSV</td><td>.csv</td></tr>
+              <tr><td>Flatex</td><td>CSV (Depotumsätze + Kontoumsätze)</td><td>.csv</td></tr>
               <tr><td>Scalable Capital</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>eToro</td><td>Account Statement XLSX</td><td>.xlsx</td></tr>
               <tr><td>Revolut</td><td>Trading Account Statement XLSX</td><td>.xlsx</td></tr>
@@ -421,8 +426,6 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
               <tr><td>Kraken</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>Trade Republic</td><td>CSV</td><td>.csv</td></tr>
               <tr><td>Trading 212</td><td>CSV</td><td>.csv</td></tr>
-              <tr><td>MEXEM</td><td>Flex Query XML</td><td>.xml</td></tr>
-              <tr><td>Swissquote</td><td>CSV</td><td>.csv</td></tr>
             </tbody>
           </table>
         </div>
@@ -469,6 +472,19 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa, dividendos y posiciones.</p>
         <p><strong>Limitaciones:</strong> Degiro no exporta acciones corporativas. Los splits deben reflejarse ya en el historial de operaciones. Si tienes operaciones en varios ejercicios, exporta todos los años.</p>
 
+        <h3>Flatex</h3>
+        <h4>Cómo exportar el informe</h4>
+        <ol class="steps">
+          <li>Inicia sesión en la <strong>web de Flatex</strong>.</li>
+          <li>Ve a <strong>Movimientos</strong> → <strong>Depotumsätze</strong> (movimientos de la cartera).</li>
+          <li>Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV.</li>
+          <li>Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV.</li>
+          <li>Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos).</li>
+        </ol>
+        <p><strong>Formato:</strong> CSV alemán (separador punto y coma). Dos ficheros: Depotumsätze (operaciones) y Kontoumsätze (movimientos de caja: dividendos, comisiones).</p>
+        <p><strong>Datos extraídos:</strong> Operaciones de compraventa, dividendos y comisiones.</p>
+        <p><strong>Limitaciones:</strong> Para que cada comisión se asigne a su operación, sube también el CSV de Kontoumsätze junto con el de Depotumsätze.</p>
+
         <h3>Scalable Capital</h3>
         <h4>Cómo exportar el informe</h4>
         <ol class="steps">
@@ -514,7 +530,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </ol>
         <p><strong>Formato:</strong> CSV con cabeceras <code>Date, Reference, Ticker, ISIN, Type, Quantity, CCY, Price/share, Gross Amount, FX Rate, Fee, Net Amt., Tax Amt.</code></p>
         <p><strong>Datos extraídos:</strong> Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.</p>
-        <p><strong>Limitaciones:</strong> Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); actualmente DeclaRenta no las calcula automáticamente.</p>
+        <p><strong>Limitaciones:</strong> Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); DeclaRenta las calcula por defecto (salvo que actives el modo monodivisa en tu perfil fiscal).</p>
 
         <h3>Freedom24</h3>
         <h4>Cómo exportar el informe</h4>
@@ -587,30 +603,11 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <p><strong>Formato:</strong> CSV con cabeceras de transacción.</p>
         <p><strong>Datos extraídos:</strong> Operaciones de compraventa y dividendos.</p>
 
-        <h3>MEXEM</h3>
-        <h4>Cómo exportar el informe</h4>
-        <ol class="steps">
-          <li>Inicia sesión en el <strong>Portal del Cliente</strong> de MEXEM (misma interfaz que IBKR).</li>
-          <li>Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>.</li>
-          <li>Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions.</li>
-          <li>En cada sección, selecciona <strong>todos los campos disponibles</strong>. Como mínimo, incluye <strong>Notes</strong> en Trades.</li>
-          <li>Formato de salida: <strong>XML</strong>.</li>
-          <li>Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto.</li>
-          <li>Ejecuta la consulta y descarga el fichero <code>.xml</code>.</li>
-        </ol>
-        <p><strong>Formato:</strong> XML con estructura <code>&lt;FlexQueryResponse&gt;</code> (idéntico a IBKR).</p>
-        <p><strong>Datos extraídos:</strong> Los mismos que Interactive Brokers — MEXEM usa la misma plataforma.</p>
+        <h3>MEXEM <span class="muted">(no soportado todavía — planeado)</span></h3>
+        <p>MEXEM no tiene todavía un parser propio en DeclaRenta. No obstante, MEXEM utiliza la misma plataforma que Interactive Brokers y exporta en <strong>Flex Query XML</strong>: si generas una Activity Flex Query (Trades, Cash Transactions y Open Positions, con todos los campos y el campo <strong>Notes</strong> en Trades), el fichero <code>.xml</code> se auto-detecta como IBKR y se procesa con el parser de IBKR. Un parser específico de MEXEM está planeado.</p>
 
-        <h3>Swissquote</h3>
-        <h4>Cómo exportar el informe</h4>
-        <ol class="steps">
-          <li>Inicia sesión en <strong>Swissquote eBanking</strong>.</li>
-          <li>Ve a <strong>Trading → Historial de transacciones</strong>.</li>
-          <li>Selecciona el rango de fechas del ejercicio fiscal.</li>
-          <li>Haz clic en <strong>Exportar → CSV</strong>.</li>
-        </ol>
-        <p><strong>Formato:</strong> CSV con cabeceras de transacción.</p>
-        <p><strong>Datos extraídos:</strong> Operaciones de compraventa.</p>
+        <h3>Swissquote <span class="muted">(no soportado todavía — planeado)</span></h3>
+        <p>Swissquote no tiene todavía un parser en DeclaRenta. El soporte está planeado. Mientras tanto, si tu informe coincide con el formato de otro broker soportado puedes intentar subirlo, pero no hay un parser específico de Swissquote.</p>
       </section>
 
       <!-- 3. Casillas del Modelo 100 -->
@@ -637,7 +634,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         <div class="casilla-ref">
           <span class="casilla-num">Info</span>
           <h4>Pérdidas patrimoniales bloqueadas (anti-churning) — Informativo</h4>
-          <p>Pérdidas bloqueadas por la norma anti-churning (Art. 33.5.f LIRPF). Son las pérdidas en las que se ha recomprado el mismo valor en los 2 meses anteriores o posteriores a la venta (cotizados) o en 1 año (no cotizados).</p>
+          <p>Pérdidas bloqueadas por la norma anti-churning (Art. 33.5.f/g LIRPF). Son las pérdidas en las que se ha recomprado el mismo valor en los 2 meses anteriores o posteriores a la venta (cotizados) o en 1 año (no cotizados/cripto). El bloqueo es proporcional a la cantidad recomprada y la pérdida diferida se reintegra al vender los valores recomprados.</p>
           <p class="muted">No existe una casilla agregada en Renta Web: estas pérdidas se gestionan a nivel de operación individual mediante «Integración diferida» (checkbox «no imputación por recompra de valores homogéneos»). DeclaRenta las muestra como informativo para que el contribuyente las localice en sus disposiciones.</p>
         </div>
 
@@ -719,17 +716,22 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
         </ul>
 
         <h3>Qué ocurre con las pérdidas bloqueadas</h3>
-        <p>Las pérdidas bloqueadas no se pierden definitivamente. Se integran en el valor de adquisición de los títulos que provocaron el bloqueo. Es decir, el coste de las nuevas acciones se incrementa en el importe de la pérdida bloqueada, lo que reducirá la ganancia (o aumentará la pérdida) cuando finalmente se vendan esos títulos.</p>
+        <p>El bloqueo es <strong>proporcional a la cantidad recomprada</strong>: si vendes 100 acciones con pérdida y recompras 30 dentro de la ventana, solo se bloquea la pérdida correspondiente a esas 30; la pérdida de las 70 restantes se computa con normalidad ahora.</p>
+        <p>La parte bloqueada <strong>no se pierde</strong> y <strong>no se suma al coste de adquisición</strong> de la nueva posición. Queda <strong>diferida</strong> como pérdida pendiente y se <strong>reintegra</strong> (vuelve a ser deducible) cuando más adelante transmitas esos valores recomprados.</p>
+        <p>En Renta Web esto <strong>requiere acción</strong>: no es automático. Por el importe bloqueado debes marcar la casilla <strong>«Pérdidas patrimoniales no imputables»</strong>; y cuando vendas los valores recomprados, debes imputar entonces la pérdida diferida.</p>
 
         <h3>Cómo lo detecta DeclaRenta</h3>
-        <p>El motor de anti-churning:</p>
+        <p>El motor de anti-churning recorre todas las operaciones en orden cronológico y, para cada valor homogéneo:</p>
         <ol>
-          <li>Identifica todas las ventas con pérdida (<code>gainLossEur &lt; 0</code>).</li>
-          <li>Para cada una, busca compras del mismo ISIN en la ventana de 2 meses antes y después.</li>
-          <li>Si existe recompra, marca la operación como <code>washSaleBlocked = true</code>.</li>
-          <li>Las operaciones bloqueadas aparecen resaltadas en la tabla de resultados.</li>
+          <li>Identifica las ventas con pérdida (<code>gainLossEur &lt; 0</code>).</li>
+          <li>Para cada una, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para cotizados, 1 año para no cotizados/cripto), antes o después de la venta.</li>
+          <li>Bloquea la pérdida de forma <strong>proporcional</strong>: <code>pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida</code>. La parte restante se computa ahora.</li>
+          <li>La pérdida bloqueada queda <strong>diferida</strong>, asociada a los valores recomprados (no se suma a su coste).</li>
+          <li><strong>Reintegración:</strong> cuando una venta posterior transmite esos valores recomprados, el motor libera la pérdida diferida correspondiente (de forma proporcional a la cantidad vendida), volviendo a hacerla deducible.</li>
+          <li>Las operaciones con pérdida bloqueada aparecen resaltadas en la tabla de resultados.</li>
         </ol>
-        <p class="warning">La regla anti-churning solo se aplica a <strong>valores homogéneos</strong>: acciones (STK), fondos (FUND) y bonos (BOND). <strong>No se aplica</strong> a opciones (OPT), futuros (FUT), CFDs, forex (CASH) ni criptomonedas.</p>
+        <p class="muted">La reintegración entre ejercicios es automática si subes los ficheros de varios años juntos (un único recorrido cronológico). En declaraciones de un solo año por separado, la pérdida diferida debe seguirse manualmente (limitación documentada).</p>
+        <p class="warning">La regla anti-churning se aplica a <strong>valores homogéneos</strong>: acciones (STK), fondos (FUND), bonos (BOND) y <strong>criptomonedas</strong>. Las criptomonedas (y los valores no cotizados) se tratan como no cotizados y usan la <strong>ventana de 1 año (±12 meses)</strong> en lugar de los 2 meses de los valores cotizados. <strong>No se aplica</strong> a opciones (OPT), futuros (FUT), CFDs ni forex (CASH).</p>
       </section>
 
       <!-- 6. Doble imposición -->
@@ -1041,7 +1043,7 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
 
           <div class="faq-item">
             <dt>¿Qué hago con las pérdidas bloqueadas por anti-churning?</dt>
-            <dd>Las pérdidas bloqueadas se integran en el coste de adquisición de los nuevos títulos. No tienes que hacer nada especial: cuando vendas esos títulos, el mayor coste base reducirá la ganancia imponible. DeclaRenta las muestra resaltadas para que lleves el control.</dd>
+            <dd>Sí tienes que actuar: <strong>no es automático</strong>. Se bloquea solo la parte proporcional a las acciones recompradas (el resto de la pérdida se imputa con normalidad). Por el importe bloqueado, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Esa pérdida bloqueada <strong>no se suma al coste</strong> de la nueva posición: queda diferida y deberás imputarla cuando vendas los valores recomprados. DeclaRenta las muestra resaltadas para que lleves el control.</dd>
           </div>
 
           <div class="faq-item">
@@ -1115,8 +1117,8 @@ declarenta d6 --input informe.xml --year 2025 --nif 12345678A --name "Apellidos,
                 <td>Gastos deducibles de los rendimientos del capital mobiliario (gastos de administración y custodia).</td>
               </tr>
               <tr>
-                <td>Art. 33.5.f LIRPF</td>
-                <td>Norma anti-churning: no se computan pérdidas patrimoniales por venta de valores si se recompran homogéneos en 2 meses.</td>
+                <td>Art. 33.5.f/g LIRPF</td>
+                <td>Norma anti-churning: no se computa la parte proporcional de la pérdida por venta de valores si se recompran homogéneos en 2 meses (cotizados) o 1 año (no cotizados/cripto). La pérdida bloqueada se difiere y se reintegra al transmitir los valores recomprados.</td>
               </tr>
               <tr>
                 <td>Art. 35 LIRPF</td>

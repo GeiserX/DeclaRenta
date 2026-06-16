@@ -72,7 +72,6 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "dependencies": {
-    "@types/pdfkit": "^0.17.6",
     "commander": "^13.1.0",
     "decimal.js": "^10.5.0",
     "fast-xml-parser": "^5.9.0",
@@ -83,6 +82,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.21",
+    "@types/pdfkit": "^0.17.6",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^9.25.0",
     "jsdom": "^29.1.1",

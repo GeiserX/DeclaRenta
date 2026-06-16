@@ -26,6 +26,7 @@
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
@@ -111,9 +112,12 @@ function sheetToRows(xlsx: typeof import("xlsx"), sheet: WorkSheet): string[][] 
 // Trade parser
 // ---------------------------------------------------------------------------
 
-function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
+function parseTrades(
+  xlsx: typeof import("xlsx"),
+  sheet: WorkSheet,
+): { trades: Trade[]; parserMessages: TaxMessage[] } {
   const rows = sheetToRows(xlsx, sheet);
-  if (rows.length < 2) return [];
+  if (rows.length < 2) return { trades: [], parserMessages: [] };
 
   const headers = rows[0]!;
   const dateAcqCol = findColumn(headers, DATE_ACQUIRED_HEADERS);
@@ -129,7 +133,7 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
   if (
     dateAcqCol < 0 || dateSoldCol < 0 || symbolCol < 0 || quantityCol < 0 ||
     costBasisCol < 0 || grossProceedsCol < 0 || currencyCol < 0
-  ) return [];
+  ) return { trades: [], parserMessages: [] };
 
   const trades: Trade[] = [];
 
@@ -224,7 +228,10 @@ function parseTrades(xlsx: typeof import("xlsx"), sheet: WorkSheet): Trade[] {
     });
   }
 
-  return trades;
+  // The closed-positions summary has no skip-and-warn cases of its own (every
+  // money/quantity cell is finiteness-guarded via toFiniteDecimal); the array is
+  // returned for a uniform Statement shape across both Revolut formats.
+  return { trades, parserMessages: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -274,16 +281,22 @@ function findTxnLogColumns(headers: string[]): TxnLogColumns | null {
 function parseTransactionLog(
   xlsx: typeof import("xlsx"),
   sheet: WorkSheet,
-): { trades: Trade[]; cashTransactions: CashTransaction[]; openPositions: OpenPosition[] } {
+): { trades: Trade[]; cashTransactions: CashTransaction[]; openPositions: OpenPosition[]; parserMessages: TaxMessage[] } {
   const rows = sheetToRows(xlsx, sheet);
-  if (rows.length < 2) return { trades: [], cashTransactions: [], openPositions: [] };
+  if (rows.length < 2) return { trades: [], cashTransactions: [], openPositions: [], parserMessages: [] };
 
   const headers = rows[0]!;
   const cols = findTxnLogColumns(headers);
-  if (!cols) return { trades: [], cashTransactions: [], openPositions: [] };
+  if (!cols) return { trades: [], cashTransactions: [], openPositions: [], parserMessages: [] };
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  // Rows whose FX rate cell was present but not a finite positive number — the
+  // conversion would be wrong, so we skip them and warn (never default to 1).
+  let skippedBadFxRate = 0;
+  // Rows that carry an amount but whose `type` is neither cash-in/out nor a
+  // recognized BUY/SELL — dropped silently before, now counted and warned.
+  let skippedUnknownType = 0;
 
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
@@ -302,12 +315,28 @@ function parseTransactionLog(
     const type = (row[cols.type] ?? "").trim();
     const ticker = (row[cols.ticker] ?? "").trim();
     const currencyRaw = (row[cols.currency] ?? "").trim();
-    const fxRateStr = (row[cols.fxRate] ?? "1").trim();
-    const fxRate = parseFloat(parseNumber(fxRateStr)) || 1;
+
+    // FX rate validation: the cell defaults to "1" only when ABSENT (missing
+    // column or empty cell) — a legitimate case (EUR rows, no FX column). But a
+    // cell that IS present and parses to a non-finite or non-positive value
+    // would silently corrupt the conversion (and divide-by-zero), so the row is
+    // skipped and counted rather than defaulting to 1.
+    const fxRateRaw = cols.fxRate >= 0 ? (row[cols.fxRate] ?? "").trim() : "";
+    let fxRate = 1;
+    if (fxRateRaw) {
+      const fxRateDec = toFiniteDecimal(fxRateRaw);
+      if (!fxRateDec.isFinite() || fxRateDec.lessThanOrEqualTo(0)) {
+        skippedBadFxRate++;
+        continue;
+      }
+      fxRate = fxRateDec.toNumber();
+    }
 
     const totalRaw = (row[cols.total] ?? "").trim();
     const { amount: totalAmountStr } = parseCcyAmount(totalRaw);
-    const totalAmount = parseFloat(totalAmountStr) || 0;
+    // Route money through toFiniteDecimal so a garbled cell can never yield
+    // NaN/Infinity (which would poison cost basis), mirroring the parseTrades path.
+    const totalAmountDec = toFiniteDecimal(totalAmountStr, "0", false);
 
     // Cash flows: CASH TOP-UP, CASH WITHDRAWAL, REWARD
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
@@ -320,28 +349,33 @@ function parseTransactionLog(
         currency: currencyRaw,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: `${totalAmount}`,
-        fxRateToBase: currencyRaw === "EUR" ? "1" : `${1 / fxRate}`,
+        amount: totalAmountDec.toString(),
+        fxRateToBase: currencyRaw === "EUR" ? "1" : new Decimal(1).div(fxRate).toString(),
         type: "Deposits/Withdrawals",
       });
       continue;
     }
 
-    // Skip non-trade rows without a ticker (e.g. REWARD)
+    // Skip non-trade rows without a ticker (e.g. REWARD). These never carry a
+    // usable trade amount in a ticker-less form, so they are not counted as
+    // dropped trade rows.
     if (!ticker) continue;
 
     const quantityStr = (row[cols.quantity] ?? "0").trim();
     const priceStr = (row[cols.price] ?? "0").trim();
 
     const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
-    const qty = Math.abs(parseFloat(qtyAmountStr) || 0);
-    if (qty === 0 || !isFinite(qty)) continue;
+    const qtyDec = toFiniteDecimal(qtyAmountStr, "0", false).abs();
+    if (qtyDec.isZero()) continue;
 
     const { amount: priceAmountStr } = parseCcyAmount(priceStr);
-    const pricePerShare = parseFloat(priceAmountStr) || 0;
+    const pricePerShareDec = toFiniteDecimal(priceAmountStr, "0", false);
 
     const assetCategory = detectAssetCategory(ticker);
-    const absTotalAmount = Math.abs(totalAmount);
+    const absTotalAmount = totalAmountDec.abs();
+    const qtyStr = qtyDec.toString();
+    const pricePerShareStr = pricePerShareDec.toString();
+    const absTotalAmountStr = absTotalAmount.toString();
 
     if (TXN_TYPE_BUY.test(type)) {
       trades.push({
@@ -354,11 +388,11 @@ function parseTransactionLog(
         currency: currencyRaw,
         tradeDate,
         settlementDate: tradeDate,
-        quantity: `${qty}`,
-        tradePrice: `${pricePerShare}`,
-        tradeMoney: `-${absTotalAmount}`,
+        quantity: qtyStr,
+        tradePrice: pricePerShareStr,
+        tradeMoney: `-${absTotalAmountStr}`,
         proceeds: "0",
-        cost: `-${absTotalAmount}`,
+        cost: `-${absTotalAmountStr}`,
         fifoPnlRealized: "0",
         fxRateToBase: "1",
         buySell: "BUY",
@@ -374,7 +408,7 @@ function parseTransactionLog(
         symbol: ticker, currency: currencyRaw, assetCategory,
         netQty: new Decimal(0), totalCost: new Decimal(0),
       };
-      pos.netQty = pos.netQty.plus(qty);
+      pos.netQty = pos.netQty.plus(qtyDec);
       pos.totalCost = pos.totalCost.plus(absTotalAmount);
       positions.set(ticker, pos);
     } else if (TXN_TYPE_SELL.test(type)) {
@@ -388,10 +422,10 @@ function parseTransactionLog(
         currency: currencyRaw,
         tradeDate,
         settlementDate: tradeDate,
-        quantity: `-${qty}`,
-        tradePrice: `${pricePerShare}`,
-        tradeMoney: `${absTotalAmount}`,
-        proceeds: `${absTotalAmount}`,
+        quantity: `-${qtyStr}`,
+        tradePrice: pricePerShareStr,
+        tradeMoney: absTotalAmountStr,
+        proceeds: absTotalAmountStr,
         cost: "0",
         fifoPnlRealized: "0",
         fxRateToBase: "1",
@@ -406,11 +440,16 @@ function parseTransactionLog(
 
       const pos = positions.get(ticker);
       if (pos && pos.netQty.greaterThan(0)) {
-        const sellQty = Decimal.min(qty, pos.netQty);
+        const sellQty = Decimal.min(qtyDec, pos.netQty);
         const costPerUnit = pos.totalCost.div(pos.netQty);
         pos.totalCost = pos.totalCost.minus(costPerUnit.times(sellQty));
         pos.netQty = pos.netQty.minus(sellQty);
       }
+    } else if (!absTotalAmount.isZero()) {
+      // A row with a ticker and a usable amount whose type is neither cash-in/out
+      // nor a recognized BUY/SELL — it was dropped silently before. Count it and
+      // warn so the user knows an operation may be missing from the calculation.
+      skippedUnknownType++;
     }
   }
 
@@ -437,7 +476,27 @@ function parseTransactionLog(
     }
   }
 
-  return { trades, cashTransactions, openPositions };
+  const parserMessages: TaxMessage[] = [];
+  if (skippedBadFxRate > 0) {
+    parserMessages.push({
+      id: "revolut.bad_fx_rate",
+      severity: "warning" as const,
+      message: `Se ${skippedBadFxRate === 1 ? "ha omitido 1 operación" : `han omitido ${skippedBadFxRate} operaciones`} del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido.`,
+      hint: "Suele deberse a una celda de tipo de cambio vacía, no numérica o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esas operaciones se incluyan.",
+      context: { count: String(skippedBadFxRate) },
+    });
+  }
+  if (skippedUnknownType > 0) {
+    parserMessages.push({
+      id: "revolut.unknown_type",
+      severity: "warning" as const,
+      message: `Se ${skippedUnknownType === 1 ? "ha omitido 1 operación" : `han omitido ${skippedUnknownType} operaciones`} del extracto de Revolut por tener un tipo de operación no reconocido.`,
+      hint: "Suele deberse a tipos de operación poco habituales no contemplados por el conversor. Si faltan operaciones en el cálculo, revisa el extracto y añade su información manualmente.",
+      context: { count: String(skippedUnknownType) },
+    });
+  }
+
+  return { trades, cashTransactions, openPositions, parserMessages };
 }
 
 // ---------------------------------------------------------------------------
@@ -491,20 +550,22 @@ export async function parseRevolutXlsx(data: Buffer | Uint8Array): Promise<State
   const headers = headerRows[0] ?? [];
 
   if (hasTxnLogHeaders(headers)) {
-    const { trades, cashTransactions, openPositions } = parseTransactionLog(xlsx, sheet);
+    const { trades, cashTransactions, openPositions, parserMessages } = parseTransactionLog(xlsx, sheet);
     return {
       accountId: "", fromDate: "", toDate: "", period: "",
       trades, cashTransactions, corporateActions: [],
       openPositions, securitiesInfo: [],
+      ...(parserMessages.length > 0 ? { parserMessages } : {}),
     };
   }
 
   // Fall back to closed-positions format
-  const trades = parseTrades(xlsx, sheet);
+  const { trades, parserMessages } = parseTrades(xlsx, sheet);
   return {
     accountId: "", fromDate: "", toDate: "", period: "",
     trades, cashTransactions: [], corporateActions: [],
     openPositions: [], securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 
