@@ -10,6 +10,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import Decimal from "decimal.js";
 import {
   parseCsvLine,
@@ -78,6 +79,10 @@ function resolveColumns(headers: string[]): ScalableColumns {
 const DIVIDEND_TYPES = ["distribution", "dividend", "dividendo", "ausschüttung"];
 const SELL_TYPES = ["sell", "venta", "verkauf"];
 const BUY_TYPES = ["buy", "savings plan", "compra", "sparplan", "kauf"];
+// Cash/savings-account interest (KKT-Abschluss). "interes" matches both EN
+// "interest" and ES "intereses"; "zins" matches DE "zinsen". None of the
+// dividend/buy/sell type tokens contain these substrings, so there is no clash.
+const INTEREST_TYPES = ["interes", "zins"];
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -93,6 +98,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  let interestWithholdingRows = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -117,6 +123,42 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const tax = toFiniteDecimalString(fields[cols.tax] ?? "0");
     const currency = (fields[cols.currency] ?? "EUR").trim();
     const reference = (fields[cols.reference] ?? "").trim();
+
+    // Cash/savings-account interest (KKT-Abschluss). Match ONLY the `type`
+    // column (already lowercased above) with a tight keyword set — matching the
+    // description risks sweeping a security named "…Interest…ETF". This branch
+    // MUST stay ABOVE the `if (!isin) continue` guard below: interest rows carry
+    // no ISIN, so the guard would silently drop them before classification.
+    if (INTEREST_TYPES.some((k) => type.includes(k))) {
+      // Sign decides the IRPF treatment (split downstream by type, abs()'d):
+      //   positive → interest credited → Casilla 0027 (Art. 25.2 LIRPF)
+      //   negative → cash-account charge → "intereses pagados al broker"
+      //              (Art. 26.1.a, informational only, not deductible)
+      //   zero     → no economic event → skip
+      const signed = new Decimal(amount);
+      if (signed.isZero()) continue;
+      // Withholding on interest (Casilla 0588) is not yet wired. Scalable cash
+      // interest to non-residents is normally paid gross (no retención), so the
+      // `amount` is the gross/íntegro figure that belongs in 0027. If a real
+      // file ever carries a non-zero `tax` on an interest row we surface an info
+      // message rather than silently ignoring it (the gross/net and 0588-credit
+      // handling would then be a follow-up — see the parserMessages below).
+      if (parseFloat(parseNumber(tax)) !== 0) interestWithholdingRows++;
+      cashTransactions.push({
+        transactionID: reference || `scalable-int-${tradeDate}-${i}`,
+        accountId: "",
+        symbol: "CASH",
+        description: description || "Interest - Scalable Capital",
+        isin: "",
+        currency: currency || "EUR",
+        dateTime: tradeDate,
+        settleDate: tradeDate,
+        amount,
+        fxRateToBase: "1",
+        type: signed.isPositive() ? "Broker Interest Received" : "Broker Interest Paid",
+      });
+      continue;
+    }
 
     if (!isin) continue;
 
@@ -199,6 +241,16 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = interestWithholdingRows > 0
+    ? [{
+        id: "scalable.interest_withholding_detected",
+        severity: "info" as const,
+        message: `Se detectó una retención en ${interestWithholdingRows} fila(s) de intereses de Scalable Capital. El interés se ha declarado íntegro en la casilla 0027.`,
+        hint: "La deducción por doble imposición (casilla 0588) sobre intereses aún no se calcula automáticamente. Revisa la retención en tu certificado fiscal y, si procede, decláralo manualmente. Los intereses de cuenta a no residentes suelen pagarse sin retención.",
+        context: { count: String(interestWithholdingRows) },
+      }]
+    : [];
+
   return {
     accountId: "",
     fromDate: "",
@@ -209,6 +261,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

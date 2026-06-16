@@ -223,6 +223,130 @@ describe("scalableParser", () => {
     });
   });
 
+  describe("parse interest", () => {
+    const HEADER =
+      "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency";
+
+    it("should emit a positive interest row as Broker Interest Received (Casilla 0027)", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF010;KKT-Abschluss;Cash;Interest;;0;0;12,50;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const interest = result.cashTransactions.filter(
+        (t) => t.type === "Broker Interest Received" || t.type === "Broker Interest Paid",
+      );
+      expect(interest).toHaveLength(1);
+      const row = interest[0]!;
+      expect(row.type).toBe("Broker Interest Received");
+      // Amount is normalized through Decimal (toFiniteDecimalString): "12,50" → "12.5".
+      expect(row.amount).toBe("12.5");
+      expect(row.isin).toBe("");
+      expect(row.symbol).toBe("CASH");
+      // No ISIN → must not be parsed as a trade.
+      expect(result.trades).toHaveLength(0);
+    });
+
+    it("should emit a negative interest row as Broker Interest Paid", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF011;KKT-Abschluss;Cash;Interest;;0;0;-3,20;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const interest = result.cashTransactions.filter(
+        (t) => t.type === "Broker Interest Received" || t.type === "Broker Interest Paid",
+      );
+      expect(interest).toHaveLength(1);
+      expect(interest[0]!.type).toBe("Broker Interest Paid");
+      expect(interest[0]!.amount).toBe("-3.2");
+    });
+
+    it("should recognize German 'Zinsen'", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF012;KKT-Abschluss;Cash;Zinsen;;0;0;5,00;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.cashTransactions.filter((t) => t.type === "Broker Interest Received")).toHaveLength(1);
+    });
+
+    it("should recognize Spanish 'Intereses'", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Ejecutada;REF013;Liquidación de cuenta;Cash;Intereses;;0;0;8,00;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      expect(result.cashTransactions.filter((t) => t.type === "Broker Interest Received")).toHaveLength(1);
+    });
+
+    it("should skip a zero-amount interest row", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF014;KKT-Abschluss;Cash;Interest;;0;0;0;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const interest = result.cashTransactions.filter(
+        (t) => t.type === "Broker Interest Received" || t.type === "Broker Interest Paid",
+      );
+      expect(interest).toHaveLength(0);
+    });
+
+    it("should not change the trade count when interest is mixed into a multi-row CSV", () => {
+      const csv = [
+        HEADER,
+        "2024-03-15;09:15;Executed;REF001;Acme World ETF;Security;Buy;IE00BK5BQT80;10;110,25;-1102,50;-0,99;0;EUR",
+        "2024-06-20;14:30;Executed;REF002;Acme World ETF;Security;Sell;IE00BK5BQT80;-5;120,00;600,00;-0,99;0;EUR",
+        "2024-12-31;23:59;Executed;REF004;KKT-Abschluss;Cash;Interest;;0;0;7,45;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      // The interest row must not be counted as a trade.
+      expect(result.trades).toHaveLength(2);
+      expect(result.cashTransactions.filter((t) => t.type === "Broker Interest Received")).toHaveLength(1);
+    });
+
+    it("should NOT sweep a security whose description contains 'interest' but is a Buy", () => {
+      const csv = [
+        HEADER,
+        "2024-03-15;09:15;Executed;REF020;Global Interest Rate ETF;Security;Buy;IE00BK5BQT80;10;100,00;-1000,00;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      // Matched on the `type` column only → parsed as a TRADE, never as interest.
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.buySell).toBe("BUY");
+      const interest = result.cashTransactions.filter(
+        (t) => t.type === "Broker Interest Received" || t.type === "Broker Interest Paid",
+      );
+      expect(interest).toHaveLength(0);
+    });
+
+    it("should declare interest gross and surface an info message when a tax/withholding is present", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF015;KKT-Abschluss;Cash;Interest;;0;0;100,00;0;-19,00;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const interest = result.cashTransactions.filter((t) => t.type === "Broker Interest Received");
+      expect(interest).toHaveLength(1);
+      // The gross amount is declared in 0027 (no silent net-of-withholding understatement).
+      expect(interest[0]!.amount).toBe("100");
+      // A non-zero tax column is surfaced as an info message, never silently dropped.
+      const msg = result.parserMessages?.find((m) => m.id === "scalable.interest_withholding_detected");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.context?.count).toBe("1");
+    });
+
+    it("should NOT emit a withholding message when interest rows have no tax", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF016;KKT-Abschluss;Cash;Interest;;0;0;12,50;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const msg = result.parserMessages?.find((m) => m.id === "scalable.interest_withholding_detected");
+      expect(msg).toBeUndefined();
+    });
+  });
+
   describe("error handling", () => {
     it("should throw on empty input", () => {
       expect(() => scalableParser.parse("")).toThrow("vacío");
