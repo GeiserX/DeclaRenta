@@ -10,6 +10,7 @@
 
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import Decimal from "decimal.js";
 import {
   parseCsvLine,
@@ -97,6 +98,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  let interestWithholdingRows = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -135,7 +137,13 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       //   zero     → no economic event → skip
       const signed = new Decimal(amount);
       if (signed.isZero()) continue;
-      // NOTE: foreign withholding on interest (Casilla 0588) is not yet handled — Scalable cash interest to non-residents is typically paid gross; follow-up if a real file shows otherwise.
+      // Withholding on interest (Casilla 0588) is not yet wired. Scalable cash
+      // interest to non-residents is normally paid gross (no retención), so the
+      // `amount` is the gross/íntegro figure that belongs in 0027. If a real
+      // file ever carries a non-zero `tax` on an interest row we surface an info
+      // message rather than silently ignoring it (the gross/net and 0588-credit
+      // handling would then be a follow-up — see the parserMessages below).
+      if (parseFloat(parseNumber(tax)) !== 0) interestWithholdingRows++;
       cashTransactions.push({
         transactionID: reference || `scalable-int-${tradeDate}-${i}`,
         accountId: "",
@@ -233,6 +241,16 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = interestWithholdingRows > 0
+    ? [{
+        id: "scalable.interest_withholding_detected",
+        severity: "info" as const,
+        message: `Se detectó una retención en ${interestWithholdingRows} fila(s) de intereses de Scalable Capital. El interés se ha declarado íntegro en la casilla 0027.`,
+        hint: "La deducción por doble imposición (casilla 0588) sobre intereses aún no se calcula automáticamente. Revisa la retención en tu certificado fiscal y, si procede, decláralo manualmente. Los intereses de cuenta a no residentes suelen pagarse sin retención.",
+        context: { count: String(interestWithholdingRows) },
+      }]
+    : [];
+
   return {
     accountId: "",
     fromDate: "",
@@ -243,6 +261,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

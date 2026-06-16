@@ -318,6 +318,33 @@ describe("scalableParser", () => {
       );
       expect(interest).toHaveLength(0);
     });
+
+    it("should declare interest gross and surface an info message when a tax/withholding is present", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF015;KKT-Abschluss;Cash;Interest;;0;0;100,00;0;-19,00;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const interest = result.cashTransactions.filter((t) => t.type === "Broker Interest Received");
+      expect(interest).toHaveLength(1);
+      // The gross amount is declared in 0027 (no silent net-of-withholding understatement).
+      expect(interest[0]!.amount).toBe("100");
+      // A non-zero tax column is surfaced as an info message, never silently dropped.
+      const msg = result.parserMessages?.find((m) => m.id === "scalable.interest_withholding_detected");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.context?.count).toBe("1");
+    });
+
+    it("should NOT emit a withholding message when interest rows have no tax", () => {
+      const csv = [
+        HEADER,
+        "2024-12-31;23:59;Executed;REF016;KKT-Abschluss;Cash;Interest;;0;0;12,50;0;0;EUR",
+      ].join("\n");
+      const result = scalableParser.parse(csv);
+      const msg = result.parserMessages?.find((m) => m.id === "scalable.interest_withholding_detected");
+      expect(msg).toBeUndefined();
+    });
   });
 
   describe("error handling", () => {

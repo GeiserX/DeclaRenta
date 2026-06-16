@@ -74,4 +74,17 @@ describe("issue #48 e2e: Scalable cash interest → Casilla 0027", () => {
     expect(report.interest.earned.toFixed(2)).toBe("7.45");
     expect(report.interest.paid.toFixed(2)).toBe("1.30");
   });
+
+  it("a non-EUR (USD) interest row is converted to EUR at the ECB rate for 0027", () => {
+    // 100 USD interest on 2024-12-31, ECB rate 1.05 EUR/USD → 105.00 EUR in 0027.
+    // Proves the FCY conversion path (the EUR cases short-circuit at rate 1).
+    const csv = [
+      HEADER,
+      "2024-12-31;23:59;Executed;REF104;KKT-Abschluss;Cash;Interest;;0;0;100,00;0;0;USD",
+    ].join("\n");
+    const statement = scalableParser.parse(csv);
+    const report = generateTaxReport(statement, rates, 2024);
+
+    expect(report.interest.earned.toFixed(2)).toBe("105.00");
+  });
 });
