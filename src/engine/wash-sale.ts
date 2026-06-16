@@ -1,19 +1,27 @@
 /**
- * Anti-churning rule detector (Art. 33.5.f LIRPF).
+ * Anti-churning rule detector (Art. 33.5.f/g LIRPF) — PROPORTIONAL blocking.
  *
- * Spanish tax law blocks capital losses if the same security
- * (or "homogeneous" security) is repurchased within:
+ * Spanish tax law blocks capital losses if homogeneous securities are
+ * repurchased within:
  * - **2 calendar months** before or after the sale — for securities
  *   admitted to trading on regulated markets (STK, FUND, BOND on MiFID venues).
  * - **1 year** before or after the sale — for securities NOT admitted
  *   to trading on regulated markets (most crypto, unlisted shares, etc.).
  *
- * Crypto and other non-listed assets use the 1-year window. Listed securities
- * use the 2-month window.
+ * The block is **proportional to the repurchased quantity** ("por paquetes",
+ * DGT V0913-08): sell 100 at a loss, rebuy 30 → only the loss on 30 is deferred,
+ * the loss on 70 is deductible now. One repurchased share absorbs one sold
+ * share's loss, once (no double-counting — DGT V2481-20). The deferred loss is
+ * NOT forfeited: it is released ("se integrarán a medida que se transmitan los
+ * valores que permanezcan en el patrimonio del contribuyente") when the surviving
+ * repurchased shares are themselves later sold — tracked here as
+ * `reintegratedLossEur` on the disposal that sells them. See
+ * docs/antichurning-proportional-design.md for the full contract and citations.
  */
 
 import type { FifoDisposal } from "../types/tax.js";
 import type { Trade } from "../types/ibkr.js";
+import Decimal from "decimal.js";
 import { parseDate } from "./dates.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f) */
@@ -43,58 +51,114 @@ export function addMonths(date: Date, months: number): Date {
   return result;
 }
 
+/** A homogeneous repurchase available to absorb a loss, with a consumable quantity. */
+interface BuyEvent {
+  time: number;
+  /** Normalized YYYY-MM-DD of the buy — the key a future disposal matches to release the deferred loss. */
+  date: string;
+  /** Remaining repurchased quantity not yet used to block a loss (the consumable budget). */
+  remainingQty: Decimal;
+}
+
+/** A deferred loss attached to a repurchased lot, released as that lot is later sold. */
+interface DeferredLot {
+  /** Repurchased shares still carrying deferred loss. */
+  qty: Decimal;
+  /** Deferred loss (EUR, positive) still attached to those shares. */
+  deferredEur: Decimal;
+}
+
 /**
- * Detect wash sales and mark blocked losses.
+ * Detect wash sales: compute PROPORTIONAL blocked losses and reintegrate
+ * previously-deferred losses, in ONE chronological pass (Art. 33.5.f/g LIRPF).
  *
- * A loss is blocked if:
- * 1. The disposal resulted in a loss (gainLossEur < 0)
- * 2. The same ISIN was purchased within 2 months before or after the sale
+ * Per homogeneous key the pass maintains (a) a FIFO budget of in-window
+ * repurchase quantities and (b) a ledger of deferred losses keyed by the
+ * repurchase date. For each disposal in sell-date order:
+ *  1. RELEASE — if it sells shares acquired on a date carrying a deferred loss,
+ *     reintegrate that loss proportionally (`reintegratedLossEur`).
+ *  2. BLOCK (losses only) — defer `|loss| × absorbed/qty` where `absorbed` is the
+ *     in-window homogeneous repurchase quantity (a buy ON the sell date is the
+ *     lot being sold, excluded), consuming that quantity from the budget and
+ *     attaching the deferred loss to the consumed buys' dates.
  *
- * @param disposals - FIFO disposals to check
- * @param allTrades - All trades for the period (needed to check repurchases)
- * @returns Disposals with washSaleBlocked flag set
+ * Passing the FULL (all-year) disposal+trade set makes reintegration work across
+ * years in a merged multi-file run (the cross-year case). Single-year runs see
+ * only blocking, exactly as before — but now proportional.
+ *
+ * @param disposals - FIFO disposals to check (pass all years for cross-year reintegration)
+ * @param allTrades - All trades for the period (homogeneous repurchases)
+ * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, and `washSaleBlocked` set
  */
 export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): FifoDisposal[] {
-  // Index buy *timestamps* by homogeneous-asset key. Each key's array is sorted
-  // once below so per-disposal lookups can binary-search the date window instead
-  // of scanning every buy of that security (the old O(n²) worst case when many
-  // losses share a heavily-traded ISIN). Behavior is identical — we still answer
-  // the boolean "is there any qualifying repurchase in the window?".
-  const buysByAsset = new Map<string, number[]>();
-
+  // Index in-window-eligible BUY events (time, date, consumable qty) by key.
+  const buysByAsset = new Map<string, BuyEvent[]>();
   for (const trade of allTrades) {
-    if (trade.buySell === "BUY" && !WASH_SALE_EXEMPT.has(trade.assetCategory)) {
-      const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
-      if (!key) continue;
-      let times = buysByAsset.get(key);
-      if (!times) {
-        times = [];
-        buysByAsset.set(key, times);
-      }
-      times.push(parseDate(trade.tradeDate).getTime());
+    if (trade.buySell !== "BUY" || WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
+    const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
+    if (!key) continue;
+    const qty = parseQty(trade.quantity);
+    if (qty.lessThanOrEqualTo(0)) continue;
+    const d = parseDate(trade.tradeDate);
+    let events = buysByAsset.get(key);
+    if (!events) {
+      events = [];
+      buysByAsset.set(key, events);
     }
+    events.push({ time: d.getTime(), date: normalizeDay(trade.tradeDate), remainingQty: qty });
+  }
+  for (const events of buysByAsset.values()) {
+    events.sort((a, b) => a.time - b.time);
   }
 
-  // Sort each key's buy timestamps ascending once, enabling binary-search lookups.
-  for (const times of buysByAsset.values()) {
-    times.sort((a, b) => a - b);
-  }
+  // Deferred-loss ledger: key → (buy date → deferred lot). A loss blocked by a
+  // repurchase on date D is recoverable when shares acquired on D are later sold.
+  const deferredByAsset = new Map<string, Map<string, DeferredLot>>();
 
-  return disposals.map((disposal) => {
-    // Only check disposals with losses
-    if (disposal.gainLossEur.greaterThanOrEqualTo(0)) {
-      return disposal;
-    }
+  // Process disposals oldest-first so a block is recorded before the later
+  // disposal that releases it (stable sort by sell date; preserve input order
+  // for same-day disposals via the index tiebreak).
+  const order = disposals.map((_, i) => i);
+  order.sort((a, b) => {
+    const ta = parseDate(disposals[a]!.sellDate).getTime();
+    const tb = parseDate(disposals[b]!.sellDate).getTime();
+    return ta !== tb ? ta - tb : a - b;
+  });
 
-    // Anti-churning does NOT apply to derivatives, forex, or CFDs.
-    if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) {
-      return disposal;
-    }
+  const result: FifoDisposal[] = disposals.map((d) => ({
+    ...d,
+    blockedLossEur: new Decimal(0),
+    reintegratedLossEur: new Decimal(0),
+    washSaleBlocked: false,
+  }));
 
+  for (const idx of order) {
+    const disposal = result[idx]!;
+    if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) continue;
     const key = homogeneousKey(disposal.isin, disposal.symbol, disposal.assetCategory);
-    if (!key) {
-      return disposal;
+    if (!key) continue;
+
+    const qty = disposal.quantity.abs();
+
+    // 1. RELEASE: this disposal sells shares acquired on a date that carries a
+    //    deferred loss → reintegrate proportionally to the quantity now sold.
+    const deferredLots = deferredByAsset.get(key);
+    if (deferredLots) {
+      const lot = deferredLots.get(normalizeDay(disposal.acquireDate));
+      if (lot && lot.qty.greaterThan(0)) {
+        const releasedQty = Decimal.min(qty, lot.qty);
+        const releasedEur = lot.qty.isZero()
+          ? new Decimal(0)
+          : lot.deferredEur.mul(releasedQty).div(lot.qty);
+        disposal.reintegratedLossEur = releasedEur;
+        lot.qty = lot.qty.minus(releasedQty);
+        lot.deferredEur = lot.deferredEur.minus(releasedEur);
+        if (lot.qty.lessThanOrEqualTo(0)) deferredLots.delete(normalizeDay(disposal.acquireDate));
+      }
     }
+
+    // 2. BLOCK: only loss disposals, proportional to the in-window repurchase qty.
+    if (disposal.gainLossEur.greaterThanOrEqualTo(0)) continue;
 
     const sellDate = parseDate(disposal.sellDate);
     const months = windowMonths(disposal.assetCategory, disposal.isin);
@@ -102,41 +166,71 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     const windowEnd = addMonths(sellDate, months).getTime();
     const sellTime = sellDate.getTime();
 
-    // A repurchase blocks the loss if ANY buy of the same security falls in the
-    // window [windowStart, windowEnd] on a day OTHER than the sale day itself
-    // (a buy ON the sell date is a same-day lot being sold, not a repurchase).
-    // The buy timestamps are pre-sorted, so we binary-search the window: the
-    // qualifying buys are the slice [lo, hi) minus any that fall exactly on the
-    // sell date. This is exactly the old `buys.some(...)` predicate, just indexed.
-    const buyTimes = buysByAsset.get(key) ?? [];
-    const lo = lowerBound(buyTimes, windowStart);
-    const hi = upperBound(buyTimes, windowEnd);
-    let inWindowCount = hi - lo;
-    // Subtract buys landing exactly on the sell day (only possible if the sell
-    // day is inside the window, which it always is, but guard anyway).
-    if (inWindowCount > 0 && sellTime >= windowStart && sellTime <= windowEnd) {
-      inWindowCount -= upperBound(buyTimes, sellTime) - lowerBound(buyTimes, sellTime);
-    }
-    const hasRepurchase = inWindowCount > 0;
+    const buyEvents = buysByAsset.get(key);
+    if (!buyEvents) continue;
 
-    // DEFERRAL NOTE (Art. 33.5.f LIRPF): a blocked loss is NOT forfeited — it is
-    // deferred and integrates into the taxable base when the replacement (repurchased)
-    // lots are themselves later sold, by adding the blocked loss to those lots' basis.
-    // We only set `washSaleBlocked` here; downstream the blocked loss is excluded from
-    // the current-year deductible base (i.e. deferred = not deducted now), which is the
-    // correct CURRENT-YEAR treatment.
-    //
-    // FULL deferral-to-future-basis is intentionally OUT OF SCOPE: it requires a
-    // persistent multi-year lot store to attach the blocked amount to the specific
-    // replacement lots and carry it across declarations. The current Lot/FifoDisposal
-    // model is single-year and has no such cross-year carry mechanism, so attempting
-    // to mutate replacement-lot basis here would be speculative and could corrupt
-    // results. We therefore keep the conservative, correct current-year behavior.
-    return {
-      ...disposal,
-      washSaleBlocked: hasRepurchase,
-    };
-  });
+    // Consume repurchase quantity (FIFO) from buys inside the window, excluding
+    // any buy landing exactly on the sell day (that is the lot being sold, not a
+    // repurchase). `absorbed` cannot exceed the sold quantity.
+    let remainingToAbsorb = qty;
+    const consumed: { date: string; qty: Decimal }[] = [];
+    for (const ev of buyEvents) {
+      if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
+      if (ev.time < windowStart || ev.time > windowEnd) continue;
+      if (ev.time === sellTime) continue;
+      if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
+      const take = Decimal.min(ev.remainingQty, remainingToAbsorb);
+      ev.remainingQty = ev.remainingQty.minus(take);
+      remainingToAbsorb = remainingToAbsorb.minus(take);
+      consumed.push({ date: ev.date, qty: take });
+    }
+
+    const absorbed = qty.minus(remainingToAbsorb);
+    if (absorbed.lessThanOrEqualTo(0)) continue;
+
+    // Proportional blocked loss: |loss| × absorbed / soldQty.
+    const lossAbs = disposal.gainLossEur.abs();
+    const blocked = absorbed.greaterThanOrEqualTo(qty) ? lossAbs : lossAbs.mul(absorbed).div(qty);
+    disposal.blockedLossEur = blocked;
+    disposal.washSaleBlocked = blocked.greaterThan(0);
+
+    // Attach the deferred loss to each consumed repurchase date, pro-rata to the
+    // quantity consumed there, so a later sale of those shares releases it.
+    let lots = deferredByAsset.get(key);
+    if (!lots) {
+      lots = new Map<string, DeferredLot>();
+      deferredByAsset.set(key, lots);
+    }
+    for (const c of consumed) {
+      const share = absorbed.isZero() ? new Decimal(0) : blocked.mul(c.qty).div(absorbed);
+      const existing = lots.get(c.date);
+      if (existing) {
+        existing.qty = existing.qty.plus(c.qty);
+        existing.deferredEur = existing.deferredEur.plus(share);
+      } else {
+        lots.set(c.date, { qty: c.qty, deferredEur: share });
+      }
+    }
+  }
+
+  return result;
+}
+
+/** Parse a trade quantity string to an absolute Decimal (never NaN/negative). */
+function parseQty(q: string): Decimal {
+  try {
+    const d = new Decimal(q);
+    return d.isFinite() ? d.abs() : new Decimal(0);
+  } catch {
+    return new Decimal(0);
+  }
+}
+
+/** Normalize a date string (YYYY-MM-DD or YYYYMMDD) to YYYY-MM-DD for ledger keys. */
+function normalizeDay(date: string): string {
+  const t = date.trim();
+  if (/^\d{8}$/.test(t)) return `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
+  return t.slice(0, 10);
 }
 
 /**
@@ -164,30 +258,6 @@ function windowMonths(assetCategory: string, isin: string): number {
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
   return isin ? 2 : 12;
-}
-
-/** First index `i` in the ascending array where `arr[i] >= target` (else arr.length). */
-function lowerBound(arr: readonly number[], target: number): number {
-  let lo = 0;
-  let hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (arr[mid]! < target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-/** First index `i` in the ascending array where `arr[i] > target` (else arr.length). */
-function upperBound(arr: readonly number[], target: number): number {
-  let lo = 0;
-  let hi = arr.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (arr[mid]! <= target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
 }
 
 function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {

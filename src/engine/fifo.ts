@@ -527,6 +527,8 @@ export class FifoEngine {
       acquireEcbRate: parts.acquireEcbRate,
       assetCategory: trade.assetCategory,
       washSaleBlocked: false, // Set later by wash sale detection
+      blockedLossEur: new Decimal(0), // Set later by detectWashSales (proportional)
+      reintegratedLossEur: new Decimal(0), // Set later by detectWashSales
       ...(parts.optionFields ?? {}),
     });
 
@@ -737,6 +739,8 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: trade.assetCategory,
         washSaleBlocked: false,
+        blockedLossEur: new Decimal(0),
+        reintegratedLossEur: new Decimal(0),
         isShort: true,
       });
 
@@ -853,6 +857,8 @@ export class FifoEngine {
           acquireEcbRate: lot.ecbRate,
           assetCategory: "OPT",
           washSaleBlocked: false,
+          blockedLossEur: new Decimal(0),
+          reintegratedLossEur: new Decimal(0),
           optionScenario: "expiration",
           putCall: ex.putCall,
           strike: ex.strike,
@@ -901,6 +907,8 @@ export class FifoEngine {
           acquireEcbRate: lot.ecbRate,
           assetCategory: "OPT",
           washSaleBlocked: false,
+          blockedLossEur: new Decimal(0),
+          reintegratedLossEur: new Decimal(0),
           isShort: true,
           optionScenario: "expiration",
           putCall: ex.putCall,
@@ -1124,6 +1132,8 @@ export class FifoEngine {
         acquireEcbRate: ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        blockedLossEur: new Decimal(0),
+        reintegratedLossEur: new Decimal(0),
         optionScenario: "exercise",
         putCall: ex.putCall,
         strike: ex.strike,
@@ -1166,6 +1176,8 @@ export class FifoEngine {
         acquireEcbRate: lot.ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        blockedLossEur: new Decimal(0),
+        reintegratedLossEur: new Decimal(0),
         optionScenario: "exercise",
         putCall: ex.putCall,
         strike: ex.strike,
@@ -1204,6 +1216,8 @@ export class FifoEngine {
         acquireEcbRate: ecbRate,
         assetCategory: "STK",
         washSaleBlocked: false,
+        blockedLossEur: new Decimal(0),
+        reintegratedLossEur: new Decimal(0),
         optionScenario: "exercise",
         putCall: ex.putCall,
         strike: ex.strike,

@@ -134,8 +134,30 @@ export interface FifoDisposal {
   acquireEcbRate: Decimal;
   /** Asset category (STK, OPT, FUND, etc.) */
   assetCategory: string;
-  /** True if loss is blocked by the anti-churning rule (Art. 33.5.f LIRPF) */
+  /**
+   * True if ANY part of this disposal's loss is blocked by the anti-churning rule
+   * (Art. 33.5.f/g LIRPF). Display flag only — equals `blockedLossEur.gt(0)`. The
+   * actual deferred amount is `blockedLossEur` (blocking is PROPORTIONAL to the
+   * repurchased quantity, not all-or-nothing).
+   */
   washSaleBlocked: boolean;
+  /**
+   * Portion of THIS disposal's loss deferred now by anti-churning, proportional
+   * to the homogeneous quantity repurchased within the ±2-month/±1-year window
+   * (DGT V0913-08 "por paquetes"): `|gainLossEur| × absorbed/quantity`, with
+   * `0 ≤ blockedLossEur ≤ |gainLossEur|`. A non-loss disposal carries 0. This is
+   * the amount added BACK to the deductible base (deferred, not deducted now).
+   */
+  blockedLossEur: Decimal;
+  /**
+   * Prior deferred (blocked) loss RELEASED because this disposal sold shares that
+   * were the homogeneous repurchase which previously blocked an earlier loss
+   * ("se integrarán a medida que se transmitan los valores que permanezcan en el
+   * patrimonio", Art. 33.5 closing paragraph). `≥ 0`; subtracted from the
+   * deductible base (a now-deductible loss). Only meaningful within a single
+   * (possibly multi-year merged) run; not persisted across separate filings.
+   */
+  reintegratedLossEur: Decimal;
   /** True for short position disposals (SELL+O → BUY+C) */
   isShort?: boolean;
   /** Option scenario per DGT V0137-23 */
@@ -257,10 +279,20 @@ export interface TaxSummary {
     transmissionValue: Decimal;
     /** Total cost basis across ALL disposals (both blocks). NOT casilla 0331 — see warning above. */
     acquisitionValue: Decimal;
-    /** Net gain/loss (transmissionValue - acquisitionValue) */
+    /** Net gain/loss (transmissionValue - acquisitionValue) — RAW, before anti-churning. */
     netGainLoss: Decimal;
-    /** Gains blocked by anti-churning rule */
+    /**
+     * Losses deferred NOW by the anti-churning rule (Art. 33.5.f/g), proportional
+     * to repurchased quantity (Σ of each disposal's `blockedLossEur`). Added back
+     * to the deductible base — not deducted this year.
+     */
     blockedLosses: Decimal;
+    /**
+     * Previously-blocked losses RELEASED this year because the surviving
+     * repurchased shares were sold (Σ of each disposal's `reintegratedLossEur`).
+     * Subtracted from the deductible base — a now-deductible deferred loss.
+     */
+    reintegratedLosses: Decimal;
     /** Individual disposals */
     disposals: FifoDisposal[];
   };

@@ -500,6 +500,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
     resumen: {
       ganancia_neta: report.capitalGains.netGainLoss.toFixed(2),
       perdidas_bloqueadas_antichurning: report.capitalGains.blockedLosses.toFixed(2),
+      perdidas_reintegradas_antichurning: report.capitalGains.reintegratedLosses.toFixed(2),
       ganancia_neta_fx: report.fxGains.netGainLoss.toFixed(2),
       num_operaciones: report.capitalGains.disposals.length,
       num_operaciones_fx: report.fxGains.disposals.length,
@@ -574,6 +575,9 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   }
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
+  }
+  if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
+    console.error(`    ↩ Pérdidas reintegradas (diferidas de años anteriores): ${report.capitalGains.reintegratedLosses.toFixed(2)} EUR`);
   }
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");

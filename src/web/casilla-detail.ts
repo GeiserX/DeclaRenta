@@ -360,6 +360,10 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     ? `<p class="warning">${t("casilla.blocked_losses", { amount: fmtEur(report.capitalGains.blockedLosses) })}</p>`
     : "";
 
+  const reintegratedNote = report.capitalGains.reintegratedLosses.greaterThan(0)
+    ? `<p class="info">${t("casilla.reintegrated_losses", { amount: fmtEur(report.capitalGains.reintegratedLosses) })}</p>`
+    : "";
+
   const msgs = report.messages;
   const errors = msgs.filter((m) => m.severity === "error");
   const warns = msgs.filter((m) => m.severity === "warning");
@@ -388,7 +392,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
     </details>`;
   }
 
-  container.innerHTML = `<div class="casilla-cards">${cards}</div><div class="sr-only" role="status" aria-live="polite"></div>${blockedWarning}${messagesHtml}`;
+  container.innerHTML = `<div class="casilla-cards">${cards}</div><div class="sr-only" role="status" aria-live="polite"></div>${blockedWarning}${reintegratedNote}${messagesHtml}`;
 
   const liveRegion = container.querySelector<HTMLElement>('[role="status"]');
 

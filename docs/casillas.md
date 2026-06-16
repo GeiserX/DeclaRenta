@@ -12,7 +12,7 @@
 
 **Notas:**
 - El motor FIFO (Art. 37.2 LIRPF) determina qué lotes se consumen al vender valores homogéneos.
-- Las pérdidas bloqueadas por la regla anti-churning (Art. 33.5.f LIRPF) se reportan por separado y no se incluyen en 0358 hasta que se vendan los valores recomprados.
+- La regla anti-churning (Art. 33.5.f/g LIRPF) bloquea **solo la parte proporcional** de la pérdida correspondiente a la cantidad recomprada; el resto se incluye en 0358 y se computa ahora. La parte bloqueada se difiere (no se pierde) y se reporta por separado hasta que se vendan los valores recomprados.
 - Los impuestos de transacción (STT, FTT, SEC fees) se incluyen en el coste de adquisición (compras) y se deducen del valor de transmisión (ventas).
 
 ## Base del ahorro — Ganancias por transmisión de moneda extranjera
@@ -64,11 +64,23 @@
 | 200.000 – 300.000 € | 27% | Art. 66.1 LIRPF |
 | > 300.000 € | 30% | Art. 66.1 LIRPF, modificado por Ley 7/2024, DF 7ª |
 
-## Regla anti-churning (Art. 33.5.f LIRPF)
+## Regla anti-churning (Art. 33.5.f/g LIRPF)
 
-Las pérdidas derivadas de la venta de valores **no computan** si el contribuyente ha adquirido valores homogéneos dentro de los **2 meses calendario** anteriores o posteriores a la venta (para valores cotizados) o **1 año** (para no cotizados).
+Cuando el contribuyente vende valores con **pérdida** y adquiere valores **homogéneos** dentro de la ventana temporal, la pérdida **no computa de forma proporcional**: solo se bloquea la parte de la pérdida correspondiente a la **cantidad recomprada**; el resto se computa ahora.
 
-Las pérdidas bloqueadas se integran cuando se transmiten los valores que permanecen en el patrimonio.
+- **Art. 33.5.f LIRPF** — valores **cotizados**: ventana de **±2 meses** calendario (antes o después de la venta).
+- **Art. 33.5.g LIRPF** — valores **no cotizados**: ventana de **±1 año**.
+
+La pérdida bloqueada **se difiere, no se pierde**: «las pérdidas patrimoniales se integrarán a medida que se transmitan los valores o participaciones que permanezcan en el patrimonio del contribuyente». Es decir, vuelve a computar cuando más adelante se venden los valores recomprados.
+
+Solo se bloquea «la correspondiente a las acciones que se consideran recompradas», y una misma compra no puede bloquear varias pérdidas (lectura proporcional «por paquetes»): DGT **V0913-08**, **V2481-20** y **V3282-18**.
+
+**Ejemplo.** Vender 100 acciones con una pérdida de 1.000 € y recomprar 30 dentro de los 2 meses:
+- Se difieren **300 €** (la pérdida correspondiente a 30 acciones).
+- Se imputan **700 €** ahora (la pérdida de las 70 acciones no recompradas, que sí entra en la casilla 0358).
+- Cuando se vendan esas 30 acciones recompradas, se reintegran los **300 €** diferidos.
+
+**Reintegración.** Si se suben los ficheros de varios años juntos, la reintegración de la pérdida diferida es **automática** (el motor procesa todas las operaciones en un único recorrido cronológico). En declaraciones de un solo año por separado, la pérdida diferida debe seguirse **manualmente** (limitación documentada).
 
 ## Tipo de cambio
 
