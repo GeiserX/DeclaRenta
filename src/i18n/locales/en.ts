@@ -474,7 +474,7 @@ const en: TranslationKeys = {
   "guide_rw.interest_note": "Broker interest (cash remuneration) is declared as investment income. Margin interest paid is NOT deductible (Art. 26.1.a LIRPF).",
   "guide_rw.double_taxation_note": "The double taxation deduction prevents paying tax twice on the same dividends. It is limited to the lesser of the amount paid abroad and the Spanish tax due. If the tax treaty allows a lower maximum rate (e.g. 15% USA), only that amount is deductible.",
   "guide_rw.blocked_losses_title": "Blocked losses (anti-churning)",
-  "guide_rw.blocked_losses_hint": "If DeclaRenta shows blocked losses, tick the <strong>\"Non-attributable capital losses\"</strong> box in Renta Web. These losses are deferred to the next year because the same security was repurchased within 2 months (listed) or 1 year (unlisted). The amount is added to the acquisition cost of the new position.",
+  "guide_rw.blocked_losses_hint": "If DeclaRenta shows blocked losses, tick the <strong>\"Non-attributable capital losses\"</strong> box in Renta Web for that amount. Only the part proportional to the shares repurchased within 2 months (listed) or 1 year (unlisted) is blocked; the rest of the loss is deductible as normal. The blocked loss is NOT added to the new position's cost: it is deferred and reintegrated when you sell those repurchased securities.",
   "guide_rw.closing_tip": "After entering all data, use the \"Verify declaration\" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because they don't calculate FX gains separately — enable single-currency mode in your profile to compare.",
 
   // PDF report

@@ -169,21 +169,37 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     const buyEvents = buysByAsset.get(key);
     if (!buyEvents) continue;
 
-    // Consume repurchase quantity (FIFO) from buys inside the window, excluding
-    // any buy landing exactly on the sell day (that is the lot being sold, not a
-    // repurchase). `absorbed` cannot exceed the sold quantity.
+    // Consume repurchase quantity from in-window buys, excluding any buy on the
+    // sell day (the lot being sold, not a repurchase). `absorbed` ≤ sold qty.
+    //
+    // Order matters for REINTEGRATION keying (not for the blocked amount): the
+    // deferred loss must attach to shares that REMAIN in the patrimony so a later
+    // sale can release it ("se integrarán a medida que se transmitan los valores
+    // que permanezcan"). A genuine replacement is a POST-sale repurchase, whereas
+    // an in-window PRE-sale buy is often the very lot FIFO just sold (which will
+    // never be sold again → the deferred loss would be stranded). So we consume
+    // post-sale buys (ascending) FIRST, then pre-sale buys — the total absorbed
+    // (and thus the proportional block) is identical either way, but the deferred
+    // loss lands on the surviving lot. (Residual, conservative: if the ONLY
+    // in-window homogeneous acquisition is the partially-sold lot itself, the
+    // block keys there and may not reintegrate — over-deferral, never under-pay.)
     let remainingToAbsorb = qty;
     const consumed: { date: string; qty: Decimal }[] = [];
-    for (const ev of buyEvents) {
-      if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
-      if (ev.time < windowStart || ev.time > windowEnd) continue;
-      if (ev.time === sellTime) continue;
-      if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
-      const take = Decimal.min(ev.remainingQty, remainingToAbsorb);
-      ev.remainingQty = ev.remainingQty.minus(take);
-      remainingToAbsorb = remainingToAbsorb.minus(take);
-      consumed.push({ date: ev.date, qty: take });
-    }
+    const consume = (predicate: (evTime: number) => boolean): void => {
+      for (const ev of buyEvents) {
+        if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
+        if (ev.time < windowStart || ev.time > windowEnd) continue;
+        if (ev.time === sellTime) continue;
+        if (!predicate(ev.time)) continue;
+        if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
+        const take = Decimal.min(ev.remainingQty, remainingToAbsorb);
+        ev.remainingQty = ev.remainingQty.minus(take);
+        remainingToAbsorb = remainingToAbsorb.minus(take);
+        consumed.push({ date: ev.date, qty: take });
+      }
+    };
+    consume((evTime) => evTime > sellTime); // post-sale repurchases first (surviving replacements)
+    consume((evTime) => evTime < sellTime); // then pre-sale in-window buys
 
     const absorbed = qty.minus(remainingToAbsorb);
     if (absorbed.lessThanOrEqualTo(0)) continue;

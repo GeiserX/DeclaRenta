@@ -558,4 +558,36 @@ describe("proportional blocking + reintegration", () => {
     expect(result[0]!.blockedLossEur.toFixed(2)).toBe("100.00");
     expect(result[0]!.washSaleBlocked).toBe(true);
   });
+
+  it("keys the deferred loss on the SURVIVING post-sale repurchase, not an in-window pre-sale buy (reintegration regression)", () => {
+    // Both a pre-sale buy (2025-05-01, the lot FIFO sells) AND a genuine post-sale
+    // repurchase (2025-07-01, which survives) fall inside the 2-month window. The
+    // budget must attach the deferred loss to the SURVIVING 2025-07-01 lot so that
+    // selling it later (2025-12-01) reintegrates the loss — not strand it on the
+    // already-sold 2025-05-01 date. Regression for the review's HIGH finding.
+    const disposals = [
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", acquireDate: "2025-05-01",
+        quantity: new Decimal(100), gainLossEur: new Decimal(-1000),
+      }),
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", sellDate: "2025-12-01", acquireDate: "2025-07-01",
+        quantity: new Decimal(100), gainLossEur: new Decimal(50),
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-05-01", "BUY", "100"), // pre-sale, in-window, becomes the sold lot
+      makeTrade(AAPL, "2025-06-15", "SELL", "100"),
+      makeTrade(AAPL, "2025-07-01", "BUY", "100"), // genuine surviving repurchase
+      makeTrade(AAPL, "2025-12-01", "SELL", "100"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    const lossSale = result.find((d) => d.sellDate === "2025-06-15")!;
+    const laterSale = result.find((d) => d.sellDate === "2025-12-01")!;
+    // Whole loss blocked (a repurchase covers all 100 sold)…
+    expect(lossSale.blockedLossEur.toFixed(2)).toBe("1000.00");
+    // …and it RELEASES when the surviving repurchased lot is sold — not stranded.
+    expect(laterSale.reintegratedLossEur.toFixed(2)).toBe("1000.00");
+  });
 });
