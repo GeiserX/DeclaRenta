@@ -28,6 +28,7 @@ import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
 import { formatCsv } from "../generators/csv.js";
+import { serializeFxTrace } from "../generators/fx-trace.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
 import type { LossCarryforward } from "../types/tax.js";
@@ -129,7 +130,9 @@ program
   .option("--monodivisa", "Disable FX FIFO engine — treat all as EUR (like Autodeclaro/Taxdown)")
   .option("--titulares <n>", "Number of account holders. >1 splits all amounts equally per contribuyente (Art. 11.3 LIRPF)", parseInt)
   .option("--crypto-rates <json>", "Manual EUR-per-unit quotes for crypto↔crypto swaps without an ECB rate. Inline JSON or path to a JSON file: [{ \"currency\": \"SOL\", \"date\": \"2024-03-01\", \"eurPerUnit\": \"120.50\" }]")
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; titulares?: number; cryptoRates?: string }) => {
+  .option("--fx-trace [file]", "Volcar la traza de movimientos del motor FX (acuñar/aparcar/desaparcar/descartar/convertir) para auditoría. Sin valor → stderr; con ruta → fichero.")
+  .option("--fx-trace-format <format>", "Formato de la traza FX: jsonl o csv", "jsonl")
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; titulares?: number; cryptoRates?: string; fxTrace?: string | boolean; fxTraceFormat?: string }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
@@ -173,7 +176,7 @@ program
       }
 
       // 3. Generate tax report
-      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, titulares: opts.titulares, manualRates });
+      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, titulares: opts.titulares, manualRates, fxTrace: opts.fxTrace !== undefined && opts.fxTrace !== false });
       if (opts.titulares && opts.titulares > 1) {
         console.error(`  Titulares: ${opts.titulares} (importes divididos por contribuyente)`);
       }
@@ -270,6 +273,26 @@ program
           console.error(`\nInforme guardado en ${opts.output}`);
         } else {
           console.log(JSON.stringify(output, null, 2));
+        }
+      }
+
+      // 4b. Emit FX-FIFO movement trace if requested (--fx-trace). With a path →
+      //     fichero; sin valor (boolean true) → stderr, so it never corrupts a
+      //     JSON/CSV stdout payload. Con --monodivisa el motor FX no se ejecuta,
+      //     así que report.fxTrace queda indefinido → se informa "sin movimientos".
+      if (opts.fxTrace !== undefined && opts.fxTrace !== false) {
+        if (!report.fxTrace || report.fxTrace.length === 0) {
+          console.error("(sin movimientos FX que trazar)");
+        } else {
+          const fmt = opts.fxTraceFormat === "csv" ? "csv" : "jsonl";
+          const traceStr = serializeFxTrace(report.fxTrace, fmt);
+          if (typeof opts.fxTrace === "string") {
+            writeFileSync(opts.fxTrace, traceStr);
+            console.error(`\nTraza FX guardada en ${opts.fxTrace} (${report.fxTrace.length} movimientos)`);
+          } else {
+            console.error(`\n--- Traza FX (${report.fxTrace.length} movimientos) ---`);
+            process.stderr.write(traceStr + "\n");
+          }
         }
       }
 

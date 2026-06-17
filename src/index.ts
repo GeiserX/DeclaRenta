@@ -49,6 +49,8 @@ export { generateD6Report } from "./generators/d6.js";
 export { generatePdfReport } from "./generators/pdf.js";
 export { formatCsv, escapeCsv } from "./generators/csv.js";
 export { validateModelo720Records } from "./generators/modelo720-validator.js";
+export { serializeFxTrace } from "./generators/fx-trace.js";
+export type { FxTraceFormat } from "./generators/fx-trace.js";
 
 // i18n
 export { t, setLocale, getCurrentLocale, detectLocale, initLocale, getLocaleNames } from "./i18n/index.js";

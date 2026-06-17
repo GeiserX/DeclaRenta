@@ -8,7 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { CashTransaction, FlexStatement, Trade } from "../types/ibkr.js";
-import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry, ManualRateQuote } from "../types/tax.js";
+import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry, ManualRateQuote, FxTraceEvent } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
@@ -270,6 +270,14 @@ export interface ReportOptions {
    * fallback by the crypto valuation pre-pass, never overriding ECB rates.
    */
   manualRates?: EcbRateMap;
+  /**
+   * Opt-in: capture the full FX-FIFO movement trace (acquire/park/unpark/discard/
+   * dispose with running balances) onto `TaxSummary.fxTrace`, for audit/diagnostic
+   * export (CLI `--fx-trace`, web diagnostic download). OFF by default and
+   * zero-cost when off; ignored in monodivisa (`skipFx`) since the FX engine
+   * doesn't run. NEVER surfaced in the standard UI.
+   */
+  fxTrace?: boolean;
 }
 
 /**
@@ -449,9 +457,11 @@ export function generateTaxReport(
   let fxAcquisitionValue = new Decimal(0);
   let fxWarningsList: string[] = [];
   let fxMessagesList: TaxMessage[] = [];
+  let fxTrace: FxTraceEvent[] | undefined;
 
   if (!options?.skipFx) {
     const fxEngine = new FxFifoEngine();
+    if (options?.fxTrace) fxEngine.enableTrace();
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
@@ -480,6 +490,9 @@ export function generateTaxReport(
       fxWarningsList = filterByYear(fxEngine.warnings, yearStr, (w) => w);
       fxMessagesList = filterByYear(fxEngine.messages, yearStr, (m) => m.message, (m) => m.context);
     }
+    // The trace is the FULL all-year movement ledger (audit artifact, not
+    // year-filtered) so a lot's whole lifecycle reconciles. Present only on opt-in.
+    if (options?.fxTrace) fxTrace = fxEngine.getTrace();
   }
 
   // 5. Double taxation. Art. 80 caps the deduction by the effective average
@@ -631,5 +644,6 @@ export function generateTaxReport(
       netGainLoss: t.fxTransmissionValue.minus(t.fxAcquisitionValue),
       disposals: fxDisposals,
     },
+    ...(fxTrace ? { fxTrace } : {}),
   };
 }
