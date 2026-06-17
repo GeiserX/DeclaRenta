@@ -184,6 +184,8 @@ const en: TranslationKeys = {
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
   "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1633/1637). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
   "profile.monodivisa_warning": "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
+  "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
+  "profile.track_autoconvert_detail": "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",
   "profile.titulares_label": "Number of account holders:",
   "profile.titulares_detail": "If the account has several holders (e.g. a joint or community-property account), DeclaRenta divides every amount equally to show each taxpayer's share (Art. 11.3 LIRPF). Each holder files their own individual return for their share.",
   "profile.saved": "Profile saved",

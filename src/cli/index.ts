@@ -128,11 +128,12 @@ program
   .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`)
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
   .option("--monodivisa", "Disable FX FIFO engine — treat all as EUR (like Autodeclaro/Taxdown)")
+  .option("--skip-auto-convert", "No tratar las autoconversiones del bróker (AFx/FXCONV) como conversiones de divisa. Por defecto SÍ se procesan (IBKR no reconvierte a EUR al vender, así que el saldo en divisa es real). Actívalo solo si tu bróker hace round-trip completo y quieres ignorar el efecto divisa.")
   .option("--titulares <n>", "Number of account holders. >1 splits all amounts equally per contribuyente (Art. 11.3 LIRPF)", parseInt)
   .option("--crypto-rates <json>", "Manual EUR-per-unit quotes for crypto↔crypto swaps without an ECB rate. Inline JSON or path to a JSON file: [{ \"currency\": \"SOL\", \"date\": \"2024-03-01\", \"eurPerUnit\": \"120.50\" }]")
   .option("--fx-trace [file]", "Volcar la traza de movimientos del motor FX (acuñar/aparcar/desaparcar/descartar/convertir) para auditoría. Sin valor → stderr; con ruta → fichero.")
   .option("--fx-trace-format <format>", "Formato de la traza FX: jsonl o csv", "jsonl")
-  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; titulares?: number; cryptoRates?: string; fxTrace?: string | boolean; fxTraceFormat?: string }) => {
+  .action(async (opts: { input: string[]; year: number; output?: string; format: string; broker?: string; priorLosses?: string; monodivisa?: boolean; skipAutoConvert?: boolean; titulares?: number; cryptoRates?: string; fxTrace?: string | boolean; fxTraceFormat?: string }) => {
     try {
       console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
 
@@ -176,7 +177,7 @@ program
       }
 
       // 3. Generate tax report
-      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, titulares: opts.titulares, manualRates, fxTrace: opts.fxTrace !== undefined && opts.fxTrace !== false });
+      const report = generateTaxReport(merged, allRates, opts.year, { skipFx: opts.monodivisa, trackAutoConvert: !opts.skipAutoConvert, titulares: opts.titulares, manualRates, fxTrace: opts.fxTrace !== undefined && opts.fxTrace !== false });
       if (opts.titulares && opts.titulares > 1) {
         console.error(`  Titulares: ${opts.titulares} (importes divididos por contribuyente)`);
       }

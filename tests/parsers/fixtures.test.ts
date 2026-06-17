@@ -211,12 +211,22 @@ describe("fixture file integration", () => {
       expect(afxTrades.every((t) => t.exchange === "IDEALFX")).toBe(true);
     });
 
-    it("should skip AFx trades and produce zero FX events from CASH", () => {
+    it("should PROCESS AFx CASH trades by DEFAULT, and SKIP them under the opt-out (issue #239)", () => {
       const r = parseIbkrFlexXml(xml);
-      const rateMap: EcbRateMap = new Map([["2025-03-17", new Map([["USD", "0.92"]])]]);
-      const events = FxFifoEngine.extractFxEvents(r.trades, rateMap);
-      // All CASH trades have AFx notes → all skipped by isFxconv
-      expect(events).toHaveLength(0);
+      // The 11 AFx CASH conversions fall back to tradeDate (2025-04-10) — the
+      // fixture's settleDateTarget is not mapped to settlementDate, so the rate
+      // lookup must cover the TRADE date, not 2025-03-17.
+      const rateMap: EcbRateMap = new Map([["2025-04-10", new Map([["USD", "0.92"]])]]);
+      // DEFAULT (issue #239): broker auto-conversions are now processed as ordinary
+      // divisa conversions → all 11 AFx CASH SELLs (EUR.USD, acquiring USD) produce
+      // an FX event.
+      const processed = FxFifoEngine.extractFxEvents(r.trades, rateMap);
+      expect(processed).toHaveLength(11);
+      expect(processed.every((e) => e.quantity.isPositive())).toBe(true); // all acquisitions
+      // OPT-OUT (trackAutoConvert=false): isFxconv() matches every AFx note → all
+      // skipped → zero FX events (the pre-#239 behaviour, preserved as the opt-out).
+      const skipped = FxFifoEngine.extractFxEvents(r.trades, rateMap, false);
+      expect(skipped).toHaveLength(0);
     });
 
     it("should have 5 STK trades across EUR and USD", () => {

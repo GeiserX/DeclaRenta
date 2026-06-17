@@ -195,6 +195,8 @@ const es = {
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
   "profile.monodivisa_detail": "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios que tratan todas las operaciones como moneda única EUR.",
   "profile.monodivisa_warning": "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
+  "profile.track_autoconvert_label": "Procesar autoconversiones del bróker (AFx/FXCONV)",
+  "profile.track_autoconvert_detail": "Activado por defecto. Interactive Brokers no reconvierte a euros al vender una acción, así que el saldo en divisa es real y su conversión posterior genera ganancia o pérdida patrimonial (Art. 33.1 LIRPF). Desactívalo solo si tu bróker hace un round-trip completo EUR↔divisa y quieres ignorar el efecto de la divisa.",
   "profile.titulares_label": "Número de titulares:",
   "profile.titulares_detail": "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
   "profile.saved": "Perfil guardado",

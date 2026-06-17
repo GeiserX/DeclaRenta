@@ -241,14 +241,16 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.currency).toBe("USD");
     });
 
-    it("should skip FXCONV trades (automatic conversions)", () => {
+    it("DEFAULT processes FXCONV/CASH-RECEIPTS trades; OPT-OUT skips them (issue #239)", () => {
       const trades = [
         makeTrade({ description: "FXCONV" }),
         makeTrade({ description: "CASH RECEIPTS / DISBURSEMENTS" }),
         makeTrade({ description: "CASH DISBURSEMENTS" }),
       ];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      expect(events).toHaveLength(0);
+      // Default (trackAutoConvert=true): all three are now processed as conversions.
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap)).toHaveLength(3);
+      // Opt-out (trackAutoConvert=false): isFxconv() matches each description → all skipped.
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap, false)).toHaveLength(0);
     });
 
     it("should fall back to tradeDate when settlementDate is empty", () => {
@@ -619,39 +621,77 @@ describe("FxFifoEngine", () => {
     });
   });
 
-  describe("FXCONV/AFx per-trade filtering", () => {
-    it("should skip FXCONV-described CASH trades", () => {
+  // -------------------------------------------------------------------------
+  // FXCONV/AFx per-trade behaviour — INVERTED for issue #239.
+  //
+  // The DEFAULT (extractFxEvents(trades, rateMap) → trackAutoConvert = true) now
+  // PROCESSES broker auto-conversions (AFx/FXCONV) as ordinary divisa
+  // conversions: IBKR does not round-trip FCY→EUR on a sale, so the auto-converted
+  // balance is genuinely held foreign currency whose conversion is an Art. 33.1
+  // gain/loss. isFxconv() is RETAINED and now drives the OPT-OUT only — passing
+  // trackAutoConvert = false restores the historical skip. Each test below pins
+  // BOTH modes: default = events PRESENT, opt-out = events SKIPPED (length 0).
+  // -------------------------------------------------------------------------
+  describe("FXCONV/AFx per-trade filtering (default PROCESSES, opt-out SKIPS — issue #239)", () => {
+    it("DEFAULT processes an FXCONV-described CASH trade (was: skipped)", () => {
+      // The makeTrade default symbol is "EUR.USD", so isCurrencyQuote() is true
+      // (quote "USD" == currency) and BOTH rows use tradeMoney (default 1080), not
+      // quantity. The FXCONV BUY disposes USD → −1080; the manual SELL acquires
+      // $1080. Both now produce events by default (issue #239).
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "FXCONV", buySell: "BUY", quantity: "1000", tradeMoney: "1080", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(2);
+      // FXCONV BUY → −1080 (dispose, |tradeMoney|); manual SELL → +1080 (acquire).
+      expect(events.map((e) => e.quantity.toString()).sort()).toEqual(["-1080", "1080"]);
+    });
+
+    it("OPT-OUT (trackAutoConvert=false) SKIPS the FXCONV-described CASH trade (old behaviour)", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "FXCONV", currency: "USD" }),
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
       ];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap, false);
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("1080");
     });
 
-    it("should skip AFx-noted CASH trades", () => {
+    it("DEFAULT processes AFx-noted CASH trades (was: skipped)", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "1000", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      // BUY EUR.USD with quote == currency (USD) → uses tradeMoney, disposing → negative.
+      expect(events[0]!.quantity.toString()).toBe("-1080");
+    });
+
+    it("OPT-OUT (trackAutoConvert=false) SKIPS AFx-noted CASH trades (old behaviour)", () => {
+      const trades = [
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "1000", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap, false);
       expect(events).toHaveLength(0);
     });
 
-    it("should skip AFx;P-noted CASH trades", () => {
+    it("DEFAULT processes AFx;P-noted CASH trades; OPT-OUT skips them", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx;P", buySell: "BUY", quantity: "500", currency: "USD" }),
       ];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      expect(events).toHaveLength(0);
+      // Default: the AFx;P note still marks an auto-conversion, but the default processes it.
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap)).toHaveLength(1);
+      // Opt-out: isFxconv() splits "AFX;P" on ";" and matches "AFX" → skipped.
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap, false)).toHaveLength(0);
     });
 
-    it("should skip exchange=FXCONV CASH trades", () => {
+    it("DEFAULT processes exchange=FXCONV CASH trades; OPT-OUT skips them", () => {
       const trades = [
-        makeTrade({ assetCategory: "CASH", description: "EUR.USD", exchange: "FXCONV", currency: "USD" }),
+        makeTrade({ assetCategory: "CASH", description: "EUR.USD", exchange: "FXCONV", buySell: "BUY", quantity: "1000", currency: "USD" }),
       ];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      expect(events).toHaveLength(0);
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap)).toHaveLength(1);
+      expect(FxFifoEngine.extractFxEvents(trades, rateMap, false)).toHaveLength(0);
     });
 
     it("should NOT skip when notes is empty or undefined", () => {
@@ -671,30 +711,48 @@ describe("FxFifoEngine", () => {
       expect(events).toHaveLength(1);
     });
 
-    it("should handle hybrid account: manual conversions processed, AFx skipped", () => {
+    it("DEFAULT hybrid account: BOTH manual and AFx CASH conversions processed (STK ignored)", () => {
       const trades = [
         makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "SELL", quantity: "-500", tradeMoney: "-540", currency: "USD" }),
         makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
         makeTrade({ tradeID: "3", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "800", currency: "USD" }),
       ];
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      // Only the manual CASH SELL (tradeID 2) generates an event; AFx skipped, STK ignored
+      // Both CASH SELLs now produce acquisition events; the STK trade is still ignored.
+      expect(events).toHaveLength(2);
+      expect(events.map((e) => e.quantity.toString()).sort()).toEqual(["1080", "540"]);
+      expect(events.every((e) => e.trigger === "conversion")).toBe(true);
+    });
+
+    it("OPT-OUT hybrid account: manual conversions processed, AFx skipped (old behaviour)", () => {
+      const trades = [
+        makeTrade({ tradeID: "1", assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "SELL", quantity: "-500", tradeMoney: "-540", currency: "USD" }),
+        makeTrade({ tradeID: "2", assetCategory: "CASH", description: "EUR.USD", buySell: "SELL", quantity: "-1000", tradeMoney: "-1080", currency: "USD" }),
+        makeTrade({ tradeID: "3", assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "800", currency: "USD" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap, false);
+      // Only the manual CASH SELL (tradeID 2) generates an event; AFx skipped, STK ignored.
       expect(events).toHaveLength(1);
       expect(events[0]!.quantity.toString()).toBe("1080");
       expect(events[0]!.trigger).toBe("conversion");
     });
 
-    it("should produce zero FX events when all CASH trades are AFx", () => {
+    it("DEFAULT processes an all-AFx account; OPT-OUT produces zero FX events", () => {
       const trades = [
         makeTrade({ assetCategory: "CASH", description: "EUR.USD", notes: "AFx", buySell: "BUY", quantity: "5000", currency: "USD" }),
         makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "BUY", tradeMoney: "3000", currency: "USD" }),
         makeTrade({ assetCategory: "STK", symbol: "AAPL", buySell: "SELL", tradeMoney: "3500", currency: "USD" }),
       ];
+      // Default: the single AFx CASH conversion is processed (the STK trades never
+      // produce CASH FX events here — extractFxEvents only looks at CASH rows).
       const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-      expect(events).toHaveLength(0);
+      expect(events).toHaveLength(1);
 
+      // Opt-out: all CASH trades are AFx → all skipped → zero events → no disposals.
+      const skipped = FxFifoEngine.extractFxEvents(trades, rateMap, false);
+      expect(skipped).toHaveLength(0);
       const engine = new FxFifoEngine();
-      engine.processEvents(events);
+      engine.processEvents(skipped);
       expect(engine.getDisposals()).toHaveLength(0);
     });
 

@@ -257,6 +257,18 @@ function synthesizeRewardLots(
 export interface ReportOptions {
   skipFx?: boolean;
   /**
+   * Track broker auto-conversions (IBKR AFx / FXCONV) as ordinary currency
+   * conversions. DEFAULT true (issue #239): IBKR does NOT round-trip FCY→EUR on a
+   * sale, so an auto-converted balance is genuinely held foreign currency whose
+   * later conversion is a divisa gain/loss under Art. 33.1 — skipping it silently
+   * dropped real FX gains. Set false for the monodivisa-style opt-out (the old
+   * skip), e.g. for an account that genuinely round-trips and wants the FX leg
+   * ignored. Independent of `skipFx` (which disables the whole FX engine); only
+   * consulted when the FX engine runs. The missing-prior-year-lot floor still
+   * applies, so processing AFx never fabricates a phantom gain.
+   */
+  trackAutoConvert?: boolean;
+  /**
    * Number of account holders (titulares). Default 1.
    * When > 1, every reported amount is divided equally per contribuyente
    * (Art. 11.3 LIRPF: rentas atribuidas según titularidad; gananciales = 50/50).
@@ -449,8 +461,11 @@ export function generateTaxReport(
   //    PARKS the carried basis; a stock SELL re-adds that principal at its carried
   //    basis plus the profit at the sale rate. Neither a buy nor a sell emits an
   //    FX disposal — only a real FCY→EUR conversion realizes the deferred gain.
-  //    FXCONV/AFx trades filtered per-trade by isFxconv(); only manual CASH/income
-  //    events and tracked stock round-trips accrue/move FCY lots.
+  //    FXCONV/AFx broker auto-conversions are PROCESSED by default (#239 — IBKR
+  //    does not round-trip FCY→EUR on a sale, so an auto-converted balance is real
+  //    held divisa); the opt-out (trackAutoConvert === false) restores the
+  //    per-trade isFxconv() skip. Manual CASH/income and tracked stock round-trips
+  //    always accrue/move FCY lots.
   // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
@@ -462,7 +477,10 @@ export function generateTaxReport(
   if (!options?.skipFx) {
     const fxEngine = new FxFifoEngine();
     if (options?.fxTrace) fxEngine.enableTrace();
-    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap);
+    // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
+    // (trackAutoConvert === false) restores the historical skip (issue #239).
+    const trackAutoConvert = options?.trackAutoConvert !== false;
+    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
     // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
@@ -474,7 +492,7 @@ export function generateTaxReport(
     // NOT the year-filtered/titulares-split `disposals`. Neither emits a disposal;
     // only a later USD→EUR conversion realizes the deferred gain (Art. 14.2.e). FX
     // disposals are year-filtered below and split at splitFxDisposal.
-    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap);
+    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap, trackAutoConvert);
     const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
     const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...stockProceedsFxEvents]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));

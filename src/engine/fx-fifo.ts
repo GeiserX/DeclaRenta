@@ -344,21 +344,37 @@ export class FxFifoEngine {
    *   - If trade.currency matches the base: quantity is already in
    *     trade.currency, BUY = acquiring, SELL = disposing.
    *
-   * FXCONV/AFx-marked trades (automatic broker conversions for settlement)
-   * are skipped per-trade via isFxconv(). No global auto-convert detection —
-   * accounts can mix manual and automatic conversions freely.
+   * FXCONV/AFx-marked trades (automatic broker conversions) are PROCESSED as
+   * ordinary conversions by default (#239): IBKR does NOT round-trip FCY→EUR when
+   * you sell, so an auto-converted balance is genuinely held divisa whose later
+   * conversion is a gain/loss (Art. 33.1). The opt-out (`trackAutoConvert ===
+   * false`) restores the per-trade isFxconv() skip for accounts that genuinely
+   * round-trip. No global auto-convert detection — accounts mix manual and
+   * automatic conversions freely.
    *
-   * Securities trades do NOT generate implicit FX events. This avoids
-   * double-counting (the broker's AFx conversion already covers settlement)
-   * and eliminates phantom gains from missing prior-year lots.
+   * Securities trades do NOT generate implicit FX events; the carry-basis stock
+   * BUY/SELL producers handle a foreign-stock round-trip (park/unpark), so the
+   * FCY a buy spends is consumed once — processing the AFx funding row that
+   * supplied it does NOT double-count (the buy's park consumes that same lot).
+   * The missing-prior-year-lot floor in consumeLots still forces gain = 0 when no
+   * lot exists, so processing AFx can never fabricate a phantom gain.
    */
-  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
+  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap, trackAutoConvert = true): FxEvent[] {
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
       if (trade.currency === "EUR") continue;
       if (trade.assetCategory !== "CASH") continue;
-      if (FxFifoEngine.isFxconv(trade)) continue;
+      // Broker auto-conversions (AFx/FXCONV). By default (trackAutoConvert) they
+      // ARE processed as ordinary currency conversions — IBKR does NOT round-trip
+      // FCY→EUR on a sale (proceeds accrue as a held FCY balance), so an AFx
+      // conversion is a genuine acquisition/disposal of divisa under Art. 33.1
+      // (issue #239). The opt-out (trackAutoConvert === false, the monodivisa-style
+      // "skip broker auto-conversions" choice) restores the historical skip for
+      // accounts where the broker genuinely round-trips and the user wants the FX
+      // leg ignored. The missing-prior-year-lot floor in consumeLots still applies
+      // either way, so processing AFx can never fabricate a phantom gain.
+      if (!trackAutoConvert && FxFifoEngine.isFxconv(trade)) continue;
 
       const date = normalizeDate(trade.settlementDate || trade.tradeDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
@@ -662,7 +678,7 @@ export class FxFifoEngine {
    * `isShort` guard on the sell side (`extractStockProceedsFxEvents` skips short
    * closes). Uses `trade.tradeDate` for the rate, exactly like `addLot`.
    */
-  static extractStockPurchaseFxEvents(trades: Trade[], rateMap: EcbRateMap): FxEvent[] {
+  static extractStockPurchaseFxEvents(trades: Trade[], rateMap: EcbRateMap, trackAutoConvert = true): FxEvent[] {
     const events: FxEvent[] = [];
     const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
     for (const trade of trades) {
@@ -670,7 +686,10 @@ export class FxFifoEngine {
       if (!SECURITY_CATEGORIES.has(trade.assetCategory)) continue;
       if (trade.currency === "EUR") continue;
       if (!isEcbResolvable(trade.currency)) continue;
-      if (FxFifoEngine.isFxconv(trade)) continue;
+      // Skip broker auto-conversions only under the opt-out (see extractFxEvents).
+      // In practice AFx/FXCONV mark CASH legs, not STK/FUND/BOND, so this rarely
+      // fires — but kept symmetric with the conversion producer for the opt-out.
+      if (!trackAutoConvert && FxFifoEngine.isFxconv(trade)) continue;
       // A short COVER (BUY to close, openCloseIndicator "C" or "C;O") is not a
       // fresh FCY outflow acquiring a long — it closes a short opened by a prior
       // SELL. Mirrors the isShort skip on the sell side. A plain long buy has

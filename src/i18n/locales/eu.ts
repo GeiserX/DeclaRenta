@@ -183,6 +183,8 @@ const eu: TranslationKeys = {
   "profile.monodivisa_label": "Modu sinplifikatua (monodibisa EUR)",
   "profile.monodivisa_detail": "Ez ditu kanbio-tasaren irabaziak bereizita kalkulatzen (1633/1637 laukitxoak). Autodeclaro, Taxdown eta eragiketa guztiak EUR moneta bakar gisa tratatzen dituzten beste zerbitzu batzuekin bateragarria.",
   "profile.monodivisa_warning": "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2324-10) arabera.",
+  "profile.track_autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
+  "profile.track_autoconvert_detail": "Lehenetsita aktibatuta. Interactive Brokersek ez du eurotara berriz bihurtzen akzio bat saltzean, beraz dibisa-saldoa erreala da eta gero bihurtzeak ondare-irabazi edo -galera sortzen du (LIRPF 33.1 art.). Desaktibatu soilik zure artekariak EUR↔dibisa round-trip osoa egiten badu eta dibisaren eragina alde batera utzi nahi baduzu.",
   "profile.titulares_label": "Titular kopurua:",
   "profile.titulares_detail": "Kontuak hainbat titular baditu (adib. kontu bateratua edo irabazpidezkoa), DeclaRentak zenbateko guztiak zati berdinetan banatzen ditu zergadun bakoitzari dagokion partea erakusteko (LIRPF 11.3 art.). Titular bakoitzak bere aitorpen indibiduala aurkezten du bere partearengatik.",
   "profile.saved": "Profila gordeta",
