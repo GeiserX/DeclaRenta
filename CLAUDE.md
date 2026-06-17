@@ -252,7 +252,7 @@ When adding a new section (like 721), follow this checklist:
 ### Monodivisa Mode
 - Optional toggle in fiscal profile (`monodivisa: boolean`) + CLI `--monodivisa` flag
 - When active: skips the FX FIFO engine entirely (`skipFx: true` in `ReportOptions`)
-- Capital gains still computed correctly in EUR via ECB rates — only separate FX lot tracking is skipped
+- `skipFx` ALSO sets `FifoEngine({traditionalCostBasis:true})` → a same-fiat FCY security's cost converts at the ACQUISITION-date rate (Art. 35.1), embedding the buy→sale FX drift in the stock line (the FX engine being off). Drift counted exactly once (stock line here, FX engine in default); capital gains deliberately DIFFER from the FX-on case — don't "fix" back to sale-date cost. Also affects option-exercise delivery + same-stablecoin permutas.
 - Matches behavior of Autodeclaro/Taxdown (competitors don't calculate Art. 37.1.l FX gains)
 - Warning text must say "distorsionar" not "infraestimar" — monodivisa can both understate (miss FX gains) and overstate (miss FX losses)
 - Art. 80 double taxation deduction is subtly affected (lower `totalSavingsBase` when FX gains are skipped) — accepted known limitation matching competitors

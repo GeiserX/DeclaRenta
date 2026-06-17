@@ -182,7 +182,7 @@ const en: TranslationKeys = {
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
-  "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1633/1637). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
+  "profile.monodivisa_detail": "Does not calculate FX gains separately (casillas 1633/1637): the currency effect is embedded in the stock cost, valued at the BUY-date rate (Art. 35.1). Compatible with Autodeclaro, Taxdown, and other services (and the traditional method some advisors use) that treat all operations as single-currency EUR.",
   "profile.monodivisa_warning": "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
   "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
   "profile.track_autoconvert_detail": "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",

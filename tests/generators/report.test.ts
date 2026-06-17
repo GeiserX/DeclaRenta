@@ -295,10 +295,44 @@ describe("generateTaxReport", () => {
     expect(report.fxGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.acquisitionValue.toFixed(2)).toBe("0.00");
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
-    // Capital gains still computed normally — gain in USD (200) converted at the
-    // SALE-date rate (0.91, DGT V2422-20): 200 × 0.91 = 182.00 EUR
+    // Capital gains still computed normally. Monodivisa → traditional method
+    // (Art. 35.1): cost at the BUY-date rate, proceeds at the SALE-date rate, FX
+    // drift embedded in the stock line (the FX engine is off).
+    //   proceeds = 10 × 120 USD × 0.91 (sale) = 1092.00 EUR
+    //   cost     = 10 × 100 USD × 0.92 (buy)  =  920.00 EUR
+    //   gain     = 172.00 EUR
     expect(report.capitalGains.disposals).toHaveLength(1);
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("182.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("172.00");
+  });
+
+  it("monodivisa reproduces the traditional method (advisor) — ISSUE.md example", () => {
+    // Canonical reconciliation from ISSUE.md: a FCY stock round-trip.
+    //   BUY  100 @ $20.00 on 2025-05-15  (1 USD = 0.8780 EUR)
+    //   SELL 100 @ $25.00 on 2025-10-15  (1 USD = 0.8547 EUR)
+    // Traditional (Art. 35.1): cost at the buy rate, proceeds at the sale rate,
+    // FX drift embedded in the stock line; the FX engine is off.
+    //   cost     = 2000 USD × 0.8780 = 1756.00 EUR
+    //   proceeds = 2500 USD × 0.8547 = 2136.75 EUR
+    //   gain     =  380.75 EUR  ← exactly what an advisor (and the rigorous
+    //              default after USD→EUR conversion) reconciles to.
+    const rates = makeRateMap({
+      "2025-05-15": "0.8780",
+      "2025-10-15": "0.8547",
+    });
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "1", tradeDate: "2025-05-15", quantity: "100", tradePrice: "20", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", tradeDate: "2025-10-15", quantity: "-100", tradePrice: "25", buySell: "SELL" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, { skipFx: true });
+
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("2136.75");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1756.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("380.75");
   });
 
   it("should produce non-zero FX gains when skipFx is false with manual CASH trades", () => {

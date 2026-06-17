@@ -330,8 +330,12 @@ export function generateTaxReport(
   const rewardLots = synthesizeRewardLots(statement.cashTransactions, resolvedRateMap, manualRates);
   const resolvedTrades = [...valuation.trades, ...rewardLots];
 
-  // 1. FIFO capital gains (process ALL years, filter to target year)
-  const fifoEngine = new FifoEngine();
+  // 1. FIFO capital gains (process ALL years, filter to target year).
+  //    Monodivisa (skipFx) → traditional cost basis: a FCY security's cost is
+  //    converted at the ACQUISITION-date rate (Art. 35.1), embedding the buy→sale
+  //    FX drift in the stock line since the FX engine is off. Default (rigorous):
+  //    same-fiat cost at the sale-date rate (V2422-20), drift to the FX engine.
+  const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
   fifoEngine.processTrades(
     resolvedTrades,
     resolvedRateMap,

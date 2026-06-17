@@ -499,10 +499,12 @@ describe("carry-basis e2e #3: buy consumes the cheap tranche → leftover micro-
 //
 // Monodivisa mode (Autodeclaro/Taxdown parity) disables the whole FX FIFO
 // engine — including the carry-basis stock-buy/sell producers (they live inside
-// the same `skipFx` block in report.ts). So the headline scenario that produces
-// €155 of carry-basis FX gain with FX ON produces ZERO FX with FX OFF, while the
-// EUR stock gain (computed via ECB rates) is unchanged at €100.
-describe("carry-basis e2e #4: monodivisa (skipFx) zeroes the carry-basis FX, keeps the stock gain", () => {
+// the same `skipFx` block in report.ts) — AND values the stock cost at the
+// ACQUISITION-date rate (traditional method, Art. 35.1). So the headline scenario
+// that produces €155 of carry-basis FX gain with FX ON produces ZERO FX with FX
+// OFF, while the buy→sale FX drift on the AAPL principal (1000 USD × (1.00 − 0.95)
+// = 50) is EMBEDDED in the stock gain, which becomes €150 (€100 + €50).
+describe("carry-basis e2e #4: monodivisa (skipFx) → traditional cost basis (Art. 35.1)", () => {
   const rates = makeRateMap({
     "2024-02-01": { USD: "0.90" },
     "2024-03-15": { USD: "0.95" },
@@ -525,11 +527,14 @@ describe("carry-basis e2e #4: monodivisa (skipFx) zeroes the carry-basis FX, kee
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
   });
 
-  it("keeps the stock capital gain identical to the FX-on case (€100.00)", () => {
+  it("embeds the buy→sale FX drift in the stock gain (€150.00)", () => {
+    // cost     = 1000 USD × 0.95 (buy rate)  =  950.00 EUR  (Art. 35.1)
+    // proceeds = 1100 USD × 1.00 (sale rate) = 1100.00 EUR
+    // gain     = 150.00 EUR  (= FX-on stock gain 100 + embedded drift 50)
     expect(report.capitalGains.disposals).toHaveLength(1);
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1100.00");
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1000.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("100.00");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("950.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("150.00");
   });
 });
 

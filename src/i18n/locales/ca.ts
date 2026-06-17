@@ -181,7 +181,7 @@ const ca: TranslationKeys = {
   "profile.phone_label": "Telèfon:",
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Mode simplificat (monodivisa EUR)",
-  "profile.monodivisa_detail": "No calcula guanys per tipus de canvi de forma separada (caselles 1633/1637). Compatible amb Autodeclaro, Taxdown i altres serveis que tracten totes les operacions com a moneda única EUR.",
+  "profile.monodivisa_detail": "No calcula guanys per tipus de canvi de forma separada (caselles 1633/1637): l'efecte divisa queda embegut en el cost de l'acció, valorat al tipus del dia de COMPRA (Art. 35.1). Compatible amb Autodeclaro, Taxdown i altres serveis (i amb el mètode tradicional que fan servir alguns assessors) que tracten totes les operacions com a moneda única EUR.",
   "profile.monodivisa_warning": "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2324-10).",
   "profile.track_autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
   "profile.track_autoconvert_detail": "Activat per defecte. Interactive Brokers no reconverteix a euros en vendre una acció, així que el saldo en divisa és real i convertir-lo després genera un guany o pèrdua patrimonial (art. 33.1 LIRPF). Desactiva-ho només si el teu bróker fa un round-trip complet EUR↔divisa i vols ignorar l'efecte de la divisa.",
