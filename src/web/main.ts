@@ -707,6 +707,7 @@ async function processFiles(): Promise<void> {
     const profileForReport = getProfile();
     const report = generateTaxReport(merged, allRates, year, {
       skipFx: profileForReport.monodivisa,
+      trackAutoConvert: profileForReport.trackAutoConvert,
       titulares: profileForReport.titulares,
       manualRates: getManualRates(),
       // Opt-in FX-FIFO movement trace, captured in the SAME run only in hidden

@@ -18,6 +18,8 @@ export interface FiscalProfile {
   telefono: string;
   year: number;
   monodivisa: boolean;
+  /** Procesar autoconversiones del bróker (AFx/FXCONV). Default true (rigor máximo). false = opt-out (se ignoran). */
+  trackAutoConvert: boolean;
   /** Número de titulares de la cuenta. 1 = individual. >1 reparte los importes a partes iguales por contribuyente (Art. 11.3 LIRPF). */
   titulares: number;
 }
@@ -37,6 +39,7 @@ const DEFAULT_PROFILE: FiscalProfile = {
   telefono: "",
   year: new Date().getFullYear() - 1,
   monodivisa: false,
+  trackAutoConvert: true,
   titulares: 1,
 };
 
@@ -56,6 +59,7 @@ export function getProfile(): FiscalProfile {
       if (typeof parsed.telefono === "string") profile.telefono = parsed.telefono;
       if (typeof parsed.year === "number" && Number.isInteger(parsed.year)) profile.year = parsed.year;
       if (typeof parsed.monodivisa === "boolean") profile.monodivisa = parsed.monodivisa;
+      if (typeof parsed.trackAutoConvert === "boolean") profile.trackAutoConvert = parsed.trackAutoConvert;
       if (typeof parsed.titulares === "number" && Number.isInteger(parsed.titulares) && parsed.titulares >= 1) {
         profile.titulares = parsed.titulares;
       }
@@ -177,6 +181,13 @@ export function initProfile(): void {
           <p class="monodivisa-detail" id="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
           <p class="monodivisa-warning" id="monodivisa-warning" role="alert" aria-live="polite" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
         </div>
+        <div class="monodivisa-callout">
+          <label class="monodivisa-toggle">
+            <input type="checkbox" id="profile-track-autoconvert" aria-describedby="track-autoconvert-detail" ${profile.trackAutoConvert ? "checked" : ""} />
+            <span class="monodivisa-label"><strong>${t("profile.track_autoconvert_label")}</strong></span>
+          </label>
+          <p class="monodivisa-detail" id="track-autoconvert-detail">${t("profile.track_autoconvert_detail")}</p>
+        </div>
       </fieldset>
 
       <div class="profile-actions">
@@ -195,6 +206,7 @@ export function initProfile(): void {
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
       year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
       monodivisa: (document.getElementById("profile-monodivisa") as HTMLInputElement).checked,
+      trackAutoConvert: (document.getElementById("profile-track-autoconvert") as HTMLInputElement).checked,
       titulares: parseInt((document.getElementById("profile-titulares") as HTMLSelectElement).value, 10) || 1,
     };
   }

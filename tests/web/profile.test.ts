@@ -85,6 +85,7 @@ describe("getProfile / saveProfile", () => {
       year: 2025,
       monodivisa: false,
       titulares: 1,
+      trackAutoConvert: true,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
@@ -100,10 +101,32 @@ describe("getProfile / saveProfile", () => {
       year: 2025,
       monodivisa: true,
       titulares: 1,
+      trackAutoConvert: true,
     };
     saveProfile(data);
     expect(getProfile()).toEqual(data);
     expect(getProfile().monodivisa).toBe(true);
+  });
+
+  it("should round-trip trackAutoConvert: false (the AFx opt-out) and default to true for pre-existing profiles", () => {
+    const data = {
+      nif: "12345678Z",
+      apellidos: "Garcia",
+      nombre: "Juan",
+      ccaa: "Madrid",
+      telefono: "600123456",
+      year: 2025,
+      monodivisa: false,
+      titulares: 1,
+      trackAutoConvert: false,
+    };
+    saveProfile(data);
+    expect(getProfile()).toEqual(data);
+    expect(getProfile().trackAutoConvert).toBe(false);
+
+    // A profile saved before this field existed must default to true (process AFx).
+    localStorage.setItem("declarenta_profile", JSON.stringify({ nif: "12345678Z", year: 2025 }));
+    expect(getProfile().trackAutoConvert).toBe(true);
   });
 
   it("should merge partial stored JSON with defaults", () => {
