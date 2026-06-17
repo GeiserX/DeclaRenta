@@ -344,13 +344,20 @@ export class FxFifoEngine {
    *   - If trade.currency matches the base: quantity is already in
    *     trade.currency, BUY = acquiring, SELL = disposing.
    *
-   * FXCONV/AFx-marked trades (automatic broker conversions for settlement)
-   * are skipped per-trade via isFxconv(). No global auto-convert detection —
-   * accounts can mix manual and automatic conversions freely.
+   * FXCONV/AFx-marked trades (automatic broker conversions) are PROCESSED as
+   * ordinary conversions by default (#239): IBKR does NOT round-trip FCY→EUR when
+   * you sell, so an auto-converted balance is genuinely held divisa whose later
+   * conversion is a gain/loss (Art. 33.1). The opt-out (`trackAutoConvert ===
+   * false`) restores the per-trade isFxconv() skip for accounts that genuinely
+   * round-trip. No global auto-convert detection — accounts mix manual and
+   * automatic conversions freely.
    *
-   * Securities trades do NOT generate implicit FX events. This avoids
-   * double-counting (the broker's AFx conversion already covers settlement)
-   * and eliminates phantom gains from missing prior-year lots.
+   * Securities trades do NOT generate implicit FX events; the carry-basis stock
+   * BUY/SELL producers handle a foreign-stock round-trip (park/unpark), so the
+   * FCY a buy spends is consumed once — processing the AFx funding row that
+   * supplied it does NOT double-count (the buy's park consumes that same lot).
+   * The missing-prior-year-lot floor in consumeLots still forces gain = 0 when no
+   * lot exists, so processing AFx can never fabricate a phantom gain.
    */
   static extractFxEvents(trades: Trade[], rateMap: EcbRateMap, trackAutoConvert = true): FxEvent[] {
     const events: FxEvent[] = [];

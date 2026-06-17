@@ -127,7 +127,9 @@ function fundUsd(id: string, date: string, usd: string, afx = false): Trade {
     cost: usd,
     buySell: "SELL", // SELL EUR.USD = acquire USD (quote side) → +lot
     openCloseIndicator: "",
-    exchange: afx ? "IDEALFX" : "IDEALFX",
+    exchange: "IDEALFX",
+    // The `notes: "AFx"` marker is what makes this a broker auto-conversion;
+    // without it, an identical manual conversion (the non-AFx control).
     ...(afx ? { notes: "AFx" } : {}),
   });
 }

@@ -461,8 +461,11 @@ export function generateTaxReport(
   //    PARKS the carried basis; a stock SELL re-adds that principal at its carried
   //    basis plus the profit at the sale rate. Neither a buy nor a sell emits an
   //    FX disposal — only a real FCY→EUR conversion realizes the deferred gain.
-  //    FXCONV/AFx trades filtered per-trade by isFxconv(); only manual CASH/income
-  //    events and tracked stock round-trips accrue/move FCY lots.
+  //    FXCONV/AFx broker auto-conversions are PROCESSED by default (#239 — IBKR
+  //    does not round-trip FCY→EUR on a sale, so an auto-converted balance is real
+  //    held divisa); the opt-out (trackAutoConvert === false) restores the
+  //    per-trade isFxconv() skip. Manual CASH/income and tracked stock round-trips
+  //    always accrue/move FCY lots.
   // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
