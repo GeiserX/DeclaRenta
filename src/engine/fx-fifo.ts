@@ -219,8 +219,18 @@ export class FxFifoEngine {
    * Transient, like `fxMissing`: cleared at the start of every processEvents run.
    * Whatever stays parked at the end is principal in positions still open at the
    * period boundary — correctly never converted, never taxed.
+   *
+   * Each parked slice also carries `acquireDate` — the ORIGINAL acquisition date
+   * of the pool lot the buy consumed (`null` for an uncovered slice, which has no
+   * tracked origin). The matching SELL re-adds the principal to the pool stamped
+   * with THIS date (not the sale date), so the spendable pool stays FIFO-ordered
+   * by genuine acquisition date and a later conversion consumes the truly-oldest
+   * dollars first (issue #230; DGT V0282-22: the returned principal keeps its
+   * original acquisition date — only the trading PROFIT is newly-acquired at the
+   * sale rate/date). The carried EUR basis is `rate`; the carried date is
+   * `acquireDate` — both travel with the principal across the round-trip.
    */
-  private parked: Map<string, { q: Decimal; rate: Decimal | null }[]> = new Map();
+  private parked: Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null }[]> = new Map();
 
   /**
    * Stable identity of a foreign-stock POSITION for the parked FIFO. `isin ||
@@ -853,6 +863,19 @@ export class FxFifoEngine {
    * (costPerUnit = rate, costInEur = q × rate) so a later conversion consumes it
    * exactly like any acquisition lot. Skips non-positive `q` (defense-in-depth:
    * a zero-quantity lot would make a later costPerUnit 0/0 = NaN).
+   *
+   * FIFO-ORDERED INSERTION (issue #230 fix). The spendable pool is consumed
+   * oldest-first by ARRAY POSITION ({@link consumeLots} takes `lots[0]`), so the
+   * array must stay sorted ascending by `acquireDate`. Plain acquisitions
+   * ({@link addLot}) always arrive in (date, phase) order, so they append and the
+   * array stays sorted. A SELL re-adds principal stamped with its ORIGINAL
+   * acquisition date (carried through the park) — which can be EARLIER than lots
+   * funded between the buy and the sale — so a tail append would mis-order the
+   * pool and make a later conversion consume the wrong (newer) dollars first,
+   * shifting an FX gain into the wrong tax year. We therefore SPLICE the new lot
+   * into the first position whose `acquireDate` is strictly greater, keeping the
+   * pool FIFO-correct. Stable for equal dates (inserts AFTER same-date lots), so
+   * same-date ordering is unchanged from the old append.
    */
   private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal): void {
     if (!q.greaterThan(0)) return;
@@ -865,7 +888,18 @@ export class FxFifoEngine {
       costInEur: q.mul(rate),
     };
     if (!this.lots.has(currency)) this.lots.set(currency, []);
-    this.lots.get(currency)!.push(lot);
+    const lots = this.lots.get(currency)!;
+    // Insert keeping the pool sorted ascending by acquireDate (FIFO frontier).
+    // Find the first lot strictly newer than this one and splice in before it;
+    // if none, append. localeCompare on the ISO yyyy-mm-dd dates is a date order.
+    let idx = lots.length;
+    for (let i = 0; i < lots.length; i++) {
+      if (lots[i]!.acquireDate.localeCompare(date) > 0) {
+        idx = i;
+        break;
+      }
+    }
+    lots.splice(idx, 0, lot);
   }
 
   /**
@@ -905,7 +939,10 @@ export class FxFifoEngine {
       while (remaining.greaterThan(EPS) && lots.length > 0) {
         const lot = lots[0]!;
         const consumed = Decimal.min(remaining, lot.quantity);
-        park.push({ q: consumed, rate: lot.costPerUnit });
+        // Carry BOTH the consumed lot's EUR basis AND its ORIGINAL acquisition
+        // date, so the matching sell re-adds the principal at its true age (issue
+        // #230) — not the sale date, which would mis-order the FIFO frontier.
+        park.push({ q: consumed, rate: lot.costPerUnit, acquireDate: lot.acquireDate });
         // Reduce the pool lot in lockstep (quantity + EUR cost), shift when empty.
         const costPortion = consumed.mul(lot.costPerUnit);
         lot.quantity = lot.quantity.minus(consumed);
@@ -916,9 +953,11 @@ export class FxFifoEngine {
       }
     }
 
-    // Shortfall: the pool had no (more) tracked dollars → park uncovered.
+    // Shortfall: the pool had no (more) tracked dollars → park uncovered (no
+    // tracked origin → no carried date either; the sell re-adds it at the sale
+    // date, which is correct for genuinely-untracked dollars).
     if (remaining.greaterThan(EPS)) {
-      park.push({ q: remaining, rate: null });
+      park.push({ q: remaining, rate: null, acquireDate: null });
       this.record("park", event, { quantityFcy: remaining, rate: null, note: "uncovered (sin lote de origen rastreado)" });
     }
   }
@@ -982,7 +1021,11 @@ export class FxFifoEngine {
         const give = Decimal.min(x, readd.minus(placed));
         if (give.greaterThan(EPS)) {
           const reAddRate = p.rate === null ? saleRate : p.rate;
-          this.pushPoolLot(event.currency, event.date, give, reAddRate);
+          // Re-add the principal at its ORIGINAL acquisition date (carried through
+          // the park), so the pool stays FIFO-ordered by genuine age (issue #230).
+          // An uncovered slice (no tracked origin) re-adds at the sale date.
+          const reAddDate = p.acquireDate ?? event.date;
+          this.pushPoolLot(event.currency, reAddDate, give, reAddRate);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -1038,7 +1081,7 @@ export class FxFifoEngine {
    * (reference/unit harnesses). Whatever stays here at the end is principal in
    * positions still open at the period boundary — never converted, never taxed.
    */
-  getParked(): Map<string, { q: Decimal; rate: Decimal | null }[]> {
+  getParked(): Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null }[]> {
     return this.parked;
   }
 }

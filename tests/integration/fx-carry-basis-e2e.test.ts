@@ -692,3 +692,181 @@ describe("issue #230: only the real conversion of the surviving dollars hits 163
     expect(qty.toFixed(0)).toBe("800");
   });
 });
+
+// ===========================================================================
+// FIFO CONSUMPTION ORDER — re-added principal keeps its ORIGINAL acquisition
+// date, so a later conversion consumes the genuinely-oldest dollars first.
+// ---------------------------------------------------------------------------
+// Issue #230 follow-up (elmasvital, comment 4729376344). The spendable pool is
+// consumed oldest-first by array position; a foreign-stock SELL re-adds its
+// principal to that pool. If the re-add were stamped with the SALE date (the
+// pre-fix behavior), a funding lot acquired BETWEEN the buy and the sale would
+// sit AHEAD of the re-added (genuinely-older) principal, and a partial
+// conversion would consume that NEWER funding first — mis-rating the conversion
+// and shifting an FX gain into the WRONG TAX YEAR. The fix carries each parked
+// slice's ORIGINAL acquireDate through the round-trip and re-adds the principal
+// at that date (DGT V0282-22: the returned principal keeps its original
+// acquisition; only the trading PROFIT is newly-acquired at the sale rate).
+//
+// THE DISCRIMINATING SHAPE (all rates "EUR per 1 USD"):
+//   2023-01-01  fund $1000 @0.80   (lot A — the genuinely-OLDEST dollars)
+//   2023-02-01  buy 10 AAPL @$100  (parks lot A's $1000 principal @0.80)
+//   2023-03-01  fund $1000 @1.10   (lot B — funded AFTER the buy, NEWER)
+//   2023-06-01  sell 10 AAPL @$100 (USD-flat; re-adds the $1000 principal —
+//                                   carried basis 0.80, ORIGINAL date 2023-01-01)
+//   2023-09-01  convert $1000 @1.20  → tax year 2023 (PARTIAL — one lot's worth)
+//   2024-03-01  convert $1000 @1.30  → tax year 2024 (the rest)
+//
+// Correct origin-FIFO: 2023 consumes the @0.80 principal first (oldest) →
+//   gain = 1000×(1.20−0.80) = €400; 2024 consumes lot B @1.10 →
+//   gain = 1000×(1.30−1.10) = €200. Lifetime = €600.
+// The pre-fix sale-date stamp gave €100 / €500 (lot B consumed first in 2023) —
+// same €600 lifetime but €300 in the WRONG year. This test pins the correct split.
+describe("issue #230: re-added principal keeps its original acquisition date (FIFO order across years)", () => {
+  const rates = makeRateMap({
+    "2023-01-01": { USD: "0.80" },
+    "2023-02-01": { USD: "0.80" },
+    "2023-03-01": { USD: "1.10" },
+    "2023-06-01": { USD: "1.00" },
+    "2023-09-01": { USD: "1.20" },
+    "2024-03-01": { USD: "1.30" },
+  });
+  const trades = [
+    fundUsd("fA", "2023-01-01", "1000"), // lot A @0.80 — oldest
+    stockBuy("buy", ISIN_AAPL, "AAPL", "2023-02-01", "10", "100"), // parks lot A @0.80
+    fundUsd("fB", "2023-03-01", "1000"), // lot B @1.10 — newer funding
+    stockSell("sell", ISIN_AAPL, "AAPL", "2023-06-01", "10", "100"), // re-adds $1000 @0.80, ORIGINAL date 2023-01-01
+    convUsd("c23", "2023-09-01", "1000"), // partial conversion in 2023
+    convUsd("c24", "2024-03-01", "1000"), // remainder in 2024
+  ];
+  const statement = makeStatement(trades);
+
+  it("2023 consumes the genuinely-oldest (@0.80) dollars first → €400, not €100", () => {
+    const report = generateTaxReport(statement, rates, 2023);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    // Origin-FIFO consumes the re-added principal (carried 0.80, original date
+    // 2023-01-01) before the 2023-03 funding @1.10. €100 here = the wrong-year bug.
+    expect(gain.toFixed(2)).toBe("400.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("400.00");
+    // The consumed lot is dated at its ORIGINAL acquisition (2023-01-01), NOT the
+    // 2023-06-01 sale; cost basis is the carried €800 (1000 × 0.80), not €1100.
+    expect(convs[0]!.acquireDate).toBe("2023-01-01");
+    expect(convs[0]!.costBasisEur.toFixed(2)).toBe("800.00");
+  });
+
+  it("2024 consumes the newer (@1.10) funding → €200, not €500", () => {
+    const report = generateTaxReport(statement, rates, 2024);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    expect(gain.toFixed(2)).toBe("200.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("200.00");
+    // 2024 now consumes lot B, dated 2023-03-01 @1.10 → cost €1100.
+    expect(convs[0]!.acquireDate).toBe("2023-03-01");
+    expect(convs[0]!.costBasisEur.toFixed(2)).toBe("1100.00");
+  });
+
+  it("lifetime FX gain is €600 regardless of split (conservation check)", () => {
+    const g23 = generateTaxReport(statement, rates, 2023).fxGains.netGainLoss;
+    const g24 = generateTaxReport(statement, rates, 2024).fxGains.netGainLoss;
+    expect(g23.plus(g24).toFixed(2)).toBe("600.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TAIL-APPEND branch of the sorted splice: a re-add NEWER than a surviving
+// older lot must append AFTER it, so the older lot converts first. The PROFIT
+// slice is exactly such a re-add — it is always dated at the SALE (the newest
+// date) and re-added at the sale rate (DGT V0282-22: profit dollars are newly
+// acquired). A wrong "always prepend" splice would consume the profit before
+// the older principal and mis-rate the conversion.
+// ---------------------------------------------------------------------------
+describe("issue #230: profit slice (sale-dated) appends after older principal — older converts first", () => {
+  const rates = makeRateMap({
+    "2023-01-01": { USD: "0.80" }, // funding (oldest dollars)
+    "2023-02-01": { USD: "0.80" }, // buy 5 AAPL @ $100 (parks $500 @0.80, dated 2023-01-01)
+    "2023-06-01": { USD: "1.00" }, // sell 5 @ $200 → $500 principal + $500 profit (profit @1.00)
+    "2023-09-01": { USD: "1.20" }, // convert the $1000 of @0.80 dollars
+    "2024-03-01": { USD: "1.30" }, // convert the $500 profit (@1.00)
+  });
+  const trades = [
+    fundUsd("f", "2023-01-01", "1000"), // $1000 @0.80
+    stockBuy("buy", ISIN_AAPL, "AAPL", "2023-02-01", "5", "100"), // spends $500 @0.80, leaves $500 in pool
+    stockSell("sell", ISIN_AAPL, "AAPL", "2023-06-01", "5", "200"), // $1000: $500 principal @0.80 + $500 profit @1.00
+    convUsd("c23", "2023-09-01", "1000"), // consume the two @0.80 lots
+    convUsd("c24", "2024-03-01", "500"), // consume the profit lot
+  ];
+  const statement = makeStatement(trades);
+
+  it("2023 consumes the @0.80 dollars (survivor + re-added principal), not the newer profit → €400", () => {
+    const report = generateTaxReport(statement, rates, 2023);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    // €300 would mean the sale-dated profit was wrongly consumed first.
+    expect(gain.toFixed(2)).toBe("400.00");
+    // Every consumed lot here is an @0.80 dollar dated at the original 2023-01-01.
+    for (const c of convs) expect(c.acquireDate).toBe("2023-01-01");
+  });
+
+  it("2024 consumes the profit lot LAST, dated at the sale (2023-06-01) @1.00 → €150", () => {
+    const report = generateTaxReport(statement, rates, 2024);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    expect(gain.toFixed(2)).toBe("150.00");
+    expect(convs[0]!.acquireDate).toBe("2023-06-01"); // the profit, appended at the tail
+    expect(convs[0]!.costBasisEur.toFixed(2)).toBe("500.00"); // 500 × 1.00
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CROSS-POSITION ordering (the fix's core purpose): two same-currency positions
+// re-add principal carrying DIFFERENT original dates into the SHARED per-currency
+// pool. They are SOLD in the OPPOSITE order to their funding, so only carrying
+// the original acquisition date keeps the shared pool FIFO-correct across
+// positions. The conversion must consume the genuinely-oldest dollars first,
+// regardless of which position was sold first.
+// ---------------------------------------------------------------------------
+describe("issue #230: two same-currency positions re-add with different original dates → shared pool in genuine-age order", () => {
+  const rates = makeRateMap({
+    "2023-01-01": { USD: "0.70" }, // fund lot for AAPL (the genuinely-OLDEST dollars)
+    "2023-02-01": { USD: "0.90" }, // fund lot for MSFT (newer)
+    "2023-03-01": { USD: "0.80" }, // buy AAPL (consumes the @0.70 lot, parks @0.70 dated 2023-01-01)
+    "2023-04-01": { USD: "0.85" }, // buy MSFT (consumes the @0.90 lot, parks @0.90 dated 2023-02-01)
+    "2023-05-01": { USD: "0.95" }, // sell MSFT FIRST (re-adds @0.90, original date 2023-02-01)
+    "2023-06-01": { USD: "1.00" }, // sell AAPL SECOND (re-adds @0.70, original date 2023-01-01)
+    "2023-09-01": { USD: "1.20" }, // convert $1000 → must hit the @0.70 (AAPL) dollars first
+    "2024-03-01": { USD: "1.30" }, // convert $1000 → then the @0.90 (MSFT) dollars
+  });
+  const trades = [
+    fundUsd("fA", "2023-01-01", "1000"), // @0.70 — oldest
+    fundUsd("fB", "2023-02-01", "1000"), // @0.90 — newer
+    stockBuy("buyA", ISIN_AAPL, "AAPL", "2023-03-01", "10", "100"), // consumes @0.70 → parks AAPL @0.70 (2023-01-01)
+    stockBuy("buyM", ISIN_MSFT, "MSFT", "2023-04-01", "10", "100"), // consumes @0.90 → parks MSFT @0.90 (2023-02-01)
+    stockSell("sellM", ISIN_MSFT, "MSFT", "2023-05-01", "10", "100"), // sold FIRST; re-adds @0.90 dated 2023-02-01
+    stockSell("sellA", ISIN_AAPL, "AAPL", "2023-06-01", "10", "100"), // sold SECOND; re-adds @0.70 dated 2023-01-01
+    convUsd("c23", "2023-09-01", "1000"),
+    convUsd("c24", "2024-03-01", "1000"),
+  ];
+  const statement = makeStatement(trades);
+
+  it("2023 consumes AAPL's @0.70 dollars first (oldest original date, though sold LAST) → €500", () => {
+    const report = generateTaxReport(statement, rates, 2023);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    // €300 would mean MSFT's @0.90 (sold first, re-added first) was consumed first — the bug.
+    expect(gain.toFixed(2)).toBe("500.00");
+    expect(convs[0]!.acquireDate).toBe("2023-01-01"); // AAPL's original funding, not the 2023-06-01 sale
+    expect(convs[0]!.costBasisEur.toFixed(2)).toBe("700.00"); // 1000 × 0.70
+  });
+
+  it("2024 then consumes MSFT's @0.90 dollars → €400 (lifetime €900 conserved)", () => {
+    const report = generateTaxReport(statement, rates, 2024);
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const gain = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    expect(gain.toFixed(2)).toBe("400.00");
+    expect(convs[0]!.acquireDate).toBe("2023-02-01"); // MSFT's original funding
+    expect(convs[0]!.costBasisEur.toFixed(2)).toBe("900.00"); // 1000 × 0.90
+    const g23 = generateTaxReport(statement, rates, 2023).fxGains.netGainLoss;
+    expect(g23.plus(gain).toFixed(2)).toBe("900.00");
+  });
+});
