@@ -496,3 +496,61 @@ describe("fx-trace e2e #5: serialize the e2e trace — JSONL round-trips, CSV ad
     expect(lines[0]).toContain("gainLossEur");
   });
 });
+
+// ===========================================================================
+// 6. MULTI-YEAR — the trace is ALL-YEAR but the casillas are YEAR-FILTERED.
+// ---------------------------------------------------------------------------
+// The load-bearing reconciliation caveat (PR #238 review): the trace is the FULL
+// all-year ledger (so a lot's whole lifecycle is visible), while 1633/1637 keep
+// only the disposals whose `disposeDate` ∈ the declaration year. So the golden
+// identity is Σ dispose.gainLossEur WHERE date∈year === fxGains.netGainLoss —
+// NOT Σ over ALL years. This test pins BOTH directions so the qualifier (and the
+// doc in types/tax.ts + CLAUDE.md) can never silently rot:
+//
+//   fund $2000 @0.90 (2023) → buy $2000 stock (2023) → sell $2000 @0.95 (2023)
+//   → convert $1000 @1.05 (2023)  AND  convert $1000 @1.20 (2024)
+//
+// 2024 casilla = only the 2024 conversion: $1000 carried @0.90 → @1.20 = €300.
+// The trace ALSO contains the 2023 conversion's dispose(s) (carried @0.90 → @1.05
+// = €150), so summing ALL dispose rows = €450 ≠ €300. Filtering by year ties out.
+// ===========================================================================
+describe("fx-trace e2e #6: multi-year — Σ dispose reconciles to the casilla ONLY when filtered by declaration year", () => {
+  const rates = makeRateMap({
+    "2023-02-01": { USD: "0.90" }, // funding ($2000 tracked)
+    "2023-03-15": { USD: "0.92" }, // buy
+    "2023-06-20": { USD: "0.95" }, // sell (re-adds principal at carried 0.90 + profit)
+    "2023-09-10": { USD: "1.05" }, // conversion #1 (2023): $1000 @0.90 → €150
+    "2024-09-10": { USD: "1.20" }, // conversion #2 (2024): $1000 @0.90 → €300
+  });
+  const statement = makeStatement([
+    fundUsd("fund", "2023-02-01", "2000"),
+    stockBuy("buy", ISIN_AAPL, "AAPL", "2023-03-15", "20", "100"), // $2000
+    stockSell("sell", ISIN_AAPL, "AAPL", "2023-06-20", "20", "100"), // $2000 back (flat in USD)
+    convUsd("conv2023", "2023-09-10", "1000"), // convert half in 2023
+    convUsd("conv2024", "2024-09-10", "1000"), // convert the other half in 2024
+  ]);
+  // The trace is identical regardless of which year we ask for (it's all-year);
+  // generate the 2024 report so the casilla is the 2024 slice.
+  const report = generateTaxReport(statement, rates, 2024, { fxTrace: true });
+  const trace = report.fxTrace!;
+
+  it("the 2024 casilla reflects ONLY the 2024 conversion (€300.00)", () => {
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("300.00");
+  });
+
+  it("summing ALL dispose rows across years does NOT match the year casilla (the trap)", () => {
+    // €150 (2023) + €300 (2024) = €450 ≠ €300. This is exactly why a naive
+    // full-ledger sum mis-states the box on a multi-year account.
+    expect(sumDisposeGainLoss(trace).toFixed(2)).toBe("450.00");
+    expect(sumDisposeGainLoss(trace).toFixed(2)).not.toBe(report.fxGains.netGainLoss.toFixed(2));
+  });
+
+  it("summing only the dispose rows DATED in the declaration year RECONCILES to the casilla", () => {
+    const yearDisposes = trace.filter((e) => e.kind === "dispose" && e.date.startsWith("2024"));
+    const sum = yearDisposes.reduce((s, e) => s.plus(e.gainLossEur ?? "0"), new Decimal(0));
+    expect(sum.toFixed(2)).toBe(report.fxGains.netGainLoss.toFixed(2));
+    expect(sum.toFixed(2)).toBe("300.00");
+    // And the trace genuinely carries a 2023-dated dispose (the all-year property).
+    expect(trace.some((e) => e.kind === "dispose" && e.date.startsWith("2023"))).toBe(true);
+  });
+});

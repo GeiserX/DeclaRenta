@@ -355,8 +355,20 @@ export interface TaxSummary {
    * caller passes `ReportOptions.fxTrace` — an opt-in for developers/advisors who
    * want to verify how a 1633/1637 figure was built (acquire → park → unpark →
    * discard → dispose, with running pool/parked balances). It is NEVER surfaced
-   * in the standard UI and is the ALL-YEAR trace (not year-filtered), so the full
-   * lifecycle of a lot reconciles. Serialize with `serializeFxTrace` (JSONL/CSV).
+   * in the standard UI. Serialize with `serializeFxTrace` (JSONL/CSV).
+   *
+   * ⚠️ RECONCILING TO THE CASILLAS — read this. The trace is the ALL-YEAR ledger
+   * (deliberately NOT year-filtered) so a lot's full lifecycle is visible even
+   * when the buy, sell and conversion fall in different years. The casillas, by
+   * contrast, are YEAR-FILTERED (`report.ts` keeps only disposals whose
+   * `disposeDate` is in the declaration year). Therefore, to tie the ledger to
+   * the declared 1633/1637 you must sum ONLY the `dispose` rows whose `date`
+   * falls in the declaration year: `Σ dispose.gainLossEur WHERE date∈year ===
+   * fxGains.netGainLoss`. Summing every `dispose` row across all years will
+   * over/under-state the box on any account that converts a tracked currency in
+   * more than one year. (`park`/`unpark`/`discard`/`profit` rows never carry a
+   * gain and are not summed — they explain HOW the pool reached the state a
+   * `dispose` then realizes.)
    */
   fxTrace?: FxTraceEvent[];
 }
