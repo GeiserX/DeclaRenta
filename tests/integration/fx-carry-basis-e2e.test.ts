@@ -601,3 +601,94 @@ describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is
     expect(principal.costBasisEur.toFixed(2)).toBe("900.00"); // 1000 × 0.90 carried funding basis
   });
 });
+
+// ===========================================================================
+// Issue #230 (elmasvital): a foreign-currency stock sold at a LOSS, where the
+// resulting dollars are NEVER converted to EUR, generates ZERO divisa gain/loss
+// ("como si te hubieras comprado una hamburguesa en dólares"). Casillas
+// 1633/1637 must contain ONLY amounts actually transmitted (FCY→EUR) in the
+// year. The dollars that left the FX FIFO inside the losing position never
+// reached a EUR conversion (Art. 14.2.e: "se imputará en el momento del cobro o
+// del pago"), so there is nothing to compute. These tests pin that invariant at
+// the casilla level so it can never silently regress.
+//
+// Funding is TRACKED ($1000 @1.20) so the buy genuinely PARKS a carried basis
+// and the sell genuinely DISCARDS the lost principal — i.e. this exercises the
+// real carry-basis discard path, not the uncovered no-op.
+// ===========================================================================
+describe("issue #230: FCY stock loss-sell with NO EUR conversion → divisa 1633/1637 = 0", () => {
+  // 02-01 fund $1000 @1.20 (€1200 cost); buy $1000 of AAPL; sell for $800 (a
+  // $200 USD loss) on 06-20 @0.80. The whole position is closed but NO dollars
+  // are converted to EUR. The €-loss lives entirely in the stock line; the
+  // divisa element is untouched because nothing was transmitted to euros.
+  const rates = makeRateMap({
+    "2024-02-01": { USD: "1.20" }, // funding + buy
+    "2024-06-20": { USD: "0.80" }, // loss sale (rate fell)
+  });
+  const fund = makeTrade({
+    tradeID: "fund", symbol: "EUR.USD", description: "EUR.USD", isin: "",
+    assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
+    settlementDate: "2024-02-01", quantity: "1000", tradePrice: "1",
+    tradeMoney: "1000", proceeds: "1000", cost: "1000",
+    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+  });
+  const statement = makeStatement([
+    fund,
+    stockBuy("buy", ISIN_AAPL, "AAPL", "2024-02-01", "10", "100"), // $1000
+    stockSell("sell", ISIN_AAPL, "AAPL", "2024-06-20", "10", "80"), // $800 → $200 USD loss
+  ]);
+  const report = generateTaxReport(statement, rates, 2024);
+
+  it("emits NO FX disposal and books exactly 0 in casillas 1633/1637", () => {
+    expect(report.fxGains.disposals).toHaveLength(0);
+    expect(report.fxGains.transmissionValue.toFixed(2)).toBe("0.00"); // 1633
+    expect(report.fxGains.acquisitionValue.toFixed(2)).toBe("0.00"); // 1637
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+  });
+
+  it("the loss lands entirely in the stock line, not the divisa line (V2422-20)", () => {
+    // Stock loss at the sale-date rate: (800 − 1000) USD × 0.80 = −€160.
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("-160.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Same loss-sale, but the SURVIVING dollars ARE later converted. Only that real
+// conversion reaches 1633/1637 (valued against the carried funding basis); the
+// principal discarded in the loss contributes NOTHING — confirming the discard
+// is clean and only real FCY→EUR transmissions are taxed.
+// ---------------------------------------------------------------------------
+describe("issue #230: only the real conversion of the surviving dollars hits 1633/1637", () => {
+  const rates = makeRateMap({
+    "2024-02-01": { USD: "1.20" }, // funding + buy
+    "2024-06-20": { USD: "0.80" }, // loss sale
+    "2024-09-10": { USD: "0.80" }, // conversion of the surviving $800
+  });
+  const fund = makeTrade({
+    tradeID: "fund", symbol: "EUR.USD", description: "EUR.USD", isin: "",
+    assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
+    settlementDate: "2024-02-01", quantity: "1000", tradePrice: "1",
+    tradeMoney: "1000", proceeds: "1000", cost: "1000",
+    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+  });
+  const statement = makeStatement([
+    fund,
+    stockBuy("buy", ISIN_AAPL, "AAPL", "2024-02-01", "10", "100"), // $1000
+    stockSell("sell", ISIN_AAPL, "AAPL", "2024-06-20", "10", "80"), // $800 back
+    convUsd("conv", "2024-09-10", "800"), // convert the surviving $800 @0.80
+  ]);
+  const report = generateTaxReport(statement, rates, 2024);
+
+  it("converts ONLY the surviving $800 at the carried 1.20 basis (the lost $200 is gone, never taxed)", () => {
+    // The 800 surviving dollars carry the 1.20 funding basis (re-added at carried
+    // basis by the sell): 800 × (0.80 − 1.20) = −€320. The $200 of principal lost
+    // inside the falling stock is discarded — it generates NO divisa entry.
+    const convs = report.fxGains.disposals.filter((d) => d.trigger === "conversion");
+    const total = convs.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    expect(total.toFixed(2)).toBe("-320.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("-320.00");
+    // Only 800 USD ever transmitted to EUR — never the full 1000.
+    const qty = convs.reduce((s, d) => s.plus(d.quantity), new Decimal(0));
+    expect(qty.toFixed(0)).toBe("800");
+  });
+});
