@@ -349,6 +349,16 @@ export interface TaxSummary {
     /** Individual FX disposals */
     disposals: FxDisposal[];
   };
+
+  /**
+   * Full FX-FIFO movement trace (audit/diagnostic only). Present ONLY when the
+   * caller passes `ReportOptions.fxTrace` — an opt-in for developers/advisors who
+   * want to verify how a 1633/1637 figure was built (acquire → park → unpark →
+   * discard → dispose, with running pool/parked balances). It is NEVER surfaced
+   * in the standard UI and is the ALL-YEAR trace (not year-filtered), so the full
+   * lifecycle of a lot reconciles. Serialize with `serializeFxTrace` (JSONL/CSV).
+   */
+  fxTrace?: FxTraceEvent[];
 }
 
 /** A single lot in the FX FIFO queue (Art. 33.1 LIRPF) */
@@ -377,6 +387,61 @@ export interface FxLot {
  * for the parked-basis encoding, which never emits a disposal on a buy.
  */
 export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_purchase" | "stock_sale";
+
+/**
+ * Movement kinds recorded in the FX-FIFO trace ({@link FxTraceEvent}).
+ *  - `acquire`  — a pool lot was created (EUR→FCY conversion, dividend/interest in FCY).
+ *  - `dispose`  — a pool lot was consumed (FCY→EUR conversion, fee, interest paid) → realizes FX.
+ *  - `park`     — a stock BUY parked principal (carried basis, or `null` rate = uncovered).
+ *  - `unpark`   — a stock SELL re-added parked principal to the pool at its carried basis.
+ *  - `discard`  — a LOSS sell dropped principal that didn't return (no FX, never converted).
+ *  - `profit`   — a stock SELL's trading profit re-added to the pool at the sale rate.
+ */
+export type FxTraceKind = "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit";
+
+/**
+ * One movement in the FX-FIFO engine, for audit/diagnostic export ONLY (opt-in
+ * via `ReportOptions.fxTrace`; never shown in the standard UI). Every monetary
+ * field is a decimal STRING (lossless, matching the serializer/JSON contract) so
+ * the trace round-trips without a Decimal dependency in consumers. Running
+ * balances are AFTER the event is applied. See `serializeFxTrace` (JSONL/CSV).
+ */
+export interface FxTraceEvent {
+  /** Monotonic sequence number in engine-processing order (1-based). */
+  seq: number;
+  /** Movement date (YYYY-MM-DD). */
+  date: string;
+  /** What moved — see {@link FxTraceKind}. */
+  kind: FxTraceKind;
+  /** Foreign currency this movement concerns (never "EUR"). */
+  currency: string;
+  /** What triggered the underlying event (conversion / dividend / stock_sale / …). */
+  trigger: FxTrigger;
+  /** Foreign-currency amount moved by this event (decimal string, always ≥ 0). */
+  quantityFcy: string;
+  /**
+   * EUR-per-FCY rate for this slice (decimal string), or `null` for an UNCOVERED
+   * park (the spent FCY had no tracked acquisition basis — funded outside the
+   * data window). For `dispose` it is the conversion (sale-out) rate.
+   */
+  rate: string | null;
+  /** dispose only: EUR cost basis of the consumed slice. */
+  costBasisEur?: string;
+  /** dispose only: EUR proceeds of the consumed slice. */
+  proceedsEur?: string;
+  /** dispose only: realized FX gain/loss (proceeds − cost). */
+  gainLossEur?: string;
+  /** Spendable per-currency POOL balance (FCY) after this event. */
+  poolBalanceFcy: string;
+  /** Parked per-(currency, position) balance (FCY) after this event. */
+  parkedBalanceFcy: string;
+  /** park/unpark/discard/profit only: the position (isin || symbol) whose principal moved. */
+  positionKey?: string;
+  /** dispose only: the consumed lot id (or "UNKNOWN" for a missing-lots floor). */
+  lotId?: string;
+  /** Optional human note (e.g. "uncovered", "missing-lots floor → gain 0"). */
+  note?: string;
+}
 
 /** Result of consuming FX lots via FIFO for a currency disposal */
 export interface FxDisposal {

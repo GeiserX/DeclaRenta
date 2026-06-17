@@ -13,7 +13,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { FxLot, FxDisposal, FxTrigger, FifoDisposal, TaxMessage } from "../types/tax.js";
+import type { FxLot, FxDisposal, FxTrigger, FifoDisposal, TaxMessage, FxTraceEvent, FxTraceKind } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, isEcbResolvable, lookupRateInMap } from "./ecb.js";
@@ -106,6 +106,80 @@ export class FxFifoEngine {
   }
 
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
+
+  /**
+   * Opt-in movement trace (audit/diagnostic only — issue #230 follow-up). OFF by
+   * default and ZERO-COST when off: every `record()` call returns immediately
+   * unless `traceEnabled` is set via {@link enableTrace}. When on, each pool/park
+   * movement appends an {@link FxTraceEvent} so a developer/advisor can verify how
+   * a 1633/1637 figure was built. Never surfaced in the standard UI.
+   */
+  private traceEnabled = false;
+  private trace: FxTraceEvent[] = [];
+  private traceSeq = 0;
+
+  /** Enable the movement trace (see {@link getTrace}). Call before processEvents. */
+  enableTrace(): void {
+    this.traceEnabled = true;
+  }
+
+  /** The recorded FX-FIFO movement trace (empty unless {@link enableTrace} was called). */
+  getTrace(): FxTraceEvent[] {
+    return this.trace;
+  }
+
+  /** Sum the FCY quantity remaining in the spendable pool for a currency. */
+  private poolBalance(currency: string): Decimal {
+    const lots = this.lots.get(currency);
+    if (!lots) return new Decimal(0);
+    return lots.reduce((s, l) => s.plus(l.quantity), new Decimal(0));
+  }
+
+  /** Sum the FCY quantity remaining in a (currency, position) parked queue. */
+  private parkedBalance(currency: string, positionKey: string | undefined): Decimal {
+    const park = this.parked.get(FxFifoEngine.parkKey(currency, positionKey));
+    if (!park) return new Decimal(0);
+    return park.reduce((s, p) => s.plus(p.q), new Decimal(0));
+  }
+
+  /**
+   * Append one movement to the trace (no-op unless tracing is enabled). Captures
+   * the running pool/parked balances AFTER the caller has applied the movement,
+   * so the trace reads as a chronological ledger. All monetary values are stored
+   * as decimal strings (the {@link FxTraceEvent} contract).
+   */
+  private record(
+    kind: FxTraceKind,
+    event: FxEvent,
+    fields: {
+      quantityFcy: Decimal;
+      rate: Decimal | null;
+      costBasisEur?: Decimal;
+      proceedsEur?: Decimal;
+      gainLossEur?: Decimal;
+      lotId?: string;
+      note?: string;
+    },
+  ): void {
+    if (!this.traceEnabled) return;
+    this.trace.push({
+      seq: ++this.traceSeq,
+      date: event.date,
+      kind,
+      currency: event.currency,
+      trigger: event.trigger,
+      quantityFcy: fields.quantityFcy.toString(),
+      rate: fields.rate === null ? null : fields.rate.toString(),
+      ...(fields.costBasisEur !== undefined ? { costBasisEur: fields.costBasisEur.toString() } : {}),
+      ...(fields.proceedsEur !== undefined ? { proceedsEur: fields.proceedsEur.toString() } : {}),
+      ...(fields.gainLossEur !== undefined ? { gainLossEur: fields.gainLossEur.toString() } : {}),
+      poolBalanceFcy: this.poolBalance(event.currency).toString(),
+      parkedBalanceFcy: this.parkedBalance(event.currency, event.positionKey).toString(),
+      ...(event.positionKey !== undefined ? { positionKey: event.positionKey } : {}),
+      ...(fields.lotId !== undefined ? { lotId: fields.lotId } : {}),
+      ...(fields.note !== undefined ? { note: fields.note } : {}),
+    });
+  }
 
   /**
    * PARKED FIFO per (currency, position) — the foreign-currency PRINCIPAL
@@ -220,6 +294,8 @@ export class FxFifoEngine {
   processEvents(events: FxEvent[]): FxDisposal[] {
     this.fxMissing.clear();
     this.parked.clear();
+    this.trace = [];
+    this.traceSeq = 0;
     const sorted = [...events].sort((a, b) => {
       const cmp = a.date.localeCompare(b.date);
       if (cmp !== 0) return cmp;
@@ -667,6 +743,7 @@ export class FxFifoEngine {
       this.lots.set(event.currency, []);
     }
     this.lots.get(event.currency)!.push(lot);
+    this.record("acquire", event, { quantityFcy: event.quantity, rate: costPerUnit });
   }
 
   private consumeLots(event: FxEvent): void {
@@ -693,6 +770,7 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
+      this.record("dispose", event, { quantityFcy: remaining, rate: event.ecbRate, costBasisEur: netProceeds, proceedsEur: netProceeds, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "sin lotes previos → ganancia FX = 0" });
       return;
     }
 
@@ -722,6 +800,7 @@ export class FxFifoEngine {
         lotId: lot.id,
       });
 
+      const lotIdConsumed = lot.id;
       lot.quantity = lot.quantity.minus(consumed);
       lot.costInEur = lot.costInEur.minus(costBasisEur);
 
@@ -730,6 +809,7 @@ export class FxFifoEngine {
       }
 
       remaining = remaining.minus(consumed);
+      this.record("dispose", event, { quantityFcy: consumed, rate: event.ecbRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed });
     }
 
     if (remaining.greaterThan(0)) {
@@ -754,6 +834,7 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
+      this.record("dispose", event, { quantityFcy: remaining, rate: event.ecbRate, costBasisEur: proceedsEur, proceedsEur, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "lotes insuficientes → ganancia FX = 0" });
     }
   }
 
@@ -831,12 +912,14 @@ export class FxFifoEngine {
         lot.costInEur = lot.costInEur.minus(costPortion);
         if (lot.quantity.lessThan(EPS)) lots.shift();
         remaining = remaining.minus(consumed);
+        this.record("park", event, { quantityFcy: consumed, rate: lot.costPerUnit });
       }
     }
 
     // Shortfall: the pool had no (more) tracked dollars → park uncovered.
     if (remaining.greaterThan(EPS)) {
       park.push({ q: remaining, rate: null });
+      this.record("park", event, { quantityFcy: remaining, rate: null, note: "uncovered (sin lote de origen rastreado)" });
     }
   }
 
@@ -898,14 +981,27 @@ export class FxFifoEngine {
         const x = Decimal.min(need, p.q);
         const give = Decimal.min(x, readd.minus(placed));
         if (give.greaterThan(EPS)) {
-          this.pushPoolLot(event.currency, event.date, give, p.rate === null ? saleRate : p.rate);
+          const reAddRate = p.rate === null ? saleRate : p.rate;
+          this.pushPoolLot(event.currency, event.date, give, reAddRate);
           placed = placed.plus(give);
+          // Re-add recorded AFTER the parked slice is decremented below would show
+          // the wrong parked balance; we decrement first, then record both moves.
         }
         // Consume the whole parked slice `x`; any part above `give` (i.e. above
         // `readd`) is the loss portion — discarded, not re-added.
+        const discarded = x.minus(give);
         p.q = p.q.minus(x);
         need = need.minus(x);
         if (p.q.lessThan(EPS)) park.shift();
+        if (give.greaterThan(EPS)) {
+          this.record("unpark", event, { quantityFcy: give, rate: p.rate === null ? saleRate : p.rate, note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined });
+        }
+        if (discarded.greaterThan(EPS)) {
+          // Loss-spent dollars that never returned: NO FX, never converted to EUR
+          // ("como una hamburguesa en dólares"). Recorded so the audit trail shows
+          // exactly what left the patrimony in the losing trade (issue #230).
+          this.record("discard", event, { quantityFcy: discarded, rate: p.rate, note: "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)" });
+        }
       }
     }
 
@@ -916,12 +1012,14 @@ export class FxFifoEngine {
       const g = Decimal.min(need, readd.minus(placed));
       this.pushPoolLot(event.currency, event.date, g, saleRate);
       placed = placed.plus(g);
+      this.record("unpark", event, { quantityFcy: g, rate: saleRate, note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)" });
     }
 
     // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
     const profit = proc.minus(placed);
     if (profit.greaterThan(EPS)) {
       this.pushPoolLot(event.currency, event.date, profit, saleRate);
+      this.record("profit", event, { quantityFcy: profit, rate: saleRate });
     }
   }
 

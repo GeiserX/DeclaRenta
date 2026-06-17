@@ -15,6 +15,7 @@ import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
+import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
 import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
@@ -160,6 +161,22 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
   applyTheme(next);
 });
 
+
+// ---------------------------------------------------------------------------
+// Diagnostic mode (developer/advisor only — NEVER part of the normal UI)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hidden diagnostic gate for the opt-in FX-FIFO movement trace (issue #230).
+ * Enabled only when the URL hash contains `debug` (e.g. `#debug`) or
+ * `localStorage.declarenta_debug === "1"`. When false, NOTHING changes anywhere
+ * — the standard 3-step wizard/results flow is byte-identical for normal users
+ * and the trace is never even computed (`fxTrace: isDebugMode()` is false → the
+ * FX engine skips trace capture at zero cost). The FX-FIFO trace is a
+ * developer/advisor audit artifact that must never reach end users.
+ */
+const isDebugMode = (): boolean =>
+  location.hash.includes("debug") || localStorage.getItem("declarenta_debug") === "1";
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -692,6 +709,9 @@ async function processFiles(): Promise<void> {
       skipFx: profileForReport.monodivisa,
       titulares: profileForReport.titulares,
       manualRates: getManualRates(),
+      // Opt-in FX-FIFO movement trace, captured in the SAME run only in hidden
+      // diagnostic mode. False by default → zero cost, normal path unchanged.
+      fxTrace: isDebugMode(),
     });
     currentReport = report;
     currentBrokers = detectedBrokers;
@@ -756,6 +776,37 @@ function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic-only: FX-FIFO movement-trace download (issue #230)
+// ---------------------------------------------------------------------------
+//
+// Rendered ONLY in hidden diagnostic mode (`#debug` / localStorage flag), so
+// normal users never see it. Created dynamically here — NOT in index.html — so
+// the static markup stays identical for everyone and no i18n keys are needed.
+// The label is intentionally hardcoded Spanish: this is a developer/advisor
+// audit tool gated out of the standard UI, never localized end-user copy.
+if (isDebugMode()) {
+  const traceBtn = document.createElement("button");
+  traceBtn.id = "export-fxtrace-btn";
+  traceBtn.textContent = "Descargar traza de cálculo FX (diagnóstico)";
+  exportPdfBtn.parentElement?.appendChild(traceBtn);
+  traceBtn.addEventListener("click", () => {
+    if (!currentReport) return;
+    // No FX events to trace (monodivisa, no FCY movements, or empty data) →
+    // don't download an empty file; surface a clear diagnostic notice instead.
+    if (!currentReport.fxTrace || currentReport.fxTrace.length === 0) {
+      console.warn("[DeclaRenta] (sin movimientos FX que trazar)");
+      alert("(sin movimientos FX que trazar)");
+      return;
+    }
+    const traceStr = serializeFxTrace(currentReport.fxTrace, "csv");
+    downloadBlob(
+      new Blob([traceStr], { type: "text/csv;charset=utf-8" }),
+      `declarenta_fxtrace_${currentReport.year}.csv`,
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
