@@ -14,6 +14,7 @@ import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
+import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
@@ -375,7 +376,15 @@ export function generateTaxReport(
   const reintegratedLosses = disposals.reduce((sum, d) => sum.plus(d.reintegratedLossEur), new Decimal(0));
 
   // 2. Dividends (filter to target year)
-  const yearCashTransactions = statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
+  // Collapse broker correction/reversal pairs (duplicate credit + its opposite-
+  // sign storno) BEFORE the dividend/interest engines run, so a duplicated-then-
+  // reversed payment nets to its real value in BOTH the gross (0029) and the
+  // withholding — instead of the reversal being .abs()'d into an addition
+  // (dividends.ts) that triples the retención. Only exact opposite-sign pairs
+  // cancel; a file with no reversals is unchanged.
+  const yearCashTransactions = collapseCorrections(
+    statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr)),
+  );
   let dividendEntries = calculateDividends(yearCashTransactions, rateMap);
   if (titulares > 1) dividendEntries = dividendEntries.map((d) => splitDividend(d, titulares));
   const grossDividends = dividendEntries.reduce(
