@@ -327,6 +327,24 @@ describe("fx-trace e2e #2: golden ledger — round-trip trace reconciles to the 
     expect(principalLeg!.proceedsEur).toBe("1050"); // 1000 × 1.05
   });
 
+  it("PROVES date-FIFO: each dispose carries the consumed lot's lotAcquireDate, non-decreasing (issue #230)", () => {
+    // The lotId (FX-N) is a creation-order counter shared across currencies, so it
+    // is NOT a FIFO indicator — a re-added carried principal keeps its OLD
+    // acquisition date but gets a fresh HIGH lotId, so a dispose can legitimately
+    // consume FX-5 before FX-2. The field that PROVES oldest-first FIFO is the
+    // consumed lot's acquisition date: across consecutive disposes of one currency
+    // it must be NON-DECREASING. This is exactly what an auditor needs to verify
+    // the ledger by hand (and what the trace previously omitted).
+    const disposes = trace.filter((e) => e.kind === "dispose");
+    expect(disposes.length).toBeGreaterThan(0);
+    for (const d of disposes) {
+      expect(d.lotAcquireDate).toBeDefined(); // every real-lot dispose carries it
+    }
+    const dates = disposes.map((d) => d.lotAcquireDate!);
+    const sorted = [...dates].sort(); // ISO yyyy-mm-dd → lexical === chronological
+    expect(dates).toEqual(sorted); // consumption order IS ascending acquisition date
+  });
+
   it("the running pool/parked balances narrate the lifecycle (park→1000, pool peaks 1400, drains to 0)", () => {
     const byKind = (k: FxTraceKind) => trace.filter((e) => e.kind === k);
     // After the funding acquire: pool holds the full $1200.
