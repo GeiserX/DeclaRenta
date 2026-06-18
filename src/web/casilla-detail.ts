@@ -92,12 +92,15 @@ function renderDisposalsDetail(
 export function renderDividendsDetail(entries: DividendEntry[]): string {
   if (entries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   const groups = groupDividendsByIssuer(entries);
-  // Foreign withholding is intentionally NOT shown here: this card feeds the
-  // Renta Web "Alta Capital mobiliario" form, whose "Retenciones" field is for
-  // Spanish IRPF retentions only (Casillas 0030/0031). Foreign withholding is
-  // recovered solely via Casilla 0588 (Art. 80 LIRPF) and is shown there. A user
-  // pasting it into "Retenciones" would double-count it against 0588. The note
-  // below redirects them; it only renders when there is foreign withholding.
+  // Withholding is intentionally NOT shown in this per-issuer table — it is split
+  // by origin into two DIFFERENT boxes, which the note below explains: FOREIGN
+  // retención (non-ES issuer) is recovered via Casilla 0588 (deducción por doble
+  // imposición internacional, Art. 80 LIRPF) and must NOT be pasted into the
+  // "Retenciones" field of the "Alta Capital mobiliario" form (that would
+  // double-count it against 0588); a SPANISH retención (ES issuer, e.g.
+  // Iberdrola/Telefónica) is a domestic pago a cuenta that DOES go to Casilla
+  // 0597 (Retenciones por rendimientos del capital mobiliario), surfaced as its
+  // own card. The note only renders when there is any withholding.
   const totalWithholding = groups.reduce((sum, g) => sum.plus(g.withholdingTotalEur), new Decimal(0));
   const note = totalWithholding.greaterThan(0)
     ? `<p class="detail-note">${esc(t("casilla.dividends_withholding_note"))}</p>`
@@ -174,6 +177,36 @@ function renderGeneralGainsDetail(entries: GeneralGainEntry[]): string {
           <td>${formatDate(e.date)}</td>
           <td>${esc(e.description)}</td>
           <td>${fmtEur(e.amountEur)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+/**
+ * Render a detail table of the Spanish-issuer dividends whose 19% retención a
+ * cuenta feeds Casilla 0597. Unlike 0588 (foreign tax, double-taxation relief),
+ * this is a DOMESTIC pago a cuenta: ES-issuer dividends (e.g. Iberdrola,
+ * Telefónica) withheld at source, deductible from the cuota — even when held at
+ * a foreign broker. Lists each ES dividend payment with its withheld amount.
+ */
+function renderSpanishWithholdingDetail(report: TaxSummary): string {
+  const esEntries = report.dividends.entries.filter((e) => e.withholdingCountry === "ES");
+  if (esEntries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  return `
+    <p class="detail-note">${esc(t("casilla.spanish_withholding_detail"))}</p>
+    <p class="detail-label">${t("casilla.spanish_withholding")} (${esEntries.length})</p>
+    <table class="detail-table">
+      <thead><tr>
+        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.date")}</th>
+        <th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th>
+      </tr></thead>
+      <tbody>${esEntries.map((e) => `
+        <tr>
+          <td class="mono">${esc(e.isin)}</td>
+          <td>${esc(e.symbol)}</td>
+          <td>${formatDate(e.payDate)}</td>
+          <td>${fmtEur(e.grossAmountEur)}</td>
+          <td>${fmtEur(e.withholdingTaxEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table>`;
@@ -312,6 +345,18 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (r) => fmtEur(r.doubleTaxation.deduction),
     getClass: () => "",
     getDetail: (r) => renderDoubleTaxDetail(r),
+  },
+  // Casilla 0597: Retenciones por rendimientos del capital mobiliario — the
+  // SPANISH retención a cuenta on ES-issuer dividends (a domestic pago a cuenta,
+  // NOT the foreign double-taxation credit of 0588). Only shown when present so
+  // purely-foreign holdings don't see an empty box.
+  {
+    code: "0597",
+    i18nKey: "casilla.spanish_withholding",
+    getValue: (r) => fmtEur(r.dividends.spanishWithholding),
+    getClass: () => "",
+    getDetail: (r) => renderSpanishWithholdingDetail(r),
+    visible: (r) => r.dividends.spanishWithholding.greaterThan(0),
   },
 ];
 

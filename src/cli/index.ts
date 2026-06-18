@@ -545,6 +545,7 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
     year: report.year,
     casillas: {
       "0029_dividendos_brutos": report.dividends.grossIncome.toFixed(2),
+      "0597_retenciones_capital_mobiliario": report.dividends.spanishWithholding.toFixed(2),
       "intereses_margen_no_deducible_informativo": report.interest.paid.toFixed(2),
       "0027_intereses_cuentas": report.interest.earned.toFixed(2),
       "0304_ganancias_no_derivadas_transmision_base_general": report.generalGains.total.toFixed(2),
@@ -641,6 +642,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   console.error("");
   console.error("  RENDIMIENTOS CAPITAL MOBILIARIO");
   console.error(`    Casilla 0029 (Dividendos brutos):  ${report.dividends.grossIncome.toFixed(2)} EUR`);
+  console.error(`    Casilla 0597 (Retenciones cap. mob.): ${report.dividends.spanishWithholding.toFixed(2)} EUR`);
   console.error(`    Casilla 0027 (Intereses ganados):  ${report.interest.earned.toFixed(2)} EUR`);
   console.error(`    Intereses margen (no deducible, informativo):   ${report.interest.paid.toFixed(2)} EUR`);
   if (report.generalGains.total.greaterThan(0)) {

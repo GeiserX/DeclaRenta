@@ -52,7 +52,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
     dividends: {
       grossIncome: new Decimal("500"),
       deductibleExpenses: new Decimal("75"),
-      entries: [
+      spanishWithholding: new Decimal(0),      entries: [
         {
           isin: "US78462F1030",
           symbol: "SPY",
@@ -118,7 +118,7 @@ describe("PDF Report Generator", () => {
       dividends: {
         grossIncome: new Decimal(0),
         deductibleExpenses: new Decimal(0),
-        entries: [],
+        spanishWithholding: new Decimal(0),        entries: [],
       },
       doubleTaxation: {
         deduction: new Decimal(0),
@@ -148,7 +148,7 @@ describe("PDF Report Generator", () => {
       dividends: {
         grossIncome: new Decimal(0),
         deductibleExpenses: new Decimal(0),
-        entries: [],
+        spanishWithholding: new Decimal(0),        entries: [],
       },
       doubleTaxation: {
         deduction: new Decimal(0),

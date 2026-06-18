@@ -92,7 +92,7 @@ function makeSummaryWithDisposals(
     dividends: {
       grossIncome: new Decimal(0),
       deductibleExpenses: new Decimal(0),
-      entries: [],
+      spanishWithholding: new Decimal(0),      entries: [],
     },
     interest: {
       earned: new Decimal(0),
@@ -303,10 +303,13 @@ describe("renderDividendsDetail (Casilla 0029 card)", () => {
     expect(html).not.toContain("3,68");
   });
 
-  it("appends the foreign-withholding redirect note when withholding > 0", () => {
+  it("appends the withholding note distinguishing foreign (0588) from Spanish (0597) when withholding > 0", () => {
     const html = renderDividendsDetail([makeDividend({ withholdingTaxEur: new Decimal("3.68") })]);
+    // The note now routes BOTH boxes: foreign withholding → 0588 (double taxation),
+    // Spanish-issuer retención → 0597 (retención a cuenta). It must reference both.
     expect(html).toContain("0588");
-    expect(html).toMatch(/Retenciones/); // references the Renta Web field name in the note
+    expect(html).toContain("0597");
+    expect(html).toMatch(/retención/i); // references the withholding guidance
   });
 
   it("omits the note when there is no foreign withholding (no noise on clean reports)", () => {

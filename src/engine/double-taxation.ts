@@ -43,7 +43,7 @@ export function calculateDoubleTaxation(
   dividends: DividendEntry[],
   year: number,
   totalSavingsBase?: Decimal,
-): { total: Decimal; byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> } {
+): { total: Decimal; byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>; spanishWithholding: Decimal } {
   const byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal }> = {};
 
   for (const div of dividends) {
@@ -56,6 +56,10 @@ export function calculateDoubleTaxation(
   }
 
   let total = new Decimal(0);
+  // The Spanish retención a cuenta (casilla 0597): an ES-issuer dividend's
+  // withholding is a domestic pago a cuenta, excluded from the foreign 0588
+  // credit below, but it must still be surfaced (it was previously dropped).
+  const spanishWithholding = byCountry["ES"]?.taxPaid ?? new Decimal(0);
   const result: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> = {};
   const effectiveSavingsRate = totalSavingsBase && totalSavingsBase.greaterThan(0)
     ? calculateSavingsTax(totalSavingsBase, year).dividedBy(totalSavingsBase)
@@ -91,5 +95,5 @@ export function calculateDoubleTaxation(
     total = total.plus(deduction);
   }
 
-  return { total, byCountry: result };
+  return { total, byCountry: result, spanishWithholding };
 }

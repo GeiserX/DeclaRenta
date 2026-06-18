@@ -110,6 +110,7 @@ export function formatCsv(report: TaxSummary): string {
     lines.push(`0304,Ganancias patrimoniales no derivadas de transmision (base general: airdrops/referidos),${report.generalGains.total.toFixed(2)}`);
   }
   lines.push(`0588,Deduccion doble imposicion,${report.doubleTaxation.deduction.toFixed(2)}`);
+  lines.push(`0597,Retenciones capital mobiliario,${report.dividends.spanishWithholding.toFixed(2)}`);
 
   return lines.join("\n") + "\n";
 }

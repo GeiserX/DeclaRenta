@@ -52,7 +52,7 @@ function makeSummary(disposals: FifoDisposal[]): TaxSummary {
       blockedLosses: new Decimal(0),
       disposals,
     },
-    dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
+    dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), spanishWithholding: new Decimal(0), entries: [] },
     interest: { earned: new Decimal(0), paid: new Decimal(0), entries: [] },
     generalGains: { total: new Decimal(0), entries: [] },
     doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
