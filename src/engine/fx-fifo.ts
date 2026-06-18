@@ -158,6 +158,7 @@ export class FxFifoEngine {
       proceedsEur?: Decimal;
       gainLossEur?: Decimal;
       lotId?: string;
+      lotAcquireDate?: string;
       note?: string;
     },
   ): void {
@@ -177,6 +178,7 @@ export class FxFifoEngine {
       parkedBalanceFcy: this.parkedBalance(event.currency, event.positionKey).toString(),
       ...(event.positionKey !== undefined ? { positionKey: event.positionKey } : {}),
       ...(fields.lotId !== undefined ? { lotId: fields.lotId } : {}),
+      ...(fields.lotAcquireDate !== undefined ? { lotAcquireDate: fields.lotAcquireDate } : {}),
       ...(fields.note !== undefined ? { note: fields.note } : {}),
     });
   }
@@ -838,7 +840,7 @@ export class FxFifoEngine {
       }
 
       remaining = remaining.minus(consumed);
-      this.record("dispose", event, { quantityFcy: consumed, rate: event.ecbRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed });
+      this.record("dispose", event, { quantityFcy: consumed, rate: event.ecbRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed, lotAcquireDate: lot.acquireDate });
     }
 
     if (remaining.greaterThan(0)) {
@@ -968,7 +970,7 @@ export class FxFifoEngine {
         lot.costInEur = lot.costInEur.minus(costPortion);
         if (lot.quantity.lessThan(EPS)) lots.shift();
         remaining = remaining.minus(consumed);
-        this.record("park", event, { quantityFcy: consumed, rate: lot.costPerUnit });
+        this.record("park", event, { quantityFcy: consumed, rate: lot.costPerUnit, lotAcquireDate: lot.acquireDate });
       }
     }
 

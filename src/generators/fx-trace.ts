@@ -37,6 +37,7 @@ const CSV_COLUMNS: readonly (keyof FxTraceEvent)[] = [
   "parkedBalanceFcy",
   "positionKey",
   "lotId",
+  "lotAcquireDate",
   "note",
 ];
 

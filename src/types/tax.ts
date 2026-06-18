@@ -451,6 +451,18 @@ export interface FxTraceEvent {
   positionKey?: string;
   /** dispose only: the consumed lot id (or "UNKNOWN" for a missing-lots floor). */
   lotId?: string;
+  /**
+   * dispose/park only: the ORIGINAL acquisition date (YYYY-MM-DD) of the consumed
+   * pool lot — the field that PROVES date-FIFO order. `lotId` is a creation-order
+   * counter shared across all currencies, so it is NOT a FIFO indicator (a re-added
+   * carried principal keeps its old acquisition date but gets a fresh re-stamped
+   * lotId). This date is the real FIFO key: across consecutive `dispose` rows of one
+   * currency it is non-decreasing, which is what oldest-first FIFO means. Absent for
+   * a missing-lots floor (no real lot) and for an uncovered park (no tracked origin).
+   * Same datum as {@link FxDisposal.acquireDate}; prefixed `lot` here to disambiguate
+   * from this event's own `date` (the movement date).
+   */
+  lotAcquireDate?: string;
   /** Optional human note (e.g. "uncovered", "missing-lots floor → gain 0"). */
   note?: string;
 }

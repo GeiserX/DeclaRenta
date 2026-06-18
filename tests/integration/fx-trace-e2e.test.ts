@@ -325,6 +325,42 @@ describe("fx-trace e2e #2: golden ledger — round-trip trace reconciles to the 
     expect(principalLeg).toBeDefined();
     expect(principalLeg!.costBasisEur).toBe("900"); // 1000 × 0.90 carried
     expect(principalLeg!.proceedsEur).toBe("1050"); // 1000 × 1.05
+    // VALUE pin (the feature's whole point, #240 carry): the re-added principal's
+    // dispose carries its ORIGINAL acquisition date (the 2024-02-01 funding date),
+    // NOT the 2024-06-20 sale date — proving the buy parked the basis+date and the
+    // sell carried it through. A regression passing event.date instead of
+    // lot.acquireDate would still be non-decreasing, so the ordering test alone
+    // can't catch it; this value assertion does.
+    expect(principalLeg!.lotAcquireDate).toBe("2024-02-01");
+  });
+
+  it("PROVES date-FIFO: dispose lotAcquireDate is non-decreasing per currency (issue #230)", () => {
+    // The lotId (FX-N) is a creation-order counter shared across currencies, so it
+    // is NOT a FIFO indicator — a re-added carried principal keeps its OLD
+    // acquisition date but gets a fresh (re-stamped) lotId, so in general a dispose
+    // can consume a higher-numbered lot before a lower one when the higher one is
+    // older by date. The field that PROVES oldest-first FIFO is the consumed lot's
+    // acquisition date: across consecutive disposes OF ONE CURRENCY it must be
+    // NON-DECREASING. This is what an auditor needs to verify the ledger by hand
+    // (and what the trace previously omitted).
+    const disposes = trace.filter((e) => e.kind === "dispose");
+    expect(disposes.length).toBeGreaterThan(0);
+    // FIFO is per-currency, and a missing-lots floor dispose (lotId "UNKNOWN") has
+    // no real source lot → no lotAcquireDate. Skip those, group by currency, and
+    // assert each currency's real-lot disposes are non-decreasing by date.
+    const datesByCurrency = new Map<string, string[]>();
+    for (const d of disposes) {
+      if (d.lotId === "UNKNOWN") continue; // floor row: no source lot, date absent
+      expect(d.lotAcquireDate).toBeDefined(); // every real-lot dispose carries it
+      const arr = datesByCurrency.get(d.currency) ?? [];
+      arr.push(d.lotAcquireDate!);
+      datesByCurrency.set(d.currency, arr);
+    }
+    expect(datesByCurrency.size).toBeGreaterThan(0);
+    for (const dates of datesByCurrency.values()) {
+      const sorted = [...dates].sort(); // ISO yyyy-mm-dd → lexical === chronological
+      expect(dates).toEqual(sorted); // consumption order IS ascending acquisition date
+    }
   });
 
   it("the running pool/parked balances narrate the lifecycle (park→1000, pool peaks 1400, drains to 0)", () => {
@@ -336,6 +372,9 @@ describe("fx-trace e2e #2: golden ledger — round-trip trace reconciles to the 
     expect(park.poolBalanceFcy).toBe("200");
     expect(park.parkedBalanceFcy).toBe("1000");
     expect(park.positionKey).toBe(ISIN_AAPL);
+    // The park row also carries the consumed pool lot's original acquisition date
+    // (the funding date) — pins the park-side half of the lotAcquireDate change.
+    expect(park.lotAcquireDate).toBe("2024-02-01");
     // After the profit re-add the pool peaks at $1400 (1000 principal + 200
     // leftover funding + 200 profit) and the parked queue is empty again.
     const profit = byKind("profit")[0]!;
