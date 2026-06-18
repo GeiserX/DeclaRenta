@@ -155,3 +155,89 @@ describe("FIFO — cross-currency permuta cost basis (€35M bug regression)", (
     expect(ds[1]!.costBasisEur.toFixed(2)).toBe("40.00"); // lot2: 50 × 0.80 (USDT→USD)
   });
 });
+
+// Monodivisa (traditional method, Art. 35.1): FifoEngine({traditionalCostBasis})
+// converts a SAME-FIAT security's cost at the ACQUISITION-date rate (not the
+// sale-date rate of the rigorous V2422-20 default), embedding the buy→sale FX
+// drift in the stock line. Pins that the flag (a) flips same-fiat stocks, (b)
+// ALSO flips same-stablecoin permutas (isEcbResolvable true for USDT/USDC), and
+// (c) leaves cross-currency crypto permutas — which already use lot.rate —
+// byte-identical regardless of the flag.
+describe("FIFO — monodivisa traditionalCostBasis (Art. 35.1)", () => {
+  it("flips a same-fiat USD stock cost to the BUY-date rate", () => {
+    // Buy 1000 USD @ 0.77, sell 1000 USD @ 0.67 (0 USD price move).
+    const buy = trade({
+      symbol: "AAPL", assetCategory: "STK", currency: "USD", buySell: "BUY",
+      tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+      quantity: "10", tradePrice: "100", cost: "1000", commissionCurrency: "USD",
+    });
+    const sell = trade({
+      symbol: "AAPL", assetCategory: "STK", currency: "USD", buySell: "SELL",
+      openCloseIndicator: "C", tradeDate: "2025-06-01", settlementDate: "2025-06-01",
+      quantity: "-10", tradePrice: "100", proceeds: "1000", cost: "0", commissionCurrency: "USD",
+    });
+    const rateMap = makeRateMap({
+      "2025-01-10": { USD: "0.77" },
+      "2025-06-01": { USD: "0.67" },
+    });
+
+    // Default (rigorous, V2422-20): both legs at the sale rate → 0 EUR gain.
+    const def = new FifoEngine().processTrades([buy, sell], rateMap)[0]!;
+    expect(def.costBasisEur.toFixed(2)).toBe("670.00");
+    expect(def.gainLossEur.toFixed(2)).toBe("0.00");
+
+    // Monodivisa (traditional): cost at the BUY rate (1000 × 0.77 = 770),
+    // proceeds at the sale rate (670) → the −100 FX drift embeds in the stock.
+    const trad = new FifoEngine({ traditionalCostBasis: true }).processTrades([buy, sell], rateMap)[0]!;
+    expect(trad.costBasisEur.toFixed(2)).toBe("770.00");
+    expect(trad.proceedsEur.toFixed(2)).toBe("670.00");
+    expect(trad.gainLossEur.toFixed(2)).toBe("-100.00");
+  });
+
+  it("ALSO flips a same-stablecoin permuta cost to the BUY-date rate (USDT both legs)", () => {
+    // BUY 100 USDC paying 100 USDT, SELL 100 USDC for 110 USDT. Both legs carry
+    // currency USDT (→ USD, isEcbResolvable). USD/EUR: 0.90 (buy) → 1.00 (sell).
+    const buy = trade({ buySell: "BUY", currency: "USDT", symbol: "USDC", quantity: "100", tradePrice: "1", cost: "100", commissionCurrency: "USDT" });
+    const sell = trade({
+      buySell: "SELL", openCloseIndicator: "C", currency: "USDT", symbol: "USDC",
+      tradeDate: "2025-04-06", settlementDate: "2025-04-06",
+      quantity: "-100", tradePrice: "1.1", proceeds: "110", cost: "0", commissionCurrency: "USDT",
+    });
+    const rateMap = makeRateMap({
+      "2025-03-14": { USD: "0.90" },
+      "2025-04-06": { USD: "1.00" },
+    });
+
+    // Default: cost at the sale rate (100 × 1.00 = 100), gain 10.
+    const def = new FifoEngine().processTrades([buy, sell], rateMap)[0]!;
+    expect(def.costBasisEur.toFixed(2)).toBe("100.00");
+    expect(def.gainLossEur.toFixed(2)).toBe("10.00");
+
+    // Monodivisa: cost at the BUY rate (100 × 0.90 = 90), proceeds 110 → gain 20.
+    const trad = new FifoEngine({ traditionalCostBasis: true }).processTrades([buy, sell], rateMap)[0]!;
+    expect(trad.costBasisEur.toFixed(2)).toBe("90.00");
+    expect(trad.proceedsEur.toFixed(2)).toBe("110.00");
+    expect(trad.gainLossEur.toFixed(2)).toBe("20.00");
+  });
+
+  it("leaves a cross-currency crypto permuta byte-identical with or without the flag", () => {
+    // BUY 300 USDC paying 277.5 EUR, SELL for BTC. Already on the lot.rate path
+    // (buy-ccy ≠ sell-ccy), so traditionalCostBasis must NOT change anything.
+    const buy = trade({ buySell: "BUY", currency: "EUR", quantity: "300", tradePrice: "0.925", cost: "277.5" });
+    const sell = trade({
+      buySell: "SELL", openCloseIndicator: "C", currency: "BTC", symbol: "USDC",
+      tradeDate: "2025-04-06", settlementDate: "2025-04-06",
+      quantity: "-300", tradePrice: "0.00001259", proceeds: "0.003777", cost: "0",
+      commissionCurrency: "BTC",
+    });
+    const rateMap = makeRateMap({
+      "2025-03-14": { EUR: "1", BTC: "70000" },
+      "2025-04-06": { EUR: "1", BTC: "78890.273739" },
+    });
+    const def = new FifoEngine().processTrades([buy, sell], rateMap)[0]!;
+    const trad = new FifoEngine({ traditionalCostBasis: true }).processTrades([buy, sell], rateMap)[0]!;
+    expect(trad.costBasisEur.toFixed(2)).toBe(def.costBasisEur.toFixed(2));
+    expect(trad.gainLossEur.toFixed(2)).toBe(def.gainLossEur.toFixed(2));
+    expect(trad.costBasisEur.toFixed(2)).toBe("277.50");
+  });
+});

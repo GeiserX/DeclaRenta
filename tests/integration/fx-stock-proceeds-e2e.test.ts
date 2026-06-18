@@ -240,14 +240,18 @@ describe("issue #230 e2e: sell foreign stock but never convert → FX deferred (
 });
 
 // ===========================================================================
-// 3. MONODIVISA — same as #1 but skipFx:true → no stock-FX, stock gain intact.
+// 3. MONODIVISA — same as #1 but skipFx:true → traditional method (Art. 35.1).
 // ===========================================================================
 //
 // Monodivisa mode (Autodeclaro/Taxdown parity) disables the FX FIFO engine
-// entirely. The foreign-stock-proceeds producer lives inside the same skipFx
-// block, so it is suppressed too: no FX disposal, all FX casillas zero. The
-// EUR stock gain is unaffected (still computed via ECB rates).
-describe("issue #230 e2e: monodivisa (skipFx) suppresses stock-FX, keeps the stock gain", () => {
+// entirely AND values the stock cost at the ACQUISITION-date rate (the
+// traditional method some advisors use, Art. 35.1). The foreign-stock-proceeds
+// producer lives inside the same skipFx block, so it is suppressed too: no FX
+// disposal, all FX casillas zero. The buy→sale FX drift is NOT lost — it is
+// EMBEDDED in the stock line (cost at the buy rate, proceeds at the sale rate),
+// so the monodivisa stock gain INTENTIONALLY differs from the FX-on case by
+// exactly that drift (15000 USD × (0.95 − 0.90) = 750.00).
+describe("issue #230 e2e: monodivisa (skipFx) → traditional cost basis (Art. 35.1)", () => {
   const rates = makeRateMap({
     "2024-03-15": { USD: "0.90" },
     "2024-06-20": { USD: "0.95" },
@@ -256,11 +260,14 @@ describe("issue #230 e2e: monodivisa (skipFx) suppresses stock-FX, keeps the sto
   const statement = makeStatement([AAPL_BUY, AAPL_SELL, usdToEurConversion("2024-09-10")]);
   const report = generateTaxReport(statement, rates, 2024, { skipFx: true });
 
-  it("keeps the stock capital gain identical to the FX-on case (4750.00)", () => {
+  it("embeds the buy→sale FX drift in the stock gain (5500.00)", () => {
+    // cost     = 15000 USD × 0.90 (buy rate)  = 13500.00 EUR  (Art. 35.1)
+    // proceeds = 20000 USD × 0.95 (sale rate) = 19000.00 EUR
+    // gain     = 5500.00 EUR  (= FX-on stock gain 4750 + embedded drift 750)
     expect(report.capitalGains.disposals).toHaveLength(1);
     expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("19000.00");
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("14250.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("4750.00");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("13500.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("5500.00");
   });
 
   it("zeroes the entire FX block (no separate FX saldo in monodivisa)", () => {

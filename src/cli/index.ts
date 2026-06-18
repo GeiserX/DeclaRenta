@@ -127,7 +127,7 @@ program
   .option("-f, --format <format>", "Output format: json, csv, or pdf", "json")
   .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`)
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
-  .option("--monodivisa", "Disable FX FIFO engine — treat all as EUR (like Autodeclaro/Taxdown)")
+  .option("--monodivisa", "Modo tradicional (como Autodeclaro/Taxdown/asesor): apaga el motor de divisa y valora el coste FCY al tipo del día de COMPRA (Art. 35.1), embebiendo el efecto divisa en la línea de la acción")
   .option("--skip-auto-convert", "No tratar las autoconversiones del bróker (AFx/FXCONV) como conversiones de divisa. Por defecto SÍ se procesan (IBKR no reconvierte a EUR al vender, así que el saldo en divisa es real). Actívalo solo si tu bróker hace round-trip completo y quieres ignorar el efecto divisa.")
   .option("--titulares <n>", "Number of account holders. >1 splits all amounts equally per contribuyente (Art. 11.3 LIRPF)", parseInt)
   .option("--crypto-rates <json>", "Manual EUR-per-unit quotes for crypto↔crypto swaps without an ECB rate. Inline JSON or path to a JSON file: [{ \"currency\": \"SOL\", \"date\": \"2024-03-01\", \"eurPerUnit\": \"120.50\" }]")

@@ -31,6 +31,21 @@ export class FifoEngine {
   private shortLots: Map<string, Lot[]> = new Map();
   private disposals: FifoDisposal[] = [];
   private nextLotId = 1;
+  /**
+   * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
+   * basis is converted at the ACQUISITION-date rate (Art. 35.1 "importe real por
+   * el que la adquisición se hubiese efectuado"), embedding the buy→sale FX drift
+   * in the stock line — what some advisors do. When false (rigorous
+   * default), a same-fiat security uses the sale-date rate (DGT V2422-20) and the
+   * drift is realized separately by the FX engine. Driven by `skipFx` (monodivisa)
+   * in report.ts; the two states are coherent (never traditional-cost WITH the FX
+   * engine on, which would double-count the drift). See disposalEur().
+   */
+  private traditionalCostBasis: boolean;
+
+  constructor(options?: { traditionalCostBasis?: boolean }) {
+    this.traditionalCostBasis = options?.traditionalCostBasis ?? false;
+  }
   /** Warnings for issues that don't block execution */
   warnings: string[] = [];
   /** Structured messages with severity, hint, and context */
@@ -424,6 +439,11 @@ export class FifoEngine {
    * currency AND that currency is genuinely ECB-resolvable (fiat/stablecoin);
    * otherwise the acquisition-date rate is used. Proceeds always use the sale-date
    * rate; the gain is their difference (Art. 37.1.h).
+   *
+   * Monodivisa (`traditionalCostBasis`): even for a same-fiat security the cost
+   * uses the ACQUISITION-date rate (Art. 35.1), so the buy→sale FX drift stays
+   * embedded in the stock line instead of being deferred to the (disabled) FX
+   * engine — reproducing the traditional method some advisors use.
    */
   private disposalEur(
     proceedsFcy: Decimal, costBasisFcy: Decimal,
@@ -436,7 +456,9 @@ export class FifoEngine {
     // (cross-currency permuta, or the same VOLATILE coin on both sides) → cost
     // at the acquisition-date rate (the real EUR paid, Art. 35.1).
     const sameFiat = lot.currency === sell.currency && isEcbResolvable(sell.currency);
-    const costBasisEur = costBasisFcy.mul(sameFiat ? sell.rate : lot.rate);
+    const costBasisEur = costBasisFcy.mul(
+      sameFiat && !this.traditionalCostBasis ? sell.rate : lot.rate,
+    );
     return { proceedsEur, costBasisEur, gainLossEur: proceedsEur.minus(costBasisEur) };
   }
 

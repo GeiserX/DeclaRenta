@@ -452,7 +452,9 @@ describe("fx-trace e2e #3: loss-sell with NO conversion → trace shows a discar
 // mode disables the WHOLE FX FIFO engine (the `if (!options?.skipFx)` block in
 // report.ts never runs), so the engine — and therefore the trace — never exists.
 // Even with `fxTrace: true` ALSO set, `report.fxTrace` is gracefully `undefined`
-// (the trace is captured only inside the FX block). The stock gain is unchanged.
+// (the trace is captured only inside the FX block). The stock cost uses the
+// ACQUISITION-date rate (traditional method, Art. 35.1), so the buy→sale FX
+// drift on the principal is embedded in the stock loss.
 // ===========================================================================
 describe("fx-trace e2e #4: monodivisa (skipFx) → fxTrace is gracefully absent even if requested", () => {
   const rates = makeRateMap({
@@ -470,10 +472,15 @@ describe("fx-trace e2e #4: monodivisa (skipFx) → fxTrace is gracefully absent 
     expect(report.fxTrace).toBeUndefined();
   });
 
-  it("zeroes the FX block and keeps the stock loss in EUR (−€160.00)", () => {
+  it("zeroes the FX block; the stock loss embeds the buy→sale FX drift (−€560.00)", () => {
+    // Traditional method (Art. 35.1): cost at the buy-date rate, proceeds at the
+    // sale-date rate, FX drift embedded in the stock line (FX engine off).
+    //   cost     = 1000 USD × 1.20 (buy)  = 1200.00 EUR
+    //   proceeds =  800 USD × 0.80 (sale) =  640.00 EUR
+    //   loss     = −560.00 EUR  (= USD stock loss −160 + USD-depreciation −400)
     expect(report.fxGains.disposals).toHaveLength(0);
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("-160.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("-560.00");
   });
 });
 
