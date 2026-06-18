@@ -84,7 +84,7 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
     dividends: {
       grossIncome: new Decimal(50),
       deductibleExpenses: new Decimal(0),
-      entries: [
+      spanishWithholding: new Decimal(0),      entries: [
         {
           isin: "US0378331005",
           symbol: "AAPL",

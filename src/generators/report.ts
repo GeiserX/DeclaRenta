@@ -650,6 +650,7 @@ export function generateTaxReport(
     dividends: {
       grossIncome: t.grossDividends,
       deductibleExpenses: new Decimal(0),
+      spanishWithholding: doubleTaxation.spanishWithholding,
       entries: dividendEntries,
     },
     interest: {

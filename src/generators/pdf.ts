@@ -130,6 +130,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
       }
       casillas.push(
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
+        ["Casilla 0597", "Retenciones capital mobiliario", formatEur(report.dividends.spanishWithholding)],
       );
 
       for (const [casilla, desc, value] of casillas) {

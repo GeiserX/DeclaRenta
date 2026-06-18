@@ -303,6 +303,16 @@ export interface TaxSummary {
     grossIncome: Decimal;
     /** Casilla 0034: Retenciones / Gastos deducibles */
     deductibleExpenses: Decimal;
+    /**
+     * Casilla 0597: Retenciones por rendimientos del capital mobiliario — the
+     * SPANISH retención a cuenta (a domestic pago a cuenta deductible from the
+     * cuota). A Spanish-issuer dividend (ISIN "ES…") suffers the 19% retención at
+     * source even when held at a foreign broker; it is NOT a foreign tax, so it
+     * goes here, never in casilla 0588 (deducción por doble imposición
+     * internacional, which is foreign tax only). Sum of `withholdingTaxEur` over
+     * entries with `withholdingCountry === "ES"`. 0 for purely-foreign holdings.
+     */
+    spanishWithholding: Decimal;
     /** Individual dividends */
     entries: DividendEntry[];
   };

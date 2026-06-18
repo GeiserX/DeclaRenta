@@ -775,6 +775,87 @@ describe("generateTaxReport", () => {
   });
 });
 
+describe("Spanish withholding (casilla 0597) end-to-end", () => {
+  // A Spanish-issuer dividend (ISIN "ES…") held at a FOREIGN broker still suffers
+  // the 19% retención a cuenta at source. That withholding is a DOMESTIC pago a
+  // cuenta — it must surface as casilla 0597 (report.dividends.spanishWithholding),
+  // and it must NEVER land in casilla 0588 (deducción por doble imposición
+  // internacional, which is foreign tax only). The country is derived from the
+  // ISIN issuer prefix ("ES" → domestic); the EUR dividend converts 1:1.
+  it("routes an ES-ISIN dividend's retención to 0597, not the 0588 foreign credit", () => {
+    // EUR-denominated → ECB rate is 1.0, so gross 100 → 100.00 and the 19
+    // retención → 19.00 exactly (no FX rounding to reason about).
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "d-es", isin: "ES0000000000", description: "IBERDROLA",
+          currency: "EUR", dateTime: "20250601", amount: "100", type: "Dividends",
+        }),
+        makeCashTx({
+          transactionID: "w-es", isin: "ES0000000000", description: "IBERDROLA",
+          currency: "EUR", dateTime: "20250601", amount: "-19", type: "Withholding Tax",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    // Casilla 0597: the domestic retención a cuenta is surfaced.
+    expect(report.dividends.spanishWithholding.toFixed(2)).toBe("19.00");
+    // Casilla 0029: gross dividend (100 EUR × 1.0).
+    expect(report.dividends.grossIncome.toFixed(2)).toBe("100.00");
+    // Casilla 0588: the ES withholding is domestic → NOT a foreign tax credit.
+    expect(report.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+    // And ES never appears in the foreign per-country breakdown.
+    expect(report.doubleTaxation.byCountry["ES"]).toBeUndefined();
+  });
+
+  it("keeps a US-ISIN dividend's withholding in 0588 with zero in 0597 (guards the split)", () => {
+    // A foreign (US) dividend: its withholding is a true foreign tax → 0588, and
+    // 0597 (Spanish retención) stays 0. This is the mirror of the ES case and
+    // guards against the two casillas being conflated.
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({ transactionID: "d-us", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w-us", amount: "-15", type: "Withholding Tax" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    // No Spanish retención on a US security.
+    expect(report.dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+    // Casilla 0588: foreign credit = 15 × 0.92 = 13.80 (treaty cap 15% of gross
+    // 92 = 13.80; Spanish savings tax on the base exceeds it) → NOT zero.
+    expect(report.doubleTaxation.deduction.toFixed(2)).toBe("13.80");
+    expect(report.doubleTaxation.deduction.isZero()).toBe(false);
+    // US appears in the foreign breakdown; ES does not.
+    expect(report.doubleTaxation.byCountry["US"]).toBeDefined();
+    expect(report.doubleTaxation.byCountry["ES"]).toBeUndefined();
+  });
+
+  it("reports zero 0597 for a dividend with no withholding", () => {
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({ transactionID: "d-only", description: "APPLE INC", amount: "100", type: "Dividends" }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    // No withholding at all → 0597 is 0 and there is no foreign credit either.
+    expect(report.dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+    expect(report.dividends.grossIncome.toFixed(2)).toBe("92.00");
+    expect(report.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+  });
+});
+
 describe("dividend grouping reconciles with the tax engine (presentation-only)", () => {
   it("Σ group gross/withholding equals grossIncome and the flat withholding total", () => {
     // Two AAPL dividends + their withholdings, run through the real engine.

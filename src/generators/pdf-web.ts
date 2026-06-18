@@ -123,6 +123,7 @@ export async function generatePdfWebReport(
   }
   casillasBody.push(
     ["0588", t("casilla.double_taxation"),     eur(report.doubleTaxation.deduction)],
+    ["0597", t("casilla.spanish_withholding"), eur(report.dividends.spanishWithholding)],
   );
 
   // Blocked losses: informative only — Renta Web handles Art. 33.5.f per-disposal, no aggregate casilla

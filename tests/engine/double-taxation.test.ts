@@ -99,6 +99,27 @@ describe("calculateDoubleTaxation", () => {
     // US: gross 1000, tax 150 = treaty cap, Spanish 190 → 150
     expect(result.byCountry["US"]!.deductionAllowed.toFixed(2)).toBe("150.00");
     expect(result.total.toFixed(2)).toBe("150.00");
+    // The ES retención a cuenta is surfaced as casilla 0597 (spanishWithholding)
+    // — the SAME 190 it excludes from the foreign 0588 total above. A domestic
+    // pago a cuenta must be reported, just not as a foreign tax credit.
+    expect(result.spanishWithholding.toFixed(2)).toBe("190.00");
+  });
+
+  it("should report zero Spanish withholding when no ES dividend is present", () => {
+    // Purely-foreign holdings have no retención a cuenta española → casilla 0597
+    // is 0 (the byCountry["ES"]?.taxPaid ?? 0 fallback). Guards the split so a
+    // US-only file never mislabels foreign withholding as a domestic 0597.
+    const entries = [
+      makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(150) }),
+      makeEntry({ withholdingCountry: "DE", grossAmountEur: new Decimal(200), withholdingTaxEur: new Decimal(30) }),
+    ];
+
+    const result = calculateDoubleTaxation(entries, YEAR);
+
+    expect(result.spanishWithholding.toFixed(2)).toBe("0.00");
+    // The foreign credit is unaffected — it still aggregates US + DE.
+    expect(result.byCountry["ES"]).toBeUndefined();
+    expect(result.total.toFixed(2)).toBe("180.00");
   });
 
   it("should use progressive savings brackets but still cap at the treaty rate", () => {

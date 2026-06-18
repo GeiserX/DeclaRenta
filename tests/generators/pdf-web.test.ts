@@ -57,7 +57,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
     dividends: {
       grossIncome: new Decimal("500"),
       deductibleExpenses: new Decimal("75"),
-      entries: [
+      spanishWithholding: new Decimal(0),      entries: [
         {
           isin: "US78462F1030",
           symbol: "SPY",
@@ -131,7 +131,7 @@ describe("generatePdfWebReport", () => {
       dividends: {
         grossIncome: new Decimal(0),
         deductibleExpenses: new Decimal(0),
-        entries: [],
+        spanishWithholding: new Decimal(0),        entries: [],
       },
     });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
@@ -307,7 +307,7 @@ describe("generatePdfWebReport", () => {
         reintegratedLosses: new Decimal(0),
         disposals: [],
       },
-      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
+      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), spanishWithholding: new Decimal(0), entries: [] },
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
       messages: Array.from({ length: 20 }, (_, i) => ({ id: "test.overflow", severity: "warning" as const, message: `${i + 1}: ${longWarning}` })),
     });
@@ -325,7 +325,7 @@ describe("generatePdfWebReport", () => {
         reintegratedLosses: new Decimal(0),
         disposals: [],
       },
-      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), entries: [] },
+      dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), spanishWithholding: new Decimal(0), entries: [] },
       doubleTaxation: { deduction: new Decimal(0), byCountry: {} },
       messages: Array.from({ length: 18 }, (_, i) => ({ id: "test.overflow", severity: "info" as const, message: `${i + 1}: ${mediumWarning}` })),
     });
