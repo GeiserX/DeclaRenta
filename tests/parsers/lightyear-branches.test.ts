@@ -101,7 +101,13 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    const sell = result.trades[0]!;
+    expect(sell.buySell).toBe("SELL");
+    expect(sell.quantity).toBe("-5");
+    expect(sell.proceeds).toBe("898.5");
+    expect(sell.tradeMoney).toBe("898.5");
+    expect(sell.commissionCurrency).toBe("USD");
+    expect(sell.commission).toBe("-1.5");
   });
 
   it("should handle ISO date format fallback (YYYY-MM-DD)", () => {
