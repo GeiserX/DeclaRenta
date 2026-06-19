@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
+import { lightyearParser } from "../../src/parsers/lightyear.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -219,5 +220,57 @@ describe("antichurning e2e: cross-year defer (2024) then reintegrate (2025)", ()
       .plus(report.capitalGains.blockedLosses)
       .minus(report.capitalGains.reintegratedLosses);
     expect(fiscal.toFixed(2)).toBe("2000.00");
+  });
+});
+
+// ===========================================================================
+// 3. TOTAL-POSITION SALE — no pre-sale shares remain, so the loss is deductible.
+// ===========================================================================
+//
+// Reporter-shaped Lightyear CSV:
+//   BUY  66 AAPL (2025-03-11) @ $19.869
+//   BUY 150 AAPL (2025-04-07)
+//   SELL 216 AAPL (2025-04-10) @ $19.63
+//
+// FIFO splits the 216-share sale into two disposals. The first 66-share disposal
+// is a real loss, but after the sale the AAPL position is zero. DGT V3282-18(1)
+// allows the loss in full: no anti-churning block, in both rigorous and
+// monodivisa modes. This fixture goes through the Lightyear parser in memory.
+describe("antichurning e2e: full-position Lightyear sale does not block the loss", () => {
+  const lightyearCsv = [
+    "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.",
+    "11/03/2025 15:30:00,OR-249-1,AAPL,US0378331005,Buy,66.000000000,USD,19.869000000,1311.354,,0.00,1311.354,",
+    "07/04/2025 16:00:00,OR-249-2,AAPL,US0378331005,Buy,150.000000000,USD,19.500000000,2925.00,,0.00,2925.00,",
+    "10/04/2025 17:00:00,OR-249-3,AAPL,US0378331005,Sell,216.000000000,USD,19.630000000,4240.08,,0.00,4240.08,",
+  ].join("\n");
+
+  const rates = makeRateMap({
+    "2025-03-11": { USD: "0.96" },
+    "2025-04-07": { USD: "0.96" },
+    "2025-04-10": { USD: "0.96" },
+  });
+
+  it("parses the reporter-shaped CSV into the full 216-share AAPL sale", () => {
+    const statement = lightyearParser.parse(lightyearCsv);
+    const aaplTrades = statement.trades.filter((trade) => trade.symbol === "AAPL");
+    expect(aaplTrades.map((trade) => `${trade.buySell}:${trade.quantity}`)).toEqual([
+      "BUY:66",
+      "BUY:150",
+      "SELL:-216",
+    ]);
+  });
+
+  it("rigorous mode reports zero blocked losses for the full-position sale", () => {
+    const report = generateTaxReport(lightyearParser.parse(lightyearCsv), rates, 2025);
+    expect(report.capitalGains.disposals).toHaveLength(2);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(report.capitalGains.disposals.every((disposal) => !disposal.washSaleBlocked)).toBe(true);
+  });
+
+  it("monodivisa mode also reports zero blocked losses for the full-position sale", () => {
+    const report = generateTaxReport(lightyearParser.parse(lightyearCsv), rates, 2025, { skipFx: true });
+    expect(report.capitalGains.disposals).toHaveLength(2);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(report.capitalGains.disposals.every((disposal) => !disposal.washSaleBlocked)).toBe(true);
   });
 });

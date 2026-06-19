@@ -20,7 +20,7 @@
  */
 
 import type { FifoDisposal } from "../types/tax.js";
-import type { Trade } from "../types/ibkr.js";
+import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { parseDate } from "./dates.js";
 
@@ -60,12 +60,26 @@ interface BuyEvent {
   remainingQty: Decimal;
 }
 
+/** Signed position movement used to compute shares remaining after a disposal. */
+interface PositionEvent {
+  time: number;
+  qty: Decimal;
+}
+
+/** Corporate split ratio that changes share quantities without changing cost basis. */
+interface SplitEvent {
+  time: number;
+  ratio: Decimal;
+}
+
 /** A deferred loss attached to a repurchased lot, released as that lot is later sold. */
 interface DeferredLot {
   /** Repurchased shares still carrying deferred loss. */
   qty: Decimal;
   /** Deferred loss (EUR, positive) still attached to those shares. */
   deferredEur: Decimal;
+  /** The deferred loss can release only on transmissions after the sale that created it. */
+  availableAfterTime: number;
 }
 
 /**
@@ -88,32 +102,55 @@ interface DeferredLot {
  *
  * @param disposals - FIFO disposals to check (pass all years for cross-year reintegration)
  * @param allTrades - All trades for the period (homogeneous repurchases)
+ * @param corporateActions - Corporate actions for split-adjusted remaining-position caps
  * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, and `washSaleBlocked` set
  */
-export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): FifoDisposal[] {
-  // Index in-window-eligible BUY events (time, date, consumable qty) by key.
+export function detectWashSales(
+  disposals: FifoDisposal[],
+  allTrades: Trade[],
+  corporateActions: CorporateAction[] = [],
+): FifoDisposal[] {
+  // Index in-window-eligible BUY events and signed position movements by key.
   const buysByAsset = new Map<string, BuyEvent[]>();
+  const positionEventsByAsset = new Map<string, PositionEvent[]>();
   for (const trade of allTrades) {
-    if (trade.buySell !== "BUY" || WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
+    if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
     if (!key) continue;
     const qty = parseQty(trade.quantity);
     if (qty.lessThanOrEqualTo(0)) continue;
     const d = parseDate(trade.tradeDate);
-    let events = buysByAsset.get(key);
-    if (!events) {
-      events = [];
-      buysByAsset.set(key, events);
+    const time = d.getTime();
+
+    let positionEvents = positionEventsByAsset.get(key);
+    if (!positionEvents) {
+      positionEvents = [];
+      positionEventsByAsset.set(key, positionEvents);
     }
-    events.push({ time: d.getTime(), date: normalizeDay(trade.tradeDate), remainingQty: qty });
+
+    if (trade.buySell === "BUY") {
+      positionEvents.push({ time, qty });
+      let events = buysByAsset.get(key);
+      if (!events) {
+        events = [];
+        buysByAsset.set(key, events);
+      }
+      events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: qty });
+    } else {
+      positionEvents.push({ time, qty: qty.neg() });
+    }
   }
   for (const events of buysByAsset.values()) {
     events.sort((a, b) => a.time - b.time);
   }
+  for (const events of positionEventsByAsset.values()) {
+    events.sort((a, b) => a.time - b.time);
+  }
+  const splitsByAsset = buildSplitEvents(corporateActions);
 
-  // Deferred-loss ledger: key → (buy date → deferred lot). A loss blocked by a
+  // Deferred-loss ledger: key → (buy date → deferred lots). A loss blocked by a
   // repurchase on date D is recoverable when shares acquired on D are later sold.
-  const deferredByAsset = new Map<string, Map<string, DeferredLot>>();
+  const deferredByAsset = new Map<string, Map<string, DeferredLot[]>>();
 
   // Process disposals oldest-first so a block is recorded before the later
   // disposal that releases it (stable sort by sell date; preserve input order
@@ -132,6 +169,50 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     washSaleBlocked: false,
   }));
 
+  const holdingAfterByAssetTime = new Map<string, Map<number, Decimal>>();
+  const holdingAfterBudgetByAssetTime = new Map<string, Map<number, Decimal>>();
+
+  const holdingAfter = (key: string, sellTime: number): Decimal => {
+    let perTime = holdingAfterByAssetTime.get(key);
+    if (!perTime) {
+      perTime = new Map();
+      holdingAfterByAssetTime.set(key, perTime);
+    }
+    const cached = perTime.get(sellTime);
+    if (cached) return cached;
+
+    let position = new Decimal(0);
+    for (const ev of positionEventsByAsset.get(key) ?? []) {
+      if (ev.time > sellTime) break;
+      position = position.plus(ev.qty.mul(splitFactorBetween(splitsByAsset, key, ev.time, sellTime)));
+    }
+    const remaining = Decimal.max(position, 0);
+    perTime.set(sellTime, remaining);
+    return remaining;
+  };
+
+  const remainingHoldingBudget = (key: string, sellTime: number): Decimal => {
+    let perTime = holdingAfterBudgetByAssetTime.get(key);
+    if (!perTime) {
+      perTime = new Map();
+      holdingAfterBudgetByAssetTime.set(key, perTime);
+    }
+    let budget = perTime.get(sellTime);
+    if (!budget) {
+      budget = holdingAfter(key, sellTime);
+      perTime.set(sellTime, budget);
+    }
+    return budget;
+  };
+
+  const consumeHoldingBudget = (key: string, sellTime: number, consumedQty: Decimal): void => {
+    if (consumedQty.lessThanOrEqualTo(0)) return;
+    const perTime = holdingAfterBudgetByAssetTime.get(key);
+    if (!perTime) return;
+    const current = perTime.get(sellTime) ?? new Decimal(0);
+    perTime.set(sellTime, Decimal.max(current.minus(consumedQty), 0));
+  };
+
   for (const idx of order) {
     const disposal = result[idx]!;
     if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) continue;
@@ -139,28 +220,47 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     if (!key) continue;
 
     const qty = disposal.quantity.abs();
+    const disposalSellDate = parseDate(disposal.sellDate);
+    const disposalSellTime = disposalSellDate.getTime();
 
     // 1. RELEASE: this disposal sells shares acquired on a date that carries a
     //    deferred loss → reintegrate proportionally to the quantity now sold.
     const deferredLots = deferredByAsset.get(key);
     if (deferredLots) {
-      const lot = deferredLots.get(normalizeDay(disposal.acquireDate));
-      if (lot && lot.qty.greaterThan(0)) {
-        const releasedQty = Decimal.min(qty, lot.qty);
-        const releasedEur = lot.qty.isZero()
-          ? new Decimal(0)
-          : lot.deferredEur.mul(releasedQty).div(lot.qty);
-        disposal.reintegratedLossEur = releasedEur;
-        lot.qty = lot.qty.minus(releasedQty);
-        lot.deferredEur = lot.deferredEur.minus(releasedEur);
-        if (lot.qty.lessThanOrEqualTo(0)) deferredLots.delete(normalizeDay(disposal.acquireDate));
+      const acquireDate = normalizeDay(disposal.acquireDate);
+      const lots = deferredLots.get(acquireDate);
+      if (lots) {
+        let remainingReleaseQty = qty;
+        for (const lot of lots) {
+          if (remainingReleaseQty.lessThanOrEqualTo(0)) break;
+          if (disposalSellTime <= lot.availableAfterTime) continue;
+          if (lot.qty.lessThanOrEqualTo(0)) continue;
+          const releaseConversion = splitFactorBetween(splitsByAsset, key, lot.availableAfterTime, disposalSellTime);
+          const lotQtyAtRelease = lot.qty.mul(releaseConversion);
+          if (lotQtyAtRelease.lessThanOrEqualTo(0)) continue;
+          const releasedQty = Decimal.min(remainingReleaseQty, lotQtyAtRelease);
+          const releasedOriginalQty = releasedQty.div(releaseConversion);
+          const releasedEur = lot.qty.isZero()
+            ? new Decimal(0)
+            : lot.deferredEur.mul(releasedOriginalQty).div(lot.qty);
+          disposal.reintegratedLossEur = disposal.reintegratedLossEur.plus(releasedEur);
+          lot.qty = lot.qty.minus(releasedOriginalQty);
+          lot.deferredEur = lot.deferredEur.minus(releasedEur);
+          remainingReleaseQty = remainingReleaseQty.minus(releasedQty);
+        }
+        const remainingLots = lots.filter((lot) => lot.qty.greaterThan(0));
+        if (remainingLots.length > 0) {
+          deferredLots.set(acquireDate, remainingLots);
+        } else {
+          deferredLots.delete(acquireDate);
+        }
       }
     }
 
     // 2. BLOCK: only loss disposals, proportional to the in-window repurchase qty.
     if (disposal.gainLossEur.greaterThanOrEqualTo(0)) continue;
 
-    const sellDate = parseDate(disposal.sellDate);
+    const sellDate = disposalSellDate;
     const months = windowMonths(disposal.assetCategory, disposal.isin);
     const windowStart = addMonths(sellDate, -months).getTime();
     const windowEnd = addMonths(sellDate, months).getTime();
@@ -172,34 +272,41 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     // Consume repurchase quantity from in-window buys, excluding any buy on the
     // sell day (the lot being sold, not a repurchase). `absorbed` ≤ sold qty.
     //
-    // Order matters for REINTEGRATION keying (not for the blocked amount): the
-    // deferred loss must attach to shares that REMAIN in the patrimony so a later
-    // sale can release it ("se integrarán a medida que se transmitan los valores
-    // que permanezcan"). A genuine replacement is a POST-sale repurchase, whereas
-    // an in-window PRE-sale buy is often the very lot FIFO just sold (which will
-    // never be sold again → the deferred loss would be stranded). So we consume
-    // post-sale buys (ascending) FIRST, then pre-sale buys — the total absorbed
-    // (and thus the proportional block) is identical either way, but the deferred
-    // loss lands on the surviving lot. (Residual, conservative: if the ONLY
-    // in-window homogeneous acquisition is the partially-sold lot itself, the
-    // block keys there and may not reintegrate — over-deferral, never under-pay.)
+    // Order matters. A POST-sale buy is a genuine surviving replacement, so it
+    // remains uncapped and is consumed first. A PRE-sale buy can only block the
+    // portion that still remains after this sale; if the sale fully exits the
+    // position, DGT V3282-18(1) allows the loss in full because no homogeneous
+    // shares remain in the patrimony. Same-day FIFO disposal splits share one
+    // holdingAfter budget so they cannot collectively block more pre-sale shares
+    // than remain after the full sale date.
     let remainingToAbsorb = qty;
     const consumed: { date: string; qty: Decimal }[] = [];
-    const consume = (predicate: (evTime: number) => boolean): void => {
-      for (const ev of buyEvents) {
+    const consume = (predicate: (evTime: number) => boolean, maxQty?: Decimal, reverse = false): Decimal => {
+      let remainingBudget = maxQty ?? qty;
+      const events = reverse ? [...buyEvents].reverse() : buyEvents;
+      for (const ev of events) {
         if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
+        if (remainingBudget.lessThanOrEqualTo(0)) break;
         if (ev.time < windowStart || ev.time > windowEnd) continue;
         if (ev.time === sellTime) continue;
         if (!predicate(ev.time)) continue;
         if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
-        const take = Decimal.min(ev.remainingQty, remainingToAbsorb);
-        ev.remainingQty = ev.remainingQty.minus(take);
+        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
+        const availableAtSell = ev.remainingQty.mul(conversion);
+        if (availableAtSell.lessThanOrEqualTo(0)) continue;
+        const take = Decimal.min(availableAtSell, remainingToAbsorb, remainingBudget);
+        ev.remainingQty = ev.remainingQty.minus(take.div(conversion));
         remainingToAbsorb = remainingToAbsorb.minus(take);
+        remainingBudget = remainingBudget.minus(take);
         consumed.push({ date: ev.date, qty: take });
       }
+      return (maxQty ?? qty).minus(remainingBudget);
     };
     consume((evTime) => evTime > sellTime); // post-sale repurchases first (surviving replacements)
-    consume((evTime) => evTime < sellTime); // then pre-sale in-window buys
+    // FIFO leaves the newest pre-sale lots behind after a partial sale, so attach
+    // capped pre-sale deferrals newest-first to the lots that actually survive.
+    const preSaleConsumed = consume((evTime) => evTime < sellTime, remainingHoldingBudget(key, sellTime), true);
+    consumeHoldingBudget(key, sellTime, preSaleConsumed);
 
     const absorbed = qty.minus(remainingToAbsorb);
     if (absorbed.lessThanOrEqualTo(0)) continue;
@@ -214,17 +321,17 @@ export function detectWashSales(disposals: FifoDisposal[], allTrades: Trade[]): 
     // quantity consumed there, so a later sale of those shares releases it.
     let lots = deferredByAsset.get(key);
     if (!lots) {
-      lots = new Map<string, DeferredLot>();
+      lots = new Map<string, DeferredLot[]>();
       deferredByAsset.set(key, lots);
     }
     for (const c of consumed) {
       const share = absorbed.isZero() ? new Decimal(0) : blocked.mul(c.qty).div(absorbed);
       const existing = lots.get(c.date);
+      const deferredLot = { qty: c.qty, deferredEur: share, availableAfterTime: sellTime };
       if (existing) {
-        existing.qty = existing.qty.plus(c.qty);
-        existing.deferredEur = existing.deferredEur.plus(share);
+        existing.push(deferredLot);
       } else {
-        lots.set(c.date, { qty: c.qty, deferredEur: share });
+        lots.set(c.date, [deferredLot]);
       }
     }
   }
@@ -247,6 +354,77 @@ function normalizeDay(date: string): string {
   const t = date.trim();
   if (/^\d{8}$/.test(t)) return `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)}`;
   return t.slice(0, 10);
+}
+
+function buildSplitEvents(corporateActions: CorporateAction[]): Map<string, SplitEvent[]> {
+  const splitsByAsset = new Map<string, SplitEvent[]>();
+  const seen = new Set<string>();
+
+  for (const action of corporateActions) {
+    if (action.type !== "FS") continue;
+    const ratioMatch = action.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
+    if (!ratioMatch) continue;
+    const numerator = new Decimal(ratioMatch[1]!);
+    const denominator = new Decimal(ratioMatch[2]!);
+    if (numerator.lessThanOrEqualTo(0) || denominator.lessThanOrEqualTo(0)) continue;
+
+    const key = corporateActionKey(action);
+    if (!key) continue;
+    const date = normalizeDay(action.dateTime);
+    const dedupeKey = `${key}:${date}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    let splits = splitsByAsset.get(key);
+    if (!splits) {
+      splits = [];
+      splitsByAsset.set(key, splits);
+    }
+    splits.push({ time: parseDate(date).getTime(), ratio: numerator.div(denominator) });
+  }
+
+  for (const splits of splitsByAsset.values()) {
+    splits.sort((a, b) => a.time - b.time);
+  }
+  return splitsByAsset;
+}
+
+function corporateActionKey(action: CorporateAction): string {
+  if (action.isin) return action.isin;
+  if (action.symbol) return `STK:${action.symbol.toUpperCase()}`;
+  return "";
+}
+
+function splitFactorBetween(
+  splitsByAsset: Map<string, SplitEvent[]>,
+  key: string,
+  fromTime: number,
+  toTime: number,
+): Decimal {
+  if (fromTime >= toTime) return new Decimal(1);
+
+  let factor = new Decimal(1);
+  for (const split of splitsByAsset.get(key) ?? []) {
+    if (split.time <= fromTime) continue;
+    if (split.time > toTime) break;
+    factor = factor.mul(split.ratio);
+  }
+  return factor;
+}
+
+function buyQtyConversionToSellUnits(
+  splitsByAsset: Map<string, SplitEvent[]>,
+  key: string,
+  buyTime: number,
+  sellTime: number,
+): Decimal {
+  if (buyTime < sellTime) {
+    return splitFactorBetween(splitsByAsset, key, buyTime, sellTime);
+  }
+  if (buyTime > sellTime) {
+    return new Decimal(1).div(splitFactorBetween(splitsByAsset, key, sellTime, buyTime));
+  }
+  return new Decimal(1);
 }
 
 /**

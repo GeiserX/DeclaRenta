@@ -358,7 +358,7 @@ export function generateTaxReport(
   // set, so this is identical to before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
-  const allDisposals = detectWashSales(fifoEngine.getDisposals(), statement.trades);
+  const allDisposals = detectWashSales(fifoEngine.getDisposals(), statement.trades, statement.corporateActions);
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
 

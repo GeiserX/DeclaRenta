@@ -26,7 +26,12 @@ securities within **±2 calendar months** (listed, letter f) / **±1 year**
    **NOT** added to the repurchased lot's cost basis.
 4. **Per-lot ("por paquetes")** proration base (V0913-08), matching our per-lot
    `FifoDisposal` granularity (one disposal per consumed FIFO lot).
-5. FIFO (Art. 37.2) decides **which** lots are sold and the loss; the homogeneity
+5. **Total-sale carve-out.** If, after the transmission, no homogeneous shares
+   remain in the taxpayer's patrimony, the loss is deductible in full (DGT
+   V3282-18 situation 1). Pre-sale buys only block up to the shares that still
+   remain after the sale; a later post-sale repurchase is still a genuine
+   replacement and can block normally.
+6. FIFO (Art. 37.2) decides **which** lots are sold and the loss; the homogeneity
    test (Art. 33.5.f/g) is a **separate** overlay deciding whether that loss is
    blocked. Two independent steps.
 
@@ -50,21 +55,35 @@ Operates on the **full, all-year** disposal set in **one chronological pass**
 homogeneous key:
 
 - **Buy budget**: sorted buy events `{time, qty}`; `qty` is consumable.
-- **Deferred ledger**: `Map<acquireTime, {qty, deferredEur}>` — deferred loss
-  attached to the repurchased lots (keyed by the repurchase buy's normalized
-  date), released when a future disposal sells shares acquired on that date.
+- **Remaining-position budget**: signed BUY/SELL movements compute
+  `holdingAfter = max(0, net position after the sale date)`. This caps only
+  PRE-sale absorption and is shared across same-date FIFO disposal splits.
+  Forward/reverse splits are applied to compare every movement in the sale's
+  share units, matching the FIFO engine's split-adjusted disposal quantities.
+- **Deferred ledger**: `Map<buyDate, DeferredLot[]>` — deferred loss attached
+  to the repurchased lots (keyed by the repurchase buy's normalized date).
+  Each entry carries `{qty, deferredEur, availableAfterTime}` so multiple
+  deferrals can share one buy date, same-sale FIFO splits do not immediately
+  release a loss created by another split, and later split-adjusted releases can
+  prorate from the right blocking sale.
 
 For each disposal (chronological):
 1. **Reintegration (all disposals, gain or loss).** If it sells shares whose
    `acquireDate` matches a deferred-ledger entry, release proportionally:
    `reintegratedLossEur = entry.deferredEur × min(qty, entry.qty)/entry.qty`;
-   decrement the entry.
-2. **Blocking (loss disposals only).** Sum in-window homogeneous repurchase qty
-   (excluding buys on the sell date — the lot being sold), `absorbed =
-   min(repurchasedQtyAvailable, disposal.qty)`,
+   decrement the entry. If the replacement lot split after the block, convert
+   the deferred-lot quantity into the release sale's share units before
+   prorating, so a 2-for-1 split releases half the loss when half the
+   post-split shares are sold.
+2. **Blocking (loss disposals only).** Consume POST-sale in-window buys first,
+   uncapped, because they are genuine replacement lots. Then consume PRE-sale
+   in-window buys only up to the remaining-position budget:
+   `preAbsorbed ≤ holdingAfter`. A full exit with no later repurchase therefore
+   blocks `0`, while a full exit followed by a later repurchase still blocks the
+   post-sale repurchase quantity. Final formula:
    `blockedLossEur = |gainLossEur| × absorbed/qty`. Consume `absorbed` from the
-   in-window buys (FIFO), attaching the deferred loss to each consumed buy's
-   date in the ledger.
+   in-window buys, attaching the deferred loss to each consumed buy's date in
+   the ledger.
 
 ### New `FifoDisposal` fields
 
@@ -130,3 +149,12 @@ homogéneos"*, and integrate deferred losses when the surviving lot is sold.
 - **Multiple loss-sales, one repurchase**: budget consumed **chronologically**
   (earliest loss-sale first), the most defensible reading (DGT lot-tracking is
   chronological; AEAT gives no explicit tiebreak).
+- **Single-year files**: if the user omits prior-year buys, `holdingAfter` can
+  understate the real position and is clamped at zero. This is the same data
+  window limitation the FIFO engine already surfaces elsewhere; this fix does
+  not reconstruct prior-year holdings from absent input.
+- **Corporate actions**: forward/reverse splits are reflected in both the
+  remaining-position cap and deferred-loss release proration. More complex
+  tax-neutral transformations (mergers, spin-offs, scrip dividends) still rely
+  on the FIFO disposal stream for the actual gain/loss and should get dedicated
+  anti-churning tests if a real case reaches this path.

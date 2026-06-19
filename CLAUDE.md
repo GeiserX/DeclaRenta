@@ -173,6 +173,12 @@ The Binance "Generate all statements" export (`User_ID,UTC_Time,Account,Operatio
 - **Casillas**: 0327-0328 (capital gains), 0029 (dividends), 0027 (interest income), 0588 (double taxation). Real casilla 0032 = insurance income (Art. 25.3), not broker margin interest.
 - **Savings brackets (2025+, Ley 7/2024)**: 19% (0–6k), 21% (6k–50k), 23% (50k–200k), 27% (200k–300k), 30% (>300k)
 
+### Anti-Churning Total-Sale Carve-Out (Hard Trace — issue #249)
+- **DGT V3282-18 situation 1**: when a loss sale leaves **zero** homogeneous shares in the taxpayer's patrimony, the loss is fully deductible. The engine must not count the very pre-sale lots FIFO just sold as surviving "repurchases".
+- **Implementation invariant** (`src/engine/wash-sale.ts`): post-sale repurchases remain uncapped and block normally; pre-sale absorption is capped by `holdingAfter = max(0, net BUY/SELL position after the sale date)`. Same-day FIFO disposal splits share one `holdingAfter` budget, so a single SELL split across lots cannot over-block. Forward/reverse splits must be applied to this cap and to later deferred-loss release proration so pre-split buys, post-split disposals, and replacement-lot releases are all compared in the relevant sale's share units.
+- **Do NOT replace this with a naive total-sale shortcut**. `buy 100 → sell 100 at a loss → rebuy 100 within the window` is still a genuine wash sale because the post-sale rebuy remains after the loss sale.
+- **Single-year limitation**: if prior-year holdings are absent from the input, `holdingAfter` can understate the real position and is clamped at zero. This is the same data-window limitation as other FIFO paths; do not invent prior holdings inside the anti-churning detector.
+
 ### AEAT Formats
 - **Modelo 100**: No file import in Renta Web. Tool generates casilla values for manual entry. XSD published annually (`Renta20XX.xsd`).
 - **Modelo 720**: Fixed-width text file, 500 bytes/record, ISO-8859-15 encoding. Submitted via TGVI.
