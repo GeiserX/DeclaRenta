@@ -319,7 +319,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "LIGHTYEAR",
       commissionCurrency: currency,
-      commission: isSell ? feeDec.toString() : feeDec.neg().toString(),
+      commission: feeDec.isZero() ? "0" : feeDec.neg().toString(),
       taxes: "0",
       multiplier: "1",
     });
