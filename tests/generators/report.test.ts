@@ -533,7 +533,15 @@ describe("generateTaxReport", () => {
     });
 
     const report = generateTaxReport(statement, rates, 2025);
-    const nonHintMessages = report.messages.filter((m) => m.id !== "report.competitor_reconciliation");
+    // Info-only reconciliation/method notes are added to the structured `messages`
+    // array only, never to the deprecated `warnings` string array — so they are
+    // excluded from the backward-compat sync check.
+    const infoOnlyIds = new Set([
+      "report.competitor_reconciliation",
+      "report.fx_method_consistency",
+      "report.fx_deferred_no_conversion",
+    ]);
+    const nonHintMessages = report.messages.filter((m) => !infoOnlyIds.has(m.id));
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- verifying backward compat sync
     const warningsCount = report.warnings.length;
     expect(warningsCount).toBe(nonHintMessages.length);
