@@ -779,14 +779,16 @@ export class FxFifoEngine {
   private static effectiveRate(event: FxEvent): Decimal {
     // A Decimal is always truthy, so re-check finite & strictly-positive here
     // (defense-in-depth, like the rest of this file): a 0/negative/NaN
-    // realEurAmount must fall back to ECB, never zero out the conversion.
+    // realEurAmount must fall back to ECB, never zero out (or sign-flip) the
+    // conversion. A real EUR principal is positive by definition, so a negative
+    // is rejected, not silently absorbed via abs().
     if (
       event.realEurAmount &&
       event.realEurAmount.isFinite() &&
-      event.realEurAmount.abs().greaterThan(0) &&
+      event.realEurAmount.greaterThan(0) &&
       event.quantity.abs().greaterThan(0)
     ) {
-      return event.realEurAmount.abs().div(event.quantity.abs());
+      return event.realEurAmount.div(event.quantity.abs());
     }
     return event.ecbRate;
   }

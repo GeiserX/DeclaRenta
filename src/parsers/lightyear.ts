@@ -152,17 +152,19 @@ function parseLightyearCsv(lines: string[]): Statement {
     const dateRaw = (fields[cols.date] ?? "").trim();
     const ccy = (fields[cols.ccy] ?? "EUR").trim();
 
-    // Harvest the EUR leg's real Net Amt. (falls back to Gross if Net is empty,
-    // mirroring the emission block below). No fee gate — a fee-free conversion
-    // still carries a real EUR principal.
+    // Harvest the EUR leg's real Net Amt. (the fee-excluded principal). No fee
+    // gate — a fee-free conversion still carries a real EUR principal.
     if (ccy === "EUR") {
       if (conversionEurAmounts.has(dateRaw)) {
         // A second EUR leg at this timestamp → ambiguous pairing; drop to ECB.
         ambiguousEurTimestamps.add(dateRaw);
       } else {
+        // Use the EUR leg's Net Amt. ONLY — it is the real principal with the fee
+        // EXCLUDED (the engine applies our -Fee commission on top). Gross is
+        // fee-INCLUSIVE, so falling back to it would double-count the fee; if Net
+        // is empty we omit the field and let the engine use ECB instead.
         const eurNet = toFiniteDecimal(fields[cols.netAmount] ?? "0");
-        const eurReal = eurNet.isZero() ? toFiniteDecimal(fields[cols.grossAmount] ?? "0") : eurNet;
-        if (!eurReal.isZero()) conversionEurAmounts.set(dateRaw, eurReal.abs().toString());
+        if (!eurNet.isZero()) conversionEurAmounts.set(dateRaw, eurNet.abs().toString());
       }
     }
 
