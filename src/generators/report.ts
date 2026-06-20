@@ -607,6 +607,35 @@ export function generateTaxReport(
       message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
     });
+    // Method-consistency warning: the FX gain on a foreign currency is realized
+    // here only when the currency is converted to euros (defer / carry-basis,
+    // Art. 14.2.e LIRPF; DGT V0152-26). A different admitted method realizes it at
+    // each foreign-currency purchase. The two must NOT be mixed across years.
+    allMessages.push({
+      id: "report.fx_method_consistency",
+      severity: "info",
+      message: "DeclaRenta calcula la ganancia de divisa difiriéndola hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Existe otro método admitido que la realiza en cada compra de valores en divisa.",
+      hint: "No mezcles métodos entre ejercicios: si un año declaraste con otro criterio (o con otra herramienta), la base de divisa arrastrada puede duplicarse u omitirse. Para divisa adquirida antes del periodo de tu informe, incluye los años anteriores en la exportación del bróker.",
+    });
+  } else if (!options?.skipFx && fxDisposals.length === 0) {
+    // Never-converted case: the user holds (and trades with) a foreign currency
+    // but made NO FCY→EUR conversion this year, so there is correctly 0 in
+    // casillas 1633/1637. Only surface this when there are foreign-currency
+    // SECURITIES disposals (STK/FUND/BOND, non-EUR) — i.e. the user genuinely
+    // holds divisa — so it never fires on pure-EUR or crypto-only files. Heads
+    // off the most common "why doesn't my number match IBKR?" question.
+    const FX_ASSET_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
+    const hasForeignCurrencySecurities = disposals.some(
+      (d) => d.currency !== "EUR" && FX_ASSET_CATEGORIES.has(d.assetCategory),
+    );
+    if (hasForeignCurrencySecurities) {
+      allMessages.push({
+        id: "report.fx_deferred_no_conversion",
+        severity: "info",
+        message: "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+        hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Bajo el criterio de DeclaRenta solo se declara la ganancia de divisa al convertir a euros.",
+      });
+    }
   }
 
   // Final boundary guard (audit [HIGH/ERR]): scan every top-level monetary total
