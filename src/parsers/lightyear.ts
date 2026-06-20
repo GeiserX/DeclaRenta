@@ -125,21 +125,49 @@ function parseLightyearCsv(lines: string[]): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
 
-  // Pre-scan: collect FX conversion fees by timestamp.
+  // Pre-scan: collect FX conversion fees AND the real EUR principal by timestamp.
   // Lightyear emits conversion pairs (one leg per currency). The fee can appear
   // on either leg (often on the EUR leg, which we skip). Group by timestamp
   // and extract the fee so it can be applied to the non-EUR trade.
   const conversionFees = new Map<string, { fee: string; currency: string }>();
+  // The EUR leg's |Net Amt.| is the real spread-laden EUR principal Lightyear
+  // actually moved (fee EXCLUDED — the engine applies our -Fee commission on
+  // top). Stored per timestamp so the non-EUR trade can be valued at the real
+  // applied rate instead of ECB (Art. 35.1 LIRPF; issue #253). FCY↔FCY
+  // conversions have no EUR leg → left unset → engine falls back to ECB.
+  const conversionEurAmounts = new Map<string, string>();
+  // Timestamps with MORE THAN ONE EUR conversion leg (two different conversions
+  // in the same second). The pairing key is only second-resolution, so we cannot
+  // tell which non-EUR leg owns which EUR principal — attaching the wrong one
+  // would mis-value an entire conversion into casillas 1633/1637. Such timestamps
+  // are excluded so the engine uses the ECB rate (a correct mid-rate beats a
+  // wrong real principal).
+  const ambiguousEurTimestamps = new Set<string>();
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
     if (!line) continue;
     const fields = parseCsvLine(line, ",");
     const txType = (fields[cols.type] ?? "").trim().toLowerCase();
     if (txType !== "conversion") continue;
-    const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
-    if (feeDec.isZero()) continue;
     const dateRaw = (fields[cols.date] ?? "").trim();
     const ccy = (fields[cols.ccy] ?? "EUR").trim();
+
+    // Harvest the EUR leg's real Net Amt. (falls back to Gross if Net is empty,
+    // mirroring the emission block below). No fee gate — a fee-free conversion
+    // still carries a real EUR principal.
+    if (ccy === "EUR") {
+      if (conversionEurAmounts.has(dateRaw)) {
+        // A second EUR leg at this timestamp → ambiguous pairing; drop to ECB.
+        ambiguousEurTimestamps.add(dateRaw);
+      } else {
+        const eurNet = toFiniteDecimal(fields[cols.netAmount] ?? "0");
+        const eurReal = eurNet.isZero() ? toFiniteDecimal(fields[cols.grossAmount] ?? "0") : eurNet;
+        if (!eurReal.isZero()) conversionEurAmounts.set(dateRaw, eurReal.abs().toString());
+      }
+    }
+
+    const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
+    if (feeDec.isZero()) continue;
     const existing = conversionFees.get(dateRaw);
     if (!existing || feeDec.abs().greaterThan(new Decimal(existing.fee).abs())) {
       conversionFees.set(dateRaw, { fee: feeDec.abs().toString(), currency: ccy });
@@ -256,6 +284,13 @@ function parseLightyearCsv(lines: string[]): Statement {
       const commissionVal = pairedFee ? pairedFee.fee : new Decimal(fee).abs().toString();
       const commCurrency = pairedFee ? pairedFee.currency : currency;
 
+      // Real EUR principal from the paired EUR leg (|Net Amt.|, spread embedded,
+      // fee excluded). Absent for FCY↔FCY conversions, or dropped when >1 EUR leg
+      // shares this timestamp (ambiguous pairing) → omit so the engine uses ECB.
+      const realEurAmount = ambiguousEurTimestamps.has(dateRaw)
+        ? undefined
+        : conversionEurAmounts.get(dateRaw);
+
       trades.push({
         tradeID: `lightyear-fx-${reference || `${tradeDate}-${currency}-${i}`}`,
         accountId: "",
@@ -278,6 +313,7 @@ function parseLightyearCsv(lines: string[]): Statement {
         exchange: "LIGHTYEAR",
         commissionCurrency: commCurrency,
         commission: `-${commissionVal}`,
+        ...(realEurAmount ? { realEurAmount } : {}),
         taxes: "0",
         multiplier: "1",
       });

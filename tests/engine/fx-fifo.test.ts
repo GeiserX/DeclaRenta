@@ -768,4 +768,134 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.trigger).toBe("dividend");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Real applied EUR amount (broker FX spread captured) — issue #253.
+  //
+  // A CASH conversion may carry the REAL EUR cash the broker actually applied
+  // (FX principal, spread embedded, the separate fee EXCLUDED). When present the
+  // engine values THAT conversion at the effective real rate (realEurAmount /
+  // |quantity|) instead of ecbRate, so the broker's hidden spread is captured as
+  // a deductible cost (Art. 35.1 LIRPF). ECB stays the default and the fallback.
+  // The single shared FxFifoEngine.effectiveRate helper guarantees both legs of a
+  // tracked round-trip value on the SAME basis — never a half-real/half-ECB mix.
+  // -------------------------------------------------------------------------
+  describe("real applied EUR amount (FX spread capture — issue #253)", () => {
+    it("dispose with realEurAmount realizes proceeds at the REAL rate, not ECB", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        // Acquire 1000 USD via a REAL EUR→USD: realEurAmount €920 → effective 0.92.
+        { date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion", realEurAmount: new Decimal("920") },
+        // Dispose 1000 USD: broker applied €900 even though ECB (0.91) would give €910.
+        { date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.91"), trigger: "conversion", realEurAmount: new Decimal("900") },
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      // Proceeds at the REAL rate (€900), NOT the ECB €910.
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("900.00");
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("920.00"); // 1000 × 0.92 (real acquire)
+      // Round-trip gain reflects real − real: 900 − 920 = −20 (a spread-driven loss).
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("-20.00");
+    });
+
+    it("SYMMETRY: both legs carry realEurAmount → gain = realReceived − realPaid exactly", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        // Pay €930 real for 1000 USD (effective 0.93 — worse than ECB 0.92).
+        { date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion", realEurAmount: new Decimal("930") },
+        // Receive €955 real converting 1000 USD back (effective 0.955 vs ECB 0.95).
+        { date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.95"), trigger: "conversion", realEurAmount: new Decimal("955") },
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("930.00");  // real paid
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("955.00");   // real received
+      // No phantom from a mixed basis: gain is EXACTLY real − real.
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("25.00");
+    });
+
+    it("commission still applies ON TOP of realEurAmount — no double-count", () => {
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        { date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion", realEurAmount: new Decimal("920") },
+        // realEurAmount €900 (FX principal), plus a SEPARATE €2 commission on the sell.
+        { date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.91"), trigger: "conversion", realEurAmount: new Decimal("900"), commissionEur: new Decimal("2") },
+      ]);
+
+      const disposals = engine.getDisposals();
+      expect(disposals).toHaveLength(1);
+      // Proceeds = real €900 − €2 commission = €898 (the fee is NOT subtracted from realEurAmount itself).
+      expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("898.00");
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("920.00");
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("-22.00");
+    });
+
+    it("a conversion WITHOUT realEurAmount is byte-identical to the pure-ECB result", () => {
+      // Same scenario, run with and without the field. The disposals must match
+      // field-for-field — the load-bearing zero-change safety property.
+      const scenario = (withReal: boolean): FxEvent[] => [
+        {
+          date: "2025-01-01", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion",
+          ...(withReal ? { realEurAmount: new Decimal("920") } : {}), // 920/1000 = 0.92 = the ECB rate
+        },
+        {
+          date: "2025-06-01", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.95"), trigger: "conversion",
+          ...(withReal ? { realEurAmount: new Decimal("950") } : {}), // 950/1000 = 0.95 = the ECB rate
+        },
+      ];
+
+      const ecbEngine = new FxFifoEngine();
+      ecbEngine.processEvents(scenario(false));
+      const realEngine = new FxFifoEngine();
+      realEngine.processEvents(scenario(true));
+
+      const ecbD = ecbEngine.getDisposals();
+      const realD = realEngine.getDisposals();
+      expect(realD).toHaveLength(ecbD.length);
+      expect(realD).toHaveLength(1);
+      // Identical proceeds/cost/gain when the real rate equals the ECB rate.
+      expect(realD[0]!.proceedsEur.toString()).toBe(ecbD[0]!.proceedsEur.toString());
+      expect(realD[0]!.costBasisEur.toString()).toBe(ecbD[0]!.costBasisEur.toString());
+      expect(realD[0]!.gainLossEur.toString()).toBe(ecbD[0]!.gainLossEur.toString());
+      // And the well-known pure-ECB numbers hold: 950 − 920 = 30.
+      expect(ecbD[0]!.proceedsEur.toFixed(2)).toBe("950.00");
+      expect(ecbD[0]!.costBasisEur.toFixed(2)).toBe("920.00");
+      expect(ecbD[0]!.gainLossEur.toFixed(2)).toBe("30.00");
+    });
+
+    it("extractFxEvents reads a finite positive realEurAmount onto the event", () => {
+      const trades = [makeTrade({ buySell: "BUY", quantity: "1000", tradeMoney: "1080", realEurAmount: "990" })];
+      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.realEurAmount!.toString()).toBe("990");
+    });
+
+    it("extractFxEvents ignores a non-finite or non-positive realEurAmount (ECB fallback)", () => {
+      const bad = [
+        makeTrade({ tradeID: "a", buySell: "BUY", quantity: "1000", tradeMoney: "1080", realEurAmount: "0" }),
+        makeTrade({ tradeID: "b", buySell: "BUY", quantity: "1000", tradeMoney: "1080", realEurAmount: "abc" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(bad, rateMap);
+      expect(events).toHaveLength(2);
+      expect(events.every((e) => e.realEurAmount === undefined)).toBe(true);
+    });
+
+    it("effectiveRate self-guards: a zero realEurAmount reaching the engine still uses ECB, never zeroes the conversion", () => {
+      // Defense-in-depth: even if a malformed event with realEurAmount=0 bypassed
+      // extractFxEvents (e.g. a future producer), the conversion must value at ECB,
+      // not collapse proceeds/cost to 0. acquire $1000 @0.92 (ECB), then dispose
+      // $1000 with a stray realEurAmount=0 → proceeds must be 920 (ECB), gain 0.
+      const engine = new FxFifoEngine();
+      engine.processEvents([
+        { date: "2025-01-10", currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.92"), trigger: "conversion" },
+        { date: "2025-02-10", currency: "USD", quantity: new Decimal(-1000), ecbRate: new Decimal("0.92"), trigger: "conversion", realEurAmount: new Decimal(0) },
+      ]);
+      const d = engine.getDisposals();
+      expect(d).toHaveLength(1);
+      expect(d[0]!.proceedsEur.toFixed(2)).toBe("920.00");
+      expect(d[0]!.gainLossEur.toFixed(2)).toBe("0.00");
+    });
+  });
 });

@@ -90,6 +90,20 @@ export interface Trade {
   underlyingIsin?: string;
   /** IBKR order ID — same value across partial-fill executions of one order. Used by the parser to collapse executions into one trade. */
   ibOrderID?: string;
+  /**
+   * Real EUR value the broker actually applied to a EUR↔FCY CASH conversion —
+   * the spread-laden euro amount moved, BEFORE the separately-itemized
+   * `commission`/fee (which the FX engine still applies on top, Art. 35). When
+   * present, the FX FIFO engine values THIS conversion at the effective real rate
+   * (`realEurAmount / |quantity|`) instead of the ECB reference rate, so the
+   * broker's hidden FX spread is captured as a deductible cost (Art. 35.1 LIRPF;
+   * issue #253). Absent → the engine falls back to the official ECB rate (the
+   * default for every other conversion and for valuing FCY that arrives with no
+   * euro price). This is a real cash amount FROM the statement — NOT IBKR's
+   * `fxRateToBase` (which remains banned). Only meaningful on `assetCategory:
+   * "CASH"` conversion trades; ignored elsewhere and under monodivisa (skipFx).
+   */
+  realEurAmount?: string;
 }
 
 export interface CashTransaction {
