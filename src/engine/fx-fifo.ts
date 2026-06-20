@@ -63,6 +63,8 @@ export interface FxEvent {
   trigger: FxTrigger;
   /** Commission in EUR (positive = cost paid). Increases cost basis on BUY, reduces proceeds on SELL. */
   commissionEur?: Decimal;
+  /** Real EUR value applied to this conversion (spread-laden), BEFORE commission. When present, the effective rate realEurAmount/|quantity| is used instead of ecbRate (issue #253). */
+  realEurAmount?: Decimal;
   /**
    * Discriminator for the carry-basis stock events. Absent → a plain
    * acquire/dispose driven by signed `quantity` (the original behavior).
@@ -406,10 +408,28 @@ export class FxFifoEngine {
         }
       }
 
+      // Real EUR cash the broker applied to THIS conversion (FX principal, spread
+      // embedded, separate commission EXCLUDED). When present and a finite positive
+      // amount, the engine values the conversion at the effective real rate
+      // (realEurAmount/|quantity|) instead of ecbRate (issue #253). Both legs of a
+      // tracked round-trip carry it so acquire and dispose value on the same basis.
+      // Not finite/positive → omit it → ECB fallback. Commission handling unchanged.
+      let realEurAmount: Decimal | undefined;
+      if (trade.realEurAmount !== undefined) {
+        try {
+          const real = new Decimal(trade.realEurAmount);
+          if (real.isFinite() && real.abs().greaterThan(0)) {
+            realEurAmount = real.abs();
+          }
+        } catch {
+          // Unparseable string (decimal.js throws on garbage) → omit → ECB fallback.
+        }
+      }
+
       if (acquiring) {
-        events.push({ date, currency: trade.currency, quantity: amount, ecbRate, trigger: "conversion", commissionEur });
+        events.push({ date, currency: trade.currency, quantity: amount, ecbRate, trigger: "conversion", commissionEur, realEurAmount });
       } else {
-        events.push({ date, currency: trade.currency, quantity: amount.negated(), ecbRate, trigger: "conversion", commissionEur });
+        events.push({ date, currency: trade.currency, quantity: amount.negated(), ecbRate, trigger: "conversion", commissionEur, realEurAmount });
       }
     }
 
@@ -752,12 +772,33 @@ export class FxFifoEngine {
       || exch === "FXCONV" || notes.includes("AFX");
   }
 
+  /** Effective EUR-per-FCY rate for an event: the broker's real applied rate
+   *  (realEurAmount / |quantity|) when supplied (issue #253), else the ECB rate.
+   *  ONE helper used by BOTH addLot and consumeLots so the acquire and dispose
+   *  legs are ALWAYS valued on the same basis — never a half-real/half-ECB mix. */
+  private static effectiveRate(event: FxEvent): Decimal {
+    // A Decimal is always truthy, so re-check finite & strictly-positive here
+    // (defense-in-depth, like the rest of this file): a 0/negative/NaN
+    // realEurAmount must fall back to ECB, never zero out (or sign-flip) the
+    // conversion. A real EUR principal is positive by definition, so a negative
+    // is rejected, not silently absorbed via abs().
+    if (
+      event.realEurAmount &&
+      event.realEurAmount.isFinite() &&
+      event.realEurAmount.greaterThan(0) &&
+      event.quantity.abs().greaterThan(0)
+    ) {
+      return event.realEurAmount.div(event.quantity.abs());
+    }
+    return event.ecbRate;
+  }
+
   private addLot(event: FxEvent): void {
     // Defense-in-depth: never create a lot for a non-positive quantity — costPerUnit
     // would be 0/0 = NaN and silently poison all later FIFO math for this currency.
     if (!event.quantity.greaterThan(0)) return;
     // Commission increases the EUR cost of acquiring the lot
-    const baseCost = event.quantity.mul(event.ecbRate);
+    const baseCost = event.quantity.mul(FxFifoEngine.effectiveRate(event));
     const totalCost = event.commissionEur ? baseCost.plus(event.commissionEur) : baseCost;
     const costPerUnit = totalCost.div(event.quantity);
 
@@ -787,7 +828,8 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      const proceedsEur = remaining.mul(event.ecbRate);
+      const effRate = FxFifoEngine.effectiveRate(event);
+      const proceedsEur = remaining.mul(effRate);
       const netProceeds = event.commissionEur ? proceedsEur.minus(event.commissionEur) : proceedsEur;
       this.disposals.push({
         currency: event.currency,
@@ -801,16 +843,17 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
-      this.record("dispose", event, { quantityFcy: remaining, rate: event.ecbRate, costBasisEur: netProceeds, proceedsEur: netProceeds, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "sin lotes previos → ganancia FX = 0" });
+      this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: netProceeds, proceedsEur: netProceeds, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "sin lotes previos → ganancia FX = 0" });
       return;
     }
 
+    const effRate = FxFifoEngine.effectiveRate(event);
     while (remaining.greaterThan(0) && lots.length > 0) {
       const lot = lots[0]!;
       const consumed = Decimal.min(remaining, lot.quantity);
 
       // Commission reduces proceeds, distributed proportionally across consumed lots
-      let proceedsEur = consumed.mul(event.ecbRate);
+      let proceedsEur = consumed.mul(effRate);
       if (event.commissionEur) {
         const proportion = consumed.div(totalQty);
         proceedsEur = proceedsEur.minus(event.commissionEur.mul(proportion));
@@ -840,7 +883,7 @@ export class FxFifoEngine {
       }
 
       remaining = remaining.minus(consumed);
-      this.record("dispose", event, { quantityFcy: consumed, rate: event.ecbRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed, lotAcquireDate: lot.acquireDate });
+      this.record("dispose", event, { quantityFcy: consumed, rate: effRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed, lotAcquireDate: lot.acquireDate });
     }
 
     if (remaining.greaterThan(0)) {
@@ -848,7 +891,7 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      let proceedsEur = remaining.mul(event.ecbRate);
+      let proceedsEur = remaining.mul(effRate);
       if (event.commissionEur) {
         const proportion = remaining.div(totalQty);
         proceedsEur = proceedsEur.minus(event.commissionEur.mul(proportion));
@@ -865,7 +908,7 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
-      this.record("dispose", event, { quantityFcy: remaining, rate: event.ecbRate, costBasisEur: proceedsEur, proceedsEur, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "lotes insuficientes → ganancia FX = 0" });
+      this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: proceedsEur, proceedsEur, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "lotes insuficientes → ganancia FX = 0" });
     }
   }
 
