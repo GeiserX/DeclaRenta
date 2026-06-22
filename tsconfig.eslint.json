@@ -1,8 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "allowJs": true
-  },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "eslint.config.js"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/web/sw.ts"]
 }
