@@ -27,15 +27,17 @@ export function manualOpeningLotKey(lot: ManualOpeningLotIdentity): string {
  * usable for FIFO.
  */
 export function normalizeManualOpeningLot(lot: ManualOpeningLot): ManualOpeningLot | null {
-  const symbol = lot.symbol.trim();
-  const description = lot.description.trim();
-  const isin = lot.isin.trim().toUpperCase();
-  const conid = (lot.conid ?? "").trim() || undefined;
-  const assetCategory = lot.assetCategory.trim().toUpperCase();
-  const currency = lot.currency.trim().toUpperCase();
-  const acquireDate = normalizeDate(lot.acquireDate.trim());
-  const quantityRaw = lot.quantity.trim().replace(/,/g, ".");
-  const priceRaw = lot.pricePerShare.trim().replace(/,/g, ".");
+  const asString = (value: unknown): string => (typeof value === "string" ? value : "");
+
+  const symbol = asString(lot.symbol).trim();
+  const description = asString(lot.description).trim();
+  const isin = asString(lot.isin).trim().toUpperCase();
+  const conid = asString(lot.conid).trim() || undefined;
+  const assetCategory = asString(lot.assetCategory).trim().toUpperCase();
+  const currency = asString(lot.currency).trim().toUpperCase();
+  const acquireDate = normalizeDate(asString(lot.acquireDate).trim());
+  const quantityRaw = asString(lot.quantity).trim().replace(/,/g, ".");
+  const priceRaw = asString(lot.pricePerShare).trim().replace(/,/g, ".");
 
   if (!assetCategory || !currency || !acquireDate) return null;
   if (!symbol && !isin && !conid) return null;

@@ -155,6 +155,35 @@ describe("setManualOpeningLots / getManualOpeningLots", () => {
     expect(getManualOpeningLots()).toHaveLength(0);
   });
 
+  it("skips malformed persisted opening lots without throwing", () => {
+    store[OPENING_LOTS_KEY] = JSON.stringify([
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "14",
+        pricePerShare: "100",
+      },
+      {
+        symbol: null,
+        description: 42,
+        isin: null,
+        assetCategory: {},
+        currency: "USD",
+        acquireDate: [],
+        quantity: {},
+        pricePerShare: "50",
+      },
+    ]);
+
+    expect(() => getManualOpeningLots()).not.toThrow();
+    expect(getManualOpeningLots()).toHaveLength(1);
+    expect(getManualOpeningLots()[0]!.symbol).toBe("AAPL");
+  });
+
   it("can clear saved opening lots", () => {
     setManualOpeningLots("US0378331005", [
       {
