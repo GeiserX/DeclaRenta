@@ -462,6 +462,10 @@ export class FxFifoEngine {
    * acquire/dispose terms alone.)
    */
   private checkConservation(): void {
+    // NOTE: accParked/accUnparked are accumulated for symmetry & trace diagnostics
+    // but are deliberately NOT terms in the identity below — park/unpark are
+    // internal pool↔parked transfers that net to zero on the rhs (poolBalance +
+    // parkedBalance), so only acquire/dispose/discard/profit/phantom appear here.
     const get = (m: Map<string, Decimal>, c: string): Decimal => m.get(c) ?? new Decimal(0);
     for (const currency of this.accCurrencies) {
       const acquired = get(this.accAcquired, currency);
