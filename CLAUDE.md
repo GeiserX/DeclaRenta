@@ -75,7 +75,7 @@ tests/           Vitest tests mirroring src/ structure
 - **Test**: `vitest`
 - **CI**: GitHub Actions (Node 22)
 - **Docker**: Multi-stage Dockerfile.web (node:22.12-alpine build → nginx:1.31-alpine)
-- **Node**: requires `^20.19.0 || >=22.12.0` (Vite 8 floor)
+- **Node**: requires `^20.19.0 || >=22.13.0` (current dependency floor)
 
 ## Web UI Architecture
 
