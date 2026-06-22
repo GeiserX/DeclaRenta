@@ -35,11 +35,15 @@ function dater(): () => string {
   };
 }
 
+/** Decimal-safe monetary input (decimal string, never a JS number — see the
+ *  Financial Precision rule). `toEvents` wraps each in `new Decimal(...)`. */
+type Money = string;
+
 type Op =
-  | ["fund", string, number, number]
-  | ["conv", string, number, number]
-  | ["buy", string, number] // cost (rate irrelevant — buy parks, never realizes)
-  | ["sell", string, number, number, number]; // cost, proceeds, saleRate
+  | ["fund", string, Money, Money]
+  | ["conv", string, Money, Money]
+  | ["buy", string, Money] // cost (rate irrelevant — buy parks, never realizes)
+  | ["sell", string, Money, Money, Money]; // cost, proceeds, saleRate
 
 /** Build the FxEvent stream for a list of ops, one ascending date per op. */
 function toEvents(ops: Op[]): FxEvent[] {
@@ -76,18 +80,18 @@ function run(ops: Op[]): { engine: FxFifoEngine; gain: Decimal } {
 
 describe("FX conservation self-check — HOLDS (no mismatch) for every legitimate scenario", () => {
   it("simple acquire + convert", () => {
-    const { engine, gain } = run([["fund", "USD", 1000, 0.9], ["conv", "USD", 1000, 1.05]]);
+    const { engine, gain } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("150.00"); // sanity: 1000 × (1.05 − 0.90)
   });
 
   it("partial conversion (pool left with an unconverted remainder)", () => {
-    const { engine } = run([["fund", "USD", 1000, 0.9], ["conv", "USD", 400, 1.05]]);
+    const { engine } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "400", "1.05"]]);
     expect(mismatches(engine)).toHaveLength(0); // 600 stays in the pool, still balances
   });
 
   it("full carry-basis round-trip (acquire → buy → sell → convert) — S1", () => {
-    const ops: Op[] = [["fund", "USD", 1000, 0.9], ["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05]];
+    const ops: Op[] = [["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("160.00"); // the validated S1 figure
@@ -95,8 +99,8 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
 
   it("two carry-basis round-trips → S2 (320.00), NO mismatch", () => {
     const ops: Op[] = [
-      ["fund", "USD", 1000, 0.9], ["buy", "USD", 1000], ["sell", "USD", 1000, 1100, 1.0], ["conv", "USD", 1100, 1.05],
-      ["fund", "USD", 1000, 1.1], ["buy", "USD", 1000], ["sell", "USD", 1000, 1300, 1.2], ["conv", "USD", 1300, 1.25],
+      ["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1100", "1.0"], ["conv", "USD", "1100", "1.05"],
+      ["fund", "USD", "1000", "1.1"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1300", "1.2"], ["conv", "USD", "1300", "1.25"],
     ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
@@ -106,7 +110,7 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   it("loss-sell (discard path) — no conversion, principal discarded", () => {
     // fund $1000@1.20, buy $1000, sell $1000→$800 @0.80 (a $200 USD loss). The 200
     // discarded principal is on the lhs (discarded) and balances.
-    const ops: Op[] = [["fund", "USD", 1000, 1.2], ["buy", "USD", 1000], ["sell", "USD", 1000, 800, 0.8]];
+    const ops: Op[] = [["fund", "USD", "1000", "1.2"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "800", "0.8"]];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("0.00"); // nothing converted → no FX realized
@@ -116,7 +120,7 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
     // A conversion with NO prior acquisition lot: the engine floors gain to 0 and
     // warns fx.missing_prior_lots — but conservation must NOT additionally fire
     // (the phantom-acquire term reconciles the floored disposal).
-    const { engine, gain } = run([["conv", "USD", 1000, 1.05]]);
+    const { engine, gain } = run([["conv", "USD", "1000", "1.05"]]);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("0.00");
     // The missing-lot INFO is still emitted (proves we took the floor path).
@@ -126,14 +130,14 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   it("partial missing-lot (pool covers only part of the conversion)", () => {
     // fund $400, convert $1000: 400 covered (real dispose) + 600 floored. The 600
     // floored leg is a phantom acquire — still balances.
-    const { engine } = run([["fund", "USD", 400, 0.9], ["conv", "USD", 1000, 1.05]]);
+    const { engine } = run([["fund", "USD", "400", "0.9"], ["conv", "USD", "1000", "1.05"]]);
     expect(mismatches(engine)).toHaveLength(0);
     expect(engine.messages.some((m) => m.id === "fx.missing_prior_lots")).toBe(true);
   });
 
   it("uncovered park then unpark at the sale rate (buy/sell with no funding)", () => {
     // A1: buy (uncovered park) → sell → convert. Funding-absent no-op path.
-    const ops: Op[] = [["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05]];
+    const ops: Op[] = [["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("60.00");
@@ -142,20 +146,20 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   it("uncovered park left OPEN at the period boundary (never sold)", () => {
     // A lone uncovered buy: parks 1000 uncovered, nothing else. The phantom-acquire
     // term must balance the parked-side FCY that had no real acquisition.
-    const { engine } = run([["buy", "USD", 1000]]);
+    const { engine } = run([["buy", "USD", "1000"]]);
     expect(mismatches(engine)).toHaveLength(0);
   });
 
   it("sell-only (position bought outside the data window) — unmatched re-add", () => {
     // A3: the unmatched-sell re-add path (phantom acquire on the pool side).
-    const ops: Op[] = [["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05]];
+    const ops: Op[] = [["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("60.00");
   });
 
   it("partial funding (pool covers only part of the buy) — A5", () => {
-    const ops: Op[] = [["fund", "USD", 500, 0.9], ["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05]];
+    const ops: Op[] = [["fund", "USD", "500", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("110.00");
@@ -163,9 +167,9 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
 
   it("documented residual partial-w/loss (S7) — still balances", () => {
     const ops: Op[] = [
-      ["fund", "USD", 2000, 0.9], ["buy", "USD", 2000],
-      ["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05],
-      ["sell", "USD", 1000, 900, 1.1], ["conv", "USD", 900, 1.15],
+      ["fund", "USD", "2000", "0.9"], ["buy", "USD", "2000"],
+      ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"],
+      ["sell", "USD", "1000", "900", "1.1"], ["conv", "USD", "900", "1.15"],
     ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
@@ -194,7 +198,7 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   });
 
   it("the check is SILENT — emits NO message at all on a clean simple flow", () => {
-    const { engine } = run([["fund", "USD", 1000, 0.9], ["conv", "USD", 1000, 1.05]]);
+    const { engine } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]);
     // A fully-covered single round-trip warns about nothing.
     expect(engine.messages).toHaveLength(0);
   });
@@ -205,8 +209,8 @@ describe("FX conservation self-check — the identity (numeric guard on the vali
     // The S2 carry-basis scenario from fx-fifo-carry-basis.test.ts. We assert the
     // identity numerically on the engine's own end-of-run accumulators + balances.
     const ops: Op[] = [
-      ["fund", "USD", 1000, 0.9], ["buy", "USD", 1000], ["sell", "USD", 1000, 1100, 1.0], ["conv", "USD", 1100, 1.05],
-      ["fund", "USD", 1000, 1.1], ["buy", "USD", 1000], ["sell", "USD", 1000, 1300, 1.2], ["conv", "USD", 1300, 1.25],
+      ["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1100", "1.0"], ["conv", "USD", "1100", "1.05"],
+      ["fund", "USD", "1000", "1.1"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1300", "1.2"], ["conv", "USD", "1300", "1.25"],
     ];
     const engine = new FxFifoEngine();
     engine.processEvents(toEvents(ops));
@@ -245,10 +249,10 @@ describe("FX conservation self-check — the identity (numeric guard on the vali
 
   it("S8 two-gains-one-conversion: identity holds and the check is silent", () => {
     const ops: Op[] = [
-      ["fund", "USD", 2000, 0.9],
-      ["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0],
-      ["buy", "USD", 1000], ["sell", "USD", 1000, 1400, 1.1],
-      ["conv", "USD", 2600, 1.2],
+      ["fund", "USD", "2000", "0.9"],
+      ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"],
+      ["buy", "USD", "1000"], ["sell", "USD", "1000", "1400", "1.1"],
+      ["conv", "USD", "2600", "1.2"],
     ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
@@ -283,7 +287,7 @@ describe("FX conservation self-check — FIRES on a genuine desync (artificial b
   it("emits fx.conservation_mismatch (warning) when the pool diverges from the books", () => {
     const engine = new BreakableEngine();
     // A clean run first (no mismatch yet).
-    engine.processEvents(toEvents([["fund", "USD", 1000, 0.9], ["conv", "USD", 1000, 1.05]]));
+    engine.processEvents(toEvents([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]));
     expect(engine.messages.filter((m) => m.id === MISMATCH_ID)).toHaveLength(0);
 
     // Now corrupt the pool by 500 units and re-run the real check.
@@ -303,7 +307,7 @@ describe("FX conservation self-check — FIRES on a genuine desync (artificial b
 
   it("stays silent for a sub-epsilon (dust) imbalance", () => {
     const engine = new BreakableEngine();
-    engine.processEvents(toEvents([["fund", "USD", 1000, 0.9], ["conv", "USD", 1000, 1.05]]));
+    engine.processEvents(toEvents([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]));
     // 0.001 < CONSERVATION_EPS (0.01) → no warning (dust is fine).
     engine.forceMismatch("USD", 0.001);
     expect(engine.messages.filter((m) => m.id === MISMATCH_ID)).toHaveLength(0);
@@ -314,13 +318,22 @@ describe("FX conservation self-check — DIAGNOSTIC ONLY (never changes a tax fi
   it("the disposals/gain are byte-identical whether or not a mismatch is emitted", () => {
     // The check runs at the END of processEvents and only reads state + emits a
     // message. The disposals returned are the same object the engine built before
-    // the check ran — proving no casilla figure depends on the diagnostic.
-    const ops: Op[] = [["fund", "USD", 1000, 0.9], ["buy", "USD", 1000], ["sell", "USD", 1000, 1200, 1.0], ["conv", "USD", 1200, 1.05]];
-    const engine = new FxFifoEngine();
+    // the check ran — proving no casilla figure depends on the diagnostic. We test
+    // BOTH branches (clean run AND after a real mismatch is emitted), per the title.
+    const ops: Op[] = [["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const engine = new BreakableEngine();
     const disposals = engine.processEvents(toEvents(ops));
     const totalBefore = disposals.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2);
     expect(totalBefore).toBe("160.00");
-    // getDisposals() returns the same array the check never touched.
+    // Clean run: no mismatch yet.
+    expect(engine.messages.filter((m) => m.id === MISMATCH_ID)).toHaveLength(0);
+
+    // Now FORCE a real mismatch (the emitted-mismatch branch the title promises).
+    engine.forceMismatch("USD", 500);
+    expect(engine.messages.some((m) => m.id === MISMATCH_ID)).toBe(true);
+
+    // The disposals/gain are UNCHANGED by the emission — same array, same total.
+    expect(disposals.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2)).toBe("160.00");
     expect(engine.getDisposals().reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2)).toBe("160.00");
   });
 });
