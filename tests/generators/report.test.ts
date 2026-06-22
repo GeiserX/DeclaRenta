@@ -178,12 +178,22 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       cashTransactions: [
         makeCashTx({
-          transactionID: "3", symbol: "", isin: "", description: "BROKER INTEREST",
-          dateTime: "20250815", amount: "50", type: "Broker Interest Received",
+          transactionID: "3",
+          symbol: "",
+          isin: "",
+          description: "BROKER INTEREST",
+          dateTime: "20250815",
+          amount: "50",
+          type: "Broker Interest Received",
         }),
         makeCashTx({
-          transactionID: "4", symbol: "", isin: "", description: "MARGIN INTEREST",
-          dateTime: "20250815", amount: "-20", type: "Broker Interest Paid",
+          transactionID: "4",
+          symbol: "",
+          isin: "",
+          description: "MARGIN INTEREST",
+          dateTime: "20250815",
+          amount: "-20",
+          type: "Broker Interest Paid",
         }),
       ],
     });
@@ -229,6 +239,59 @@ describe("generateTaxReport", () => {
     expect(fifoErrors[0]!.severity).toBe("error");
   });
 
+  it("uses manual opening lots for transferred positions with multiple prices", () => {
+    const rates = makeRateMap({
+      "2024-01-10": "0.9000",
+      "2024-02-01": "0.9050",
+      "2025-09-20": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "sell-1",
+          tradeDate: "2025-09-20",
+          settlementDate: "2025-09-20",
+          quantity: "-17",
+          tradePrice: "120",
+          buySell: "SELL",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, {
+      manualOpeningLots: [
+        {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          acquireDate: "2024-01-10",
+          quantity: "14",
+          pricePerShare: "100",
+        },
+        {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          acquireDate: "2024-02-01",
+          quantity: "3",
+          pricePerShare: "200",
+        },
+      ],
+    });
+
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    expect(report.messages.some((m) => m.id === "fifo.insufficient_lots")).toBe(false);
+    expect(report.capitalGains.disposals).toHaveLength(2);
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1820.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1856.40");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("36.40");
+  });
+
   it("should handle empty statement", () => {
     const rates: EcbRateMap = new Map();
     const statement = makeStatement();
@@ -253,10 +316,20 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-1000", tradePrice: "1.1111", tradeMoney: "-1111",
-          proceeds: "1111", buySell: "SELL", exchange: "IDEALFX",
+          tradeID: "fx-sell",
+          tradeDate: "2025-01-10",
+          settlementDate: "2025-01-10",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "-1000",
+          tradePrice: "1.1111",
+          tradeMoney: "-1111",
+          proceeds: "1111",
+          buySell: "SELL",
+          exchange: "IDEALFX",
         }),
       ],
       cashTransactions: [
@@ -345,16 +418,36 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-5000", tradePrice: "1.0870", tradeMoney: "-5435",
-          proceeds: "5435", buySell: "SELL", exchange: "IDEALFX",
+          tradeID: "fx-sell",
+          tradeDate: "2025-01-10",
+          settlementDate: "2025-01-10",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "-5000",
+          tradePrice: "1.0870",
+          tradeMoney: "-5435",
+          proceeds: "5435",
+          buySell: "SELL",
+          exchange: "IDEALFX",
         }),
         makeTrade({
-          tradeID: "fx-buy", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "5000", tradePrice: "1.0526", tradeMoney: "5263",
-          proceeds: "-5263", buySell: "BUY", exchange: "IDEALFX",
+          tradeID: "fx-buy",
+          tradeDate: "2025-06-15",
+          settlementDate: "2025-06-15",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "5000",
+          tradePrice: "1.0526",
+          tradeMoney: "5263",
+          proceeds: "-5263",
+          buySell: "BUY",
+          exchange: "IDEALFX",
         }),
       ],
     });
@@ -382,10 +475,20 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx1", tradeDate: "2025-03-28", settlementDate: "2025-04-01",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-998", tradePrice: "1.0824", tradeMoney: "-1080.24",
-          proceeds: "1080.24", buySell: "SELL", exchange: "IDEALFX",
+          tradeID: "fx1",
+          tradeDate: "2025-03-28",
+          settlementDate: "2025-04-01",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "-998",
+          tradePrice: "1.0824",
+          tradeMoney: "-1080.24",
+          proceeds: "1080.24",
+          buySell: "SELL",
+          exchange: "IDEALFX",
         }),
       ],
     });
@@ -457,16 +560,36 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
-          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+          tradeID: "fx-buy",
+          tradeDate: "2025-01-10",
+          settlementDate: "2025-01-10",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "5000",
+          tradePrice: "1.0870",
+          tradeMoney: "5000",
+          proceeds: "-5000",
+          buySell: "BUY",
+          exchange: "IDEALFX",
         }),
         makeTrade({
-          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
-          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+          tradeID: "fx-sell",
+          tradeDate: "2025-06-15",
+          settlementDate: "2025-06-15",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "-5000",
+          tradePrice: "1.0526",
+          tradeMoney: "-5000",
+          proceeds: "5000",
+          buySell: "SELL",
+          exchange: "IDEALFX",
         }),
       ],
     });
@@ -486,16 +609,36 @@ describe("generateTaxReport", () => {
     const statement = makeStatement({
       trades: [
         makeTrade({
-          tradeID: "fx-buy", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "5000", tradePrice: "1.0870", tradeMoney: "5000",
-          proceeds: "-5000", buySell: "BUY", exchange: "IDEALFX",
+          tradeID: "fx-buy",
+          tradeDate: "2025-01-10",
+          settlementDate: "2025-01-10",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "5000",
+          tradePrice: "1.0870",
+          tradeMoney: "5000",
+          proceeds: "-5000",
+          buySell: "BUY",
+          exchange: "IDEALFX",
         }),
         makeTrade({
-          tradeID: "fx-sell", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
-          symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-          currency: "USD", quantity: "-5000", tradePrice: "1.0526", tradeMoney: "-5000",
-          proceeds: "5000", buySell: "SELL", exchange: "IDEALFX",
+          tradeID: "fx-sell",
+          tradeDate: "2025-06-15",
+          settlementDate: "2025-06-15",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          quantity: "-5000",
+          tradePrice: "1.0526",
+          tradeMoney: "-5000",
+          proceeds: "5000",
+          buySell: "SELL",
+          exchange: "IDEALFX",
         }),
       ],
     });
@@ -558,8 +701,13 @@ describe("generateTaxReport", () => {
           makeCashTx({ transactionID: "d1", dateTime: "20250601", amount: "100", type: "Dividends" }),
           makeCashTx({ transactionID: "w1", dateTime: "20250601", amount: "-15", type: "Withholding Tax" }),
           makeCashTx({
-            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
-            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+            transactionID: "i1",
+            symbol: "",
+            isin: "",
+            description: "BROKER INTEREST",
+            dateTime: "20250601",
+            amount: "50",
+            type: "Broker Interest Received",
           }),
         ],
       });
@@ -575,32 +723,33 @@ describe("generateTaxReport", () => {
       const solo = generateTaxReport(makeMixedStatement(), splitRates, 2025);
       const split = generateTaxReport(makeMixedStatement(), splitRates, 2025, { titulares: 2 });
 
-      expect(split.capitalGains.transmissionValue.toFixed(2))
-        .toBe(solo.capitalGains.transmissionValue.div(2).toFixed(2));
-      expect(split.capitalGains.acquisitionValue.toFixed(2))
-        .toBe(solo.capitalGains.acquisitionValue.div(2).toFixed(2));
-      expect(split.capitalGains.netGainLoss.toFixed(2))
-        .toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
-      expect(split.dividends.grossIncome.toFixed(2))
-        .toBe(solo.dividends.grossIncome.div(2).toFixed(2));
-      expect(split.interest.earned.toFixed(2))
-        .toBe(solo.interest.earned.div(2).toFixed(2));
-      expect(split.doubleTaxation.deduction.toFixed(2))
-        .toBe(solo.doubleTaxation.deduction.div(2).toFixed(2));
+      expect(split.capitalGains.transmissionValue.toFixed(2)).toBe(
+        solo.capitalGains.transmissionValue.div(2).toFixed(2),
+      );
+      expect(split.capitalGains.acquisitionValue.toFixed(2)).toBe(solo.capitalGains.acquisitionValue.div(2).toFixed(2));
+      expect(split.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
+      expect(split.dividends.grossIncome.toFixed(2)).toBe(solo.dividends.grossIncome.div(2).toFixed(2));
+      expect(split.interest.earned.toFixed(2)).toBe(solo.interest.earned.div(2).toFixed(2));
+      expect(split.doubleTaxation.deduction.toFixed(2)).toBe(solo.doubleTaxation.deduction.div(2).toFixed(2));
 
       // Per-operation amounts are split too (keeps the annex consistent).
-      expect(split.capitalGains.disposals[0]!.proceedsEur.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2));
-      expect(split.capitalGains.disposals[0]!.quantity.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.proceedsEur.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.proceedsEur.div(2).toFixed(2),
+      );
+      expect(split.capitalGains.disposals[0]!.quantity.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.quantity.div(2).toFixed(2),
+      );
       // FCY figures must split too (or a >1-titulares declaration over-counts
       // them by ×n once any surface reads the FCY fields).
-      expect(split.capitalGains.disposals[0]!.proceedsFcy.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.proceedsFcy.div(2).toFixed(2));
-      expect(split.capitalGains.disposals[0]!.costBasisFcy.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.costBasisFcy.div(2).toFixed(2));
-      expect(split.capitalGains.disposals[0]!.gainLossFcy.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.gainLossFcy.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.proceedsFcy.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.proceedsFcy.div(2).toFixed(2),
+      );
+      expect(split.capitalGains.disposals[0]!.costBasisFcy.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.costBasisFcy.div(2).toFixed(2),
+      );
+      expect(split.capitalGains.disposals[0]!.gainLossFcy.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.gainLossFcy.div(2).toFixed(2),
+      );
     });
 
     it("should emit an info message about shared titularity when titulares > 1", () => {
@@ -634,16 +783,36 @@ describe("generateTaxReport", () => {
       const fxStatement = makeStatement({
         trades: [
           makeTrade({
-            tradeID: "fx-sell", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
-            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-            currency: "USD", quantity: "-5000", tradePrice: "1.0870", tradeMoney: "-5435",
-            proceeds: "5435", buySell: "SELL", exchange: "IDEALFX",
+            tradeID: "fx-sell",
+            tradeDate: "2025-01-10",
+            settlementDate: "2025-01-10",
+            symbol: "EUR.USD",
+            description: "EUR.USD",
+            isin: "",
+            assetCategory: "CASH",
+            currency: "USD",
+            quantity: "-5000",
+            tradePrice: "1.0870",
+            tradeMoney: "-5435",
+            proceeds: "5435",
+            buySell: "SELL",
+            exchange: "IDEALFX",
           }),
           makeTrade({
-            tradeID: "fx-buy", tradeDate: "2025-06-15", settlementDate: "2025-06-15",
-            symbol: "EUR.USD", description: "EUR.USD", isin: "", assetCategory: "CASH",
-            currency: "USD", quantity: "5000", tradePrice: "1.0526", tradeMoney: "5263",
-            proceeds: "-5263", buySell: "BUY", exchange: "IDEALFX",
+            tradeID: "fx-buy",
+            tradeDate: "2025-06-15",
+            settlementDate: "2025-06-15",
+            symbol: "EUR.USD",
+            description: "EUR.USD",
+            isin: "",
+            assetCategory: "CASH",
+            currency: "USD",
+            quantity: "5000",
+            tradePrice: "1.0526",
+            tradeMoney: "5263",
+            proceeds: "-5263",
+            buySell: "BUY",
+            exchange: "IDEALFX",
           }),
         ],
       });
@@ -655,8 +824,9 @@ describe("generateTaxReport", () => {
       expect(split.fxGains.disposals.length).toBe(solo.fxGains.disposals.length);
       expect(split.fxGains.netGainLoss.toFixed(2)).toBe(solo.fxGains.netGainLoss.div(2).toFixed(2));
       expect(split.fxGains.transmissionValue.toFixed(2)).toBe(solo.fxGains.transmissionValue.div(2).toFixed(2));
-      expect(split.fxGains.disposals[0]!.gainLossEur.toFixed(2))
-        .toBe(solo.fxGains.disposals[0]!.gainLossEur.div(2).toFixed(2));
+      expect(split.fxGains.disposals[0]!.gainLossEur.toFixed(2)).toBe(
+        solo.fxGains.disposals[0]!.gainLossEur.div(2).toFixed(2),
+      );
     });
 
     it("should keep titulares=3 split consistent (each third reconciles to the whole)", () => {
@@ -666,8 +836,7 @@ describe("generateTaxReport", () => {
       // Each titular's net × 3 reconciles to the undivided total (within Decimal rounding).
       const reconstructed = split.capitalGains.netGainLoss.times(3);
       expect(reconstructed.toFixed(2)).toBe(solo.capitalGains.netGainLoss.toFixed(2));
-      expect(split.dividends.grossIncome.times(3).toFixed(2))
-        .toBe(solo.dividends.grossIncome.toFixed(2));
+      expect(split.dividends.grossIncome.times(3).toFixed(2)).toBe(solo.dividends.grossIncome.toFixed(2));
     });
 
     it("titulares=2 halves interest paid (Broker Interest Paid path)", () => {
@@ -680,12 +849,22 @@ describe("generateTaxReport", () => {
         ],
         cashTransactions: [
           makeCashTx({
-            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
-            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+            transactionID: "i1",
+            symbol: "",
+            isin: "",
+            description: "BROKER INTEREST",
+            dateTime: "20250601",
+            amount: "50",
+            type: "Broker Interest Received",
           }),
           makeCashTx({
-            transactionID: "p1", symbol: "", isin: "", description: "MARGIN INTEREST EXPENSE",
-            dateTime: "20250601", amount: "-40", type: "Broker Interest Paid",
+            transactionID: "p1",
+            symbol: "",
+            isin: "",
+            description: "MARGIN INTEREST EXPENSE",
+            dateTime: "20250601",
+            amount: "-40",
+            type: "Broker Interest Paid",
           }),
         ],
       });
@@ -728,16 +907,16 @@ describe("generateTaxReport", () => {
       expect(solo.capitalGains.netGainLoss.isNegative()).toBe(true);
 
       // Split must be exactly half
-      expect(split.capitalGains.netGainLoss.toFixed(2))
-        .toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
+      expect(split.capitalGains.netGainLoss.toFixed(2)).toBe(solo.capitalGains.netGainLoss.div(2).toFixed(2));
 
       // Sign must be preserved (each titular's loss is still negative)
       expect(split.capitalGains.netGainLoss.isNegative()).toBe(true);
 
       // Per-disposal gainLossEur is also negative and halved
       expect(split.capitalGains.disposals[0]!.gainLossEur.isNegative()).toBe(true);
-      expect(split.capitalGains.disposals[0]!.gainLossEur.toFixed(2))
-        .toBe(solo.capitalGains.disposals[0]!.gainLossEur.div(2).toFixed(2));
+      expect(split.capitalGains.disposals[0]!.gainLossEur.toFixed(2)).toBe(
+        solo.capitalGains.disposals[0]!.gainLossEur.div(2).toFixed(2),
+      );
     });
 
     it("titulares=2 splits the double-taxation deduction linearly when the foreign treaty cap binds", () => {
@@ -779,8 +958,13 @@ describe("generateTaxReport", () => {
           makeCashTx({ transactionID: "d2", dateTime: "20250601", amount: "4000", type: "Dividends" }),
           makeCashTx({ transactionID: "w2", dateTime: "20250601", amount: "-600", type: "Withholding Tax" }),
           makeCashTx({
-            transactionID: "i1", symbol: "", isin: "", description: "BROKER INTEREST",
-            dateTime: "20250601", amount: "50", type: "Broker Interest Received",
+            transactionID: "i1",
+            symbol: "",
+            isin: "",
+            description: "BROKER INTEREST",
+            dateTime: "20250601",
+            amount: "50",
+            type: "Broker Interest Received",
           }),
         ],
       });
@@ -789,9 +973,7 @@ describe("generateTaxReport", () => {
       const split = generateTaxReport(bigDividendStatement, bigDividendRates, 2025, { titulares: 2 });
 
       // Sanity: solo savings base is above 6 000 (crosses into the 21 % band)
-      const soloBase = solo.capitalGains.netGainLoss
-        .plus(solo.dividends.grossIncome)
-        .plus(solo.interest.earned);
+      const soloBase = solo.capitalGains.netGainLoss.plus(solo.dividends.grossIncome).plus(solo.interest.earned);
       expect(soloBase.greaterThan(6000)).toBe(true);
 
       // Per-titular base is below 6 000 (stays in the 19 % band)
@@ -803,16 +985,12 @@ describe("generateTaxReport", () => {
       expect(split.doubleTaxation.deduction.toFixed(2)).toBe("552.00");
 
       // Each titular's deduction never exceeds their share of the withholding.
-      expect(
-        split.doubleTaxation.deduction.lessThanOrEqualTo(solo.doubleTaxation.deduction),
-      ).toBe(true);
+      expect(split.doubleTaxation.deduction.lessThanOrEqualTo(solo.doubleTaxation.deduction)).toBe(true);
 
       // When the foreign cap binds, the split is exactly linear (withholding scales 1/N),
       // even though the bases straddle the 6 000 EUR bracket. Locks the behaviour so a
       // regression to a base-independent / wrongly-scaled deduction is caught.
-      expect(split.doubleTaxation.deduction.times(2).toFixed(2)).toBe(
-        solo.doubleTaxation.deduction.toFixed(2),
-      );
+      expect(split.doubleTaxation.deduction.times(2).toFixed(2)).toBe(solo.doubleTaxation.deduction.toFixed(2));
     });
   });
 });
@@ -933,8 +1111,10 @@ describe("dividend grouping reconciles with the tax engine (presentation-only)",
       ],
     });
     const split = generateTaxReport(statement, rates, 2025, { titulares: 2 });
-    const sumGross = groupDividendsByIssuer(split.dividends.entries)
-      .reduce((s, g) => s.plus(g.grossTotalEur), new Decimal(0));
+    const sumGross = groupDividendsByIssuer(split.dividends.entries).reduce(
+      (s, g) => s.plus(g.grossTotalEur),
+      new Decimal(0),
+    );
     // Grouping runs on already-split entries; it must not re-divide.
     expect(sumGross.toFixed(2)).toBe(split.dividends.grossIncome.toFixed(2));
   });

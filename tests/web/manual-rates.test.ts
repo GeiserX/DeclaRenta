@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getManualRates, setManualRate } from "../../src/web/manual-rates.js";
+import {
+  clearManualOpeningLots,
+  getManualRates,
+  setManualRate,
+  getManualOpeningLots,
+  renderManualOpeningLotsPanel,
+  setManualOpeningLots,
+} from "../../src/web/manual-rates.js";
 import { lookupRateInMap } from "../../src/engine/ecb.js";
 
 // Shim localStorage exactly as tests/web/profile.test.ts does (no jsdom).
@@ -8,17 +15,26 @@ beforeEach(() => {
   store = {};
   globalThis.localStorage = {
     getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, val: string) => { store[key] = val; },
-    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    removeItem: (key: string) => { delete store[key]; },
-    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-    clear: () => { Object.keys(store).forEach((k) => { delete store[k]; }); },
-    get length() { return Object.keys(store).length; },
+    setItem: (key: string, val: string) => {
+      store[key] = val;
+    },
+
+    removeItem: (key: string) => {
+      store = Object.fromEntries(Object.entries(store).filter(([entryKey]) => entryKey !== key));
+    },
+
+    clear: () => {
+      store = {};
+    },
+    get length() {
+      return Object.keys(store).length;
+    },
     key: (i: number) => Object.keys(store)[i] ?? null,
   };
 });
 
 const KEY = "declarenta_manual_rates";
+const OPENING_LOTS_KEY = "declarenta_manual_opening_lots";
 
 describe("setManualRate / getManualRates", () => {
   it("persists a quote and resolves it through getManualRates", () => {
@@ -81,12 +97,123 @@ describe("getManualRates resilience", () => {
   });
 
   it("skips malformed entries but keeps valid ones", () => {
-    store[KEY] = JSON.stringify([
-      { currency: "SOL", date: "2025-04-10", eurPerUnit: "40" },
-      { currency: "BAD" },
-    ]);
+    store[KEY] = JSON.stringify([{ currency: "SOL", date: "2025-04-10", eurPerUnit: "40" }, { currency: "BAD" }]);
     const map = getManualRates();
     expect(lookupRateInMap(map, "2025-04-10", "SOL")).not.toBeNull();
     expect(map.size).toBe(1);
+  });
+});
+
+describe("setManualOpeningLots / getManualOpeningLots", () => {
+  it("persists multiple opening lots for one transferred position", () => {
+    const saved = setManualOpeningLots("US0378331005", [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "14",
+        pricePerShare: "100",
+      },
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-02-01",
+        quantity: "3",
+        pricePerShare: "200",
+      },
+    ]);
+
+    expect(saved).toBe(2);
+    const stored = JSON.parse(store[OPENING_LOTS_KEY]!) as { isin: string }[];
+    expect(stored).toHaveLength(2);
+    expect(getManualOpeningLots()).toHaveLength(2);
+    expect(getManualOpeningLots()[0]!.isin).toBe("US0378331005");
+  });
+
+  it("ignores invalid opening lots", () => {
+    const saved = setManualOpeningLots("US0378331005", [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "0",
+        pricePerShare: "100",
+      },
+    ]);
+
+    expect(saved).toBe(0);
+    expect(store[OPENING_LOTS_KEY]).toBeUndefined();
+    expect(getManualOpeningLots()).toHaveLength(0);
+  });
+
+  it("can clear saved opening lots", () => {
+    setManualOpeningLots("US0378331005", [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "14",
+        pricePerShare: "100",
+      },
+    ]);
+
+    clearManualOpeningLots();
+
+    expect(store[OPENING_LOTS_KEY]).toBeUndefined();
+    expect(getManualOpeningLots()).toHaveLength(0);
+  });
+
+  it("renders saved opening lots even without active missing-lot messages", () => {
+    setManualOpeningLots("US0378331005", [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "14",
+        pricePerShare: "100",
+      },
+    ]);
+
+    const html = renderManualOpeningLotsPanel([]);
+
+    expect(html).toContain('<details class="manual-opening-lots-panel');
+    expect(html).toContain("AAPL");
+    expect(html).toContain("manual-opening-lots-clear-btn");
+  });
+
+  it("keeps the panel open when there are active missing-lot issues", () => {
+    const html = renderManualOpeningLotsPanel([
+      {
+        id: "fifo.insufficient_lots",
+        severity: "warning",
+        message: "missing lots",
+        context: {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          date: "2025-03-10",
+          quantity: "14",
+        },
+      },
+    ]);
+
+    expect(html).toContain('<details class="manual-opening-lots-panel crypto-rates-panel" open>');
   });
 });

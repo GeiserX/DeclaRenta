@@ -12,14 +12,22 @@
 
 import { t, type TranslationKey } from "../i18n/index.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import type { UnresolvedValuation } from "../types/tax.js";
-import { buildManualRateMap, coerceManualQuotes, normalizeManualQuote, type ManualRateQuote } from "../engine/manual-rates.js";
+import type { ManualOpeningLot, TaxMessage, UnresolvedValuation } from "../types/tax.js";
+import {
+  buildManualRateMap,
+  coerceManualQuotes,
+  normalizeManualQuote,
+  type ManualRateQuote,
+} from "../engine/manual-rates.js";
+import { coerceManualOpeningLots, manualOpeningLotKey } from "../engine/manual-opening-lots.js";
 import { esc } from "./esc.js";
 
 const STORAGE_KEY = "declarenta_manual_rates";
+const OPENING_LOTS_STORAGE_KEY = "declarenta_manual_opening_lots";
 
 /** Shape persisted on disk: a flat array of manual quotes. */
 type StoredManualRate = ManualRateQuote;
+type StoredManualOpeningLot = ManualOpeningLot;
 
 /**
  * Reference the new `crypto_rates.*` i18n keys without a compile-time
@@ -55,6 +63,29 @@ function writeStored(entries: StoredManualRate[]): void {
   }
 }
 
+function readStoredOpeningLots(): StoredManualOpeningLot[] {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(OPENING_LOTS_STORAGE_KEY);
+  } catch {
+    return [];
+  }
+  if (!raw) return [];
+  try {
+    return coerceManualOpeningLots(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredOpeningLots(entries: StoredManualOpeningLot[]): void {
+  try {
+    localStorage.setItem(OPENING_LOTS_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    /* storage unavailable/full — manual opening lots simply won't persist */
+  }
+}
+
 /**
  * Build an EcbRateMap (date → currency → EUR-per-1-unit) from stored manual
  * quotes, delegating all validation/normalization to the shared engine helper
@@ -62,6 +93,18 @@ function writeStored(entries: StoredManualRate[]): void {
  */
 export function getManualRates(): EcbRateMap {
   return buildManualRateMap(readStored());
+}
+
+export function getManualOpeningLots(): ManualOpeningLot[] {
+  return readStoredOpeningLots();
+}
+
+export function clearManualOpeningLots(): void {
+  try {
+    localStorage.removeItem(OPENING_LOTS_STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
 }
 
 /**
@@ -77,12 +120,97 @@ export function setManualRate(currency: string, date: string, eurPerUnit: string
   // re-saving the same row upserts instead of duplicating.
   const norm = normalizeManualQuote({ currency, date, eurPerUnit });
   if (norm === null) return false;
-  const entries = readStored().filter(
-    (e) => !(e.currency === norm.currency && e.date === norm.date),
-  );
+  const entries = readStored().filter((e) => !(e.currency === norm.currency && e.date === norm.date));
   entries.push({ currency: norm.currency, date: norm.date, eurPerUnit: norm.eurPerUnit });
   writeStored(entries);
   return true;
+}
+
+function openingLotIdentityKey(
+  lot: Pick<
+    ManualOpeningLot,
+    "symbol" | "isin" | "assetCategory" | "currency" | "acquireDate" | "quantity" | "pricePerShare"
+  >,
+): string {
+  return [
+    lot.symbol.trim().toUpperCase(),
+    lot.isin.trim().toUpperCase(),
+    lot.assetCategory.trim().toUpperCase(),
+    lot.currency.trim().toUpperCase(),
+    lot.acquireDate.trim(),
+    lot.quantity.trim(),
+    lot.pricePerShare.trim(),
+  ].join("|");
+}
+
+export function setManualOpeningLots(groupKey: string, lots: ManualOpeningLot[]): number {
+  const validLots = coerceManualOpeningLots(lots);
+  if (validLots.length === 0) return 0;
+  const existing = readStoredOpeningLots().filter((lot) => manualOpeningLotKey(lot) !== groupKey);
+  const deduped = new Map<string, ManualOpeningLot>();
+  for (const lot of validLots) {
+    deduped.set(openingLotIdentityKey(lot), lot);
+  }
+  writeStoredOpeningLots([...existing, ...deduped.values()]);
+  return deduped.size;
+}
+
+function storedOpeningLotsFor(groupKey: string): ManualOpeningLot[] {
+  return readStoredOpeningLots().filter((lot) => manualOpeningLotKey(lot) === groupKey);
+}
+
+type ManualOpeningLotIssue = {
+  groupKey: string;
+  symbol: string;
+  description: string;
+  isin: string;
+  conid?: string;
+  assetCategory: string;
+  currency: string;
+  sellDate?: string;
+  missingQuantity?: string;
+};
+
+function manualOpeningIssueFromMessage(msg: TaxMessage): ManualOpeningLotIssue | null {
+  const symbol = (msg.context?.symbol ?? "").trim();
+  const description = (msg.context?.description ?? symbol).trim() || symbol;
+  const isin = (msg.context?.isin ?? "").trim();
+  const conid = (msg.context?.conid ?? "").trim() || undefined;
+  const assetCategory = (msg.context?.assetCategory ?? "STK").trim().toUpperCase() || "STK";
+  const currency = (msg.context?.currency ?? "USD").trim().toUpperCase() || "USD";
+  const sellDate = (msg.context?.date ?? "").trim();
+  const missingQuantity = (msg.context?.quantity ?? "").trim();
+  if (!symbol && !isin) return null;
+  if (!sellDate || !missingQuantity) return null;
+  return {
+    groupKey: manualOpeningLotKey({ symbol, isin, conid, assetCategory }),
+    symbol,
+    description,
+    isin,
+    ...(conid ? { conid } : {}),
+    assetCategory,
+    currency,
+    sellDate,
+    missingQuantity,
+  };
+}
+
+function collectStoredOpeningLotIssues(): ManualOpeningLotIssue[] {
+  const grouped = new Map<string, ManualOpeningLotIssue>();
+  for (const lot of readStoredOpeningLots()) {
+    const groupKey = manualOpeningLotKey(lot);
+    if (grouped.has(groupKey)) continue;
+    grouped.set(groupKey, {
+      groupKey,
+      symbol: lot.symbol,
+      description: lot.description,
+      isin: lot.isin,
+      ...(lot.conid ? { conid: lot.conid } : {}),
+      assetCategory: lot.assetCategory,
+      currency: lot.currency,
+    });
+  }
+  return [...grouped.values()];
 }
 
 /** Look up the currently-stored quote for a currency+date pair (for prefill). */
@@ -144,6 +272,95 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
   </div>`;
 }
 
+function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
+  const stored = storedOpeningLotsFor(issue.groupKey);
+  const rows =
+    stored.length > 0
+      ? stored
+      : [
+          {
+            symbol: issue.symbol,
+            description: issue.description,
+            isin: issue.isin,
+            assetCategory: issue.assetCategory,
+            currency: issue.currency,
+            acquireDate: "",
+            quantity: "",
+            pricePerShare: "",
+          } satisfies ManualOpeningLot,
+        ];
+
+  return rows
+    .map(
+      (lot, index) => `<tr class="manual-opening-lot-row" data-group-key="${esc(issue.groupKey)}">
+      <td><input type="date" class="manual-opening-lot-input" data-field="acquireDate" value="${esc(lot.acquireDate)}" /></td>
+      <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="quantity" placeholder="${esc(tr("opening_lots.placeholder_quantity"))}" value="${esc(lot.quantity)}" /></td>
+      <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="pricePerShare" placeholder="${esc(tr("opening_lots.placeholder_price"))}" value="${esc(lot.pricePerShare)}" /></td>
+      <td class="manual-opening-lot-actions">
+        <button type="button" class="btn-secondary btn-small manual-opening-lot-add" data-group-key="${esc(issue.groupKey)}">${esc(tr("opening_lots.add_row"))}</button>
+        <button type="button" class="btn-secondary btn-small manual-opening-lot-remove" data-group-key="${esc(issue.groupKey)}" ${index === 0 && rows.length === 1 ? "disabled" : ""}>${esc(tr("opening_lots.remove_row"))}</button>
+      </td>
+    </tr>`,
+    )
+    .join("");
+}
+
+export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
+  const issuesFromMessages = messages
+    .map((msg) => manualOpeningIssueFromMessage(msg))
+    .filter((issue): issue is ManualOpeningLotIssue => issue !== null)
+    .filter(
+      (issue, index, arr) =>
+        arr.findIndex((i) => i.groupKey === issue.groupKey && i.sellDate === issue.sellDate) === index,
+    );
+
+  const issues = issuesFromMessages.length > 0 ? issuesFromMessages : collectStoredOpeningLotIssues();
+  const hasActiveIssues = issuesFromMessages.length > 0;
+
+  if (issues.length === 0) return "";
+
+  const groups = issues
+    .map(
+      (
+        issue,
+      ) => `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
+      <h4>${esc(issue.symbol)}${issue.isin ? ` <span class="mono">(${esc(issue.isin)})</span>` : ""}</h4>
+      <p>${esc(issue.missingQuantity && issue.sellDate
+        ? tr("opening_lots.group_intro", { quantity: issue.missingQuantity, date: issue.sellDate })
+        : tr("opening_lots.group_intro_saved"))}</p>
+      <div class="table-wrapper"><table>
+        <thead><tr>
+          <th>${esc(tr("opening_lots.col_acquire_date"))}</th>
+          <th>${esc(tr("opening_lots.col_quantity"))}</th>
+          <th>${esc(tr("opening_lots.col_price"))}</th>
+          <th>${esc(tr("opening_lots.col_actions"))}</th>
+        </tr></thead>
+        <tbody>${renderOpeningLotRows(issue)}</tbody>
+      </table></div>
+    </section>`,
+    )
+    .join("");
+
+  return `<details class="manual-opening-lots-panel crypto-rates-panel"${hasActiveIssues ? " open" : ""}>
+    <summary class="manual-opening-lots-summary">
+      <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
+      <span class="manual-opening-lots-summary-count">${issues.length}</span>
+    </summary>
+    <div class="manual-opening-lots-body">
+      <p>${esc(tr("opening_lots.description"))}</p>
+      <p class="muted">${esc(tr("opening_lots.help"))}</p>
+      <p class="manual-opening-lots-effect">${esc(tr("opening_lots.effect_hint"))}</p>
+      ${groups}
+      <div class="manual-opening-lots-actions">
+        <button type="button" id="manual-opening-lots-save-btn" class="btn-cta">${esc(tr("opening_lots.save_btn"))}</button>
+        <button type="button" id="manual-opening-lots-clear-btn" class="btn-secondary">${esc(tr("opening_lots.clear_btn"))}</button>
+      </div>
+      <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg" hidden>${esc(tr("opening_lots.saved"))}</span>
+      <p class="muted crypto-rates-recalculate-hint">${esc(tr("opening_lots.recalculate_hint"))}</p>
+    </div>
+  </details>`;
+}
+
 /**
  * Wire the save button after the panel HTML has been injected into `container`.
  * On save: reads each non-empty input, persists it via setManualRate, then
@@ -168,6 +385,96 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: () => void)
     }
 
     const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
+    if (msg) msg.hidden = savedCount === 0;
+
+    if (savedCount > 0) onSave();
+  });
+}
+
+function renderEmptyOpeningLotRow(groupEl: HTMLElement): string {
+  const groupKey = groupEl.dataset.groupKey ?? "";
+  return `<tr class="manual-opening-lot-row" data-group-key="${esc(groupKey)}">
+    <td><input type="date" class="manual-opening-lot-input" data-field="acquireDate" value="" /></td>
+    <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="quantity" placeholder="${esc(tr("opening_lots.placeholder_quantity"))}" value="" /></td>
+    <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="pricePerShare" placeholder="${esc(tr("opening_lots.placeholder_price"))}" value="" /></td>
+    <td class="manual-opening-lot-actions">
+      <button type="button" class="btn-secondary btn-small manual-opening-lot-add" data-group-key="${esc(groupKey)}">${esc(tr("opening_lots.add_row"))}</button>
+      <button type="button" class="btn-secondary btn-small manual-opening-lot-remove" data-group-key="${esc(groupKey)}">${esc(tr("opening_lots.remove_row"))}</button>
+    </td>
+  </tr>`;
+}
+
+export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () => void): void {
+  container.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const addBtn = target.closest<HTMLButtonElement>(".manual-opening-lot-add");
+    if (addBtn) {
+      const group = addBtn.closest<HTMLElement>(".manual-opening-lot-group");
+      const tbody = group?.querySelector<HTMLTableSectionElement>("tbody");
+      if (group && tbody) tbody.insertAdjacentHTML("beforeend", renderEmptyOpeningLotRow(group));
+      return;
+    }
+
+    const removeBtn = target.closest<HTMLButtonElement>(".manual-opening-lot-remove");
+    if (removeBtn) {
+      const row = removeBtn.closest<HTMLTableRowElement>(".manual-opening-lot-row");
+      const tbody = row?.parentElement;
+      if (!row || !tbody) return;
+      if (tbody.querySelectorAll(".manual-opening-lot-row").length <= 1) {
+        row.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
+          input.value = "";
+        });
+        return;
+      }
+      row.remove();
+    }
+  });
+
+  const clearBtn = container.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      clearManualOpeningLots();
+      onSave();
+    });
+  }
+
+  const btn = container.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    let savedCount = 0;
+    const groups = [...container.querySelectorAll<HTMLElement>(".manual-opening-lot-group")];
+    for (const group of groups) {
+      const rows = [...group.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")];
+      const symbol = group.dataset.symbol ?? "";
+      const description = group.dataset.description ?? symbol;
+      const isin = group.dataset.isin ?? "";
+      const conid = group.dataset.conid ?? "";
+      const assetCategory = group.dataset.assetCategory ?? "STK";
+      const currency = group.dataset.currency ?? "USD";
+      const groupKey = group.dataset.groupKey ?? (isin || symbol);
+
+      const lots: ManualOpeningLot[] = rows.map((row) => {
+        const acquireDate = row.querySelector<HTMLInputElement>("[data-field='acquireDate']")?.value.trim() ?? "";
+        const quantity = row.querySelector<HTMLInputElement>("[data-field='quantity']")?.value.trim() ?? "";
+        const pricePerShare = row.querySelector<HTMLInputElement>("[data-field='pricePerShare']")?.value.trim() ?? "";
+        return {
+          symbol,
+          description,
+          isin,
+          ...(conid ? { conid } : {}),
+          assetCategory,
+          currency,
+          acquireDate,
+          quantity,
+          pricePerShare,
+        };
+      });
+
+      savedCount += setManualOpeningLots(groupKey, lots);
+    }
+
+    const msg = container.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
     if (msg) msg.hidden = savedCount === 0;
 
     if (savedCount > 0) onSave();

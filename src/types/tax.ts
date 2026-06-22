@@ -49,6 +49,25 @@ export interface ManualRateQuote {
   eurPerUnit: string;
 }
 
+/**
+ * One user-supplied opening lot for a security transferred from another broker.
+ *
+ * The web UI stores these locally and `generateTaxReport()` injects them as
+ * synthetic BUY trades before the FIFO pass, so a later sale can consume the
+ * correct prior lots instead of falling back to cost basis 0.
+ */
+export interface ManualOpeningLot {
+  symbol: string;
+  description: string;
+  isin: string;
+  conid?: string;
+  assetCategory: string;
+  currency: string;
+  acquireDate: string;
+  quantity: string;
+  pricePerShare: string;
+}
+
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
 export type OptionScenario = "expiration" | "close" | "exercise";
 

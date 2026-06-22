@@ -4,7 +4,6 @@ const es = {
   "app.title": "DeclaRenta",
   "app.subtitle": "Broker extranjero → Renta española",
 
-
   // Upload
   "upload.title": "Sube tu informe del broker",
   "upload.broker_question": "¿Qué broker(s) utilizas?",
@@ -12,7 +11,8 @@ const es = {
   "upload.broker_label": "Broker:",
   "upload.auto_detect": "Auto-detectar",
   "upload.drop_text": "Arrastra tu fichero aquí o haz clic para seleccionar",
-  "upload.formats_help": "Formatos: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
+  "upload.formats_help":
+    "Formatos: XML (IBKR Flex), CSV (Degiro, Flatex, Trade Republic, Scalable, Lightyear, Coinbase, Binance, Kraken), JSON (Freedom24), XLSX (eToro, Revolut)",
   "upload.autodetect_note": "El broker se detecta automáticamente en la mayoría de los casos.",
   "upload.detecting": "Analizando fichero...",
   "upload.detected": "Broker detectado:",
@@ -44,7 +44,8 @@ const es = {
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(es)",
   "results.dividends_count": "{{count}} dividendo(s)",
-  "results.year_mismatch": "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
+  "results.year_mismatch":
+    "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
 
   // Table headers
   "table.isin": "ISIN",
@@ -63,7 +64,8 @@ const es = {
   "table.payments": "Pagos",
   "casilla.dividends_by_issuer": "Dividendos por emisor",
   "casilla.dividends_per_payment": "Pagos individuales",
-  "casilla.dividends_withholding_note": "La retención <strong>extranjera</strong> no se declara aquí: en el formulario «Alta Capital mobiliario» de Renta Web déjala en 0 y dedúcela en la casilla 0588 (doble imposición internacional, Art. 80 LIRPF). Pero la retención <strong>española</strong> sobre emisores españoles (ISIN ES…) sí es una retención a cuenta y va en la casilla 0597.",
+  "casilla.dividends_withholding_note":
+    "La retención extranjera no se declara aquí. En el formulario «Alta Capital mobiliario» de Renta Web, deja el campo «Retenciones» en 0 — la retención extranjera se deduce por separado en la casilla 0588 (deducción por doble imposición internacional, Art. 80 LIRPF).",
   "table.casilla": "Casilla",
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
@@ -74,7 +76,8 @@ const es = {
   "casilla.acquisition_value": "Valor de adquisición (total transmisiones)",
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (acciones negociadas)",
-  "casilla.acquisition_sale_rate_note": "El valor de adquisición se muestra al tipo de cambio del BCE de la fecha de VENTA, de modo que transmisión − adquisición coincide exactamente con la ganancia o pérdida (DGT V2422-20: la ganancia se calcula en la moneda de la acción y solo la diferencia se convierte a euros). En valores en moneda extranjera este importe difiere del coste histórico en euros de la fecha de compra y puede no coincidir con cifras guardadas en versiones anteriores.",
+  "casilla.acquisition_sale_rate_note":
+    "El valor de adquisición se muestra al tipo de cambio del BCE de la fecha de VENTA, de modo que transmisión − adquisición coincide exactamente con la ganancia o pérdida (DGT V2422-20: la ganancia se calcula en la moneda de la acción y solo la diferencia se convierte a euros). En valores en moneda extranjera este importe difiere del coste histórico en euros de la fecha de compra y puede no coincidir con cifras guardadas en versiones anteriores.",
   "casilla.other_transmission_value": "Valor de transmisión (otros elementos: opciones/cripto/fondos/divisa)",
   "casilla.other_acquisition_value": "Valor de adquisición (otros elementos: opciones/cripto/fondos/divisa)",
   "casilla.fx_transmission_value": "Valor de transmisión FX (moneda extranjera)",
@@ -86,10 +89,8 @@ const es = {
   "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible — informativo)",
   "casilla.general_gains": "Ganancias patrimoniales no derivadas de transmisión (airdrops, comisiones de referidos)",
   "casilla.double_taxation": "Deducción doble imposición",
-  "casilla.spanish_withholding": "Retenciones del capital mobiliario (casilla 0597)",
-  "casilla.spanish_withholding_detail": "Retención a cuenta del IRPF practicada en origen sobre dividendos o intereses de emisores españoles (p. ej. acciones del IBEX), aunque estén en un bróker extranjero. Es un pago a cuenta deducible de la cuota; NO es la deducción por doble imposición (casilla 0588), que solo aplica a impuesto extranjero.",
-  "casilla.blocked_losses": "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
-  "casilla.reintegrated_losses": "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
+  "casilla.blocked_losses":
+    "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
   "messages.errors_title": "{{count}} error(es) — requiere atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
@@ -109,7 +110,8 @@ const es = {
 
   // Disclaimer
   "disclaimer.title": "Aviso legal",
-  "disclaimer.text": "Esta herramienta es meramente informativa y no constituye asesoramiento fiscal ni jurídico. Los resultados generados deben ser verificados por el usuario y/o un profesional cualificado antes de ser utilizados en cualquier declaración tributaria.\n\nDeclaRenta no se responsabiliza de errores, omisiones ni de las consecuencias derivadas del uso de esta información. El usuario es el único responsable de la veracidad y exactitud de los datos introducidos y de las declaraciones presentadas ante la Agencia Tributaria.\n\nLos tipos de cambio proceden del Banco Central Europeo (BCE). Los cálculos fiscales se basan en la normativa vigente (LIRPF, Ley del Patrimonio, Orden EHA/3290/2008) pero pueden no cubrir todos los supuestos ni reflejar cambios normativos posteriores a la última actualización del software.",
+  "disclaimer.text":
+    "Esta herramienta es meramente informativa y no constituye asesoramiento fiscal ni jurídico. Los resultados generados deben ser verificados por el usuario y/o un profesional cualificado antes de ser utilizados en cualquier declaración tributaria.\n\nDeclaRenta no se responsabiliza de errores, omisiones ni de las consecuencias derivadas del uso de esta información. El usuario es el único responsable de la veracidad y exactitud de los datos introducidos y de las declaraciones presentadas ante la Agencia Tributaria.\n\nLos tipos de cambio proceden del Banco Central Europeo (BCE). Los cálculos fiscales se basan en la normativa vigente (LIRPF, Ley del Patrimonio, Orden EHA/3290/2008) pero pueden no cubrir todos los supuestos ni reflejar cambios normativos posteriores a la última actualización del software.",
   "disclaimer.accept": "Entendido",
 
   // Accessibility
@@ -164,8 +166,9 @@ const es = {
   "compare.clear_confirm": "¿Borrar todos los informes guardados?",
 
   // Errors
-  "error.no_broker_detected": "No se pudo detectar el broker de \"{{filename}}\". Selecciona el broker manualmente.",
-  "error.file_too_large": "El fichero \"{{filename}}\" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.",
+  "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
+  "error.file_too_large":
+    'El fichero "{{filename}}" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.',
   "error.prefix": "Error: ",
 
   // Status
@@ -195,12 +198,13 @@ const es = {
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
-  "profile.monodivisa_detail": "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637): el efecto divisa queda embebido en el coste de la acción, valorado al tipo del día de COMPRA (Art. 35.1). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios (y con el método tradicional que usan algunos asesores) que tratan todas las operaciones como moneda única EUR. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
-  "profile.monodivisa_warning": "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
-  "profile.track_autoconvert_label": "Procesar autoconversiones del bróker (AFx/FXCONV)",
-  "profile.track_autoconvert_detail": "Activado por defecto. Interactive Brokers no reconvierte a euros al vender una acción, así que el saldo en divisa es real y su conversión posterior genera ganancia o pérdida patrimonial (Art. 33.1 LIRPF). Desactívalo solo si tu bróker hace un round-trip completo EUR↔divisa y quieres ignorar el efecto de la divisa.",
+  "profile.monodivisa_detail":
+    "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios que tratan todas las operaciones como moneda única EUR.",
+  "profile.monodivisa_warning":
+    "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
   "profile.titulares_label": "Número de titulares:",
-  "profile.titulares_detail": "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
+  "profile.titulares_detail":
+    "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
   "profile.saved": "Perfil guardado",
   "profile.save_btn": "Guardar perfil",
   "profile.incomplete_banner": "Completa tu perfil fiscal para generar los modelos 720 y D-6.",
@@ -208,7 +212,8 @@ const es = {
 
   // Broker guides
   "guide.title": "¿Cómo obtener el informe?",
-  "guide.tip_fifo": "Incluye todo el histórico — DeclaRenta necesita operaciones anteriores para el cálculo FIFO correcto.",
+  "guide.tip_fifo":
+    "Incluye todo el histórico — DeclaRenta necesita operaciones anteriores para el cálculo FIFO correcto.",
   "guide.select_broker_hint": "Selecciona tu broker para ver las instrucciones de descarga del informe.",
   "guide.heading": "¿Cómo obtener el informe de tu broker?",
 
@@ -216,9 +221,12 @@ const es = {
   "guide.ibkr.title": "Interactive Brokers (Flex Query XML)",
   "guide.ibkr.step1": "Inicia sesión en el <strong>Portal del Cliente</strong> de IBKR",
   "guide.ibkr.step2": "Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>",
-  "guide.ibkr.step3": "En <strong>Consulta flex de actividad</strong>, haz clic en el <strong>+</strong> para crear una nueva consulta",
-  "guide.ibkr.step4": "En la configuración, activa las secciones:<ul><li><strong>Trades</strong> (obligatorio)</li><li><strong>Cash Transactions</strong> — dividendos y retenciones (obligatorio)</li><li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li><li><strong>Financial Instrument Information</strong> (recomendado)</li></ul>",
-  "guide.ibkr.step5": "En cada sección, <strong>selecciona todos los campos disponibles</strong> (marca todas las casillas). Cuantos más datos incluyas, más preciso será el cálculo. Como mínimo asegúrate de incluir el campo <strong>Notes</strong> en Trades — es necesario para detectar conversiones automáticas de divisa.",
+  "guide.ibkr.step3":
+    "En <strong>Consulta flex de actividad</strong>, haz clic en el <strong>+</strong> para crear una nueva consulta",
+  "guide.ibkr.step4":
+    "En la configuración, activa las secciones:<ul><li><strong>Trades</strong> (obligatorio)</li><li><strong>Cash Transactions</strong> — dividendos y retenciones (obligatorio)</li><li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li><li><strong>Financial Instrument Information</strong> (recomendado)</li></ul>",
+  "guide.ibkr.step5":
+    "En cada sección, <strong>selecciona todos los campos disponibles</strong> (marca todas las casillas). Cuantos más datos incluyas, más preciso será el cálculo. Como mínimo asegúrate de incluir el campo <strong>Notes</strong> en Trades — es necesario para detectar conversiones automáticas de divisa.",
   "guide.ibkr.step6": "Formato de salida: <strong>XML</strong>",
   "guide.ibkr.step7": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
   "guide.ibkr.step8": "Guarda la consulta, ejecútala y descarga el fichero <code>.xml</code>",
@@ -230,13 +238,17 @@ const es = {
   "guide.degiro.step3": "Haz clic en <strong>Transacciones</strong> (historial de transacciones de tus productos)",
   "guide.degiro.step4": "Selecciona el rango de fechas deseado (incluye <strong>todo el histórico</strong> para FIFO)",
   "guide.degiro.step5": "Haz clic en <strong>Exportar</strong> y descarga el fichero CSV",
-  "guide.degiro.step6": "Para dividendos: vuelve al <strong>Buzón</strong> → <strong>Cuenta</strong> (historial de movimientos de tu cuenta) → misma fecha → <strong>Exportar</strong> CSV",
+  "guide.degiro.step6":
+    "Para dividendos: vuelve al <strong>Buzón</strong> → <strong>Cuenta</strong> (historial de movimientos de tu cuenta) → misma fecha → <strong>Exportar</strong> CSV",
   "guide.flatex.title": "Flatex (CSV)",
   "guide.flatex.step1": "Inicia sesión en la <strong>web de Flatex</strong>",
   "guide.flatex.step2": "Ve a <strong>Movimientos</strong> → <strong>Depotumsätze</strong> (movimientos de la cartera)",
-  "guide.flatex.step3": "Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV",
-  "guide.flatex.step4": "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV",
-  "guide.flatex.step5": "Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos)",
+  "guide.flatex.step3":
+    "Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV",
+  "guide.flatex.step4":
+    "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV",
+  "guide.flatex.step5":
+    "Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos)",
 
   // eToro
   "guide.etoro.title": "eToro (XLSX)",
@@ -268,8 +280,10 @@ const es = {
   // Binance
   "guide.binance.title": "Binance (CSV)",
   "guide.binance.step1": "Inicia sesión en <strong>Binance</strong>",
-  "guide.binance.step2": "<strong>Historial de operaciones spot:</strong> Órdenes → Orden spot → Exportar historial de operaciones (↑) → Spot - Historial de Operaciones → Personalizar tiempo (UTC+1) → CSV",
-  "guide.binance.step3": "<strong>Historial de transacciones:</strong> Órdenes → Historial de Activos → Exportar registros de transacciones (↑) → Historial de Transacciones → Personalizar tiempo (UTC+1) → CSV",
+  "guide.binance.step2":
+    "<strong>Historial de operaciones spot:</strong> Órdenes → Orden spot → Exportar historial de operaciones (↑) → Spot - Historial de Operaciones → Personalizar tiempo (UTC+1) → CSV",
+  "guide.binance.step3":
+    "<strong>Historial de transacciones:</strong> Órdenes → Historial de Activos → Exportar registros de transacciones (↑) → Historial de Transacciones → Personalizar tiempo (UTC+1) → CSV",
   "guide.binance.step4": "Puedes subir uno o ambos ficheros — se aceptan tanto en español como en inglés",
 
   // Kraken
@@ -312,7 +326,8 @@ const es = {
   "guide.mexem.title": "MEXEM (Flex Query XML)",
   "guide.mexem.step1": "Inicia sesión en el <strong>Portal del Cliente</strong> de MEXEM (misma interfaz que IBKR)",
   "guide.mexem.step2": "Ve a <strong>Rendimiento e informes</strong> → pestaña <strong>Consultas Flex</strong>",
-  "guide.mexem.step3": "Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions",
+  "guide.mexem.step3":
+    "Crea una <strong>Activity Flex Query</strong> incluyendo Trades, Cash Transactions y Open Positions",
   "guide.mexem.step4": "Formato de salida: <strong>XML</strong>",
   "guide.mexem.step5": "Ejecuta la consulta y descarga el fichero <code>.xml</code>",
 
@@ -327,17 +342,20 @@ const es = {
   "m720.title": "Modelo 720 — Bienes en el extranjero",
   "m720.description": "Declaración informativa sobre bienes y derechos situados en el extranjero.",
   "m720.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 720.",
-  "m720.threshold_not_exceeded": "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
+  "m720.threshold_not_exceeded":
+    "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m720.category_v": "Valores (acciones, fondos, bonos)",
   "m720.category_c": "Cuentas (saldos en efectivo)",
   "m720.category_exceeded": "Supera 50.000 € — obligatorio declarar",
   "m720.category_not_exceeded": "Por debajo del umbral",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
   "m720.positions_title": "Posiciones declarables",
-  "m720.positions_unvalued": "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+  "m720.positions_unvalued":
+    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.q4_average": "Media Q4",
-  "m720.cash_missing_average": "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Esos saldos se muestran para revisión, pero no se incluyen en el fichero generado.",
+  "m720.cash_missing_average":
+    "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Esos saldos se muestran para revisión, pero no se incluyen en el fichero generado.",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -352,10 +370,12 @@ const es = {
   // Modelo D-6 section
   "d6.title": "Modelo D-6 — Inversiones en el exterior",
   "d6.description": "Declaración al Registro de Inversiones del Ministerio de Economía.",
-  "d6.no_minimum": "Desde la Orden ICT/1408/2021, el D-6 solo es obligatorio si tu participación representa el <strong>10% o más</strong> del capital o derechos de voto de una empresa cotizada extranjera. La mayoría de inversores minoristas están exentos.",
+  "d6.no_minimum":
+    "Desde la Orden ICT/1408/2021, el D-6 solo es obligatorio si tu participación representa el <strong>10% o más</strong> del capital o derechos de voto de una empresa cotizada extranjera. La mayoría de inversores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
   "d6.positions_title": "Posiciones a declarar",
-  "d6.positions_unvalued": "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+  "d6.positions_unvalued":
+    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",
   "d6.deadline": "Plazo: 1 – 31 enero del año siguiente",
@@ -372,7 +392,8 @@ const es = {
   "m721.title": "Modelo 721 — Criptomonedas en el extranjero",
   "m721.description": "Declaración informativa sobre monedas virtuales situadas en el extranjero.",
   "m721.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 721.",
-  "m721.threshold_not_exceeded": "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
+  "m721.threshold_not_exceeded":
+    "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m721.no_positions": "Sube un informe con posiciones de criptomonedas en Modelo 100 para analizar el Modelo 721.",
   "m721.positions_title": "Posiciones declarables",
   "m721.generate_btn": "Generar fichero Modelo 721",
@@ -386,16 +407,19 @@ const es = {
   "m721.filing_step3": "Rellena la declaración con los datos de la tabla (formato oficial: XML, Orden HFP/886/2023)",
   "m721.filing_step4": "Revisa y firma con certificado digital o Cl@ve",
   "m721.exchange": "Exchange",
-  "m721.format_notice": "El formato oficial de la AEAT es XML (Orden HFP/886/2023). DeclaRenta solo muestra una revisión orientativa: la generación oficial está desactivada hasta implementar el XML validado.",
-  "m721.positions_unvalued": "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+  "m721.format_notice":
+    "El formato oficial de la AEAT es XML (Orden HFP/886/2023). DeclaRenta solo muestra una revisión orientativa: la generación oficial está desactivada hasta implementar el XML validado.",
+  "m721.positions_unvalued":
+    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "m721.empty_title": "No hay posiciones de criptomonedas",
-  "m721.empty_description": "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
+  "m721.empty_description":
+    "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
   "m721.empty_cta": "Ir a Modelo 100",
   "m721.profile_required": "Completa tu perfil fiscal antes de generar el fichero del Modelo 721.",
 
   // Section headers
   "section.year_label": "Ejercicio",
-  "section.profile_source": "Datos del <a href=\"#perfil\">Perfil fiscal</a>",
+  "section.profile_source": 'Datos del <a href="#perfil">Perfil fiscal</a>',
 
   // Badge statuses
   "badge.complete": "Completo",
@@ -405,10 +429,12 @@ const es = {
 
   // Empty states with educational content
   "m720.empty_title": "No hay posiciones cargadas",
-  "m720.empty_description": "El Modelo 720 es una declaración informativa obligatoria si posees bienes en el extranjero valorados en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral y genere el fichero. Plazo: 1 de enero – 31 de marzo.",
+  "m720.empty_description":
+    "El Modelo 720 es una declaración informativa obligatoria si posees bienes en el extranjero valorados en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral y genere el fichero. Plazo: 1 de enero – 31 de marzo.",
   "m720.empty_cta": "Ir a Modelo 100",
   "d6.empty_title": "No hay posiciones cargadas",
-  "d6.empty_description": "El Modelo D-6 declara inversiones en valores extranjeros ante el Ministerio de Economía. Desde la reforma de 2021 (Orden ICT/1408/2021), solo es obligatorio si tu participación representa el 10% o más del capital o derechos de voto de una empresa cotizada extranjera. Sube tu informe del broker en la sección Modelo 100 y DeclaRenta generará la guía paso a paso. Plazo: 1 – 31 de enero.",
+  "d6.empty_description":
+    "El Modelo D-6 declara inversiones en valores extranjeros ante el Ministerio de Economía. Desde la reforma de 2021 (Orden ICT/1408/2021), solo es obligatorio si tu participación representa el 10% o más del capital o derechos de voto de una empresa cotizada extranjera. Sube tu informe del broker en la sección Modelo 100 y DeclaRenta generará la guía paso a paso. Plazo: 1 – 31 de enero.",
   "d6.empty_cta": "Ir a Modelo 100",
 
   // Profile required warnings
@@ -429,12 +455,18 @@ const es = {
 
   // Validation
   "validation.future_date": "La operación de {{symbol}} tiene fecha futura ({{date}}). Verifica los datos.",
-  "validation.no_cash_transactions": "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si usas IBKR, activa la sección Cash Transactions en tu Flex Query.",
-  "validation.no_cash_degiro": "No se han encontrado dividendos ni retenciones. Degiro los incluye en un fichero separado: descarga también el CSV de Cuenta (Account) desde el Buzón.",
-  "validation.no_cash_generic": "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si tu broker las exporta por separado, súbelas como fichero adicional.",
-  "validation.no_trades_in_year": "No hay operaciones en el ejercicio {{year}}. Las operaciones anteriores se usan para el cálculo FIFO.",
-  "validation.very_old_data": "Los datos incluyen operaciones desde {{year}} (más de 10 años). Verifica que el fichero es correcto.",
-  "validation.duplicate_trades": "Se han detectado {{count}} operación(es) duplicada(s). Revisa si has subido el mismo fichero dos veces.",
+  "validation.no_cash_transactions":
+    "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si usas IBKR, activa la sección Cash Transactions en tu Flex Query.",
+  "validation.no_cash_degiro":
+    "No se han encontrado dividendos ni retenciones. Degiro los incluye en un fichero separado: descarga también el CSV de Cuenta (Account) desde el Buzón.",
+  "validation.no_cash_generic":
+    "No se han encontrado transacciones de efectivo (dividendos/retenciones). Si tu broker las exporta por separado, súbelas como fichero adicional.",
+  "validation.no_trades_in_year":
+    "No hay operaciones en el ejercicio {{year}}. Las operaciones anteriores se usan para el cálculo FIFO.",
+  "validation.very_old_data":
+    "Los datos incluyen operaciones desde {{year}} (más de 10 años). Verifica que el fichero es correcto.",
+  "validation.duplicate_trades":
+    "Se han detectado {{count}} operación(es) duplicada(s). Revisa si has subido el mismo fichero dos veces.",
 
   // Operations annex
   "annex.title": "Anexo de operaciones (Anexo C1)",
@@ -450,7 +482,8 @@ const es = {
   "tax.total_estimated": "Total estimado",
   "tax.effective_rate": "Tipo efectivo",
   "tax.double_tax_deduction": "Deducción doble imposición",
-  "tax.disclaimer": "Estimación orientativa. Los tramos corresponden a la base del ahorro del IRPF vigente. Consulta con un asesor fiscal.",
+  "tax.disclaimer":
+    "Estimación orientativa. Los tramos corresponden a la base del ahorro del IRPF vigente. Consulta con un asesor fiscal.",
   "tax.breakdown_capital_gains": "Ganancias patrimoniales",
   "tax.breakdown_fx_gains": "Ganancias por tipo de cambio",
   "tax.breakdown_dividends": "Dividendos",
@@ -463,59 +496,78 @@ const es = {
   // Guía de cumplimentación (Renta Web)
   "guide_rw.title": "Guía de cumplimentación — Renta Web",
   "guide_rw.description": "Cómo rellenar cada casilla en Renta Web con los datos de DeclaRenta.",
-  "guide_rw.intro": "Esta guía explica cómo trasladar los resultados de DeclaRenta a Renta Web (AEAT). Para cada apartado, se indica la casilla destino, qué valor introducir y qué opciones seleccionar en los desplegables.",
+  "guide_rw.intro":
+    "Esta guía explica cómo trasladar los resultados de DeclaRenta a Renta Web (AEAT). Para cada apartado, se indica la casilla destino, qué valor introducir y qué opciones seleccionar en los desplegables.",
   "guide_rw.capital_gains_title": "Ganancias y pérdidas patrimoniales (transmisiones)",
   "guide_rw.fx_title": "Ganancias por tipo de cambio (moneda extranjera)",
   "guide_rw.dividends_title": "Rendimientos del capital mobiliario — Dividendos",
   "guide_rw.interest_title": "Rendimientos del capital mobiliario — Intereses",
   "guide_rw.double_taxation_title": "Deducción por doble imposición internacional",
   "guide_rw.entidad_emisora_label": "Entidad emisora",
-  "guide_rw.entidad_emisora_value": "Nombre del broker (ej. Interactive Brokers, Degiro, eToro…). Si consolidas varias operaciones en una sola línea, indica el broker principal.",
+  "guide_rw.entidad_emisora_value":
+    "Nombre del broker (ej. Interactive Brokers, Degiro, eToro…). Si consolidas varias operaciones en una sola línea, indica el broker principal.",
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
-  "guide_rw.tipo_elemento_value_capital": "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
+  "guide_rw.tipo_elemento_value_capital":
+    "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
   "guide_rw.tipo_elemento_value_fx": "Selecciona <strong>«Otros elementos patrimoniales — Divisas»</strong>.",
   "guide_rw.clave_prereq_title": "¿La casilla del valor de transmisión está bloqueada?",
-  "guide_rw.clave_prereq_hint": "En Renta Web, las casillas <strong>1633</strong> (valor de transmisión) y <strong>1637</strong> (valor de adquisición) <strong>aparecen deshabilitadas hasta que rellenes antes estos campos, en este orden</strong>:<br>1) Casilla <strong>1626 «Tipo de elemento patrimonial. Clave»</strong> → para divisas y opciones suele ser la clave <strong>4</strong> («Otros elementos patrimoniales no afectos a actividades económicas»); para cripto, revisa la clave que el ejercicio asigne a las monedas virtuales. Los fondos de inversión (IIC) <strong>no</strong> usan la clave 4: se declaran como «Participaciones en IIC».<br>2) <strong>«Tipo de transmisión»</strong> → <strong>«Transmisión intervivos onerosa (venta, permuta, etc.)»</strong> — es <strong>onerosa</strong>, no lucrativa/gratuita.<br>3) <strong>Fecha de transmisión</strong> (casillas <strong>1631/1632</strong>) → día/mes/año de la venta.<br>4) <strong>Fecha de adquisición</strong> (casilla <strong>1932</strong>) → día/mes/año de la compra.<br>Una vez rellenados, las casillas 1633 y 1637 se activan y podrás escribir los importes. <em>El número exacto de casilla puede variar según el ejercicio.</em>",
+  "guide_rw.clave_prereq_hint":
+    "En Renta Web, las casillas <strong>1633</strong> (valor de transmisión) y <strong>1637</strong> (valor de adquisición) <strong>aparecen deshabilitadas hasta que rellenes antes estos campos, en este orden</strong>:<br>1) Casilla <strong>1626 «Tipo de elemento patrimonial. Clave»</strong> → para divisas y opciones suele ser la clave <strong>4</strong> («Otros elementos patrimoniales no afectos a actividades económicas»); para cripto, revisa la clave que el ejercicio asigne a las monedas virtuales. Los fondos de inversión (IIC) <strong>no</strong> usan la clave 4: se declaran como «Participaciones en IIC».<br>2) <strong>«Tipo de transmisión»</strong> → <strong>«Transmisión intervivos onerosa (venta, permuta, etc.)»</strong> — es <strong>onerosa</strong>, no lucrativa/gratuita.<br>3) <strong>Fecha de transmisión</strong> (casillas <strong>1631/1632</strong>) → día/mes/año de la venta.<br>4) <strong>Fecha de adquisición</strong> (casilla <strong>1932</strong>) → día/mes/año de la compra.<br>Una vez rellenados, las casillas 1633 y 1637 se activan y podrás escribir los importes. <em>El número exacto de casilla puede variar según el ejercicio.</em>",
   "guide_rw.gastos_transmision_label": "Gastos de la transmisión",
   "guide_rw.gastos_adquisicion_label": "Gastos de la adquisición",
-  "guide_rw.gastos_zero": "<strong>0</strong> — DeclaRenta ya incluye las comisiones en los valores de transmisión/adquisición. No añadas gastos por separado.",
+  "guide_rw.gastos_zero":
+    "<strong>0</strong> — DeclaRenta ya incluye las comisiones en los valores de transmisión/adquisición. No añadas gastos por separado.",
   "guide_rw.gastos_label": "Gastos de administración y depósito",
   "guide_rw.valor_transmision_label": "Valor de transmisión",
   "guide_rw.valor_adquisicion_label": "Valor de adquisición",
-  "guide_rw.valor_transmision_hint": "El importe de la casilla <strong>0328</strong> de DeclaRenta (EUR, comisiones ya incluidas).",
-  "guide_rw.valor_adquisicion_hint": "El importe de la casilla <strong>0331</strong> de DeclaRenta (EUR, comisiones ya incluidas).",
+  "guide_rw.valor_transmision_hint":
+    "El importe de la casilla <strong>0328</strong> de DeclaRenta (EUR, comisiones ya incluidas).",
+  "guide_rw.valor_adquisicion_hint":
+    "El importe de la casilla <strong>0331</strong> de DeclaRenta (EUR, comisiones ya incluidas).",
   "guide_rw.fx_valor_transmision_hint": "El importe de la casilla <strong>1633</strong> de DeclaRenta.",
   "guide_rw.fx_valor_adquisicion_hint": "El importe de la casilla <strong>1637</strong> de DeclaRenta.",
   "guide_rw.fecha_transmision_label": "Fecha de transmisión",
   "guide_rw.fecha_adquisicion_label": "Fecha de adquisición",
-  "guide_rw.fecha_hint_individual": "Si introduces operación a operación, usa la fecha exacta del PDF. Si consolidas todas en una línea, usa <strong>31/12/AAAA</strong> (transmisión) y <strong>01/01/AAAA</strong> (adquisición).",
-  "guide_rw.fx_fecha_hint": "Para la consolidación de FX: <strong>01/01/AAAA</strong> (adquisición) y <strong>31/12/AAAA</strong> (transmisión). Si introduces operación a operación, usa las fechas reales del informe.",
+  "guide_rw.fecha_hint_individual":
+    "Si introduces operación a operación, usa la fecha exacta del PDF. Si consolidas todas en una línea, usa <strong>31/12/AAAA</strong> (transmisión) y <strong>01/01/AAAA</strong> (adquisición).",
+  "guide_rw.fx_fecha_hint":
+    "Para la consolidación de FX: <strong>01/01/AAAA</strong> (adquisición) y <strong>31/12/AAAA</strong> (transmisión). Si introduces operación a operación, usa las fechas reales del informe.",
   "guide_rw.retenciones_label": "Retenciones",
-  "guide_rw.retenciones_zero": "Normalmente <strong>0</strong> para emisores extranjeros (su retención extranjera va en la casilla 0588). PERO si tienes acciones <strong>españolas</strong> (ISIN ES…) en un bróker extranjero, su retención del 19% SÍ es una retención a cuenta española y va en la <strong>casilla 0597</strong>.",
+  "guide_rw.retenciones_zero":
+    "<strong>0</strong> — Los brokers extranjeros no practican retención a cuenta del IRPF español. La retención extranjera se deduce en la casilla 0588.",
   "guide_rw.importe_label": "Ingresos íntegros",
   "guide_rw.dividends_importe_hint": "El importe bruto de la casilla <strong>0029</strong> de DeclaRenta (EUR).",
   "guide_rw.interest_importe_hint": "El importe de la casilla <strong>0027</strong> de DeclaRenta (EUR).",
   "guide_rw.dt_pais_label": "País de origen",
-  "guide_rw.dt_pais_hint": "Selecciona el país donde se practicó la retención (ej. Estados Unidos, Irlanda, Alemania…). Si tienes retenciones de varios países, añade una línea por cada uno.",
+  "guide_rw.dt_pais_hint":
+    "Selecciona el país donde se practicó la retención (ej. Estados Unidos, Irlanda, Alemania…). Si tienes retenciones de varios países, añade una línea por cada uno.",
   "guide_rw.dt_importe_label": "Importe de la deducción",
-  "guide_rw.dt_importe_hint": "El importe de la casilla <strong>0588</strong> de DeclaRenta. Es el menor entre la retención extranjera pagada y la cuota española correspondiente (Art. 80 LIRPF).",
+  "guide_rw.dt_importe_hint":
+    "El importe de la casilla <strong>0588</strong> de DeclaRenta. Es el menor entre la retención extranjera pagada y la cuota española correspondiente (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "¿En qué campo del cuadro?",
-  "guide_rw.dt_campo_hint": "En el cuadro de doble imposición, rellena DOS filas:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → importe bruto de los dividendos extranjeros (mismo valor que casilla 0029).<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → importe de la casilla 0588 de DeclaRenta.<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
-  "guide_rw.capital_gains_note": "Si tienes muchas operaciones, puedes consolidarlas en una sola línea por tipo de activo usando las fechas genéricas 01/01 y 31/12. Renta Web acepta importes agregados.",
-  "guide_rw.fx_note": "Las ganancias por tipo de cambio se declaran aparte de las ganancias de valores. Aparecen cuando conviertes divisa a euros —incluidas las conversiones automáticas de tu bróker (p. ej. AFx/FXCONV en IBKR)—, no solo en las conversiones manuales. Mientras mantienes la divisa (p. ej. compras y vendes acciones en USD sin pasar a euros), la diferencia de cambio queda diferida hasta que conviertes efectivamente a euros (Art. 14.2.e LIRPF). Si usas modo monodivisa, esta sección no aplica.",
-  "guide_rw.dividends_note": "La retención <strong>extranjera</strong> (withholding tax) NO se pone aquí: se deduce aparte en la casilla 0588 (doble imposición). En cambio, la retención <strong>española</strong> del 19% sobre dividendos de emisores españoles (ISIN ES…), aunque los tengas en un bróker extranjero, sí es una retención a cuenta y va en la casilla 0597.",
-  "guide_rw.interest_note": "Los intereses del broker (remuneración de saldo) se declaran como rendimientos del capital mobiliario. Los intereses de margen pagados NO son deducibles (Art. 26.1.a LIRPF).",
-  "guide_rw.double_taxation_note": "La deducción por doble imposición evita pagar dos veces impuestos sobre los mismos dividendos. Se limita al menor entre lo pagado en origen y la cuota española. Si el convenio de doble imposición permite un tipo máximo inferior (ej. 15% EE.UU.), solo es deducible hasta ese límite.",
+  "guide_rw.dt_campo_hint":
+    "En el cuadro de doble imposición, rellena DOS filas:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → importe bruto de los dividendos extranjeros (mismo valor que casilla 0029).<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → importe de la casilla 0588 de DeclaRenta.<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
+  "guide_rw.capital_gains_note":
+    "Si tienes muchas operaciones, puedes consolidarlas en una sola línea por tipo de activo usando las fechas genéricas 01/01 y 31/12. Renta Web acepta importes agregados.",
+  "guide_rw.fx_note":
+    "Las ganancias por tipo de cambio se declaran aparte de las ganancias de valores. Solo aparecen si has operado con divisas manualmente (ej. conversiones EUR→USD en IBKR). Si usas modo monodivisa, esta sección no aplica.",
+  "guide_rw.dividends_note":
+    "Los dividendos de brokers extranjeros no llevan retención española. La retención extranjera (withholding tax) NO se pone aquí: se deduce aparte en la casilla 0588 (doble imposición).",
+  "guide_rw.interest_note":
+    "Los intereses del broker (remuneración de saldo) se declaran como rendimientos del capital mobiliario. Los intereses de margen pagados NO son deducibles (Art. 26.1.a LIRPF).",
+  "guide_rw.double_taxation_note":
+    "La deducción por doble imposición evita pagar dos veces impuestos sobre los mismos dividendos. Se limita al menor entre lo pagado en origen y la cuota española. Si el convenio de doble imposición permite un tipo máximo inferior (ej. 15% EE.UU.), solo es deducible hasta ese límite.",
   "guide_rw.blocked_losses_title": "Pérdidas bloqueadas (anti-churning)",
-  "guide_rw.blocked_losses_hint": "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web por ese importe. Se bloquea solo la parte proporcional a las acciones recompradas dentro de los 2 meses (cotizados) o 1 año (no cotizados); el resto de la pérdida se imputa con normalidad. La pérdida bloqueada NO se suma al coste de la nueva posición: queda diferida y se reintegra cuando transmitas esos valores recomprados.",
-  "guide_rw.closing_tip": "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que no calcula las ganancias por tipo de cambio por separado — activa el modo monodivisa en tu perfil para comparar.",
+  "guide_rw.blocked_losses_hint":
+    "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Estas pérdidas se difieren al ejercicio siguiente porque se recompró el mismo valor en los 2 meses posteriores (cotizados) o 1 año (no cotizados). El importe se suma a la adquisición de la nueva posición.",
+  "guide_rw.closing_tip":
+    "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que no calcula las ganancias por tipo de cambio por separado — activa el modo monodivisa en tu perfil para comparar.",
 
   // PDF report
   "pdf.subtitle": "Informe fiscal — Ejercicio",
   "pdf.generated": "Generado el",
   "pdf.informative": "Informativo",
   "pdf.blocked_losses": "Pérdidas bloqueadas anti-churning",
-  "pdf.reintegrated_losses": "Pérdidas reintegradas (anti-churning)",
   "pdf.interest_margin": "Intereses margen (no deducible)",
   "pdf.section_casillas": "1. Resumen de Casillas — Modelo 100",
   "pdf.section_operations": "2. Detalle de Operaciones",
@@ -524,13 +576,17 @@ const es = {
   "pdf.section_warnings": "Advertencias",
   "pdf.dt_paid": "Impuesto pagado",
   "pdf.dt_allowed": "Deducción permitida",
-  "pdf.ecb_note": "Tipo ECB: tipo de cambio oficial del Banco Central Europeo (EUR por 1 unidad de divisa extranjera) en la fecha de la operación. Fuente: ECB SDMX API.",
-  "pdf.footer": "DeclaRenta — https://declarenta.com — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.",
+  "pdf.ecb_note":
+    "Tipo ECB: tipo de cambio oficial del Banco Central Europeo (EUR por 1 unidad de divisa extranjera) en la fecha de la operación. Fuente: ECB SDMX API.",
+  "pdf.footer":
+    "DeclaRenta — https://declarenta.com — Este informe es orientativo y no sustituye al asesoramiento fiscal profesional.",
 
   // Manual crypto valuation
   "crypto_rates.title": "Valoración manual de criptomonedas",
-  "crypto_rates.description": "Algunos canjes entre criptomonedas no se han podido valorar automáticamente porque ninguna de las dos divisas tiene un tipo de cambio oficial del BCE. Introduce el valor en euros por unidad en la fecha de la operación para incluirlos.",
-  "crypto_rates.help": "Nunca consultamos precios de criptomonedas en internet: tu cartera permanece privada. Busca tú mismo el valor en euros (p. ej. en el historial de tu exchange o en una web de precios) e introdúcelo aquí.",
+  "crypto_rates.description":
+    "Algunos canjes entre criptomonedas no se han podido valorar automáticamente porque ninguna de las dos divisas tiene un tipo de cambio oficial del BCE. Introduce el valor en euros por unidad en la fecha de la operación para incluirlos.",
+  "crypto_rates.help":
+    "Nunca consultamos precios de criptomonedas en internet: tu cartera permanece privada. Busca tú mismo el valor en euros (p. ej. en el historial de tu exchange o en una web de precios) e introdúcelo aquí.",
   "crypto_rates.col_asset": "Activo",
   "crypto_rates.col_date": "Fecha",
   "crypto_rates.col_quantity": "Cantidad",
@@ -541,76 +597,154 @@ const es = {
   "crypto_rates.saved": "Guardado",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
 
+  // Manual opening lots for transferred positions
+  "opening_lots.title": "Lotes manuales para posiciones transferidas",
+  "opening_lots.description":
+    "Si una venta corresponde a acciones transferidas desde otro broker, puedes introducir aquí los lotes de compra originales para que el FIFO calcule el coste base correcto.",
+  "opening_lots.help":
+    "Añade tantos lotes como necesites. Cada fila representa una compra previa distinta con su propia fecha, cantidad y precio por acción. Los datos se guardan solo en tu navegador.",
+  "opening_lots.effect_hint":
+    "Si el resultado baja después de introducir estos lotes, es normal: antes esa venta se estaba calculando con coste base = 0.",
+  "opening_lots.group_intro":
+    "Faltan {{quantity}} títulos para la venta del {{date}}. Introduce los lotes previos que cubren esa posición transferida.",
+  "opening_lots.group_intro_saved":
+    "Estos lotes manuales están guardados en tu navegador y se seguirán aplicando mientras no los borres.",
+  "opening_lots.col_acquire_date": "Fecha de compra",
+  "opening_lots.col_quantity": "Cantidad",
+  "opening_lots.col_price": "Precio por acción",
+  "opening_lots.col_actions": "Acciones",
+  "opening_lots.placeholder_quantity": "p. ej. 14",
+  "opening_lots.placeholder_price": "p. ej. 100,00",
+  "opening_lots.add_row": "Añadir lote",
+  "opening_lots.remove_row": "Quitar",
+  "opening_lots.save_btn": "Guardar lotes y recalcular",
+  "opening_lots.clear_btn": "Borrar lotes guardados",
+  "opening_lots.saved": "Guardado",
+  "opening_lots.recalculate_hint": "Los lotes manuales se guardan en tu navegador y el informe se recalcula.",
+
   // Engine & parser messages (TaxMessage id → localized text). The engine still
   // emits the Spanish message/hint as a byte-identical fallback for any id NOT
   // present here; these keys add localized rendering. {{placeholders}} are filled
   // from each message's `context`. es is the source of truth — keep tildes/ñ.
-  "fx.missing_prior_lots": "⚠ {{count}} disposiciones de {{currency}} sin lotes previos suficientes (total: {{totalQuantity}} {{currency}}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.",
-  "fx.missing_prior_lots.hint": "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).",
-  "fifo.unknown_category": "⚠ Categoría de activo desconocida: \"{{assetCategory}}\" para {{symbol}}. Se procesará con FIFO genérico.",
-  "fifo.unknown_category.hint": "Se procesa igualmente con FIFO genérico. Si es un activo nuevo de IBKR, puede que se añada en futuras versiones.",
+  "fx.missing_prior_lots":
+    "⚠ {{count}} disposiciones de {{currency}} sin lotes previos suficientes (total: {{totalQuantity}} {{currency}}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.",
+  "fx.missing_prior_lots.hint":
+    "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).",
+  "fifo.unknown_category":
+    '⚠ Categoría de activo desconocida: "{{assetCategory}}" para {{symbol}}. Se procesará con FIFO genérico.',
+  "fifo.unknown_category.hint":
+    "Se procesa igualmente con FIFO genérico. Si es un activo nuevo de IBKR, puede que se añada en futuras versiones.",
   "fifo.scrip_dividend": "📈 Scrip dividend: {{symbol}} +{{quantity}} acciones el {{date}}",
   "fifo.scrip_dividend.hint": "El scrip dividend se ha añadido como lote con coste igual al valor del dividendo.",
   "fifo.roll_operation": "⚠ Operación C;O (roll): {{symbol}} el {{date}}. Se procesa como cierre + apertura.",
-  "fifo.roll_operation.hint": "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.",
+  "fifo.roll_operation.hint":
+    "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
-  "fifo.split_applied.hint": "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
-  "fifo.merger_applied": "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
-  "fifo.merger_applied.hint": "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.",
-  "fifo.spinoff_applied": "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, coste {{costPercent}}% al spin-off, {{date}})",
+  "fifo.split_applied.hint":
+    "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
+  "fifo.merger_applied":
+    "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
+  "fifo.merger_applied.hint":
+    "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.",
+  "fifo.spinoff_applied":
+    "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, coste {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.",
-  "fifo.sell_without_lots": "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
-  "fifo.sell_without_lots.hint": "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
+  "fifo.sell_without_lots":
+    "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
+  "fifo.sell_without_lots.hint":
+    "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
   "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0.",
-  "fifo.insufficient_lots.hint": "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
+  "fifo.insufficient_lots.hint":
+    "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
   "fifo.option_invalid_date": "⚠ Evento OptionEAE sin fecha válida para {{symbol}}. Omitido.",
-  "fifo.option_invalid_date.hint": "Evento de opción omitido por fecha inválida. Revisa que el Flex Query incluye la sección 'Option Exercises, Assignments & Expirations'.",
+  "fifo.option_invalid_date.hint":
+    "Evento de opción omitido por fecha inválida. Revisa que el Flex Query incluye la sección 'Option Exercises, Assignments & Expirations'.",
   "fifo.option_zero_quantity": "⚠ Evento OptionEAE con cantidad 0 para {{symbol}} el {{date}}. Omitido.",
   "fifo.option_zero_quantity.hint": "Evento de opción con cantidad 0 — probablemente un registro duplicado de IBKR.",
-  "fifo.option_invalid_strike": "⚠ Strike inválido \"{{strike}}\" para {{symbol}} el {{date}}. Omitiendo ejercicio.",
-  "fifo.option_invalid_strike.hint": "No se pudo calcular el ejercicio de esta opción. El coste del subyacente no incluirá la prima.",
+  "fifo.option_invalid_strike": '⚠ Strike inválido "{{strike}}" para {{symbol}} el {{date}}. Omitiendo ejercicio.',
+  "fifo.option_invalid_strike.hint":
+    "No se pudo calcular el ejercicio de esta opción. El coste del subyacente no incluirá la prima.",
   "fifo.option_expiry_no_lots": "⚠ Expiración de opción sin lotes: {{symbol}} × {{quantity}} el {{date}}.",
-  "fifo.option_expiry_no_lots.hint": "La opción expiró pero no se encontraron lotes de compra. ¿Incluiste el año de compra en el Flex Query?",
-  "fifo.option_exercise_no_lots": "⚠ Ejercicio/asignación sin lotes de opción: {{symbol}} × {{quantity}} el {{date}}. Coste de prima = 0.",
-  "fifo.option_exercise_no_lots.hint": "Ejercicio registrado con prima = 0 porque no se encontró la compra de la opción. Amplía el periodo del Flex Query.",
-  "fifo.exercise_no_underlying_lots": "⚠ Ejercicio de opción sin lotes del subyacente: {{symbol}} × {{quantity}} el {{date}}. Coste base = 0.",
-  "fifo.exercise_no_underlying_lots.hint": "Asignación de PUT registrada con coste base = 0 del subyacente. El Flex Query puede no cubrir la adquisición original.",
-  "fifo.insufficient_underlying_lots": "⚠ Lotes insuficientes del subyacente: {{symbol}} × {{quantity}} el {{date}}. Coste base = 0.",
-  "fifo.insufficient_underlying_lots.hint": "No hay suficientes lotes del subyacente para cubrir la asignación completa.",
-  "report.crypto_valuation_unresolved": "Hay {{count}} operación(es) en criptomoneda cuyo valor en euros no se ha podido determinar automáticamente y se han excluido de los cálculos.",
-  "report.crypto_valuation_unresolved.hint": "Sucede en permutas cripto-cripto (p. ej. Binance Convert) cuando ninguna de las dos monedas tiene tipo de cambio oficial del BCE. Introduce manualmente el valor en euros por unidad de cada moneda en la fecha indicada para incluir estas operaciones.",
-  "report.crypto_commission_neutralized": "Se ha ignorado la comisión de {{count}} operación(es) por estar denominada en una criptomoneda sin tipo de cambio disponible.",
-  "report.crypto_commission_neutralized.hint": "El valor principal de la operación sí se ha calculado; solo se omite la pequeña comisión, cuyo impacto fiscal es mínimo.",
-  "report.crypto_income_unvalued": "Hay {{count}} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
-  "report.crypto_income_unvalued.hint": "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
-  "report.crypto_general_gain_unvalued": "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
-  "report.crypto_general_gain_unvalued.hint": "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
-  "report.titularidad_compartida": "Los importes mostrados están divididos entre {{titulares}} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los {{titulares}} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.",
-  "report.titularidad_compartida.hint": "El reparto a partes iguales ({{titulares}} × {{percent}} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.",
-  "report.competitor_reconciliation": "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
-  "report.competitor_reconciliation.hint": "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
-  "report.non_finite_total": "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
-  "report.non_finite_total.hint": "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
-  "flatex.lagerstellenwechsel.unmatched": "Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para {{isin}}: {{netQuantity}} títulos.",
-  "flatex.lagerstellenwechsel.unmatched.hint": "Un traspaso sin pareja entró o salió del depósito sin precio de adquisición. Si más tarde vendes estos títulos, revisa que el valor de compra original esté incluido para no declarar una ganancia ficticia.",
-  "flatex.commission.unmatched_trades": "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
-  "flatex.commission.unmatched_trades.hint": "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
+  "fifo.option_expiry_no_lots.hint":
+    "La opción expiró pero no se encontraron lotes de compra. ¿Incluiste el año de compra en el Flex Query?",
+  "fifo.option_exercise_no_lots":
+    "⚠ Ejercicio/asignación sin lotes de opción: {{symbol}} × {{quantity}} el {{date}}. Coste de prima = 0.",
+  "fifo.option_exercise_no_lots.hint":
+    "Ejercicio registrado con prima = 0 porque no se encontró la compra de la opción. Amplía el periodo del Flex Query.",
+  "fifo.exercise_no_underlying_lots":
+    "⚠ Ejercicio de opción sin lotes del subyacente: {{symbol}} × {{quantity}} el {{date}}. Coste base = 0.",
+  "fifo.exercise_no_underlying_lots.hint":
+    "Asignación de PUT registrada con coste base = 0 del subyacente. El Flex Query puede no cubrir la adquisición original.",
+  "fifo.insufficient_underlying_lots":
+    "⚠ Lotes insuficientes del subyacente: {{symbol}} × {{quantity}} el {{date}}. Coste base = 0.",
+  "fifo.insufficient_underlying_lots.hint":
+    "No hay suficientes lotes del subyacente para cubrir la asignación completa.",
+  "report.crypto_valuation_unresolved":
+    "Hay {{count}} operación(es) en criptomoneda cuyo valor en euros no se ha podido determinar automáticamente y se han excluido de los cálculos.",
+  "report.crypto_valuation_unresolved.hint":
+    "Sucede en permutas cripto-cripto (p. ej. Binance Convert) cuando ninguna de las dos monedas tiene tipo de cambio oficial del BCE. Introduce manualmente el valor en euros por unidad de cada moneda en la fecha indicada para incluir estas operaciones.",
+  "report.crypto_commission_neutralized":
+    "Se ha ignorado la comisión de {{count}} operación(es) por estar denominada en una criptomoneda sin tipo de cambio disponible.",
+  "report.crypto_commission_neutralized.hint":
+    "El valor principal de la operación sí se ha calculado; solo se omite la pequeña comisión, cuyo impacto fiscal es mínimo.",
+  "report.crypto_income_unvalued":
+    "Hay {{count}} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
+  "report.crypto_income_unvalued.hint":
+    "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+  "report.crypto_general_gain_unvalued":
+    "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
+  "report.crypto_general_gain_unvalued.hint":
+    "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
+  "report.titularidad_compartida":
+    "Los importes mostrados están divididos entre {{titulares}} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los {{titulares}} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.",
+  "report.titularidad_compartida.hint":
+    "El reparto a partes iguales ({{titulares}} × {{percent}} %) presupone titularidad por igual. Si los porcentajes de titularidad son distintos (p. ej. 70/30), ajusta los importes manualmente. En cuentas de gananciales la atribución es 50/50 (Art. 11.3 LIRPF). Puedes cambiar el número de titulares en tu perfil fiscal.",
+  "report.competitor_reconciliation":
+    "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
+  "report.competitor_reconciliation.hint":
+    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+  "report.non_finite_total":
+    "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
+  "report.non_finite_total.hint":
+    "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
+  "flatex.lagerstellenwechsel.unmatched":
+    "Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para {{isin}}: {{netQuantity}} títulos.",
+  "flatex.lagerstellenwechsel.unmatched.hint":
+    "Un traspaso sin pareja entró o salió del depósito sin precio de adquisición. Si más tarde vendes estos títulos, revisa que el valor de compra original esté incluido para no declarar una ganancia ficticia.",
+  "flatex.commission.unmatched_trades":
+    "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
+  "flatex.commission.unmatched_trades.hint":
+    "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
   "degiro.rows_skipped": "Se omitieron {{count}} filas sin ISIN/sin importe.",
-  "degiro.rows_skipped.hint": "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
-  "binance.unparseable_timestamp": "Se han omitido {{count}} fila(s) del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.",
-  "binance.unparseable_timestamp.hint": "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
-  "coinbase.rewards_income_classification": "Se han clasificado {{count}} ingreso(s) de tipo \"Rewards Income\" de Coinbase como rendimientos del capital mobiliario (base del ahorro).",
-  "coinbase.rewards_income_classification.hint": "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
-  "trade_republic.trade_skipped_no_amount": "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
-  "trade_republic.trade_skipped_no_amount.hint": "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
-  "parser.trading212.unresolved_price_skipped": "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
-  "parser.trading212.unresolved_price_skipped.hint": "Estas filas no tenían precio por acción y su importe (Total) estaba en una divisa distinta a la del instrumento, por lo que no se pudo calcular el valor de la operación. Vuelve a exportar el histórico desde Trading 212 asegurándote de incluir la columna \"Price / share\".",
-  "parser.cash_summary_duplicates": "Se omitieron {{skipped}} filas resumen duplicadas en las transacciones de efectivo.",
-  "parser.cash_summary_duplicates.hint": "Tu Flex Query tiene activada la opción \"Summary\" en la sección Cash Transactions, lo que duplica cada movimiento. Puedes desactivarla, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar dividendos, retenciones y comisiones.",
+  "degiro.rows_skipped.hint":
+    "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
+  "binance.unparseable_timestamp":
+    "Se han omitido {{count}} fila(s) del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.",
+  "binance.unparseable_timestamp.hint":
+    "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
+  "coinbase.rewards_income_classification":
+    'Se han clasificado {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).',
+  "coinbase.rewards_income_classification.hint":
+    "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+  "trade_republic.trade_skipped_no_amount":
+    "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
+  "trade_republic.trade_skipped_no_amount.hint":
+    'Suele deberse a filas incompletas en la exportación (columna "amount" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.',
+  "parser.trading212.unresolved_price_skipped":
+    "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
+  "parser.trading212.unresolved_price_skipped.hint":
+    'Estas filas no tenían precio por acción y su importe (Total) estaba en una divisa distinta a la del instrumento, por lo que no se pudo calcular el valor de la operación. Vuelve a exportar el histórico desde Trading 212 asegurándote de incluir la columna "Price / share".',
+  "parser.cash_summary_duplicates":
+    "Se omitieron {{skipped}} filas resumen duplicadas en las transacciones de efectivo.",
+  "parser.cash_summary_duplicates.hint":
+    'Tu Flex Query tiene activada la opción "Summary" en la sección Cash Transactions, lo que duplica cada movimiento. Puedes desactivarla, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar dividendos, retenciones y comisiones.',
   "parser.executions_merged": "Se agruparon {{sourceFillCount}} ejecuciones parciales en {{mergedGroupCount}} órdenes.",
-  "parser.executions_merged.hint": "Las órdenes con varias ejecuciones parciales se han combinado en una sola operación, igual que hacen los brokers que informan a Hacienda. El cálculo fiscal no cambia: cantidad total, precio medio ponderado y comisiones suman lo mismo.",
-  "parser.order_level_duplicates": "Se omitieron {{skipped}} filas agregadas de tipo ORDER duplicadas en las operaciones.",
-  "parser.order_level_duplicates.hint": "Tu Flex Query tiene activado el nivel de detalle \"Orders\" además de \"Executions\" en la sección Trades, lo que duplica cada operación. Puedes desactivar \"Orders\" en la configuración del Flex Query, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar cantidades, importes y comisiones.",
+  "parser.executions_merged.hint":
+    "Las órdenes con varias ejecuciones parciales se han combinado en una sola operación, igual que hacen los brokers que informan a Hacienda. El cálculo fiscal no cambia: cantidad total, precio medio ponderado y comisiones suman lo mismo.",
+  "parser.order_level_duplicates":
+    "Se omitieron {{skipped}} filas agregadas de tipo ORDER duplicadas en las operaciones.",
+  "parser.order_level_duplicates.hint":
+    'Tu Flex Query tiene activado el nivel de detalle "Orders" además de "Executions" en la sección Trades, lo que duplica cada operación. Puedes desactivar "Orders" en la configuración del Flex Query, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar cantidades, importes y comisiones.',
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

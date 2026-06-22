@@ -18,7 +18,13 @@ import { formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
-import { extractChartData, renderDonutChart, renderMonthlyGainLossChart, renderHorizontalBarChart, renderTaxBracketCard } from "./charts.js";
+import {
+  extractChartData,
+  renderDonutChart,
+  renderMonthlyGainLossChart,
+  renderHorizontalBarChart,
+  renderTaxBracketCard,
+} from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
@@ -27,7 +33,14 @@ import { initProfile, getProfile, saveProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
-import { getManualRates, renderManualRatesPanel, bindManualRatesPanel } from "./manual-rates.js";
+import {
+  getManualRates,
+  renderManualRatesPanel,
+  bindManualRatesPanel,
+  getManualOpeningLots,
+  renderManualOpeningLotsPanel,
+  bindManualOpeningLotsPanel,
+} from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
@@ -106,10 +119,14 @@ const splashCta = document.getElementById("splash-cta");
 function dismissSplash() {
   if (!splash) return;
   splash.classList.add("splash-exit");
-  splash.addEventListener("animationend", () => {
-    splash.style.display = "none";
-    document.body.classList.remove("splash-visible");
-  }, { once: true });
+  splash.addEventListener(
+    "animationend",
+    () => {
+      splash.style.display = "none";
+      document.body.classList.remove("splash-visible");
+    },
+    { once: true },
+  );
 }
 
 function showSplash() {
@@ -161,7 +178,6 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
   applyTheme(next);
 });
 
-
 // ---------------------------------------------------------------------------
 // Diagnostic mode (developer/advisor only — NEVER part of the normal UI)
 // ---------------------------------------------------------------------------
@@ -175,8 +191,7 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
  * FX engine skips trace capture at zero cost). The FX-FIFO trace is a
  * developer/advisor audit artifact that must never reach end users.
  */
-const isDebugMode = (): boolean =>
-  location.hash.includes("debug") || localStorage.getItem("declarenta_debug") === "1";
+const isDebugMode = (): boolean => location.hash.includes("debug") || localStorage.getItem("declarenta_debug") === "1";
 
 // ---------------------------------------------------------------------------
 // DOM references
@@ -236,28 +251,32 @@ onStepChange((_from: WizardStep, to: WizardStep) => {
 
 // Override next button to trigger processing on step 2
 const wizardNext = document.getElementById("wizard-next")!;
-wizardNext.addEventListener("click", (e) => {
-  const step = getCurrentWizardStep();
-  if (step === 1 && pendingFiles.length === 0) {
-    e.stopImmediatePropagation();
-    return;
-  }
-  if (step === 2) {
-    e.stopImmediatePropagation();
-    const panel = document.getElementById("wizard-step-2")!;
-    const overlay = document.createElement("div");
-    overlay.className = "processing-overlay";
-    overlay.innerHTML = `<div class="processing-spinner"></div><span class="processing-text">${t("config.processing")}</span>`;
-    panel.appendChild(overlay);
-    wizardNext.setAttribute("disabled", "");
-    void processFiles().then(() => {
-      overlay.remove();
-      wizardNext.removeAttribute("disabled");
-      if (currentReport) goToStep(3);
-    });
-    return;
-  }
-}, true); // Capture phase to run before wizard's own handler
+wizardNext.addEventListener(
+  "click",
+  (e) => {
+    const step = getCurrentWizardStep();
+    if (step === 1 && pendingFiles.length === 0) {
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (step === 2) {
+      e.stopImmediatePropagation();
+      const panel = document.getElementById("wizard-step-2")!;
+      const overlay = document.createElement("div");
+      overlay.className = "processing-overlay";
+      overlay.innerHTML = `<div class="processing-spinner"></div><span class="processing-text">${t("config.processing")}</span>`;
+      panel.appendChild(overlay);
+      wizardNext.setAttribute("disabled", "");
+      void processFiles().then(() => {
+        overlay.remove();
+        wizardNext.removeAttribute("disabled");
+        if (currentReport) goToStep(3);
+      });
+      return;
+    }
+  },
+  true,
+); // Capture phase to run before wizard's own handler
 
 function getCurrentWizardStep(): WizardStep {
   for (let i = 1; i <= 3; i++) {
@@ -315,8 +334,9 @@ function addFiles(files: File[]) {
     if (statusEl) {
       const limitMb = String(Math.round(MAX_FILE_BYTES / (1024 * 1024)));
       statusEl.innerHTML = oversized
-        .map((name) =>
-          `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${esc(t("error.file_too_large", { filename: name, limit: limitMb }))}</span>`,
+        .map(
+          (name) =>
+            `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${esc(t("error.file_too_large", { filename: name, limit: limitMb }))}</span>`,
         )
         .join("");
     }
@@ -345,7 +365,10 @@ function addFiles(files: File[]) {
 
 function renderFileList() {
   fileListDiv.innerHTML = pendingFiles
-    .map((f, i) => `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`)
+    .map(
+      (f, i) =>
+        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`,
+    )
     .join(" ");
 
   fileListDiv.querySelectorAll(".remove-file").forEach((btn) => {
@@ -410,14 +433,19 @@ async function previewDetectBroker(file: File): Promise<string | null> {
 function renderDetectionStatus(): void {
   const statusEl = document.getElementById("detection-status");
   if (!statusEl) return;
-  if (pendingFiles.length === 0) { statusEl.innerHTML = ""; return; }
-  statusEl.innerHTML = pendingFiles.map((f) => {
-    const cached = detectionCache.get(fileKey(f));
-    if (cached === undefined) return `<span class="detection-loading">${t("upload.detecting")}</span>`;
-    return cached && cached !== DETECTION_ERROR
-      ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(cached)}</strong></span>`
-      : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`;
-  }).join("");
+  if (pendingFiles.length === 0) {
+    statusEl.innerHTML = "";
+    return;
+  }
+  statusEl.innerHTML = pendingFiles
+    .map((f) => {
+      const cached = detectionCache.get(fileKey(f));
+      if (cached === undefined) return `<span class="detection-loading">${t("upload.detecting")}</span>`;
+      return cached && cached !== DETECTION_ERROR
+        ? `<span class="detection-ok"><span class="detection-icon">&#10003;</span>${t("upload.detected")} <strong>${esc(cached)}</strong></span>`
+        : `<span class="detection-fail"><span class="detection-icon">&#9888;</span>${t("upload.detection_failed")}</span>`;
+    })
+    .join("");
 }
 
 async function updateDetectionStatus(): Promise<void> {
@@ -489,9 +517,10 @@ async function parseFiles(): Promise<void> {
 
       const content = new TextDecoder("utf-8").decode(uint8);
       const selectedBroker = brokerSelect.value;
-      let parser = selectedBroker !== "auto"
-        ? getBroker(selectedBroker)
-        : resolveDetection(detectionCache.get(fileKey(file)), content, detectBroker, getBroker);
+      let parser =
+        selectedBroker !== "auto"
+          ? getBroker(selectedBroker)
+          : resolveDetection(detectionCache.get(fileKey(file)), content, detectBroker, getBroker);
 
       // Fallback: if auto-detection failed, try parsers for brokers the user selected in the card grid
       if (!parser) {
@@ -560,8 +589,8 @@ async function parseFiles(): Promise<void> {
 
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
   const tradeCount = merged.trades.length;
-  const divCount = merged.cashTransactions.filter((c) =>
-    c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
+  const divCount = merged.cashTransactions.filter(
+    (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
   ).length;
 
   const currencies = new Set<string>();
@@ -569,9 +598,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   currencies.delete("EUR");
 
   const dates = merged.trades.map((tr) => normalizeDate(tr.tradeDate)).sort();
-  const dateRange = dates.length > 0
-    ? `${formatDate(dates[0]!)} — ${formatDate(dates[dates.length - 1]!)}`
-    : "—";
+  const dateRange = dates.length > 0 ? `${formatDate(dates[0]!)} — ${formatDate(dates[dates.length - 1]!)}` : "—";
 
   reviewContent.innerHTML = `
     <div class="review-grid">
@@ -599,9 +626,13 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
     <div class="review-files">
       <table>
         <thead><tr><th>${t("review.file")}</th><th>${t("review.broker")}</th></tr></thead>
-        <tbody>${pendingFiles.map((f, i) => `
+        <tbody>${pendingFiles
+          .map(
+            (f, i) => `
           <tr><td>${esc(f.name)}</td><td>${esc(perFileBrokers[i] ?? "—")}</td></tr>
-        `).join("")}</tbody>
+        `,
+          )
+          .join("")}</tbody>
       </table>
     </div>
   `;
@@ -713,6 +744,7 @@ async function processFiles(): Promise<void> {
       // Opt-in FX-FIFO movement trace, captured in the SAME run only in hidden
       // diagnostic mode. False by default → zero cost, normal path unchanged.
       fxTrace: isDebugMode(),
+      manualOpeningLots: getManualOpeningLots(),
     });
     currentReport = report;
     currentBrokers = detectedBrokers;
@@ -758,16 +790,18 @@ exportPdfBtn.addEventListener("click", () => {
   if (!currentReport) return;
   exportPdfBtn.disabled = true;
   const report = currentReport;
-  void import("../generators/pdf-web.js").then(({ generatePdfWebReport }) =>
-    generatePdfWebReport(report, t as (key: string) => string, getCurrentLocale())
-  ).then((blob) => {
-    downloadBlob(blob, `declarenta_${report.year}.pdf`);
-  }).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
-    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
-  }).finally(() => {
-    exportPdfBtn.disabled = false;
-  });
+  void import("../generators/pdf-web.js")
+    .then(({ generatePdfWebReport }) => generatePdfWebReport(report, t as (key: string) => string, getCurrentLocale()))
+    .then((blob) => {
+      downloadBlob(blob, `declarenta_${report.year}.pdf`);
+    })
+    .catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+    })
+    .finally(() => {
+      exportPdfBtn.disabled = false;
+    });
 });
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -815,7 +849,10 @@ if (isDebugMode()) {
 // ---------------------------------------------------------------------------
 
 type SortDir = "asc" | "desc" | null;
-interface SortState { col: string; dir: SortDir }
+interface SortState {
+  col: string;
+  dir: SortDir;
+}
 
 let opsSort: SortState = { col: "", dir: null };
 let divSort: SortState = { col: "", dir: null };
@@ -866,10 +903,14 @@ function renderResults(report: TaxSummary) {
   const yearHeader = document.getElementById("results-year-header");
   if (yearHeader) {
     const year = report.year;
-    const hasData = report.capitalGains.disposals.length > 0 || report.fxGains.disposals.length > 0 || report.dividends.entries.length > 0;
+    const hasData =
+      report.capitalGains.disposals.length > 0 ||
+      report.fxGains.disposals.length > 0 ||
+      report.dividends.entries.length > 0;
 
     const yearOptions = (detectedYears.length > 0 ? detectedYears : [year])
-      .slice().sort((a, b) => a - b)
+      .slice()
+      .sort((a, b) => a - b)
       .map((y) => `<option value="${y}"${y === year ? " selected" : ""}>${y}</option>`)
       .join("");
 
@@ -906,6 +947,19 @@ function renderResults(report: TaxSummary) {
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
+  resultsSectionEl.querySelectorAll(".manual-opening-lots-panel").forEach((el) => el.remove());
+
+  const panelHtml = renderManualOpeningLotsPanel(report.messages);
+  if (panelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".manual-opening-lots-panel");
+    if (panel) {
+      bindManualOpeningLotsPanel(panel, () => {
+        void processFiles();
+      });
+    }
+  }
+
   const unresolved = report.unresolvedCryptoValuations;
   if (unresolved && unresolved.length > 0) {
     const panelHtml = renderManualRatesPanel(unresolved);
@@ -938,7 +992,9 @@ function renderResults(report: TaxSummary) {
     renderDonutChart(t("chart.currency_composition"), chartData.currencyComposition),
     renderHorizontalBarChart(t("chart.withholdings_country"), chartData.withholdingsByCountry),
     renderTaxBracketCard(t("chart.tax_estimate"), report.year, taxableBase, dtDeduction, taxBaseBreakdown),
-  ].filter(Boolean).join("");
+  ]
+    .filter(Boolean)
+    .join("");
 
   const resultsSection = document.getElementById("wizard-step-3")!;
   resultsSection.querySelectorAll(".charts-grid").forEach((el) => el.remove());
@@ -1025,7 +1081,9 @@ function renderOperationsTable() {
         </tr>
       </thead>
       <tbody>
-        ${disposals.map((d) => `
+        ${disposals
+          .map(
+            (d) => `
           <tr>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
@@ -1034,10 +1092,12 @@ function renderOperationsTable() {
             <td>${d.quantity.toString()}</td>
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
-            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? 'gain' : 'loss'}">${fmtEur(d.gainLossEur)}</td>
+            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
           </tr>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </tbody>
     </table>
     <p class="table-count">${t("results.operations_count", { count: String(disposals.length) })}</p>
@@ -1083,7 +1143,9 @@ function renderDividendsTable(report: TaxSummary) {
         </tr>
       </thead>
       <tbody>
-        ${entries.map((d) => `
+        ${entries
+          .map(
+            (d) => `
           <tr>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
@@ -1092,7 +1154,9 @@ function renderDividendsTable(report: TaxSummary) {
             <td>${fmtEur(d.withholdingTaxEur)}</td>
             <td>${esc(d.withholdingCountry)}</td>
           </tr>
-        `).join("")}
+        `,
+          )
+          .join("")}
       </tbody>
     </table>
     <p class="table-count">${t("results.dividends_count", { count: String(entries.length) })}</p>
