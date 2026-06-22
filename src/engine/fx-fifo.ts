@@ -110,6 +110,57 @@ export class FxFifoEngine {
   private fxMissing: Map<string, { count: number; totalQty: Decimal }> = new Map();
 
   /**
+   * ALWAYS-ON per-currency conservation accumulators (issue #230 follow-up — the
+   * "no se silencien operaciones sin respaldo económico" self-check). NOT gated
+   * behind tracing: this diagnostic must run on EVERY report (it is cheap — plain
+   * Decimal adds, no allocation per event beyond one Map entry per currency seen).
+   *
+   * One running total per movement kind that mutates the spendable pool or the
+   * parked FIFO, incremented at the SAME sites that call {@link record} (via the
+   * {@link accumulate} helper, called right next to each record so the two can
+   * never desync). Used at the end of {@link processEvents} to verify the FX
+   * bookkeeping balances — see {@link checkConservation}.
+   *
+   * `phantom` is the reconciling term for FCY that legitimately enters the books
+   * with NO real pool acquisition behind it (missing-lot floored disposals, an
+   * uncovered park against an empty pool, and an unmatched-sell re-add). Such FCY
+   * was never `acquired`, yet a floored dispose REDUCES lhs / an uncovered park or
+   * unmatched re-add appears on the rhs without a matching acquire — so we count an
+   * implicit "phantom acquire" of exactly that quantity to keep the identity
+   * balanced for these documented-legitimate paths. See {@link checkConservation}
+   * for the full algebra and why this is the correct (non-false-positive) form.
+   */
+  private accAcquired: Map<string, Decimal> = new Map();
+  private accDisposed: Map<string, Decimal> = new Map();
+  private accParked: Map<string, Decimal> = new Map();
+  private accUnparked: Map<string, Decimal> = new Map();
+  private accDiscarded: Map<string, Decimal> = new Map();
+  private accProfit: Map<string, Decimal> = new Map();
+  private accPhantom: Map<string, Decimal> = new Map();
+  /** Every currency seen by any accumulator — drives the end-of-run check loop. */
+  private accCurrencies: Set<string> = new Set();
+
+  /**
+   * Add `qty` to the per-currency running total for one conservation movement
+   * kind. Called right next to each {@link record} call (and at the three
+   * "phantom acquire" reconciling sites) so the accumulators stay in lockstep with
+   * the trace and can never silently drift apart. Pure Decimal add + Map upsert —
+   * no per-event allocation beyond the first Map entry per currency.
+   */
+  private accumulate(kind: "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit" | "phantom", currency: string, qty: Decimal): void {
+    const map =
+      kind === "acquire" ? this.accAcquired
+      : kind === "dispose" ? this.accDisposed
+      : kind === "park" ? this.accParked
+      : kind === "unpark" ? this.accUnparked
+      : kind === "discard" ? this.accDiscarded
+      : kind === "profit" ? this.accProfit
+      : this.accPhantom;
+    map.set(currency, (map.get(currency) ?? new Decimal(0)).plus(qty));
+    this.accCurrencies.add(currency);
+  }
+
+  /**
    * Opt-in movement trace (audit/diagnostic only — issue #230 follow-up). OFF by
    * default and ZERO-COST when off: every `record()` call returns immediately
    * unless `traceEnabled` is set via {@link enableTrace}. When on, each pool/park
@@ -310,6 +361,16 @@ export class FxFifoEngine {
     this.parked.clear();
     this.trace = [];
     this.traceSeq = 0;
+    // Transient per-currency conservation accumulators — like fxMissing/parked,
+    // reset every run so the self-check reflects only this report's movements.
+    this.accAcquired.clear();
+    this.accDisposed.clear();
+    this.accParked.clear();
+    this.accUnparked.clear();
+    this.accDiscarded.clear();
+    this.accProfit.clear();
+    this.accPhantom.clear();
+    this.accCurrencies.clear();
     const sorted = [...events].sort((a, b) => {
       const cmp = a.date.localeCompare(b.date);
       if (cmp !== 0) return cmp;
@@ -335,7 +396,94 @@ export class FxFifoEngine {
       this.emit({ id: "fx.missing_prior_lots", severity: "info", message: `⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`, hint: "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).", context: { currency, count: count.toString(), totalQuantity: totalQty.toFixed(2) } });
     }
 
+    this.checkConservation();
+
     return this.disposals;
+  }
+
+  /** Quantity-conservation tolerance (FCY units). Dust below this is fine — the
+   *  carry-basis loops already use a 1e-9 EPS, so legit runs balance far tighter
+   *  than this; anything above it signals a real bookkeeping desync. */
+  private static readonly CONSERVATION_EPS = new Decimal("0.01");
+
+  /** Sum the parked FCY across ALL positions of a currency (every parked queue
+   *  whose key is `${currency}` or starts with `${currency}|` — the two
+   *  {@link parkKey} forms). The plain-currency `getParked()` accessor only sees
+   *  the bare-key queue, so the conservation check needs this to total the
+   *  per-position queues real data produces. */
+  private totalParkedBalance(currency: string): Decimal {
+    const prefix = `${currency}|`;
+    let sum = new Decimal(0);
+    for (const [key, slices] of this.parked) {
+      if (key !== currency && !key.startsWith(prefix)) continue;
+      for (const s of slices) sum = sum.plus(s.q);
+    }
+    return sum;
+  }
+
+  /**
+   * FX conservation self-check (issue #230 — "para la comprobación de descuadres
+   * del FIFO, y no se silencien operaciones sin respaldo económico"). A pure
+   * DIAGNOSTIC: it reads only the running accumulators and the final pool/parked
+   * balances and emits a developer-facing `warning` if they fail to balance. It
+   * NEVER mutates a disposal, lot, or any tax figure — no casilla output depends
+   * on it. It is the regression tripwire for the "pool diverged from the real
+   * spendable balance" bug class (the documented €450-vs-€320 drift).
+   *
+   * THE IDENTITY (per currency). Six kinds mutate the pool/parked quantities:
+   *   finalPool   = Σacquire − Σdispose(per-lot) − Σpark(covered) + Σunpark + Σprofit
+   *   finalParked = Σpark(covered+uncovered) − Σunpark(matched) − Σdiscard
+   * The accumulators sum the SAME quantities the trace's `record()` logs, so for
+   * the well-behaved (fully-funded) case:
+   *   (acquired + profit) − disposed − discarded  ==  finalPool + finalParked.
+   *
+   * RECONCILING THE THREE LEGITIMATE "no real acquire behind it" PATHS. Three
+   * documented-correct paths put FCY into the books that was never a real pool
+   * acquisition, so the bare identity above would FALSE-POSITIVE on them:
+   *   1. Missing-lot floored disposal (consumeLots, the "sin lotes"/"insuficientes"
+   *      branches): FCY is disposed that was never acquired. Those branches floor
+   *      gain to 0 and DO NOT touch the pool (the pool never goes negative), so the
+   *      floored qty is on `disposed` (reducing lhs) with no matching acquire.
+   *   2. Uncovered park (parkPrincipal shortfall, rate=null): FCY parked from an
+   *      empty pool — on the rhs (finalParked) with no acquire behind it.
+   *   3. Unmatched-sell re-add (unparkAndReadd top-up): FCY re-added to the pool at
+   *      the sale rate with no parked principal — on the rhs (finalPool) with no
+   *      acquire behind it.
+   * Each is genuine, untracked FCY (funding outside the data window — AFx
+   * settlement, single-year exports, options-delivered shares). We therefore count
+   * an implicit "phantom acquire" of exactly that quantity (`accPhantom`,
+   * incremented at those three sites). Algebra: with phantom included,
+   *   lhs − rhs = −(disposed_floor + parked_uncovered + unpark_unmatched) + phantom
+   *             = 0
+   * exactly, so the check is SILENT on every legitimate scenario and only fires
+   * when the pool genuinely diverged from the parked/spendable books. (FCY↔FCY and
+   * short legs never enter park/unpark — shorts are filtered out by the producers,
+   * FCY↔FCY conversions are plain acquire/dispose — so they balance via the
+   * acquire/dispose terms alone.)
+   */
+  private checkConservation(): void {
+    const get = (m: Map<string, Decimal>, c: string): Decimal => m.get(c) ?? new Decimal(0);
+    for (const currency of this.accCurrencies) {
+      const acquired = get(this.accAcquired, currency);
+      const disposed = get(this.accDisposed, currency);
+      const discarded = get(this.accDiscarded, currency);
+      const profit = get(this.accProfit, currency);
+      const phantom = get(this.accPhantom, currency);
+
+      const lhs = acquired.plus(profit).plus(phantom).minus(disposed).minus(discarded);
+      const rhs = this.poolBalance(currency).plus(this.totalParkedBalance(currency));
+      const mismatch = lhs.minus(rhs);
+
+      if (mismatch.abs().greaterThan(FxFifoEngine.CONSERVATION_EPS)) {
+        this.emit({
+          id: "fx.conservation_mismatch",
+          severity: "warning",
+          message: `⚠ Descuadre interno del motor de divisa para ${currency}: ${mismatch.toFixed(2)} unidades sin cuadrar. Las casillas 1633/1637 pueden no reconciliar.`,
+          hint: "Esto es una comprobación interna (no debería ocurrir). Si lo ves, repórtalo en GitHub adjuntando el informe; los importes de divisa pueden necesitar revisión manual.",
+          context: { currency, mismatch: mismatch.toString() },
+        });
+      }
+    }
   }
 
   /**
@@ -816,6 +964,7 @@ export class FxFifoEngine {
     }
     this.lots.get(event.currency)!.push(lot);
     this.record("acquire", event, { quantityFcy: event.quantity, rate: costPerUnit });
+    this.accumulate("acquire", event.currency, event.quantity);
   }
 
   private consumeLots(event: FxEvent): void {
@@ -844,6 +993,12 @@ export class FxFifoEngine {
         lotId: "UNKNOWN",
       });
       this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: netProceeds, proceedsEur: netProceeds, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "sin lotes previos → ganancia FX = 0" });
+      this.accumulate("dispose", event.currency, remaining);
+      // Floored dispose: this FCY was never acquired (no prior lot) and the pool
+      // was NOT driven negative (we returned without touching this.lots). It is
+      // therefore an untracked "phantom acquire" of the same qty — counting it
+      // keeps the conservation identity balanced for this legitimate path.
+      this.accumulate("phantom", event.currency, remaining);
       return;
     }
 
@@ -884,6 +1039,7 @@ export class FxFifoEngine {
 
       remaining = remaining.minus(consumed);
       this.record("dispose", event, { quantityFcy: consumed, rate: effRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed, lotAcquireDate: lot.acquireDate });
+      this.accumulate("dispose", event.currency, consumed);
     }
 
     if (remaining.greaterThan(0)) {
@@ -909,6 +1065,12 @@ export class FxFifoEngine {
         lotId: "UNKNOWN",
       });
       this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: proceedsEur, proceedsEur, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "lotes insuficientes → ganancia FX = 0" });
+      this.accumulate("dispose", event.currency, remaining);
+      // Same as the no-lots branch: the pool ran out (lots fully consumed above),
+      // so this leftover is disposed FCY with no acquire behind it. Count a phantom
+      // acquire to balance — the pool was not driven negative (the loop stops at
+      // lots.length === 0; this floor only books gain = 0 + warns).
+      this.accumulate("phantom", event.currency, remaining);
     }
   }
 
@@ -1014,6 +1176,7 @@ export class FxFifoEngine {
         if (lot.quantity.lessThan(EPS)) lots.shift();
         remaining = remaining.minus(consumed);
         this.record("park", event, { quantityFcy: consumed, rate: lot.costPerUnit, lotAcquireDate: lot.acquireDate });
+        this.accumulate("park", event.currency, consumed);
       }
     }
 
@@ -1023,6 +1186,11 @@ export class FxFifoEngine {
     if (remaining.greaterThan(EPS)) {
       park.push({ q: remaining, rate: null, acquireDate: null });
       this.record("park", event, { quantityFcy: remaining, rate: null, note: "uncovered (sin lote de origen rastreado)" });
+      this.accumulate("park", event.currency, remaining);
+      // Uncovered park: this FCY had no tracked acquisition lot (funded outside the
+      // data window). It lands on the parked side (rhs) with no real acquire, so we
+      // count a phantom acquire of the same qty to keep the identity balanced.
+      this.accumulate("phantom", event.currency, remaining);
     }
   }
 
@@ -1102,12 +1270,14 @@ export class FxFifoEngine {
         if (p.q.lessThan(EPS)) park.shift();
         if (give.greaterThan(EPS)) {
           this.record("unpark", event, { quantityFcy: give, rate: p.rate === null ? saleRate : p.rate, note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined });
+          this.accumulate("unpark", event.currency, give);
         }
         if (discarded.greaterThan(EPS)) {
           // Loss-spent dollars that never returned: NO FX, never converted to EUR
           // ("como una hamburguesa en dólares"). Recorded so the audit trail shows
           // exactly what left the patrimony in the losing trade (issue #230).
           this.record("discard", event, { quantityFcy: discarded, rate: p.rate, note: "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)" });
+          this.accumulate("discard", event.currency, discarded);
         }
       }
     }
@@ -1120,6 +1290,12 @@ export class FxFifoEngine {
       this.pushPoolLot(event.currency, event.date, g, saleRate);
       placed = placed.plus(g);
       this.record("unpark", event, { quantityFcy: g, rate: saleRate, note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)" });
+      this.accumulate("unpark", event.currency, g);
+      // Unmatched sell (position bought outside the data window): this FCY is
+      // re-added to the pool (rhs) with NO parked principal behind it — untracked.
+      // Count a phantom acquire of the same qty so the identity balances (this is
+      // the full-proceeds-equivalent no-op the carry model degrades to).
+      this.accumulate("phantom", event.currency, g);
     }
 
     // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
@@ -1127,6 +1303,7 @@ export class FxFifoEngine {
     if (profit.greaterThan(EPS)) {
       this.pushPoolLot(event.currency, event.date, profit, saleRate);
       this.record("profit", event, { quantityFcy: profit, rate: saleRate });
+      this.accumulate("profit", event.currency, profit);
     }
   }
 
