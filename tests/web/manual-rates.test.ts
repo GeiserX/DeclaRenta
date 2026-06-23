@@ -204,6 +204,39 @@ describe("setManualOpeningLots / getManualOpeningLots", () => {
     expect(getManualOpeningLots()).toHaveLength(0);
   });
 
+  it("clears one persisted opening-lot group when saved with no valid rows", () => {
+    setManualOpeningLots("US0378331005", [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "14",
+        pricePerShare: "100",
+      },
+    ]);
+    setManualOpeningLots("US5949181045", [
+      {
+        symbol: "MSFT",
+        description: "MICROSOFT CORP",
+        isin: "US5949181045",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-12",
+        quantity: "5",
+        pricePerShare: "200",
+      },
+    ]);
+
+    expect(setManualOpeningLots("US0378331005", [])).toBe(1);
+
+    const lots = getManualOpeningLots();
+    expect(lots).toHaveLength(1);
+    expect(lots[0]!.isin).toBe("US5949181045");
+  });
+
   it("renders saved opening lots even without active missing-lot messages", () => {
     setManualOpeningLots("US0378331005", [
       {

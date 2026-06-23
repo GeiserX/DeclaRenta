@@ -406,6 +406,48 @@ describe("generateTaxReport", () => {
     expect(report.fxGains.netGainLoss.toFixed(2)).not.toBe("55.00");
   });
 
+  it("includes manual opening lots in wash-sale detection", () => {
+    const rates = makeRateMap({
+      "2025-02-20": "0.9000",
+      "2025-03-10": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "sell-1",
+          tradeDate: "2025-03-10",
+          settlementDate: "2025-03-10",
+          quantity: "-10",
+          tradePrice: "90",
+          tradeMoney: "900",
+          proceeds: "900",
+          cost: "900",
+          buySell: "SELL",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, {
+      manualOpeningLots: [
+        {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          acquireDate: "2025-02-20",
+          quantity: "20",
+          pricePerShare: "100",
+        },
+      ],
+    });
+
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    expect(report.capitalGains.disposals[0]!.washSaleBlocked).toBe(true);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("91.00");
+  });
+
   it("should handle empty statement", () => {
     const rates: EcbRateMap = new Map();
     const statement = makeStatement();

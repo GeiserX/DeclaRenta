@@ -144,9 +144,14 @@ function openingLotIdentityKey(
 }
 
 export function setManualOpeningLots(groupKey: string, lots: ManualOpeningLot[]): number {
+  const existingAll = readStoredOpeningLots();
+  const existing = existingAll.filter((lot) => manualOpeningLotKey(lot) !== groupKey);
+  const hadGroupEntries = existing.length !== existingAll.length;
   const validLots = coerceManualOpeningLots(lots);
-  if (validLots.length === 0) return 0;
-  const existing = readStoredOpeningLots().filter((lot) => manualOpeningLotKey(lot) !== groupKey);
+  if (validLots.length === 0) {
+    if (hadGroupEntries) writeStoredOpeningLots(existing);
+    return hadGroupEntries ? 1 : 0;
+  }
   const deduped = new Map<string, ManualOpeningLot>();
   for (const lot of validLots) {
     deduped.set(openingLotIdentityKey(lot), lot);

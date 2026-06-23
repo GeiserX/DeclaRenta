@@ -85,9 +85,9 @@ const gl: TranslationKeys = {
   "casilla.interest_earned": "Xuros gañados",
   "casilla.interest_paid": "Xuros pagados ao broker (marxe, non deducible — informativo)",
   "casilla.general_gains": "Ganancias patrimoniais non derivadas de transmisión (airdrops, comisións de referidos)",
-  "casilla.spanish_withholding": "Retencións do capital mobiliario (casa 0597)",
+  "casilla.spanish_withholding": "Retencións do capital mobiliario (casilla 0597)",
   "casilla.spanish_withholding_detail":
-    "Retención a conta do IRPF practicada na orixe sobre dividendos ou xuros de emisores españois (p. ex. accións do IBEX), aínda que estean nun bróker estranxeiro. É un pagamento a conta deducible da cota; NON é a dedución por dobre imposición (casa 0588), que só se aplica a imposto estranxeiro.",
+    "Retención a conta do IRPF practicada na orixe sobre dividendos ou xuros de emisores españois (p. ex. accións do IBEX), aínda que estean nun bróker estranxeiro. É un pagamento a conta deducible da cota; NON é a dedución por dobre imposición (casilla 0588), que só se aplica a imposto estranxeiro.",
   "casilla.double_taxation": "Dedución dobre imposición",
   "casilla.reintegrated_losses":
     "Perdas diferidas de anos anteriores agora deducibles (vendéronse os valores recomprados): {{amount}} EUR",
