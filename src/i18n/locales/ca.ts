@@ -62,8 +62,7 @@ const ca: TranslationKeys = {
   "table.payments": "Pagaments",
   "casilla.dividends_by_issuer": "Dividends per emissor",
   "casilla.dividends_per_payment": "Pagaments individuals",
-  "casilla.dividends_withholding_note":
-    "La retenció estrangera no es declara aquí. En el formulari «Alta Capital mobiliario» de Renta Web, deixa el camp «Retencions» a 0 — la retenció estrangera es dedueix per separat a la casella 0588 (deducció per doble imposició internacional, Art. 80 LIRPF).",
+  "casilla.dividends_withholding_note": "La retenció <strong>estrangera</strong> no es declara aquí: en el formulari «Alta Capital mobiliario» de Renta Web, deixa-la a 0 i dedueix-la a la casella 0588 (doble imposició internacional, Art. 80 LIRPF). Però la retenció <strong>espanyola</strong> sobre emissors espanyols (ISIN ES…) sí és un pagament a compte i va a la casella 0597.",
   "table.casilla": "Casella",
   "table.concept": "Concepte",
   "table.amount_eur": "Import (EUR)",
@@ -508,8 +507,7 @@ const ca: TranslationKeys = {
   "guide_rw.fx_fecha_hint":
     "Per a la consolidació de FX: <strong>01/01/AAAA</strong> (adquisició) i <strong>31/12/AAAA</strong> (transmissió). Si introdueixes operació a operació, usa les dates reals de l'informe.",
   "guide_rw.retenciones_label": "Retencions",
-  "guide_rw.retenciones_zero":
-    "<strong>0</strong> — Els brokers estrangers no practiquen retenció a compte de l'IRPF espanyol. La retenció estrangera es dedueix a la casella 0588.",
+  "guide_rw.retenciones_zero": "Normalment <strong>0</strong> per a emissors estrangers (la seva retenció estrangera va a la casella 0588). PERÒ si tens accions <strong>espanyoles</strong> (ISIN ES…) en un bróker estranger, la seva retenció del 19% SÍ és un pagament a compte espanyol i va a la <strong>casella 0597</strong>.",
   "guide_rw.importe_label": "Ingressos íntegres",
   "guide_rw.dividends_importe_hint": "L'import brut de la casella <strong>0029</strong> de DeclaRenta (EUR).",
   "guide_rw.interest_importe_hint": "L'import de la casella <strong>0027</strong> de DeclaRenta (EUR).",

@@ -62,8 +62,7 @@ const gl: TranslationKeys = {
   "table.payments": "Pagamentos",
   "casilla.dividends_by_issuer": "Dividendos por emisor",
   "casilla.dividends_per_payment": "Pagamentos individuais",
-  "casilla.dividends_withholding_note":
-    "A retención estranxeira non se declara aquí. No formulario «Alta Capital mobiliario» de Renta Web, deixa o campo «Retencións» en 0 — a retención estranxeira dedúcese por separado na casilla 0588 (dedución por dobre imposición internacional, Art. 80 LIRPF).",
+  "casilla.dividends_withholding_note": "A retención <strong>estranxeira</strong> non se declara aquí: no formulario «Alta Capital mobiliario» de Renta Web, déixaa en 0 e dedúcea na casilla 0588 (dobre imposición internacional, Art. 80 LIRPF). Pero a retención <strong>española</strong> sobre emisores españois (ISIN ES…) si é un pagamento a conta e vai na casilla 0597.",
   "table.casilla": "Casilla",
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
@@ -508,8 +507,7 @@ const gl: TranslationKeys = {
   "guide_rw.fx_fecha_hint":
     "Para a consolidación de FX: <strong>01/01/AAAA</strong> (adquisición) e <strong>31/12/AAAA</strong> (transmisión). Se introduces operación a operación, usa as datas reais do informe.",
   "guide_rw.retenciones_label": "Retencións",
-  "guide_rw.retenciones_zero":
-    "<strong>0</strong> — Os brokers estranxeiros non practican retención a conta do IRPF español. A retención estranxeira dedúcese na casilla 0588.",
+  "guide_rw.retenciones_zero": "Normalmente <strong>0</strong> para emisores estranxeiros (a súa retención estranxeira vai na casilla 0588). PERO se tes accións <strong>españolas</strong> (ISIN ES…) nun bróker estranxeiro, a súa retención do 19% SI é un pagamento a conta español e vai na <strong>casilla 0597</strong>.",
   "guide_rw.importe_label": "Ingresos íntegros",
   "guide_rw.dividends_importe_hint": "O importe bruto da casilla <strong>0029</strong> de DeclaRenta (EUR).",
   "guide_rw.interest_importe_hint": "O importe da casilla <strong>0027</strong> de DeclaRenta (EUR).",

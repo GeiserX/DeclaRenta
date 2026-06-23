@@ -62,8 +62,7 @@ const eu: TranslationKeys = {
   "table.payments": "Ordainketak",
   "casilla.dividends_by_issuer": "Dibidenduak jaulkitzaileka",
   "casilla.dividends_per_payment": "Banakako ordainketak",
-  "casilla.dividends_withholding_note":
-    "Atzerriko atxikipena ez da hemen aitortzen. Renta Web-eko «Alta Capital mobiliario» formularioan, utzi «Retenciones» eremua 0 balioan — atzerriko atxikipena bereiz kentzen da 0588 gelaxkan (nazioarteko zergapetze bikoitzaren kenkaria, IRPF Legearen 80. art.).",
+  "casilla.dividends_withholding_note": "<strong>Atzerriko</strong> atxikipena ez da hemen aitortzen: Renta Web-eko «Alta Capital mobiliario» formularioan, utzi 0 balioan eta kendu 0588 gelaxkan (nazioarteko zergapetze bikoitza, IRPF Legearen 80. art.). Baina <strong>espainiar</strong> jaulkitzaileen gaineko atxikipen espainiarra (ISIN ES…) konturako ordainketa da eta 0597 laukira doa.",
   "table.casilla": "Laukia",
   "table.concept": "Kontzeptua",
   "table.amount_eur": "Zenbatekoa (EUR)",
@@ -508,8 +507,7 @@ const eu: TranslationKeys = {
   "guide_rw.fx_fecha_hint":
     "FX konsolidaziorako: <strong>01/01/UUUU</strong> (eskuraketa) eta <strong>31/12/UUUU</strong> (eskualdaketa). Banaka sartzen baduzu, erabili txosteneko benetako datak.",
   "guide_rw.retenciones_label": "Atxikipenak",
-  "guide_rw.retenciones_zero":
-    "<strong>0</strong> — Atzerriko broker-ek ez dute Espainiako IRPF-ren konturako atxikipenik egiten. Atzerriko atxikipena 0588 gelaxkan kentzen da.",
+  "guide_rw.retenciones_zero": "Normalean <strong>0</strong> atzerriko jaulkitzaileentzat (haien atzerriko atxikipena 0588 gelaxkara doa). BAINA atzerriko artekari batean akzio <strong>espainiarrak</strong> (ISIN ES…) badituzu, haien %19ko atxikipena konturako ordainketa espainiarra DA eta <strong>0597 laukira</strong> doa.",
   "guide_rw.importe_label": "Diru-sarrera osoak",
   "guide_rw.dividends_importe_hint": "DeclaRenta-ren <strong>0029</strong> gelaxkako zenbateko gordina (EUR).",
   "guide_rw.interest_importe_hint": "DeclaRenta-ren <strong>0027</strong> gelaxkako zenbatekoa (EUR).",

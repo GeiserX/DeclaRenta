@@ -61,8 +61,7 @@ const en: TranslationKeys = {
   "table.payments": "Payments",
   "casilla.dividends_by_issuer": "Dividends by issuer",
   "casilla.dividends_per_payment": "Individual payments",
-  "casilla.dividends_withholding_note":
-    'Foreign withholding tax is not declared here. In the AEAT Renta Web "Alta Capital mobiliario" form, leave the "Retenciones" field at 0 — foreign withholding is deducted separately in box 0588 (deduction for international double taxation, Art. 80 LIRPF).',
+  "casilla.dividends_withholding_note": "<strong>Foreign</strong> withholding tax is not declared here: in the AEAT Renta Web \"Alta Capital mobiliario\" form, leave it at 0 and deduct it in box 0588 (international double taxation, Art. 80 LIRPF). But <strong>Spanish</strong> withholding on Spanish issuers (ISIN ES…) is a prepayment and goes in box 0597.",
   "table.casilla": "Box",
   "table.concept": "Concept",
   "table.amount_eur": "Amount (EUR)",
@@ -506,8 +505,7 @@ const en: TranslationKeys = {
   "guide_rw.fx_fecha_hint":
     "For consolidated FX: <strong>01/01/YYYY</strong> (acquisition) and <strong>31/12/YYYY</strong> (disposal). If entering individually, use the actual dates from the report.",
   "guide_rw.retenciones_label": "Withholdings",
-  "guide_rw.retenciones_zero":
-    "<strong>0</strong> — Foreign brokers do not withhold Spanish IRPF. Foreign withholding tax is deducted in box 0588.",
+  "guide_rw.retenciones_zero": "Usually <strong>0</strong> for foreign issuers (their foreign withholding goes in box 0588). BUT if you hold <strong>Spanish</strong> shares (ISIN ES…) at a foreign broker, their 19% withholding IS a Spanish prepayment and goes in <strong>box 0597</strong>.",
   "guide_rw.importe_label": "Gross income",
   "guide_rw.dividends_importe_hint": "The gross amount from DeclaRenta's box <strong>0029</strong> (EUR).",
   "guide_rw.interest_importe_hint": "The amount from DeclaRenta's box <strong>0027</strong> (EUR).",
