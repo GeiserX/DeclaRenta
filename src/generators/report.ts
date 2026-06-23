@@ -25,10 +25,10 @@ import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
-import { lookupRateInMap } from "../engine/ecb.js";
+import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
-import { buildManualOpeningLotTrades } from "../engine/manual-opening-lots.js";
+import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
@@ -270,6 +270,44 @@ function synthesizeRewardLots(
   return lots;
 }
 
+function resolveManualOpeningLots(
+  lots: ManualOpeningLot[],
+  resolvedRateMap: EcbRateMap,
+): { usableLots: ManualOpeningLot[]; skippedMessages: TaxMessage[] } {
+  const usableLots: ManualOpeningLot[] = [];
+  const skippedMessages: TaxMessage[] = [];
+
+  for (const rawLot of lots) {
+    const lot = normalizeManualOpeningLot(rawLot);
+    if (!lot) continue;
+
+    if (lot.currency !== "EUR") {
+      const rate = isEcbResolvable(lot.currency)
+        ? lookupRateInMap(resolvedRateMap, lot.acquireDate, lot.currency)
+        : null;
+      if (rate === null) {
+        skippedMessages.push({
+          id: "report.manual_opening_lot_unvalued",
+          severity: "warning",
+          message: `No se ha podido valorar el lote manual transferido de ${lot.symbol || lot.isin} (${lot.currency}, ${lot.acquireDate}) y se ignorará en los cálculos automáticos.`,
+          hint: "Incluye el año de adquisición para que se cargue el tipo ECB correspondiente, o revisa que la divisa del lote sea una moneda fiat resoluble por el BCE. Mientras no haya tipo disponible, este lote no se puede usar como coste base ni como base de divisa.",
+          context: {
+            symbol: lot.symbol,
+            isin: lot.isin,
+            currency: lot.currency,
+            acquireDate: lot.acquireDate,
+          },
+        });
+        continue;
+      }
+    }
+
+    usableLots.push(lot);
+  }
+
+  return { usableLots, skippedMessages };
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
   /**
@@ -354,7 +392,11 @@ export function generateTaxReport(
   // 0d. User-supplied opening lots for transferred positions are modeled as
   //     synthetic BUY trades. This lets the normal FIFO pass consume multiple
   //     manual lots (different dates/prices) without a parallel cost-basis path.
-  const manualOpeningLotTrades = buildManualOpeningLotTrades(options?.manualOpeningLots ?? []);
+  const { usableLots: usableManualOpeningLots, skippedMessages: manualOpeningLotMessages } = resolveManualOpeningLots(
+    options?.manualOpeningLots ?? [],
+    resolvedRateMap,
+  );
+  const manualOpeningLotTrades = buildManualOpeningLotTrades(usableManualOpeningLots);
   const resolvedTrades = [...valuation.trades, ...rewardLots, ...manualOpeningLotTrades];
 
   // 1. FIFO capital gains (process ALL years, filter to target year).
@@ -523,11 +565,13 @@ export function generateTaxReport(
       rateMap,
       trackAutoConvert,
     );
+    const manualOpeningLotFxEvents = FxFifoEngine.extractManualOpeningLotFxEvents(usableManualOpeningLots, rateMap);
     const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
     const allFxDisposals = fxEngine.processEvents([
       ...tradeFxEvents,
       ...cashFxEvents,
       ...stockPurchaseFxEvents,
+      ...manualOpeningLotFxEvents,
       ...stockProceedsFxEvents,
     ]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
@@ -590,6 +634,7 @@ export function generateTaxReport(
     ...(statement.parserWarnings ?? []),
     ...yearWarnings,
     ...fxWarningsList,
+    ...manualOpeningLotMessages.map((m) => m.message),
     ...cryptoValuationMessages.map((m) => m.message),
   ];
 
@@ -598,6 +643,7 @@ export function generateTaxReport(
     ...(statement.parserMessages ?? []),
     ...yearMessages,
     ...fxMessagesList,
+    ...manualOpeningLotMessages,
     ...cryptoValuationMessages,
   ];
 

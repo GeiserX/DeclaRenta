@@ -88,7 +88,12 @@ const es = {
   "casilla.interest_earned": "Intereses ganados",
   "casilla.interest_paid": "Intereses pagados al broker (margen, no deducible — informativo)",
   "casilla.general_gains": "Ganancias patrimoniales no derivadas de transmisión (airdrops, comisiones de referidos)",
+  "casilla.spanish_withholding": "Retenciones del capital mobiliario (casilla 0597)",
+  "casilla.spanish_withholding_detail":
+    "Retención a cuenta del IRPF practicada en origen sobre dividendos o intereses de emisores españoles (p. ej. acciones del IBEX), aunque estén en un bróker extranjero. Es un pago a cuenta deducible de la cuota; NO es la deducción por doble imposición (casilla 0588), que solo aplica a impuesto extranjero.",
   "casilla.double_taxation": "Deducción doble imposición",
+  "casilla.reintegrated_losses":
+    "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
   "casilla.blocked_losses":
     "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
@@ -199,9 +204,12 @@ const es = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
   "profile.monodivisa_detail":
-    "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios que tratan todas las operaciones como moneda única EUR.",
+    "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637): el efecto divisa queda embebido en el coste de la acción, valorado al tipo del día de COMPRA (Art. 35.1). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios (y con el método tradicional que usan algunos asesores) que tratan todas las operaciones como moneda única EUR. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
   "profile.monodivisa_warning":
     "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
+  "profile.track_autoconvert_label": "Procesar autoconversiones del bróker (AFx/FXCONV)",
+  "profile.track_autoconvert_detail":
+    "Activado por defecto. Interactive Brokers no reconvierte a euros al vender una acción, así que el saldo en divisa es real y su conversión posterior genera ganancia o pérdida patrimonial (Art. 33.1 LIRPF). Desactívalo solo si tu bróker hace un round-trip completo EUR↔divisa y quieres ignorar el efecto de la divisa.",
   "profile.titulares_label": "Número de titulares:",
   "profile.titulares_detail":
     "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
@@ -574,6 +582,7 @@ const es = {
   "pdf.section_dividends": "3. Dividendos",
   "pdf.section_dt": "4. Deducción por Doble Imposición Internacional",
   "pdf.section_warnings": "Advertencias",
+  "pdf.reintegrated_losses": "Pérdidas reintegradas (anti-churning)",
   "pdf.dt_paid": "Impuesto pagado",
   "pdf.dt_allowed": "Deducción permitida",
   "pdf.ecb_note":
@@ -630,6 +639,10 @@ const es = {
     "⚠ {{count}} disposiciones de {{currency}} sin lotes previos suficientes (total: {{totalQuantity}} {{currency}}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.",
   "fx.missing_prior_lots.hint":
     "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).",
+  "fx.conservation_mismatch":
+    "⚠ Descuadre interno del motor de divisa para {{currency}}: {{mismatch}} unidades sin cuadrar. Las casillas 1633/1637 pueden no reconciliar.",
+  "fx.conservation_mismatch.hint":
+    "Esto es una comprobación interna (no debería ocurrir). Si lo ves, repórtalo en GitHub adjuntando el informe; los importes de divisa pueden necesitar revisión manual.",
   "fifo.unknown_category":
     '⚠ Categoría de activo desconocida: "{{assetCategory}}" para {{symbol}}. Se procesará con FIFO genérico.',
   "fifo.unknown_category.hint":

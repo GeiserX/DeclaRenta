@@ -84,7 +84,12 @@ const en: TranslationKeys = {
   "casilla.interest_earned": "Interest earned",
   "casilla.interest_paid": "Interest paid to broker (margin, not deductible — informational)",
   "casilla.general_gains": "Capital gains not arising from transmission (airdrops, referral commissions)",
+  "casilla.spanish_withholding": "Capital-income withholdings (box 0597)",
+  "casilla.spanish_withholding_detail":
+    "Spanish IRPF withholding applied at source on dividends or interest from Spanish issuers (e.g. IBEX shares), even when held at a foreign broker. It is a prepayment deductible from the tax due; it is NOT the double-taxation deduction (box 0588), which applies only to foreign tax.",
   "casilla.double_taxation": "Double taxation deduction",
+  "casilla.reintegrated_losses":
+    "Deferred losses from prior years now deductible (the repurchased securities were sold): {{amount}} EUR",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} warning(s)",
   "messages.errors_title": "{{count}} error(s) — action required",
@@ -187,9 +192,12 @@ const en: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
   "profile.monodivisa_detail":
-    "Does not calculate FX gains separately (casillas 1633/1637). Compatible with Autodeclaro, Taxdown, and other services that treat all operations as single-currency EUR.",
+    "Does not calculate FX gains separately (casillas 1633/1637): the currency effect is embedded in the stock cost, valued at the BUY-date rate (Art. 35.1). Compatible with Autodeclaro, Taxdown, and other services (and the traditional method some advisors use) that treat all operations as single-currency EUR. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
   "profile.monodivisa_warning":
     "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
+  "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
+  "profile.track_autoconvert_detail":
+    "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",
   "profile.titulares_label": "Number of account holders:",
   "profile.titulares_detail":
     "If the account has several holders (e.g. a joint or community-property account), DeclaRenta divides every amount equally to show each taxpayer's share (Art. 11.3 LIRPF). Each holder files their own individual return for their share.",
@@ -539,6 +547,7 @@ const en: TranslationKeys = {
   "pdf.section_dividends": "3. Dividends",
   "pdf.section_dt": "4. International Double Taxation Deduction",
   "pdf.section_warnings": "Warnings",
+  "pdf.reintegrated_losses": "Reintegrated losses (anti-churning)",
   "pdf.dt_paid": "Tax paid",
   "pdf.dt_allowed": "Deduction allowed",
   "pdf.ecb_note":
@@ -592,6 +601,10 @@ const en: TranslationKeys = {
     "⚠ {{count}} disposals of {{currency}} without sufficient prior lots (total: {{totalQuantity}} {{currency}}). Possible acquisition before the reported period — FX gain assumed = 0.",
   "fx.missing_prior_lots.hint":
     "This currency was acquired before the Flex Query period. An FX gain of 0 is assumed (conservative treatment).",
+  "fx.conservation_mismatch":
+    "⚠ Internal foreign-exchange engine mismatch for {{currency}}: {{mismatch}} unbalanced units. Boxes 1633/1637 may fail to reconcile.",
+  "fx.conservation_mismatch.hint":
+    "This is an internal consistency check and should not happen. If you see it, report it on GitHub and attach the report; the foreign-exchange amounts may need manual review.",
   "fifo.unknown_category":
     '⚠ Unknown asset category: "{{assetCategory}}" for {{symbol}}. It will be processed with generic FIFO.',
   "fifo.unknown_category.hint":

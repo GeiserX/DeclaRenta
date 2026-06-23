@@ -85,7 +85,12 @@ const ca: TranslationKeys = {
   "casilla.interest_earned": "Interessos guanyats",
   "casilla.interest_paid": "Interessos pagats al broker (marge, no deduïble — informatiu)",
   "casilla.general_gains": "Guanys patrimonials no derivats de transmissió (airdrops, comissions de referits)",
+  "casilla.spanish_withholding": "Retencions del capital mobiliari (casella 0597)",
+  "casilla.spanish_withholding_detail":
+    "Retenció a compte de l'IRPF practicada en origen sobre dividends o interessos d'emissors espanyols (p. ex. accions de l'IBEX), encara que estiguin en un bróker estranger. És un pagament a compte deduïble de la quota; NO és la deducció per doble imposició (casella 0588), que només s'aplica a impost estranger.",
   "casilla.double_taxation": "Deducció doble imposició",
+  "casilla.reintegrated_losses":
+    "Pèrdues diferides d'anys anteriors ara deduïbles (es van vendre els valors recomprats): {{amount}} EUR",
   "casilla.blocked_losses":
     "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",
@@ -187,9 +192,12 @@ const ca: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Mode simplificat (monodivisa EUR)",
   "profile.monodivisa_detail":
-    "No calcula guanys per tipus de canvi de forma separada (caselles 1633/1637). Compatible amb Autodeclaro, Taxdown i altres serveis que tracten totes les operacions com a moneda única EUR.",
+    "No calcula guanys per tipus de canvi de forma separada (caselles 1633/1637): l'efecte divisa queda embegut en el cost de l'acció, valorat al tipus del dia de COMPRA (Art. 35.1). Compatible amb Autodeclaro, Taxdown i altres serveis (i amb el mètode tradicional que fan servir alguns assessors) que tracten totes les operacions com a moneda única EUR. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
   "profile.monodivisa_warning":
     "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2324-10).",
+  "profile.track_autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
+  "profile.track_autoconvert_detail":
+    "Activat per defecte. Interactive Brokers no reconverteix a euros en vendre una acció, així que el saldo en divisa és real i convertir-lo després genera un guany o pèrdua patrimonial (art. 33.1 LIRPF). Desactiva-ho només si el teu bróker fa un round-trip complet EUR↔divisa i vols ignorar l'efecte de la divisa.",
   "profile.titulares_label": "Nombre de titulars:",
   "profile.titulares_detail":
     "Si el compte té diversos titulars (p. ex. compte conjunt o de guanys), DeclaRenta divideix tots els imports a parts iguals per mostrar la part que correspon a cada contribuent (Art. 11.3 LIRPF). Cada titular presenta la seva declaració individual per la seva part.",
@@ -541,6 +549,7 @@ const ca: TranslationKeys = {
   "pdf.section_dividends": "3. Dividends",
   "pdf.section_dt": "4. Deducció per Doble Imposició Internacional",
   "pdf.section_warnings": "Advertències",
+  "pdf.reintegrated_losses": "Pèrdues reintegrades (anti-churning)",
   "pdf.dt_paid": "Impost pagat",
   "pdf.dt_allowed": "Deducció permesa",
   "pdf.ecb_note":
@@ -594,6 +603,10 @@ const ca: TranslationKeys = {
     "⚠ {{count}} disposicions de {{currency}} sense lots previs suficients (total: {{totalQuantity}} {{currency}}). Possible adquisició anterior al període declarat — guany de canvi assumit = 0.",
   "fx.missing_prior_lots.hint":
     "L'adquisició d'aquesta divisa va ser anterior al període del Flex Query. S'assumeix un guany de canvi = 0 (tractament conservador).",
+  "fx.conservation_mismatch":
+    "⚠ Desquadrament intern del motor de divisa per a {{currency}}: {{mismatch}} unitats sense quadrar. Les caselles 1633/1637 poden no reconciliar-se.",
+  "fx.conservation_mismatch.hint":
+    "Això és una comprovació interna (no hauria de passar). Si ho veus, informa'n a GitHub adjuntant l'informe; els imports de divisa poden necessitar revisió manual.",
   "fifo.unknown_category":
     '⚠ Categoria d\'actiu desconeguda: "{{assetCategory}}" per a {{symbol}}. Es processarà amb FIFO genèric.',
   "fifo.unknown_category.hint":

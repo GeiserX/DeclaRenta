@@ -273,6 +273,7 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
 }
 
 function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
+  const maxDate = new Date().toISOString().slice(0, 10);
   const stored = storedOpeningLotsFor(issue.groupKey);
   const rows =
     stored.length > 0
@@ -293,7 +294,7 @@ function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
   return rows
     .map(
       (lot, index) => `<tr class="manual-opening-lot-row" data-group-key="${esc(issue.groupKey)}">
-      <td><input type="date" class="manual-opening-lot-input" data-field="acquireDate" value="${esc(lot.acquireDate)}" /></td>
+      <td><input type="date" max="${esc(maxDate)}" class="manual-opening-lot-input" data-field="acquireDate" value="${esc(lot.acquireDate)}" /></td>
       <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="quantity" placeholder="${esc(tr("opening_lots.placeholder_quantity"))}" value="${esc(lot.quantity)}" /></td>
       <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="pricePerShare" placeholder="${esc(tr("opening_lots.placeholder_price"))}" value="${esc(lot.pricePerShare)}" /></td>
       <td class="manual-opening-lot-actions">
@@ -325,9 +326,11 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
         issue,
       ) => `<section class="manual-opening-lot-group" data-group-key="${esc(issue.groupKey)}" data-symbol="${esc(issue.symbol)}" data-description="${esc(issue.description)}" data-isin="${esc(issue.isin)}" data-conid="${esc(issue.conid ?? "")}" data-asset-category="${esc(issue.assetCategory)}" data-currency="${esc(issue.currency)}">
       <h4>${esc(issue.symbol)}${issue.isin ? ` <span class="mono">(${esc(issue.isin)})</span>` : ""}</h4>
-      <p>${esc(issue.missingQuantity && issue.sellDate
-        ? tr("opening_lots.group_intro", { quantity: issue.missingQuantity, date: issue.sellDate })
-        : tr("opening_lots.group_intro_saved"))}</p>
+      <p>${esc(
+        issue.missingQuantity && issue.sellDate
+          ? tr("opening_lots.group_intro", { quantity: issue.missingQuantity, date: issue.sellDate })
+          : tr("opening_lots.group_intro_saved"),
+      )}</p>
       <div class="table-wrapper"><table>
         <thead><tr>
           <th>${esc(tr("opening_lots.col_acquire_date"))}</th>
@@ -393,8 +396,9 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: () => void)
 
 function renderEmptyOpeningLotRow(groupEl: HTMLElement): string {
   const groupKey = groupEl.dataset.groupKey ?? "";
+  const maxDate = new Date().toISOString().slice(0, 10);
   return `<tr class="manual-opening-lot-row" data-group-key="${esc(groupKey)}">
-    <td><input type="date" class="manual-opening-lot-input" data-field="acquireDate" value="" /></td>
+    <td><input type="date" max="${esc(maxDate)}" class="manual-opening-lot-input" data-field="acquireDate" value="" /></td>
     <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="quantity" placeholder="${esc(tr("opening_lots.placeholder_quantity"))}" value="" /></td>
     <td><input type="text" inputmode="decimal" class="manual-opening-lot-input" data-field="pricePerShare" placeholder="${esc(tr("opening_lots.placeholder_price"))}" value="" /></td>
     <td class="manual-opening-lot-actions">

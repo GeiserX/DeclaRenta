@@ -245,4 +245,26 @@ describe("setManualOpeningLots / getManualOpeningLots", () => {
 
     expect(html).toContain('<details class="manual-opening-lots-panel crypto-rates-panel" open>');
   });
+
+  it("caps manual opening lot dates at today", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const html = renderManualOpeningLotsPanel([
+      {
+        id: "fifo.insufficient_lots",
+        severity: "warning",
+        message: "missing lots",
+        context: {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          date: "2025-03-10",
+          quantity: "14",
+        },
+      },
+    ]);
+
+    expect(html).toContain(`type="date" max="${today}"`);
+  });
 });

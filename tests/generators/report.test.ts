@@ -292,6 +292,120 @@ describe("generateTaxReport", () => {
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("36.40");
   });
 
+  it("skips an unvalued non-EUR manual opening lot with a warning instead of throwing", () => {
+    const rates = makeRateMap({
+      "2025-09-20": "0.9100",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "sell-1",
+          tradeDate: "2025-09-20",
+          settlementDate: "2025-09-20",
+          quantity: "-10",
+          tradePrice: "120",
+          buySell: "SELL",
+        }),
+      ],
+    });
+
+    expect(() =>
+      generateTaxReport(statement, rates, 2025, {
+        manualOpeningLots: [
+          {
+            symbol: "AAPL",
+            description: "APPLE INC",
+            isin: "US0378331005",
+            assetCategory: "STK",
+            currency: "USD",
+            acquireDate: "2024-01-10",
+            quantity: "10",
+            pricePerShare: "100",
+          },
+        ],
+      }),
+    ).not.toThrow();
+
+    const report = generateTaxReport(statement, rates, 2025, {
+      manualOpeningLots: [
+        {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          acquireDate: "2024-01-10",
+          quantity: "10",
+          pricePerShare: "100",
+        },
+      ],
+    });
+
+    expect(report.messages.some((m) => m.id === "report.manual_opening_lot_unvalued")).toBe(true);
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(true);
+  });
+
+  it("uses the acquisition-date carried basis for FX on manual transferred lots", () => {
+    const rates = makeRateMap({
+      "2024-01-10": "0.9000",
+      "2025-09-20": "1.0000",
+      "2025-10-01": "1.0500",
+    });
+
+    const statement = makeStatement({
+      trades: [
+        makeTrade({
+          tradeID: "sell-aapl",
+          tradeDate: "2025-09-20",
+          settlementDate: "2025-09-20",
+          quantity: "-10",
+          tradePrice: "110",
+          tradeMoney: "1100",
+          proceeds: "1100",
+          cost: "1100",
+          buySell: "SELL",
+        }),
+        makeTrade({
+          tradeID: "conv-usd",
+          symbol: "EUR.USD",
+          description: "EUR.USD",
+          isin: "",
+          assetCategory: "CASH",
+          currency: "USD",
+          tradeDate: "2025-10-01",
+          settlementDate: "2025-10-01",
+          quantity: "1100",
+          tradePrice: "1",
+          tradeMoney: "1100",
+          proceeds: "-1100",
+          cost: "1100",
+          buySell: "BUY",
+          openCloseIndicator: "",
+          exchange: "IDEALFX",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025, {
+      manualOpeningLots: [
+        {
+          symbol: "AAPL",
+          description: "APPLE INC",
+          isin: "US0378331005",
+          assetCategory: "STK",
+          currency: "USD",
+          acquireDate: "2024-01-10",
+          quantity: "10",
+          pricePerShare: "100",
+        },
+      ],
+    });
+
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("155.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).not.toBe("55.00");
+  });
+
   it("should handle empty statement", () => {
     const rates: EcbRateMap = new Map();
     const statement = makeStatement();
@@ -1010,12 +1124,22 @@ describe("Spanish withholding (casilla 0597) end-to-end", () => {
     const statement = makeStatement({
       cashTransactions: [
         makeCashTx({
-          transactionID: "d-es", isin: "ES0000000000", description: "IBERDROLA",
-          currency: "EUR", dateTime: "20250601", amount: "100", type: "Dividends",
+          transactionID: "d-es",
+          isin: "ES0000000000",
+          description: "IBERDROLA",
+          currency: "EUR",
+          dateTime: "20250601",
+          amount: "100",
+          type: "Dividends",
         }),
         makeCashTx({
-          transactionID: "w-es", isin: "ES0000000000", description: "IBERDROLA",
-          currency: "EUR", dateTime: "20250601", amount: "-19", type: "Withholding Tax",
+          transactionID: "w-es",
+          isin: "ES0000000000",
+          description: "IBERDROLA",
+          currency: "EUR",
+          dateTime: "20250601",
+          amount: "-19",
+          type: "Withholding Tax",
         }),
       ],
     });

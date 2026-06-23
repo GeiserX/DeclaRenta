@@ -8,6 +8,7 @@ import {
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { Trade, CashTransaction } from "../../src/types/ibkr.js";
+import type { ManualOpeningLot } from "../../src/types/tax.js";
 
 // All fixtures below are ANONYMIZED: synthetic account IDs, no real NIF/names/amounts.
 
@@ -126,6 +127,27 @@ describe("deriveEcbNeeds", () => {
     expect(needs.years).toContain(2022); // minYear (2023) - 1
   });
 
+  it("includes manual opening lots in currencies and years", () => {
+    const statement = makeStatement([]);
+    const manualOpeningLots: ManualOpeningLot[] = [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "10",
+        pricePerShare: "100",
+      },
+    ];
+
+    const needs = deriveEcbNeeds(statement, 2025, manualOpeningLots);
+
+    expect(needs.currencies).toEqual(["USD"]);
+    expect([...needs.years].sort((x, y) => x - y)).toEqual([2023, 2024, 2025]);
+  });
+
   it("returns no years when there are no trades or cash and the declaration year is added", () => {
     const statement = makeStatement([]);
     const needs = deriveEcbNeeds(statement, 2025);
@@ -153,6 +175,28 @@ describe("buildEcbRateMap", () => {
     expect(map.get("2025-07-01")?.get("USD")).toBe("0.2025USD");
     expect(map.get("2024-07-01")?.get("GBP")).toBe("0.2024GBP");
     // 2023 (minYear-1) was fetched too (lookback) — same currencies, distinct date.
+    expect(map.get("2023-07-01")?.get("USD")).toBe("0.2023USD");
+  });
+
+  it("fetches prior-year ECB rates needed only by manual opening lots", async () => {
+    const { fetcher } = makeFakeFetcher();
+    const statement = makeStatement([]);
+    const manualOpeningLots: ManualOpeningLot[] = [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "10",
+        pricePerShare: "100",
+      },
+    ];
+
+    const map = await buildEcbRateMap({ statement, year: 2025, manualOpeningLots }, { fetcher });
+
+    expect(map.get("2024-07-01")?.get("USD")).toBe("0.2024USD");
     expect(map.get("2023-07-01")?.get("USD")).toBe("0.2023USD");
   });
 

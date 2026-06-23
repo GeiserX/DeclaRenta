@@ -86,7 +86,12 @@ const eu: TranslationKeys = {
   "casilla.interest_paid": "Brokerrari ordaindutako interesak (marjina, ez kengarria — informatiboa)",
   "casilla.general_gains":
     "Transmisiotik eratortzen ez diren ondare-irabaziak (airdropak, lagunak gomendatzeagatiko komisioak)",
+  "casilla.spanish_withholding": "Kapital higigarriaren atxikipenak (0597 laukia)",
+  "casilla.spanish_withholding_detail":
+    "Espainiako jaulkitzaileen dibidendu edo interesen gainean jatorrian egindako PFEZ atxikipena (adib. IBEX akzioak), atzerriko artekari batean egon arren. Kuotatik kentzeko konturako ordainketa da; EZ da nazioarteko zergapetze bikoitzaren kenkaria (0588 laukia), atzerriko zergari soilik aplikatzen zaiona.",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
+  "casilla.reintegrated_losses":
+    "Aurreko urteetako galera atzeratuak orain kengarriak (berrerositako balioak saldu ziren): {{amount}} EUR",
   "casilla.blocked_losses":
     "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",
@@ -186,11 +191,14 @@ const eu: TranslationKeys = {
   "profile.ccaa_label": "Autonomia Erkidegoa:",
   "profile.phone_label": "Telefonoa:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Modu sinplifikatua (monodibisa EUR)",
+  "profile.monodivisa_label": "Modu sinplifikatua (EUR monodibisa)",
   "profile.monodivisa_detail":
-    "Ez ditu kanbio-tasaren irabaziak bereizita kalkulatzen (1633/1637 laukitxoak). Autodeclaro, Taxdown eta eragiketa guztiak EUR moneta bakar gisa tratatzen dituzten beste zerbitzu batzuekin bateragarria.",
+    "Ez ditu kanbio-tasaren irabaziak bereizita kalkulatzen (1633/1637 laukitxoak): dibisaren eragina akzioaren kostuan txertatuta geratzen da, EROSKETA-eguneko tasarekin balioetsita (35.1 art.). Autodeclaro, Taxdown eta eragiketa guztiak EUR moneta bakar gisa tratatzen dituzten beste zerbitzu batzuekin bateragarria (eta aholkulari batzuek erabiltzen duten metodo tradizionalarekin). Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
   "profile.monodivisa_warning":
     "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2324-10) arabera.",
+  "profile.track_autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
+  "profile.track_autoconvert_detail":
+    "Lehenetsita aktibatuta. Interactive Brokersek ez du eurotara berriz bihurtzen akzio bat saltzean, beraz dibisa-saldoa erreala da eta gero bihurtzeak ondare-irabazi edo -galera sortzen du (LIRPF 33.1 art.). Desaktibatu soilik zure artekariak EUR↔dibisa round-trip osoa egiten badu eta dibisaren eragina alde batera utzi nahi baduzu.",
   "profile.titulares_label": "Titular kopurua:",
   "profile.titulares_detail":
     "Kontuak hainbat titular baditu (adib. kontu bateratua edo irabazpidezkoa), DeclaRentak zenbateko guztiak zati berdinetan banatzen ditu zergadun bakoitzari dagokion partea erakusteko (LIRPF 11.3 art.). Titular bakoitzak bere aitorpen indibiduala aurkezten du bere partearengatik.",
@@ -541,6 +549,7 @@ const eu: TranslationKeys = {
   "pdf.section_dividends": "3. Dibidenduak",
   "pdf.section_dt": "4. Nazioarteko Zerga Bikoitzaren Kenkaria",
   "pdf.section_warnings": "Abisuak",
+  "pdf.reintegrated_losses": "Berreskuratutako galerak (anti-churning)",
   "pdf.dt_paid": "Ordaindutako zerga",
   "pdf.dt_allowed": "Baimendutako kenkaria",
   "pdf.ecb_note":
@@ -594,6 +603,10 @@ const eu: TranslationKeys = {
     "⚠ {{currency}} dibisaren {{count}} xedapen aurreko lote nahikorik gabe (guztira: {{totalQuantity}} {{currency}}). Litekeena da deklaratutako epea baino lehenagoko eskuratzea — kanbio-irabazia 0 dela suposatzen da.",
   "fx.missing_prior_lots.hint":
     "Dibisa hau Flex Query-aren epea baino lehen eskuratu zen. Kanbio-irabazia = 0 dela suposatzen da (tratamendu kontserbadorea).",
+  "fx.conservation_mismatch":
+    "⚠ Barneko desoreka dibisa-motorrarentzat {{currency}}: {{mismatch}} unitate koadratu gabe. 1633/1637 laukiek baliteke ez bateratzea.",
+  "fx.conservation_mismatch.hint":
+    "Hau barneko egiaztapen bat da (ez litzateke gertatu behar). Ikusten baduzu, jakinarazi GitHub-en txostena erantsita; dibisa-zenbatekoek eskuzko berrikuspena behar izan dezakete.",
   "fifo.unknown_category":
     '⚠ Aktibo-kategoria ezezaguna: "{{assetCategory}}" {{symbol}} baliorako. FIFO generikoarekin prozesatuko da.',
   "fifo.unknown_category.hint":

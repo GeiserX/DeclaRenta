@@ -701,6 +701,7 @@ async function processFiles(): Promise<void> {
   try {
     const merged = mergedStatement;
     const year = activeYear ?? getProfile().year;
+    const manualOpeningLots = getManualOpeningLots();
     // Build the ECB rate map via the shared orchestrator. `deriveEcbNeeds`
     // (inside buildEcbRateMap) replicates exactly the (currency, year) set this
     // block used to build by hand: trade + cashTransaction currencies (minus
@@ -714,7 +715,7 @@ async function processFiles(): Promise<void> {
     // repeated processFiles() runs (year-select change, manual-rate entry,
     // monodivisa toggle) reuse already-fetched rates instead of refetching
     // everything each time.
-    const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year });
+    const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year, manualOpeningLots });
     if (isStale()) return; // a newer run started while fetching — let it win
 
     // Yield a macrotask so the browser can paint the processing overlay/spinner
@@ -744,7 +745,7 @@ async function processFiles(): Promise<void> {
       // Opt-in FX-FIFO movement trace, captured in the SAME run only in hidden
       // diagnostic mode. False by default → zero cost, normal path unchanged.
       fxTrace: isDebugMode(),
-      manualOpeningLots: getManualOpeningLots(),
+      manualOpeningLots,
     });
     currentReport = report;
     currentBrokers = detectedBrokers;
