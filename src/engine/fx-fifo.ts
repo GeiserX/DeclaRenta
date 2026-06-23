@@ -13,7 +13,16 @@
  */
 
 import Decimal from "decimal.js";
-import type { FxLot, FxDisposal, FxTrigger, FifoDisposal, TaxMessage, FxTraceEvent, FxTraceKind } from "../types/tax.js";
+import type {
+  FxLot,
+  FxDisposal,
+  FxTrigger,
+  FifoDisposal,
+  TaxMessage,
+  FxTraceEvent,
+  FxTraceKind,
+} from "../types/tax.js";
+import type { ManualOpeningLot } from "../types/tax.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, isEcbResolvable, lookupRateInMap } from "./ecb.js";
@@ -79,6 +88,13 @@ export interface FxEvent {
   costFcy?: Decimal;
   /** Stock sell only: the total FCY received (principal + profit). */
   proceedsFcy?: Decimal;
+  /**
+   * Explicit carry-basis for synthetic/manual stock-buy events. When present,
+   * parkPrincipal bypasses pool consumption and parks the whole cost as a
+   * covered slice at this EUR-per-FCY basis and acquisition date.
+   */
+  coveredCostPerUnit?: Decimal;
+  coveredAcquireDate?: string;
   /**
    * Stock buy/sell ONLY: the stable identity of the position whose principal is
    * being parked (buy) or unparked (sell). Both producers derive it IDENTICALLY
@@ -147,15 +163,25 @@ export class FxFifoEngine {
    * the trace and can never silently drift apart. Pure Decimal add + Map upsert —
    * no per-event allocation beyond the first Map entry per currency.
    */
-  private accumulate(kind: "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit" | "phantom", currency: string, qty: Decimal): void {
+  private accumulate(
+    kind: "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit" | "phantom",
+    currency: string,
+    qty: Decimal,
+  ): void {
     const map =
-      kind === "acquire" ? this.accAcquired
-      : kind === "dispose" ? this.accDisposed
-      : kind === "park" ? this.accParked
-      : kind === "unpark" ? this.accUnparked
-      : kind === "discard" ? this.accDiscarded
-      : kind === "profit" ? this.accProfit
-      : this.accPhantom;
+      kind === "acquire"
+        ? this.accAcquired
+        : kind === "dispose"
+          ? this.accDisposed
+          : kind === "park"
+            ? this.accParked
+            : kind === "unpark"
+              ? this.accUnparked
+              : kind === "discard"
+                ? this.accDiscarded
+                : kind === "profit"
+                  ? this.accProfit
+                  : this.accPhantom;
     map.set(currency, (map.get(currency) ?? new Decimal(0)).plus(qty));
     this.accCurrencies.add(currency);
   }
@@ -393,7 +419,13 @@ export class FxFifoEngine {
     }
 
     for (const [currency, { count, totalQty }] of this.fxMissing) {
-      this.emit({ id: "fx.missing_prior_lots", severity: "info", message: `⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`, hint: "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).", context: { currency, count: count.toString(), totalQuantity: totalQty.toFixed(2) } });
+      this.emit({
+        id: "fx.missing_prior_lots",
+        severity: "info",
+        message: `⚠ ${count} disposiciones de ${currency} sin lotes previos suficientes (total: ${totalQty.toFixed(2)} ${currency}). Posible adquisición anterior al período declarado — ganancia FX asumida = 0.`,
+        hint: "La adquisición de esta divisa fue anterior al periodo del Flex Query. Se asume ganancia FX = 0 (tratamiento conservador).",
+        context: { currency, count: count.toString(), totalQuantity: totalQty.toFixed(2) },
+      });
     }
 
     this.checkConservation();
@@ -579,9 +611,25 @@ export class FxFifoEngine {
       }
 
       if (acquiring) {
-        events.push({ date, currency: trade.currency, quantity: amount, ecbRate, trigger: "conversion", commissionEur, realEurAmount });
+        events.push({
+          date,
+          currency: trade.currency,
+          quantity: amount,
+          ecbRate,
+          trigger: "conversion",
+          commissionEur,
+          realEurAmount,
+        });
       } else {
-        events.push({ date, currency: trade.currency, quantity: amount.negated(), ecbRate, trigger: "conversion", commissionEur, realEurAmount });
+        events.push({
+          date,
+          currency: trade.currency,
+          quantity: amount.negated(),
+          ecbRate,
+          trigger: "conversion",
+          commissionEur,
+          realEurAmount,
+        });
       }
     }
 
@@ -608,7 +656,6 @@ export class FxFifoEngine {
    * withholding tax and fees paid in FCY consume lots.
    */
   static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
-
     const events: FxEvent[] = [];
 
     // Withholding tax (retención en origen) on a foreign-currency dividend/interest
@@ -716,7 +763,13 @@ export class FxFifoEngine {
         events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest" });
       } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
         if (amount.lessThan(0)) {
-          events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "commission" });
+          events.push({
+            date,
+            currency: tx.currency,
+            quantity: amount.abs().negated(),
+            ecbRate,
+            trigger: "commission",
+          });
         } else {
           events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "commission" });
         }
@@ -799,16 +852,16 @@ export class FxFifoEngine {
       // conversion of the real short profit then hits the conservative missing-lot
       // floor (gain = 0) rather than a fabricated gain.
       if (d.isShort) continue;
-      if (!isEcbResolvable(d.currency)) continue;               // genuine fiat FCY only
-      if (!d.proceedsFcy.greaterThan(0)) continue;              // skip non-positive (defensive)
+      if (!isEcbResolvable(d.currency)) continue; // genuine fiat FCY only
+      if (!d.proceedsFcy.greaterThan(0)) continue; // skip non-positive (defensive)
       events.push({
         kind: "stock_sell",
         date: normalizeDate(d.sellDate),
         currency: d.currency,
-        quantity: new Decimal(0),       // unused for stock_sell (amounts are in costFcy/proceedsFcy)
-        costFcy: d.costBasisFcy,        // principal that was parked at the matching buy
-        proceedsFcy: d.proceedsFcy,     // FULL net proceeds in FCY (already net of commission/taxes)
-        ecbRate: d.sellEcbRate,         // sale-date ECB rate (for the profit and uncovered/unmatched re-add)
+        quantity: new Decimal(0), // unused for stock_sell (amounts are in costFcy/proceedsFcy)
+        costFcy: d.costBasisFcy, // principal that was parked at the matching buy
+        proceedsFcy: d.proceedsFcy, // FULL net proceeds in FCY (already net of commission/taxes)
+        ecbRate: d.sellEcbRate, // sale-date ECB rate (for the profit and uncovered/unmatched re-add)
         trigger: "stock_sale",
         // Per-position key (isin || symbol) — IDENTICAL derivation to the buy
         // producer, so this sell unparks ONLY its own position's principal. An
@@ -902,7 +955,7 @@ export class FxFifoEngine {
         kind: "stock_buy",
         date: cashDate,
         currency: trade.currency,
-        quantity: new Decimal(0),       // unused for stock_buy (the amount spent is costFcy)
+        quantity: new Decimal(0), // unused for stock_buy (the amount spent is costFcy)
         costFcy,
         ecbRate,
         trigger: "stock_purchase",
@@ -915,13 +968,64 @@ export class FxFifoEngine {
     return events;
   }
 
+  /**
+   * Synthetic carry-basis buy-side FX events for manual opening lots.
+   *
+   * A transferred opening lot has no explicit EUR->FCY funding conversion in the
+   * imported statement, so the normal stock-buy producer would park it as
+   * "uncovered" and silently degrade to the old full-proceeds path. For manual
+   * transferred positions we DO know the acquisition date and FCY cost, so we can
+   * park that whole principal as an explicitly covered slice at the acquisition
+   * date's ECB rate. The later SELL then re-adds the carried principal exactly as
+   * if the original funding lot had been present in the data.
+   */
+  static extractManualOpeningLotFxEvents(lots: ManualOpeningLot[], rateMap: EcbRateMap): FxEvent[] {
+    const events: FxEvent[] = [];
+    const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
+
+    for (const lot of lots) {
+      if (!SECURITY_CATEGORIES.has(lot.assetCategory)) continue;
+      if (lot.currency === "EUR") continue;
+      if (!isEcbResolvable(lot.currency)) continue;
+
+      const date = normalizeDate(lot.acquireDate);
+      const ecbRate = lookupRateInMap(rateMap, date, lot.currency);
+      if (ecbRate === null) continue;
+
+      const quantity = new Decimal(lot.quantity);
+      const pricePerShare = new Decimal(lot.pricePerShare);
+      const costFcy = quantity.mul(pricePerShare);
+      if (!costFcy.greaterThan(0)) continue;
+
+      events.push({
+        kind: "stock_buy",
+        date,
+        currency: lot.currency,
+        quantity: new Decimal(0),
+        costFcy,
+        ecbRate,
+        trigger: "stock_purchase",
+        coveredCostPerUnit: ecbRate,
+        coveredAcquireDate: date,
+        positionKey: lot.isin || lot.symbol,
+      });
+    }
+
+    return events;
+  }
+
   /** Detect FXCONV (automatic broker conversions for settlement) */
   private static isFxconv(trade: Trade): boolean {
     const desc = (trade.description || "").toUpperCase();
     const exch = (trade.exchange || "").toUpperCase();
     const notes = (trade.notes || "").toUpperCase().split(";");
-    return desc.includes("FXCONV") || desc.includes("CASH RECEIPTS") || desc.includes("CASH DISBURSEMENTS")
-      || exch === "FXCONV" || notes.includes("AFX");
+    return (
+      desc.includes("FXCONV") ||
+      desc.includes("CASH RECEIPTS") ||
+      desc.includes("CASH DISBURSEMENTS") ||
+      exch === "FXCONV" ||
+      notes.includes("AFX")
+    );
   }
 
   /** Effective EUR-per-FCY rate for an event: the broker's real applied rate
@@ -996,7 +1100,15 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
-      this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: netProceeds, proceedsEur: netProceeds, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "sin lotes previos → ganancia FX = 0" });
+      this.record("dispose", event, {
+        quantityFcy: remaining,
+        rate: effRate,
+        costBasisEur: netProceeds,
+        proceedsEur: netProceeds,
+        gainLossEur: new Decimal(0),
+        lotId: "UNKNOWN",
+        note: "sin lotes previos → ganancia FX = 0",
+      });
       this.accumulate("dispose", event.currency, remaining);
       // Floored dispose: this FCY was never acquired (no prior lot) and the pool
       // was NOT driven negative (we returned without touching this.lots). It is
@@ -1042,7 +1154,15 @@ export class FxFifoEngine {
       }
 
       remaining = remaining.minus(consumed);
-      this.record("dispose", event, { quantityFcy: consumed, rate: effRate, costBasisEur, proceedsEur, gainLossEur: proceedsEur.minus(costBasisEur), lotId: lotIdConsumed, lotAcquireDate: lot.acquireDate });
+      this.record("dispose", event, {
+        quantityFcy: consumed,
+        rate: effRate,
+        costBasisEur,
+        proceedsEur,
+        gainLossEur: proceedsEur.minus(costBasisEur),
+        lotId: lotIdConsumed,
+        lotAcquireDate: lot.acquireDate,
+      });
       this.accumulate("dispose", event.currency, consumed);
     }
 
@@ -1068,7 +1188,15 @@ export class FxFifoEngine {
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
       });
-      this.record("dispose", event, { quantityFcy: remaining, rate: effRate, costBasisEur: proceedsEur, proceedsEur, gainLossEur: new Decimal(0), lotId: "UNKNOWN", note: "lotes insuficientes → ganancia FX = 0" });
+      this.record("dispose", event, {
+        quantityFcy: remaining,
+        rate: effRate,
+        costBasisEur: proceedsEur,
+        proceedsEur,
+        gainLossEur: new Decimal(0),
+        lotId: "UNKNOWN",
+        note: "lotes insuficientes → ganancia FX = 0",
+      });
       this.accumulate("dispose", event.currency, remaining);
       // Same as the no-lots branch: the pool ran out (lots fully consumed above),
       // so this leftover is disposed FCY with no acquire behind it. Count a phantom
@@ -1158,6 +1286,27 @@ export class FxFifoEngine {
   private parkPrincipal(event: FxEvent): void {
     const cost = event.costFcy;
     if (!cost || !cost.greaterThan(0)) return;
+
+    if (event.coveredCostPerUnit && event.coveredAcquireDate) {
+      const parkKey = FxFifoEngine.parkKey(event.currency, event.positionKey);
+      if (!this.parked.has(parkKey)) this.parked.set(parkKey, []);
+      const park = this.parked.get(parkKey)!;
+      park.push({ q: cost, rate: event.coveredCostPerUnit, acquireDate: event.coveredAcquireDate });
+      this.record("park", event, {
+        quantityFcy: cost,
+        rate: event.coveredCostPerUnit,
+        lotAcquireDate: event.coveredAcquireDate,
+        note: "lote manual cubierto",
+      });
+      // A manual opening lot is a real historical FCY acquisition whose funding
+      // row is simply absent from the imported statement. It therefore belongs on
+      // the acquire side of the conservation identity, even though we park it
+      // directly instead of materializing a spendable pool lot first.
+      this.accumulate("acquire", event.currency, cost);
+      this.accumulate("park", event.currency, cost);
+      return;
+    }
+
     let remaining = cost;
     const EPS = FxFifoEngine.EPS;
     const lots = this.lots.get(event.currency);
@@ -1189,7 +1338,11 @@ export class FxFifoEngine {
     // date, which is correct for genuinely-untracked dollars).
     if (remaining.greaterThan(EPS)) {
       park.push({ q: remaining, rate: null, acquireDate: null });
-      this.record("park", event, { quantityFcy: remaining, rate: null, note: "uncovered (sin lote de origen rastreado)" });
+      this.record("park", event, {
+        quantityFcy: remaining,
+        rate: null,
+        note: "uncovered (sin lote de origen rastreado)",
+      });
       this.accumulate("park", event.currency, remaining);
       // Uncovered park: this FCY had no tracked acquisition lot (funded outside the
       // data window). It lands on the parked side (rhs) with no real acquire, so we
@@ -1273,14 +1426,22 @@ export class FxFifoEngine {
         need = need.minus(x);
         if (p.q.lessThan(EPS)) park.shift();
         if (give.greaterThan(EPS)) {
-          this.record("unpark", event, { quantityFcy: give, rate: p.rate === null ? saleRate : p.rate, note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined });
+          this.record("unpark", event, {
+            quantityFcy: give,
+            rate: p.rate === null ? saleRate : p.rate,
+            note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined,
+          });
           this.accumulate("unpark", event.currency, give);
         }
         if (discarded.greaterThan(EPS)) {
           // Loss-spent dollars that never returned: NO FX, never converted to EUR
           // ("como una hamburguesa en dólares"). Recorded so the audit trail shows
           // exactly what left the patrimony in the losing trade (issue #230).
-          this.record("discard", event, { quantityFcy: discarded, rate: p.rate, note: "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)" });
+          this.record("discard", event, {
+            quantityFcy: discarded,
+            rate: p.rate,
+            note: "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
+          });
           this.accumulate("discard", event.currency, discarded);
         }
       }
@@ -1293,7 +1454,11 @@ export class FxFifoEngine {
       const g = Decimal.min(need, readd.minus(placed));
       this.pushPoolLot(event.currency, event.date, g, saleRate);
       placed = placed.plus(g);
-      this.record("unpark", event, { quantityFcy: g, rate: saleRate, note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)" });
+      this.record("unpark", event, {
+        quantityFcy: g,
+        rate: saleRate,
+        note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)",
+      });
       this.accumulate("unpark", event.currency, g);
       // Unmatched sell (position bought outside the data window): this FCY is
       // re-added to the pool (rhs) with NO parked principal behind it — untracked.

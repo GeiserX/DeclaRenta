@@ -8,7 +8,16 @@
 
 import Decimal from "decimal.js";
 import type { CashTransaction, FlexStatement, Trade } from "../types/ibkr.js";
-import type { TaxSummary, TaxMessage, FifoDisposal, FxDisposal, DividendEntry, ManualRateQuote, FxTraceEvent } from "../types/tax.js";
+import type {
+  TaxSummary,
+  TaxMessage,
+  FifoDisposal,
+  FxDisposal,
+  DividendEntry,
+  ManualRateQuote,
+  FxTraceEvent,
+  ManualOpeningLot,
+} from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
@@ -16,14 +25,20 @@ import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
-import { lookupRateInMap } from "../engine/ecb.js";
+import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
+import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
-function filterByYear<T>(items: T[], yearStr: string, getText: (item: T) => string, getContext?: (item: T) => Record<string, string> | undefined): T[] {
+function filterByYear<T>(
+  items: T[],
+  yearStr: string,
+  getText: (item: T) => string,
+  getContext?: (item: T) => Record<string, string> | undefined,
+): T[] {
   return items.filter((item) => {
     const ctx = getContext?.(item);
     if (ctx?.date) return ctx.date.startsWith(yearStr);
@@ -130,7 +145,7 @@ function mergeManualRateHints(
   userManual: EcbRateMap | undefined,
   hints: ManualRateQuote[] | undefined,
 ): EcbRateMap | undefined {
-  if ((!hints || hints.length === 0)) return userManual;
+  if (!hints || hints.length === 0) return userManual;
   const merged = buildManualRateMap(hints);
   if (userManual) {
     for (const [date, byCur] of userManual) {
@@ -255,6 +270,44 @@ function synthesizeRewardLots(
   return lots;
 }
 
+function resolveManualOpeningLots(
+  lots: ManualOpeningLot[],
+  resolvedRateMap: EcbRateMap,
+): { usableLots: ManualOpeningLot[]; skippedMessages: TaxMessage[] } {
+  const usableLots: ManualOpeningLot[] = [];
+  const skippedMessages: TaxMessage[] = [];
+
+  for (const rawLot of lots) {
+    const lot = normalizeManualOpeningLot(rawLot);
+    if (!lot) continue;
+
+    if (lot.currency !== "EUR") {
+      const rate = isEcbResolvable(lot.currency)
+        ? lookupRateInMap(resolvedRateMap, lot.acquireDate, lot.currency)
+        : null;
+      if (rate === null) {
+        skippedMessages.push({
+          id: "report.manual_opening_lot_unvalued",
+          severity: "warning",
+          message: `No se ha podido valorar el lote manual transferido de ${lot.symbol || lot.isin} (${lot.currency}, ${lot.acquireDate}) y se ignorará en los cálculos automáticos.`,
+          hint: "Incluye el año de adquisición para que se cargue el tipo ECB correspondiente, o revisa que la divisa del lote sea una moneda fiat resoluble por el BCE. Mientras no haya tipo disponible, este lote no se puede usar como coste base ni como base de divisa.",
+          context: {
+            symbol: lot.symbol,
+            isin: lot.isin,
+            currency: lot.currency,
+            acquireDate: lot.acquireDate,
+          },
+        });
+        continue;
+      }
+    }
+
+    usableLots.push(lot);
+  }
+
+  return { usableLots, skippedMessages };
+}
+
 export interface ReportOptions {
   skipFx?: boolean;
   /**
@@ -291,6 +344,13 @@ export interface ReportOptions {
    * doesn't run. NEVER surfaced in the standard UI.
    */
   fxTrace?: boolean;
+
+  /**
+   * User-supplied opening lots for positions transferred from another broker.
+   * Injected as synthetic BUY trades before FIFO so later sales consume them
+   * normally and can be split across multiple dates/prices.
+   */
+  manualOpeningLots?: ManualOpeningLot[];
 }
 
 /**
@@ -329,7 +389,16 @@ export function generateTaxReport(
   //     BUY trades (FIFO never taxes a BUY); they are EUR-denominated so they need
   //     no further valuation and go straight to the FIFO engine.
   const rewardLots = synthesizeRewardLots(statement.cashTransactions, resolvedRateMap, manualRates);
-  const resolvedTrades = [...valuation.trades, ...rewardLots];
+  // 0d. User-supplied opening lots for transferred positions are modeled as
+  //     synthetic BUY trades. This lets the normal FIFO pass consume multiple
+  //     manual lots (different dates/prices) without a parallel cost-basis path.
+  const { usableLots: usableManualOpeningLots, skippedMessages: manualOpeningLotMessages } = resolveManualOpeningLots(
+    options?.manualOpeningLots ?? [],
+    resolvedRateMap,
+  );
+  const manualOpeningLotTrades = buildManualOpeningLotTrades(usableManualOpeningLots);
+  const resolvedTrades = [...valuation.trades, ...rewardLots, ...manualOpeningLotTrades];
+  const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades];
 
   // 1. FIFO capital gains (process ALL years, filter to target year).
   //    Monodivisa (skipFx) → traditional cost basis: a FCY security's cost is
@@ -337,12 +406,7 @@ export function generateTaxReport(
   //    FX drift in the stock line since the FX engine is off. Default (rigorous):
   //    same-fiat cost at the sale-date rate (V2422-20), drift to the FX engine.
   const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
-  fifoEngine.processTrades(
-    resolvedTrades,
-    resolvedRateMap,
-    statement.corporateActions,
-    statement.optionExercises,
-  );
+  fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
 
   // Number of account holders. >1 splits every reported amount equally per
   // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.
@@ -358,18 +422,12 @@ export function generateTaxReport(
   // set, so this is identical to before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
-  const allDisposals = detectWashSales(fifoEngine.getDisposals(), statement.trades, statement.corporateActions);
+  const allDisposals = detectWashSales(fifoEngine.getDisposals(), washSaleTrades, statement.corporateActions);
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
 
-  const transmissionValue = disposals.reduce(
-    (sum, d) => sum.plus(d.proceedsEur),
-    new Decimal(0),
-  );
-  const acquisitionValue = disposals.reduce(
-    (sum, d) => sum.plus(d.costBasisEur),
-    new Decimal(0),
-  );
+  const transmissionValue = disposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
+  const acquisitionValue = disposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
   // Anti-churning (Art. 33.5.f/g LIRPF), PROPORTIONAL: blocked = the portion of
   // each loss deferred now (Σ blockedLossEur); reintegrated = previously-deferred
   // losses released this year because the surviving repurchased shares were sold
@@ -391,10 +449,7 @@ export function generateTaxReport(
   );
   let dividendEntries = calculateDividends(yearCashTransactions, rateMap);
   if (titulares > 1) dividendEntries = dividendEntries.map((d) => splitDividend(d, titulares));
-  const grossDividends = dividendEntries.reduce(
-    (sum, d) => sum.plus(d.grossAmountEur),
-    new Decimal(0),
-  );
+  const grossDividends = dividendEntries.reduce((sum, d) => sum.plus(d.grossAmountEur), new Decimal(0));
 
   // 3. Interest (already filtered to target year). Crypto reward income tagged
   //    taxBucket="ahorro" (staking, Simple Earn interest) is rendimiento del
@@ -410,6 +465,7 @@ export function generateTaxReport(
 
   let interestEarned = new Decimal(0);
   let interestPaid = new Decimal(0);
+
   let unresolvableInterest = 0;
   const interestEntries = interestTransactions
     .filter((t) => {
@@ -429,7 +485,7 @@ export function generateTaxReport(
       }
 
       return {
-        type: isEarned ? "earned" as const : "paid" as const,
+        type: isEarned ? ("earned" as const) : ("paid" as const),
         description: t.description,
         date: normalizeDate(t.dateTime),
         amountEur,
@@ -505,9 +561,20 @@ export function generateTaxReport(
     // NOT the year-filtered/titulares-split `disposals`. Neither emits a disposal;
     // only a later USD→EUR conversion realizes the deferred gain (Art. 14.2.e). FX
     // disposals are year-filtered below and split at splitFxDisposal.
-    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap, trackAutoConvert);
+    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(
+      statement.trades,
+      rateMap,
+      trackAutoConvert,
+    );
+    const manualOpeningLotFxEvents = FxFifoEngine.extractManualOpeningLotFxEvents(usableManualOpeningLots, rateMap);
     const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
-    const allFxDisposals = fxEngine.processEvents([...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...stockProceedsFxEvents]);
+    const allFxDisposals = fxEngine.processEvents([
+      ...tradeFxEvents,
+      ...cashFxEvents,
+      ...stockPurchaseFxEvents,
+      ...manualOpeningLotFxEvents,
+      ...stockProceedsFxEvents,
+    ]);
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
@@ -519,7 +586,12 @@ export function generateTaxReport(
     // showing them when the target year has zero FX activity is misleading noise.
     if (fxDisposals.length > 0) {
       fxWarningsList = filterByYear(fxEngine.warnings, yearStr, (w) => w);
-      fxMessagesList = filterByYear(fxEngine.messages, yearStr, (m) => m.message, (m) => m.context);
+      fxMessagesList = filterByYear(
+        fxEngine.messages,
+        yearStr,
+        (m) => m.message,
+        (m) => m.context,
+      );
     }
     // The trace is the FULL all-year movement ledger (audit artifact, not
     // year-filtered) so a lot's whole lifecycle reconciles. Present only on opt-in.
@@ -533,10 +605,7 @@ export function generateTaxReport(
   // blocked (deferred) loss so it is NOT deducted now, and subtract the
   // reintegrated (now-released) prior deferred loss. This is the fiscal base, not
   // the raw netGainLoss — blocked losses no longer silently reduce the base.
-  const fiscalCapitalGains = transmissionValue
-    .minus(acquisitionValue)
-    .plus(blockedLosses)
-    .minus(reintegratedLosses);
+  const fiscalCapitalGains = transmissionValue.minus(acquisitionValue).plus(blockedLosses).minus(reintegratedLosses);
   const totalSavingsBase = Decimal.max(fiscalCapitalGains, 0)
     .plus(Decimal.max(fxTransmissionValue.minus(fxAcquisitionValue), 0))
     .plus(grossDividends)
@@ -545,10 +614,20 @@ export function generateTaxReport(
 
   // Filter warnings to those relevant to the selected year
   const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
-  const yearMessages = filterByYear(fifoEngine.messages, yearStr, (m) => m.message, (m) => m.context);
+  const yearMessages = filterByYear(
+    fifoEngine.messages,
+    yearStr,
+    (m) => m.message,
+    (m) => m.context,
+  );
 
   // Crypto valuation pre-pass messages (filtered to the target year by date).
-  const cryptoValuationMessages = filterByYear(valuation.messages, yearStr, (m) => m.message, (m) => m.context);
+  const cryptoValuationMessages = filterByYear(
+    valuation.messages,
+    yearStr,
+    (m) => m.message,
+    (m) => m.context,
+  );
   const yearUnresolvedCrypto = valuation.unresolved.filter((u) => u.date.startsWith(yearStr));
 
   // Prepend parser warnings (unparsed sections, etc.)
@@ -556,11 +635,18 @@ export function generateTaxReport(
     ...(statement.parserWarnings ?? []),
     ...yearWarnings,
     ...fxWarningsList,
+    ...manualOpeningLotMessages.map((m) => m.message),
     ...cryptoValuationMessages.map((m) => m.message),
   ];
 
   // Aggregate structured messages from all sources
-  const allMessages: TaxMessage[] = [...(statement.parserMessages ?? []), ...yearMessages, ...fxMessagesList, ...cryptoValuationMessages];
+  const allMessages: TaxMessage[] = [
+    ...(statement.parserMessages ?? []),
+    ...yearMessages,
+    ...fxMessagesList,
+    ...manualOpeningLotMessages,
+    ...cryptoValuationMessages,
+  ];
 
   // Crypto-denominated income (staking rewards paid in the coin) can't be valued
   // via ECB rates. We skip it rather than crash; the user must value it manually.
@@ -604,7 +690,8 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.competitor_reconciliation",
       severity: "info",
-      message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
+      message:
+        "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
     });
     // Method-consistency warning: the FX gain on a foreign currency is realized
@@ -614,7 +701,8 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.fx_method_consistency",
       severity: "info",
-      message: "DeclaRenta calcula la ganancia de divisa difiriéndola hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Existe otro método admitido que la realiza en cada compra de valores en divisa.",
+      message:
+        "DeclaRenta calcula la ganancia de divisa difiriéndola hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Existe otro método admitido que la realiza en cada compra de valores en divisa.",
       hint: "No mezcles métodos entre ejercicios: si un año declaraste con otro criterio (o con otra herramienta), la base de divisa arrastrada puede duplicarse u omitirse. Para divisa adquirida antes del periodo de tu informe, incluye los años anteriores en la exportación del bróker.",
     });
   } else if (!options?.skipFx && fxDisposals.length === 0) {
@@ -632,7 +720,8 @@ export function generateTaxReport(
       allMessages.push({
         id: "report.fx_deferred_no_conversion",
         severity: "info",
-        message: "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+        message:
+          "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
         hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Bajo el criterio de DeclaRenta solo se declara la ganancia de divisa al convertir a euros.",
       });
     }

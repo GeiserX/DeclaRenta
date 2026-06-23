@@ -3,6 +3,8 @@ import Decimal from "decimal.js";
 import { FxFifoEngine } from "../../src/engine/fx-fifo.js";
 import type { FxEvent } from "../../src/engine/fx-fifo.js";
 import type { TaxMessage } from "../../src/types/tax.js";
+import type { ManualOpeningLot } from "../../src/types/tax.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 
 /**
  * FX conservation self-check (issue #230 — "para la comprobación de descuadres
@@ -55,11 +57,34 @@ function toEvents(ops: Op[]): FxEvent[] {
       case "fund":
         return { date, currency, quantity: new Decimal(op[2]), ecbRate: new Decimal(op[3]), trigger: "conversion" };
       case "conv":
-        return { date, currency, quantity: new Decimal(op[2]).negated(), ecbRate: new Decimal(op[3]), trigger: "conversion" };
+        return {
+          date,
+          currency,
+          quantity: new Decimal(op[2]).negated(),
+          ecbRate: new Decimal(op[3]),
+          trigger: "conversion",
+        };
       case "buy":
-        return { kind: "stock_buy", date, currency, quantity: new Decimal(0), costFcy: new Decimal(op[2]), ecbRate: new Decimal(1), trigger: "stock_purchase" };
+        return {
+          kind: "stock_buy",
+          date,
+          currency,
+          quantity: new Decimal(0),
+          costFcy: new Decimal(op[2]),
+          ecbRate: new Decimal(1),
+          trigger: "stock_purchase",
+        };
       case "sell":
-        return { kind: "stock_sell", date, currency, quantity: new Decimal(0), costFcy: new Decimal(op[2]), proceedsFcy: new Decimal(op[3]), ecbRate: new Decimal(op[4]), trigger: "stock_sale" };
+        return {
+          kind: "stock_sell",
+          date,
+          currency,
+          quantity: new Decimal(0),
+          costFcy: new Decimal(op[2]),
+          proceedsFcy: new Decimal(op[3]),
+          ecbRate: new Decimal(op[4]),
+          trigger: "stock_sale",
+        };
     }
   });
 }
@@ -71,6 +96,14 @@ function mismatches(engine: FxFifoEngine): TaxMessage[] {
   return engine.messages.filter((m) => m.id === MISMATCH_ID);
 }
 
+function makeRateMap(rates: Record<string, string>): EcbRateMap {
+  const map: EcbRateMap = new Map();
+  for (const [date, rate] of Object.entries(rates)) {
+    map.set(date, new Map([["USD", rate]]));
+  }
+  return map;
+}
+
 /** Run the engine over ops, returning both the engine (for messages) and the total FX gain. */
 function run(ops: Op[]): { engine: FxFifoEngine; gain: Decimal } {
   const engine = new FxFifoEngine();
@@ -80,18 +113,29 @@ function run(ops: Op[]): { engine: FxFifoEngine; gain: Decimal } {
 
 describe("FX conservation self-check — HOLDS (no mismatch) for every legitimate scenario", () => {
   it("simple acquire + convert", () => {
-    const { engine, gain } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]);
+    const { engine, gain } = run([
+      ["fund", "USD", "1000", "0.9"],
+      ["conv", "USD", "1000", "1.05"],
+    ]);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("150.00"); // sanity: 1000 × (1.05 − 0.90)
   });
 
   it("partial conversion (pool left with an unconverted remainder)", () => {
-    const { engine } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "400", "1.05"]]);
+    const { engine } = run([
+      ["fund", "USD", "1000", "0.9"],
+      ["conv", "USD", "400", "1.05"],
+    ]);
     expect(mismatches(engine)).toHaveLength(0); // 600 stays in the pool, still balances
   });
 
   it("full carry-basis round-trip (acquire → buy → sell → convert) — S1", () => {
-    const ops: Op[] = [["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const ops: Op[] = [
+      ["fund", "USD", "1000", "0.9"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+    ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("160.00"); // the validated S1 figure
@@ -99,8 +143,14 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
 
   it("two carry-basis round-trips → S2 (320.00), NO mismatch", () => {
     const ops: Op[] = [
-      ["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1100", "1.0"], ["conv", "USD", "1100", "1.05"],
-      ["fund", "USD", "1000", "1.1"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1300", "1.2"], ["conv", "USD", "1300", "1.25"],
+      ["fund", "USD", "1000", "0.9"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1100", "1.0"],
+      ["conv", "USD", "1100", "1.05"],
+      ["fund", "USD", "1000", "1.1"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1300", "1.2"],
+      ["conv", "USD", "1300", "1.25"],
     ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
@@ -110,7 +160,11 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   it("loss-sell (discard path) — no conversion, principal discarded", () => {
     // fund $1000@1.20, buy $1000, sell $1000→$800 @0.80 (a $200 USD loss). The 200
     // discarded principal is on the lhs (discarded) and balances.
-    const ops: Op[] = [["fund", "USD", "1000", "1.2"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "800", "0.8"]];
+    const ops: Op[] = [
+      ["fund", "USD", "1000", "1.2"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "800", "0.8"],
+    ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("0.00"); // nothing converted → no FX realized
@@ -130,14 +184,21 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   it("partial missing-lot (pool covers only part of the conversion)", () => {
     // fund $400, convert $1000: 400 covered (real dispose) + 600 floored. The 600
     // floored leg is a phantom acquire — still balances.
-    const { engine } = run([["fund", "USD", "400", "0.9"], ["conv", "USD", "1000", "1.05"]]);
+    const { engine } = run([
+      ["fund", "USD", "400", "0.9"],
+      ["conv", "USD", "1000", "1.05"],
+    ]);
     expect(mismatches(engine)).toHaveLength(0);
     expect(engine.messages.some((m) => m.id === "fx.missing_prior_lots")).toBe(true);
   });
 
   it("uncovered park then unpark at the sale rate (buy/sell with no funding)", () => {
     // A1: buy (uncovered park) → sell → convert. Funding-absent no-op path.
-    const ops: Op[] = [["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const ops: Op[] = [
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+    ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("60.00");
@@ -152,14 +213,22 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
 
   it("sell-only (position bought outside the data window) — unmatched re-add", () => {
     // A3: the unmatched-sell re-add path (phantom acquire on the pool side).
-    const ops: Op[] = [["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const ops: Op[] = [
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+    ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("60.00");
   });
 
   it("partial funding (pool covers only part of the buy) — A5", () => {
-    const ops: Op[] = [["fund", "USD", "500", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const ops: Op[] = [
+      ["fund", "USD", "500", "0.9"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+    ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
     expect(gain.toFixed(2)).toBe("110.00");
@@ -167,9 +236,12 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
 
   it("documented residual partial-w/loss (S7) — still balances", () => {
     const ops: Op[] = [
-      ["fund", "USD", "2000", "0.9"], ["buy", "USD", "2000"],
-      ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"],
-      ["sell", "USD", "1000", "900", "1.1"], ["conv", "USD", "900", "1.15"],
+      ["fund", "USD", "2000", "0.9"],
+      ["buy", "USD", "2000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+      ["sell", "USD", "1000", "900", "1.1"],
+      ["conv", "USD", "900", "1.15"],
     ];
     const { engine, gain } = run(ops);
     expect(mismatches(engine)).toHaveLength(0);
@@ -180,15 +252,56 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
     const next = dater();
     const events: FxEvent[] = [
       // USD: fund → buy → sell → convert
-      { date: next(), currency: "USD", quantity: new Decimal(1000), ecbRate: new Decimal("0.90"), trigger: "conversion" },
-      { kind: "stock_buy", date: next(), currency: "USD", quantity: new Decimal(0), costFcy: new Decimal(1000), ecbRate: new Decimal(1), trigger: "stock_purchase" },
-      { kind: "stock_sell", date: next(), currency: "USD", quantity: new Decimal(0), costFcy: new Decimal(1000), proceedsFcy: new Decimal(1200), ecbRate: new Decimal("1.00"), trigger: "stock_sale" },
-      { date: next(), currency: "USD", quantity: new Decimal(-1200), ecbRate: new Decimal("1.05"), trigger: "conversion" },
+      {
+        date: next(),
+        currency: "USD",
+        quantity: new Decimal(1000),
+        ecbRate: new Decimal("0.90"),
+        trigger: "conversion",
+      },
+      {
+        kind: "stock_buy",
+        date: next(),
+        currency: "USD",
+        quantity: new Decimal(0),
+        costFcy: new Decimal(1000),
+        ecbRate: new Decimal(1),
+        trigger: "stock_purchase",
+      },
+      {
+        kind: "stock_sell",
+        date: next(),
+        currency: "USD",
+        quantity: new Decimal(0),
+        costFcy: new Decimal(1000),
+        proceedsFcy: new Decimal(1200),
+        ecbRate: new Decimal("1.00"),
+        trigger: "stock_sale",
+      },
+      {
+        date: next(),
+        currency: "USD",
+        quantity: new Decimal(-1200),
+        ecbRate: new Decimal("1.05"),
+        trigger: "conversion",
+      },
       // EUR: must be skipped entirely (never enters the books)
       { date: next(), currency: "EUR", quantity: new Decimal(5000), ecbRate: new Decimal(1), trigger: "conversion" },
       // GBP: simple fund + convert
-      { date: next(), currency: "GBP", quantity: new Decimal(800), ecbRate: new Decimal("1.15"), trigger: "conversion" },
-      { date: next(), currency: "GBP", quantity: new Decimal(-800), ecbRate: new Decimal("1.20"), trigger: "conversion" },
+      {
+        date: next(),
+        currency: "GBP",
+        quantity: new Decimal(800),
+        ecbRate: new Decimal("1.15"),
+        trigger: "conversion",
+      },
+      {
+        date: next(),
+        currency: "GBP",
+        quantity: new Decimal(-800),
+        ecbRate: new Decimal("1.20"),
+        trigger: "conversion",
+      },
     ];
     const engine = new FxFifoEngine();
     engine.processEvents(events);
@@ -198,9 +311,33 @@ describe("FX conservation self-check — HOLDS (no mismatch) for every legitimat
   });
 
   it("the check is SILENT — emits NO message at all on a clean simple flow", () => {
-    const { engine } = run([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]);
+    const { engine } = run([
+      ["fund", "USD", "1000", "0.9"],
+      ["conv", "USD", "1000", "1.05"],
+    ]);
     // A fully-covered single round-trip warns about nothing.
     expect(engine.messages).toHaveLength(0);
+  });
+
+  it("manual opening lots parked as covered slices do not emit a false mismatch", () => {
+    const lots: ManualOpeningLot[] = [
+      {
+        symbol: "AAPL",
+        description: "APPLE INC",
+        isin: "US0378331005",
+        assetCategory: "STK",
+        currency: "USD",
+        acquireDate: "2024-01-10",
+        quantity: "17",
+        pricePerShare: "213.486535294117647",
+      },
+    ];
+    const rateMap = makeRateMap({ "2024-01-10": "0.90" });
+    const engine = new FxFifoEngine();
+
+    engine.processEvents(FxFifoEngine.extractManualOpeningLotFxEvents(lots, rateMap));
+
+    expect(mismatches(engine)).toHaveLength(0);
   });
 });
 
@@ -209,8 +346,14 @@ describe("FX conservation self-check — the identity (numeric guard on the vali
     // The S2 carry-basis scenario from fx-fifo-carry-basis.test.ts. We assert the
     // identity numerically on the engine's own end-of-run accumulators + balances.
     const ops: Op[] = [
-      ["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1100", "1.0"], ["conv", "USD", "1100", "1.05"],
-      ["fund", "USD", "1000", "1.1"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1300", "1.2"], ["conv", "USD", "1300", "1.25"],
+      ["fund", "USD", "1000", "0.9"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1100", "1.0"],
+      ["conv", "USD", "1100", "1.05"],
+      ["fund", "USD", "1000", "1.1"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1300", "1.2"],
+      ["conv", "USD", "1300", "1.25"],
     ];
     const engine = new FxFifoEngine();
     engine.processEvents(toEvents(ops));
@@ -250,8 +393,10 @@ describe("FX conservation self-check — the identity (numeric guard on the vali
   it("S8 two-gains-one-conversion: identity holds and the check is silent", () => {
     const ops: Op[] = [
       ["fund", "USD", "2000", "0.9"],
-      ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"],
-      ["buy", "USD", "1000"], ["sell", "USD", "1000", "1400", "1.1"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1400", "1.1"],
       ["conv", "USD", "2600", "1.2"],
     ];
     const { engine, gain } = run(ops);
@@ -272,12 +417,29 @@ class BreakableEngine extends FxFifoEngine {
   /** Corrupt the spendable pool for a currency, then re-run the real check. */
   forceMismatch(currency: string, extraQty: number): void {
     const self = this as unknown as {
-      lots: Map<string, { id: string; currency: string; acquireDate: string; quantity: Decimal; costPerUnit: Decimal; costInEur: Decimal }[]>;
+      lots: Map<
+        string,
+        {
+          id: string;
+          currency: string;
+          acquireDate: string;
+          quantity: Decimal;
+          costPerUnit: Decimal;
+          costInEur: Decimal;
+        }[]
+      >;
       checkConservation(): void;
     };
     const lots = self.lots.get(currency) ?? [];
     // Inject a phantom pool lot that NO accumulator counted → rhs > lhs → mismatch.
-    lots.push({ id: "BROKEN", currency, acquireDate: "2025-12-31", quantity: new Decimal(extraQty), costPerUnit: new Decimal(1), costInEur: new Decimal(extraQty) });
+    lots.push({
+      id: "BROKEN",
+      currency,
+      acquireDate: "2025-12-31",
+      quantity: new Decimal(extraQty),
+      costPerUnit: new Decimal(1),
+      costInEur: new Decimal(extraQty),
+    });
     self.lots.set(currency, lots);
     self.checkConservation();
   }
@@ -287,7 +449,12 @@ describe("FX conservation self-check — FIRES on a genuine desync (artificial b
   it("emits fx.conservation_mismatch (warning) when the pool diverges from the books", () => {
     const engine = new BreakableEngine();
     // A clean run first (no mismatch yet).
-    engine.processEvents(toEvents([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]));
+    engine.processEvents(
+      toEvents([
+        ["fund", "USD", "1000", "0.9"],
+        ["conv", "USD", "1000", "1.05"],
+      ]),
+    );
     expect(engine.messages.filter((m) => m.id === MISMATCH_ID)).toHaveLength(0);
 
     // Now corrupt the pool by 500 units and re-run the real check.
@@ -307,7 +474,12 @@ describe("FX conservation self-check — FIRES on a genuine desync (artificial b
 
   it("stays silent for a sub-epsilon (dust) imbalance", () => {
     const engine = new BreakableEngine();
-    engine.processEvents(toEvents([["fund", "USD", "1000", "0.9"], ["conv", "USD", "1000", "1.05"]]));
+    engine.processEvents(
+      toEvents([
+        ["fund", "USD", "1000", "0.9"],
+        ["conv", "USD", "1000", "1.05"],
+      ]),
+    );
     // 0.001 < CONSERVATION_EPS (0.01) → no warning (dust is fine).
     engine.forceMismatch("USD", 0.001);
     expect(engine.messages.filter((m) => m.id === MISMATCH_ID)).toHaveLength(0);
@@ -320,7 +492,12 @@ describe("FX conservation self-check — DIAGNOSTIC ONLY (never changes a tax fi
     // message. The disposals returned are the same object the engine built before
     // the check ran — proving no casilla figure depends on the diagnostic. We test
     // BOTH branches (clean run AND after a real mismatch is emitted), per the title.
-    const ops: Op[] = [["fund", "USD", "1000", "0.9"], ["buy", "USD", "1000"], ["sell", "USD", "1000", "1200", "1.0"], ["conv", "USD", "1200", "1.05"]];
+    const ops: Op[] = [
+      ["fund", "USD", "1000", "0.9"],
+      ["buy", "USD", "1000"],
+      ["sell", "USD", "1000", "1200", "1.0"],
+      ["conv", "USD", "1200", "1.05"],
+    ];
     const engine = new BreakableEngine();
     const disposals = engine.processEvents(toEvents(ops));
     const totalBefore = disposals.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2);
@@ -334,6 +511,11 @@ describe("FX conservation self-check — DIAGNOSTIC ONLY (never changes a tax fi
 
     // The disposals/gain are UNCHANGED by the emission — same array, same total.
     expect(disposals.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2)).toBe("160.00");
-    expect(engine.getDisposals().reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toFixed(2)).toBe("160.00");
+    expect(
+      engine
+        .getDisposals()
+        .reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0))
+        .toFixed(2),
+    ).toBe("160.00");
   });
 });

@@ -17,6 +17,7 @@
 
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { ManualOpeningLot } from "../types/tax.js";
 import { fetchEcbRates, normalizeCurrency } from "./ecb.js";
 import { normalizeDate } from "./dates.js";
 
@@ -80,10 +81,15 @@ export function __resetEcbCache(): void {
  * in a year with no trades), the declaration year, and `minYear - 1` for the
  * early-January lookback.
  */
-export function deriveEcbNeeds(statement: Statement, year: number): EcbNeeds {
+export function deriveEcbNeeds(
+  statement: Statement,
+  year: number,
+  manualOpeningLots: ManualOpeningLot[] = [],
+): EcbNeeds {
   const currencies = new Set<string>();
   for (const t of statement.trades) currencies.add(t.currency);
   for (const c of statement.cashTransactions) currencies.add(c.currency);
+  for (const lot of manualOpeningLots) currencies.add(lot.currency);
   currencies.delete("EUR");
 
   const years = new Set<number>();
@@ -96,6 +102,10 @@ export function deriveEcbNeeds(statement: Statement, year: number): EcbNeeds {
   // didn't trade. Fetch their years too, or valuation throws "No ECB rate".
   for (const c of statement.cashTransactions) {
     const y = parseInt(normalizeDate(c.dateTime).slice(0, 4));
+    if (Number.isFinite(y)) years.add(y);
+  }
+  for (const lot of manualOpeningLots) {
+    const y = parseInt(normalizeDate(lot.acquireDate).slice(0, 4));
     if (Number.isFinite(y)) years.add(y);
   }
   years.add(year);
@@ -139,12 +149,11 @@ function mergeInto(target: EcbRateMap, source: EcbRateMap): void {
  * @returns The merged rate map (date → currency → EUR-per-1-FCY).
  */
 export async function buildEcbRateMap(
-  input: { statement: Statement; year: number } | EcbNeeds,
+  input: { statement: Statement; year: number; manualOpeningLots?: ManualOpeningLot[] } | EcbNeeds,
   opts: BuildEcbRateMapOptions = {},
 ): Promise<EcbRateMap> {
-  const needs: EcbNeeds = "statement" in input
-    ? deriveEcbNeeds(input.statement, input.year)
-    : input;
+  const needs: EcbNeeds =
+    "statement" in input ? deriveEcbNeeds(input.statement, input.year, input.manualOpeningLots ?? []) : input;
 
   const fetcher = opts.fetcher ?? fetchEcbRates;
   const useCache = !opts.noCache;

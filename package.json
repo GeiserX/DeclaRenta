@@ -69,7 +69,7 @@
     "url": "https://github.com/GeiserX/DeclaRenta/issues"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": "^20.19.0 || >=22.13.0"
   },
   "dependencies": {
     "commander": "^13.1.0",

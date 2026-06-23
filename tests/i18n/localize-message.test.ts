@@ -22,7 +22,8 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         // The engine's Spanish fallback — must be IGNORED because the id is a known key.
-        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
+        message:
+          "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       };
       const out = localizeMessage(m);
       expect(out).toBe(
@@ -32,10 +33,30 @@ describe("localizeMessage / localizeHint", () => {
       expect(out).not.toBe(m.message);
     });
 
+    it("renders the active locale's text for fx conservation mismatch (English)", () => {
+      setLocale("en");
+      const m: LocalizableMessage = {
+        id: "fx.conservation_mismatch",
+        message:
+          "⚠ Descuadre interno del motor de divisa para USD: -3629.27 unidades sin cuadrar. Las casillas 1633/1637 pueden no reconciliar.",
+        hint: "Esto es una comprobación interna (no debería ocurrir). Si lo ves, repórtalo en GitHub adjuntando el informe; los importes de divisa pueden necesitar revisión manual.",
+        context: { currency: "USD", mismatch: "-3629.27" },
+      };
+
+      expect(localizeMessage(m)).toBe(
+        "⚠ Internal foreign-exchange engine mismatch for USD: -3629.27 unbalanced units. Boxes 1633/1637 may fail to reconcile.",
+      );
+      expect(localizeHint(m)).toBe(
+        "This is an internal consistency check and should not happen. If you see it, report it on GitHub and attach the report; the foreign-exchange amounts may need manual review.",
+      );
+      expect(localizeMessage(m)).not.toBe(m.message);
+    });
+
     it("renders the Spanish locale text (byte-identical to the engine) when locale is es", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
-        message: "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
+        message:
+          "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
       };
       // es locale text equals the engine's emitted Spanish message exactly.
       expect(localizeMessage(m)).toBe(m.message);
@@ -90,7 +111,8 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "fifo.sell_without_lots",
         // Build the engine's exact Spanish string from the same field values.
-        message: "⚠ Venta sin lotes: AAPL (US0378331005) × 5 el 2025-03-14. Coste base = 0 (posible posición corta o datos previos incompletos).",
+        message:
+          "⚠ Venta sin lotes: AAPL (US0378331005) × 5 el 2025-03-14. Coste base = 0 (posible posición corta o datos previos incompletos).",
         context: { symbol: "AAPL", isin: "US0378331005", quantity: "5", date: "2025-03-14" },
       };
       // localizeMessage(es) reconstructs exactly what the engine emitted.
