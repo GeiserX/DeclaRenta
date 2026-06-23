@@ -715,8 +715,7 @@ const eu: TranslationKeys = {
   "parser.cash_summary_duplicates": "{{skipped}} laburpen-errenkada bikoiztu baztertu dira efektiboko transakzioetan.",
   "parser.cash_summary_duplicates.hint":
     'Zure Flex Query-ak "Summary" aukera aktibatuta du Cash Transactions atalean, eta horrek mugimendu bakoitza bikoizten du. Desaktiba dezakezu, baina ez da beharrezkoa: errenkada hauek automatikoki ezikusi dira dibidenduak, atxikipenak eta komisioak ez bikoizteko.',
-  "parser.executions_merged":
-    "{{sourceFillCount}} egikaritze partzial {{mergedGroupCount}} agindutan multzokatu dira.",
+  "parser.executions_merged": "{{sourceFillCount}} egikaritze partzial {{mergedGroupCount}} agindutan multzokatu dira.",
   "parser.executions_merged.hint":
     "Hainbat egikaritze partzial dituzten aginduak eragiketa bakarrean konbinatu dira, Ogasunari informatzen dioten brokerrek egiten duten bezala. Zerga-kalkulua ez da aldatzen: kopuru osoa, batez besteko prezio haztatua eta komisioak berdin batzen dira.",
   "parser.order_level_duplicates": "{{skipped}} ORDER motako errenkada agregatu bikoiztu baztertu dira eragiketetan.",
