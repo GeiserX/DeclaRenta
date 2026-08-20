@@ -26,7 +26,13 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, toFiniteDecimalString, findColumn, stripBom } from "./csv-utils.js";
+import {
+  parseCsvLine,
+  toFiniteDecimalString,
+  findColumn,
+  normalizeFractionalCurrency,
+  stripBom,
+} from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -116,25 +122,9 @@ function isSkippedAction(action: string): boolean {
   return /deposit|withdrawal|currency conversion|card debit|spending cashback/i.test(action);
 }
 
-// ---------------------------------------------------------------------------
-// Fractional currency normalization
-// Trading 212 reports GBX (pence), ZAc (South African cents), ILA (Israeli
-// agorot) as-is. ECB only publishes GBP/ZAR/ILS so we normalize and ÷100.
-// ---------------------------------------------------------------------------
-
-const FRACTIONAL_CURRENCIES: Record<string, { base: string; divisor: Decimal }> = {
-  GBX: { base: "GBP", divisor: new Decimal(100) },
-  ZAC: { base: "ZAR", divisor: new Decimal(100) },
-  ILA: { base: "ILS", divisor: new Decimal(100) },
-};
-
-function normalizeCurrency(code: string): { currency: string; divisor: Decimal } {
-  const entry = FRACTIONAL_CURRENCIES[code.toUpperCase()];
-  if (entry && code.toUpperCase() !== entry.base) {
-    return { currency: entry.base, divisor: entry.divisor };
-  }
-  return { currency: code, divisor: new Decimal(1) };
-}
+// Fractional currency normalization (GBX pence, ZAc cents, ILA agorot →
+// ECB major unit ÷100) is shared with the Degiro parser: see
+// normalizeFractionalCurrency in csv-utils.ts.
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -172,12 +162,12 @@ function parseTrading212Csv(lines: string[]): Statement {
     const sharesStr = toFiniteDecimalString(fields[cols.shares] ?? "0");
     const priceStr = toFiniteDecimalString(fields[cols.pricePerShare] ?? "0");
     const rawCurrency = (fields[cols.priceCurrency] ?? "").trim() || "EUR";
-    const { currency: priceCurrency, divisor: priceDivisor } = normalizeCurrency(rawCurrency);
+    const { currency: priceCurrency, divisor: priceDivisor } = normalizeFractionalCurrency(rawCurrency);
     const currency = priceCurrency;
     // Currency (Total) is authoritative for cash transaction amounts: in EUR-primary accounts
     // the Total column holds the credited EUR amount, not the instrument's native currency.
     const rawCashCurrency = (fields[cols.totalCurrency] ?? "").trim() || rawCurrency;
-    const { currency: cashCurrency, divisor: cashDivisor } = normalizeCurrency(rawCashCurrency);
+    const { currency: cashCurrency, divisor: cashDivisor } = normalizeFractionalCurrency(rawCashCurrency);
     const totalStr = toFiniteDecimalString(fields[cols.total] ?? "0");
     const txId = (fields[cols.id] ?? "").trim();
 
