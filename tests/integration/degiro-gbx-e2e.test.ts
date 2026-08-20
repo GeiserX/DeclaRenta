@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { degiroParser } from "../../src/parsers/degiro.js";
-import type { FlexStatement } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ===========================================================================
@@ -51,7 +50,7 @@ function makeRateMap(): EcbRateMap {
 }
 
 describe("Degiro GBX end-to-end (issue #282)", () => {
-  const statement = degiroParser.parse(GBX_CSV) as FlexStatement;
+  const statement = degiroParser.parse(GBX_CSV);
   const report = generateTaxReport(statement, makeRateMap(), 2026);
 
   it("consumes the buys as FIFO lots — no sell_without_lots / insufficient_lots", () => {
