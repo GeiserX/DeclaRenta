@@ -15,6 +15,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
+import Decimal from "decimal.js";
 import {
   detectDelimiter,
   parseCsvLine,
@@ -22,6 +23,7 @@ import {
   toFiniteDecimal,
   convertDateDMY,
   findColumn,
+  normalizeFractionalCurrency,
   stripBom,
 } from "./csv-utils.js";
 
@@ -260,6 +262,38 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const isSell = valueDec.greaterThan(0) || qtyDec.lessThan(0);
     const absQtyStr = qtyDec.abs().toString();
 
+    // Degiro quotes LSE instruments in GBX (pence). ECB only publishes GBP,
+    // so normalize the code and divide the per-share price, the local value
+    // and the FX rate by 100 (issue #282). The "Valor local" column is by
+    // definition in the instrument's quote currency, so it divides with it;
+    // a 16-col fallback value (already the EUR column) is left untouched.
+    let tradeCurrency = currency || "EUR";
+    let tradePrice = price;
+    let tradeValue = value;
+    let tradeFxRate = fxRate;
+    const fractional = normalizeFractionalCurrency(tradeCurrency);
+    if (!fractional.divisor.equals(1)) {
+      tradeCurrency = fractional.currency;
+      tradePrice = new Decimal(price).div(fractional.divisor).toString();
+      if (localValue) tradeValue = new Decimal(localValue).div(fractional.divisor).toString();
+      if (tradeFxRate !== "0" && tradeFxRate !== "1") {
+        tradeFxRate = new Decimal(tradeFxRate).div(fractional.divisor).toString();
+      }
+    }
+
+    // Commission currency may itself be a minor unit in older layouts with a
+    // per-costs currency column (fallback = the raw quote currency, so an
+    // unlabeled pence commission is divided too) — normalize it the same way.
+    let commissionValue = commission;
+    let commissionCcy = commCurrency || currency || "EUR";
+    const commFractional = normalizeFractionalCurrency(commissionCcy);
+    if (!commFractional.divisor.equals(1)) {
+      commissionCcy = commFractional.currency;
+      if (commissionValue !== "0") {
+        commissionValue = new Decimal(commissionValue).div(commFractional.divisor).toString();
+      }
+    }
+
     trades.push({
       tradeID: orderId,
       accountId: "",
@@ -267,21 +301,21 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       description: product,
       isin,
       assetCategory: "STK",
-      currency: currency || "EUR",
+      currency: tradeCurrency,
       tradeDate,
       settlementDate: tradeDate, // T+2 estimated, but we use tradeDate for FIFO
       quantity: isSell ? `-${absQtyStr}` : absQtyStr,
-      tradePrice: price,
-      tradeMoney: value,
-      proceeds: isSell ? value : "0",
-      cost: isSell ? "0" : value,
+      tradePrice,
+      tradeMoney: tradeValue,
+      proceeds: isSell ? tradeValue : "0",
+      cost: isSell ? "0" : tradeValue,
       fifoPnlRealized: "0",
-      fxRateToBase: fxRate === "0" ? "1" : fxRate || "1",
+      fxRateToBase: tradeFxRate === "0" ? "1" : tradeFxRate || "1",
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange,
-      commissionCurrency: commCurrency || currency || "EUR",
-      commission,
+      commissionCurrency: commissionCcy,
+      commission: commissionValue,
       taxes: "0",
       multiplier: "1",
     });
@@ -388,9 +422,16 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     const description = (fields[cols.description] ?? "").trim();
     const isin = (fields[cols.isin] ?? "").trim();
     const product = (fields[cols.product] ?? "").trim();
-    const amount = parseNumber(fields[cols.amount] ?? "0");
-    const currency = cols.currency >= 0 ? (fields[cols.currency] ?? "EUR").trim() : "EUR";
+    let amount = parseNumber(fields[cols.amount] ?? "0");
+    let currency = cols.currency >= 0 ? (fields[cols.currency] ?? "EUR").trim() : "EUR";
     const fx = cols.fx >= 0 ? parseNumber(fields[cols.fx] ?? "1") : "1";
+
+    // Minor-unit amounts (GBX pence, etc.) → ECB major unit, same as trades.
+    const fractional = normalizeFractionalCurrency(currency || "EUR");
+    if (!fractional.divisor.equals(1)) {
+      currency = fractional.currency;
+      if (amount !== "0") amount = new Decimal(amount).div(fractional.divisor).toString();
+    }
 
     if (!description) continue;
 

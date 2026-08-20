@@ -387,4 +387,87 @@ describe("degiroParser", () => {
       expect(noComm.commission).toBe("0");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // GBX (penny sterling) normalization — issue #282.
+  // Degiro quotes LSE instruments in GBX (pence). ECB only publishes GBP, so
+  // without normalization every GBX trade is dropped as an unresolvable
+  // currency by the crypto-valuation pre-pass: the buys create no FIFO lots
+  // and a later sale fires `fifo.sell_without_lots` with cost basis 0.
+  // Fixture = the exact export from the issue (order IDs synthetic): a 2021
+  // buy, a 2022 ISIN swap (KISTOS PLC → KISTOS HOLDINGS PLC), a 2024 buy and
+  // the 2026 sale of the combined 510 shares.
+  // -------------------------------------------------------------------------
+
+  describe("GBX fractional currency (issue #282)", () => {
+    const GBX_CSV = [
+      "Fecha,Hora,Producto,ISIN,Bolsa de referencia,Centro de ejecución,Número,Precio,,Valor local,,Valor EUR,Tipo de cambio,Comisión AutoFX,Costes de transacción y/o externos EUR,Total EUR,ID Orden",
+      '26-05-2026,09:12,KISTOS HOLDINGS PLC,GB00BP7NQJ77,LSE,AIMX,-510,"333,4500",GBX,"170059,50",GBX,"1969,88","86,3297","-4,93","-5,73","1959,22",00000000-0000-4000-8000-000000000001',
+      '12-07-2024,13:02,KISTOS HOLDINGS PLC,GB00BP7NQJ77,LSE,AIMX,400,"109,5600",GBX,"-43824,00",GBX,"-521,59","84,0202","-1,30","-4,07","-526,96",00000000-0000-4000-8000-000000000002',
+      '29-12-2022,14:34,KISTOS HOLDINGS PLC,GB00BP7NQJ77,LSE,,110,"458,8900",GBX,"-50477,90",GBX,"-576,11","87,6194","0,00",,"-576,11",',
+      '29-12-2022,14:34,KISTOS PLC,GB00BLF7NX68,LSE,,-110,"458,8900",GBX,"50477,90",GBX,"576,11","87,6194","0,00",,"576,11",',
+      '22-09-2021,10:35,KISTOS PLC,GB00BLF7NX68,LSE,AIMX,110,"316,7800",GBX,"-34845,80",GBX,"-405,33","85,9697","-0,40","-3,97","-409,70",00000000-0000-4000-8000-000000000003',
+    ].join("\n");
+
+    it("should parse all 5 rows without dropping any (buys included)", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      expect(result.trades).toHaveLength(5);
+      expect(result.parserMessages).toBeUndefined();
+      expect(result.trades.filter((t) => t.buySell === "BUY")).toHaveLength(3);
+      expect(result.trades.filter((t) => t.buySell === "SELL")).toHaveLength(2);
+    });
+
+    it("should normalize GBX to GBP with price ÷100", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      for (const t of result.trades) {
+        expect(t.currency).toBe("GBP");
+      }
+      const sell = result.trades.find((t) => t.quantity === "-510")!;
+      expect(sell.tradePrice).toBe("3.3345"); // 333.4500 GBX
+      const buy2024 = result.trades.find((t) => t.quantity === "400")!;
+      expect(buy2024.tradePrice).toBe("1.0956"); // 109.5600 GBX
+      const buy2021 = result.trades.find(
+        (t) => t.isin === "GB00BLF7NX68" && t.buySell === "BUY",
+      )!;
+      expect(buy2021.tradePrice).toBe("3.1678"); // 316.7800 GBX
+    });
+
+    it("should normalize the local value (tradeMoney) ÷100", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      const sell = result.trades.find((t) => t.quantity === "-510")!;
+      expect(sell.tradeMoney).toBe("1700.595"); // 170059.50 GBX
+      const buy2024 = result.trades.find((t) => t.quantity === "400")!;
+      expect(buy2024.tradeMoney).toBe("-438.24"); // -43824.00 GBX
+    });
+
+    it("should keep EUR commissions untouched (Comisión AutoFX + Costes EUR)", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      const sell = result.trades.find((t) => t.quantity === "-510")!;
+      expect(sell.commission).toBe("-10.66"); // -4.93 AutoFX + -5.73 costes
+      expect(sell.commissionCurrency).toBe("EUR");
+      const buy2024 = result.trades.find((t) => t.quantity === "400")!;
+      expect(buy2024.commission).toBe("-5.37"); // -1.30 + -4.07
+    });
+
+    it("should express fxRateToBase in the major unit (GBP per EUR)", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      const sell = result.trades.find((t) => t.quantity === "-510")!;
+      expect(sell.fxRateToBase).toBe("0.863297"); // 86.3297 GBX per EUR
+    });
+
+    it("should parse the ISIN-swap pair (no order ID, empty venue)", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      const swapIn = result.trades.find(
+        (t) => t.isin === "GB00BP7NQJ77" && t.quantity === "110",
+      )!;
+      expect(swapIn.buySell).toBe("BUY");
+      expect(swapIn.tradePrice).toBe("4.5889");
+      expect(swapIn.commission).toBe("0");
+      const swapOut = result.trades.find(
+        (t) => t.isin === "GB00BLF7NX68" && t.quantity === "-110",
+      )!;
+      expect(swapOut.buySell).toBe("SELL");
+      expect(swapOut.tradePrice).toBe("4.5889");
+    });
+  });
 });

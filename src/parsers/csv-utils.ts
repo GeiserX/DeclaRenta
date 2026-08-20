@@ -170,6 +170,31 @@ export function convertDateISO(date: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Fractional (minor-unit) currency normalization
+// Some venues quote in the minor unit: GBX (penny sterling, LSE), ZAc (South
+// African cents), ILA (Israeli agorot). The ECB only publishes the major unit
+// (GBP/ZAR/ILS), so parsers must normalize the code and divide the quoted
+// price/amount by 100 before anything downstream sees the trade — otherwise
+// the valuation pre-pass drops it as an unresolvable currency (issue #282).
+// ---------------------------------------------------------------------------
+
+const FRACTIONAL_CURRENCIES: Record<string, { base: string; divisor: Decimal }> = {
+  GBX: { base: "GBP", divisor: new Decimal(100) },
+  ZAC: { base: "ZAR", divisor: new Decimal(100) },
+  ILA: { base: "ILS", divisor: new Decimal(100) },
+};
+
+/**
+ * Map a minor-unit currency code to its ECB major unit and the divisor to
+ * apply to amounts quoted in it. Unknown codes pass through with divisor 1.
+ */
+export function normalizeFractionalCurrency(code: string): { currency: string; divisor: Decimal } {
+  const entry = FRACTIONAL_CURRENCIES[code.trim().toUpperCase()];
+  if (entry) return { currency: entry.base, divisor: entry.divisor };
+  return { currency: code, divisor: new Decimal(1) };
+}
+
+// ---------------------------------------------------------------------------
 // Column finding
 // ---------------------------------------------------------------------------
 
