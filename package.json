@@ -74,7 +74,7 @@
   "dependencies": {
     "commander": "^13.1.0",
     "decimal.js": "^10.5.0",
-    "fast-xml-parser": "^5.10.1",
+    "fast-xml-parser": "^5.11.0",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",
     "pdfkit": "^0.19.1",
@@ -83,14 +83,14 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@types/pdfkit": "^0.17.6",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
     "tsup": "^8.4.0",
     "tsx": "^4.23.12",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.67.0",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "^4.1.8"
   },
   "overrides__comment": "esbuild pinned to clear GHSA-gv7w-rqvm-qjhr (High) + GHSA-g7r4-m6w7-qqqr (Low), both <0.28.1. tsup/tsx pull esbuild transitively below the fix; this dedupes all copies to 0.28.1. Vite 8 uses Rolldown/Oxc (not esbuild) for the web build, so this can't re-trigger the v6 destructuring-target failure. Drop this override once tsup/tsx/vite raise their own esbuild floor to >=0.28.1.",
