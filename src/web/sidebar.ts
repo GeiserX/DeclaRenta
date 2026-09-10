@@ -58,7 +58,9 @@ export function navigateToSection(section: Section): void {
       el.hidden = s !== section;
       if (s === section) {
         el.classList.remove("fade-in");
-        void el.offsetHeight;
+        // Force a synchronous reflow so the browser does not batch the class
+        // remove+add, which would leave the animation never restarting.
+        void el.getBoundingClientRect();
         el.classList.add("fade-in");
       }
     }
