@@ -81,7 +81,7 @@
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@types/node": "^22.20.2",
+    "@types/node": "^22.20.3",
     "@types/pdfkit": "^0.17.6",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.39.5",
