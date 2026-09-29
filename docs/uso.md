@@ -6,7 +6,7 @@
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/GeiserX/DeclaRenta)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/from?repoUrl=https://github.com/GeiserX/DeclaRenta)
 
-DeclaRenta es una web estática (Vite) — funciona en cualquier hosting de archivos estáticos. También disponible como imagen Docker: `drumsergio/declarenta:web`.
+DeclaRenta es una web estática (Vite) — funciona en cualquier hosting de archivos estáticos. También disponible como imagen Docker (la web servida con nginx): `drumsergio/declarenta:0.58.27`.
 
 ## Inicio rápido
 
@@ -18,12 +18,10 @@ Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la 
 
 ### Docker
 
-```bash
-# Web (nginx)
-docker run -p 8080:80 drumsergio/declarenta:web
+La imagen publicada sirve la web con nginx; para la CLI, usa la instalación de abajo.
 
-# CLI
-docker run --rm -v $(pwd):/data drumsergio/declarenta convert --input /data/flex_query.xml --year 2025
+```bash
+docker run -p 8080:80 drumsergio/declarenta:0.58.27
 ```
 
 ### CLI
