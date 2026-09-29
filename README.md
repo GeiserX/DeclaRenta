@@ -293,4 +293,4 @@ Si DeclaRenta te ahorra tiempo (y dinero), considera apoyar el proyecto:
 
 ## Licencia
 
-[AGPL-3.0-or-later](LICENSE). Puedes usar, modificar y redistribuir DeclaRenta. Si distribuyes una versión modificada, o la ofreces como servicio en red, debes publicar su código fuente bajo la misma licencia.
+[AGPL-3.0-or-later](LICENSE). Puedes usar, modificar y redistribuir DeclaRenta. Si distribuyes una versión modificada, debes entregar su código fuente, bajo la misma licencia, a quien la reciba. Si ofreces una versión modificada como servicio en red, debes ofrecer su código fuente a los usuarios de ese servicio (sección 13 de la AGPL).
