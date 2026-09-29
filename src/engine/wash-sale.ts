@@ -16,7 +16,7 @@
  * valores que permanezcan en el patrimonio del contribuyente") when the surviving
  * repurchased shares are themselves later sold — tracked here as
  * `reintegratedLossEur` on the disposal that sells them. See
- * docs/antichurning-proportional-design.md for the full contract and citations.
+ * docs/design/antichurning-proportional.md for the full contract and citations.
  */
 
 import type { FifoDisposal } from "../types/tax.js";

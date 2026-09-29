@@ -51,4 +51,4 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 - **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%
 - **Validador Modelo 720**: verificación contra la especificación BOE del formato de registro
 
-Diseño del bloqueo proporcional anti-churning: [antichurning-proportional-design.md](antichurning-proportional-design.md).
+Diseño del bloqueo proporcional anti-churning: [antichurning-proportional.md](https://github.com/GeiserX/DeclaRenta/blob/main/docs/design/antichurning-proportional.md).

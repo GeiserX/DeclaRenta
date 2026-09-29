@@ -1,30 +1,8 @@
 # Uso
 
-## Despliegue rápido
+La instalación y el primer uso están en [Primeros pasos](getting-started.md).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/GeiserX/DeclaRenta)
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/GeiserX/DeclaRenta)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/from?repoUrl=https://github.com/GeiserX/DeclaRenta)
-
-DeclaRenta es una web estática (Vite) — funciona en cualquier hosting de archivos estáticos. También disponible como imagen Docker (la web servida con nginx): `drumsergio/declarenta:0.58.27`.
-
-## Inicio rápido
-
-### Web (recomendado)
-
-Visita [declarenta.com](https://declarenta.com) — arrastra tus ficheros y listo.
-
-Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la vez para FIFO cruzado entre brokers.
-
-### Docker
-
-La imagen publicada sirve la web con nginx; para la CLI, usa la instalación de abajo.
-
-```bash
-docker run -p 8080:80 drumsergio/declarenta:0.58.27
-```
-
-### CLI
+## CLI
 
 ```bash
 git clone https://github.com/GeiserX/DeclaRenta.git

@@ -1,5 +1,7 @@
 # Desarrollo
 
+Para trabajar sobre el código:
+
 [![Codecov](https://img.shields.io/codecov/c/github/GeiserX/DeclaRenta?style=flat-square&color=f59e0b)](https://codecov.io/gh/GeiserX/DeclaRenta)
 
 ```bash

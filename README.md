@@ -9,7 +9,7 @@
 </p>
 <p align="center">
   <a href="https://github.com/GeiserX/DeclaRenta/releases"><img src="https://img.shields.io/github/v/release/GeiserX/DeclaRenta?style=flat-square&color=dc2626" alt="Release"/></a>
-  <a href="https://github.com/GeiserX/DeclaRenta/actions"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/DeclaRenta/ci.yml?style=flat-square&label=CI" alt="CI"/></a>
+  <a href="https://github.com/GeiserX/DeclaRenta/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GeiserX/DeclaRenta/ci.yml?style=flat-square&label=CI" alt="CI"/></a>
   <a href="https://github.com/GeiserX/DeclaRenta/blob/main/LICENSE"><img src="https://img.shields.io/github/license/GeiserX/DeclaRenta?style=flat-square&color=dc2626" alt="License"/></a>
   <a href="https://github.com/GeiserX/DeclaRenta/stargazers"><img src="https://img.shields.io/github/stars/GeiserX/DeclaRenta?style=flat-square&color=f59e0b" alt="Stars"/></a>
   <a href="https://github.com/GeiserX/awesome-spain#readme"><img src="https://img.shields.io/badge/listed%20on-awesome--spain-c60b1e?style=flat-square&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIxNCIgdmlld0JveD0iMCAwIDIwIDE0Ij48cmVjdCB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIGZpbGw9IiNjNjBiMWUiLz48cmVjdCB5PSIzLjUiIHdpZHRoPSIyMCIgaGVpZ2h0PSI3IiBmaWxsPSIjZmZjNDAwIi8+PC9zdmc+&labelColor=ffc400" alt="awesome-spain"/></a>
@@ -29,6 +29,8 @@
 
 DeclaRenta lee los informes de tu broker extranjero y calcula las casillas de la renta con FIFO y tipos de cambio oficiales del BCE. Renta Web no importa esos datos, así que sin esto hay que hacerlo a mano.
 
+<p align="center"><img src="docs/images/screenshots/inicio.png" alt="DeclaRenta: pantalla de inicio" width="700"/></p>
+
 ## Funcionalidades
 
 - Lee 13 brokers: IBKR, Degiro, Flatex, Scalable Capital, eToro, Freedom24, Revolut, Lightyear, Trade Republic, Trading 212, Coinbase, Binance y Kraken. Detecta el broker solo y combina varios para FIFO cruzado.
@@ -42,7 +44,7 @@ DeclaRenta lee los informes de tu broker extranjero y calcula las casillas de la
 
 ## Inicio rápido
 
-Entra en [declarenta.com](https://declarenta.com) y arrastra tus ficheros `.xml`, `.csv`, `.json` o `.xlsx`. Para alojarlo tú mismo, usa Docker o uno de los botones.
+Entra en [declarenta.com](https://declarenta.com) y arrastra tus ficheros `.xml`, `.csv`, `.json` o `.xlsx`. Para alojarlo tú mismo, usa Docker (luego abre `http://localhost:8080`) o uno de los botones.
 
 ```bash
 docker run -p 8080:80 drumsergio/declarenta:0.58.27
@@ -50,17 +52,17 @@ docker run -p 8080:80 drumsergio/declarenta:0.58.27
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/GeiserX/DeclaRenta)
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/GeiserX/DeclaRenta)
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/from?repoUrl=https://github.com/GeiserX/DeclaRenta)
 
 ## Documentación
 
-- [Uso](docs/uso.md), con despliegue, web, Docker y todos los comandos de la CLI
+- [Primeros pasos](docs/getting-started.md): la web, Docker y los botones de despliegue
+- [Uso](docs/usage.md), con la web y todos los comandos de la CLI
 - [Brokers soportados](docs/brokers.md) y el formato de fichero de cada uno
 - [Modelos fiscales y motor fiscal](docs/modelos-fiscales.md), con las reglas que aplica el motor
 - [Casillas del Modelo 100](docs/casillas.md), cada casilla con su base legal
 - [Traza del motor de divisas (FX)](docs/traza-fx.md), el modo diagnóstico para auditar las casillas 1633/1637
 - [Privacidad](docs/privacidad.md)
-- [Desarrollo, contribuir y soporte](docs/desarrollo.md)
+- [Desarrollo, contribuir y soporte](docs/development.md)
 - [Roadmap](ROADMAP.md)
 
 Dudas y novedades: [GitHub Issues](https://github.com/GeiserX/DeclaRenta/issues) y el canal de Telegram [@declarenta](https://t.me/declarenta). Listado en [awesome-spain](https://github.com/GeiserX/awesome-spain#readme).
