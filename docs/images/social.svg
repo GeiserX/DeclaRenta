@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 630">
+  <!-- Hard split: black left, yellow right -->
+  <rect width="600" height="630" fill="#000"/>
+  <rect x="600" width="600" height="630" fill="#f59e0b"/>
+  <!-- Logo on black side -->
+  <image href="logo.png" x="100" y="115" width="400" height="400" opacity="1"/>
+  <!-- White frame around logo -->
+  <rect x="100" y="115" width="400" height="400" fill="none" stroke="white" stroke-width="4"/>
+  <!-- Title on yellow side, stacked huge -->
+  <text x="630" y="180" font-family="'Impact', 'Haettenschweiler', sans-serif" font-size="120" font-weight="900" fill="#000" letter-spacing="-5">DECLA</text>
+  <text x="630" y="310" font-family="'Impact', 'Haettenschweiler', sans-serif" font-size="120" font-weight="900" fill="#000" letter-spacing="-5">RENTA</text>
+  <!-- Hard line -->
+  <rect x="630" y="330" width="540" height="6" fill="#000"/>
+  <!-- Features stacked -->
+  <text x="630" y="380" font-family="'Helvetica Neue', Helvetica, sans-serif" font-size="20" font-weight="700" fill="#000">BROKER → RENTA</text>
+  <text x="630" y="415" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">12 BROKERS INTERNACIONALES</text>
+  <text x="630" y="445" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MODELO 100 · 720 · 721 · D-6</text>
+  <text x="630" y="475" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MOTOR FIFO · TIPOS BCE</text>
+  <text x="630" y="505" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">PRIVACIDAD TOTAL · GPL-3.0</text>
+  <!-- URL -->
+  <text x="630" y="565" font-family="'Courier New', monospace" font-size="18" font-weight="700" fill="#000">declarenta.com</text>
+  <!-- Diagonal yellow bleed into black side -->
+  <polygon points="580,0 620,0 600,630 560,630" fill="#f59e0b" opacity="0.3"/>
+</svg>
