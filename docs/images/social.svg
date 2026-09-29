@@ -16,7 +16,7 @@
   <text x="630" y="415" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">12 BROKERS INTERNACIONALES</text>
   <text x="630" y="445" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MODELO 100 · 720 · 721 · D-6</text>
   <text x="630" y="475" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">MOTOR FIFO · TIPOS BCE</text>
-  <text x="630" y="505" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">PRIVACIDAD TOTAL · GPL-3.0</text>
+  <text x="630" y="505" font-family="'Helvetica Neue', sans-serif" font-size="16" fill="rgba(0,0,0,0.6)">PRIVACIDAD TOTAL · AGPL-3.0</text>
   <!-- URL -->
   <text x="630" y="565" font-family="'Courier New', monospace" font-size="18" font-weight="700" fill="#000">declarenta.com</text>
   <!-- Diagonal yellow bleed into black side -->
