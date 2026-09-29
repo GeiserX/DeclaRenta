@@ -11,7 +11,7 @@ Soporta `.xml`, `.csv`, `.json` y `.xlsx`. Se pueden subir varios ficheros a la 
 La imagen publicada sirve la web con nginx en el puerto 80:
 
 ```bash
-docker run -p 8080:80 drumsergio/declarenta:0.58.27
+docker run -p 8080:80 drumsergio/declarenta:0.58.28
 ```
 
 Después abre `http://localhost:8080`. Para la CLI, usa la instalación desde el código de [Uso](usage.md#cli).
