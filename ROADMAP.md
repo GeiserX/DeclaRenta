@@ -115,7 +115,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | **burocratin** | OSS (AGPL-3.0) | Gratis | IBKR, Degiro | 720, D-6 | Browser (WASM) | Solo genera 720 y D-6, no calcula IRPF; escrito en Rust/WASM (19 stars) |
 | **IBKR-RENTA** | OSS | Gratis | IBKR (CSV) | 100 | Browser | Single-file HTML; solo IBKR CSV (no Flex XML); sin 720/D-6; 1 star, creado mar 2026 |
 | **Asesor fiscal** | Servicio | 150-500 € | Cualquiera | Todos | Datos compartidos | Coste elevado, dependencia de tercero, tiempos de espera |
-| **DeclaRenta** | OSS (GPL-3.0) | **Gratis** | IBKR, Degiro, Scalable, eToro, Freedom24, Coinbase, Binance, Kraken | **100, 720, D-6** + 721 | **Browser-first, zero-server** | En desarrollo activo |
+| **DeclaRenta** | OSS (AGPL-3.0) | **Gratis** | IBKR, Degiro, Scalable, eToro, Freedom24, Coinbase, Binance, Kraken | **100, 720, D-6** + 721 | **Browser-first, zero-server** | En desarrollo activo |
 
 **Hueco que cubre DeclaRenta**: no existe ninguna herramienta open source que cubra el ciclo completo (IRPF + 720 + D-6) con soporte multi-broker y privacidad total. burocratin solo hace 720/D-6. IBKR-RENTA solo hace Modelo 100 desde CSV. TaxDown cobra 239 € y sube los datos a la nube.
 
@@ -397,7 +397,7 @@ Tareas:
 - [ ] **MCP server**: integración con Claude Code / ChatGPT para consultas fiscales contextuales
 - [ ] **n8n node**: automatización de procesamiento periódico
 
-### Monetización (preservando core OSS GPL-3.0)
+### Monetización (preservando core OSS AGPL-3.0)
 
 El core siempre será gratuito. La monetización viene de conveniencia y servicios profesionales:
 
@@ -438,7 +438,7 @@ Posibilidades adicionales (a evaluar):
 
 2. **Precisión absoluta**: `Decimal.js` en todo cálculo monetario, tipos ECB oficiales, FIFO estricto. Un céntimo de error es inaceptable — estamos generando datos para Hacienda.
 
-3. **Open source real**: el core es GPL-3.0 y siempre será gratis. La monetización viene de conveniencia (hosting, gestión multi-cliente), nunca de features básicas que necesita un contribuyente individual.
+3. **Open source real**: el core es AGPL-3.0 y siempre será gratis. La monetización viene de conveniencia (hosting, gestión multi-cliente), nunca de features básicas que necesita un contribuyente individual.
 
 4. **Browser-first**: la mayoría de usuarios usarán la web. CLI y Docker son para power users y gestorías. Todo lo que funciona en la web debe funcionar offline (PWA).
 

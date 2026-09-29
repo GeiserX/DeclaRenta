@@ -290,3 +290,7 @@ Las contribuciones son bienvenidas. Áreas donde más ayuda se necesita:
 Si DeclaRenta te ahorra tiempo (y dinero), considera apoyar el proyecto:
 
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor-♥-ea4aaa?style=flat-square)](https://github.com/sponsors/GeiserX)
+
+## Licencia
+
+[AGPL-3.0-or-later](LICENSE). Puedes usar, modificar y redistribuir DeclaRenta. Si distribuyes una versión modificada, o la ofreces como servicio en red, debes publicar su código fuente bajo la misma licencia.
