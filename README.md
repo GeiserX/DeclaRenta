@@ -45,7 +45,7 @@ DeclaRenta lee los informes de tu broker extranjero y calcula las casillas de la
 Entra en [declarenta.com](https://declarenta.com) y arrastra tus ficheros `.xml`, `.csv`, `.json` o `.xlsx`. Para alojarlo tú mismo, usa Docker o uno de los botones.
 
 ```bash
-docker run -p 8080:80 drumsergio/declarenta:web
+docker run -p 8080:80 drumsergio/declarenta:0.58.27
 ```
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/GeiserX/DeclaRenta)
