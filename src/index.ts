@@ -2,7 +2,7 @@
  * DeclaRenta - Convert foreign broker reports into Spanish tax declarations.
  *
  * @module declarenta
- * @license GPL-3.0
+ * @license AGPL-3.0-or-later
  */
 
 // Parsers
