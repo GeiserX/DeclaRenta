@@ -37,6 +37,21 @@ jobs:
       - name: Build web
         run: npm run build:web
 
+      # The docs are a directory of the same artifact (declarenta.com/docs/),
+      # so they go live with each release and never need a deploy of their own.
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements-docs.txt
+
+      - name: Install docs dependencies
+        run: pip install -r docs/requirements-docs.txt
+
+      - name: Build docs
+        run: mkdocs build --strict --site-dir dist/web/docs
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
