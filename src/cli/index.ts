@@ -12,7 +12,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { Command } from "commander";
+import { Command, InvalidArgumentError, Option } from "commander";
 import Decimal from "decimal.js";
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
@@ -71,13 +71,35 @@ function encodeISO885915Buffer(str: string): Buffer {
   return bytes;
 }
 
+/**
+ * --year: a four-digit year from 1900 to 2999, like the web. parseInt read
+ * "2O25" as 2, and the report selects the year by date prefix, so a typo summed
+ * every year starting with those digits.
+ */
+function parseYear(value: string): number {
+  const year = /^\d{4}$/.test(value) ? Number(value) : NaN;
+  if (!(year >= 1900 && year <= 2999)) {
+    throw new InvalidArgumentError("El ejercicio debe ser un año de cuatro cifras entre 1900 y 2999.");
+  }
+  return year;
+}
+
+/** --titulares: a whole number of holders, at least 1. */
+function parseTitulares(value: string): number {
+  const n = /^\d+$/.test(value) ? Number(value) : NaN;
+  if (!(n >= 1)) {
+    throw new InvalidArgumentError("Debe ser un número entero mayor o igual que 1.");
+  }
+  return n;
+}
+
+const BROKER_NAMES = brokerParsers.map((p) => p.name).join(", ");
+
 const program = new Command();
 
 program
   .name("declarenta")
-  .description(
-    "Convert foreign broker reports (IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken) into Spanish tax declarations (Modelo 100, 720, D-6)",
-  )
+  .description(`Convert foreign broker reports (${BROKER_NAMES}) into Spanish tax declarations (Modelo 100, 720, D-6)`)
   .version(pkg.version);
 
 /**
@@ -164,17 +186,12 @@ async function parseAndMerge(
 
 program
   .command("convert")
-  .description(
-    "Convert broker reports to Modelo 100 casilla values. Supports: IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken",
-  )
+  .description(`Convert broker reports to Modelo 100 casilla values. Supports: ${BROKER_NAMES}`)
   .requiredOption("-i, --input <files...>", "Broker report file(s). Pass multiple for cross-year FIFO or cross-broker")
-  .requiredOption("-y, --year <year>", "Tax year", parseInt)
+  .requiredOption("-y, --year <year>", "Tax year", parseYear)
   .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option("-f, --format <format>", "Output format: json, csv, or pdf", "json")
-  .option(
-    "-b, --broker <name>",
-    `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`,
-  )
+  .addOption(new Option("-f, --format <format>", "Output format").choices(["json", "csv", "pdf"]).default("json"))
+  .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${BROKER_NAMES}`)
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
   .option(
     "--monodivisa",
@@ -187,7 +204,7 @@ program
   .option(
     "--titulares <n>",
     "Number of account holders. >1 splits all amounts equally per contribuyente (Art. 11.3 LIRPF)",
-    parseInt,
+    parseTitulares,
   )
   .option(
     "--crypto-rates <json>",
@@ -197,7 +214,7 @@ program
     "--fx-trace [file]",
     "Volcar la traza de movimientos del motor FX (acuñar/aparcar/desaparcar/descartar/convertir) para auditoría. Sin valor → stderr; con ruta → fichero.",
   )
-  .option("--fx-trace-format <format>", "Formato de la traza FX: jsonl o csv", "jsonl")
+  .addOption(new Option("--fx-trace-format <format>", "Formato de la traza FX").choices(["jsonl", "csv"]).default("jsonl"))
   .action(
     async (opts: {
       input: string[];
@@ -405,6 +422,8 @@ program
             console.error(`  ${e.message}`);
             if (e.hint) console.error(`    → ${e.hint}`);
           }
+          // The report is written, but a script must not take it as valid.
+          process.exitCode = 1;
         }
         if (warnings.length > 0) {
           console.error(`\n⚠ ${warnings.length} aviso(s):`);
@@ -452,17 +471,14 @@ program
   .command("modelo720")
   .description("Generate Modelo 720 fixed-width file from broker positions")
   .requiredOption("-i, --input <files...>", "Broker report file(s). Pass one per broker: the 50,000 EUR threshold applies to the total")
-  .requiredOption("-y, --year <year>", "Tax year", parseInt)
+  .requiredOption("-y, --year <year>", "Tax year", parseYear)
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option(
-    "-b, --broker <name>",
-    `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`,
-  )
+  .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${BROKER_NAMES}`)
   .option("--phone <phone>", "Teléfono de contacto", "")
   .option("--previous-720 <file>", "Previous year 720 output file (to determine A/M/C types)")
-  .option("--titulares <n>", "Number of holders sharing every asset: each declares 100/n % with the full value", parseInt)
+  .option("--titulares <n>", "Number of holders sharing every asset: each declares 100/n % with the full value", parseTitulares)
   .option("--declaration-id <id>", "Número identificativo (13 digits starting with 720). Defaults to a new one")
   .action(
     async (opts: {
@@ -628,15 +644,12 @@ program
   .command("d6")
   .description("Generate Modelo D-6 AFORIX guide from broker positions")
   .requiredOption("-i, --input <files...>", "Broker report file(s)")
-  .requiredOption("-y, --year <year>", "Tax year", parseInt)
+  .requiredOption("-y, --year <year>", "Tax year", parseYear)
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option("-f, --format <format>", "Output format: json or text", "text")
-  .option(
-    "-b, --broker <name>",
-    `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`,
-  )
+  .addOption(new Option("-f, --format <format>", "Output format").choices(["json", "text"]).default("text"))
+  .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${BROKER_NAMES}`)
   .option("--previous-d6 <file>", "Previous year D-6 JSON output file (to generate cancellations)")
   .action(
     async (opts: {

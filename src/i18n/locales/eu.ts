@@ -87,6 +87,7 @@ const eu: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Espainiako jaulkitzaileen dibidendu edo interesen gainean jatorrian egindako PFEZ atxikipena (adib. IBEX akzioak), atzerriko artekari batean egon arren. Kuotatik kentzeko konturako ordainketa da; EZ da nazioarteko zergapetze bikoitzaren kenkaria (0588 laukia), atzerriko zergari soilik aplikatzen zaiona.",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
+  "casilla.dt_foreign_income_total": "Atzerriko errendimenduak guztira",
   "casilla.reintegrated_losses":
     "Aurreko urteetako galera atzeratuak orain kengarriak (berrerositako balioak saldu ziren): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -163,7 +164,10 @@ const eu: TranslationKeys = {
   "compare.acquisition_value": "Eskuratze-balioa (transmisioak, dibisarik gabe)",
   "compare.net_gain_loss": "Irabazi/Galera garbia (transmisioak, dibisarik gabe)",
 
-  "error.no_broker_detected": 'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.',
+  "error.no_broker_detected":
+    'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Broker baten txostena bada, hautatu brokerra eskuz; bestela, kendu zerrendatik.',
+  "error.empty_file":
+    '"{{filename}}" fitxategia hutsik dago. Kendu zerrendatik edo esportatu berriro zure brokerretik.',
   "error.file_too_large":
     '"{{filename}}" fitxategiak {{limit}} MB-ko muga gainditzen du eta baztertu egin da. Esportatu epe laburragoa edo zatitu fitxategia.',
   "error.prefix": "Errorea: ",
@@ -179,7 +183,7 @@ const eu: TranslationKeys = {
   "sidebar.toggle": "Menua ireki/itxi",
 
   "profile.title": "Profil fiskala",
-  "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira.",
+  "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira. Nabigatzaile honetan bakarrik gordetzen dira, inoiz ez zerbitzari batean.",
   "profile.section_personal": "Datu pertsonalak",
   "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
@@ -205,6 +209,8 @@ const eu: TranslationKeys = {
     "Kontuak hainbat titular baditu (adib. kontu bateratua edo irabazpidezkoa), DeclaRentak zenbateko guztiak zati berdinetan banatzen ditu zergadun bakoitzari dagokion partea erakusteko (LIRPF 11.3 art.). Titular bakoitzak bere aitorpen indibiduala aurkezten du bere partearengatik.",
   "profile.saved": "Profila gordeta",
   "profile.save_btn": "Profila gorde",
+  "profile.clear_btn": "Ezabatu nire datuak nabigatzaile honetatik",
+  "profile.clear_confirm": "Nabigatzaile honetatik ezabatu zure profil fiskala, gordetako txostenak eta eskuz sartutako balioak?",
   "profile.incomplete_banner": "Osatu zure profil fiskala 720 eta D-6 ereduak sortzeko.",
   "profile.go_to_profile": "Profilara joan",
 
@@ -221,7 +227,7 @@ const eu: TranslationKeys = {
     "Konfigurazioan, gaitu atal hauek:<ul><li><strong>Trades</strong> (nahitaezkoa)</li><li><strong>Cash Transactions</strong> — dibidenduak eta atxikipenak (nahitaezkoa)</li><li><strong>Open Positions</strong> — 720 Eredu/D-6-rako (gomendatua)</li><li><strong>Financial Instrument Information</strong> (gomendatua)</li></ul>",
   "guide.ibkr.step5":
     "Atal bakoitzean, <strong>hautatu eremu guztiak</strong> (markatu lauki guztiak). Zenbat eta datu gehiago sartu, orduan eta kalkulua zehatzagoa. Gutxienez, ziurtatu <strong>Notes</strong> eremua Trades atalean sartzen duzula — dibisa bihurtzeen detekziorako beharrezkoa da.",
-  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>",
+  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>. <em>Date Format</em> aukeran, utzi <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Sartu <strong>eskuragarri dauden urte guztiak</strong> FIFO kalkulu zuzenerako",
   "guide.ibkr.step8": "Gorde kontsulta, exekutatu eta deskargatu <code>.xml</code> fitxategia",
   "guide.degiro.title": "Degiro (CSV)",
@@ -500,7 +506,7 @@ const eu: TranslationKeys = {
   "guide_rw.double_taxation_title": "Nazioarteko zergapetze bikoitzagatiko kenkaria",
   "guide_rw.entidad_emisora_label": "Entitate jaulkitzailea",
   "guide_rw.entidad_emisora_value":
-    "Broker-aren izena (adib. Interactive Brokers, Degiro, eToro…). Eragiketa bat baino gehiago lerro batean konsolidatzen badituzu, adierazi broker nagusia.",
+    "Saltzen duzun enpresaren edo baloreren izena (adib. Apple Inc.), ez broker-arena. Dibisetan, moneta (adib. USD). Eragiketa bat baino gehiago lerro batean konsolidatzen badituzu, adierazi balore nagusia.",
   "guide_rw.tipo_elemento_label": "Ondare elementu mota",
   "guide_rw.tipo_elemento_value_capital":
     "Hautatu <strong>«Negoziaziora onartutako akzioak»</strong> kotizatutako akzioetarako. Funts-etarako: «IIC-eko partaidetzak». Deribatu/opsioetarako: «Beste ondare elementu batzuk».",
@@ -540,7 +546,7 @@ const eu: TranslationKeys = {
     "DeclaRenta-ren <strong>0588</strong> gelaxkako zenbatekoa. Atzerrian ordaindutako zergaren eta Espainiako kuota dagokionaren arteko txikiena da (80. art. LIRPF).",
   "guide_rw.dt_campo_label": "Zein eremutan koadroan?",
   "guide_rw.dt_campo_hint":
-    "Zergapetze bikoitzaren koadroan, bete BI lerro:<br>• <strong>«Atzerrian lortutako beste errendimendu garbi murriztuak»</strong> (2. lerroa) → atzerriko dibidenduen zenbateko gordina (0029 gelaxkako balio bera).<br>• <strong>«Atzerrian ordaindutako zerga»</strong> (azken lerroa) → DeclaRenta-ren 0588 gelaxkako zenbatekoa.<br>2. lerroa hutsik uzten baduzu, Renta Web-ek abisu bat erakusten du errentak falta direlako. 1. eta 3. lerroak 0-n geratzen dira.",
+    "Zergapetze bikoitzaren koadroan, bete BI lerro herrialde bakoitzeko:<br>• <strong>«Atzerrian lortutako beste errendimendu garbi murriztuak»</strong> (2. lerroa) → herrialde horren «Gordina EUR» zutabea, DeclaRenta-ren 0588 gelaxkaren xehetasunean. Herrialde bakarra baduzu, xehetasun horretako «Atzerriko errendimenduak guztira» lerroa da. Ez ditu barne hartzen Espainiako dibidenduak, ezta atxikipenik gabeko herrialdeetakoak ere.<br>• <strong>«Atzerrian ordaindutako zerga»</strong> (azken lerroa) → herrialde horren kenkaria, xehetasun berean (herrialde bakarrarekin, 0588 gelaxkako zenbatekoa).<br>2. lerroa hutsik uzten baduzu, Renta Web-ek abisu bat erakusten du errentak falta direlako. 1. eta 3. lerroak 0-n geratzen dira.",
   "guide_rw.capital_gains_note":
     "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note":
@@ -642,6 +648,9 @@ const eu: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",
+  "fifo.split_unresolved": "⚠ {{symbol}}-ren split-a ({{date}}) ez da aplikatu: ez dago aurreko akziorik proportzioa kalkulatzeko.",
+  "fifo.split_unresolved.hint":
+    "Igo aurreko urteetako laburpenak ere, kontua ireki zenetik. Bestela, akzio kopurua eta balio honen ondorengo salmenten kostua ez dira zuzenak izango.",
   "fifo.merger_applied":
     "🔄 Bat-egitea: {{oldIsin}} → {{newIsin}} (ratioa {{ratio}}, {{lotsTransferred}} lote transferituak, {{date}})",
   "fifo.merger_applied.hint":
@@ -740,6 +749,10 @@ const eu: TranslationKeys = {
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Agindu bakoitzaren komisioen guztizkoa zehatza da; exekuzioen arteko banaketa soilik da gutxi gorabeherakoa.",
+  "flatex.depot.repeated_fills":
+    "Errepikatutako Flatex eragiketak, behin bakarrik zenbatuak: {{fills}}. Kargatuta zegoen beste baten agindu-zenbaki eta idazpen-zenbaki (TA-Nr.) bera zuten.",
+  "flatex.depot.repeated_fills.hint":
+    "Depotumsätze CSV bera bi aldiz igotzean gertatu ohi da, edo datak gainjartzen dituzten bi esportazio igotzean. Benetan eragiketa desberdinak badira, berrikusi fitxategia: Flatex-ek exekuzio bakoitzari bere TA-Nr. ematen dio.",
   "flatex.dividends.net_amounts":
     "Flatex-ek dibidenduak jasotako zenbateko garbiarekin erregistratzen ditu, atxikipena kenduta, eta Kontoumsätze CSVak ez du atxikipena jasotzen.",
   "flatex.dividends.net_amounts.hint":
@@ -747,6 +760,10 @@ const eu: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",
+  "degiro.corporate_action_pair":
+    "Baliteke {{date}} egunean eragiketa korporatibo bat egotea: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degirok salmenta eta erosketa gisa erregistratzen du.",
+  "degiro.corporate_action_pair.hint":
+    "Degirok ISIN aldaketak, splitak eta akzio-trukeak balore zaharraren salmenta eta berriaren erosketa gisa erregistratzen ditu, agindu-zenbakirik eta kosturik gabe. DeclaRentak horrela kalkulatzen ditu: egun horretan irabazi edo galera bat aitortzen du, eta akzio berriek prezio hori eta data hori hartzen dituzte kostu gisa. Berrikusi Degiroren edo jaulkitzailearen jakinarazpena. ISIN aldaketa hutsa, split bat edo fiskalki neutroa den truke bat izan bazen (Sozietateen gaineko Zergaren Legearen araubide berezia), ez zen salmentarik egon: akzio berriek zaharren kostua eta erosketa-data gordetzen dituzte, beraz, zuzendu eragiketa hori zure aitorpenean. Zergapean dagoen truke bat izan bazen (LIRPFren 37.1.e art.), kalkulua zuzena da.",
   "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",

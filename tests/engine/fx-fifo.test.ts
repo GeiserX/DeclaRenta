@@ -985,3 +985,66 @@ describe("FxFifoEngine", () => {
     });
   });
 });
+
+describe("FxFifoEngine pool insertion at scale", () => {
+  const sell = (date: string, cost: string, proceeds: string, positionKey: string): FxEvent => ({
+    kind: "stock_sell",
+    date,
+    currency: "USD",
+    quantity: new Decimal(0),
+    costFcy: new Decimal(cost),
+    proceedsFcy: new Decimal(proceeds),
+    ecbRate: new Decimal("0.91"),
+    trigger: "stock_sale",
+    positionKey,
+  });
+
+  it("re-adds 20,000 lots from 10,000 USD stock sells without scanning the whole pool each time", () => {
+    // Sells of positions bought before the export window re-add their proceeds at
+    // the sale date, so the USD pool grows by two lots per sell and nothing drains
+    // it. Scanning the pool from the front on every insert took seconds here; a
+    // binary search takes milliseconds. The bound is loose so a slow CI runner passes.
+    const events: FxEvent[] = [];
+    for (let i = 0; i < 10_000; i++) {
+      const date = new Date(Date.UTC(2024, 0, 2 + Math.floor(i / 40))).toISOString().slice(0, 10);
+      events.push(sell(date, "1000", "1010", "US0378331005"));
+    }
+
+    const engine = new FxFifoEngine();
+    const start = performance.now();
+    engine.processEvents(events);
+    const elapsedMs = performance.now() - start;
+
+    const pool = engine.getRemainingLots().get("USD")!;
+    expect(pool).toHaveLength(20_000);
+    expect(pool.every((lot, i) => i === 0 || pool[i - 1]!.acquireDate <= lot.acquireDate)).toBe(true);
+    expect(elapsedMs).toBeLessThan(2_000);
+  });
+
+  it("splices a re-added principal after the pool lots that share its original date", () => {
+    // Fund three USD lots, two of them on the same day. A buy spends the first
+    // lot and part of the second; the sell puts both slices back at their own
+    // date, after the untouched remainder of that day and before the newer lot.
+    const fund = (date: string, qty: string, rate: string): FxEvent =>
+      makeEvent({ date, quantity: new Decimal(qty), ecbRate: new Decimal(rate) });
+    const engine = new FxFifoEngine();
+    engine.processEvents([
+      fund("2025-01-02", "100", "0.90"),
+      fund("2025-01-02", "50", "0.91"),
+      fund("2025-01-03", "100", "0.95"),
+      {
+        kind: "stock_buy", date: "2025-01-06", currency: "USD", quantity: new Decimal(0),
+        costFcy: new Decimal(120), ecbRate: new Decimal("0.93"), trigger: "stock_purchase", positionKey: "X",
+      },
+      sell("2025-01-07", "120", "120", "X"),
+    ]);
+
+    const pool = engine.getRemainingLots().get("USD")!;
+    expect(pool.map((lot) => `${lot.acquireDate} ${lot.quantity.toString()}@${lot.costPerUnit.toString()}`)).toEqual([
+      "2025-01-02 30@0.91",
+      "2025-01-02 100@0.9",
+      "2025-01-02 20@0.91",
+      "2025-01-03 100@0.95",
+    ]);
+  });
+});

@@ -86,6 +86,7 @@ const ca: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Retenció a compte de l'IRPF practicada en origen sobre dividends o interessos d'emissors espanyols (p. ex. accions de l'IBEX), encara que estiguin en un bróker estranger. És un pagament a compte deduïble de la quota; NO és la deducció per doble imposició (casella 0588), que només s'aplica a impost estranger.",
   "casilla.double_taxation": "Deducció doble imposició",
+  "casilla.dt_foreign_income_total": "Total rendiments estrangers",
   "casilla.reintegrated_losses":
     "Pèrdues diferides d'anys anteriors ara deduïbles (es van vendre els valors recomprats): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -162,7 +163,10 @@ const ca: TranslationKeys = {
   "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
   "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
-  "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
+  "error.no_broker_detected":
+    'No s\'ha pogut detectar el broker de "{{filename}}". Si és un informe de broker, selecciona el broker manualment; si no ho és, treu-lo de la llista.',
+  "error.empty_file":
+    'El fitxer "{{filename}}" és buit. Treu-lo de la llista o torna\'l a exportar des del teu broker.',
   "error.file_too_large":
     'El fitxer "{{filename}}" supera el límit de {{limit}} MB i s\'ha descartat. Exporta un període més curt o divideix el fitxer.',
   "error.prefix": "Error: ",
@@ -178,7 +182,7 @@ const ca: TranslationKeys = {
   "sidebar.toggle": "Obrir/tancar menú",
 
   "profile.title": "Perfil fiscal",
-  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6.",
+  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6. Només es desen en aquest navegador, mai en un servidor.",
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
@@ -204,6 +208,8 @@ const ca: TranslationKeys = {
     "Si el compte té diversos titulars (p. ex. compte conjunt o de guanys), DeclaRenta divideix tots els imports a parts iguals per mostrar la part que correspon a cada contribuent (Art. 11.3 LIRPF). Cada titular presenta la seva declaració individual per la seva part.",
   "profile.saved": "Perfil desat",
   "profile.save_btn": "Desar perfil",
+  "profile.clear_btn": "Esborrar les meves dades d'aquest navegador",
+  "profile.clear_confirm": "Vols esborrar d'aquest navegador el teu perfil fiscal, els informes desats i els valors introduïts a mà?",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
   "profile.go_to_profile": "Anar al perfil",
 
@@ -220,7 +226,7 @@ const ca: TranslationKeys = {
     "A la configuració, activa les seccions:<ul><li><strong>Trades</strong> (obligatori)</li><li><strong>Cash Transactions</strong> — dividends i retencions (obligatori)</li><li><strong>Open Positions</strong> — per al Model 720/D-6 (recomanat)</li><li><strong>Financial Instrument Information</strong> (recomanat)</li></ul>",
   "guide.ibkr.step5":
     "A cada secció, <strong>selecciona tots els camps disponibles</strong> (marca totes les caselles). Com més dades incloguis, més precís serà el càlcul. Com a mínim, assegura't d'incloure el camp <strong>Notes</strong> a Trades — és necessari per detectar conversions automàtiques de divisa.",
-  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>. A <em>Date Format</em>, deixa <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Inclou <strong>tots els anys disponibles</strong> per al càlcul FIFO correcte",
   "guide.ibkr.step8": "Desa la consulta, executa-la i descarrega el fitxer <code>.xml</code>",
   "guide.degiro.title": "Degiro (CSV)",
@@ -500,7 +506,7 @@ const ca: TranslationKeys = {
   "guide_rw.double_taxation_title": "Deducció per doble imposició internacional",
   "guide_rw.entidad_emisora_label": "Entitat emissora",
   "guide_rw.entidad_emisora_value":
-    "Nom del broker (ex. Interactive Brokers, Degiro, eToro…). Si consolides diverses operacions en una sola línia, indica el broker principal.",
+    "Nom de l'empresa o del valor que vens (ex. Apple Inc.), no el del broker. En divises, la moneda (ex. USD). Si consolides diverses operacions en una sola línia, indica el valor principal.",
   "guide_rw.tipo_elemento_label": "Tipus d'element patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Accions admeses a negociació»</strong> per a accions cotitzades. Per a fons: «Participacions en IIC». Per a derivats/opcions: «Altres elements patrimonials».",
@@ -540,7 +546,7 @@ const ca: TranslationKeys = {
     "L'import de la casella <strong>0588</strong> de DeclaRenta. És el menor entre la retenció estrangera pagada i la quota espanyola corresponent (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "En quin camp del quadre?",
   "guide_rw.dt_campo_hint":
-    "Al quadre de doble imposició, omple DUES files:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → import brut dels dividends estrangers (mateix valor que casella 0029).<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → import de la casella 0588 de DeclaRenta.<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
+    "Al quadre de doble imposició, omple DUES files per cada país:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → la columna «Brut EUR» d'aquest país al detall de la casella 0588 de DeclaRenta. Si només hi ha un país, és la fila «Total rendiments estrangers» d'aquest detall. No inclou els dividends espanyols ni els de països sense retenció.<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → la deducció d'aquest país al mateix detall (amb un sol país, l'import de la casella 0588).<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
@@ -642,6 +648,9 @@ const ca: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sense aplicar: no hi ha accions anteriors amb què calcular la proporció.",
+  "fifo.split_unresolved.hint":
+    "Puja també els extractes d'anys anteriors, des de l'obertura del compte. Si no, el nombre d'accions i el cost de les vendes posteriors d'aquest valor no seran correctes.",
   "fifo.merger_applied":
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
@@ -738,6 +747,10 @@ const ca: TranslationKeys = {
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total de comissions de cada ordre és exacte; només el repartiment entre execucions és aproximat.",
+  "flatex.depot.repeated_fills":
+    "Operacions de Flatex repetides i comptades una sola vegada: {{fills}}. Tenien el mateix número d'ordre i d'apunt (TA-Nr.) que una altra ja carregada.",
+  "flatex.depot.repeated_fills.hint":
+    "Sol passar en pujar el mateix CSV de Depotumsätze dues vegades, o dues exportacions amb dates que se solapen. Si de debò són operacions diferents, revisa el fitxer: Flatex dona a cada execució el seu propi TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota els dividends per l'import net cobrat, ja descomptada la retenció, i el CSV de Kontoumsätze no inclou la retenció.",
   "flatex.dividends.net_amounts.hint":
@@ -745,6 +758,10 @@ const ca: TranslationKeys = {
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
+  "degiro.corporate_action_pair":
+    "Possible operació societària el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro l'anota com una venda i una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota els canvis d'ISIN, els splits i els bescanvis d'accions com una venda del valor antic i una compra del nou, sense número d'ordre ni costos. DeclaRenta els calcula així: declara un guany o una pèrdua aquell dia, i les accions noves prenen aquest preu i aquesta data com a cost. Revisa la comunicació de Degiro o de l'emissor. Si va ser un simple canvi d'ISIN, un split o un bescanvi fiscalment neutre (règim especial de la Llei de l'Impost sobre Societats), no hi va haver venda: les accions noves conserven el cost i la data de compra de les antigues, així que corregeix aquesta operació a la teva declaració. Si va ser un bescanvi que tributa (art. 37.1.e LIRPF), el càlcul és correcte.",
   "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",

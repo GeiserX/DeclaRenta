@@ -14,8 +14,8 @@ El Modelo 720 es una declaración informativa de bienes y derechos situados en e
 
 Cualquier residente fiscal en España que a 31 de diciembre posea bienes en el extranjero cuyo valor **por categoría** supere los **50.000 EUR**. Las tres categorías independientes son:
 
-- **Valores y derechos** (acciones, fondos, bonos) — la que DeclaRenta calcula.
-- **Cuentas en entidades financieras** — no aplica a posiciones del broker.
+- **Valores y derechos** (acciones, fondos, bonos) — DeclaRenta la calcula con tus posiciones.
+- **Cuentas en entidades financieras** — DeclaRenta la calcula con los saldos en efectivo del broker, cuando el fichero los trae. Suma por separado los saldos a 31 de diciembre y los saldos medios del cuarto trimestre, y la categoría se declara si cualquiera de las dos sumas supera los 50.000 EUR.
 - **Bienes inmuebles** — no aplica a posiciones del broker.
 
 Cada categoría se evalúa de forma independiente. Solo se declaran las categorías que superan el umbral.
@@ -72,7 +72,7 @@ La presentación oficial para programas externos se hace en XML según la Orden 
 
 ### Qué es
 
-El Modelo D-6 es la declaración de inversiones españolas en el exterior, regulada por el Banco de España. Es independiente del Modelo 720 y se presenta ante la Dirección General de Comercio Internacional e Inversiones.
+El Modelo D-6 es la declaración de inversiones españolas en el exterior. Es independiente del Modelo 720 y se presenta en el Registro de Inversiones Exteriores de la Secretaría de Estado de Comercio, no en el Banco de España.
 
 ### Quién debe presentarlo
 
@@ -82,9 +82,9 @@ Desde la Orden ICT/1408/2021, el D-6 suele quedar limitado a participaciones que
 
 Del **1 al 31 de enero** del ejercicio siguiente.
 
-### Formulario web AFORIX
+### Programa AFORIX
 
-A diferencia del Modelo 720, el D-6 **no admite carga de fichero**. Se cumplimenta manualmente en el formulario web AFORIX del Banco de España, posición por posición.
+El D-6 se prepara en el **programa AFORIX** de la Secretaría de Estado de Comercio, posición por posición, y se firma electrónicamente en el propio programa. DeclaRenta no genera ese fichero, te da los datos que tienes que escribir en él.
 
 ### Qué genera DeclaRenta
 
@@ -97,13 +97,12 @@ Una **guía orientativa de cumplimentación** con los datos que necesitarías in
 
 Si proporcionas el D-6 del año anterior (vía `--previous-d6`), DeclaRenta genera también las **cancelaciones** para posiciones que ya no mantienes.
 
-### Cómo acceder a AFORIX
+### Cómo presentarlo
 
-1. Accede a **sefreca.bde.es/sefreca/**.
-2. Selecciona "Modelo D-6 (Inversiones en el exterior)".
-3. Identifícate con certificado digital o Cl@ve.
-4. Introduce cada posición siguiendo la guía generada por DeclaRenta.
-5. Revisa y envía.
+1. Abre el programa AFORIX y crea una declaración del modelo D-6.
+2. Introduce cada posición siguiendo la guía generada por DeclaRenta.
+3. Revisa la declaración y fírmala electrónicamente en AFORIX.
+4. Sube el fichero firmado (`.aforixd`) en [eAFORIX](https://oficinavirtual.comercio.gob.es/eAFORIX/).
 
 ## Perfil fiscal
 
