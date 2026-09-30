@@ -235,7 +235,7 @@ const es = {
     "En la configuración, activa las secciones:<ul><li><strong>Trades</strong> (obligatorio)</li><li><strong>Cash Transactions</strong> — dividendos y retenciones (obligatorio)</li><li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li><li><strong>Financial Instrument Information</strong> (recomendado)</li></ul>",
   "guide.ibkr.step5":
     "En cada sección, <strong>selecciona todos los campos disponibles</strong> (marca todas las casillas). Cuantos más datos incluyas, más preciso será el cálculo. Como mínimo asegúrate de incluir el campo <strong>Notes</strong> en Trades — es necesario para detectar conversiones automáticas de divisa.",
-  "guide.ibkr.step6": "Formato de salida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Formato de salida: <strong>XML</strong>. En <em>Date Format</em>, deja <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
   "guide.ibkr.step8": "Guarda la consulta, ejecútala y descarga el fichero <code>.xml</code>",
 

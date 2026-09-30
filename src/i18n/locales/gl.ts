@@ -219,7 +219,7 @@ const gl: TranslationKeys = {
     "Na configuración, activa as seccións:<ul><li><strong>Trades</strong> (obrigatorio)</li><li><strong>Cash Transactions</strong> — dividendos e retencións (obrigatorio)</li><li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li><li><strong>Financial Instrument Information</strong> (recomendado)</li></ul>",
   "guide.ibkr.step5":
     "En cada sección, <strong>selecciona todos os campos dispoñibles</strong> (marca todas as casillas). Cantos máis datos inclúas, máis preciso será o cálculo. Como mínimo asegúrate de incluír o campo <strong>Notes</strong> en Trades — é necesario para detectar conversións automáticas de divisa.",
-  "guide.ibkr.step6": "Formato de saída: <strong>XML</strong>",
+  "guide.ibkr.step6": "Formato de saída: <strong>XML</strong>. En <em>Date Format</em>, deixa <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Inclúe <strong>todos os anos dispoñibles</strong> para o cálculo FIFO correcto",
   "guide.ibkr.step8": "Garda a consulta, execútaa e descarga o ficheiro <code>.xml</code>",
   "guide.degiro.title": "Degiro (CSV)",

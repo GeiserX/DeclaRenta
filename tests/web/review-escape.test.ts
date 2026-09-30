@@ -181,11 +181,18 @@ describe("results tables escape broker-supplied dates", () => {
   it("a short markup date, which the date formatters return unchanged, is shown as text", async () => {
     // Fewer than 8 characters: the casilla and annex formatters skip their
     // slicing and hand the raw string back, so only esc() stands in the way.
+    // The IBKR parser now refuses a date that is not yyyyMMdd, so the raw
+    // string comes in through Freedom24, whose parser passes it along.
+    const freedom24Trade = (operation: string, date: string, p: number) => ({
+      operation, ticker: "ACME.EU", isin: "XX0000000001", date, q: 10, p, curr_c: "EUR",
+      amount: String(10 * p), commission: "0",
+    });
     await uploadAndReview(
-      flexXml(
-        trade("1", { currency: "EUR", tradeDate: "&lt;style&gt;", side: "BUY" }) +
-          trade("2", { currency: "EUR", tradeDate: "20250310", side: "SELL" }),
-      ),
+      JSON.stringify({
+        trades: {
+          detailed: [freedom24Trade("buy", "<style>", 100), freedom24Trade("sell", "2025-03-10 10:00:00", 120)],
+        },
+      }),
     );
     await continueToResults();
 

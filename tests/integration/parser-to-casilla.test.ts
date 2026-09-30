@@ -62,9 +62,11 @@ function fixtureBuffer(name: string): Buffer {
 // ---------------------------------------------------------------------------
 
 describe("IBKR ibkr-sample.xml → casillas", () => {
-  // ACME: BUY 10 @150 USD 2024-03-15, SELL 10 @175 USD 2024-09-20.
-  // Cost converts at the SALE-date rate (DGT V2422-20): 10×150×0.91 = 1365.
-  // Proceeds: 10×175×0.91 = 1592.50. Dividend 5 USD @0.93 = 4.65; WHT 0.75 @0.93 = 0.6975.
+  // ACME: BUY 10 @150 USD 2024-03-15, SELL 10 @175 USD 2024-09-20, $1 commission each.
+  // Cost converts at the SALE-date rate (DGT V2422-20). The buy fee adds to the
+  // cost and the sell fee reduces the proceeds (Art. 35 LIRPF):
+  // cost (1500 + 1) × 0.91 = 1365.91; proceeds (1750 − 1) × 0.91 = 1591.59.
+  // Dividend 5 USD @0.93 = 4.65; WHT 0.75 @0.93 = 0.6975.
   const rates = makeRateMap({
     "2024-03-15": { USD: "0.92" },
     "2024-09-20": { USD: "0.91" },
@@ -72,11 +74,11 @@ describe("IBKR ibkr-sample.xml → casillas", () => {
   });
   const report = generateTaxReport(toStatement(parseIbkrFlexXml(fixture("ibkr-sample.xml"))), rates, 2024);
 
-  it("pins capital-gain net (Casillas 0328/0331): 1592.50 − 1365.00 = 227.50", () => {
+  it("pins capital-gain net (Casillas 0328/0331) with fees: 1591.59 − 1365.91 = 225.68", () => {
     expect(report.capitalGains.disposals).toHaveLength(1);
-    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1592.50");
-    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1365.00");
-    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("227.50");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1591.59");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1365.91");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("225.68");
     expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
   });
 
