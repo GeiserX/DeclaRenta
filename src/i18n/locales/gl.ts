@@ -45,6 +45,9 @@ const gl: TranslationKeys = {
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
+  "results.profile_changed":
+    "Perfil cambiado: estes resultados calculáronse con outros axustes de monodivisa, autoconversións ou titulares. Recalcula para aplicar os novos.",
+  "results.profile_recalc_btn": "Recalcular",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",

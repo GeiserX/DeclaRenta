@@ -46,6 +46,9 @@ const es = {
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch":
     "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
+  "results.profile_changed":
+    "Perfil cambiado: estos resultados se calcularon con otros ajustes de monodivisa, autoconversiones o titulares. Recalcula para aplicar los nuevos.",
+  "results.profile_recalc_btn": "Recalcular",
 
   // Table headers
   "table.isin": "ISIN",

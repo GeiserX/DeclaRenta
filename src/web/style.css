@@ -1959,6 +1959,11 @@ footer a:hover {
   text-decoration: underline;
 }
 
+.profile-recalc-banner button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 /* Broker guide panels */
 .broker-guide-container {
   margin-top: 1rem;

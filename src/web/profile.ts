@@ -69,11 +69,32 @@ export function getProfile(): FiscalProfile {
   return { ...DEFAULT_PROFILE };
 }
 
-/** Save the fiscal profile to localStorage */
+/** Save the fiscal profile to localStorage and announce it with a `profilechange` event */
 export function saveProfile(profile: FiscalProfile): void {
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch { /* localStorage full */ }
+  if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("profilechange"));
+}
+
+/** The profile fields that change the tax report. Personal data (NIF, name, phone) does not. */
+export type ReportSettings = Pick<FiscalProfile, "monodivisa" | "trackAutoConvert" | "titulares">;
+
+export function reportSettingsOf(profile: FiscalProfile): ReportSettings {
+  return {
+    monodivisa: profile.monodivisa,
+    trackAutoConvert: profile.trackAutoConvert,
+    titulares: profile.titulares,
+  };
+}
+
+/** True when a report computed with `used` no longer matches the profile's `current` settings. */
+export function reportSettingsChanged(used: ReportSettings, current: ReportSettings): boolean {
+  return (
+    used.monodivisa !== current.monodivisa ||
+    used.trackAutoConvert !== current.trackAutoConvert ||
+    used.titulares !== current.titulares
+  );
 }
 
 /** Validate a Spanish NIF/NIE */

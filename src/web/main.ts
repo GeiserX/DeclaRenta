@@ -29,7 +29,14 @@ import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
-import { initProfile, getProfile, saveProfile } from "./profile.js";
+import {
+  initProfile,
+  getProfile,
+  saveProfile,
+  reportSettingsOf,
+  reportSettingsChanged,
+  type ReportSettings,
+} from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
@@ -213,6 +220,8 @@ const reviewContent = document.getElementById("review-content")!;
 const yearCompareDiv = document.getElementById("year-compare")!;
 
 let currentReport: TaxSummary | null = null;
+/** Profile settings (monodivisa, auto-convert, titulares) that produced `currentReport` */
+let currentReportSettings: ReportSettings | null = null;
 let currentBrokers: string[] = [];
 const pendingFiles: File[] = [];
 
@@ -678,8 +687,9 @@ function renderSectionSafely(containerId: string, render: () => void): void {
 }
 
 /**
- * Monotonic run token. `processFiles` is triggered from four places (wizard
- * Next, year-select change, manual-rate apply, monodivisa toggle) and is async
+ * Monotonic run token. `processFiles` is triggered from several places (wizard
+ * Next, year-select change, manual-rate and opening-lot apply, the "profile
+ * changed: recalculate" banner button) and is async
  * (it awaits the ECB fetch and a paint yield), so two runs can overlap — e.g.
  * the user changes the year and immediately edits a manual rate. Without a guard
  * the slower run would resolve last and clobber `currentReport`/the rendered
@@ -713,7 +723,7 @@ async function processFiles(): Promise<void> {
     // We deliberately do NOT pass `noCache` — ECB rates are immutable historical
     // data, so the orchestrator's per-(currency, year) memoization makes the
     // repeated processFiles() runs (year-select change, manual-rate entry,
-    // monodivisa toggle) reuse already-fetched rates instead of refetching
+    // profile recalculation) reuse already-fetched rates instead of refetching
     // everything each time.
     const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year, manualOpeningLots });
     if (isStale()) return; // a newer run started while fetching — let it win
@@ -748,6 +758,7 @@ async function processFiles(): Promise<void> {
       manualOpeningLots,
     });
     currentReport = report;
+    currentReportSettings = reportSettingsOf(profileForReport);
     currentBrokers = detectedBrokers;
 
     // Persist for year comparison
@@ -769,6 +780,50 @@ async function processFiles(): Promise<void> {
     currentReport = null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Profile changed after the report was computed
+// ---------------------------------------------------------------------------
+
+/**
+ * Monodivisa, auto-convert and titulares change the numbers, but the profile
+ * form only saves them. When they no longer match the settings of the report on
+ * screen, Results shows a banner whose button re-runs the engine. Nothing is
+ * recalculated until the user clicks it. Personal fields (NIF, name, phone) are
+ * not report settings, so editing them never shows the banner.
+ */
+function syncRecalcBanner(): void {
+  const host = document.getElementById("results-year-header");
+  if (!host) return;
+  const existing = host.querySelector<HTMLElement>(".profile-recalc-banner");
+  const stale =
+    currentReport !== null &&
+    currentReportSettings !== null &&
+    reportSettingsChanged(currentReportSettings, reportSettingsOf(getProfile()));
+  // Keep a live banner in place while the user types elsewhere in the profile,
+  // so screen readers do not re-announce it on every keystroke.
+  if (stale && existing && !existing.querySelector("button:disabled")) return;
+  existing?.remove();
+  if (!stale) return;
+
+  const banner = document.createElement("div");
+  banner.className = "banner banner-warning profile-recalc-banner";
+  banner.setAttribute("role", "status");
+  const text = document.createElement("span");
+  text.textContent = t("results.profile_changed");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-small profile-recalc-btn";
+  btn.textContent = t("results.profile_recalc_btn");
+  btn.addEventListener("click", () => {
+    btn.disabled = true;
+    void processFiles().finally(syncRecalcBanner);
+  });
+  banner.append(text, btn);
+  host.appendChild(banner);
+}
+
+document.addEventListener("profilechange", syncRecalcBanner);
 
 // ---------------------------------------------------------------------------
 // Export & generate buttons
@@ -941,6 +996,7 @@ function renderResults(report: TaxSummary) {
         void processFiles();
       }
     });
+    syncRecalcBanner();
   }
 
   // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
