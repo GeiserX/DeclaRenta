@@ -7,7 +7,7 @@
  *   declarenta convert --input flex.xml --year 2025 --output report.json
  *   declarenta convert --input flex.xml --year 2025 --format pdf --output report.pdf
  *   declarenta modelo720 --input flex.xml --year 2025 --nif 12345678A
- *   declarenta modelo720 --input ibkr.xml --input degiro.csv --year 2025 --nif 12345678A
+ *   declarenta modelo720 --input ibkr_cuenta1.xml --input ibkr_cuenta2.xml --year 2025 --nif 12345678A
  *   declarenta d6 --input flex.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
  */
 
