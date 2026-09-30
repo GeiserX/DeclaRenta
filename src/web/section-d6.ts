@@ -15,6 +15,7 @@ import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
+import { renderPositionsDateBanner } from "./positions-date.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -95,6 +96,10 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </div>`;
   }
 
+  // Positions must be the holdings at 31 December of the selected year
+  const positionsDate = renderPositionsDateBanner(statement, year);
+  html += positionsDate.html;
+
   // 10% threshold reminder (Orden ICT/1408/2021)
   html += `<div class="banner banner-warning">${t("d6.no_minimum")}</div>`;
 
@@ -143,10 +148,11 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   }
 
   // Generate button
-  html += `<button id="d6-generate-btn">${t("d6.generate_btn")}</button>`;
+  html += `<button id="d6-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("d6.generate_btn")}</button>`;
 
-  // AFORIX guide
-  html += renderAforixGuide(positions, rateMap, year, profile);
+  // AFORIX guide. D-6 is filed by typing these values into AFORIX, so the
+  // guide is withheld too when the positions are from another date.
+  if (!positionsDate.blocked) html += renderAforixGuide(positions, rateMap, year, profile);
 
   // Deadline
   html += `<div class="deadline-reminder">${t("d6.deadline")}</div>`;

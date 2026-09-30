@@ -153,6 +153,8 @@ function parseClosedPositions(
   let skippedDataRows = 0;
   // Count rows whose Long/Short direction value was non-empty but unrecognized.
   let unrecognizedDirection = 0;
+  // Rows skipped because their Type is unsupported (e.g. crypto), per raw type.
+  const skippedTypes = new Map<string, number>();
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
@@ -160,18 +162,32 @@ function parseClosedPositions(
 
     // Determine asset category from type and leverage
     const leverage = leverageCol >= 0 ? (row[leverageCol] ?? "").trim() : "1";
-    const rowType = typeCol >= 0 ? (row[typeCol] ?? "").toLowerCase().trim() : "";
+    // Accents stripped so the Spanish export's "Índices" matches like "Indices".
+    const rowType = typeCol >= 0
+      ? (row[typeCol] ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
+      : "";
 
-    // Skip unknown/unsupported types (e.g. crypto on eToro — use dedicated crypto parsers)
-    if (rowType && !rowType.includes("stock") && !rowType.includes("etf") &&
-        !rowType.includes("accion") && !rowType.includes("cfd") &&
-        !rowType.includes("index") && !rowType.includes("indice") &&
-        !rowType.includes("commodit")) continue;
+    // Crypto is checked first: labels like "Cryptocurrencies" or "Criptodivisas"
+    // contain "currenc"/"divisa" and would otherwise be taken as currency CFDs.
+    const isCryptoType = rowType.includes("crypt") || rowType.includes("cripto");
 
-    // CFD: leverage > 1 OR type explicitly says "cfd" OR commodity (always derivative on eToro)
+    // Commodities and currencies are always derivatives (CFD) on eToro.
+    const isCfdType = !isCryptoType && (rowType.includes("cfd") || rowType.includes("commodit") ||
+      rowType.includes("materia") || rowType.includes("currenc") || rowType.includes("divisa"));
+
+    // Skip unknown/unsupported types (e.g. crypto on eToro is not supported),
+    // counted per type so the user is told what was left out.
+    if (rowType && !isCfdType && !rowType.includes("stock") && !rowType.includes("etf") &&
+        !rowType.includes("accion") && !rowType.includes("index") && !rowType.includes("indice")) {
+      const rawType = (row[typeCol] ?? "").trim();
+      skippedTypes.set(rawType, (skippedTypes.get(rawType) ?? 0) + 1);
+      continue;
+    }
+
+    // CFD: leverage > 1 OR a CFD type (explicit CFD, commodity, currency)
     // Strip non-numeric prefixes (e.g. "x5", "X10") before parsing
     const leverageNum = parseFloat(leverage.replace(/^[xX]/, ""));
-    const isCfd = (!isNaN(leverageNum) && leverageNum > 1) || rowType.includes("cfd") || rowType.includes("commodit");
+    const isCfd = (!isNaN(leverageNum) && leverageNum > 1) || isCfdType;
     const assetCat = isCfd ? "CFD" as const : "STK" as const;
 
     // Two eToro formats:
@@ -315,6 +331,18 @@ function parseClosedPositions(
       message: `Se ha(n) omitido ${skippedDataRows} fila(s) de "Posiciones cerradas" de eToro con datos no interpretables (acción, símbolo o unidades inválidos).`,
       hint: "eToro cambia el formato de exportación; vuelve a descargar el informe XLSX completo de la cuenta. Si faltan operaciones, revisa que las columnas de acción y unidades estén presentes.",
       context: { count: String(skippedDataRows) },
+    });
+  }
+
+  if (skippedTypes.size > 0) {
+    const skippedTypeCount = [...skippedTypes.values()].reduce((a, b) => a + b, 0);
+    const types = [...skippedTypes].map(([type, n]) => `${type} (${n})`).join(", ");
+    parserMessages.push({
+      id: "etoro.closed_types_skipped",
+      severity: "warning",
+      message: `Se ha(n) omitido ${skippedTypeCount} posición(es) cerrada(s) de eToro de un tipo no soportado: ${types}.`,
+      hint: "DeclaRenta todavía no importa estos tipos de posición de eToro (p. ej. criptomonedas). Su ganancia o pérdida no está incluida en el cálculo: añádela a mano en tu declaración con el importe invertido y el beneficio que muestra eToro.",
+      context: { count: String(skippedTypeCount), types },
     });
   }
 

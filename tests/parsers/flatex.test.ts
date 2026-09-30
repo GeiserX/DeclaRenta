@@ -366,6 +366,50 @@ describe("flatexParser — Lagerstellenwechsel warning", () => {
   });
 });
 
+describe("flatexParser — Kontoumsätze dividends are net", () => {
+  const kontoHeader =
+    "Buchtag;Valuta;BIC / BLZ;IBAN / Kontonummer;Buchungsinformationen;TA-Nr.;Betrag;;Auftraggeberkonto;Konto";
+
+  it("warns once that dividend amounts are net when no Quellensteuer row is present", () => {
+    const stmt = flatexParser.parse(kontoCsv);
+    const msgs = (stmt.parserMessages ?? []).filter(
+      (m) => m.id === "flatex.dividends.net_amounts",
+    );
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.severity).toBe("warning");
+  });
+
+  it("does not warn when each dividend has its Quellensteuer row, and 0588 gets the tax", async () => {
+    const { calculateDividends } = await import("../../src/engine/dividends.js");
+    const csv = [
+      kontoHeader,
+      "16.12.2025;16.12.2025;;;Dividendenzahlung US91324P1021;4649709016;56,41;EUR;1234567890;***xxx Cashkonto",
+      "16.12.2025;16.12.2025;;;Quellensteuer US91324P1021;4649709017;-8,46;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+    const stmt = flatexParser.parse(csv);
+    expect(
+      (stmt.parserMessages ?? []).some((m) => m.id === "flatex.dividends.net_amounts"),
+    ).toBe(false);
+    const entries = calculateDividends(stmt.cashTransactions, new Map());
+    const unh = entries.find((e) => e.isin === "US91324P1021")!;
+    expect(unh.withholdingTaxEur.gt(0)).toBe(true);
+    expect(unh.withholdingTaxEur.toFixed(2)).toBe("8.46");
+  });
+
+  it("still warns when the Quellensteuer row is for a different ISIN or too far apart", () => {
+    const csv = [
+      kontoHeader,
+      "16.12.2025;16.12.2025;;;Dividendenzahlung US91324P1021;4649709016;47,95;EUR;1234567890;***xxx Cashkonto",
+      "16.12.2025;16.12.2025;;;Quellensteuer US7170811035;4649709017;-2,77;EUR;1234567890;***xxx Cashkonto",
+      "02.12.2025;01.12.2025;;;Dividendenzahlung US7170811035;4623401771;15,69;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+    const stmt = flatexParser.parse(csv);
+    expect(
+      (stmt.parserMessages ?? []).filter((m) => m.id === "flatex.dividends.net_amounts"),
+    ).toHaveLength(1);
+  });
+});
+
 describe("flatexParser — dividend country end-to-end", () => {
   it("assigns withholdingCountry ES for a Spanish-ISIN dividend through the engine", async () => {
     const { calculateDividends } = await import("../../src/engine/dividends.js");

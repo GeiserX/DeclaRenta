@@ -20,10 +20,11 @@ import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { fetchEcbRates } from "../engine/ecb.js";
+import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { generateTaxReport } from "../generators/report.js";
-import { generateModelo720 } from "../generators/modelo720.js";
+import { checkModelo720Thresholds, generateModelo720 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
@@ -71,6 +72,28 @@ program
     "Convert foreign broker reports (IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken) into Spanish tax declarations (Modelo 100, 720, D-6)",
   )
   .version(pkg.version);
+
+/**
+ * Modelo 720 and D-6 declare the holdings at 31 December of the tax year, so
+ * refuse open positions from a statement that ends on another date (the same
+ * rule as the web sections).
+ */
+function assertYearEndPositions(statement: Statement, year: number): void {
+  const mismatch = positionsDateMismatch(statement, year);
+  if (mismatch === true) {
+    throw new Error(
+      `Las posiciones del fichero son a fecha ${formatDateDmy(statement.toDate)}, no a 31/12/${year}. ` +
+        "Este modelo declara lo que tenías a 31 de diciembre, así que no se genera ningún fichero con ellas. " +
+        `Descarga un informe que termine el 31/12/${year} (en IBKR, un Flex Query con fecha final 31/12/${year}) y vuelve a ejecutar el comando.`,
+    );
+  }
+  if (mismatch === "unknown") {
+    console.error(
+      `ℹ El broker no indica a qué fecha corresponden las posiciones. Comprueba que el informe refleje lo que tenías a 31/12/${year}: ` +
+        "si lo descargaste más tarde, las posiciones y sus valores pueden no coincidir.",
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helper: parse and merge broker files
@@ -448,9 +471,11 @@ program
           );
         }
         const statement = parser.parse(content);
+        assertYearEndPositions(statement, opts.year);
 
         const currencies = new Set<string>();
         for (const p of statement.openPositions) currencies.add(p.currency);
+        for (const cb of statement.cashBalances ?? []) currencies.add(cb.currency);
         currencies.delete("EUR");
 
         const rateMap = await fetchEcbRates(opts.year, [...currencies]);
@@ -495,8 +520,22 @@ program
           statement.cashBalances,
         );
 
+        const missingAverage = (statement.cashBalances ?? []).filter(
+          (cb) => new Decimal(cb.endingCash).greaterThan(0) && !cb.averageQ4Cash,
+        );
+        if (missingAverage.length > 0) {
+          console.error(
+            `Aviso: ${missingAverage.length} saldo(s) en efectivo sin media del cuarto trimestre (${missingAverage.map((cb) => cb.currency).join(", ")}). Cuentan para el umbral de 50.000 EUR, pero no se incluyen en el fichero: decláralos a mano con su saldo medio.`,
+          );
+        }
+
         if (!output720) {
-          console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
+          const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
+          if (thresholds.accounts.exceeds) {
+            console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
+          } else {
+            console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
+          }
           return;
         }
 
@@ -562,6 +601,7 @@ program
           );
         }
         const statement = parser.parse(content);
+        assertYearEndPositions(statement, opts.year);
 
         const currencies = new Set<string>();
         for (const p of statement.openPositions) currencies.add(p.currency);

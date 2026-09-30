@@ -83,7 +83,35 @@ function convertTimestamp(ts: string): string {
 // Transaction type classification
 // ---------------------------------------------------------------------------
 
-const SKIP_TYPES = ["send", "receive"];
+/**
+ * Non-taxable movements: crypto sent/received, fiat deposits/withdrawals, moves
+ * to/from Coinbase Pro/Exchange/Prime and the Vault, savings and staking
+ * transfers. None of them is a disposal or income, so they are skipped quietly.
+ * Any OTHER unrecognised type is skipped too, but counted and reported.
+ */
+const SKIP_TYPES = [
+  "send",
+  "receive",
+  "deposit",
+  "withdrawal",
+  "exchange deposit",
+  "exchange withdrawal",
+  "pro deposit",
+  "pro withdrawal",
+  "prime deposit",
+  "transfer",
+  "retail staking transfer",
+  "retail unstaking transfer",
+  "vault withdrawal",
+  "cash to savings",
+  "savings to cash",
+];
+/**
+ * Coinbase Advanced Trade fills. "Advance Trade" (sic) appears in some exports.
+ * Exact labels only, never includes(): other types also contain "buy"/"sell".
+ */
+const BUY_TYPES = ["buy", "advanced trade buy", "advance trade buy"];
+const SELL_TYPES = ["sell", "advanced trade sell", "advance trade sell"];
 /**
  * Crypto income types and their Spanish tax bucket:
  *  - "ahorro": rendimiento del capital mobiliario (savings base, Casilla 0027) —
@@ -104,7 +132,11 @@ const SKIP_TYPES = ["send", "receive"];
 const INCOME_BUCKETS: Record<string, "ahorro" | "general"> = {
   "staking income": "ahorro",
   "rewards income": "ahorro",
+  // Staking-style yield on inflationary coins (ATOM, XTZ...): same as staking.
+  "inflation reward": "ahorro",
   "learning reward": "general",
+  // Older label for the same learn-and-earn rewards.
+  "coinbase earn": "general",
 };
 
 // ---------------------------------------------------------------------------
@@ -125,6 +157,12 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   // Conversions whose Notes we couldn't parse: the SELL leg is emitted but the
   // received coin gets NO BUY leg → no FIFO lot → phantom gain on a later sale.
   let convertNoDestCount = 0;
+  // Unrecognised transaction types (raw label → row count), reported once.
+  const unknownTypes = new Map<string, number>();
+  // Advanced Trade fills quoted in a currency other than the row's Price
+  // Currency (e.g. ETH-BTC): only the base coin's leg is emitted.
+  let cryptoQuoteCount = 0;
+  const cryptoQuotePairs = new Set<string>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -218,7 +256,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // Open (buy) the destination asset
       if (convertMatch) {
         const destAsset = convertMatch[2]!;
-        const destQuantityDec = toFiniteDecimal(convertMatch[1]!).abs();
+        // Notes are US-formatted: a comma is a thousands separator ("2,000").
+        const destQuantityDec = toFiniteDecimal(convertMatch[1]!.replace(/,/g, "")).abs();
         const subtotalDec = toFiniteDecimal(subtotal).abs();
         const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
 
@@ -255,17 +294,32 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     }
 
     // Buy / Sell trades
-    const isSell = txType === "sell";
-    const isBuy = txType === "buy";
-    if (!isSell && !isBuy) continue;
+    const isSell = SELL_TYPES.includes(txType);
+    const isBuy = BUY_TYPES.includes(txType);
+    if (!isSell && !isBuy) {
+      const rawType = (fields[cols.transactionType] ?? "").trim();
+      unknownTypes.set(rawType, (unknownTypes.get(rawType) ?? 0) + 1);
+      continue;
+    }
 
     const qtyDec = toFiniteDecimal(quantity).abs();
     if (qtyDec.isZero()) continue;
 
+    // Advanced Trade Notes name the market ("... on ETH-BTC at ..."). When the
+    // quote coin is not the Price Currency, the coin paid or received is
+    // another crypto and that permuta leg is not emitted: warn about it.
+    if (txType !== "buy" && txType !== "sell") {
+      const market = notes.match(/\bon\s+([A-Za-z0-9]+)-([A-Za-z0-9]+)\b/);
+      if (market && market[2]!.toUpperCase() !== (spotCurrency || "EUR").toUpperCase()) {
+        cryptoQuoteCount++;
+        cryptoQuotePairs.add(`${market[1]!.toUpperCase()}-${market[2]!.toUpperCase()}`);
+      }
+    }
+
     const feeDec2 = toFiniteDecimal(fees);
 
     trades.push({
-      tradeID: `coinbase-${txType}-${tradeDate}-${asset}-${i}`,
+      tradeID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
       accountId: "",
       symbol: asset,
       description: `${txType.charAt(0).toUpperCase() + txType.slice(1)} ${asset}`,
@@ -314,6 +368,32 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       message: `No se pudo interpretar el destino de ${convertNoDestCount === 1 ? "una conversión" : `${convertNoDestCount} conversiones`} Coinbase; la moneda adquirida no tendrá coste de adquisición.`,
       hint: "Suele deberse a que la columna \"Notes\" no incluye el texto \"Converted ... to ...\" esperado. Vuelve a descargar el informe original desde Coinbase sin editarlo, o añade manualmente la compra de la moneda recibida para que tenga coste de adquisición.",
       context: { count: String(convertNoDestCount) },
+    });
+  }
+
+  // Rows whose type we don't recognise were not counted at all: name them so
+  // the user can check whether any was a taxable sale, purchase or reward.
+  if (unknownTypes.size > 0) {
+    const skipped = [...unknownTypes.values()].reduce((a, b) => a + b, 0);
+    const types = [...unknownTypes].map(([type, n]) => `${type} (${n})`).join(", ");
+    parserMessages.push({
+      id: "coinbase.unknown_types_skipped",
+      severity: "warning" as const,
+      message: `Se han omitido ${skipped} fila(s) de Coinbase con un tipo de operación no reconocido: ${types}.`,
+      hint: "Estas filas no se han tenido en cuenta en el cálculo. Si alguna es una venta, una compra, un pago con cripto o una recompensa, añádela manualmente para que su ganancia, su coste de adquisición o su rendimiento cuenten.",
+      context: { count: String(skipped), types },
+    });
+  }
+  // An Advanced Trade fill quoted in another coin (e.g. ETH-BTC) also disposes
+  // of or acquires that coin: this leg is missing (a permuta, Art. 37.1.h LIRPF).
+  if (cryptoQuoteCount > 0) {
+    const pairs = [...cryptoQuotePairs].join(", ");
+    parserMessages.push({
+      id: "coinbase.advanced_trade_quote_leg_missing",
+      severity: "warning" as const,
+      message: `${cryptoQuoteCount} operación(es) de Advanced Trade de Coinbase se pagaron o cobraron en una moneda distinta de la de valoración (${pairs}); solo se ha registrado la criptomoneda comprada o vendida, no la moneda de contrapartida.`,
+      hint: "En estos pares también transmites (al comprar) o adquieres (al vender) la moneda de cotización, sea otra criptomoneda o una divisa, y esa operación también tributa. Añade manualmente la venta o la compra de esa moneda por el mismo valor en euros de la operación para que su ganancia y su coste de adquisición cuadren.",
+      context: { count: String(cryptoQuoteCount), pairs },
     });
   }
 
