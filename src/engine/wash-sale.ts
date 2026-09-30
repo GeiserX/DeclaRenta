@@ -187,6 +187,18 @@ export function detectWashSales(
   const holdingAfterByAssetTime = new Map<string, Map<number, Decimal>>();
   const holdingAfterBudgetByAssetTime = new Map<string, Map<number, Decimal>>();
 
+  // Running split-adjusted position per key, advanced forward as sell dates grow
+  // (disposals are visited in sell-date order). `splitsApplied` is how many of the
+  // key's splits fall on or before the sell date the sum is expressed in; crossing
+  // a new split changes every earlier event's conversion, so the sum is rebuilt
+  // once per split. Each event adds the same term in the same order as a full
+  // re-walk from the start would, so the result is identical, in O(events + splits
+  // × events) per key instead of O(sell dates × events).
+  const positionSweepByAsset = new Map<
+    string,
+    { nextEvent: number; position: Decimal; splitsApplied: number; lastSellTime: number }
+  >();
+
   const holdingAfter = (key: string, sellTime: number): Decimal => {
     let perTime = holdingAfterByAssetTime.get(key);
     if (!perTime) {
@@ -196,13 +208,23 @@ export function detectWashSales(
     const cached = perTime.get(sellTime);
     if (cached) return cached;
 
-    let position = new Decimal(0);
-    for (const ev of positionEventsByAsset.get(key) ?? []) {
-      if (ev.time > sellTime) break;
-      const conversion = splitFactorBetween(splitsByAsset, key, ev.time, sellTime);
-      position = position.plus(ev.qty.mul(conversion.num).div(conversion.den));
+    const events = positionEventsByAsset.get(key) ?? [];
+    const splits = splitsByAsset.get(key) ?? [];
+    let splitsApplied = 0;
+    while (splitsApplied < splits.length && splits[splitsApplied]!.time <= sellTime) splitsApplied++;
+    let sweep = positionSweepByAsset.get(key);
+    if (!sweep || sellTime < sweep.lastSellTime || splitsApplied !== sweep.splitsApplied) {
+      sweep = { nextEvent: 0, position: new Decimal(0), splitsApplied, lastSellTime: sellTime };
+      positionSweepByAsset.set(key, sweep);
     }
-    const remaining = Decimal.max(position, 0);
+    sweep.lastSellTime = sellTime;
+    while (sweep.nextEvent < events.length && events[sweep.nextEvent]!.time <= sellTime) {
+      const ev = events[sweep.nextEvent]!;
+      const conversion = splitFactorBetween(splitsByAsset, key, ev.time, sellTime);
+      sweep.position = sweep.position.plus(ev.qty.mul(conversion.num).div(conversion.den));
+      sweep.nextEvent++;
+    }
+    const remaining = Decimal.max(sweep.position, 0);
     perTime.set(sellTime, remaining);
     return remaining;
   };
@@ -297,15 +319,16 @@ export function detectWashSales(
     // than remain after the full sale date.
     let remainingToAbsorb = qty;
     const consumed: { date: string; qty: Decimal }[] = [];
-    const consume = (predicate: (evTime: number) => boolean, maxQty?: Decimal, reverse = false): Decimal => {
+    // buyEvents is sorted by time, so each pass walks only its slice of the
+    // window, found by binary search: (sellTime, windowEnd] forward for post-sale
+    // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
+    // outside both slices.
+    const consume = (from: number, to: number, step: 1 | -1, maxQty?: Decimal): Decimal => {
       let remainingBudget = maxQty ?? qty;
-      const events = reverse ? [...buyEvents].reverse() : buyEvents;
-      for (const ev of events) {
+      for (let i = from; i !== to; i += step) {
+        const ev = buyEvents[i]!;
         if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
         if (remainingBudget.lessThanOrEqualTo(0)) break;
-        if (ev.time < windowStart || ev.time > windowEnd) continue;
-        if (ev.time === sellTime) continue;
-        if (!predicate(ev.time)) continue;
         if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
         const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
         const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
@@ -318,10 +341,16 @@ export function detectWashSales(
       }
       return (maxQty ?? qty).minus(remainingBudget);
     };
-    consume((evTime) => evTime > sellTime); // post-sale repurchases first (surviving replacements)
+    // post-sale repurchases first (surviving replacements)
+    consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1);
     // FIFO leaves the newest pre-sale lots behind after a partial sale, so attach
     // capped pre-sale deferrals newest-first to the lots that actually survive.
-    const preSaleConsumed = consume((evTime) => evTime < sellTime, remainingHoldingBudget(key, sellTime), true);
+    const preSaleConsumed = consume(
+      firstIndexAtOrAfter(buyEvents, sellTime) - 1,
+      firstIndexAtOrAfter(buyEvents, windowStart) - 1,
+      -1,
+      remainingHoldingBudget(key, sellTime),
+    );
     consumeHoldingBudget(key, sellTime, preSaleConsumed);
 
     const absorbed = qty.minus(remainingToAbsorb);
@@ -363,6 +392,30 @@ function parseQty(q: string): Decimal {
   } catch {
     return new Decimal(0);
   }
+}
+
+/** First index of the time-sorted `events` whose time is strictly after `time` (length if none). */
+function firstIndexAfter(events: readonly { time: number }[], time: number): number {
+  let lo = 0;
+  let hi = events.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (events[mid]!.time > time) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/** First index of the time-sorted `events` whose time is at or after `time` (length if none). */
+function firstIndexAtOrAfter(events: readonly { time: number }[], time: number): number {
+  let lo = 0;
+  let hi = events.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (events[mid]!.time >= time) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
 }
 
 /** Normalize a date string (YYYY-MM-DD or YYYYMMDD) to YYYY-MM-DD for ledger keys. */
