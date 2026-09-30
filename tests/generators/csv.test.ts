@@ -61,6 +61,7 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
       acquisitionValue: new Decimal(800),
       netGainLoss: new Decimal(200),
       blockedLosses: new Decimal(0),
+      reintegratedLosses: new Decimal(0),
       disposals: [
         {
           isin: "US0378331005",
@@ -78,6 +79,8 @@ function makeReport(overrides?: Partial<TaxSummary>): TaxSummary {
           sellEcbRate: new Decimal("0.91"),
           acquireEcbRate: new Decimal("0.92"),
           washSaleBlocked: false,
+          blockedLossEur: new Decimal(0),
+          reintegratedLossEur: new Decimal(0),
         },
       ],
     },
@@ -212,6 +215,7 @@ describe("formatCsv", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
       fxGains: {
@@ -300,5 +304,36 @@ describe("formatCsv", () => {
     // Should still have headers but no data rows
     const lines = csv.split("\n").filter((l) => l.startsWith("US"));
     expect(lines).toHaveLength(0);
+  });
+
+  it("carries a partial anti-churning block into the row and the summary", () => {
+    // 400 of a 1000 EUR loss deferred; 250 of an earlier deferral released.
+    const report = makeReport();
+    const d = report.capitalGains.disposals[0]!;
+    d.proceedsEur = new Decimal(3000);
+    d.costBasisEur = new Decimal(4000);
+    d.gainLossEur = new Decimal(-1000);
+    d.washSaleBlocked = true;
+    d.blockedLossEur = new Decimal(400);
+    report.capitalGains.blockedLosses = new Decimal(400);
+    report.capitalGains.reintegratedLosses = new Decimal(250);
+    const lines = formatCsv(report).split("\n");
+
+    const header = lines.find((l) => l.startsWith("ISIN,Simbolo,Descripcion"))!.split(",");
+    const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
+    expect(header[header.length - 1]).toBe("Perdida_Bloqueada_EUR");
+    expect(row).toHaveLength(header.length);
+    expect(row[14]).toBe("SI");
+    expect(row[row.length - 1]).toBe("400.00");
+
+    expect(lines).toContain("—,Perdidas bloqueadas antichurning (Art. 33.5.f — informativo),400.00");
+    expect(lines).toContain("—,Perdidas reintegradas antichurning (Art. 33.5.f — informativo),250.00");
+  });
+
+  it("writes 0.00 in the blocked column and no anti-churning summary rows when nothing is blocked", () => {
+    const lines = formatCsv(makeReport()).split("\n");
+    const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
+    expect(row[row.length - 1]).toBe("0.00");
+    expect(lines.some((l) => /antichurning/i.test(l) && l.startsWith("—,"))).toBe(false);
   });
 });

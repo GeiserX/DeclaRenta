@@ -12,7 +12,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { lookupPositionRate } from "../engine/ecb.js";
 import { buildModelo721Entries } from "../generators/modelo721.js";
 import Decimal from "decimal.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
 
@@ -28,6 +28,10 @@ let cachedRateMap: EcbRateMap | null = null;
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("m721-content");
   if (!container) return;
   container.innerHTML = `
@@ -139,7 +143,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       return `<tr>
         <td class="mono">${esc(p.entry.description)}</td>
         <td>${esc(exchange)}</td>
-        <td>${p.entry.quantity.toString()}</td>
+        <td>${fmtQty(p.entry.quantity)}</td>
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
@@ -157,7 +161,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <h4>${t("m721.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
         const rate = lookupPositionRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
   }

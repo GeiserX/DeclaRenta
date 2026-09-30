@@ -4,6 +4,7 @@ import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
 import { localizeMessage, localizeHint } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { pdfSafeText } from "./pdf-text.js";
 
 export type TranslationFn = (key: TranslationKey) => string;
 
@@ -319,7 +320,7 @@ export async function generatePdfWebReport(
       for (const m of items) {
         doc.setTextColor(...color);
         const hint = localizeHint(m);
-        const text = localizeMessage(m) + (hint ? ` → ${hint}` : "");
+        const text = pdfSafeText(localizeMessage(m)) + (hint ? ` — ${pdfSafeText(hint)}` : "");
         const lines = doc.splitTextToSize(text, CONTENT_W) as string[];
         const blockH = lines.length * 4;
         if (wy + blockH > PAGE_H - MARGIN - 20) { doc.addPage(); wy = MARGIN + 10; }
@@ -333,9 +334,11 @@ export async function generatePdfWebReport(
     const warnings = msgs.filter((m) => m.severity === "warning");
     const infos = msgs.filter((m) => m.severity === "info");
 
-    renderGroup(errors, `⛔ ${errors.length} error(es)`, [220, 38, 38]);
-    renderGroup(warnings, `⚠ ${warnings.length} aviso(s)`, [180, 120, 0]);
-    renderGroup(infos, `ℹ ${infos.length} nota(s)`, [120, 120, 140]);
+    const groupTitle = (key: TranslationKey, count: number) =>
+      pdfSafeText(t(key).replace("{{count}}", String(count)));
+    renderGroup(errors, groupTitle("messages.errors_title", errors.length), [220, 38, 38]);
+    renderGroup(warnings, groupTitle("messages.warnings_title", warnings.length), [180, 120, 0]);
+    renderGroup(infos, groupTitle("messages.info_title", infos.length), [120, 120, 140]);
 
     contentEndY = wy;
   }

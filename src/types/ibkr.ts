@@ -31,6 +31,20 @@ export interface FlexStatement {
    * price oracle. Lower precedence than ECB rates and explicit user manual rates.
    */
   manualRateHints?: import("./tax.js").ManualRateQuote[];
+  /**
+   * Open positions and cash balances of each merged file, with that file's
+   * period end. Set by `mergeStatement` so `yearEndHoldings` can keep only the
+   * holdings of the files that end on 31 December of the declared year.
+   */
+  holdingsBySource?: HoldingsSource[];
+}
+
+/** The year-end holdings of one merged file, dated to that file's period end. */
+export interface HoldingsSource {
+  accountId: string;
+  toDate: string;
+  openPositions: OpenPosition[];
+  cashBalances: CashBalance[];
 }
 
 /**
@@ -63,6 +77,12 @@ export interface Trade {
   assetCategory: AssetCategory;
   currency: string;
   tradeDate: string;
+  /**
+   * Time of day of the execution ("HH:MM:SS"), when the export has one. Only
+   * orders trades of the same day, so FIFO consumes the unit bought first
+   * (Art. 37.2 LIRPF). Absent → the parser's row order is kept.
+   */
+  tradeTime?: string;
   settlementDate: string;
   quantity: string;
   tradePrice: string;
