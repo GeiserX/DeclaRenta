@@ -77,6 +77,12 @@ export interface Trade {
   assetCategory: AssetCategory;
   currency: string;
   tradeDate: string;
+  /**
+   * Time of day of the execution ("HH:MM:SS"), when the export has one. Only
+   * orders trades of the same day, so FIFO consumes the unit bought first
+   * (Art. 37.2 LIRPF). Absent → the parser's row order is kept.
+   */
+  tradeTime?: string;
   settlementDate: string;
   quantity: string;
   tradePrice: string;
