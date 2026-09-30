@@ -92,6 +92,14 @@ describe("D-6 Guide Generator", () => {
     expect(report.guide.some((l) => l.includes("Test User"))).toBe(true);
   });
 
+  it("sends the user to eAFORIX at the Ministry of Commerce, not to the Banco de España", () => {
+    const report = generateD6Report([makePosition()], rateMap, 2025, "Test User", "12345678A");
+    const text = report.guide.join("\n");
+
+    expect(text).toContain("https://oficinavirtual.comercio.gob.es/eAFORIX/");
+    expect(text).not.toContain("bde.es");
+  });
+
   it("should map ISIN prefix to exchange code", () => {
     const positions = [
       makePosition({ isin: "US78462F1030" }),

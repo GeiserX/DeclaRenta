@@ -86,6 +86,7 @@ const gl: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Retención a conta do IRPF practicada na orixe sobre dividendos ou xuros de emisores españois (p. ex. accións do IBEX), aínda que estean nun bróker estranxeiro. É un pagamento a conta deducible da cota; NON é a dedución por dobre imposición (casilla 0588), que só se aplica a imposto estranxeiro.",
   "casilla.double_taxation": "Dedución dobre imposición",
+  "casilla.dt_foreign_income_total": "Total rendementos estranxeiros",
   "casilla.reintegrated_losses":
     "Perdas diferidas de anos anteriores agora deducibles (vendéronse os valores recomprados): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -162,7 +163,10 @@ const gl: TranslationKeys = {
   "compare.acquisition_value": "Valor de adquisición (transmisións, sen divisas)",
   "compare.net_gain_loss": "Ganancia/Perda neta (transmisións, sen divisas)",
 
-  "error.no_broker_detected": 'Non se puido detectar o broker de "{{filename}}". Selecciona o broker manualmente.',
+  "error.no_broker_detected":
+    'Non se puido detectar o broker de "{{filename}}". Se é un informe de broker, selecciona o broker manualmente; se non o é, quítao da lista.',
+  "error.empty_file":
+    'O ficheiro "{{filename}}" está baleiro. Quítao da lista ou volve exportalo desde o teu broker.',
   "error.file_too_large":
     'O ficheiro "{{filename}}" supera o límite de {{limit}} MB e descartouse. Exporta un período máis curto ou divide o ficheiro.',
   "error.prefix": "Erro: ",
@@ -178,7 +182,7 @@ const gl: TranslationKeys = {
   "sidebar.toggle": "Abrir/pechar menú",
 
   "profile.title": "Perfil fiscal",
-  "profile.description": "Estes datos utilízanse para xerar os ficheiros dos modelos 720 e D-6.",
+  "profile.description": "Estes datos utilízanse para xerar os ficheiros dos modelos 720 e D-6. Gárdanse só neste navegador, nunca nun servidor.",
   "profile.section_personal": "Datos persoais",
   "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
@@ -204,6 +208,8 @@ const gl: TranslationKeys = {
     "Se a conta ten varios titulares (p. ex. conta conxunta ou de gananciais), DeclaRenta divide todos os importes a partes iguais para amosar a parte que corresponde a cada contribuínte (Art. 11.3 LIRPF). Cada titular presenta a súa declaración individual pola súa parte.",
   "profile.saved": "Perfil gardado",
   "profile.save_btn": "Gardar perfil",
+  "profile.clear_btn": "Borrar os meus datos deste navegador",
+  "profile.clear_confirm": "Borrar deste navegador o teu perfil fiscal, os informes gardados e os valores introducidos a man?",
   "profile.incomplete_banner": "Completa o teu perfil fiscal para xerar os modelos 720 e D-6.",
   "profile.go_to_profile": "Ir ao perfil",
 
@@ -500,7 +506,7 @@ const gl: TranslationKeys = {
   "guide_rw.double_taxation_title": "Dedución por dobre imposición internacional",
   "guide_rw.entidad_emisora_label": "Entidade emisora",
   "guide_rw.entidad_emisora_value":
-    "Nome do broker (ex. Interactive Brokers, Degiro, eToro…). Se consolidas varias operacións nunha soa liña, indica o broker principal.",
+    "Nome da empresa ou do valor que vendes (ex. Apple Inc.), non o do broker. En divisas, a moeda (ex. USD). Se consolidas varias operacións nunha soa liña, indica o valor principal.",
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Accións admitidas a negociación»</strong> para accións cotizadas. Para fondos: «Participacións en IIC». Para derivados/opcións: «Outros elementos patrimoniais».",
@@ -540,7 +546,7 @@ const gl: TranslationKeys = {
     "O importe da casilla <strong>0588</strong> de DeclaRenta. É o menor entre a retención estranxeira pagada e a cota española correspondente (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "En que campo do cadro?",
   "guide_rw.dt_campo_hint":
-    "No cadro de dobre imposición, cubre DÚAS filas:<br>• <strong>«Outros rendementos netos reducidos obtidos no estranxeiro»</strong> (2ª fila) → importe bruto dos dividendos estranxeiros (mesmo valor que casilla 0029).<br>• <strong>«Imposto satisfeito no estranxeiro»</strong> (última fila) → importe da casilla 0588 de DeclaRenta.<br>Se deixas a 2ª fila baleira, Renta Web amosa o aviso «Reflectiu o imposto sen facer constar as rendas». As filas 1 e 3 quedan a 0.",
+    "No cadro de dobre imposición, cubre DÚAS filas por cada país:<br>• <strong>«Outros rendementos netos reducidos obtidos no estranxeiro»</strong> (2ª fila) → a columna «Bruto EUR» dese país no detalle da casilla 0588 de DeclaRenta. Se só hai un país, é a fila «Total rendementos estranxeiros» dese detalle. Non inclúe os dividendos españois nin os de países sen retención.<br>• <strong>«Imposto satisfeito no estranxeiro»</strong> (última fila) → a dedución dese país no mesmo detalle (cun só país, o importe da casilla 0588).<br>Se deixas a 2ª fila baleira, Renta Web amosa o aviso «Reflectiu o imposto sen facer constar as rendas». As filas 1 e 3 quedan a 0.",
   "guide_rw.capital_gains_note":
     "Se tes moitas operacións, podes consolidalas nunha soa liña por tipo de activo usando as datas xenéricas 01/01 e 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note":
@@ -641,6 +647,9 @@ const gl: TranslationKeys = {
   "fifo.unknown_direction.hint": "Só se procesan compras (BUY) e vendas (SELL). Revisa esta fila no ficheiro do broker e, se é unha operación real, corrixe a súa dirección.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint": "Split aplicado a todos os lotes. O custo total mantense — só cambia o número de accións.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} o {{date}} sen aplicar: non hai accións anteriores coas que calcular a proporción.",
+  "fifo.split_unresolved.hint":
+    "Sube tamén os extractos de anos anteriores, dende a apertura da conta. Se non, o número de accións e o custo das vendas posteriores deste valor non serán correctos.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
@@ -745,6 +754,10 @@ const gl: TranslationKeys = {
   "degiro.rows_skipped": "Omitíronse {{count}} filas sen ISIN/sen importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tiñan cantidade ou prezo pero faltáballes o ISIN ou o importe, polo que non se puideron incluír como operacións. Adoita indicar que as columnas do CSV non se recoñeceron ben: volve exportar o CSV de Transaccións de Degiro sen modificar as cabeceiras.",
+  "degiro.corporate_action_pair":
+    "Posible operación societaria o {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro anótaa como unha venda e unha compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota os cambios de ISIN, os splits e os canxes de accións como unha venda do valor antigo e unha compra do novo, sen número de orde nin custos. DeclaRenta calcúlaos así: declara unha ganancia ou perda ese día, e as accións novas toman ese prezo e esa data como custo. Revisa a comunicación de Degiro ou do emisor. Se foi un simple cambio de ISIN, un split ou un canxe fiscalmente neutro (réxime especial da Lei do Imposto sobre Sociedades), non houbo venda: as accións novas conservan o custo e a data de compra das antigas, así que corrixe esa operación na túa declaración. Se foi un canxe que tributa (art. 37.1.e LIRPF), o cálculo é correcto.",
   "degiro.transaction_tax": "Imposto sobre as transaccións financeiras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este imposto ao comprar accións españolas, francesas ou italianas e só o mostra no CSV de Conta. Forma parte do valor de adquisición (art. 35.1.b LIRPF): súmao ao custo das compras dese valor, porque DeclaRenta non o engade automaticamente.",
