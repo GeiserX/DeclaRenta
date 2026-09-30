@@ -113,7 +113,7 @@ describe("localizeMessage / localizeHint", () => {
         // Build the engine's exact Spanish string from the same field values.
         message:
           "⚠ Venta sin lotes: AAPL (US0378331005) × 5 el 2025-03-14. Coste base = 0 (posible posición corta o datos previos incompletos).",
-        context: { symbol: "AAPL", isin: "US0378331005", quantity: "5", date: "2025-03-14" },
+        context: { symbol: "AAPL", isin: "US0378331005", isinSuffix: " (US0378331005)", quantity: "5", date: "2025-03-14" },
       };
       // localizeMessage(es) reconstructs exactly what the engine emitted.
       expect(localizeMessage(m)).toBe(m.message);

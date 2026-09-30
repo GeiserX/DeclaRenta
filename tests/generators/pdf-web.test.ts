@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { generatePdfWebReport } from "../../src/generators/pdf-web.js";
 import type { TaxSummary } from "../../src/types/tax.js";
+import { t as realT, setLocale } from "../../src/i18n/index.js";
 
 const t = (key: string) => key;
 
@@ -354,5 +355,34 @@ describe("generatePdfWebReport", () => {
       messages: Array.from({ length: 18 }, (_, i) => ({ id: "test.overflow", severity: "info" as const, message: `${i + 1}: ${mediumWarning}` })),
     });
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("prints messages with symbols the built-in font can encode (no 2-byte strings)", async () => {
+    // Helvetica here is WinAnsi only. A string holding ⛔ ⚠ ℹ → or an emoji makes
+    // jsPDF write that whole string as 2-byte text, which shows as garbage.
+    for (const locale of ["es", "en"] as const) {
+      await setLocale(locale);
+      const report = makeReport({
+        messages: [
+          {
+            id: "fifo.sell_without_lots",
+            severity: "error",
+            message: "⚠ Venta sin lotes: XYZ (XX0000000001) × 5 el 2025-03-14.",
+            hint: "pista",
+            context: { symbol: "XYZ", isin: "XX0000000001", quantity: "5", date: "2025-03-14" },
+          },
+          { id: "test.unkeyed_warning", severity: "warning", message: "⚠️ Aviso de prueba 💶" },
+          { id: "test.unkeyed_info", severity: "info", message: "ℹ Nota de prueba" },
+        ],
+      });
+      const blob = await generatePdfWebReport(report, realT, locale);
+      const text = new TextDecoder("latin1").decode(new Uint8Array(await blob.arrayBuffer()));
+      expect(text, locale).toContain("XYZ");
+      expect(text, locale).toContain("Aviso de prueba");
+      expect(text, locale).toContain("Nota de prueba");
+      expect(text, locale).not.toContain("\u0000");
+      expect(text, locale).not.toContain("&\u00d4");
+    }
+    await setLocale("es");
   });
 });

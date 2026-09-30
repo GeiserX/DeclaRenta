@@ -17,7 +17,7 @@ import {
   renderMonthlyGainLossChart,
   renderTaxBracketCard,
 } from "../../src/web/charts.js";
-import { ASSET_LABELS, assetLabel } from "../../src/web/asset-labels.js";
+import { assetLabel } from "../../src/web/asset-labels.js";
 
 /** Minimal disposal shape consumed by extractChartData. */
 function disposal(assetCategory: string, proceeds: number, currency = "USD") {
@@ -46,9 +46,9 @@ describe("extractChartData — asset distribution labels", () => {
     ]));
 
     const labels = assetDistribution.map((d) => d.label);
-    expect(labels).toContain(ASSET_LABELS.STK);
-    expect(labels).toContain(ASSET_LABELS.CRYPTO);
-    expect(labels).toContain(ASSET_LABELS.FUND);
+    expect(labels).toContain(assetLabel("STK"));
+    expect(labels).toContain(assetLabel("CRYPTO"));
+    expect(labels).toContain(assetLabel("FUND"));
   });
 
   it("uses the canonical 'Criptomonedas' (not the old chart-local 'Crypto')", () => {

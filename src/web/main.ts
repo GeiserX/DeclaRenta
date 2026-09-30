@@ -168,6 +168,7 @@ document.addEventListener("localechange", () => {
   rerenderSectionGuide();
   initProfile();
   renderDetectionStatus();
+  if (lastReview) renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
 });
 
 updateStaticText();
@@ -399,6 +400,7 @@ function addFiles(files: File[]) {
  */
 function resetDownstream(): void {
   mergedStatement = null;
+  lastReview = null;
   currentReport = null;
   activeYear = null;
   shownResultsYear = null;
@@ -642,9 +644,13 @@ async function parseFiles(): Promise<void> {
  * which never raises one) uses the Review panel as before. On step 3 the Review
  * panel is hidden, so the error goes in a banner at the top of the Results step.
  */
+/** The last review shown on step 2, so a language change can draw it again. */
+let lastReview: { merged: Statement; brokers: string[]; perFileBrokers: string[] } | null = null;
+
 function showWizardError(msg: string): void {
   const html = `${t("error.prefix")}${esc(msg)}`;
   if (getCurrentWizardStep() !== 3) {
+    lastReview = null;
     reviewContent.innerHTML = `<p class="warning">${html}</p>`;
     return;
   }
@@ -659,6 +665,7 @@ function clearWizardError(): void {
 }
 
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
+  lastReview = { merged, brokers, perFileBrokers };
   const tradeCount = merged.trades.length;
   const divCount = merged.cashTransactions.filter(
     (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",

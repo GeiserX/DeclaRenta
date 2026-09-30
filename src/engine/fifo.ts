@@ -40,6 +40,11 @@ function lotKey(trade: { isin: string; symbol: string; assetCategory: string; co
   return `${trade.assetCategory}:${trade.symbol}`;
 }
 
+/** " (ISIN)" after a symbol in a message, or nothing when the asset has no ISIN (most crypto). */
+function isinSuffix(isin: string): string {
+  return isin ? ` (${isin})` : "";
+}
+
 /** A stock split (IBKR FS/RS) as an exact ratio: `num` new shares for every `den` old ones. */
 interface Split {
   /** ISIN whose lots are split (the old ISIN when the split also changes it) */
@@ -953,12 +958,13 @@ export class FifoEngine {
       this.emit({
         id: "fifo.sell_without_lots",
         severity: "error",
-        message: `⚠ Venta sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`,
-        hint: "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
+        message: `⚠ Venta sin lotes: ${trade.symbol}${isinSuffix(trade.isin)} × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0 (posible posición corta o datos previos incompletos).`,
+        hint: "¿Incluye tu exportación los años anteriores? Descarga de tu broker un periodo que cubra desde la primera compra de este valor.",
         context: {
           symbol: trade.symbol,
           description: trade.description,
           isin: trade.isin,
+          isinSuffix: isinSuffix(trade.isin),
           conid: trade.conid ?? "",
           assetCategory: trade.assetCategory,
           currency: trade.currency,
@@ -1061,12 +1067,13 @@ export class FifoEngine {
       this.emit({
         id: "fifo.insufficient_lots",
         severity: "error",
-        message: `⚠ Lotes insuficientes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0.`,
-        hint: "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
+        message: `⚠ Lotes insuficientes: ${trade.symbol}${isinSuffix(trade.isin)} × ${remaining} el ${normalizeDate(trade.tradeDate)}. Coste base = 0.`,
+        hint: "El fichero no cubre todas las compras previas de este valor. Exporta desde tu broker un periodo más amplio.",
         context: {
           symbol: trade.symbol,
           description: trade.description,
           isin: trade.isin,
+          isinSuffix: isinSuffix(trade.isin),
           conid: trade.conid ?? "",
           assetCategory: trade.assetCategory,
           currency: trade.currency,

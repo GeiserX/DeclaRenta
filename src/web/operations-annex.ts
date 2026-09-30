@@ -4,20 +4,22 @@
  */
 
 import Decimal from "decimal.js";
-import { t } from "../i18n/index.js";
+import { t, type TranslationKey } from "../i18n/index.js";
 import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
 
-// TODO(i18n): needs keys "option.expiration" / "option.close" / "option.exercise"
-// in all 5 locales — kept as Spanish literals for now so the 4 non-Spanish
-// locales don't crash on a missing key.
-const OPTION_SCENARIO_LABELS: Record<string, string> = {
-  expiration: "Expiración",
-  close: "Cierre anticipado",
-  exercise: "Ejercicio/Asignación",
+const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
+  expiration: "option.expiration",
+  close: "option.close",
+  exercise: "option.exercise",
 };
+
+function optionScenarioLabel(scenario: string): string {
+  const key = OPTION_SCENARIO_LABELS[scenario];
+  return key ? t(key) : scenario;
+}
 
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
@@ -74,7 +76,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
       const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = d.washSaleBlocked ? ' class="wash-sale-blocked"' : "";
       const optionInfo = d.optionScenario
-        ? ` <span class="option-badge">${esc(OPTION_SCENARIO_LABELS[d.optionScenario] ?? d.optionScenario)}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
+        ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
         : "";
       html += `
             <tr${blocked}>

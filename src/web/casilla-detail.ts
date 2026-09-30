@@ -7,7 +7,7 @@
 
 import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
-import { t, localizeMessage, localizeHint } from "../i18n/index.js";
+import { t, localizeMessage, localizeHint, isTranslationKey } from "../i18n/index.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
@@ -241,6 +241,12 @@ export function renderDoubleTaxDetail(report: TaxSummary): string {
     </table>`;
 }
 
+/** Readable, localized name of what triggered an FX disposal; the raw code if unknown. */
+function fxTriggerLabel(trigger: string): string {
+  const key = `fx.trigger.${trigger}`;
+  return isTranslationKey(key) ? t(key) : trigger;
+}
+
 /**
  * Render a detail table of FX disposals for casilla 1633/1637 drill-down.
  * `mode` selects the EUR amount: transmission (1633) shows proceedsEur,
@@ -257,7 +263,7 @@ function renderFxDisposalsDetail(
     <table class="detail-table">
       <thead><tr>
         <th>${t("table.currency")}</th><th>${t("table.sell_date")}</th><th>${t("table.buy_date")}</th>
-        <th>${t("table.units")}</th><th>EUR</th><th>Origen</th><th>Lote FIFO</th>
+        <th>${t("table.units")}</th><th>EUR</th><th>${t("table.fx_origin")}</th><th>${t("table.fx_lot")}</th>
       </tr></thead>
       <tbody>${disposals.map((d) => `
         <tr>
@@ -266,7 +272,7 @@ function renderFxDisposalsDetail(
           <td>${esc(formatDate(d.acquireDate))}</td>
           <td>${fmtEur(d.quantity)}</td>
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
-          <td>${esc(d.trigger)}</td>
+          <td>${esc(fxTriggerLabel(d.trigger))}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
       </tbody>

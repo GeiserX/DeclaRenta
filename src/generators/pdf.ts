@@ -10,8 +10,9 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
-import { localizeHint, localizeMessage } from "../i18n/index.js";
+import { localizeHint, localizeMessage, t } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { pdfSafeText } from "./pdf-text.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -252,7 +253,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         for (const [country, data] of Object.entries(report.doubleTaxation.byCountry)) {
           doc.fontSize(FONT_SIZE.body).fillColor(COLORS.text)
             .text(
-              `${country}: Impuesto pagado ${data.taxPaid.toFixed(2)} EUR → Deducción permitida ${data.deductionAllowed.toFixed(2)} EUR`,
+              `${country}: Impuesto pagado ${data.taxPaid.toFixed(2)} EUR — Deducción permitida ${data.deductionAllowed.toFixed(2)} EUR`,
               MARGIN,
             );
           doc.moveDown(0.3);
@@ -275,10 +276,11 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           ...infos.slice(0, MAX_INFOS),
         ];
         for (const m of shown) {
-          const prefix = m.severity === "error" ? "⛔ " : m.severity === "warning" ? "⚠ " : "ℹ ";
+          const label = t(m.severity === "error" ? "pdf.severity_error" : m.severity === "warning" ? "pdf.severity_warning" : "pdf.severity_info");
           const color = m.severity === "error" ? COLORS.accent : COLORS.muted;
           const hint = localizeHint(m);
-          doc.fontSize(FONT_SIZE.small).fillColor(color).text(prefix + localizeMessage(m) + (hint ? ` → ${hint}` : ""), MARGIN);
+          const text = `${label}: ${pdfSafeText(localizeMessage(m))}${hint ? ` — ${pdfSafeText(hint)}` : ""}`;
+          doc.fontSize(FONT_SIZE.small).fillColor(color).text(text, MARGIN);
           doc.moveDown(0.2);
         }
         if (infos.length > MAX_INFOS) {
