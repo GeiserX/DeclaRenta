@@ -326,6 +326,7 @@ const eu: TranslationKeys = {
   "m720.category_exceeded": "50.000 € gainditzen du — aitorpena derrigorrezkoa",
   "m720.category_not_exceeded": "Atalasearen azpitik",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
+  "m720.export_no_holdings": "Igo dituzun fitxategiek ({{brokers}}) ez dituzte zure baloreak eta saldoak abenduaren 31n jasotzen, beraz ezin dugu 720 Eredua haiekin egiaztatu. Begiratu zure brokerraren urte amaierako laburpena eta idatzi behean zer zenuen, 50.000 €-ko atalasean kontuan har dadin.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago kanbio-tasarik eskuragarri haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -361,6 +362,7 @@ const eu: TranslationKeys = {
   "d6.no_minimum":
     "ICT/1408/2021 Aginduaz geroztik, D-6 soilik nahitaezkoa da zure partaidetza atzerriko enpresa kotizatu baten kapitalaren edo boto-eskubideen <strong>%10 edo gehiago</strong> bada. Txikizkako inbertitzaile gehienak salbuetsita daude.",
   "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
+  "d6.export_no_holdings": "Igo dituzun fitxategiek ({{brokers}}) ez dituzte zure posizioak abenduaren 31n jasotzen, beraz ezin dugu D-6 haiekin prestatu. Begiratu zure brokerraren urte amaierako laburpena zer balore atzerritar zenituen jakiteko.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago kanbio-tasarik eskuragarri haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -383,6 +385,18 @@ const eu: TranslationKeys = {
   "m721.threshold_not_exceeded":
     "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
   "m721.no_positions": "Igo kriptomoneda posizioak dituen txostena 100 Ereduan 721 Eredua aztertzeko.",
+  "m721.export_no_holdings": "Igo dituzun fitxategiek ({{brokers}}) ez dituzte zure kriptomonedak abenduaren 31n jasotzen, beraz ezin dugu 721 Eredua haiekin egiaztatu. Begiratu zure exchangearen urte amaierako laburpena eta idatzi behean zer zenuen, 50.000 €-ko atalasean kontuan har dadin.",
+  "manual_holdings.title_720": "Zure fitxategietan ez dauden baloreak abenduaren 31n",
+  "manual_holdings.title_721": "Zure fitxategietan ez dauden kriptomonedak abenduaren 31n",
+  "manual_holdings.help": "Kopiatu aktibo bakoitza zure broker edo exchangearen urte amaierako laburpenetik. Nabigatzaile honetan bakarrik gordetzen da eta 50.000 €-ko atalasean kontatzen da.",
+  "manual_holdings.not_in_file_720": "Errenkada hauek ez dira 720 Ereduaren fitxategian sartzen: aitortu eskuz AEATren inprimakian.",
+  "manual_holdings.col_asset": "Aktiboa",
+  "manual_holdings.col_quantity": "Kopurua",
+  "manual_holdings.col_value": "Balioa abenduaren 31n (€)",
+  "manual_holdings.add_btn": "Gehitu",
+  "manual_holdings.remove_btn": "Kendu",
+  "manual_holdings.invalid": "Berrikusi errenkada: jarri aktibo bat, zero baino handiagoa den kopuru bat eta negatiboa ez den balio bat.",
+  "manual_holdings.total": "Eskuz gehitutakoen guztira: {{amount}} €",
   "m721.positions_title": "Aitortu beharreko posizioak",
   "m721.generate_btn": "721 Ereduaren fitxategia sortu",
   "m721.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",

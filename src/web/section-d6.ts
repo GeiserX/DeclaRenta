@@ -16,6 +16,7 @@ import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { renderExportNoHoldings } from "./manual-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -26,6 +27,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedBrokers: string[] = [];
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
@@ -42,10 +44,15 @@ export function initSectionD6(): void {
     </div>`;
 }
 
-/** Render D-6 section with processed data */
-export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void {
+/**
+ * Render D-6 section with processed data. `brokers` names the processed
+ * exports, so an export with no year-end holdings can be told apart from no
+ * upload at all.
+ */
+export function renderSectionD6(statement: Statement, rateMap: EcbRateMap, brokers: string[] = []): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedBrokers = brokers;
 
   const container = document.getElementById("d6-content");
   if (!container) return;
@@ -63,7 +70,8 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   );
 
   if (positions.length === 0) {
-    container.innerHTML = `<p class="muted">${t("d6.no_positions")}</p>`;
+    const noHoldings = statement.openPositions.length === 0 ? renderExportNoHoldings("d6.export_no_holdings", brokers) : "";
+    container.innerHTML = noHoldings || `<p class="muted">${t("d6.no_positions")}</p>`;
     return;
   }
 
@@ -279,6 +287,6 @@ async function generateD6File(): Promise<void> {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSectionD6(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSectionD6(cachedStatement, cachedRateMap);
+    renderSectionD6(cachedStatement, cachedRateMap, cachedBrokers);
   }
 }

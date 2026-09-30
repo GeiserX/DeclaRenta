@@ -23,6 +23,13 @@ import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import {
+  bindManualHoldingsPanel,
+  loadManualHoldings,
+  manualHoldingsTotal,
+  renderExportNoHoldings,
+  renderManualHoldingsPanel,
+} from "./manual-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -34,6 +41,7 @@ function effectiveYearEnd(year: number): string {
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
+let cachedBrokers: string[] = [];
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
@@ -50,11 +58,21 @@ export function initSection720(): void {
     </div>`;
 }
 
-/** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
+/**
+ * Render 720 section with processed data. `brokers` names the processed
+ * exports, so an export with no year-end holdings can be told apart from no
+ * upload at all.
+ */
+export function renderSection720(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  yearEndLots?: Map<string, Lot[]>,
+  brokers: string[] = [],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
   cachedYearEndLots = yearEndLots;
+  cachedBrokers = brokers;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -63,8 +81,18 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const year = profile.year;
 
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
-  if (statement.openPositions.length === 0 && !hasCashBalances) {
-    container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
+  const exportEmpty = statement.openPositions.length === 0 && !hasCashBalances;
+  // Holdings typed by hand from the broker's year-end statement.
+  const manual = loadManualHoldings("720", year);
+  const noHoldingsBanner = exportEmpty ? renderExportNoHoldings("m720.export_no_holdings", brokers) : "";
+  const rerender = () => renderSection720(statement, rateMap, yearEndLots, brokers);
+  if (exportEmpty && manual.length === 0) {
+    if (!noHoldingsBanner) {
+      container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
+      return;
+    }
+    container.innerHTML = noHoldingsBanner + renderManualHoldingsPanel("720", year);
+    bindManualHoldingsPanel(container, "720", year, rerender);
     return;
   }
 
@@ -95,17 +123,24 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     </div>`;
   }
 
+  html += noHoldingsBanner;
+
   // Positions must be the holdings at 31 December of the selected year
   const positionsDate = renderPositionsDateBanner(statement, year);
-  html += positionsDate.html;
+  if (!exportEmpty) html += positionsDate.html;
 
-  // Per-category threshold checks (720 has independent 50K thresholds)
+  // Per-category threshold checks (720 has independent 50K thresholds).
+  // Holdings typed by hand count toward the securities threshold only; the
+  // file below is still built from the export alone.
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
-  const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
+  const exportExceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
+  const valuesTotal = thresholds.values.total.plus(manualHoldingsTotal(manual));
+  const valuesExceeds = valuesTotal.greaterThan(50000);
+  const exceeds = valuesExceeds || thresholds.accounts.exceeds;
 
   const categories: { label: string; total: Decimal; exceeds: boolean }[] = [];
-  if (thresholds.values.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds });
+  if (valuesTotal.greaterThan(0)) {
+    categories.push({ label: t("m720.category_v"), total: valuesTotal, exceeds: valuesExceeds });
   }
   if (thresholds.accounts.total.greaterThan(0)) {
     categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds });
@@ -127,7 +162,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   }
 
   if (exceeds) {
-    const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
+    const totalValue = valuesTotal.plus(thresholds.accounts.total);
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
   }
@@ -179,6 +214,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     }
   }
 
+  html += renderManualHoldingsPanel("720", year);
+
   // Cash balances table (Category C — Cuentas)
   const cashBalances = (statement.cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (cashBalances.length > 0) {
@@ -212,7 +249,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   }
 
   // Generate button
-  if (exceeds || positions.length > 0) {
+  if (exportExceeds || positions.length > 0) {
     html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
   }
 
@@ -231,6 +268,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   html += `<div class="deadline-reminder">${t("m720.deadline")}</div>`;
 
   container.innerHTML = html;
+  bindManualHoldingsPanel(container, "720", year, rerender);
 
   // Bind generate button
   document.getElementById("m720-generate-btn")?.addEventListener("click", () => {
@@ -328,6 +366,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedBrokers);
   }
 }

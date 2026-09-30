@@ -15,6 +15,13 @@ import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import {
+  bindManualHoldingsPanel,
+  loadManualHoldings,
+  manualHoldingsTotal,
+  renderExportNoHoldings,
+  renderManualHoldingsPanel,
+} from "./manual-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -25,6 +32,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedBrokers: string[] = [];
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
@@ -41,10 +49,15 @@ export function initSection721(): void {
     </div>`;
 }
 
-/** Render 721 section with processed data */
-export function renderSection721(statement: Statement, rateMap: EcbRateMap): void {
+/**
+ * Render 721 section with processed data. `brokers` names the processed
+ * exports, so an export with no year-end crypto can be told apart from no
+ * upload at all.
+ */
+export function renderSection721(statement: Statement, rateMap: EcbRateMap, brokers: string[] = []): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedBrokers = brokers;
 
   const container = document.getElementById("m721-content");
   if (!container) return;
@@ -57,8 +70,23 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   const valuation = buildModelo721Entries(statement.openPositions, rateMap, yearEnd);
   const positions = valuation.positions;
 
-  if (positions.length === 0) {
-    container.innerHTML = `<p class="muted">${t("m721.no_positions")}</p>`;
+  // Holdings typed by hand from the exchange's year-end statement.
+  const manual = loadManualHoldings("721", year);
+  // Name the broker only when its export carries no positions at all. An export
+  // with stocks but no crypto (IBKR) did its job; the user simply held no crypto there.
+  const noHoldingsBanner = positions.length === 0 && statement.openPositions.length === 0
+    ? renderExportNoHoldings("m721.export_no_holdings", brokers)
+    : "";
+  const rerender = () => renderSection721(statement, rateMap, brokers);
+
+  if (positions.length === 0 && manual.length === 0) {
+    const noPositions = `<p class="muted">${t("m721.no_positions")}</p>`;
+    if (brokers.length === 0) {
+      container.innerHTML = noPositions;
+      return;
+    }
+    container.innerHTML = (noHoldingsBanner || noPositions) + renderManualHoldingsPanel("721", year);
+    bindManualHoldingsPanel(container, "721", year, rerender);
     return;
   }
 
@@ -88,14 +116,16 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
+  html += noHoldingsBanner;
+
   // Positions must be the holdings at 31 December of the selected year
-  html += renderPositionsDateBanner(statement, year).html;
+  if (positions.length > 0) html += renderPositionsDateBanner(statement, year).html;
 
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
   // coin itself) has no resolvable year-end rate are excluded from the EUR total
   // and surfaced below for manual valuation, instead of crashing the section.
   const unvaluedCount = valuation.unvaluedCount;
-  const totalValue = valuation.totalValueEur;
+  const totalValue = valuation.totalValueEur.plus(manualHoldingsTotal(manual));
 
   const exceeds = totalValue.greaterThanOrEqualTo(50000);
   const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
@@ -116,7 +146,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   </p>`;
 
   // Positions table
-  html += `<h3>${t("m721.positions_title")}</h3>
+  if (positions.length > 0) html += `<h3>${t("m721.positions_title")}</h3>
   <div class="table-wrapper"><table>
     <thead><tr>
       <th>${t("table.symbol")}</th><th>${t("m721.exchange")}</th>
@@ -135,6 +165,8 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
+
+  html += renderManualHoldingsPanel("721", year);
 
   // Exchange rates display. Currencies come from the raw crypto positions
   // (valuation entries don't carry currency); same crypto filter the generator uses.
@@ -174,13 +206,13 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   html += `<div class="deadline-reminder">${t("m721.deadline")}</div>`;
 
   container.innerHTML = html;
-
+  bindManualHoldingsPanel(container, "721", year, rerender);
 }
 
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection721(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection721(cachedStatement, cachedRateMap);
+    renderSection721(cachedStatement, cachedRateMap, cachedBrokers);
   } else {
     initSection721();
   }

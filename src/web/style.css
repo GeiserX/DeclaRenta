@@ -3184,3 +3184,58 @@ footer a:hover {
     color: #4b5563;
   }
 }
+
+/* Year-end holdings typed by hand for Modelo 720/721 (brokers whose export has none) */
+.manual-holdings-panel {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.manual-holdings-panel h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.manual-holdings-panel .muted {
+  font-size: 0.8rem;
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.manual-holdings-input {
+  width: 100%;
+  min-width: 6rem;
+  font-size: 0.9rem;
+}
+
+.manual-holdings-add,
+.manual-holdings-remove {
+  margin: 0;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.manual-holdings-error {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.manual-holdings-error[hidden] {
+  display: none;
+}
+
+.manual-holdings-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.manual-holdings-total {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+}

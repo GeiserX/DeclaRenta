@@ -326,6 +326,7 @@ const ca: TranslationKeys = {
   "m720.category_exceeded": "Supera 50.000 € — obligatori declarar",
   "m720.category_not_exceeded": "Per sota del llindar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
+  "m720.export_no_holdings": "Has pujat fitxers de {{brokers}}, però no inclouen els teus valors ni els teus saldos a 31 de desembre, així que no podem comprovar el Model 720 amb ells. Mira l'extracte de final d'any del teu broker i anota a sota el que tenies per sumar-ho al llindar de 50.000 €.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -361,6 +362,7 @@ const ca: TranslationKeys = {
   "d6.no_minimum":
     "Des de l'Orden ICT/1408/2021, el D-6 només és obligatori si la teva participació representa el <strong>10% o més</strong> del capital o drets de vot d'una empresa cotitzada estrangera. La majoria d'inversors minoristes estan exempts.",
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
+  "d6.export_no_holdings": "Has pujat fitxers de {{brokers}}, però no inclouen les teves posicions a 31 de desembre, així que no podem preparar el D-6 amb ells. Mira l'extracte de final d'any del teu broker per saber quins valors estrangers tenies.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -383,6 +385,18 @@ const ca: TranslationKeys = {
   "m721.threshold_not_exceeded":
     "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
   "m721.no_positions": "Puja un informe amb posicions de criptomonedes al Model 100 per analitzar el Model 721.",
+  "m721.export_no_holdings": "Has pujat fitxers de {{brokers}}, però no inclouen les teves criptomonedes a 31 de desembre, així que no podem comprovar el Model 721 amb ells. Mira l'extracte de final d'any del teu exchange i anota a sota el que tenies per sumar-ho al llindar de 50.000 €.",
+  "manual_holdings.title_720": "Valors a 31 de desembre que no són als teus fitxers",
+  "manual_holdings.title_721": "Criptomonedes a 31 de desembre que no són als teus fitxers",
+  "manual_holdings.help": "Copia cada actiu de l'extracte de final d'any del teu broker o exchange. Només es desa en aquest navegador i compta per al llindar de 50.000 €.",
+  "manual_holdings.not_in_file_720": "Aquestes files no van al fitxer del Model 720: declara-les a mà al formulari de l'AEAT.",
+  "manual_holdings.col_asset": "Actiu",
+  "manual_holdings.col_quantity": "Quantitat",
+  "manual_holdings.col_value": "Valor a 31 des. (€)",
+  "manual_holdings.add_btn": "Afegeix",
+  "manual_holdings.remove_btn": "Treu",
+  "manual_holdings.invalid": "Revisa la fila: posa un actiu, una quantitat més gran que zero i un valor que no sigui negatiu.",
+  "manual_holdings.total": "Total afegit a mà: {{amount}} €",
   "m721.positions_title": "Posicions declarables",
   "m721.generate_btn": "Generar fitxer Model 721",
   "m721.deadline": "Termini: 1 gener – 31 març de l'any següent",

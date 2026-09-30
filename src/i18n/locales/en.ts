@@ -325,6 +325,7 @@ const en: TranslationKeys = {
   "m720.category_exceeded": "Exceeds 50,000 EUR — filing required",
   "m720.category_not_exceeded": "Below threshold",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
+  "m720.export_no_holdings": "You uploaded files from {{brokers}}, but they don't include your securities or balances at 31 December, so we can't check Modelo 720 from them. Look at your broker's year-end statement and enter what you held below to count it toward the 50,000 EUR threshold.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -361,6 +362,7 @@ const en: TranslationKeys = {
   "d6.no_minimum":
     "Since Orden ICT/1408/2021, the D-6 is only required if your stake represents <strong>10% or more</strong> of the capital or voting rights of a listed foreign company. Most retail investors are exempt.",
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
+  "d6.export_no_holdings": "You uploaded files from {{brokers}}, but they don't include your positions at 31 December, so we can't prepare D-6 from them. Look at your broker's year-end statement to see which foreign securities you held.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -383,6 +385,18 @@ const en: TranslationKeys = {
   "m721.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
+  "m721.export_no_holdings": "You uploaded files from {{brokers}}, but they don't include your crypto at 31 December, so we can't check Modelo 721 from them. Look at your exchange's year-end statement and enter what you held below to count it toward the 50,000 EUR threshold.",
+  "manual_holdings.title_720": "Securities at 31 December missing from your files",
+  "manual_holdings.title_721": "Crypto at 31 December missing from your files",
+  "manual_holdings.help": "Copy each asset from your broker's or exchange's year-end statement. It is stored only in this browser and counts toward the 50,000 EUR threshold.",
+  "manual_holdings.not_in_file_720": "These rows are not written into the Modelo 720 file: declare them by hand in the AEAT form.",
+  "manual_holdings.col_asset": "Asset",
+  "manual_holdings.col_quantity": "Quantity",
+  "manual_holdings.col_value": "Value at 31 Dec (EUR)",
+  "manual_holdings.add_btn": "Add",
+  "manual_holdings.remove_btn": "Remove",
+  "manual_holdings.invalid": "Check the row: enter an asset, a quantity above zero and a value that isn't negative.",
+  "manual_holdings.total": "Total entered by hand: {{amount}} EUR",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
   "m721.deadline": "Deadline: January 1 – March 31 of the following year",

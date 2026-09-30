@@ -326,6 +326,7 @@ const gl: TranslationKeys = {
   "m720.category_exceeded": "Supera 50.000 € — obrigatorio declarar",
   "m720.category_not_exceeded": "Por debaixo do limiar",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
+  "m720.export_no_holdings": "Subiches ficheiros de {{brokers}}, pero non inclúen os teus valores nin os teus saldos a 31 de decembro, así que non podemos comprobar o Modelo 720 con eles. Mira o extracto de fin de ano do teu broker e anota embaixo o que tiñas para sumalo ao limiar de 50.000 €.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -361,6 +362,7 @@ const gl: TranslationKeys = {
   "d6.no_minimum":
     "Desde a Orde ICT/1408/2021, o D-6 só é obrigatorio se a túa participación representa o <strong>10% ou máis</strong> do capital ou dereitos de voto dunha empresa cotizada estranxeira. A maioría dos investidores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o D-6.",
+  "d6.export_no_holdings": "Subiches ficheiros de {{brokers}}, pero non inclúen as túas posicións a 31 de decembro, así que non podemos preparar o D-6 con eles. Mira o extracto de fin de ano do teu broker para saber que valores estranxeiros tiñas.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -383,6 +385,18 @@ const gl: TranslationKeys = {
   "m721.threshold_not_exceeded":
     "Non superas o limiar de 50.000 € (total: {{amount}} €). Non estás obrigado a presentar.",
   "m721.no_positions": "Sube un informe con posicións de criptomoedas no Modelo 100 para analizar o Modelo 721.",
+  "m721.export_no_holdings": "Subiches ficheiros de {{brokers}}, pero non inclúen as túas criptomoedas a 31 de decembro, así que non podemos comprobar o Modelo 721 con eles. Mira o extracto de fin de ano do teu exchange e anota embaixo o que tiñas para sumalo ao limiar de 50.000 €.",
+  "manual_holdings.title_720": "Valores a 31 de decembro que non están nos teus ficheiros",
+  "manual_holdings.title_721": "Criptomoedas a 31 de decembro que non están nos teus ficheiros",
+  "manual_holdings.help": "Copia cada activo do extracto de fin de ano do teu broker ou exchange. Gárdase só neste navegador e conta para o limiar de 50.000 €.",
+  "manual_holdings.not_in_file_720": "Estas filas non van no ficheiro do Modelo 720: decláraas a man no formulario da AEAT.",
+  "manual_holdings.col_asset": "Activo",
+  "manual_holdings.col_quantity": "Cantidade",
+  "manual_holdings.col_value": "Valor a 31 dec. (€)",
+  "manual_holdings.add_btn": "Engadir",
+  "manual_holdings.remove_btn": "Quitar",
+  "manual_holdings.invalid": "Revisa a fila: pon un activo, unha cantidade maior que cero e un valor que non sexa negativo.",
+  "manual_holdings.total": "Total engadido a man: {{amount}} €",
   "m721.positions_title": "Posicións declarables",
   "m721.generate_btn": "Xerar ficheiro Modelo 721",
   "m721.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
