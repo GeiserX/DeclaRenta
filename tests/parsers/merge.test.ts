@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../../src/parsers/merge.js";
+import { positionsDateMismatch } from "../../src/engine/dates.js";
 import type { Statement } from "../../src/types/broker.js";
 
 function makeStatement(overrides: Partial<Statement>): Statement {
@@ -309,5 +310,98 @@ describe("statement merge utilities", () => {
     expect(statement.cashTransactions.map((t) => t.transactionID)).toEqual(["C1", "C2"]);
     expect(statement.corporateActions.map((a) => a.transactionID)).toEqual(["CA1", "CA2"]);
     expect(statement.optionExercises?.map((e) => e.transactionID)).toEqual(["EX1", "EX2"]);
+  });
+
+  describe("year-end holdings of files with different period ends", () => {
+    function holdingsFile(accountId: string, toDate: string, symbol: string): Statement {
+      return makeStatement({
+        accountId,
+        fromDate: toDate ? `${toDate.slice(0, 4)}0101` : "",
+        toDate,
+        trades: [makeTrade({ tradeID: `${accountId}-${toDate}`, accountId, tradeDate: `${toDate.slice(0, 4) || "2025"}0301` })],
+        openPositions: [{
+          accountId,
+          symbol,
+          description: symbol,
+          isin: "",
+          currency: "EUR",
+          assetCategory: "STK",
+          quantity: "1",
+          costBasisMoney: "10",
+          costBasisPrice: "10",
+          markPrice: "10",
+          positionValue: "10",
+          fifoPnlUnrealized: "0",
+          fxRateToBase: "1",
+        }],
+        cashBalances: [{ accountId, currency: "EUR", endingCash: "100", endingSettledCash: "100", averageQ4Cash: "90" }],
+      });
+    }
+
+    function merge(...files: Statement[]): Statement {
+      const target = createEmptyStatement();
+      for (const f of files) mergeStatement(target, f);
+      return finalizeMergedStatement(target);
+    }
+
+    it("keeps only the holdings of the file that ends on the declared year's 31 December", () => {
+      const merged = merge(holdingsFile("U1", "20241231", "OLD"), holdingsFile("U1", "20251231", "NEW"));
+
+      const statement = yearEndHoldings(merged, 2025);
+
+      expect(statement.openPositions.map((p) => p.symbol)).toEqual(["NEW"]);
+      expect(statement.cashBalances).toHaveLength(1);
+      expect(statement.toDate).toBe("20251231");
+      expect(statement.trades).toHaveLength(2); // trades of every file still count
+      const dropped = statement.parserMessages!.filter((m) => m.id === "merge.holdings_other_date");
+      expect(dropped.map((m) => m.context)).toEqual([{ account: "U1", date: "31/12/2024", year: "2025" }]);
+      expect(merged.openPositions).toHaveLength(2); // the merged statement is left intact for another year
+    });
+
+    it("keeps the earlier file's holdings when that is the declared year", () => {
+      const merged = merge(holdingsFile("U1", "20241231", "OLD"), holdingsFile("U1", "20251231", "NEW"));
+
+      const statement = yearEndHoldings(merged, 2024);
+
+      expect(statement.openPositions.map((p) => p.symbol)).toEqual(["OLD"]);
+      expect(statement.toDate).toBe("20241231");
+      expect(positionsDateMismatch(statement, 2024)).toBe(false);
+    });
+
+    it("keeps every account whose file ends at the year end", () => {
+      // 31/12/2022 was a Saturday: IBKR ends that year's statement on Friday 30/12.
+      const merged = merge(holdingsFile("U1", "20221230", "A"), holdingsFile("U2", "20221231", "B"));
+
+      const statement = yearEndHoldings(merged, 2022);
+
+      expect(statement.openPositions.map((p) => p.symbol)).toEqual(["A", "B"]);
+      expect(statement.cashBalances).toHaveLength(2);
+      expect(statement.parserMessages ?? []).toEqual([]);
+    });
+
+    it("keeps holdings without a period end, since their date is unknown", () => {
+      const merged = merge(holdingsFile("", "", "UNDATED"), holdingsFile("U1", "20241231", "OLD"), holdingsFile("U1", "20251231", "NEW"));
+
+      expect(yearEndHoldings(merged, 2025).openPositions.map((p) => p.symbol)).toEqual(["UNDATED", "NEW"]);
+    });
+
+    it("leaves the statement to the positions-date check when no file ends at the year end", () => {
+      const merged = merge(holdingsFile("U1", "20241231", "OLD"), holdingsFile("U1", "20250630", "MID"));
+
+      const statement = yearEndHoldings(merged, 2025);
+
+      expect(statement.openPositions.map((p) => p.symbol)).toEqual(["OLD", "MID"]);
+      expect(positionsDateMismatch(statement, 2025)).toBe(true);
+    });
+
+    it("does not warn about a file from another year that holds nothing", () => {
+      const tradesOnly = { ...holdingsFile("U1", "20241231", "OLD"), openPositions: [], cashBalances: [] };
+      const merged = merge(tradesOnly, holdingsFile("U1", "20251231", "NEW"));
+
+      const statement = yearEndHoldings(merged, 2025);
+
+      expect(statement.openPositions.map((p) => p.symbol)).toEqual(["NEW"]);
+      expect(statement.parserMessages ?? []).toEqual([]);
+    });
   });
 });

@@ -417,6 +417,10 @@ const en: TranslationKeys = {
     "The positions in your file are dated {{date}}, not 31/12/{{year}}. These models declare what you held on 31 December, so no file is generated from them. Download a report that ends on 31/12/{{year}} (in IBKR, a Flex Query with end date 31/12/{{year}}) and upload it again.",
   "section.positions_date_unknown":
     "Your broker does not say which date the positions are from. Check that the report shows what you held on 31/12/{{year}}: if you downloaded it later, the positions and their values may not match.",
+  "merge.holdings_other_date":
+    "Positions and balances of account {{account}} dated {{date}} left out of Modelo 720, 721 and D-6: they are not the ones at 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "That file ends on another date. Its trades and transactions still count, but these models declare what you held on 31 December, so its positions and balances are not added. If you are missing that account's report at 31/12/{{year}}, upload it too.",
 
   "badge.complete": "Complete",
   "badge.pending": "Pending",

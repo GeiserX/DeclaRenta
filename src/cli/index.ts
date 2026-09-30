@@ -40,7 +40,7 @@ import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
 import { savingsBalances } from "../engine/taxable-base.js";
 import type { LossCarryforward } from "../types/tax.js";
-import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 
@@ -79,6 +79,20 @@ program
     "Convert foreign broker reports (IBKR, Trade Republic, Degiro, eToro, Scalable, Freedom24, Revolut, Lightyear, Coinbase, Binance, Kraken) into Spanish tax declarations (Modelo 100, 720, D-6)",
   )
   .version(pkg.version);
+
+/**
+ * The statement for Modelo 720 and D-6 of `year`: the holdings of the input
+ * files that end on 31 December (`yearEndHoldings`, the same as the web), with
+ * a warning for each file whose holdings are left out, then the date check.
+ */
+function yearEndStatement(merged: Statement, year: number): Statement {
+  const statement = yearEndHoldings(merged, year);
+  for (const m of statement.parserMessages ?? []) {
+    if (m.id === "merge.holdings_other_date") console.error(`⚠ ${m.message}`);
+  }
+  assertYearEndPositions(statement, year);
+  return statement;
+}
 
 /**
  * Modelo 720 and D-6 declare the holdings at 31 December of the tax year, so
@@ -478,8 +492,8 @@ program
       declarationId?: string;
     }) => {
       try {
-        const { merged: statement } = await parseAndMerge(opts.input, opts.broker);
-        assertYearEndPositions(statement, opts.year);
+        const { merged } = await parseAndMerge(opts.input, opts.broker);
+        const statement = yearEndStatement(merged, opts.year);
 
         // Rates for every year with a trade: the FIFO run dates the lots held at
         // 31 December and the sales that ended a previously declared holding.
@@ -650,8 +664,8 @@ program
       previousD6?: string;
     }) => {
       try {
-        const { merged: statement } = await parseAndMerge(opts.input, opts.broker);
-        assertYearEndPositions(statement, opts.year);
+        const { merged } = await parseAndMerge(opts.input, opts.broker);
+        const statement = yearEndStatement(merged, opts.year);
 
         // Extract ISINs from previous year's D-6 JSON output
         let previousYearIsins: string[] | undefined;

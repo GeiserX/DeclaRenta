@@ -1,6 +1,6 @@
 import type { Statement } from "../types/broker.js";
 import Decimal from "decimal.js";
-import { normalizeDate } from "../engine/dates.js";
+import { formatDateDmy, isYearEndDate, normalizeDate } from "../engine/dates.js";
 
 export function createEmptyStatement(): Statement {
   return {
@@ -39,8 +39,64 @@ export function mergeStatement(target: Statement, source: Statement): Statement 
   target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
   target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
+  target.holdingsBySource = [
+    ...(target.holdingsBySource ?? []),
+    ...(source.holdingsBySource ?? [{
+      accountId: source.accountId,
+      toDate: source.toDate,
+      openPositions: source.openPositions,
+      cashBalances: source.cashBalances ?? [],
+    }]),
+  ];
 
   return target;
+}
+
+/**
+ * The statement to use for Modelo 720, 721 and D-6 of `year`.
+ *
+ * Each file's open positions and cash balances are the holdings on that file's
+ * own period end, and the merged `toDate` is the latest one. So with last
+ * year's statement uploaded next to this year's (for its trades), last year's
+ * holdings would be added to this year's and still pass the positions-date
+ * check. Keep only the holdings of the files that end at the year end, plus
+ * those of files with no period end (their date is unknown, only IBKR gives
+ * one), and warn once per file whose holdings are left out. Trades and cash
+ * transactions of every file are kept.
+ *
+ * When no file ends at the year end, the statement is returned as is, so the
+ * positions-date check still refuses it. The merged statement is not changed:
+ * the web applies this again when the user picks another year.
+ */
+export function yearEndHoldings(statement: Statement, year: number): Statement {
+  const sources = statement.holdingsBySource ?? [];
+  const other = sources.filter((s) => s.toDate && !isYearEndDate(s.toDate, year));
+  const atYearEnd = sources.filter((s) => s.toDate && isYearEndDate(s.toDate, year));
+  if (other.length === 0 || atYearEnd.length === 0) return statement;
+
+  const kept = sources.filter((s) => !other.includes(s));
+  const messages = other
+    .filter((s) => s.openPositions.length > 0 || s.cashBalances.length > 0)
+    .map((s): NonNullable<Statement["parserMessages"]>[number] => {
+      const account = s.accountId || "(sin número)";
+      const date = formatDateDmy(s.toDate);
+      return {
+        id: "merge.holdings_other_date",
+        severity: "warning",
+        message: `Posiciones y saldos de la cuenta ${account} a fecha ${date} fuera de los modelos 720, 721 y D-6: no son los de 31/12/${year}.`,
+        hint: `Ese fichero termina en otra fecha. Sus operaciones y movimientos sí se tienen en cuenta, pero estos modelos declaran lo que tenías a 31 de diciembre, así que sus posiciones y saldos no se suman. Si te falta el informe de esa cuenta a 31/12/${year}, súbelo también.`,
+        context: { account, date, year: String(year) },
+      };
+    });
+
+  return {
+    ...statement,
+    toDate: atYearEnd.map((s) => s.toDate).reduce(maxDate),
+    openPositions: kept.flatMap((s) => s.openPositions),
+    cashBalances: kept.flatMap((s) => s.cashBalances),
+    parserMessages: [...(statement.parserMessages ?? []), ...messages],
+    parserWarnings: [...(statement.parserWarnings ?? []), ...messages.map((m) => m.message)],
+  };
 }
 
 export function finalizeMergedStatement(statement: Statement): Statement {

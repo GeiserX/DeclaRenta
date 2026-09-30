@@ -416,6 +416,10 @@ const eu: TranslationKeys = {
     "Zure fitxategiko posizioak {{date}} datakoak dira, ez 31/12/{{year}} datakoak. Eredu hauek abenduaren 31n zenuena aitortzen dute, beraz, ez da fitxategirik sortzen haiekin. Deskargatu 31/12/{{year}} egunean amaitzen den txosten bat (IBKRn, amaiera-data 31/12/{{year}} duen Flex Query bat) eta igo berriro.",
   "section.positions_date_unknown":
     "Zure brokerrak ez du adierazten posizioak zein datatakoak diren. Egiaztatu txostenak 31/12/{{year}} egunean zenuena islatzen duela: geroago deskargatu bazenuen, posizioak eta haien balioak ez dira bat etorriko agian.",
+  "merge.holdings_other_date":
+    "{{account}} kontuaren {{date}} datako posizioak eta saldoak 720, 721 eta D-6 ereduetatik kanpo geratu dira: ez dira 31/12/{{year}} egunekoak.",
+  "merge.holdings_other_date.hint":
+    "Fitxategi hori beste data batean amaitzen da. Haren eragiketak eta mugimenduak kontuan hartzen dira, baina eredu hauek abenduaren 31n zenuena aitortzen dute, beraz, haren posizioak eta saldoak ez dira batzen. 31/12/{{year}} eguneko kontu horren txostena falta bazaizu, igo hori ere.",
 
   "badge.complete": "Osatuta",
   "badge.pending": "Zain",

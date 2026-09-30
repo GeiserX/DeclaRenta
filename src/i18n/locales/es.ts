@@ -448,6 +448,10 @@ const es = {
     "Las posiciones de tu fichero son a fecha {{date}}, no a 31/12/{{year}}. Estos modelos declaran lo que tenías a 31 de diciembre, así que no se genera ningún fichero con ellas. Descarga un informe que termine el 31/12/{{year}} (en IBKR, un Flex Query con fecha final 31/12/{{year}}) y súbelo de nuevo.",
   "section.positions_date_unknown":
     "Tu broker no indica a qué fecha corresponden las posiciones. Comprueba que el informe refleje lo que tenías a 31/12/{{year}}: si lo descargaste más tarde, las posiciones y sus valores pueden no coincidir.",
+  "merge.holdings_other_date":
+    "Posiciones y saldos de la cuenta {{account}} a fecha {{date}} fuera de los modelos 720, 721 y D-6: no son los de 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "Ese fichero termina en otra fecha. Sus operaciones y movimientos sí se tienen en cuenta, pero estos modelos declaran lo que tenías a 31 de diciembre, así que sus posiciones y saldos no se suman. Si te falta el informe de esa cuenta a 31/12/{{year}}, súbelo también.",
 
   // Badge statuses
   "badge.complete": "Completo",
