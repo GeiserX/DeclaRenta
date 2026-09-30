@@ -226,7 +226,7 @@ const ca: TranslationKeys = {
     "A la configuració, activa les seccions:<ul><li><strong>Trades</strong> (obligatori)</li><li><strong>Cash Transactions</strong> — dividends i retencions (obligatori)</li><li><strong>Open Positions</strong> — per al Model 720/D-6 (recomanat)</li><li><strong>Financial Instrument Information</strong> (recomanat)</li></ul>",
   "guide.ibkr.step5":
     "A cada secció, <strong>selecciona tots els camps disponibles</strong> (marca totes les caselles). Com més dades incloguis, més precís serà el càlcul. Com a mínim, assegura't d'incloure el camp <strong>Notes</strong> a Trades — és necessari per detectar conversions automàtiques de divisa.",
-  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>. A <em>Date Format</em>, deixa <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Inclou <strong>tots els anys disponibles</strong> per al càlcul FIFO correcte",
   "guide.ibkr.step8": "Desa la consulta, executa-la i descarrega el fitxer <code>.xml</code>",
   "guide.degiro.title": "Degiro (CSV)",
@@ -747,6 +747,10 @@ const ca: TranslationKeys = {
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total de comissions de cada ordre és exacte; només el repartiment entre execucions és aproximat.",
+  "flatex.depot.repeated_fills":
+    "Operacions de Flatex repetides i comptades una sola vegada: {{fills}}. Tenien el mateix número d'ordre i d'apunt (TA-Nr.) que una altra ja carregada.",
+  "flatex.depot.repeated_fills.hint":
+    "Sol passar en pujar el mateix CSV de Depotumsätze dues vegades, o dues exportacions amb dates que se solapen. Si de debò són operacions diferents, revisa el fitxer: Flatex dona a cada execució el seu propi TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota els dividends per l'import net cobrat, ja descomptada la retenció, i el CSV de Kontoumsätze no inclou la retenció.",
   "flatex.dividends.net_amounts.hint":

@@ -226,7 +226,7 @@ const en: TranslationKeys = {
     "In the configuration, enable:<ul><li>Trades (required)</li><li>Cash Transactions — dividends and withholdings (required)</li><li>Open Positions — for Modelo 720/D-6 (recommended)</li><li>Financial Instrument Information / Securities Info (recommended)</li></ul>",
   "guide.ibkr.step5":
     "In each section, <strong>select all available fields</strong> (check every box). The more data you include, the more accurate the calculation. At minimum, ensure the <strong>Notes</strong> field is included in Trades — it's needed to detect automatic currency conversions.",
-  "guide.ibkr.step6": "Output format: <strong>XML</strong>",
+  "guide.ibkr.step6": "Output format: <strong>XML</strong>. Under <em>Date Format</em>, keep <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Include <strong>all available years</strong> for correct FIFO calculation",
   "guide.ibkr.step8": "Save the query, run it and download the <code>.xml</code> file",
   "guide.degiro.title": "Degiro (CSV)",
@@ -745,6 +745,10 @@ const en: TranslationKeys = {
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
+  "flatex.depot.repeated_fills":
+    "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
+  "flatex.depot.repeated_fills.hint":
+    "This usually happens when the same Depotumsätze CSV is uploaded twice, or two exports with overlapping dates. If they really are different trades, check the file: Flatex gives each execution its own TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
   "flatex.dividends.net_amounts.hint":

@@ -62,12 +62,12 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
 /**
  * Format a variation between two numbers as a percentage string.
  */
-/** Format the percentage variation between two values (e.g. "+12.3%"). */
+/** Format the percentage variation between two values (e.g. "+12,3%"). */
 function formatVariation(current: number, previous: number): string {
   if (previous === 0) return current === 0 ? "—" : "+∞";
   const pct = ((current - previous) / Math.abs(previous)) * 100;
   const sign = pct >= 0 ? "+" : "";
-  return `${sign}${pct.toFixed(1)}%`;
+  return `${sign}${fmtEur(pct, 1)}%`;
 }
 
 /**
