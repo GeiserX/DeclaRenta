@@ -227,7 +227,7 @@ const eu: TranslationKeys = {
     "Konfigurazioan, gaitu atal hauek:<ul><li><strong>Trades</strong> (nahitaezkoa)</li><li><strong>Cash Transactions</strong> — dibidenduak eta atxikipenak (nahitaezkoa)</li><li><strong>Open Positions</strong> — 720 Eredu/D-6-rako (gomendatua)</li><li><strong>Financial Instrument Information</strong> (gomendatua)</li></ul>",
   "guide.ibkr.step5":
     "Atal bakoitzean, <strong>hautatu eremu guztiak</strong> (markatu lauki guztiak). Zenbat eta datu gehiago sartu, orduan eta kalkulua zehatzagoa. Gutxienez, ziurtatu <strong>Notes</strong> eremua Trades atalean sartzen duzula — dibisa bihurtzeen detekziorako beharrezkoa da.",
-  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>",
+  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>. <em>Date Format</em> aukeran, utzi <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Sartu <strong>eskuragarri dauden urte guztiak</strong> FIFO kalkulu zuzenerako",
   "guide.ibkr.step8": "Gorde kontsulta, exekutatu eta deskargatu <code>.xml</code> fitxategia",
   "guide.degiro.title": "Degiro (CSV)",
