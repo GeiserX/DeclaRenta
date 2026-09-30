@@ -898,11 +898,28 @@ tbody tr:hover {
   font-size: 0.8rem;
 }
 
-.gain {
+.gain,
+.loss {
+  color: var(--text);
+}
+
+/* Status colours (--success, --warning) are too light to be read as text on
+   the light theme, so gains, losses and warnings keep the body text colour and
+   carry their status in a coloured arrow or a coloured left border instead.
+   The arrow is decorative: the sign of the amount already says it. */
+.gain::before,
+.loss::before {
+  display: inline-block;
+  margin-right: 0.3em;
+  font-size: 0.75em;
+  content: "\25B2";
+  content: "\25B2" / "";
   color: var(--success);
 }
 
-.loss {
+.loss::before {
+  content: "\25BC";
+  content: "\25BC" / "";
   color: var(--danger);
 }
 
@@ -911,8 +928,9 @@ tbody tr:hover {
   padding: 0.75rem 1rem;
   background: var(--warning-bg);
   border: 1px solid var(--warning-border);
+  border-left: 4px solid var(--warning);
   border-radius: 6px;
-  color: var(--warning);
+  color: var(--text);
   font-size: 0.85rem;
 }
 
@@ -932,7 +950,7 @@ details {
 
 details summary {
   cursor: pointer;
-  color: var(--warning);
+  color: var(--text);
   font-size: 0.85rem;
 }
 
@@ -1097,14 +1115,14 @@ details ul {
 
 .sidebar-badge.badge-success {
   background: rgba(34, 197, 94, 0.1);
-  border-color: rgba(34, 197, 94, 0.3);
-  color: var(--success);
+  border-color: var(--success);
+  color: var(--text);
 }
 
 .sidebar-badge.badge-warning {
   background: var(--warning-bg);
-  border-color: var(--warning-border);
-  color: var(--warning);
+  border-color: var(--warning);
+  color: var(--text);
 }
 
 .sidebar-badge:empty {
@@ -1879,7 +1897,7 @@ footer a:hover {
 }
 
 .profile-saved-msg {
-  color: var(--success);
+  color: var(--text);
   font-size: 0.85rem;
   margin: 0;
   opacity: 0;
@@ -1888,6 +1906,18 @@ footer a:hover {
 
 .profile-saved-msg.visible {
   opacity: 1;
+}
+
+.profile-saved-msg::before {
+  margin-right: 0.3em;
+}
+
+/* The confirmation text stays neutral; the green tick carries the status. */
+.profile-saved-msg::before,
+.crypto-rates-saved-msg::before {
+  content: "\2713";
+  content: "\2713" / "";
+  color: var(--success);
 }
 
 /* Monodivisa callout */
@@ -1924,7 +1954,7 @@ footer a:hover {
 }
 .monodivisa-warning {
   font-size: 0.78rem;
-  color: var(--warning);
+  color: var(--text);
   margin: 8px 0 0;
   line-height: 1.5;
   font-weight: 500;
@@ -1944,7 +1974,8 @@ footer a:hover {
 .banner-warning {
   background: var(--warning-bg);
   border: 1px solid var(--warning-border);
-  color: var(--warning);
+  border-left: 4px solid var(--warning);
+  color: var(--text);
 }
 
 .banner-info {
@@ -2102,7 +2133,7 @@ footer a:hover {
 }
 
 .copy-btn.copied {
-  color: var(--success);
+  color: var(--text);
   border-color: var(--success);
 }
 
@@ -2284,11 +2315,12 @@ footer a:hover {
 
 .guide-section-warning {
   border-color: var(--warning-border);
+  border-left: 4px solid var(--warning);
   background: var(--warning-bg);
 }
 
 .guide-section-warning h4 {
-  color: var(--warning);
+  color: var(--text);
 }
 
 .guide-section-tip {
@@ -2868,7 +2900,7 @@ footer a:hover {
 .crypto-rates-panel h4 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--warning);
+  color: var(--text);
 }
 
 .crypto-rates-panel > p {
@@ -2922,7 +2954,7 @@ footer a:hover {
   margin-left: 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--success);
+  color: var(--text);
 }
 
 .manual-opening-lots-error-msg {
@@ -2968,7 +3000,7 @@ footer a:hover {
 .manual-opening-lots-effect {
   font-size: 0.84rem;
   margin: 0 0 1rem;
-  color: var(--warning);
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -2997,8 +3029,8 @@ footer a:hover {
   padding: 0 0.55rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--warning) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-  color: var(--warning);
+  border: 1px solid var(--warning);
+  color: var(--text);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -3112,11 +3144,12 @@ footer a:hover {
 .msg-warning {
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  color: var(--warning-text, #f59e0b);
+  border-left: 4px solid var(--warning);
+  color: var(--text);
 }
 
 .msg-warning .msg-hint {
-  color: var(--warning-text, #f59e0b);
+  color: var(--text);
 }
 
 /* Info tier — neutral, collapsed by default */

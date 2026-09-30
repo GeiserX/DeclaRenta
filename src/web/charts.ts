@@ -306,21 +306,23 @@ export function renderTaxBracketCard(
   const netTax = Math.max(0, totalTax - doubleTaxDeduction);
   const effectiveRate = taxableBase > 0 ? (netTax / taxableBase) * 100 : 0;
 
-  // SVG stacked horizontal bar
-  const barW = 360, barH = 28, barX = 10, barY = 4;
+  // SVG stacked horizontal bar. The rate labels sit under their segment in the
+  // theme text colour, not on the coloured fill: text on bright green or amber
+  // cannot reach a readable contrast, and the colour is only a band marker.
+  const barW = 360, barH = 28, barX = 10, barY = 4, labelH = 14;
   const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
   let offsetX = barX;
   const segments = rows.map((r) => {
     const w = totalAmount > 0 ? (r.amount / totalAmount) * barW : 0;
     const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}" opacity="0.85"/>`;
     const labelSeg = w > 30
-      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
+      ? `<text x="${offsetX + w / 2}" y="${barY + barH + labelH - 2}" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
       : "";
     offsetX += w;
     return seg + labelSeg;
   }).join("");
 
-  const svg = `<svg viewBox="0 0 ${barW + 20} ${barH + 8}" class="chart-svg" style="max-height:40px">${segments}</svg>`;
+  const svg = `<svg viewBox="0 0 ${barW + 20} ${barH + labelH + 8}" class="chart-svg" style="max-height:54px">${segments}</svg>`;
 
   // Breakdown table
   const tableRows = rows.map((r) =>

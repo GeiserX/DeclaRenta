@@ -390,7 +390,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
         <svg class="icon-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
       </button>`;
     return `
-      <div class="casilla-card ${cls} ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}">
+      <div class="casilla-card ${hasDetail ? "expandable" : ""} ${isNetRow ? "casilla-net" : ""}" data-casilla-idx="${idx}">
         <div class="casilla-header">
           ${hasDetail
             ? `<button type="button" class="casilla-trigger" aria-expanded="false">${inner}</button>`
