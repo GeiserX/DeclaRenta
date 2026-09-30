@@ -141,8 +141,9 @@ describe("Degiro degiro-account-sample.csv → dividend casillas", () => {
   it("pins double-taxation: 15.5941 foreign tax paid, deduction Art.80-capped at 12.10", () => {
     const xx = report.doubleTaxation.byCountry["XX"]!;
     expect(xx.taxPaid.toFixed(4)).toBe("15.5941");
-    // Art. 80 caps the deduction below the full foreign tax: the effective
-    // Spanish rate on this savings base limits it to 12.1023.
+    // The 15 % treaty cap binds, not the Spanish tax due: 15 % of the 80.6822
+    // gross is 12.1023, below the 15.5941 withheld. The Spanish-tax limit can
+    // never bind here: the savings rate starts at 19 %, above the 15 % cap.
     expect(report.doubleTaxation.deduction.toFixed(2)).toBe("12.10");
     expect(xx.deductionAllowed.toFixed(4)).toBe("12.1023");
   });
