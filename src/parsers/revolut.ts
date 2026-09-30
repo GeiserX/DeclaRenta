@@ -10,22 +10,25 @@
  *
  * Format B — Transaction log (what users actually get from the Revolut app):
  *   Date | Ticker | Type | Quantity | Price per share | Total Amount | Currency | FX Rate
- *   Each row = one event (BUY, SELL, CASH TOP-UP, CASH WITHDRAWAL, REWARD).
- *   Parser creates individual trades, extracts cash transactions, and infers
- *   open positions from unmatched buys.
+ *   Each row = one event (BUY, SELL, CASH TOP-UP, CASH WITHDRAWAL, REWARD,
+ *   DIVIDEND, STOCK SPLIT). Parser creates individual trades, extracts cash
+ *   transactions and dividends, turns splits into FS/RS corporate actions, and
+ *   infers open positions from unmatched buys.
  *
  * Revolut only offers XLSX or PDF exports (no CSV).
  *
  * Limitations:
  * - No ISIN codes in either format — cross-broker FIFO matching uses symbol fallback.
- * - No dividends/withholdings in either format. Users need a separate Account Statement.
+ * - Format B dividends are net of withholding, with no separate withholding row:
+ *   the gross amount and the tax withheld come from Revolut's annual tax report.
+ *   Format A has no dividends at all.
  * - FX rates in format B are EUR/FCY. The parser stores fxRateToBase="1" and lets
  *   the FIFO engine fetch official ECB rates independently.
  */
 
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
-import type { Trade, CashTransaction, OpenPosition, AssetCategory } from "../types/ibkr.js";
+import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
@@ -65,6 +68,11 @@ const TXN_TYPE_BUY = /^BUY\s*-\s*(MARKET|LIMIT)$/i;
 const TXN_TYPE_SELL = /^SELL\s*-\s*(MARKET|LIMIT)$/i;
 const TXN_TYPE_CASH_IN = /^CASH\s*TOP[- ]?UP$/i;
 const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
+const TXN_TYPE_DIVIDEND = /^DIVIDEND$/i;
+const TXN_TYPE_SPLIT = /^STOCK\s*SPLIT$/i;
+// One row per ticker when Revolut moved accounts between its own entities
+// (e.g. to Revolut Securities Europe UAB): same holding, nothing to apply.
+const TXN_TYPE_ENTITY_TRANSFER = /^TRANSFER\s+FROM\s+REVOLUT\b.*\bTO\s+REVOLUT\b/i;
 
 // ---------------------------------------------------------------------------
 // Crypto detection — Revolut mixes stocks and crypto in the same sheet.
@@ -281,22 +289,31 @@ function findTxnLogColumns(headers: string[]): TxnLogColumns | null {
 function parseTransactionLog(
   xlsx: typeof import("xlsx"),
   sheet: WorkSheet,
-): { trades: Trade[]; cashTransactions: CashTransaction[]; openPositions: OpenPosition[]; parserMessages: TaxMessage[] } {
+): {
+  trades: Trade[]; cashTransactions: CashTransaction[]; corporateActions: CorporateAction[];
+  openPositions: OpenPosition[]; parserMessages: TaxMessage[];
+} {
+  const empty = { trades: [], cashTransactions: [], corporateActions: [], openPositions: [], parserMessages: [] };
   const rows = sheetToRows(xlsx, sheet);
-  if (rows.length < 2) return { trades: [], cashTransactions: [], openPositions: [], parserMessages: [] };
+  if (rows.length < 2) return empty;
 
   const headers = rows[0]!;
   const cols = findTxnLogColumns(headers);
-  if (!cols) return { trades: [], cashTransactions: [], openPositions: [], parserMessages: [] };
+  if (!cols) return empty;
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
+  const corporateActions: CorporateAction[] = [];
   // Rows whose FX rate cell was present but not a finite positive number — the
   // conversion would be wrong, so we skip them and warn (never default to 1).
   let skippedBadFxRate = 0;
-  // Rows that carry an amount but whose `type` is neither cash-in/out nor a
-  // recognized BUY/SELL — dropped silently before, now counted and warned.
+  // Ticker rows whose `type` is none of BUY/SELL/DIVIDEND/STOCK SPLIT, whatever
+  // their amount (a spin-off or stock merger can carry USD 0) — counted and warned.
   let skippedUnknownType = 0;
+  // DIVIDEND rows imported at the net amount Revolut reports.
+  let netDividends = 0;
+  // STOCK SPLIT rows with no usable Quantity (shares added).
+  let unresolvedSplits = 0;
 
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
@@ -365,7 +382,67 @@ function parseTransactionLog(
     const priceStr = (row[cols.price] ?? "0").trim();
 
     const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
-    const qtyDec = toFiniteDecimal(qtyAmountStr, "0", false).abs();
+    const signedQtyDec = toFiniteDecimal(qtyAmountStr, "0", false);
+    const qtyDec = signedQtyDec.abs();
+
+    // DIVIDEND: Quantity is empty and the amount is net of withholding.
+    if (TXN_TYPE_DIVIDEND.test(type)) {
+      if (!totalAmountDec.isZero()) {
+        cashTransactions.push({
+          transactionID: `revolut-div-${tradeDate}-${ticker}-${i}`,
+          accountId: "",
+          symbol: ticker,
+          description: `Dividend - ${ticker}`,
+          isin: "",
+          currency: currencyRaw,
+          dateTime: tradeDate,
+          settleDate: tradeDate,
+          amount: totalAmountDec.toString(),
+          fxRateToBase: "1",
+          type: "Dividends",
+        });
+        netDividends++;
+      }
+      continue;
+    }
+
+    // STOCK SPLIT: Quantity is the number of shares added (negative for a
+    // reverse split) and the amount is zero. The ratio depends on the whole
+    // holding, which can span several yearly files, so the parser does not size
+    // it: the FIFO engine does, from the lots it holds at the split date, and
+    // rescales them keeping their cost (Art. 37.1.a LIRPF: not a disposal).
+    if (TXN_TYPE_SPLIT.test(type)) {
+      if (signedQtyDec.isZero()) {
+        unresolvedSplits++;
+        continue;
+      }
+      corporateActions.push({
+        transactionID: `revolut-split-${tradeDate}-${ticker}-${i}`,
+        accountId: "",
+        symbol: ticker,
+        description: `${ticker} STOCK SPLIT ${signedQtyDec.toString()} SHARES`,
+        isin: "",
+        currency: currencyRaw,
+        reportDate: tradeDate,
+        dateTime: tradeDate,
+        quantity: signedQtyDec.toString(),
+        amount: "0",
+        type: signedQtyDec.greaterThan(0) ? "FS" : "RS",
+        actionDescription: type,
+      });
+      const pos = positions.get(ticker);
+      if (pos) pos.netQty = Decimal.max(0, pos.netQty.plus(signedQtyDec));
+      continue;
+    }
+
+    if (TXN_TYPE_ENTITY_TRANSFER.test(type)) continue;
+
+    if (!TXN_TYPE_BUY.test(type) && !TXN_TYPE_SELL.test(type)) {
+      // Any other ticker row (spin-off, stock merger, ...) is not applied.
+      // Count it whatever its amount so the user knows something is missing.
+      skippedUnknownType++;
+      continue;
+    }
     if (qtyDec.isZero()) continue;
 
     const { amount: priceAmountStr } = parseCcyAmount(priceStr);
@@ -411,7 +488,7 @@ function parseTransactionLog(
       pos.netQty = pos.netQty.plus(qtyDec);
       pos.totalCost = pos.totalCost.plus(absTotalAmount);
       positions.set(ticker, pos);
-    } else if (TXN_TYPE_SELL.test(type)) {
+    } else {
       trades.push({
         tradeID: `revolut-sell-${tradeDate}-${ticker}-${i}`,
         accountId: "",
@@ -445,11 +522,6 @@ function parseTransactionLog(
         pos.totalCost = pos.totalCost.minus(costPerUnit.times(sellQty));
         pos.netQty = pos.netQty.minus(sellQty);
       }
-    } else if (!absTotalAmount.isZero()) {
-      // A row with a ticker and a usable amount whose type is neither cash-in/out
-      // nor a recognized BUY/SELL — it was dropped silently before. Count it and
-      // warn so the user knows an operation may be missing from the calculation.
-      skippedUnknownType++;
     }
   }
 
@@ -495,8 +567,26 @@ function parseTransactionLog(
       context: { count: String(skippedUnknownType) },
     });
   }
+  if (unresolvedSplits > 0) {
+    parserMessages.push({
+      id: "revolut.split_unresolved",
+      severity: "warning" as const,
+      message: `Se ${unresolvedSplits === 1 ? "ha omitido 1 desdoblamiento (STOCK SPLIT)" : `han omitido ${unresolvedSplits} desdoblamientos (STOCK SPLIT)`} del extracto de Revolut porque la fila no indica cuántas acciones se añadieron.`,
+      hint: "Vuelve a descargar el Trading Account Statement desde la app de Revolut. Si la fila sigue sin cantidad, el número de acciones y el coste de las ventas posteriores de ese valor no serán correctos.",
+      context: { count: String(unresolvedSplits) },
+    });
+  }
+  if (netDividends > 0) {
+    parserMessages.push({
+      id: "revolut.dividends_net",
+      severity: "info" as const,
+      message: `Se ${netDividends === 1 ? "ha importado 1 dividendo" : `han importado ${netDividends} dividendos`} de Revolut por su importe neto, con la retención en origen ya descontada.`,
+      hint: "El extracto de operaciones de Revolut no separa la retención. Para declarar el dividendo bruto (casilla 0029) y deducir la doble imposición internacional (casilla 0588), toma el importe bruto y la retención del informe fiscal anual de Revolut.",
+      context: { count: String(netDividends) },
+    });
+  }
 
-  return { trades, cashTransactions, openPositions, parserMessages };
+  return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
 
 // ---------------------------------------------------------------------------
@@ -550,10 +640,10 @@ export async function parseRevolutXlsx(data: Buffer | Uint8Array): Promise<State
   const headers = headerRows[0] ?? [];
 
   if (hasTxnLogHeaders(headers)) {
-    const { trades, cashTransactions, openPositions, parserMessages } = parseTransactionLog(xlsx, sheet);
+    const { trades, cashTransactions, corporateActions, openPositions, parserMessages } = parseTransactionLog(xlsx, sheet);
     return {
       accountId: "", fromDate: "", toDate: "", period: "",
-      trades, cashTransactions, corporateActions: [],
+      trades, cashTransactions, corporateActions,
       openPositions, securitiesInfo: [],
       ...(parserMessages.length > 0 ? { parserMessages } : {}),
     };

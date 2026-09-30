@@ -115,7 +115,7 @@ flowchart LR
 - Sin servidor: no hay nada que reciba tus ficheros. Todo el cálculo ocurre en tu navegador.
 - Sin analítica, sin cookies de terceros y sin telemetría.
 - La única petición a Internet va a `data-api.ecb.europa.eu` y pide tipos de cambio por año y divisa; no lleva ningún dato tuyo.
-- El perfil fiscal y los resúmenes por año se guardan en el `localStorage` del navegador. Puedes borrarlos desde la comparativa interanual o limpiando los datos del sitio.
+- El perfil fiscal y los resúmenes por año se guardan en el `localStorage` del navegador. El botón **Borrar mis datos de este navegador**, en el perfil fiscal, los borra. Ver [Privacidad](privacidad.md).
 - El pie de la web muestra la versión y el commit desplegados, para cotejarlos con el [código fuente](https://github.com/GeiserX/DeclaRenta).
 
 Detalle en [Privacidad](privacidad.md).
