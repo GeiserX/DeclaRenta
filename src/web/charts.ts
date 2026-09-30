@@ -238,7 +238,13 @@ export function extractChartData(report: {
 
 // Color palette for the savings bands, mapped by band index. Extra colors are
 // ignored if a year has fewer bands; the engine table is the source of truth.
-const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
+export const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
+
+// Text colour for the rate labels drawn inside the band segments. White on
+// these bright fills was 2:1; this near-black reaches WCAG AA (4.5:1) on every
+// band. The segments are drawn fully opaque so the label contrast does not
+// depend on the theme background showing through.
+export const BRACKET_LABEL_COLOR = "#0b0e14";
 
 /** Format a band threshold with Spanish thousands separators (no decimals). */
 function fmtThreshold(n: number): string {
@@ -312,9 +318,9 @@ export function renderTaxBracketCard(
   let offsetX = barX;
   const segments = rows.map((r) => {
     const w = totalAmount > 0 ? (r.amount / totalAmount) * barW : 0;
-    const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}" opacity="0.85"/>`;
+    const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}"/>`;
     const labelSeg = w > 30
-      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
+      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="${BRACKET_LABEL_COLOR}" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
       : "";
     offsetX += w;
     return seg + labelSeg;
