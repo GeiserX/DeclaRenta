@@ -43,7 +43,7 @@ export function calculateDoubleTaxation(
   dividends: DividendEntry[],
   year: number,
   totalSavingsBase?: Decimal,
-): { total: Decimal; byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>; spanishWithholding: Decimal } {
+): { total: Decimal; byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal; deductionAllowed: Decimal }>; spanishWithholding: Decimal } {
   const byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal }> = {};
 
   for (const div of dividends) {
@@ -60,7 +60,7 @@ export function calculateDoubleTaxation(
   // withholding is a domestic pago a cuenta, excluded from the foreign 0588
   // credit below, but it must still be surfaced (it was previously dropped).
   const spanishWithholding = byCountry["ES"]?.taxPaid ?? new Decimal(0);
-  const result: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }> = {};
+  const result: Record<string, { grossIncome: Decimal; taxPaid: Decimal; deductionAllowed: Decimal }> = {};
   const effectiveSavingsRate = totalSavingsBase && totalSavingsBase.greaterThan(0)
     ? calculateSavingsTax(totalSavingsBase, year).dividedBy(totalSavingsBase)
     : undefined;
@@ -87,6 +87,8 @@ export function calculateDoubleTaxation(
     const deduction = Decimal.min(creditableForeignTax, spanishTax);
 
     result[country] = {
+      // The income Renta Web's double-taxation dialog asks for, per country.
+      grossIncome: data.grossIncome,
       // taxPaid stays the ACTUAL paid amount for display purposes.
       taxPaid: data.taxPaid,
       deductionAllowed: deduction,

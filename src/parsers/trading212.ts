@@ -19,7 +19,9 @@
  * Limitations:
  * - No open positions in CSV — Modelo 720/D-6 cannot be generated from this alone.
  * - Exchange rate column is Trading 212's own rate, not ECB — the FIFO engine fetches ECB rates independently.
- * - Trading 212 is zero-commission (spread-based) — commission is always 0.
+ * - Trading 212 charges no dealing commission, but the optional fee columns
+ *   (Currency conversion fee, Stamp duty reserve tax, French transaction tax,
+ *   Finra fee) are read into the trade's taxes/commission (Art. 35.1.b / 35.2 LIRPF).
  */
 
 import Decimal from "decimal.js";
@@ -28,10 +30,12 @@ import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import {
   parseCsvLine,
+  toFiniteDecimal,
   toFiniteDecimalString,
   findColumn,
   normalizeFractionalCurrency,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -63,7 +67,12 @@ interface Trading212Columns {
   total: number;
   totalCurrency: number;
   id: number;
+  /** Optional fee/tax columns, each with its own currency column. */
+  fees: { amount: number; currency: number }[];
 }
+
+/** Trading 212 fee and transaction-tax columns (present only when the export has them). */
+const FEE_COLUMNS = ["currency conversion fee", "stamp duty reserve tax", "french transaction tax", "finra fee"];
 
 function resolveColumns(headers: string[]): Trading212Columns {
   return {
@@ -79,6 +88,10 @@ function resolveColumns(headers: string[]): Trading212Columns {
     total: findColumn(headers, ["total"]),
     totalCurrency: findColumn(headers, ["currency (total)"]),
     id: findColumn(headers, ["id"]),
+    fees: FEE_COLUMNS.map((name) => ({
+      amount: findColumn(headers, [name]),
+      currency: findColumn(headers, [`currency (${name})`]),
+    })),
   };
 }
 
@@ -173,6 +186,7 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     if (!timeRaw) continue;
     const tradeDate = convertTrading212Date(timeRaw);
+    const tradeTime = timeOfDay(timeRaw);
 
     if (isSkippedAction(action)) continue;
 
@@ -262,6 +276,30 @@ function parseTrading212Csv(lines: string[]): Statement {
       ? totalDec
       : qtyDec.times(priceDec);
 
+    // Fees and transaction taxes are part of the acquisition cost on a buy and
+    // reduce the transmission value on a sell (Art. 35.1.b / 35.2 LIRPF). A fee in
+    // the instrument's currency goes to `taxes` (added as-is); a fee in another
+    // currency (e.g. the EUR conversion fee on a USD trade) goes to `commission`,
+    // which the FIFO engine converts at the trade-date cross-rate. When the price
+    // is missing the trade is valued from Total, which already includes the fees,
+    // so they are not added a second time.
+    let taxesDec = new Decimal(0);
+    let commissionDec = new Decimal(0);
+    let commissionCurrency = currency;
+    for (const fee of priceDec.isZero() ? [] : cols.fees) {
+      if (fee.amount < 0) continue;
+      const amountDec = toFiniteDecimal(fields[fee.amount] ?? "0").abs();
+      if (amountDec.isZero()) continue;
+      const rawFeeCurrency = (fields[fee.currency] ?? "").trim() || rawCashCurrency;
+      const { currency: feeCurrency, divisor: feeDivisor } = normalizeFractionalCurrency(rawFeeCurrency);
+      if (feeCurrency === currency) {
+        taxesDec = taxesDec.plus(amountDec.div(feeDivisor));
+      } else {
+        commissionDec = commissionDec.plus(amountDec.div(feeDivisor));
+        commissionCurrency = feeCurrency;
+      }
+    }
+
     trades.push({
       tradeID: `trading212-${buy ? "buy" : "sell"}-${uniqueId}`,
       accountId: "",
@@ -271,6 +309,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       assetCategory: "STK",
       currency,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: sell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: priceDec.toString(),
@@ -282,9 +321,9 @@ function parseTrading212Csv(lines: string[]): Statement {
       buySell: sell ? "SELL" : "BUY",
       openCloseIndicator: sell ? "C" : "O",
       exchange: "TRADING212",
-      commissionCurrency: currency,
-      commission: "0",
-      taxes: "0",
+      commissionCurrency,
+      commission: commissionDec.isZero() ? "0" : commissionDec.neg().toString(),
+      taxes: taxesDec.isZero() ? "0" : taxesDec.neg().toString(),
       multiplier: "1",
     });
   }

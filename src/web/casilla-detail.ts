@@ -7,18 +7,11 @@
 
 import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
-import { t, localizeMessage, localizeHint } from "../i18n/index.js";
-import { fmtEur } from "./format.js";
+import { t, localizeMessage, localizeHint, isTranslationKey } from "../i18n/index.js";
+import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
-
-/** Format a date string (YYYYMMDD or YYYY-MM-DD) to DD/MM/YYYY display format. */
-function formatDate(d: string): string {
-  if (d.length === 8) return `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
-  if (d.length >= 10) return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
-  return d;
-}
 
 // ---------------------------------------------------------------------------
 // Casilla → operation mapping
@@ -29,7 +22,12 @@ interface CasillaConfig {
   i18nKey: string;
   getValue: (r: TaxSummary, blocks: CasillaBlocks) => string;
   getClass: (r: TaxSummary, blocks: CasillaBlocks) => string;
-  getDetail: (r: TaxSummary) => string;
+  /** The drill-down with the contributing operations; a card without one does not expand. */
+  getDetail?: (r: TaxSummary) => string;
+  /** The bold net-total row (no casilla code). */
+  net?: true;
+  /** A figure shown for information only, never typed into Renta Web: no copy button. */
+  informational?: true;
   /** Optional: hide this card when it returns false (e.g. block has no operations). */
   visible?: (r: TaxSummary, blocks: CasillaBlocks) => boolean;
 }
@@ -75,7 +73,7 @@ function renderDisposalsDetail(
           <td class="mono">${esc(d.isin)}</td>
           <td>${esc(d.symbol)}</td>
           <td>${esc(formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate))}</td>
-          <td>${d.quantity.toString()}</td>
+          <td>${fmtQty(d.quantity)}</td>
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
@@ -212,22 +210,41 @@ function renderSpanishWithholdingDetail(report: TaxSummary): string {
     </table>`;
 }
 
-/** Render a detail table of double taxation deductions by country. */
-function renderDoubleTaxDetail(report: TaxSummary): string {
+/**
+ * Render a detail table of double taxation deductions by country. The gross
+ * column and its total are the foreign income Renta Web's dialog asks for:
+ * byCountry never holds ES, so the total excludes Spanish dividends (which
+ * casilla 0029 includes).
+ */
+export function renderDoubleTaxDetail(report: TaxSummary): string {
   const countries = Object.entries(report.doubleTaxation.byCountry);
   if (countries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  const foreignGross = countries.reduce((sum, [, data]) => sum.plus(data.grossIncome), new Decimal(0));
   return `
     <p class="detail-label">${t("casilla.double_taxation")} (${countries.length} ${t("table.country").toLowerCase()})</p>
     <table class="detail-table">
-      <thead><tr><th>${t("table.country")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
+      <thead><tr><th>${t("table.country")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
       <tbody>${countries.map(([country, data]) => `
         <tr>
           <td>${esc(country)}</td>
+          <td>${fmtEur(data.grossIncome)}</td>
           <td>${fmtEur(data.taxPaid)}</td>
           <td>${fmtEur(data.deductionAllowed)}</td>
         </tr>`).join("")}
       </tbody>
+      <tfoot><tr>
+        <td>${t("casilla.dt_foreign_income_total")}</td>
+        <td>${fmtEur(foreignGross)}</td>
+        <td></td>
+        <td>${fmtEur(report.doubleTaxation.deduction)}</td>
+      </tr></tfoot>
     </table>`;
+}
+
+/** Readable, localized name of what triggered an FX disposal; the raw code if unknown. */
+function fxTriggerLabel(trigger: string): string {
+  const key = `fx.trigger.${trigger}`;
+  return isTranslationKey(key) ? t(key) : trigger;
 }
 
 /**
@@ -246,7 +263,7 @@ function renderFxDisposalsDetail(
     <table class="detail-table">
       <thead><tr>
         <th>${t("table.currency")}</th><th>${t("table.sell_date")}</th><th>${t("table.buy_date")}</th>
-        <th>${t("table.units")}</th><th>EUR</th><th>Origen</th><th>Lote FIFO</th>
+        <th>${t("table.units")}</th><th>EUR</th><th>${t("table.fx_origin")}</th><th>${t("table.fx_lot")}</th>
       </tr></thead>
       <tbody>${disposals.map((d) => `
         <tr>
@@ -255,7 +272,7 @@ function renderFxDisposalsDetail(
           <td>${esc(formatDate(d.acquireDate))}</td>
           <td>${fmtEur(d.quantity)}</td>
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
-          <td>${esc(d.trigger)}</td>
+          <td>${esc(fxTriggerLabel(d.trigger))}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
       </tbody>
@@ -306,8 +323,9 @@ const CASILLAS: CasillaConfig[] = [
     code: "",
     i18nKey: "casilla.net_gain_loss",
     getValue: (_r, blocks) => fmtEur(combinedNetGainLoss(blocks)),
-    getClass: (_r, blocks) => combinedNetGainLoss(blocks).greaterThanOrEqualTo(0) ? "gain" : "loss",
-    getDetail: () => "",
+    // Classify the shown cents: a net of -0,004 € displays as 0,00 and is not a loss.
+    getClass: (_r, blocks) => combinedNetGainLoss(blocks).toDecimalPlaces(2).greaterThanOrEqualTo(0) ? "gain" : "loss",
+    net: true,
   },
   {
     code: "0029",
@@ -329,6 +347,7 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (r) => fmtEur(r.interest.paid),
     getClass: () => "",
     getDetail: (r) => renderInterestDetail(r.interest.entries, "paid"),
+    informational: true,
   },
   {
     code: "0304",
@@ -371,11 +390,12 @@ const CASILLAS: CasillaConfig[] = [
  */
 export function renderCasillaCards(container: HTMLElement, report: TaxSummary): void {
   const blocks = computeCasillaBlocksWithFx(report);
-  const cards = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks)).map((c, idx) => {
+  const visible = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks));
+  const cards = visible.map((c, idx) => {
     const value = c.getValue(report, blocks);
     const cls = c.getClass(report, blocks);
-    const hasDetail = c.code !== "";
-    const isNetRow = c.code === "";
+    const hasDetail = c.getDetail !== undefined;
+    const isNetRow = c.net === true;
 
     const copyLabel = esc(t("casilla.copy"));
     const concept = isNetRow ? `<strong>${t(c.i18nKey as Parameters<typeof t>[0])}</strong>` : t(c.i18nKey as Parameters<typeof t>[0]);
@@ -384,7 +404,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       <span class="casilla-concept">${concept}</span>
       <span class="casilla-value ${cls}">${isNetRow ? `<strong>${value}</strong>` : value} EUR</span>
       ${hasDetail ? `<span class="casilla-toggle" aria-hidden="true">&#9656;</span>` : ""}`;
-    const copyBtn = `
+    const copyBtn = c.informational ? "" : `
       <button type="button" class="casilla-copy" data-copy="${esc(value)}" title="${copyLabel}" aria-label="${copyLabel}">
         <svg class="icon-copy" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         <svg class="icon-check" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
@@ -397,7 +417,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
             : `<div class="casilla-trigger casilla-trigger-static">${inner}</div>`}
           ${copyBtn}
         </div>
-        ${hasDetail ? `<div class="casilla-detail" hidden>${c.getDetail(report)}</div>` : ""}
+        ${hasDetail ? `<div class="casilla-detail" hidden></div>` : ""}
       </div>`;
   }).join("");
 
@@ -450,6 +470,13 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
       const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
+        // The drill-down lists every contributing operation, so it is built on
+        // the first expand rather than for every card up front.
+        if (!detail.dataset.built) {
+          const casilla = visible[Number(card.dataset.casillaIdx)];
+          if (casilla?.getDetail) detail.innerHTML = casilla.getDetail(report);
+          detail.dataset.built = "1";
+        }
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);

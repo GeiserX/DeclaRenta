@@ -7,12 +7,12 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
@@ -24,11 +24,25 @@ function effectiveYearEnd(year: number): string {
   return yearEnd <= today ? yearEnd : today;
 }
 
+/**
+ * Year-end rate for a position, or null when it cannot be valued: no rate for
+ * its currency, or no market value in the export (unknown, never 0 €).
+ */
+function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+}
+
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("d6-content");
   if (!container) return;
   container.innerHTML = `
@@ -52,6 +66,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
   const yearEnd = effectiveYearEnd(year);
 
   const positions = statement.openPositions.filter(
@@ -107,7 +122,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // surfaced via the warning banner below).
   let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     if (rate === null) { unvaluedCount++; return sum; }
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
@@ -125,11 +140,11 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+        const rate = positionRate(rateMap, yearEnd, p);
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
-        <td>${esc(p.isin.slice(0, 2))}</td><td>${new Decimal(p.quantity).toString()}</td><td>${val}</td>
+        <td>${esc(p.isin.slice(0, 2))}</td><td>${fmtQty(p.quantity)}</td><td>${val}</td>
       </tr>`;
       })
       .join("")}</tbody>
@@ -142,7 +157,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
       <h4>${t("d6.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
         const rate = lookupPositionRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
   }
@@ -219,13 +234,13 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
-    html += aforixField("Nº títulos", new Decimal(p.quantity).toString());
+    html += aforixField("Nº títulos", fmtQty(p.quantity));
     html += aforixField("Valor EUR", val);
     html += aforixField(t("table.currency"), p.currency);
   }
@@ -243,7 +258,7 @@ function aforixField(label: string, value: string): string {
 }
 
 async function generateD6File(): Promise<void> {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("d6-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -262,7 +277,7 @@ async function generateD6File(): Promise<void> {
   const report = generateD6Report(
     cachedStatement.openPositions,
     cachedRateMap,
-    profile.year,
+    cachedYear,
     fullName || "CONTRIBUYENTE",
     profile.nif || "00000000T",
   );
@@ -271,7 +286,7 @@ async function generateD6File(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `d6_guia_${profile.year}.json`;
+  a.download = `d6_guia_${cachedYear}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
