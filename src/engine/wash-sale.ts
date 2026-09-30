@@ -114,12 +114,16 @@ interface DeferredLot {
  * @param disposals - FIFO disposals to check (pass all years for cross-year reintegration)
  * @param allTrades - All trades for the period (homogeneous repurchases)
  * @param corporateActions - Corporate actions for split-adjusted remaining-position caps
+ * @param splitRatios - Ratio the FIFO engine applied per FS/RS transactionID
+ *   (`FifoEngine.getSplitRatios()`); required for splits given only as shares
+ *   added (Revolut), whose ratio depends on the holding at the split date
  * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, and `washSaleBlocked` set
  */
 export function detectWashSales(
   disposals: FifoDisposal[],
   allTrades: Trade[],
   corporateActions: CorporateAction[] = [],
+  splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }> = new Map(),
 ): FifoDisposal[] {
   // Index in-window-eligible BUY events and signed position movements by key.
   const buysByAsset = new Map<string, BuyEvent[]>();
@@ -157,7 +161,7 @@ export function detectWashSales(
   for (const events of positionEventsByAsset.values()) {
     events.sort((a, b) => a.time - b.time);
   }
-  const splitsByAsset = buildSplitEvents(corporateActions);
+  const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
 
   // Deferred-loss ledger: key → (buy date → deferred lots). A loss blocked by a
   // repurchase on date D is recoverable when shares acquired on D are later sold.
@@ -368,16 +372,23 @@ function normalizeDay(date: string): string {
   return t.slice(0, 10);
 }
 
-function buildSplitEvents(corporateActions: CorporateAction[]): Map<string, SplitEvent[]> {
+function buildSplitEvents(
+  corporateActions: CorporateAction[],
+  splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }>,
+): Map<string, SplitEvent[]> {
   const splitsByAsset = new Map<string, SplitEvent[]>();
   const seen = new Set<string>();
 
   for (const action of corporateActions) {
     if (action.type !== "FS" && action.type !== "RS") continue;
+    // Same ratio as FIFO: from the description, or the one FIFO sized from the
+    // holding when the broker gives only the shares added. A split FIFO did not
+    // apply has no ratio and is skipped here too.
     const ratioMatch = action.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
-    if (!ratioMatch) continue;
-    const numerator = new Decimal(ratioMatch[1]!);
-    const denominator = new Decimal(ratioMatch[2]!);
+    const applied = ratioMatch ? undefined : splitRatios.get(action.transactionID);
+    if (!ratioMatch && !applied) continue;
+    const numerator = ratioMatch ? new Decimal(ratioMatch[1]!) : applied!.num;
+    const denominator = ratioMatch ? new Decimal(ratioMatch[2]!) : applied!.den;
     if (numerator.lessThanOrEqualTo(0) || denominator.lessThanOrEqualTo(0)) continue;
 
     const key = corporateActionKey(action);

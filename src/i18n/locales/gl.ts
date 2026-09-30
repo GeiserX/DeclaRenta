@@ -185,7 +185,8 @@ const gl: TranslationKeys = {
   "profile.section_personal": "Datos persoais",
   "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "O NIF/NIE non é válido: revisa os díxitos e a letra de control.",
   "profile.surname_label": "Apelidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nome:",
@@ -643,6 +644,9 @@ const gl: TranslationKeys = {
   "fifo.unknown_direction.hint": "Só se procesan compras (BUY) e vendas (SELL). Revisa esta fila no ficheiro do broker e, se é unha operación real, corrixe a súa dirección.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint": "Split aplicado a todos os lotes. O custo total mantense — só cambia o número de accións.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} o {{date}} sen aplicar: non hai accións anteriores coas que calcular a proporción.",
+  "fifo.split_unresolved.hint":
+    "Sube tamén os extractos de anos anteriores, dende a apertura da conta. Se non, o número de accións e o custo das vendas posteriores deste valor non serán correctos.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
@@ -747,6 +751,10 @@ const gl: TranslationKeys = {
   "degiro.rows_skipped": "Omitíronse {{count}} filas sen ISIN/sen importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tiñan cantidade ou prezo pero faltáballes o ISIN ou o importe, polo que non se puideron incluír como operacións. Adoita indicar que as columnas do CSV non se recoñeceron ben: volve exportar o CSV de Transaccións de Degiro sen modificar as cabeceiras.",
+  "degiro.corporate_action_pair":
+    "Posible operación societaria o {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro anótaa como unha venda e unha compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota os cambios de ISIN, os splits e os canxes de accións como unha venda do valor antigo e unha compra do novo, sen número de orde nin custos. DeclaRenta calcúlaos así: declara unha ganancia ou perda ese día, e as accións novas toman ese prezo e esa data como custo. Revisa a comunicación de Degiro ou do emisor. Se foi un simple cambio de ISIN, un split ou un canxe fiscalmente neutro (réxime especial da Lei do Imposto sobre Sociedades), non houbo venda: as accións novas conservan o custo e a data de compra das antigas, así que corrixe esa operación na túa declaración. Se foi un canxe que tributa (art. 37.1.e LIRPF), o cálculo é correcto.",
   "degiro.transaction_tax": "Imposto sobre as transaccións financeiras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este imposto ao comprar accións españolas, francesas ou italianas e só o mostra no CSV de Conta. Forma parte do valor de adquisición (art. 35.1.b LIRPF): súmao ao custo das compras dese valor, porque DeclaRenta non o engade automaticamente.",
@@ -782,6 +790,14 @@ const gl: TranslationKeys = {
     "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Adoita deberse a filas incompletas na exportación (columna "amount" baleira ou non numérica). Se faltan operacións, volve descargar o CSV de transaccións completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: non se aplicaron {{count}} movemento(s) de acción corporativa (fusión, canxe, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "O custo dos títulos antigos non pasa aos novos, así que unha venda posterior do novo valor pode saír sen lotes e con custo 0. Se foi unha fusión ou un canxe, engade o custo de adquisición orixinal en «Lotes manuais para posicións transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: non se importaron {{count}} entrega(s) de títulos sen compravenda (accións gratuítas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "As accións gratuítas dunha promoción son unha ganancia patrimonial da base xeral polo seu valor de mercado o día da entrega: declaraas á parte e engade ese valor como custo en «Lotes manuais para posicións transferidas». Se é un traspaso desde outro bróker, engade alí o custo de compra orixinal.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

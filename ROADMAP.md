@@ -62,7 +62,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | Generador Modelo D-6 (guía AFORIX) | Implementado | `src/generators/d6.ts` |
 | Generador informe PDF | Implementado | `src/generators/pdf.ts` |
 | Mapeo a casillas Modelo 100 | Implementado | `src/generators/report.ts` |
-| CLI (`convert`, `modelo720`, `d6`, `modelo721`) | Implementado | `src/cli/index.ts` |
+| CLI (`convert`, `modelo720`, `d6`; el Modelo 721 solo se revisa en la web) | Implementado | `src/cli/index.ts` |
 | Web UI: selector broker, tabla operaciones, filtros, búsqueda, ordenación | Implementado | `src/web/` |
 | Web UI: wizard 4 pasos (subir → revisar → configurar → resultados) | Implementado | `src/web/wizard.ts` |
 | Web UI: casillas expandibles con desglose de operaciones | Implementado | `src/web/casilla-detail.ts` |
