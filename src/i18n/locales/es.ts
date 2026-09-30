@@ -123,6 +123,9 @@ const es = {
   "a11y.theme_toggle": "Cambiar tema",
   "a11y.drop_zone": "Zona de carga de ficheros",
   "a11y.file_input": "Seleccionar ficheros",
+  "a11y.ops_search": "Buscar operaciones por ISIN o símbolo",
+  "a11y.ops_filter": "Filtrar operaciones por resultado",
+  "a11y.remove_file": "Quitar {{name}}",
 
   // Theme
   "theme.toggle": "Cambiar tema",

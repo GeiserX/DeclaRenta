@@ -117,6 +117,9 @@ const eu: TranslationKeys = {
   "a11y.theme_toggle": "Gaia aldatu",
   "a11y.drop_zone": "Fitxategiak igotzeko eremua",
   "a11y.file_input": "Fitxategiak hautatu",
+  "a11y.ops_search": "Bilatu eragiketak ISIN edo sinboloz",
+  "a11y.ops_filter": "Iragazi eragiketak emaitzaren arabera",
+  "a11y.remove_file": "Kendu {{name}}",
 
   "theme.toggle": "Gaia aldatu",
 

@@ -114,6 +114,9 @@ const en: TranslationKeys = {
   "a11y.theme_toggle": "Toggle theme",
   "a11y.drop_zone": "File upload area",
   "a11y.file_input": "Select files",
+  "a11y.ops_search": "Search operations by ISIN or symbol",
+  "a11y.ops_filter": "Filter operations by result",
+  "a11y.remove_file": "Remove {{name}}",
 
   "theme.toggle": "Toggle theme",
 
