@@ -197,7 +197,8 @@ export class FifoEngine {
       if (num.lessThanOrEqualTo(0) || den.lessThanOrEqualTo(0)) continue;
       const date = normalizeDate(ca.dateTime.slice(0, 8));
       const fromIsin = ca.description.match(/\(([A-Z]{2}[A-Z0-9]{9}\d)\)\s+SPLIT\s/i)?.[1]?.toUpperCase();
-      const groupIsin = fromIsin ?? ca.isin;
+      // A broker without ISINs (Revolut) keys its lots by symbol, as wash-sale.ts does.
+      const groupIsin = fromIsin ?? (ca.isin || lotKey({ isin: "", symbol: ca.symbol, assetCategory: "STK" }));
       const key = `${groupIsin}:${date}`;
       let split = splitMap.get(key);
       if (!split) {
