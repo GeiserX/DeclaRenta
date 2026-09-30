@@ -236,6 +236,22 @@ describe("flatexParser — commission reconciliation (both files)", () => {
       (twice.parserMessages ?? []).some((m) => m.id === "flatex.commission.multi_fill_prorated"),
     ).toBe(false);
   });
+
+  it("the same Depot export uploaded twice gives each copy the single-upload commission", () => {
+    const merged = createEmptyStatement();
+    mergeStatement(merged, flatexParser.parse(depotCsv));
+    mergeStatement(merged, flatexParser.parse(depotCsv));
+    mergeStatement(merged, flatexParser.parse(kontoCsv));
+    const twice = finalizeMergedStatement(merged);
+
+    const once = new Map(parseBoth().trades.map((t) => [t.tradeID, t.commission]));
+    expect(twice.trades.map((t) => [t.tradeID, t.commission])).toEqual(
+      twice.trades.map((t) => [t.tradeID, once.get(t.tradeID)]),
+    );
+    expect(
+      (twice.parserMessages ?? []).some((m) => m.id === "flatex.commission.multi_fill_prorated"),
+    ).toBe(false);
+  });
 });
 
 describe("flatexParser — multi-fill and foreign-venue commission", () => {

@@ -130,6 +130,11 @@ function reconcileOrderLegs(statement: Statement): void {
   }
 
   const tradesByKey = new Map<string, Trade[]>();
+  // A Depot export uploaded twice repeats each fill with the same booking
+  // number (TA-Nr.): leave the repeat out of the pairing and give it the
+  // original's fee below.
+  const firstFill = new Map<string, Trade>();
+  const repeatedFills: [Trade, Trade][] = [];
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
@@ -137,6 +142,15 @@ function reconcileOrderLegs(statement: Statement): void {
     // mistaken for an IBKR notes flag (AFx, P) downstream.
     delete trade.notes;
     const orderKey = key.slice(FLATEX_ORDER_PREFIX.length);
+    if (trade.tradeID) {
+      const fill = `${orderKey}:${trade.tradeID}`;
+      const original = firstFill.get(fill);
+      if (original) {
+        repeatedFills.push([trade, original]);
+        continue;
+      }
+      firstFill.set(fill, trade);
+    }
     const trades = tradesByKey.get(orderKey);
     if (trades) trades.push(trade);
     else tradesByKey.set(orderKey, [trade]);
@@ -193,6 +207,11 @@ function reconcileOrderLegs(statement: Statement): void {
       trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
     }
     proratedOrders++;
+  }
+
+  for (const [repeat, original] of repeatedFills) {
+    repeat.commission = original.commission;
+    repeat.commissionCurrency = original.commissionCurrency;
   }
 
   // Trades present but their settlement legs are not (user uploaded only the
