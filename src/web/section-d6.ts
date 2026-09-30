@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -24,8 +24,18 @@ function effectiveYearEnd(year: number): string {
   return yearEnd <= today ? yearEnd : today;
 }
 
+/**
+ * Year-end rate for a position, or null when it cannot be valued: no rate for
+ * its currency, or no market value in the export (unknown, never 0 €).
+ */
+function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+}
+
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
@@ -52,6 +62,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
   const yearEnd = effectiveYearEnd(year);
 
   const positions = statement.openPositions.filter(
@@ -107,7 +118,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // surfaced via the warning banner below).
   let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     if (rate === null) { unvaluedCount++; return sum; }
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
@@ -125,7 +136,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+        const rate = positionRate(rateMap, yearEnd, p);
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
@@ -219,7 +230,7 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField(t("table.isin"), p.isin);
@@ -243,7 +254,7 @@ function aforixField(label: string, value: string): string {
 }
 
 async function generateD6File(): Promise<void> {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("d6-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -262,7 +273,7 @@ async function generateD6File(): Promise<void> {
   const report = generateD6Report(
     cachedStatement.openPositions,
     cachedRateMap,
-    profile.year,
+    cachedYear,
     fullName || "CONTRIBUYENTE",
     profile.nif || "00000000T",
   );
@@ -271,7 +282,7 @@ async function generateD6File(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `d6_guia_${profile.year}.json`;
+  a.download = `d6_guia_${cachedYear}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
