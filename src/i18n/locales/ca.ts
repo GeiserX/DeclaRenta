@@ -700,6 +700,14 @@ const ca: TranslationKeys = {
     "S'han classificat {{count}} ingrés(os) de tipus \"Rewards Income\" de Coinbase com a rendiments del capital mobiliari (base de l'estalvi).",
   "coinbase.rewards_income_classification.hint":
     "Si part d'aquests imports són recompenses promocionals o cashback de targeta (no rendiments per mantenir o cedir cripto), el seu tractament correcte seria guany patrimonial no derivat de transmissió (base general). Revisa'n la naturalesa si la quantitat és significativa.",
+  "coinbase.unknown_types_skipped":
+    "S'han omès {{count}} fila(es) de Coinbase amb un tipus d'operació no reconegut: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Aquestes files no s'han tingut en compte en el càlcul. Si alguna és una venda, una compra, un pagament amb cripto o una recompensa, afegeix-la manualment perquè el seu guany, el seu cost d'adquisició o el seu rendiment comptin.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} operació(ns) d'Advanced Trade de Coinbase es van pagar o cobrar en una moneda diferent de la de valoració ({{pairs}}); només s'ha registrat la criptomoneda comprada o venuda, no la moneda de contrapartida.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "En aquests parells també transmets (en comprar) o adquireixes (en vendre) la moneda de cotització, sigui una altra criptomoneda o una divisa, i aquesta operació també tributa. Afegeix manualment la venda o la compra d'aquesta moneda pel mateix valor en euros de l'operació perquè el seu guany i el seu cost d'adquisició quadrin.",
   "trade_republic.trade_skipped_no_amount":
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
