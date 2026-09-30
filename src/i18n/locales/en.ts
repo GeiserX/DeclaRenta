@@ -182,7 +182,7 @@ const en: TranslationKeys = {
 
   // Fiscal profile
   "profile.title": "Tax profile",
-  "profile.description": "This data is used to generate the Modelo 720 and D-6 files.",
+  "profile.description": "This data is used to generate the Modelo 720 and D-6 files. It is stored only in this browser, never on a server.",
   "profile.section_personal": "Personal details",
   "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
@@ -208,6 +208,8 @@ const en: TranslationKeys = {
     "If the account has several holders (e.g. a joint or community-property account), DeclaRenta divides every amount equally to show each taxpayer's share (Art. 11.3 LIRPF). Each holder files their own individual return for their share.",
   "profile.saved": "Profile saved",
   "profile.save_btn": "Save profile",
+  "profile.clear_btn": "Delete my data from this browser",
+  "profile.clear_confirm": "Delete your fiscal profile, saved reports and manually entered values from this browser?",
   "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",
   "profile.go_to_profile": "Go to profile",
 
