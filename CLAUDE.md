@@ -96,6 +96,7 @@ tests/           Vitest tests mirroring src/ structure
 - Static text: `data-i18n` attributes updated by `updateStaticText()`
 - Dynamic content (broker guides, profile form, 720/D-6 sections): rendered with `t()` calls, must re-render on `localechange` event
 - **GOTCHA**: Any module that renders HTML with `t()` must listen for `localechange` and re-render, otherwise switching language leaves stale text
+- Only `es` is bundled up front; `en`/`ca`/`eu`/`gl` load on demand. `setLocale()` and `initLocale()` are async and switch only after the table has loaded (`localechange` fires after). `main.ts` awaits `initLocale()` before the first render; tests must `await setLocale(...)` before asserting on `t()`
 
 ### Data Persistence
 - **localStorage only** — no cookies, no server-side storage
@@ -243,10 +244,10 @@ When adding a new section (like 721), follow this checklist:
 - `isFxconv()` is RETAINED as the per-trade AFx detector and now drives an OPT-OUT (`ReportOptions.trackAutoConvert=false` / CLI `--skip-auto-convert` / web profile checkbox) that restores the old skip for accounts that genuinely round-trip. No global auto-convert detection (`detectAutoConvert()` stays removed, #171).
 
 ### Logo vs Favicon (Hard Trace)
-- `src/web/public/logo.png` = the realistic bull app logo (1.9MB, 1024×1024). Used for splash screen and top-bar branding.
+- `src/web/public/logo.png` = the realistic bull app logo, served as a 360×360 export (about 70 KB, 2× the 180 px splash size). Used for splash screen and top-bar branding. It is fetched on every visit, so keep it small: `tests/web/logo.test.ts` fails above 150 KB.
 - `src/web/public/favicon.svg` / `favicon-16.png` / `favicon-32.png` = small icon for browser tabs only.
 - **NEVER** use `favicon.svg` as the `src` for `.splash-logo` or `.brand-logo` in index.html. Those must reference `logo.png`.
-- `src/web/assets/logo.png` is a copy of the same logo; `docs/images/social.svg` references it. The docs header uses `docs/images/logo.svg` (the favicon mark without its plate).
+- `src/web/assets/logo.png` is the 1024×1024 original of the same logo (1.9 MB); `docs/images/social.svg` references it. The docs header uses `docs/images/logo.svg` (the favicon mark without its plate).
 
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"

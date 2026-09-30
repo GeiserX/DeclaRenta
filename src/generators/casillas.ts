@@ -15,7 +15,7 @@
  *
  *  2. "Otros elementos patrimoniales" (página 17 I) — options (Art. 37.1.m),
  *     crypto, non-listed funds, and foreign-currency gains (Art. 33.1):
- *       1626 = Tipo de elemento patrimonial. Clave (use 5 = otros elementos no afectos)
+ *       1626 = Tipo de elemento patrimonial. Clave (use 4 = otros elementos no afectos; 5 is afectos)
  *       1633 = Valor de transmisión
  *       1637 = Valor de adquisición
  *       1640 = Ganancia patrimonial obtenida ([1633] - [1637] positiva)

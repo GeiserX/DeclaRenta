@@ -1094,9 +1094,9 @@ describe("generateTaxReport", () => {
       // Spanish-tax cap (b) at either base (~19–21 % of 7 360 ≈ 1 400+) exceeds the
       // 1 104 EUR foreign withholding, so cap (a) wins and the deduction = withholding,
       // which halves cleanly: solo = 1 104.00, split = 552.00, split × 2 = solo.
-      // The progressive bracket only changes the result when the Spanish cap binds
-      // (low foreign withholding) — covered conceptually here; we pin the observed
-      // treaty-capped values to lock the behaviour against regressions.
+      // The progressive bracket would only change the result if cap (b) bound, and
+      // it cannot today: the savings rate starts at 19 %, above the 15 % treaty cap.
+      // We pin the observed treaty-capped values to lock the behaviour.
       const bigDividendRates = makeRateMap({
         "2025-03-15": "0.9200",
         "2025-09-20": "0.9100",
@@ -1144,8 +1144,8 @@ describe("generateTaxReport", () => {
       expect(split.doubleTaxation.deduction.lessThanOrEqualTo(solo.doubleTaxation.deduction)).toBe(true);
 
       // When the foreign cap binds, the split is exactly linear (withholding scales 1/N),
-      // even though the bases straddle the 6 000 EUR bracket. Locks the behaviour so a
-      // regression to a base-independent / wrongly-scaled deduction is caught.
+      // even though the bases straddle the 6 000 EUR bracket. This catches a wrongly
+      // scaled split; it cannot tell a base-dependent cap (b) from none at all.
       expect(split.doubleTaxation.deduction.times(2).toFixed(2)).toBe(solo.doubleTaxation.deduction.toFixed(2));
     });
   });
