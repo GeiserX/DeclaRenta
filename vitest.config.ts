@@ -37,6 +37,9 @@ export default defineConfig({
         "src/generators/**",
         "src/parsers/**",
         "src/i18n/**",
+        // CLI. tests/cli/ runs it as a child process, which v8 coverage does not
+        // measure, so it reports as uncovered; listed so that gap stays visible.
+        "src/cli/**",
         // Pure web helpers — no DOM, no localStorage, no network. Each returns
         // data or an HTML string and is unit-tested directly (see tests/web/).
         "src/web/esc.ts", // HTML-escaper (XSS) — tests/web/esc.test.ts

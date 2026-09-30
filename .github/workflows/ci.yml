@@ -70,6 +70,23 @@ jobs:
           node dist/cli.js --version
           npm pack --dry-run
 
+  docker-headers:
+    name: docker image headers
+    # The Docker Hub image (Dockerfile.web) serves the app through nginx. Build
+    # it, start it, and check that JS, CSS, sw.js and the HTML page all carry
+    # the security headers from nginx-security-headers.conf.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -f Dockerfile.web -t declarenta-web:ci .
+
+      - name: Check security headers
+        run: |
+          docker run -d --name declarenta-web -p 127.0.0.1:8080:80 declarenta-web:ci
+          scripts/check-docker-headers.sh http://127.0.0.1:8080
+
   docs:
     name: docs (strict)
     # The docs are built into the Pages artifact by deploy.yml at release time;
@@ -91,6 +108,20 @@ jobs:
 
       - name: Build
         run: mkdocs build --strict
+
+      # Material fetches the repo's stars and latest release from api.github.com
+      # for every element marked data-md-component="source", which would send
+      # each reader's IP to GitHub. overrides/partials/source.html keeps the
+      # header link without that marker. The last two lines are controls: the
+      # fetch code is still in the bundle, and the link still renders.
+      - name: No GitHub API call from the docs pages
+        run: |
+          if grep -rl 'data-md-component="source"' site/; then
+            echo "::error::The docs would call api.github.com from the reader's browser (see overrides/partials/source.html)"
+            exit 1
+          fi
+          grep -rlq 'api.github.com' site/assets/javascripts/
+          grep -q 'class="md-source"' site/index.html
 
   workflows:
     name: workflows (zizmor)

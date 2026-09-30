@@ -5,7 +5,7 @@
  * All processing happens in the browser. No data is uploaded anywhere.
  */
 
-import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import { detectBroker, getBroker } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
@@ -58,7 +58,9 @@ Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 // i18n initialization
 // ---------------------------------------------------------------------------
 
-initLocale();
+// Wait for the saved or detected locale's table, so the first render is
+// already in that language.
+await initLocale();
 
 /** Update all static elements with data-i18n attributes */
 function updateStaticText() {
@@ -93,7 +95,11 @@ for (const [code, name] of Object.entries(localeNames)) {
 }
 
 langSelect.addEventListener("change", () => {
-  setLocale(langSelect.value as Locale);
+  setLocale(langSelect.value as Locale).catch(() => {
+    // The locale could not load (offline, missing chunk): keep the selector on
+    // the language still in use.
+    langSelect.value = getCurrentLocale();
+  });
 });
 
 document.addEventListener("localechange", () => {
@@ -223,6 +229,12 @@ let detectedBrokers: string[] = [];
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
 let activeYear: number | null = null;
+/**
+ * The year of the results currently rendered on the Results step, or null when
+ * none are. Kept apart from `currentReport`, which a failed re-run clears while
+ * the previous results stay on screen.
+ */
+let shownResultsYear: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Wizard initialization
@@ -313,6 +325,9 @@ fileInput.addEventListener("change", () => {
   if (fileInput.files) {
     addFiles(Array.from(fileInput.files));
   }
+  // Browsers fire no change event when the same selection is picked again, so
+  // clear it: a file removed with × can then be picked again.
+  fileInput.value = "";
 });
 
 // Reject pathologically large uploads before any parsing to avoid a
@@ -350,17 +365,33 @@ function addFiles(files: File[]) {
     }
   }
   renderFileList();
-  // Reset downstream state when files change
-  mergedStatement = null;
-  currentReport = null;
-  activeYear = null;
-  detectedYears = [];
+  resetDownstream();
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
   // Refresh detection unless every file was rejected for size — in that case
   // keep the "file too large" message visible instead of clearing it.
   if (pendingFiles.length > 0 || oversized.length === 0) {
     void updateDetectionStatus();
   }
+}
+
+/**
+ * Forget everything built from the previous upload list: the parsed statement,
+ * the report, the year picked from it, the 720/721/D-6 sections (and the data
+ * they cache) and the Renta badge. Called whenever a file is added or removed.
+ */
+function resetDownstream(): void {
+  mergedStatement = null;
+  currentReport = null;
+  activeYear = null;
+  shownResultsYear = null;
+  detectedYears = [];
+  // Drop any processFiles run still in flight: it was built from the old list.
+  processRunToken++;
+  initSection720();
+  initSection721();
+  initSectionD6();
+  updateBadge("renta", "");
+  clearWizardError();
 }
 
 function renderFileList() {
@@ -379,8 +410,7 @@ function renderFileList() {
       fileBytesCache.delete(removed);
       pendingFiles.splice(idx, 1);
       renderFileList();
-      mergedStatement = null;
-      currentReport = null;
+      resetDownstream();
       void updateDetectionStatus();
     });
   });
@@ -516,6 +546,9 @@ async function parseFiles(): Promise<void> {
       }
 
       const content = new TextDecoder("utf-8").decode(uint8);
+      if (content.trim() === "") {
+        throw new Error(t("error.empty_file", { filename: file.name }));
+      }
       const selectedBroker = brokerSelect.value;
       let parser =
         selectedBroker !== "auto"
@@ -543,9 +576,7 @@ async function parseFiles(): Promise<void> {
       }
 
       if (!parser) {
-        throw new Error(
-          t("error.no_broker_detected", { filename: file.name }) + ` ${brokerParsers.map((p) => p.name).join(", ")}`,
-        );
+        throw new Error(t("error.no_broker_detected", { filename: file.name }));
       }
 
       const statement = parser.parse(content);
@@ -577,14 +608,36 @@ async function parseFiles(): Promise<void> {
       const profile = getProfile();
       profile.year = activeYear;
       saveProfile(profile);
+      // Redraw the form, or its stale year select is saved back on the next edit.
+      initProfile();
     }
 
     renderReview(merged, detectedBrokers, brokerNames);
     unlockStep(3);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+    showWizardError(err instanceof Error ? err.message : String(err));
   }
+}
+
+/**
+ * Show an error on the wizard step the user is looking at. Step 2 (and step 1,
+ * which never raises one) uses the Review panel as before. On step 3 the Review
+ * panel is hidden, so the error goes in a banner at the top of the Results step.
+ */
+function showWizardError(msg: string): void {
+  const html = `${t("error.prefix")}${esc(msg)}`;
+  if (getCurrentWizardStep() !== 3) {
+    reviewContent.innerHTML = `<p class="warning">${html}</p>`;
+    return;
+  }
+  clearWizardError();
+  document
+    .getElementById("wizard-step-3")!
+    .insertAdjacentHTML("afterbegin", `<div class="banner banner-warning wizard-error" role="alert"><span>${html}</span></div>`);
+}
+
+function clearWizardError(): void {
+  document.querySelectorAll(".wizard-error").forEach((el) => el.remove());
 }
 
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
@@ -753,7 +806,9 @@ async function processFiles(): Promise<void> {
     persistReport(report, currentBrokers);
 
     unlockStep(3);
+    clearWizardError();
     renderResults(report);
+    shownResultsYear = report.year;
 
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
@@ -763,9 +818,22 @@ async function processFiles(): Promise<void> {
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+    if (isStale()) return; // a newer run owns the screen now
+    // A failed re-run from the Results step leaves the previous results on
+    // screen: put the year back to theirs so the select does not label them
+    // with a year that was never computed.
+    const shownYear = shownResultsYear;
     currentReport = null;
+    if (shownYear !== null && activeYear !== shownYear) {
+      activeYear = shownYear;
+      const profile = getProfile();
+      profile.year = shownYear;
+      saveProfile(profile);
+      initProfile();
+      const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement | null;
+      if (yearSelect) yearSelect.value = String(shownYear);
+    }
+    showWizardError(err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -796,8 +864,7 @@ exportPdfBtn.addEventListener("click", () => {
       downloadBlob(blob, `declarenta_${report.year}.pdf`);
     })
     .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+      showWizardError(err instanceof Error ? err.message : String(err));
     })
     .finally(() => {
       exportPdfBtn.disabled = false;
@@ -886,7 +953,14 @@ divsTable.addEventListener("click", (e) => {
 // Search and filter
 // ---------------------------------------------------------------------------
 
-opsSearch.addEventListener("input", () => renderOperationsTable());
+// Each render rebuilds the whole table, so wait for a pause in typing instead
+// of rendering on every keystroke.
+const OPS_SEARCH_DEBOUNCE_MS = 150;
+let opsSearchTimer: ReturnType<typeof setTimeout> | undefined;
+opsSearch.addEventListener("input", () => {
+  clearTimeout(opsSearchTimer);
+  opsSearchTimer = setTimeout(renderOperationsTable, OPS_SEARCH_DEBOUNCE_MS);
+});
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
@@ -1190,7 +1264,10 @@ if (versionEl) {
 // ---------------------------------------------------------------------------
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {
+  // The build's commit hash in the script URL makes every deploy install a new
+  // worker, whose activate step clears the previous deploy's cached files.
+  // sw.js itself never changes, so without it the first worker stays forever.
+  navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(__COMMIT_HASH__)}`).catch(() => {
     // SW registration is optional — fail silently
   });
 }
