@@ -6,7 +6,9 @@
  * XML entities in attributes, so `currency="USD&lt;form&gt;"` arrives as the
  * string `USD<form>`. The review step (currencies, date range) and the results
  * tables (buy/sell dates, dividend pay date) interpolate these values into
- * innerHTML, so each one must go through esc().
+ * innerHTML, and so do the casilla detail cards (#casillas) and the operations
+ * annex (.annex-container), each with its own date formatter. Every one of these
+ * values must go through esc().
  *
  * This drives the real app: the real index.html markup, the real main.ts, a
  * File handed to #file-input, and the wizard's Next button. All amounts are in
@@ -126,7 +128,7 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     const review = await uploadAndReview(
       flexXml(
         trade("1", {
-          currency: `USD&lt;form id=&quot;f&quot; action=&quot;https://example.invalid/&quot;&gt;&lt;input name=&quot;nif&quot;&gt;&lt;/form&gt;`,
+          currency: `USD&lt;form id=&quot;f&quot;&gt;&lt;input&gt;&lt;/form&gt;`,
           tradeDate: `20250110${TAG("date")}`,
           side: "BUY",
         }),
@@ -138,6 +140,20 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     expect(review.textContent).toContain('20250110<b id="date">x</b>');
   });
 });
+
+/** Assert that no results-step container holds an injected element. */
+function expectNoInjectedResults(): { casillas: HTMLElement; annex: HTMLElement } {
+  const casillas = document.getElementById("casillas")!;
+  const annex = document.querySelector<HTMLElement>(".annex-container")!;
+  expect(casillas.querySelector(".casilla-detail")).not.toBeNull();
+  expect(annex).not.toBeNull();
+  for (const id of ["operations-table", "dividends-table"]) {
+    expect(document.getElementById(id)!.querySelector(INJECTED)).toBeNull();
+  }
+  expect(casillas.querySelector(INJECTED)).toBeNull();
+  expect(annex.querySelector(INJECTED)).toBeNull();
+  return { casillas, annex };
+}
 
 describe("results tables escape broker-supplied dates", () => {
   it("markup in buy/sell dates and dividend pay date is shown as text", async () => {
@@ -159,5 +175,23 @@ describe("results tables escape broker-supplied dates", () => {
     expect(ops.textContent).toContain('20250110<b id="buy">x</b>');
     expect(ops.textContent).toContain('20250310<b id="sell">x</b>');
     expect(divs.textContent).toContain('20250315<b id="pay">x</b>');
+    expectNoInjectedResults();
+  });
+
+  it("a short markup date, which the date formatters return unchanged, is shown as text", async () => {
+    // Fewer than 8 characters: the casilla and annex formatters skip their
+    // slicing and hand the raw string back, so only esc() stands in the way.
+    await uploadAndReview(
+      flexXml(
+        trade("1", { currency: "EUR", tradeDate: "&lt;style&gt;", side: "BUY" }) +
+          trade("2", { currency: "EUR", tradeDate: "20250310", side: "SELL" }),
+      ),
+    );
+    await continueToResults();
+
+    const { casillas, annex } = expectNoInjectedResults();
+    expect(document.querySelector("#wizard-step-3 style")).toBeNull();
+    expect(casillas.textContent).toContain("<style>");
+    expect(annex.textContent).toContain("<style>");
   });
 });
