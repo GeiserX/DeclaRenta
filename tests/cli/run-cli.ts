@@ -18,8 +18,8 @@ export interface FixturePosition {
   value: string;
 }
 
-/** IBKR Flex Query ending 31/12/2025 with the given EUR positions (100 shares each). */
-export function flexXml(accountId: string, positions: FixturePosition[]): string {
+/** IBKR Flex Query ending on `toDate` (31/12/2025 by default) with the given EUR positions (100 shares each). */
+export function flexXml(accountId: string, positions: FixturePosition[], toDate = "20251231"): string {
   const rows = positions
     .map(
       (p) => `        <OpenPosition accountId="${accountId}" symbol="${p.symbol}" description="${p.symbol} SA"
@@ -31,7 +31,7 @@ export function flexXml(accountId: string, positions: FixturePosition[]): string
   return `<?xml version="1.0" encoding="UTF-8"?>
 <FlexQueryResponse queryName="Test" type="AF">
   <FlexStatements count="1">
-    <FlexStatement accountId="${accountId}" fromDate="20250101" toDate="20251231" period="">
+    <FlexStatement accountId="${accountId}" fromDate="${toDate.slice(0, 4)}0101" toDate="${toDate}" period="">
       <OpenPositions>
 ${rows}
       </OpenPositions>

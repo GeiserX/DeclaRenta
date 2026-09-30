@@ -15,6 +15,7 @@ const DE = { isin: "DE0007164600", symbol: "SAP", value: "30000" };
 const dir = tempFiles({
   "a.xml": flexXml("U1111111", [US]),
   "b.xml": flexXml("U2222222", [DE]),
+  "a-2024.xml": flexXml("U1111111", [US], "20241231"),
   "empty.xml": flexXml("U1111111", []),
   "prev.json": JSON.stringify({ positions: [{ isin: "US0378331005" }] }),
 });
@@ -36,6 +37,17 @@ describe("declarenta d6", () => {
     const res = runCli(["d6", "-i", file("a.xml"), "-i", file("b.xml"), ...base, "-o", out]);
     expect(res.status).toBe(0);
     expect(readReport(out).positions.map((p) => p.isin).sort()).toEqual(["DE0007164600", "US0378331005"]);
+  }, 30_000);
+
+  it("leaves out the positions of a file that ends on another year's 31 December", () => {
+    // Last year's statement is uploaded for its trades (FIFO history); its
+    // holdings are the 2024 ones and must not be added to the 2025 declaration.
+    const out = file("other-year.json");
+    const res = runCli(["d6", "-i", file("a-2024.xml"), "-i", file("b.xml"), ...base, "-o", out]);
+    expect(res.status).toBe(0);
+    expect(readReport(out).positions.map((p) => p.isin)).toEqual(["DE0007164600"]);
+    expect(res.stderr).toContain("U1111111");
+    expect(res.stderr).toContain("31/12/2024");
   }, 30_000);
 
   it("still lists the position of a single file", () => {

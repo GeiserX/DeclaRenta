@@ -48,7 +48,7 @@ import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
-import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
 
@@ -770,8 +770,9 @@ async function processFiles(): Promise<void> {
   const isStale = () => runToken !== processRunToken;
 
   try {
-    const merged = mergedStatement;
     const year = activeYear ?? getProfile().year;
+    // 720/721/D-6 take only the holdings of files that end at this year's end.
+    const merged = yearEndHoldings(mergedStatement, year);
     const manualOpeningLots = getManualOpeningLots();
     // Build the ECB rate map via the shared orchestrator. `deriveEcbNeeds`
     // (inside buildEcbRateMap) collects trade, cashTransaction, open-position and
