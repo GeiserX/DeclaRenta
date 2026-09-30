@@ -126,6 +126,23 @@ describe("eToro XLSX parsing", () => {
       expect(msg!.context?.types).toBe("Crypto (1)");
     });
 
+    it("should skip and report crypto types whose label contains 'currenc' or 'divisa'", async () => {
+      for (const type of ["Cryptocurrencies", "Criptodivisas"]) {
+        const data = buildEtoroWorkbook({
+          closedPositions: [
+            CLOSED_POSITIONS_HEADER,
+            ["Buy BTC", "500", "0.01", "50000", "55000", "50", "01/01/2025", "01/03/2025", type, "1", ""],
+          ],
+        });
+
+        const result = await parseEtoroXlsx(data);
+        expect(result.trades, type).toHaveLength(0);
+        const msgs = (result.parserMessages ?? []).filter((m) => m.id === "etoro.closed_types_skipped");
+        expect(msgs, type).toHaveLength(1);
+        expect(msgs[0]!.context?.types).toBe(`${type} (1)`);
+      }
+    });
+
     it("should parse Currencies positions as CFD", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [

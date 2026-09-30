@@ -167,9 +167,13 @@ function parseClosedPositions(
       ? (row[typeCol] ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
       : "";
 
+    // Crypto is checked first: labels like "Cryptocurrencies" or "Criptodivisas"
+    // contain "currenc"/"divisa" and would otherwise be taken as currency CFDs.
+    const isCryptoType = rowType.includes("crypt") || rowType.includes("cripto");
+
     // Commodities and currencies are always derivatives (CFD) on eToro.
-    const isCfdType = rowType.includes("cfd") || rowType.includes("commodit") ||
-      rowType.includes("materia") || rowType.includes("currenc") || rowType.includes("divisa");
+    const isCfdType = !isCryptoType && (rowType.includes("cfd") || rowType.includes("commodit") ||
+      rowType.includes("materia") || rowType.includes("currenc") || rowType.includes("divisa"));
 
     // Skip unknown/unsupported types (e.g. crypto on eToro is not supported),
     // counted per type so the user is told what was left out.
