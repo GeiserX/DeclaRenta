@@ -362,7 +362,9 @@ const es = {
   "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
-    "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Esos saldos se muestran para revisión, pero no se incluyen en el fichero generado.",
+    "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Su saldo a 31 de diciembre sí cuenta para el umbral de 50.000 €, pero esas cuentas no se incluyen en el fichero generado: añádelas a mano, con su saldo medio del cuarto trimestre, antes de presentar.",
+  "m720.successive_years_note":
+    "Si ya presentaste el Modelo 720 en un año anterior, solo es obligatorio volver a presentarlo cuando el valor conjunto de una categoría ha aumentado más de 20.000 € respecto de la última declaración, o cuando has vendido o cancelado un bien que declaraste (arts. 42 bis.5 y 42 ter.5 del RD 1065/2007). Si no, presentarlo es opcional.",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -427,6 +429,10 @@ const es = {
   // Section headers
   "section.year_label": "Ejercicio",
   "section.profile_source": 'Datos del <a href="#perfil">Perfil fiscal</a>',
+  "section.positions_date_mismatch":
+    "Las posiciones de tu fichero son a fecha {{date}}, no a 31/12/{{year}}. Estos modelos declaran lo que tenías a 31 de diciembre, así que no se genera ningún fichero con ellas. Descarga un informe que termine el 31/12/{{year}} (en IBKR, un Flex Query con fecha final 31/12/{{year}}) y súbelo de nuevo.",
+  "section.positions_date_unknown":
+    "Tu broker no indica a qué fecha corresponden las posiciones. Comprueba que el informe refleje lo que tenías a 31/12/{{year}}: si lo descargaste más tarde, las posiciones y sus valores pueden no coincidir.",
 
   // Badge statuses
   "badge.complete": "Completo",
