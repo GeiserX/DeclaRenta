@@ -26,7 +26,7 @@ import { calculateDividends } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
-import { resolveCryptoTradeValues } from "../engine/crypto-valuation.js";
+import { resolveCryptoTradeValues, lookupValuationRate, isFiatPriced } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { normalizeDate } from "../engine/dates.js";
@@ -161,8 +161,9 @@ function mergeManualRateHints(
  * Value a cash income transaction in EUR. Precedence:
  *   1. An explicit `rewardCostBasisEur` (authoritative — already the EUR value,
  *      e.g. from a Binance EUR_Value column). Returns rate as amountEur/|amount|.
- *   2. A rate from the resolved (ECB + synthetic) map, then the manual-rate map,
- *      for the income currency on the receipt date.
+ *   2. For EUR, ECB fiat and stablecoins: the resolved map (weekend walk-back), then the
+ *      manual-rate map. For any other coin: the manual-rate map, then a synthetic
+ *      rate, both for the exact receipt date.
  * Returns null when the income cannot be valued (caller skips + warns).
  */
 function valueIncomeEur(
@@ -190,20 +191,19 @@ function valueIncomeEur(
   }
 
   // A rate present in the resolved map (ECB fiat, a normalized stablecoin like
-  // USDT→USD, or a synthetic crypto rate injected by the valuation pass). We
-  // gate on lookupRateInMap !== null rather than isEcbResolvable() so that a
-  // resolvable currency whose rate was never fetched (e.g. a USDT reward in a
-  // year with no trades) degrades to the manual/skip path below instead of
-  // throwing inside getEcbRate and crashing the whole report.
-  const mapRate = lookupRateInMap(resolvedRateMap, date, t.currency);
-  if (mapRate !== null) {
-    return { amountEur: amount.mul(mapRate).abs(), rate: mapRate };
-  }
-
-  // A user/EUR_Value manual-rate hint for the coin (never a live price oracle).
-  const manualRate = manualRates ? lookupRateInMap(manualRates, date, t.currency) : null;
-  if (manualRate !== null) {
-    return { amountEur: amount.mul(manualRate).abs(), rate: manualRate };
+  // USDT→USD, or a synthetic crypto rate injected by the valuation pass), or a
+  // user/EUR_Value manual-rate hint for the coin (never a live price oracle).
+  // Lookups return null instead of throwing, so a resolvable currency whose rate
+  // was never fetched (e.g. a USDT reward in a year with no trades) degrades to
+  // the skip path instead of crashing the whole report. For a coin (not ECB
+  // fiat/stablecoin) both lookups match the receipt date exactly and the manual
+  // quote wins, the same order as the valuation pass, so a price inferred on an
+  // earlier day is never reused for this reward.
+  const mapRate = lookupValuationRate(resolvedRateMap, date, t.currency);
+  const manualRate = manualRates ? lookupValuationRate(manualRates, date, t.currency) : null;
+  const rate = isFiatPriced(t.currency) ? (mapRate ?? manualRate) : (manualRate ?? mapRate);
+  if (rate !== null) {
+    return { amountEur: amount.mul(rate).abs(), rate };
   }
 
   return null;
@@ -398,7 +398,6 @@ export function generateTaxReport(
   );
   const manualOpeningLotTrades = buildManualOpeningLotTrades(usableManualOpeningLots);
   const resolvedTrades = [...valuation.trades, ...rewardLots, ...manualOpeningLotTrades];
-  const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades];
 
   // 1. FIFO capital gains (process ALL years, filter to target year).
   //    Monodivisa (skipFx) → traditional cost basis: a FCY security's cost is
@@ -407,6 +406,9 @@ export function generateTaxReport(
   //    same-fiat cost at the sale-date rate (V2422-20), drift to the FX engine.
   const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
+  // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
+  // see it too, or the bought-out shares still count as held (V3282-18 total exit).
+  const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades, ...fifoEngine.getCashBuyoutSales()];
 
   // Number of account holders. >1 splits every reported amount equally per
   // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.

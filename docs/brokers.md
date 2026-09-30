@@ -64,14 +64,14 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 1. Inicia sesión en la **web de Flatex**.
 2. Ve a **Movimientos** → **Depotumsätze** (movimientos de la cartera).
 3. Selecciona **todo el histórico** (necesario para el cálculo FIFO) y exporta el fichero CSV.
-4. Para dividendos: ve a **Kontoumsätze** (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV.
+4. Para dividendos: ve a **Kontoumsätze** (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV. Ojo: ahí los dividendos aparecen por el importe neto, ya descontada la retención; toma el importe íntegro y la retención del justificante en PDF de cada dividendo.
 5. Sube **ambos ficheros** CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos).
 
 **Formato:** CSV alemán (separador punto y coma). Dos ficheros: Depotumsätze (operaciones) y Kontoumsätze (movimientos de caja: dividendos, comisiones).
 
 **Datos extraídos:** Operaciones de compraventa, dividendos y comisiones.
 
-**Limitaciones:** Para que cada comisión se asigne a su operación, sube también el CSV de Kontoumsätze junto con el de Depotumsätze.
+**Limitaciones:** Para que cada comisión se asigne a su operación, sube también el CSV de Kontoumsätze junto con el de Depotumsätze. Flatex anota cada dividendo como un único abono neto (ya descontada la retención en origen o la española) y el CSV no trae la retención, así que DeclaRenta avisa de que el importe es neto: corrige a mano las casillas 0029 (importe íntegro), 0588 (retención extranjera) y 0597 (retención española) con los datos del justificante en PDF de cada dividendo. Si cada dividendo trae su fila de Quellensteuer en el CSV, esa fila se usa como retención y el aviso no aparece.
 
 ### Scalable Capital
 

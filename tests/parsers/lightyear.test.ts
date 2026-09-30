@@ -317,6 +317,26 @@ describe("lightyearParser", () => {
       expect(result.cashTransactions).toHaveLength(8);
     });
 
+    it("should emit no parser message for a file whose types are all known", () => {
+      expect(lightyearParser.parse(LIGHTYEAR_FIXTURE).parserMessages).toBeUndefined();
+      expect(lightyearParser.parse(LIGHTYEAR_CSV).parserMessages).toBeUndefined();
+    });
+
+    it("should report rows of an unknown type instead of dropping them silently", () => {
+      const csv = [
+        HEADER,
+        "15/03/2025 10:30:00,OR-0000000014,AAPL,US0378331005,Buy,10.000000000,USD,185.500000000,1855.00,0.92,0.00,1855.00,",
+        "01/06/2025 09:00:00,CA-0000000020,AAPL,US0378331005,Stock split,10.000000000,USD,,,,,,",
+      ].join("\n");
+      const result = lightyearParser.parse(csv);
+      expect(result.trades).toHaveLength(1);
+      const msgs = (result.parserMessages ?? []).filter((m) => m.id === "lightyear.unknown_types");
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0]!.severity).toBe("warning");
+      expect(msgs[0]!.context?.count).toBe("1");
+      expect(msgs[0]!.context?.types).toBe("Stock split (1)");
+    });
+
     it("should return empty arrays for non-applicable fields", () => {
       const result = lightyearParser.parse(LIGHTYEAR_CSV);
       expect(result.corporateActions).toEqual([]);

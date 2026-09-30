@@ -118,6 +118,43 @@ describe("eToro XLSX parsing", () => {
 
       const result = await parseEtoroXlsx(data);
       expect(result.trades).toHaveLength(0); // crypto filtered out
+      // ...but never silently: the skipped position is reported.
+      const msg = (result.parserMessages ?? []).find((m) => m.id === "etoro.closed_types_skipped");
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("warning");
+      expect(msg!.context?.count).toBe("1");
+      expect(msg!.context?.types).toBe("Crypto (1)");
+    });
+
+    it("should skip and report crypto types whose label contains 'currenc' or 'divisa'", async () => {
+      for (const type of ["Cryptocurrencies", "Criptodivisas"]) {
+        const data = buildEtoroWorkbook({
+          closedPositions: [
+            CLOSED_POSITIONS_HEADER,
+            ["Buy BTC", "500", "0.01", "50000", "55000", "50", "01/01/2025", "01/03/2025", type, "1", ""],
+          ],
+        });
+
+        const result = await parseEtoroXlsx(data);
+        expect(result.trades, type).toHaveLength(0);
+        const msgs = (result.parserMessages ?? []).filter((m) => m.id === "etoro.closed_types_skipped");
+        expect(msgs, type).toHaveLength(1);
+        expect(msgs[0]!.context?.types).toBe(`${type} (1)`);
+      }
+    });
+
+    it("should parse Currencies positions as CFD", async () => {
+      const data = buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy EURUSD", "1000", "1000", "1.08", "1.09", "10", "01/04/2025", "01/05/2025", "Currencies", "1", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2);
+      expect(result.trades.every((t) => t.assetCategory === "CFD")).toBe(true);
+      expect(result.parserMessages ?? []).toEqual([]);
     });
 
     it("should handle multiple trades", async () => {
@@ -514,6 +551,46 @@ describe("eToro XLSX parsing", () => {
       // Short: opening leg is SELL, closing leg is BUY
       expect(result.trades[0]!.buySell).toBe("SELL");
       expect(result.trades[1]!.buySell).toBe("BUY");
+    });
+
+    it("should parse accented Spanish types 'Índices', 'Materias primas' and 'Divisas' as CFD", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["1", "SPX500", "Long", "1000", "2", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "5", "0", "0", "50", "45", "1", "1", "5000", "5025", "0", "0", "0", "-", "Índices", "", ""],
+          ["2", "GOLD", "Long", "1000", "1", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "1", "0", "0", "20", "18", "1", "1", "2000", "2020", "0", "0", "0", "-", "Materias primas", "", ""],
+          ["3", "EURUSD", "Short", "1000", "1000", "01/02/2025 10:00:00", "15/06/2025 16:00:00",
+           "1", "0", "0", "10", "9", "1", "1", "1.08", "1.07", "0", "0", "0", "-", "Divisas", "", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(6);
+      expect(result.trades.every((t) => t.assetCategory === "CFD")).toBe(true);
+      expect((result.parserMessages ?? []).some((m) => m.id === "etoro.closed_types_skipped")).toBe(false);
+    });
+
+    it("should report Spanish 'Cripto' positions it skips, with their type and count", async () => {
+      const data = buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["1", "Bitcoin", "Long", "500", "0.01", "01/01/2025 10:00:00", "01/03/2025 10:00:00",
+           "1", "0", "0", "50", "45", "1", "1", "50000", "55000", "0", "0", "0", "-", "Cripto", "", ""],
+          ["2", "Ethereum", "Long", "300", "0.1", "01/01/2025 10:00:00", "01/03/2025 10:00:00",
+           "1", "0", "0", "30", "27", "1", "1", "3000", "3300", "0", "0", "0", "-", "Cripto", "", ""],
+          ["3", "Apple Inc (AAPL)", "Long", "1000", "5", "01/01/2025 10:00:00", "01/03/2025 10:00:00",
+           "1", "0", "0", "100", "91", "1", "1", "180", "200", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
+        ],
+      });
+
+      const result = await parseEtoroXlsx(data);
+      expect(result.trades).toHaveLength(2); // only Apple
+      const msg = (result.parserMessages ?? []).find((m) => m.id === "etoro.closed_types_skipped");
+      expect(msg).toBeDefined();
+      expect(msg!.context?.count).toBe("2");
+      expect(msg!.context?.types).toBe("Cripto (2)");
     });
 
     it("should build a PROFITABLE short with open-high/close-low legs and O/C indicators", async () => {

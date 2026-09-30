@@ -234,7 +234,7 @@ const en: TranslationKeys = {
   "guide.flatex.step2": "Go to <strong>Transactions</strong> → <strong>Depotumsätze</strong> (portfolio movements)",
   "guide.flatex.step3": "Select <strong>the full history</strong> (needed for FIFO) and export the CSV file",
   "guide.flatex.step4":
-    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV",
+    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV. Note: dividends there show the net amount, after withholding; take the gross amount and the withholding from each dividend's PDF statement",
   "guide.flatex.step5":
     "Upload <strong>both CSV files</strong> (Depotumsätze for trades and Kontoumsätze for dividends)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -594,6 +594,8 @@ const en: TranslationKeys = {
   "opening_lots.save_btn": "Save lots and recalculate",
   "opening_lots.clear_btn": "Clear saved lots",
   "opening_lots.saved": "Saved",
+  "opening_lots.row_invalid":
+    "Check the highlighted rows: enter the purchase date and a quantity and price above zero (e.g. 1,234.56). Nothing was saved.",
   "opening_lots.recalculate_hint": "Manual lots are saved in your browser and the report is recalculated.",
 
   // Engine & parser messages (TaxMessage id → localized text)
@@ -614,6 +616,8 @@ const en: TranslationKeys = {
   "fifo.roll_operation": "⚠ C;O (roll) operation: {{symbol}} on {{date}}. Processed as close + open.",
   "fifo.roll_operation.hint":
     "Roll operation processed correctly as a close of the previous position and an open of the new one.",
+  "fifo.unknown_direction": '⚠ Trade with unknown direction ("{{buySell}}"): {{symbol}} on {{date}}. It was not processed.',
+  "fifo.unknown_direction.hint": "Only purchases (BUY) and sales (SELL) are processed. Check this row in the broker file and, if it is a real trade, correct its direction.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) applied ({{date}})",
   "fifo.split_applied.hint":
     "Split applied to all lots. The total cost is unchanged — only the number of shares changes.",
@@ -621,9 +625,17 @@ const en: TranslationKeys = {
     "🔄 Merger: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lots transferred, {{date}})",
   "fifo.merger_applied.hint":
     "Tax-neutral merger: the lots are transferred to the new ISIN keeping the original cost basis.",
+  "fifo.cash_merger_disposal":
+    "💶 Cash buyout: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Declared as a sale.",
+  "fifo.cash_merger_disposal.hint":
+    "A merger or acquisition paid in cash is a disposal: the gain or loss is computed as for a sale, with the cash received as the transfer value.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, {{costPercent}}% of cost to the spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "The cost is split proportionally between the parent and the spun-off company.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Corporate action {{type}} for {{symbol}} ({{isin}}) on {{date}}: not applied to the FIFO calculation.",
+  "fifo.corporate_action_unhandled.hint":
+    "If it changed the number of shares or the ISIN of the position, check the cost of later sales of this security.",
   "fifo.sell_without_lots":
     "⚠ Sale without lots: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Cost basis = 0 (possible short position or incomplete prior data).",
   "fifo.sell_without_lots.hint":
@@ -689,17 +701,44 @@ const en: TranslationKeys = {
     "Not all Flatex commissions could be matched: the corresponding cash entries are missing.",
   "flatex.commission.unmatched_trades.hint":
     "Also upload the Kontoumsätze (account movements) CSV together with the Depotumsätze one so that each operation's commission is taken into account (added to the acquisition cost on purchases and subtracted from the transfer value on sales).",
+  "flatex.dividends.net_amounts":
+    "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
+  "flatex.dividends.net_amounts.hint":
+    "Take the gross amount and the withholding of each payment from the PDF statement Flatex puts in your document inbox, and correct boxes 0029 (gross amount), 0588 (foreign withholding) and 0597 (Spanish withholding) by hand.",
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",
+  "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
   "binance.unparseable_timestamp":
     "{{count}} row(s) of the Binance CSV were skipped because they had an unrecognizable date/time (UTC_Time).",
   "binance.unparseable_timestamp.hint":
     "This is usually caused by a manually edited or incompletely exported file. Re-download the original report from Binance without editing it so those operations are included.",
+  "binance.unhandled_operation":
+    "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "etoro.closed_types_skipped":
+    "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta does not import these eToro position types yet (e.g. crypto). Their gain or loss is not included in the calculation: add it to your return by hand using the invested amount and the profit eToro shows.",
+  "lightyear.unknown_types":
+    "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "These movements are not included in the calculation. If they are stock splits, share transfers or other corporate actions, check them by hand: they can change the share count or the acquisition cost of later sales.",
   "coinbase.rewards_income_classification":
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":
     "If some of those amounts are promotional rewards or card cashback (not income from holding or lending crypto), their correct treatment would be a capital gain not arising from a transfer (general tax base). Review their nature if the amount is significant.",
+  "coinbase.unknown_types_skipped":
+    "{{count}} Coinbase row(s) with an unrecognised transaction type were skipped: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "These rows were left out of the calculation. If any of them is a sale, a purchase, a payment made with crypto or a reward, add it manually so its gain, acquisition cost or income is counted.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
   "trade_republic.trade_skipped_no_amount":
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":
@@ -717,6 +756,10 @@ const en: TranslationKeys = {
   "parser.order_level_duplicates": "{{skipped}} duplicate aggregated ORDER-type rows were skipped in the operations.",
   "parser.order_level_duplicates.hint":
     'Your Flex Query has the "Orders" detail level enabled in addition to "Executions" in the Trades section, which duplicates every operation. You can disable "Orders" in the Flex Query configuration, but it is not necessary: these rows were ignored automatically to avoid duplicating quantities, amounts and commissions.',
+  "parser.cancelled_trades": "{{count}} trades cancelled by IBKR were skipped together with their cancellation rows.",
+  "parser.cancelled_trades.hint": 'IBKR marks a cancelled execution with a reversing row ("(Ca.)"). The original trade and its cancellation were discarded: they never became a real purchase or sale.',
+  "parser.cancelled_trades_unmatched": "{{count}} IBKR cancellation rows were skipped because the original trade is not in this file.",
+  "parser.cancelled_trades_unmatched.hint": "The cancelled trade falls outside this Flex Query's period. If you load it from another file, it will still count as real: export a period that includes both the trade and its cancellation in the same file.",
 };
 
 export default en;
