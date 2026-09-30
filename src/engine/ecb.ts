@@ -17,7 +17,7 @@ const RETRY_DELAY_MS = 2000;
 const STABLECOIN_TO_FIAT: Record<string, string> = {
   USDT: "USD", USDC: "USD", BUSD: "USD", DAI: "USD",
   TUSD: "USD", FDUSD: "USD", USDP: "USD", GUSD: "USD",
-  PYUSD: "USD", USD1: "USD", EURT: "EUR", EUROC: "EUR",
+  PYUSD: "USD", USD1: "USD", RLUSD: "USD", EURT: "EUR", EUROC: "EUR",
   AEUR: "EUR", EURI: "EUR",
 };
 
