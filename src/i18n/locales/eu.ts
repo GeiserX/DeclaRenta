@@ -699,6 +699,10 @@ const eu: TranslationKeys = {
     "{{count}} kriptomonetako diru-sarrera daude (adib. staking sariak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_income_unvalued.hint":
     "Diru-sarrera hauek kripto berean ordaintzen dira eta ez dute BCEren kanbio-tasa ofizialik. Kalkulatu eurotako balioa kobratze-datan eta deklaratu eskuz kapital higigarriaren etekin gisa (0027 kasila).",
+  "report.dividend_unvalued":
+    "{{currencies}} dibisako {{count}} dibidendu daude automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
+  "report.dividend_unvalued.hint":
+    "BCEk ez du dibisa horren kanbio-tasa ofizialik argitaratzen kobratze-datan. Kalkulatu zenbatekoa eurotan data horretan, gehitu eskuz 0029 laukian eta kontuan hartu haren atxikipena nazioarteko zergapetze bikoitzaren kenkarian (0588 laukia).",
   "report.crypto_general_gain_unvalued":
     "{{count}} kriptomonetako ondare-irabazi daude (adib. airdropak edo gomendio-komisioak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_general_gain_unvalued.hint":

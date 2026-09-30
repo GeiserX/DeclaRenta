@@ -697,6 +697,10 @@ const ca: TranslationKeys = {
     "Hi ha {{count}} ingrés(os) en criptomoneda (p. ex. recompenses de staking) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_income_unvalued.hint":
     "Aquests ingressos es paguen en la mateixa cripto i no tenen tipus de canvi oficial del BCE. Calcula'n el valor en euros a la data de cobrament i declara'ls manualment com a rendiments del capital mobiliari (Casella 0027).",
+  "report.dividend_unvalued":
+    "Hi ha {{count}} dividend(s) en {{currencies}} que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
+  "report.dividend_unvalued.hint":
+    "El BCE no publica cap tipus de canvi oficial per a aquesta divisa a la data de cobrament. Calcula l'import en euros a aquesta data, suma'l a mà a la casella 0029 i tingues en compte la seva retenció en la deducció per doble imposició internacional (casella 0588).",
   "report.crypto_general_gain_unvalued":
     "Hi ha {{count}} guany(s) patrimonial(s) en criptomoneda (p. ex. airdrops o comissions de referits) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_general_gain_unvalued.hint":

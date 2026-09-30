@@ -697,6 +697,10 @@ const gl: TranslationKeys = {
     "Hai {{count}} ingreso(s) en criptomoeda (p. ex. recompensas de staking) que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.crypto_income_unvalued.hint":
     "Estes ingresos páganse na propia cripto e non teñen tipo de cambio oficial do BCE. Calcula o seu valor en euros na data de cobramento e decláraos manualmente como rendementos do capital mobiliario (Casa 0027).",
+  "report.dividend_unvalued":
+    "Hai {{count}} dividendo(s) en {{currencies}} que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
+  "report.dividend_unvalued.hint":
+    "O BCE non publica un tipo de cambio oficial para esa divisa na data de cobramento. Calcula o importe en euros nesa data, súmao a man á casilla 0029 e ten en conta a súa retención na dedución por dobre imposición internacional (casilla 0588).",
   "report.crypto_general_gain_unvalued":
     "Hai {{count}} ganancia(s) patrimonial(is) en criptomoeda (p. ex. airdrops ou comisións de referidos) que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.crypto_general_gain_unvalued.hint":
