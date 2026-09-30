@@ -261,7 +261,15 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     if (ORDER_RE.test(info)) {
       const orderKey = extractOrderKey(info);
       if (orderKey) {
-        pendingOrderLegs.push({ orderKey, netAmount: amount, isin, currency: currency || "EUR", tradeDate });
+        const bookingId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
+        pendingOrderLegs.push({
+          orderKey,
+          netAmount: amount,
+          isin,
+          currency: currency || "EUR",
+          tradeDate,
+          ...(bookingId ? { bookingId } : {}),
+        });
       }
       continue;
     }

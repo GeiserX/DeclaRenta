@@ -219,6 +219,23 @@ describe("flatexParser — commission reconciliation (both files)", () => {
     const waste = stmt.trades.find((t) => t.isin === "US94106L1098")!;
     expect(waste.commission).toBe("0");
   });
+
+  it("the same Konto export uploaded twice gives the single-upload commissions", () => {
+    // e.g. "Kontoumsaetze (1).csv" next to the original, or two overlapping
+    // date ranges: every cash leg arrives twice with the same TA-Nr.
+    const merged = createEmptyStatement();
+    mergeStatement(merged, flatexParser.parse(depotCsv));
+    mergeStatement(merged, flatexParser.parse(kontoCsv));
+    mergeStatement(merged, flatexParser.parse(kontoCsv));
+    const twice = finalizeMergedStatement(merged);
+
+    const commissions = (stmt: typeof twice) =>
+      stmt.trades.map((t) => [t.isin, t.tradeDate, t.commission]);
+    expect(commissions(twice)).toEqual(commissions(parseBoth()));
+    expect(
+      (twice.parserMessages ?? []).some((m) => m.id === "flatex.commission.multi_fill_prorated"),
+    ).toBe(false);
+  });
 });
 
 describe("flatexParser — multi-fill and foreign-venue commission", () => {

@@ -48,6 +48,8 @@ export interface OrderLeg {
   currency: string;
   /** Booking date (YYYYMMDD), used to pair the fills of a partially executed order. */
   tradeDate: string;
+  /** Booking number of the cash leg (Flatex TA-Nr.), used to drop the same leg uploaded twice. */
+  bookingId?: string;
 }
 
 export interface Trade {

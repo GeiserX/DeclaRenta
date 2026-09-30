@@ -113,8 +113,17 @@ function reconcileOrderLegs(statement: Statement): void {
   // note that must be cleared (and warned about). The per-trade startsWith guard
   // below is a no-op for IBKR/other brokers whose notes never use that prefix.
   const legsByKey = new Map<string, OrderLeg[]>();
+  // The same cash leg can arrive twice (one Konto export uploaded twice, or two
+  // exports with overlapping dates). Keep one leg per booking number, or the
+  // order would look like it has more legs than fills.
+  const seenBookings = new Set<string>();
   for (const leg of statement.pendingOrderLegs ?? []) {
     if (!leg.orderKey) continue;
+    if (leg.bookingId) {
+      const booking = `${leg.orderKey}:${leg.bookingId}`;
+      if (seenBookings.has(booking)) continue;
+      seenBookings.add(booking);
+    }
     const legs = legsByKey.get(leg.orderKey);
     if (legs) legs.push(leg);
     else legsByKey.set(leg.orderKey, [leg]);
