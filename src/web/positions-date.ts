@@ -14,12 +14,27 @@ import type { Statement } from "../types/broker.js";
 import { esc } from "./esc.js";
 
 /**
+ * Last Monday–Friday of `year` as "YYYY-MM-DD". IBKR cuts a statement period to
+ * business days, so a full-year Flex Query for 2023 ends on 29/12/2023 (31/12
+ * was a Sunday). Nothing trades or gets a new mark over the weekend, so the
+ * holdings on that day are the 31 December holdings.
+ */
+function lastWeekdayOfYear(year: number): string {
+  const dow = new Date(Date.UTC(year, 11, 31)).getUTCDay(); // 0 = Sunday, 6 = Saturday
+  const day = dow === 0 ? 29 : dow === 6 ? 30 : 31;
+  return `${year}-12-${day}`;
+}
+
+/**
  * Whether the statement's positions date differs from 31 December of `year`.
- * Returns "unknown" when the broker gives no period end (only IBKR does today).
+ * A period end on the last weekday of the year, or any day after it up to
+ * 31/12, counts as 31 December. Returns "unknown" when the broker gives no
+ * period end (only IBKR does today).
  */
 export function positionsDateMismatch(statement: Pick<Statement, "toDate">, year: number): boolean | "unknown" {
   if (!statement.toDate) return "unknown";
-  return normalizeDate(statement.toDate) !== `${year}-12-31`;
+  const toDate = normalizeDate(statement.toDate);
+  return !(toDate >= lastWeekdayOfYear(year) && toDate <= `${year}-12-31`);
 }
 
 /** "20200912" or "2020-09-12" → "12/09/2020" */

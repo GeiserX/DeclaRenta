@@ -33,6 +33,23 @@ describe("positionsDateMismatch", () => {
     expect(positionsDateMismatch(withToDate("2025-12-31"), 2025)).toBe(false);
   });
 
+  it("accepts the last weekday of the year when 31 December falls on a weekend", () => {
+    // IBKR cuts the period to business days: full-year 2023 ends on Friday 29/12
+    // (31/12 was a Sunday), full-year 2022 on Friday 30/12 (31/12 was a Saturday).
+    expect(positionsDateMismatch(withToDate("20231229"), 2023)).toBe(false);
+    expect(positionsDateMismatch(withToDate("20221230"), 2022)).toBe(false);
+    expect(renderPositionsDateBanner(withToDate("20231229"), 2023)).toEqual({ html: "", blocked: false });
+  });
+
+  it("flags a period end that leaves business days before 31 December", () => {
+    // Thursday 28/12/2023: Friday 29/12 still followed.
+    expect(positionsDateMismatch(withToDate("20231228"), 2023)).toBe(true);
+    // 31/12/2025 is a Wednesday, so 30/12 is not the year end.
+    expect(positionsDateMismatch(withToDate("20251230"), 2025)).toBe(true);
+    // The last weekday of 2023 does not stand in for 2024.
+    expect(positionsDateMismatch(withToDate("20231229"), 2024)).toBe(true);
+  });
+
   it("returns 'unknown' when the broker gives no period end", () => {
     expect(positionsDateMismatch(withToDate(""), 2025)).toBe("unknown");
   });

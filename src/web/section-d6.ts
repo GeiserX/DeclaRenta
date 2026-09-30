@@ -150,8 +150,9 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // Generate button
   html += `<button id="d6-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("d6.generate_btn")}</button>`;
 
-  // AFORIX guide
-  html += renderAforixGuide(positions, rateMap, year, profile);
+  // AFORIX guide. D-6 is filed by typing these values into AFORIX, so the
+  // guide is withheld too when the positions are from another date.
+  if (!positionsDate.blocked) html += renderAforixGuide(positions, rateMap, year, profile);
 
   // Deadline
   html += `<div class="deadline-reminder">${t("d6.deadline")}</div>`;
