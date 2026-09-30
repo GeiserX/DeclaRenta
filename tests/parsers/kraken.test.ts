@@ -290,3 +290,130 @@ describe("krakenParser — crypto↔crypto trades emit both legs", () => {
     expect(trades[0]!.currency).toBe("EUR");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Kraken asset codes: stablecoin quotes, DOGE and staking suffixes
+// ---------------------------------------------------------------------------
+
+describe("krakenParser — stablecoin-quoted pairs split into real coin names", () => {
+  const HEADER = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
+  const row = (id: string, pair: string) =>
+    `"${id}","ORD${id}","${pair}","2024-06-03 10:00:00","buy","limit","100","100","0","1","0","",""`;
+  const main = (pair: string) => {
+    const result = krakenParser.parse([HEADER, row("T1", pair)].join("\n"));
+    return { trade: result.trades.find((t) => t.tradeID === "T1")!, messages: result.parserMessages };
+  };
+
+  it.each([
+    ["XBTUSDT", "BTC", "USDT"],
+    ["ETHUSDC", "ETH", "USDC"],
+    ["SOLUSDT", "SOL", "USDT"],
+    ["XBTPYUSD", "BTC", "PYUSD"],
+    ["XBTEURT", "BTC", "EURT"],
+    ["USDCUSDT", "USDC", "USDT"],
+  ])("%s → %s/%s with no warning", (pair, symbol, currency) => {
+    const { trade, messages } = main(pair);
+    expect(trade.symbol).toBe(symbol);
+    expect(trade.currency).toBe(currency);
+    expect(messages).toBeUndefined();
+  });
+
+  it("a USDT-quoted buy is a permuta: the USDT paid gets its own disposal leg", () => {
+    const { trades } = krakenParser.parse([HEADER, row("T1", "XBTUSDT")].join("\n"));
+    expect(trades).toHaveLength(2);
+    const usdt = trades.find((t) => t.symbol === "USDT")!;
+    expect(usdt.buySell).toBe("SELL");
+    expect(usdt.currency).toBe("BTC");
+  });
+
+  it.each([["XXDGZEUR"], ["XDGEUR"]])("%s is DOGE", (pair) => {
+    const { trade, messages } = main(pair);
+    expect(trade.symbol).toBe("DOGE");
+    expect(trade.currency).toBe("EUR");
+    expect(messages).toBeUndefined();
+  });
+
+  it.each([
+    ["ETHDAI", "ETH", "DAI"],
+    ["XBTCHF", "BTC", "CHF"],
+  ])("%s (quote resolvable through ECB) → %s/%s with no warning", (pair, symbol, currency) => {
+    const { trade, messages } = main(pair);
+    expect(trade.symbol).toBe(symbol);
+    expect(trade.currency).toBe(currency);
+    expect(messages).toBeUndefined();
+  });
+
+  it("an unknown 6+ char pair keeps the last-3 guess but warns that it was not recognized", () => {
+    const { trade, messages } = main("ABCDEF");
+    expect(trade.symbol).toBe("ABC");
+    expect(trade.currency).toBe("DEF");
+    expect(messages).toHaveLength(1);
+    expect(messages![0]!.id).toBe("kraken.unrecognized_pair");
+    expect(messages![0]!.severity).toBe("warning");
+    expect(messages![0]!.message).toContain("ABCDEF");
+    expect(messages![0]!.message).toContain("ABC/DEF");
+  });
+});
+
+describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
+  const HEADER = '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"';
+  const row = (id: string, type: string, subtype: string, asset: string, amount = "1") =>
+    `"${id}","R${id}","2024-06-01 00:00:00","${type}","${subtype}","currency","${asset}","${amount}","0","10"`;
+
+  it.each([
+    ["DOT.S", "DOT"],
+    ["XTZ.S", "XTZ"],
+    ["ADA.S", "ADA"],
+    ["ETH2.S", "ETH"],
+    ["ETH2", "ETH"],
+    ["DOT28.S", "DOT"],
+    ["KSM07.S", "KSM"],
+    ["ATOM21.S", "ATOM"],
+    ["XBT.M", "BTC"],
+    ["SOL.F", "SOL"],
+  ])("staking reward in %s is booked as %s", (asset, symbol) => {
+    const result = krakenParser.parse([HEADER, row("L1", "staking", "", asset)].join("\n"));
+    expect(result.cashTransactions).toHaveLength(1);
+    expect(result.cashTransactions[0]!.symbol).toBe(symbol);
+    expect(result.cashTransactions[0]!.currency).toBe(symbol);
+  });
+
+  it("an earn/reward row is one savings-base reward income", () => {
+    const result = krakenParser.parse([
+      HEADER,
+      row("L1", "earn", "reward", "ETH", "0.01"),
+      row("L2", "earn", "allocation", "ETH", "-1"),
+      row("L3", "earn", "deallocation", "ETH", "1"),
+    ].join("\n"));
+    expect(result.cashTransactions).toHaveLength(1);
+    const reward = result.cashTransactions[0]!;
+    expect(reward.symbol).toBe("ETH");
+    expect(reward.type).toBe("Crypto Reward Income");
+    expect(reward.taxBucket).toBe("ahorro");
+    expect(reward.amount).toBe("0.01");
+    expect(result.parserMessages).toBeUndefined();
+  });
+
+  it("ledger rows of types the parser does not read are counted in an info message", () => {
+    const result = krakenParser.parse([
+      HEADER,
+      row("L1", "spend", "", "ZEUR", "-1000"),
+      row("L2", "receive", "", "XXBT", "0.02"),
+      row("L3", "deposit", "", "ZEUR", "1000"),
+      row("L4", "withdrawal", "", "ZEUR", "-10"),
+      row("L5", "trade", "", "XXBT", "0.01"),
+      row("L6", "transfer", "spottostaking", "DOT", "-5"),
+      row("L7", "staking", "", "DOT.S", "0.1"),
+    ].join("\n"));
+    expect(result.cashTransactions).toHaveLength(1);
+    expect(result.parserMessages).toHaveLength(1);
+    const msg = result.parserMessages![0]!;
+    expect(msg.id).toBe("kraken.ledger_rows_ignored");
+    expect(msg.severity).toBe("info");
+    expect(msg.message).toContain("spend");
+    expect(msg.message).toContain("receive");
+    expect(msg.message).not.toContain("deposit");
+    expect(msg.message).not.toContain("trade");
+    expect(msg.context).toEqual({ count: "2" });
+  });
+});

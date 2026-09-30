@@ -618,15 +618,25 @@ const gl: TranslationKeys = {
   "fifo.roll_operation": "⚠ Operación C;O (roll): {{symbol}} o {{date}}. Procésase como peche + apertura.",
   "fifo.roll_operation.hint":
     "Operación roll procesada correctamente como peche da posición anterior e apertura da nova.",
+  "fifo.unknown_direction": '⚠ Operación con dirección descoñecida ("{{buySell}}"): {{symbol}} o {{date}}. Non se procesou.',
+  "fifo.unknown_direction.hint": "Só se procesan compras (BUY) e vendas (SELL). Revisa esta fila no ficheiro do broker e, se é unha operación real, corrixe a súa dirección.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint": "Split aplicado a todos os lotes. O custo total mantense — só cambia o número de accións.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
     "Fusión fiscalmente neutra: os lotes transfírense ao novo ISIN conservando o custo base orixinal.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectivo: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Declárase como unha venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Unha fusión ou adquisición pagada en efectivo é unha transmisión: a ganancia ou perda calcúlase como nunha venda, co efectivo recibido como valor de transmisión.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, custo {{costPercent}}% ao spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "O custo repártese proporcionalmente entre a matriz e a empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acción corporativa {{type}} de {{symbol}} ({{isin}}) o {{date}}: non se aplica ao cálculo FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Se cambiou o número de accións ou o ISIN da posición, revisa o custo das vendas posteriores deste valor.",
   "fifo.sell_without_lots":
     "⚠ Venda sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0 (posible posición curta ou datos previos incompletos).",
   "fifo.sell_without_lots.hint":
@@ -721,6 +731,10 @@ const gl: TranslationKeys = {
   "parser.order_level_duplicates": "Omitíronse {{skipped}} filas agregadas de tipo ORDER duplicadas nas operacións.",
   "parser.order_level_duplicates.hint":
     'O teu Flex Query ten activado o nivel de detalle "Orders" ademais de "Executions" na sección Trades, o que duplica cada operación. Podes desactivar "Orders" na configuración do Flex Query, pero non é necesario: estas filas ignoráronse automaticamente para evitar duplicar cantidades, importes e comisións.',
+  "parser.cancelled_trades": "Omitíronse {{count}} operacións canceladas por IBKR xunto coa súa anulación.",
+  "parser.cancelled_trades.hint": 'IBKR marca unha execución cancelada cunha fila de anulación ("(Ca.)"). A operación orixinal e a súa anulación descartáronse: nunca chegaron a ser unha compra ou venda real.',
+  "parser.cancelled_trades_unmatched": "Omitíronse {{count}} anulacións de IBKR sen a operación orixinal neste ficheiro.",
+  "parser.cancelled_trades_unmatched.hint": "A operación cancelada queda fóra do período deste Flex Query. Se a cargas desde outro ficheiro, seguirá contando como real: exporta un período que inclúa a operación e a súa anulación no mesmo ficheiro.",
 };
 
 export default gl;

@@ -618,6 +618,8 @@ const ca: TranslationKeys = {
   "fifo.roll_operation": "⚠ Operació C;O (roll): {{symbol}} el {{date}}. Es processa com a tancament + obertura.",
   "fifo.roll_operation.hint":
     "Operació roll processada correctament com a tancament de la posició anterior i obertura de la nova.",
+  "fifo.unknown_direction": "⚠ Operació amb direcció desconeguda (\"{{buySell}}\"): {{symbol}} el {{date}}. No s'ha processat.",
+  "fifo.unknown_direction.hint": "Només es processen compres (BUY) i vendes (SELL). Revisa aquesta fila al fitxer del broker i, si és una operació real, corregeix-ne la direcció.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
@@ -625,9 +627,17 @@ const ca: TranslationKeys = {
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
     "Fusió fiscalment neutra: els lots es transfereixen al nou ISIN conservant el cost base original.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectiu: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Es declara com una venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Una fusió o adquisició pagada en efectiu és una transmissió: el guany o la pèrdua es calcula com en una venda, amb l'efectiu rebut com a valor de transmissió.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ràtio {{ratio}}, cost {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El cost es reparteix proporcionalment entre la matriu i l'empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acció corporativa {{type}} de {{symbol}} ({{isin}}) el {{date}}: no s'aplica al càlcul FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Si va canviar el nombre d'accions o l'ISIN de la posició, revisa el cost de les vendes posteriors d'aquest valor.",
   "fifo.sell_without_lots":
     "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
@@ -721,6 +731,10 @@ const ca: TranslationKeys = {
   "parser.order_level_duplicates": "S'han omès {{skipped}} files agregades de tipus ORDER duplicades a les operacions.",
   "parser.order_level_duplicates.hint":
     'El teu Flex Query té activat el nivell de detall "Orders" a més d\'"Executions" a la secció Trades, la qual cosa duplica cada operació. Pots desactivar "Orders" a la configuració del Flex Query, però no és necessari: aquestes files s\'han ignorat automàticament per evitar duplicar quantitats, imports i comissions.',
+  "parser.cancelled_trades": "S'han omès {{count}} operacions cancel·lades per IBKR juntament amb la seva anul·lació.",
+  "parser.cancelled_trades.hint": "IBKR marca una execució cancel·lada amb una fila d'anul·lació (\"(Ca.)\"). L'operació original i la seva anul·lació s'han descartat: mai no van ser una compra o venda real.",
+  "parser.cancelled_trades_unmatched": "S'han omès {{count}} anul·lacions d'IBKR sense l'operació original en aquest fitxer.",
+  "parser.cancelled_trades_unmatched.hint": "L'operació cancel·lada queda fora del període d'aquest Flex Query. Si la carregues des d'un altre fitxer, es continuarà comptant com a real: exporta un període que inclogui l'operació i la seva anul·lació en el mateix fitxer.",
 };
 
 export default ca;
