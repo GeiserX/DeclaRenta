@@ -164,10 +164,10 @@ describe("every control has an accessible name", () => {
     const { setLocale } = await import("../../src/i18n/index.js");
     const search = document.getElementById("ops-search")!;
     const filter = document.getElementById("ops-filter")!;
-    setLocale("es");
+    await setLocale("es");
     expect(accessibleName(search)).toBe("Buscar operaciones por ISIN o símbolo");
     expect(accessibleName(filter)).toBe("Filtrar operaciones por resultado");
-    setLocale("en");
+    await setLocale("en");
     expect(accessibleName(search)).toBe("Search operations by ISIN or symbol");
     expect(accessibleName(filter)).toBe("Filter operations by result");
   });
@@ -187,9 +187,9 @@ describe("every control has an accessible name", () => {
 
     // The name is rebuilt in the new language when the user switches locale.
     const { setLocale } = await import("../../src/i18n/index.js");
-    setLocale("es");
+    await setLocale("es");
     expect(accessibleName(remove())).toBe("Quitar mi-extracto-2025.xml");
-    setLocale("en");
+    await setLocale("en");
     expect(accessibleName(remove())).toBe("Remove mi-extracto-2025.xml");
   });
 });
