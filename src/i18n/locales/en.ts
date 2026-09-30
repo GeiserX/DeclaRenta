@@ -777,6 +777,14 @@ const en: TranslationKeys = {
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":
     'This is usually caused by incomplete rows in the export (an empty or non-numeric "amount" column). If operations are missing, re-download the full transactions CSV from Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: {{count}} corporate action row(s) (merger, exchange, split) for {{isins}} were not applied.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "The cost of the old securities is not carried over to the new ones, so a later sale of the new security may show no lots and a cost of 0. If it was a merger or an exchange, add the original acquisition cost under “Manual lots for transferred positions”.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: {{count}} securities delivery row(s) without a trade (free shares, transfers) for {{isins}} were not imported.",
+  "trade_republic.delivery_not_applied.hint":
+    "Free shares from a promotion are a capital gain in the general tax base at their market value on the delivery date: declare them separately and add that value as the cost under “Manual lots for transferred positions”. If it is a transfer from another broker, add the original purchase cost there.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":
