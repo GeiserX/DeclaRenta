@@ -5,9 +5,10 @@ import {
   __resetEcbCache,
   type EcbFetcher,
 } from "../../src/engine/ecb-orchestrator.js";
+import { getEcbRate } from "../../src/engine/ecb.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
-import type { Trade, CashTransaction } from "../../src/types/ibkr.js";
+import type { Trade, CashTransaction, OpenPosition } from "../../src/types/ibkr.js";
 import type { ManualOpeningLot } from "../../src/types/tax.js";
 
 // All fixtures below are ANONYMIZED: synthetic account IDs, no real NIF/names/amounts.
@@ -116,9 +117,47 @@ describe("deriveEcbNeeds", () => {
 
     // EUR is removed; trade + cash currencies remain.
     expect([...needs.currencies].sort()).toEqual(["CHF", "GBP", "USD"]);
-    // Years: 2025 (trade + declaration), 2024 (trade), 2022 (cash), declaration 2025,
-    // plus minYear-1 = 2021 for the early-January lookback.
-    expect([...needs.years].sort((x, y) => x - y)).toEqual([2021, 2022, 2024, 2025]);
+    // Years: 2025 (trade + declaration), 2024 (trade), 2022 (cash), plus the year
+    // before each of them for the early-January lookback (2021, 2023).
+    for (const y of [2021, 2022, 2023, 2024, 2025]) expect(needs.years).toContain(y);
+  });
+
+  it("adds the previous year of EVERY year, so a gap year still gets its late-December rates", () => {
+    // Activity in 2023, nothing in 2024, a USD dividend on 1 January 2025.
+    const statement = makeStatement(
+      [makeTrade({ currency: "USD", tradeDate: "2023-06-10" })],
+      [makeCash({ currency: "USD", dateTime: "20250101;120000" })],
+    );
+    const needs = deriveEcbNeeds(statement, 2025);
+    expect(needs.years).toContain(2024);
+  });
+
+  it("includes the currencies of open positions and cash balances", () => {
+    const statement = makeStatement([makeTrade({ currency: "EUR", tradeDate: "2025-03-02" })]);
+    const position: OpenPosition = {
+      accountId: "ACC-TEST",
+      symbol: "GBETF",
+      description: "",
+      isin: "",
+      currency: "GBP",
+      assetCategory: "STK",
+      quantity: "100",
+      costBasisMoney: "1",
+      costBasisPrice: "1",
+      markPrice: "800",
+      positionValue: "80000",
+      fifoPnlUnrealized: "0",
+      fxRateToBase: "0",
+    };
+    statement.openPositions = [position];
+    statement.cashBalances = [
+      { accountId: "ACC-TEST", currency: "USD", endingCash: "70000", endingSettledCash: "70000" },
+    ];
+
+    const needs = deriveEcbNeeds(statement, 2025);
+
+    expect(needs.currencies).toContain("GBP");
+    expect(needs.currencies).toContain("USD");
   });
 
   it("includes minYear - 1 for the early-January lookback", () => {
@@ -286,6 +325,82 @@ describe("buildEcbRateMap", () => {
 
     // Both runs fetch — nothing is read from or written to the shared cache.
     expect(calls).toHaveLength(2);
+  });
+
+  it("resolves a 1 January dividend after a gap year (late-December rates are fetched)", async () => {
+    // Business-day observations only: 1 January and weekends have no rate.
+    const fetcher: EcbFetcher = (year, currencies) => {
+      const map: EcbRateMap = new Map();
+      for (let d = new Date(Date.UTC(year, 0, 1)); d.getUTCFullYear() === year; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dow = d.getUTCDay();
+        const iso = d.toISOString().slice(0, 10);
+        if (dow === 0 || dow === 6 || iso.endsWith("-01-01")) continue;
+        map.set(iso, new Map(currencies.map((c) => [c, "0.9"])));
+      }
+      return Promise.resolve(map);
+    };
+    const statement = makeStatement(
+      [makeTrade({ currency: "USD", tradeDate: "2023-06-10" })],
+      [makeCash({ currency: "USD", dateTime: "20250101;120000" })],
+    );
+
+    const map = await buildEcbRateMap({ statement, year: 2025 }, { fetcher, noCache: true });
+
+    expect(getEcbRate(map, "2025-01-01", "USD").toString()).toBe("0.9");
+  });
+
+  it("refetches the current year (its batch is still growing) but keeps serving past years from the cache", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-30T12:00:00Z"));
+    try {
+      const calls: number[] = [];
+      const published: Record<string, string> = { "2026-09-28": "0.90" };
+      const fetcher: EcbFetcher = (year, currencies) => {
+        calls.push(year);
+        const map: EcbRateMap = new Map();
+        if (year === 2026) {
+          for (const [date, rate] of Object.entries(published)) {
+            map.set(date, new Map(currencies.map((c) => [c, rate])));
+          }
+        } else {
+          map.set(`${year}-12-30`, new Map(currencies.map((c) => [c, "0.80"])));
+        }
+        return Promise.resolve(map);
+      };
+
+      await buildEcbRateMap({ currencies: ["USD"], years: [2024, 2026] }, { fetcher });
+      // The ECB publishes the next day's rate while the tab stays open.
+      published["2026-09-29"] = "0.95";
+      const second = await buildEcbRateMap({ currencies: ["USD"], years: [2024, 2026] }, { fetcher });
+
+      expect(getEcbRate(second, "2026-09-29", "USD").toString()).toBe("0.95");
+      // 2026 fetched twice; 2024 fetched once and then served from the cache.
+      expect(calls.filter((y) => y === 2026)).toHaveLength(2);
+      expect(calls.filter((y) => y === 2024)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("fetches the years in parallel, not one after another", async () => {
+    const DELAY_MS = 50;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetcher: EcbFetcher = async (year, currencies) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+      inFlight--;
+      return new Map([[`${year}-07-01`, new Map(currencies.map((c) => [c, `0.${year}`]))]]);
+    };
+
+    const start = Date.now();
+    const map = await buildEcbRateMap({ currencies: ["USD"], years: [2023, 2024, 2025] }, { fetcher, noCache: true });
+    const elapsed = Date.now() - start;
+
+    expect(maxInFlight).toBeGreaterThanOrEqual(2);
+    expect(elapsed).toBeLessThan(3 * DELAY_MS);
+    for (const y of [2023, 2024, 2025]) expect(map.get(`${y}-07-01`)?.get("USD")).toBe(`0.${y}`);
   });
 
   it("defaults to the real fetchEcbRates when no fetcher is injected (no accidental network in this test)", async () => {
