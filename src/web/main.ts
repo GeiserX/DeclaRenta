@@ -984,8 +984,9 @@ function renderResults(report: TaxSummary) {
   const chartData = extractChartData(report);
   // Taxable-base breakdown + clamped total for the estimate chart. The math
   // (netGainLoss includes wash-sale-blocked losses, so they're added back —
-  // they're deferred, not deductible now — and the whole sum is clamped at 0)
-  // lives in the shared decimal.js helper so the money math never round-trips
+  // they're deferred, not deductible now — and a loss in one savings bucket
+  // offsets at most 25% of the other, Art. 49 LIRPF) lives in the shared
+  // decimal.js helper so the money math never round-trips
   // through a lossy Number mid-calculation.
   const { breakdown: taxBaseBreakdown, taxableBase } = computeTaxableBaseBreakdown(report);
   const dtDeduction = report.doubleTaxation.deduction.toNumber();
