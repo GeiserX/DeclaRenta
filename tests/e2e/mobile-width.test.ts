@@ -215,6 +215,9 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     // A plain narrow viewport: `mobile: true` lets Chrome widen the layout
     // viewport to fit overflowing content, which would hide the defect.
     await send("Emulation.setDeviceMetricsOverride", { width, height: 844, deviceScaleFactor: 1, mobile: false });
+    // Phones draw overlay scrollbars; without this, Linux Chrome reserves 15px
+    // for a classic scrollbar and the page measures narrower than the screen.
+    await send("Emulation.setScrollbarsHidden", { hidden: true });
     await send("Page.navigate", { url: baseUrl });
     await waitFor(`document.readyState === "complete" && !!document.getElementById("splash-cta")`, "page load");
 
