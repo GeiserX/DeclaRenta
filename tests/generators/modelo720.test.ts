@@ -1339,6 +1339,52 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "acquisitionDate" }]);
   });
 
+  it("writes one extinction record per acquisition date sold, when last year's file has one record per date", () => {
+    // Last year's file: 100 VWCE held in two lots, so two V records for one ISIN.
+    const vwceLot = (acquireDate: string, quantity: number): Lot => ({
+      id: acquireDate, isin: "IE00BK5BQT80", symbol: "VWCE", description: "", acquireDate,
+      quantity: new Decimal(quantity), pricePerShare: new Decimal(50), costInFcy: new Decimal(50 * quantity),
+      currency: "EUR", ecbRate: new Decimal(1),
+    });
+    const lastYearFile = generateModelo720(
+      [makePosition({ isin: "IE00BK5BQT80", symbol: "VWCE", currency: "EUR", quantity: "100", positionValue: "60000" })],
+      new Map(),
+      { ...baseConfig, year: 2024 },
+      new Map([["IE00BK5BQT80", [vwceLot("20230502", 60), vwceLot("20240212", 40)]]]),
+    );
+    const previous = readPrevious720(lastYearFile).securities;
+    expect(previous.map((s) => s.isin)).toEqual(["IE00BK5BQT80", "IE00BK5BQT80"]);
+
+    // All 100 sold in 2025.
+    const s: FlexStatement = {
+      ...statement, toDate: "20251231",
+      trades: [
+        vwce({ tradeDate: "2023-05-02", quantity: "60", tradePrice: "50" }),
+        vwce({ tradeDate: "2024-02-12", quantity: "40", tradePrice: "50" }),
+        sell("2025-03-03", "100", "60"),
+      ],
+    };
+    const disposals = generateTaxReport(s, new Map(), 2025).capitalGains.disposals;
+    const lines = generateModelo720(s.openPositions, rateMap, { ...baseConfig, previousYearSecurities: previous }, undefined, undefined, disposals)
+      .split("\n");
+    const cancelled = lines
+      .filter((l) => l[0] === "2" && l[422] === "C")
+      .map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.fechaExtincion), boeField(l, BOE_720.detail.valoracion1)]);
+    expect(cancelled).toEqual([
+      ["20230502", "20250303", "00000000360000"], // 60 x 60 EUR
+      ["20240212", "20250303", "00000000240000"], // 40 x 60 EUR
+    ]);
+  });
+
+  it("asks for no extinction date on a sale the file leaves out for an old code", () => {
+    // No sale in the year: a written C record would need its date completed by hand.
+    const valid: Previous720Security = { isin: "IE00BK5BQT80", claveSubclave: "V1", country: "IE" };
+    const blankSubclave: Previous720Security = { isin: "US0378331005", claveSubclave: "V ", country: "US" };
+    const isinCountry: Previous720Security = { isin: "XS2314659447", claveSubclave: "V2", country: "XS" };
+    const cfg = { ...baseConfig, previousYearSecurities: [valid, blankSubclave, isinCountry] };
+    expect(findUndatedExtinctions([makePosition()], cfg, [])).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
+  });
+
   it("repeats last year's codes on a dated extinction, and never writes one whose old record has a blank subclave", () => {
     const s: FlexStatement = {
       ...statement, toDate: "20251231",
