@@ -35,3 +35,6 @@ npm-debug.log*
 .tbd/
 AGENTS.md
 .omc/
+
+# MkDocs build output
+site/
