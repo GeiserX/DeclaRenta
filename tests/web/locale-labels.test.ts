@@ -61,13 +61,13 @@ function summary(disposals: FifoDisposal[], fxDisposals: TaxSummary["fxGains"]["
   };
 }
 
-afterEach(() => {
-  setLocale("es");
+afterEach(async () => {
+  await setLocale("es");
 });
 
 describe("labels follow the active language", () => {
-  it("chart months and asset types are English under the English locale", () => {
-    setLocale("en");
+  it("chart months and asset types are English under the English locale", async () => {
+    await setLocale("en");
     const { monthlyGainLoss, assetDistribution } = extractChartData(summary([disposal()]));
     expect(monthlyGainLoss.map((m) => m.month)).toEqual(
       ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
@@ -84,8 +84,8 @@ describe("labels follow the active language", () => {
     expect(assetDistribution[0]!.label).toBe("Acciones");
   });
 
-  it("the operations annex prints asset group and option scenario in English", () => {
-    setLocale("en");
+  it("the operations annex prints asset group and option scenario in English", async () => {
+    await setLocale("en");
     const html = renderOperationsAnnex(summary([
       disposal({ assetCategory: "OPT", optionScenario: "expiration", putCall: "C", strike: "20" }),
     ]));
@@ -95,8 +95,8 @@ describe("labels follow the active language", () => {
     expect(html).not.toContain("Opciones");
   });
 
-  it("the FX detail has translated headers and a readable trigger instead of the raw code", () => {
-    setLocale("en");
+  it("the FX detail has translated headers and a readable trigger instead of the raw code", async () => {
+    await setLocale("en");
     const container = document.createElement("div");
     renderCasillaCards(container, summary([], [{
       currency: "USD",
@@ -110,6 +110,10 @@ describe("labels follow the active language", () => {
       holdingPeriodDays: 156,
       lotId: "lot-001",
     }]));
+    // Drill-downs are built on the first expand, so open every card first.
+    container.querySelectorAll<HTMLElement>(".casilla-card.expandable .casilla-trigger").forEach((el) => {
+      el.click();
+    });
     const html = container.innerHTML;
     expect(html).toContain("lot-001");
     expect(html).not.toContain("Origen");

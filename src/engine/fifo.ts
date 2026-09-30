@@ -55,6 +55,14 @@ interface Split {
   date: string;
   num: Decimal;
   den: Decimal;
+  /**
+   * Shares added (negative for a reverse split) when the broker gives no ratio
+   * (Revolut). The ratio is then sized in applySplit from the lots held under
+   * `isin` at that date, across every merged file.
+   */
+  sharesAdded?: Decimal;
+  /** Corporate-action rows grouped into this split */
+  transactionIDs: string[];
 }
 
 /**
@@ -71,6 +79,18 @@ function scaleLotsForSplit(lots: Lot[], split: Split): void {
   }
 }
 
+/**
+ * Ratio as shown to the user. A split sized from the holding (60 shares for 6)
+ * is reduced to its simplest form (10:1) when that is exact.
+ */
+function splitRatioLabel(split: Split): string {
+  if (split.sharesAdded) {
+    const [n, d] = split.num.div(split.den).toFraction(1000) as [Decimal, Decimal];
+    if (n.mul(split.den).equals(d.mul(split.num))) return `${n.toString()}:${d.toString()}`;
+  }
+  return `${split.num.toString()}:${split.den.toString()}`;
+}
+
 export class FifoEngine {
   /** FIFO queue per security (ISIN or symbol) — long positions */
   private lots: Map<string, Lot[]> = new Map();
@@ -79,6 +99,8 @@ export class FifoEngine {
   private disposals: FifoDisposal[] = [];
   /** Synthetic SELLs booked for cash buyouts (TC rows), for callers that also need them as trades */
   private cashBuyoutSales: Trade[] = [];
+  /** Ratio applied per FS/RS corporate-action transactionID, for wash-sale.ts to use the same units */
+  private splitRatios: Map<string, { num: Decimal; den: Decimal }> = new Map();
   private nextLotId = 1;
   /**
    * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
@@ -196,19 +218,44 @@ export class FifoEngine {
     const splitMap = new Map<string, Split>();
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "FS" || ca.type === "RS")) {
       const ratioMatch = ca.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
-      if (!ratioMatch) continue;
-      const num = new Decimal(ratioMatch[1]!);
-      const den = new Decimal(ratioMatch[2]!);
-      if (num.lessThanOrEqualTo(0) || den.lessThanOrEqualTo(0)) continue;
+      let num = new Decimal(1);
+      let den = new Decimal(1);
+      let sharesAdded: Decimal | undefined;
+      if (ratioMatch) {
+        num = new Decimal(ratioMatch[1]!);
+        den = new Decimal(ratioMatch[2]!);
+        if (num.lessThanOrEqualTo(0) || den.lessThanOrEqualTo(0)) continue;
+      } else {
+        // No ratio: a broker without ISINs (Revolut) gives only the shares added.
+        // The ratio depends on the whole holding, which may span several files,
+        // so it is sized at split time from the lots (applySplit).
+        if (ca.isin) continue;
+        let added: Decimal;
+        try {
+          added = new Decimal(ca.quantity);
+        } catch {
+          continue;
+        }
+        if (!added.isFinite() || added.isZero()) continue;
+        sharesAdded = added;
+      }
       const date = normalizeDate(ca.dateTime.slice(0, 8));
       const fromIsin = ca.description.match(/\(([A-Z]{2}[A-Z0-9]{9}\d)\)\s+SPLIT\s/i)?.[1]?.toUpperCase();
-      const groupIsin = fromIsin ?? ca.isin;
+      // A broker without ISINs (Revolut) keys its lots by symbol, as wash-sale.ts does.
+      const groupIsin = fromIsin ?? (ca.isin || lotKey({ isin: "", symbol: ca.symbol, assetCategory: "STK" }));
       const key = `${groupIsin}:${date}`;
       let split = splitMap.get(key);
       if (!split) {
-        split = { isin: groupIsin, isins: new Set(), newSymbol: ca.symbol, date, num, den };
+        split = {
+          isin: groupIsin, isins: new Set(), newSymbol: ca.symbol, date, num, den,
+          ...(sharesAdded ? { sharesAdded } : {}),
+          transactionIDs: [],
+        };
         splitMap.set(key, split);
+      } else if (split.sharesAdded && sharesAdded) {
+        split.sharesAdded = split.sharesAdded.plus(sharesAdded);
       }
+      split.transactionIDs.push(ca.transactionID);
       split.isins.add(ca.isin);
       if (ca.isin !== groupIsin) split.newSymbol = ca.symbol;
     }
@@ -513,9 +560,12 @@ export class FifoEngine {
   }
 
   private applySplit(split: Split): void {
+    if (split.sharesAdded && !this.sizeSplitFromLots(split)) return;
+    for (const id of split.transactionIDs) this.splitRatios.set(id, { num: split.num, den: split.den });
+
     const emitApplied = (isin: string): void => {
       const direction = split.num.greaterThanOrEqualTo(split.den) ? "forward" : "reverse";
-      const ratio = `${split.num.toString()}:${split.den.toString()}`;
+      const ratio = splitRatioLabel(split);
       this.emit({
         id: "fifo.split_applied",
         severity: "info",
@@ -528,6 +578,13 @@ export class FifoEngine {
     const lots = this.lots.get(split.isin);
     if (lots && lots.length > 0) {
       scaleLotsForSplit(lots, split);
+      if (split.sharesAdded) {
+        // Land exactly on the holding the broker reports, so a ratio like 10:3
+        // leaves no 1e-19 dust that would make a later full sale look short.
+        const held = split.den.plus(split.sharesAdded);
+        const others = lots.slice(0, -1).reduce((sum, lot) => sum.plus(lot.quantity), new Decimal(0));
+        lots[lots.length - 1]!.quantity = held.minus(others);
+      }
       // ISIN change: the split lots continue under the new ISIN, ahead of any newer lots there
       const newIsin = [...split.isins].find((isin) => isin && isin !== split.isin);
       if (newIsin) {
@@ -551,6 +608,30 @@ export class FifoEngine {
       scaleLotsForSplit(rowLots, split);
       emitApplied(isin);
     }
+  }
+
+  /**
+   * Size a split given only as shares added: ratio = (held + added) / held, with
+   * `held` the long lots under the split's key right now, from every merged file.
+   * Returns false (and warns) when nothing is held or the result is not positive.
+   */
+  private sizeSplitFromLots(split: Split): boolean {
+    const added = split.sharesAdded!;
+    const held = (this.lots.get(split.isin) ?? []).reduce((sum, lot) => sum.plus(lot.quantity), new Decimal(0));
+    const after = held.plus(added);
+    if (held.lessThanOrEqualTo(0) || after.lessThanOrEqualTo(0)) {
+      this.emit({
+        id: "fifo.split_unresolved",
+        severity: "warning",
+        message: `⚠ Split de ${split.newSymbol} el ${split.date} sin aplicar: no hay acciones anteriores con las que calcular la proporción.`,
+        hint: "Sube también los extractos de años anteriores, desde la apertura de la cuenta. Si no, el número de acciones y el coste de las ventas posteriores de este valor no serán correctos.",
+        context: { symbol: split.newSymbol, date: split.date, quantity: added.toString() },
+      });
+      return false;
+    }
+    split.num = after;
+    split.den = held;
+    return true;
   }
 
   private addScripDividendLot(sd: {
@@ -1711,6 +1792,11 @@ export class FifoEngine {
   /** The synthetic SELL trades booked for cash buyouts, so the anti-churning check sees the exit. */
   getCashBuyoutSales(): Trade[] {
     return this.cashBuyoutSales;
+  }
+
+  /** Ratio applied per FS/RS transactionID, including splits sized from the lots held */
+  getSplitRatios(): Map<string, { num: Decimal; den: Decimal }> {
+    return this.splitRatios;
   }
 
   getRemainingLots(): Map<string, Lot[]> {

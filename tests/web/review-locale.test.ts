@@ -70,7 +70,7 @@ afterEach(() => {
 describe("review step follows a language change", () => {
   it("re-renders the review cards in English after switching from Spanish", async () => {
     const { setLocale } = await import("../../src/i18n/index.js");
-    setLocale("es");
+    await setLocale("es");
     const file = new File([XML], "statement.xml", { type: "text/xml" });
     const input = document.getElementById("file-input") as HTMLInputElement;
     Object.defineProperty(input, "files", { value: [file], configurable: true });
@@ -83,7 +83,7 @@ describe("review step follows a language change", () => {
       [...document.querySelectorAll("#review-content .review-label")].map((el) => el.textContent);
     expect(labels()).toContain("Operaciones");
 
-    setLocale("en");
+    await setLocale("en");
     expect(labels()).toContain("Trades");
     expect(labels()).toContain("Date range");
     expect(labels()).not.toContain("Operaciones");
