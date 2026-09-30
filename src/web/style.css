@@ -3014,6 +3014,11 @@ footer a:hover {
   align-items: center;
 }
 
+.manual-rates-clear-bar {
+  margin: 1rem 0;
+  font-size: 0.85rem;
+}
+
 .manual-opening-lot-group input {
   width: 100%;
 }
@@ -3036,7 +3041,8 @@ footer a:hover {
 
   #crypto-rates-save-btn,
   #manual-opening-lots-save-btn,
-  #manual-opening-lots-clear-btn {
+  #manual-opening-lots-clear-btn,
+  #crypto-rates-clear-btn {
     width: 100%;
   }
 

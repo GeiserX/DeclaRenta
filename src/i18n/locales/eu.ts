@@ -586,6 +586,9 @@ const eu: TranslationKeys = {
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
+  "crypto_rates.stored_note":
+    "Kriptomoneten {{count}} prezio manual daude gordeta nabigatzaile honetan. Txostena birkalkulatzen den bakoitzean aplikatzen dira.",
+  "crypto_rates.clear_btn": "Ezabatu prezio manualak",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Eskuzko loteak transferitutako posizioentzat",

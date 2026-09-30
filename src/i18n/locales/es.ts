@@ -619,6 +619,9 @@ const es = {
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
+  "crypto_rates.stored_note":
+    "Hay {{count}} precio(s) manual(es) de criptomonedas guardado(s) en este navegador. Se aplican cada vez que se recalcula el informe.",
+  "crypto_rates.clear_btn": "Borrar precios manuales",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuales para posiciones transferidas",

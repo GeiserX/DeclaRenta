@@ -103,6 +103,15 @@ export function getManualOpeningLots(): ManualOpeningLot[] {
   return readStoredOpeningLots();
 }
 
+/** Remove every saved manual crypto price from this browser. */
+export function clearManualRates(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
+}
+
 export function clearManualOpeningLots(): void {
   try {
     localStorage.removeItem(OPENING_LOTS_STORAGE_KEY);
@@ -279,6 +288,33 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
     <span class="crypto-rates-saved-msg" hidden>${esc(tr("crypto_rates.saved"))}</span>
     <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
   </div>`;
+}
+
+/**
+ * Render the "clear saved manual prices" bar, or "" when none are saved.
+ *
+ * A saved price that values its trade removes that row from the crypto-rates
+ * panel, so without this bar a mistyped price keeps applying on every visit
+ * with no way to undo it. The bar shows how many prices are saved and one
+ * button that deletes them all; the panel then asks for them again.
+ */
+export function renderManualRatesClearBar(): string {
+  const count = readStored().length;
+  if (count === 0) return "";
+  return `<div class="manual-rates-clear-bar manual-opening-lots-actions">
+    <span class="muted">${esc(tr("crypto_rates.stored_note", { count: String(count) }))}</span>
+    <button type="button" id="crypto-rates-clear-btn" class="btn-secondary">${esc(tr("crypto_rates.clear_btn"))}</button>
+  </div>`;
+}
+
+/** Wire the clear button: delete every saved price, then recalculate. */
+export function bindManualRatesClearBar(container: HTMLElement, onClear: () => void): void {
+  const btn = container.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    clearManualRates();
+    onClear();
+  });
 }
 
 function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {

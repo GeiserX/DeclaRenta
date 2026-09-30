@@ -584,6 +584,9 @@ const en: TranslationKeys = {
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
+  "crypto_rates.stored_note":
+    "{{count}} manual crypto price(s) saved in this browser. They are applied every time the report is recalculated.",
+  "crypto_rates.clear_btn": "Clear manual prices",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Manual lots for transferred positions",

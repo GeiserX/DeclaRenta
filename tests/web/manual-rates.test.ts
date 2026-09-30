@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   clearManualOpeningLots,
+  clearManualRates,
+  renderManualRatesClearBar,
   getManualRates,
   setManualRate,
   getManualOpeningLots,
@@ -78,6 +80,42 @@ describe("setManualRate / getManualRates", () => {
 
   it("returns false for a non-numeric rate", () => {
     expect(setManualRate("SOL", "2025-04-10", "abc")).toBe(false);
+  });
+});
+
+describe("clearManualRates / renderManualRatesClearBar", () => {
+  it("clearManualRates empties getManualRates()", () => {
+    setManualRate("SOL", "2025-04-10", "30000");
+    expect(getManualRates().size).toBe(1);
+    clearManualRates();
+    expect(store[KEY]).toBeUndefined();
+    expect(getManualRates().size).toBe(0);
+  });
+
+  it("clearManualRates leaves the saved opening lots alone", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    store[OPENING_LOTS_KEY] = "[]";
+    clearManualRates();
+    expect(store[OPENING_LOTS_KEY]).toBe("[]");
+  });
+
+  it("renders nothing when no manual price is saved", () => {
+    expect(renderManualRatesClearBar()).toBe("");
+  });
+
+  it("renders the clear button with the saved count when prices are saved", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    setManualRate("ADA", "2025-05-02", "0,45");
+    const html = renderManualRatesClearBar();
+    expect(html).toContain('id="crypto-rates-clear-btn"');
+    expect(html).toContain("2");
+    expect(html).not.toContain("{{count}}");
+  });
+
+  it("renders nothing again after clearing", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    clearManualRates();
+    expect(renderManualRatesClearBar()).toBe("");
   });
 });
 

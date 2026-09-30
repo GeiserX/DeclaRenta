@@ -135,6 +135,48 @@ describe("crypto-rates Save next to the opening-lots panel", () => {
   });
 });
 
+describe("clearing saved manual crypto prices", () => {
+  it("shows no clear button before any price is saved", () => {
+    expect(document.getElementById("crypto-rates-clear-btn")).toBeNull();
+  });
+
+  it("keeps a clear button once a saved price hides its row, and clearing brings the row back", async () => {
+    type(document.querySelector<HTMLInputElement>(".crypto-rate-input"), "30000");
+    document.getElementById("crypto-rates-save-btn")!.click();
+    await waitFor(() => document.querySelector(".crypto-rate-input") === null || null, "crypto panel gone");
+
+    // The mistyped price now values the swap and its row is gone, but the
+    // clear button stays on the results step.
+    const clearBtn = await waitFor(
+      () => document.querySelector<HTMLButtonElement>("#wizard-step-3 #crypto-rates-clear-btn"),
+      "clear button",
+    );
+    // It sits in its own bar, never inside the opening-lots panel, so it is
+    // visible even when that panel is collapsed.
+    expect(clearBtn.closest(".manual-opening-lots-panel")).toBeNull();
+    expect(document.querySelectorAll(".manual-rates-clear-bar")).toHaveLength(1);
+
+    clearBtn.click();
+
+    expect(localStorage.getItem(RATES_KEY)).toBeNull();
+    const input = await waitFor(
+      () => document.querySelector<HTMLInputElement>(".crypto-rate-input"),
+      "crypto row back",
+    );
+    expect(input.value).toBe("");
+    expect(document.getElementById("crypto-rates-clear-btn")).toBeNull();
+  });
+
+  it("leaves the saved opening lots in place", async () => {
+    localStorage.setItem(LOTS_KEY, "[]");
+    type(document.querySelector<HTMLInputElement>(".crypto-rate-input"), "30000");
+    document.getElementById("crypto-rates-save-btn")!.click();
+    const clearBtn = await waitFor(() => document.getElementById("crypto-rates-clear-btn"), "clear button");
+    clearBtn.click();
+    expect(localStorage.getItem(LOTS_KEY)).toBe("[]");
+  });
+});
+
 describe("opening-lot inputs", () => {
   function row(): HTMLTableRowElement {
     return document.querySelector<HTMLTableRowElement>(".manual-opening-lot-row")!;

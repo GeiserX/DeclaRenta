@@ -40,6 +40,8 @@ import {
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   bindManualOpeningLotsPanel,
+  renderManualRatesClearBar,
+  bindManualRatesClearBar,
 } from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
@@ -948,6 +950,7 @@ function renderResults(report: TaxSummary) {
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
   resultsSectionEl.querySelectorAll(".manual-opening-lots-panel").forEach((el) => el.remove());
+  resultsSectionEl.querySelectorAll(".manual-rates-clear-bar").forEach((el) => el.remove());
 
   const panelHtml = renderManualOpeningLotsPanel(report.messages);
   if (panelHtml) {
@@ -955,6 +958,19 @@ function renderResults(report: TaxSummary) {
     const panel = resultsSectionEl.querySelector<HTMLElement>(".manual-opening-lots-panel");
     if (panel) {
       bindManualOpeningLotsPanel(panel, () => {
+        void processFiles();
+      });
+    }
+  }
+
+  // Saved manual crypto prices stay applied even after their rows leave the
+  // crypto-rates panel, so offer a way to clear them whenever any are saved.
+  const clearBarHtml = renderManualRatesClearBar();
+  if (clearBarHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", clearBarHtml);
+    const bar = resultsSectionEl.querySelector<HTMLElement>(".manual-rates-clear-bar");
+    if (bar) {
+      bindManualRatesClearBar(bar, () => {
         void processFiles();
       });
     }

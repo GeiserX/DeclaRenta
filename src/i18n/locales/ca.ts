@@ -586,6 +586,9 @@ const ca: TranslationKeys = {
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
+  "crypto_rates.stored_note":
+    "Hi ha {{count}} preu(s) manual(s) de criptomonedes desat(s) en aquest navegador. S'apliquen cada vegada que es recalcula l'informe.",
+  "crypto_rates.clear_btn": "Esborra els preus manuals",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lots manuals per a posicions transferides",
