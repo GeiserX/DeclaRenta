@@ -363,6 +363,14 @@ const es = {
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
     "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Esos saldos se muestran para revisión, pero no se incluyen en el fichero generado.",
+  "m720.omitted_title":
+    "Estos bienes no caben en el fichero y debes declararlos a mano en el formulario del Modelo 720:",
+  "m720.omitted_no_isin":
+    "no tiene ISIN; en el formulario se identifica con «Z» más el código del país del emisor",
+  "m720.omitted_no_country":
+    "falta el país donde está depositado o situado",
+  "m720.omitted_no_account":
+    "falta el número de cuenta",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",

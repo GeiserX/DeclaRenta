@@ -23,7 +23,12 @@ import { fetchEcbRates } from "../engine/ecb.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { generateTaxReport } from "../generators/report.js";
-import { generateModelo720 } from "../generators/modelo720.js";
+import {
+  findModelo720Omissions,
+  generateModelo720,
+  modelo720DeclarationId,
+  readPrevious720,
+} from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
@@ -429,6 +434,8 @@ program
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("--phone <phone>", "Teléfono de contacto", "")
   .option("--previous-720 <file>", "Previous year 720 output file (to determine A/M/C types)")
+  .option("--titulares <n>", "Number of holders sharing every asset: each declares 100/n % with the full value", parseInt)
+  .option("--declaration-id <id>", "Número identificativo (13 digits starting with 720). Defaults to a new one")
   .action(
     async (opts: {
       input: string;
@@ -438,6 +445,8 @@ program
       output?: string;
       phone: string;
       previous720?: string;
+      titulares?: number;
+      declarationId?: string;
     }) => {
       try {
         const content = readFileSync(opts.input, "utf-8");
@@ -459,8 +468,16 @@ program
         const surname = nameParts[0] ?? "";
         const firstName = nameParts[1] ?? "";
 
-        // Extract ISINs from previous year's 720 file (detail records start with "2", ISIN at positions 131-142)
+        if (opts.declarationId !== undefined && !/^720\d{10}$/.test(opts.declarationId)) {
+          throw new Error(`--declaration-id debe tener 13 dígitos y empezar por 720: "${opts.declarationId}"`);
+        }
+        if (opts.titulares !== undefined && !(Number.isInteger(opts.titulares) && opts.titulares >= 1)) {
+          throw new Error("--titulares debe ser un número entero mayor o igual que 1");
+        }
+
+        // ISINs (V/I records) and account codes (C records) from last year's 720 file
         let previousYearIsins: string[] | undefined;
+        let previousYearAccounts: string[] | undefined;
         if (opts.previous720) {
           let prev: string;
           try {
@@ -469,11 +486,7 @@ program
             console.error(`Error: No se pudo leer el archivo ${opts.previous720}.`);
             process.exit(1);
           }
-          previousYearIsins = prev
-            .split("\n")
-            .filter((line) => line.startsWith("2"))
-            .map((line) => line.slice(131, 143).trim())
-            .filter((isin) => isin.length > 0);
+          ({ isins: previousYearIsins, accounts: previousYearAccounts } = readPrevious720(prev));
         }
 
         const output720 = generateModelo720(
@@ -486,17 +499,35 @@ program
             year: opts.year,
             phone: opts.phone,
             contactName: opts.name,
-            declarationId: "0000000000001",
+            declarationId: opts.declarationId ?? modelo720DeclarationId(),
             isComplementary: false,
             isReplacement: false,
             previousYearIsins,
+            previousYearAccounts,
+            titulares: opts.titulares,
           },
           undefined,
           statement.cashBalances,
         );
 
+        // Assets the file cannot carry: the user declares them by hand.
+        const omissions = findModelo720Omissions(statement.openPositions, statement.cashBalances);
+        for (const o of omissions) {
+          const what = o.kind === "position"
+            ? `Posición ${o.position.symbol || o.position.description}`
+            : `Cuenta ${o.cashBalance.accountId || "(sin número)"} en ${o.cashBalance.currency}`;
+          const why = {
+            no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
+            no_country: "no tiene un código de país válido",
+            no_account: "no tiene número de cuenta",
+          }[o.reason];
+          console.error(`⚠ ${what} ${why}: no se incluye en el fichero. Decláralo a mano en el formulario del Modelo 720.`);
+        }
+
         if (!output720) {
-          console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
+          console.error(omissions.length > 0
+            ? "No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720."
+            : "Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
           return;
         }
 

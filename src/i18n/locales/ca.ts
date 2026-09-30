@@ -333,6 +333,14 @@ const ca: TranslationKeys = {
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
     "Alguns saldos no inclouen la mitjana del quart trimestre obligatòria per als comptes del Model 720. Es mostren per revisar-los, però no s'inclouen al fitxer generat.",
+  "m720.omitted_title":
+    "Aquests béns no caben al fitxer i els has de declarar a mà al formulari del Model 720:",
+  "m720.omitted_no_isin":
+    "no té ISIN; al formulari s'identifica amb «Z» més el codi del país de l'emissor",
+  "m720.omitted_no_country":
+    "falta el país on està dipositat o situat",
+  "m720.omitted_no_account":
+    "falta el número de compte",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",

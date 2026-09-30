@@ -8,7 +8,13 @@
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
-import { checkModelo720Thresholds, generateModelo720 } from "../generators/modelo720.js";
+import {
+  checkModelo720Thresholds,
+  findModelo720Omissions,
+  generateModelo720,
+  modelo720DeclarationId,
+  modelo720PositionCountry,
+} from "../generators/modelo720.js";
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -142,7 +148,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         }
         if (rate === null) unvaluedCount++;
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
-        return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(p.isin.slice(0, 2))}</td><td>${val}</td></tr>`;
+        return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
     if (unvaluedCount > 0) {
@@ -179,6 +185,17 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
         return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
+  }
+
+  // Assets the file leaves out: the user declares them by hand.
+  const omissions = findModelo720Omissions(statement.openPositions, statement.cashBalances);
+  if (omissions.length > 0) {
+    html += `<div class="banner banner-warning">${esc(t("m720.omitted_title"))}<ul>${omissions.map((o) => {
+      const label = o.kind === "position"
+        ? o.position.symbol || o.position.description || o.position.isin
+        : `${o.cashBalance.accountId} (${o.cashBalance.currency})`;
+      return `<li>${esc(label)}: ${esc(t(`m720.omitted_${o.reason}`))}</li>`;
+    }).join("")}</ul></div>`;
   }
 
   // Generate button
@@ -250,9 +267,10 @@ function generate720File(): void {
     year: profile.year,
     phone: profile.telefono,
     contactName: fullName || "CONTRIBUYENTE",
-    declarationId: "",
+    declarationId: modelo720DeclarationId(),
     isComplementary: false,
     isReplacement: false,
+    titulares: profile.titulares,
   };
 
   // Validate the free-text inputs (taxpayer name, contact, broker-supplied

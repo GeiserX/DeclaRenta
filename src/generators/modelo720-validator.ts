@@ -80,6 +80,11 @@ const ISO_COUNTRY_CODES = new Set([
   "VU", "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW",
 ]);
 
+/** True when `code` is a two-letter country code AEAT accepts in positions 129-130. */
+export function isIsoCountryCode(code: string): boolean {
+  return ISO_COUNTRY_CODES.has(code);
+}
+
 /**
  * Validate the ISIN check digit using the Luhn algorithm.
  *
@@ -133,6 +138,7 @@ function isNumeric(s: string): boolean {
  * - Numeric fields contain only digits, at the BOE positions of the type-2
  *   tail (432-500: valoraciones, representación, número de valores, porcentaje)
  * - Country codes are valid ISO 3166-1 alpha-2
+ * - The declaration number (type 1, 108-120) is 13 digits starting with 720
  * - ISIN check digit passes Luhn algorithm
  *
  * @param records - Array of fixed-width record strings
@@ -279,6 +285,15 @@ export function validateModelo720Records(records: string[]): ValidationResult[] 
 
     // For summary records (type "1"), validate numeric totals
     if (len >= 1 && record[0] === "1") {
+      // Número identificativo de la declaración (positions 108-120): 13 digits,
+      // the first three being 720 (Orden HAP/72/2013, art. 1).
+      if (len >= 120) {
+        const declarationId = record.slice(107, 120);
+        if (!/^720\d{10}$/.test(declarationId)) {
+          errors.push(`Número identificativo de la declaración inválido: "${declarationId}" (13 dígitos que empiezan por 720)`);
+        }
+      }
+
       // Detail count (positions 136-144): 9 digits
       if (len >= 144) {
         const detailCount = record.slice(135, 144);

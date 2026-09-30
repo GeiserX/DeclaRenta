@@ -332,6 +332,14 @@ const en: TranslationKeys = {
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
     "Some balances do not include the Q4 average required for Modelo 720 account records. They are shown for review but excluded from the generated file.",
+  "m720.omitted_title":
+    "These assets do not fit in the file, so declare them by hand in the Modelo 720 form:",
+  "m720.omitted_no_isin":
+    "it has no ISIN; the form identifies it with “Z” plus the issuer's country code",
+  "m720.omitted_no_country":
+    "the country where it is deposited or located is missing",
+  "m720.omitted_no_account":
+    "the account number is missing",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",

@@ -333,6 +333,14 @@ const gl: TranslationKeys = {
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
     "Algúns saldos non inclúen a media do cuarto trimestre obrigatoria para as contas do Modelo 720. Móstranse para revisión, pero non se inclúen no ficheiro xerado.",
+  "m720.omitted_title":
+    "Estes bens non caben no ficheiro e debes declaralos a man no formulario do Modelo 720:",
+  "m720.omitted_no_isin":
+    "non ten ISIN; no formulario identifícase con «Z» máis o código do país do emisor",
+  "m720.omitted_no_country":
+    "falta o país onde está depositado ou situado",
+  "m720.omitted_no_account":
+    "falta o número de conta",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",

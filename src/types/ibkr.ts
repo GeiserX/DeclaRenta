@@ -188,6 +188,11 @@ export interface OpenPosition {
   positionValue: string;
   fifoPnlUnrealized: string;
   fxRateToBase: string;
+  /**
+   * Country where the broker keeps the securities in custody (ISO alpha-2).
+   * Modelo 720 writes it in positions 129-130 of a clave V record.
+   */
+  custodianCountry?: string;
 }
 
 export interface SecurityInfo {

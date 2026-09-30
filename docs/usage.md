@@ -29,6 +29,9 @@ node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --
 # Modelo 720 con tipos A/M/C (comparando con declaración del año anterior)
 node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE" --previous-720 720_2024.txt
 
+# Modelo 720 de una cuenta con dos titulares (cada uno declara el 50 % con el valor completo)
+node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE" --titulares 2
+
 # Modelo D-6 (guía AFORIX)
 node dist/cli.js d6 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
 

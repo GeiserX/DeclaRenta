@@ -38,6 +38,9 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
   }
 
   if (type === "1") {
+    // Número identificativo (positions 108-120): 13 digits starting with 720
+    const id = "7200000000001";
+    for (let i = 0; i < id.length; i++) chars[107 + i] = id[i]!;
     // Detail count (positions 136-144): 9 digits
     const cnt = "000000001";
     for (let i = 0; i < cnt.length; i++) chars[135 + i] = cnt[i]!;
@@ -225,6 +228,15 @@ describe("validateModelo720Records", () => {
   });
 
   describe("Summary record numeric field validation", () => {
+    it("should reject a declaration number that does not start with 720", () => {
+      for (const id of ["0000000000000", "0000000000001", "720000000000A"]) {
+        const results = validateModelo720Records([buildRecord("1", { 107: id })]);
+        expect(results[0]!.valid).toBe(false);
+        expect(results[0]!.errors).toContainEqual(expect.stringContaining("Número identificativo de la declaración"));
+      }
+    });
+
+
     it("should detect non-numeric suma de valoración 1 in summary record", () => {
       const record = buildRecord("1", { 145: "ABCDEFGHIJKLMNOPQ" });
       const results = validateModelo720Records([record]);

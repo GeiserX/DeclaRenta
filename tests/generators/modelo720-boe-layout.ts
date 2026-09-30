@@ -8,13 +8,26 @@
  */
 export const BOE_720 = {
   summary: {
+    nombre: [18, 57],
+    telefono: [59, 67],
+    contacto: [68, 107],
+    numeroDeclaracion: [108, 120],
     suma1Sign: [145, 145],
     suma1: [146, 162],
     suma2Sign: [163, 163],
     suma2: [164, 180],
   },
   detail: {
+    nombre: [36, 75],
     claveBien: [102, 102],
+    claveSubclave: [102, 103],
+    pais: [129, 130],
+    claveIdentificacion: [131, 131],
+    isin: [132, 143],
+    claveCuenta: [144, 144],
+    bic: [145, 155],
+    codigoCuenta: [156, 189],
+    entidad: [190, 230],
     origen: [423, 423],
     fechaExtincion: [424, 431],
     valoracion1Sign: [432, 432],

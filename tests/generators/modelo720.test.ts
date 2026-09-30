@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { generateModelo720, checkModelo720Thresholds } from "../../src/generators/modelo720.js";
-import type { OpenPosition } from "../../src/types/ibkr.js";
+import {
+  generateModelo720,
+  checkModelo720Thresholds,
+  findModelo720Omissions,
+  modelo720DeclarationId,
+  readPrevious720,
+} from "../../src/generators/modelo720.js";
+import type { CashBalance, OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
 import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
@@ -27,6 +33,7 @@ function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
     positionValue: "60000",
     fifoPnlUnrealized: "20000",
     fxRateToBase: "0.92",
+    custodianCountry: "IE",
     ...overrides,
   };
 }
@@ -38,7 +45,7 @@ const baseConfig = {
   year: 2025,
   phone: "600123456",
   contactName: "GARCIA LOPEZ, JUAN",
-  declarationId: "0000000000001",
+  declarationId: "7200000000001",
   isComplementary: false,
   isReplacement: false,
 };
@@ -82,12 +89,12 @@ describe("Modelo 720 Generator", () => {
     expect(lines).toHaveLength(3); // 1 summary + 2 detail (OPT excluded)
   });
 
-  it("should extract country code from ISIN into detail record", () => {
+  it("should write the custodian's country, not the ISIN prefix, into a V detail record", () => {
     const positions = [makePosition()];
     const result = generateModelo720(positions, rateMap, baseConfig);
     const detail = result.split("\n")[1]!;
-    // Country code at positions 129-130 (0-indexed: 128-129)
-    expect(detail.slice(128, 130)).toBe("US");
+    // Country code at positions 129-130 (0-indexed: 128-129): where the securities are deposited
+    expect(detail.slice(128, 130)).toBe("IE");
   });
 
   it("should include ISIN in detail record", () => {
@@ -320,7 +327,7 @@ describe("Modelo 720 Generator", () => {
     it("should generate Category C records when cash exceeds 50K", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
-        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
+        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -346,7 +353,7 @@ describe("Modelo 720 Generator", () => {
     it("should generate both V and C records when both exceed 50K", () => {
       const positions = [makePosition()]; // 60000 * 0.92 = 55200 EUR
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000", countryCode: "IE" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -362,7 +369,7 @@ describe("Modelo 720 Generator", () => {
     it("should only generate C records when V is below threshold but C exceeds", () => {
       const positions = [makePosition({ positionValue: "10000" })]; // 9200 EUR < 50K
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000" },
+        { accountId: "U1", currency: "EUR", endingCash: "55000", endingSettledCash: "55000", averageQ4Cash: "55000", countryCode: "IE" },
       ];
       const result = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances);
 
@@ -506,7 +513,7 @@ describe("Modelo 720 Generator", () => {
 
     it("writes a cash account with the 31-Dec balance in valoración 1 and the Q4 average in valoración 2", () => {
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000", countryCode: "IE" },
       ];
       const detail = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n")[1]!;
       expect(detail).toHaveLength(500);
@@ -537,7 +544,7 @@ describe("Modelo 720 Generator", () => {
 
     it("type-1 sumas equal the sum of the valoración 1 and valoración 2 written in the details", () => {
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000", countryCode: "IE" },
       ];
       const lines = generateModelo720([makePosition()], rateMap, baseConfig, undefined, cashBalances).split("\n");
       const summary = lines[0]!;
@@ -631,7 +638,7 @@ describe("Modelo 720 Generator", () => {
       const positions = [makePosition()];
       const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
       const cashBalances = [
-        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000" },
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" },
       ];
       const result = generateModelo720(positions, rateMap, config, undefined, cashBalances);
       for (const line of result.split("\n")) {
@@ -705,13 +712,13 @@ describe("Modelo 720 Generator", () => {
 
     it("sanitizes control chars in the cash-account entity name (Category C)", () => {
       const cashBalances = [
-        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", institutionName: "BANK\r\nOF X" },
+        { accountId: "U1234567", currency: "USD", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", institutionName: "BANK\r\nOF X", countryCode: "IE" },
       ];
       const detail = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n")[1]!;
       expect(detail.length).toBe(500);
-      // Entity name at 36-75 (0-indexed 35..74) and 190-230 (0-indexed 189..229).
+      // Entity name at 190-230 (0-indexed 189..229).
       expect(detail).not.toMatch(/[\x00-\x1F\x7F-\x9F]/);
-      expect(detail.slice(35, 75)).toBe("BANK  OF X".padEnd(40, " "));
+      expect(detail.slice(189, 230)).toBe("BANK  OF X".padEnd(41, " "));
     });
 
     it("regression: a normal record with no control chars is byte-identical to the pre-sanitization output", () => {
@@ -776,5 +783,165 @@ describe("Modelo 720 — unvaluable position (missing year-end rate) degrades, d
     expect(heldIsinRecords).toHaveLength(0);
     // Sanity: the valued GBP position IS declared.
     expect(detailLines.some((l) => l.slice(131, 143).trim() === "GB0000000001")).toBe(true);
+  });
+});
+
+describe("Modelo 720 — codes, identity and account fields the BOE asks for (Orden HAP/72/2013)", () => {
+  const d = BOE_720.detail;
+  const sm = BOE_720.summary;
+  /** A holding at an Irish-entity broker (IBKR Ireland), worth 55,200 EUR. */
+  const held = (overrides: Partial<OpenPosition> = {}) => makePosition({ custodianCountry: "IE", ...overrides });
+  const onlyDetail = (positions: OpenPosition[], config: Parameters<typeof generateModelo720>[2] = baseConfig) =>
+    generateModelo720(positions, rateMap, config).split("\n")[1]!;
+
+  describe("clave (102) and subclave (103)", () => {
+    it("codes a share V/1, a bond V/2 and a foreign fund I/0", () => {
+      expect(boeField(onlyDetail([held()]), d.claveSubclave)).toBe("V1");
+      expect(boeField(onlyDetail([held({ assetCategory: "BOND", isin: "XS2314659447" })]), d.claveSubclave)).toBe("V2");
+      expect(boeField(onlyDetail([held({ assetCategory: "FUND", isin: "IE00BK5BQT80" })]), d.claveSubclave)).toBe("I0");
+    });
+
+    it("never writes a position without an ISIN as clave 1 with a blank ISIN; it leaves it out and reports it", () => {
+      const noIsin = held({ isin: "", symbol: "RVLT", description: "Revolut holding" });
+      const lines = generateModelo720([held(), noIsin], rateMap, baseConfig).split("\n");
+      const details = lines.filter((l) => l[0] === "2");
+      expect(details).toHaveLength(1);
+      expect(boeField(details[0]!, d.isin)).toBe("US78462F1030");
+      expect(findModelo720Omissions([held(), noIsin])).toEqual([
+        { kind: "position", reason: "no_isin", position: noIsin },
+      ]);
+    });
+  });
+
+  describe("country (129-130)", () => {
+    it("writes the custodian's country for clave V, not the ISIN prefix", () => {
+      expect(boeField(onlyDetail([held()]), d.pais)).toBe("IE");
+    });
+
+    it("writes the fund's own country for clave I (where the IIC is situated)", () => {
+      const fund = held({ assetCategory: "FUND", isin: "LU0274208692", custodianCountry: "DE" });
+      expect(boeField(onlyDetail([fund]), d.pais)).toBe("LU");
+    });
+
+    it("an XS Eurobond held at a broker passes the validator", () => {
+      const bond = held({ assetCategory: "BOND", isin: "XS2314659447" });
+      const records = generateModelo720([bond], rateMap, { ...baseConfig, declarationId: modelo720DeclarationId() }).split("\n");
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], []]);
+    });
+
+    it("leaves out and reports a security whose custodian country is unknown", () => {
+      const unknown = makePosition({ custodianCountry: undefined });
+      expect(generateModelo720([unknown, held({ isin: "US0378331005" })], rateMap, baseConfig).split("\n")).toHaveLength(2);
+      expect(findModelo720Omissions([unknown])).toEqual([{ kind: "position", reason: "no_country", position: unknown }]);
+    });
+  });
+
+  describe("text fields", () => {
+    const accented = { ...baseConfig, surname: "Muñoz Pérez", name: "José", contactName: "Muñoz Pérez José" };
+
+    it("uppercases names and strips accents but keeps Ñ", () => {
+      const [summary, detail] = generateModelo720([held()], rateMap, accented).split("\n") as [string, string];
+      expect(boeField(summary, sm.nombre).trimEnd()).toBe("MUÑOZ PEREZ JOSE");
+      expect(boeField(summary, sm.contacto).trimEnd()).toBe("MUÑOZ PEREZ JOSE");
+      expect(boeField(detail, d.nombre).trimEnd()).toBe("MUÑOZ PEREZ JOSE");
+    });
+
+    it("keeps Ç, drops other diacritics and blanks characters outside Latin-1", () => {
+      const detail = onlyDetail([held({ description: "Çà Škoda € Œuvre" })]);
+      expect(boeField(detail, d.entidad).trimEnd()).toBe("ÇA SKODA    UVRE");
+      expect(detail).toHaveLength(500);
+    });
+
+    it("writes the phone as its last nine digits, without the +34 / 0034 prefix", () => {
+      for (const phone of ["+34 600 123 456", "0034600123456", "600 123 456", "600123456"]) {
+        const summary = generateModelo720([held()], rateMap, { ...baseConfig, phone }).split("\n")[0]!;
+        expect(boeField(summary, sm.telefono)).toBe("600123456");
+      }
+    });
+  });
+
+  describe("ownership percentage (476-480)", () => {
+    it("writes each holder's share with the full, unprorated value", () => {
+      const detail = onlyDetail([held()], { ...baseConfig, titulares: 2 });
+      expect(boeField(detail, d.porcentaje)).toBe("05000");
+      expect(boeField(detail, d.valoracion1)).toBe("00000005520000");
+    });
+
+    it("rounds a three-way split to 33.33", () => {
+      expect(boeField(onlyDetail([held()], { ...baseConfig, titulares: 3 }), d.porcentaje)).toBe("03333");
+    });
+  });
+
+  describe("declaration number (108-120)", () => {
+    it("starts with 720 and has 13 digits", () => {
+      expect(modelo720DeclarationId(new Date("2026-03-01T10:00:00Z"))).toBe("7201772359200");
+      expect(modelo720DeclarationId()).toMatch(/^720\d{10}$/);
+      const summary = generateModelo720([held()], rateMap, { ...baseConfig, declarationId: modelo720DeclarationId() }).split("\n")[0]!;
+      expect(boeField(summary, sm.numeroDeclaracion)).toMatch(/^720\d{10}$/);
+    });
+
+    it("the validator rejects a number that does not start with 720", () => {
+      const records = generateModelo720([held()], rateMap, { ...baseConfig, declarationId: "0000000000001" }).split("\n");
+      expect(validateModelo720Records(records)[0]!.errors).toContainEqual(expect.stringContaining("Número identificativo"));
+    });
+  });
+
+  describe("cash account record (clave C)", () => {
+    const account = { accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE", institutionName: "Interactive Brokers Ireland Limited" };
+    const cashDetail = (cb: CashBalance, config: Parameters<typeof generateModelo720>[2] = baseConfig) =>
+      generateModelo720([], rateMap, config, undefined, [cb]).split("\n")[1]!;
+
+    it("names the declarant, codes 103 = 5 and 131 = 0, and puts the account in 144 and 156-189", () => {
+      const detail = cashDetail(account);
+      expect(boeField(detail, d.nombre).trimEnd()).toBe("GARCIA LOPEZ JUAN");
+      expect(boeField(detail, d.claveSubclave)).toBe("C5");
+      expect(boeField(detail, d.pais)).toBe("IE");
+      expect(boeField(detail, d.claveIdentificacion)).toBe("0");
+      expect(boeField(detail, d.isin)).toBe(" ".repeat(12));
+      expect(boeField(detail, d.claveCuenta)).toBe("O");
+      expect(boeField(detail, d.bic)).toBe(" ".repeat(11));
+      expect(boeField(detail, d.codigoCuenta).trimEnd()).toBe("U1234567");
+      expect(boeField(detail, d.entidad).trimEnd()).toBe("INTERACTIVE BROKERS IRELAND LIMITED");
+      expect(boeField(detail, d.origen)).toBe("A");
+      expect(detail).toHaveLength(500);
+    });
+
+    it("keys an IBAN as I", () => {
+      const detail = cashDetail({ ...account, accountId: "DE89 3704 0044 0532 0130 00" });
+      expect(boeField(detail, d.claveCuenta)).toBe("I");
+      expect(boeField(detail, d.codigoCuenta).trimEnd()).toBe("DE89370400440532013000");
+    });
+
+    it("writes M for an account declared last year", () => {
+      expect(boeField(cashDetail(account, { ...baseConfig, previousYearAccounts: ["U1234567"] }), d.origen)).toBe("M");
+      // Last year's file carries the IBAN compacted, as 156-189 holds it.
+      const iban = { ...account, accountId: "DE89 3704 0044 0532 0130 00" };
+      expect(boeField(cashDetail(iban, { ...baseConfig, previousYearAccounts: ["DE89370400440532013000"] }), d.origen)).toBe("M");
+    });
+
+    it("leaves out and reports an account with no country instead of writing XX", () => {
+      const noCountry = { ...account, countryCode: undefined };
+      expect(generateModelo720([], rateMap, baseConfig, undefined, [noCountry])).not.toContain("XX");
+      expect(findModelo720Omissions([], [noCountry])).toEqual([{ kind: "cash", reason: "no_country", cashBalance: noCountry }]);
+    });
+  });
+
+  it("a cancelled record carries the declarant's name and subclave 1", () => {
+    const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+    const cancelled = generateModelo720([held()], rateMap, config)
+      .split("\n").find((l) => l[0] === "2" && boeField(l, d.origen) === "C")!;
+    expect(boeField(cancelled, d.nombre).trimEnd()).toBe("GARCIA LOPEZ JUAN");
+    expect(boeField(cancelled, d.claveSubclave)).toBe("V1");
+  });
+
+  it("reads last year's ISINs from V/I records and account codes from C records", () => {
+    const lastYear = generateModelo720(
+      [held(), held({ assetCategory: "FUND", isin: "IE00BK5BQT80" })],
+      rateMap,
+      baseConfig,
+      undefined,
+      [{ accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" }],
+    );
+    expect(readPrevious720(lastYear)).toEqual({ isins: ["US78462F1030", "IE00BK5BQT80"], accounts: ["U1234567"] });
   });
 });

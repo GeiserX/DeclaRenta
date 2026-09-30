@@ -333,6 +333,14 @@ const eu: TranslationKeys = {
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
     "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Berrikusteko erakusten dira, baina ez dira sortutako fitxategian sartzen.",
+  "m720.omitted_title":
+    "Ondasun hauek ez dira fitxategian sartzen, eta eskuz aitortu behar dituzu 720 Ereduaren inprimakian:",
+  "m720.omitted_no_isin":
+    "ez du ISINik; inprimakian «Z» eta jaulkitzailearen herrialde-kodea erabiliz identifikatzen da",
+  "m720.omitted_no_country":
+    "gordailuan edo kokatuta dagoen herrialdea falta da",
+  "m720.omitted_no_account":
+    "kontu-zenbakia falta da",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
