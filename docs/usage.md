@@ -38,17 +38,32 @@ node dist/cli.js d6 --input flex_query.xml --year 2025 --nif 12345678A --name "A
 
 El broker se auto-detecta a partir del contenido del fichero. Se puede forzar con `--broker <nombre>`.
 
+Opciones adicionales del comando `convert`:
+
+- `--output fichero.json` — Guardar resultado en un fichero en vez de stdout.
+- `--format pdf|csv|json` — Formato de salida (por defecto JSON).
+- `--broker ibkr|degiro|flatex|scalable|etoro|revolut|lightyear|freedom24|coinbase|binance|kraken|traderepublic|trading212` — Forzar broker si la auto-detección falla.
+- `--prior-losses fichero.json` — Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF). El formato está en [Compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas).
+
 ## Interfaz web
 
 La web incluye:
 
-- **Wizard guiado**: subida de ficheros → revisión de datos → resultados con casillas detalladas
-- **Guías por broker**: instrucciones paso a paso para obtener el informe de cada broker
-- **Perfil fiscal**: NIF, nombre, CCAA y teléfono para generar 720/D-6 correctamente
-- **Secciones dedicadas**: Modelo 100, Modelo 720, Modelo D-6 con navegación lateral
-- **Gráficas interactivas**: distribución por activo, G/P mensual, composición de divisas, retenciones por país
-- **Comparativa interanual**: guarda informes en localStorage y compara variaciones año a año
-- **Detalle de casillas**: desplegable con explicación de cada casilla y su normativa
-- **PWA instalable**: funciona offline tras la primera visita
-- **Tema claro/oscuro**
-- **5 idiomas**: español, inglés, catalán, euskera, gallego
+- Un asistente guiado: subida de ficheros, revisión de datos y resultados con casillas detalladas.
+- Guías por broker, con instrucciones paso a paso para obtener el informe de cada uno.
+- Un perfil fiscal con NIF, nombre, CCAA y teléfono para generar el 720 y el D-6 correctamente.
+- Secciones dedicadas al Modelo 100, 720, 721 y D-6, con navegación lateral.
+- Gráficas interactivas: distribución por activo, G/P mensual, composición de divisas y retenciones por país.
+- Una comparativa interanual que guarda los informes en localStorage y compara las variaciones año a año.
+- Un desplegable por casilla con su explicación y su normativa.
+- Una PWA instalable que funciona sin conexión tras la primera visita.
+- Tema claro y oscuro.
+- Cinco idiomas: español, inglés, catalán, euskera y gallego.
+
+## Guía Renta Web
+
+La sección Guía Renta Web de la web (`#guia`) indica, para cada casilla, en qué apartado de Renta Web va, qué valor introducir y qué opciones elegir en los desplegables.
+
+Es una página fija: se puede consultar sin subir ningún fichero.
+
+![La Guía de cumplimentación de Renta Web: el apartado de las casillas 0328 y 0331 con la entidad emisora, el tipo de elemento patrimonial, los gastos y las fechas que pide Renta Web](images/screenshots/guia-renta-web.png)

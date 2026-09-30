@@ -32,6 +32,10 @@
 - No existe umbral mínimo (de minimis) — toda conversión es declarable.
 - La regla anti-churning (Art. 33.5.f/g) NO se aplica a divisas.
 
+!!! warning
+
+    **Fondos y ETFs:** DeclaRenta clasifica los fondos y ETFs (categoría FUND) y los bonos (BOND) en este bloque «otros elementos» (1633/1637). Si tu fondo/ETF *cotiza* en un mercado regulado, técnicamente correspondería al bloque de acciones negociadas (0328/0331). Los informes de los brokers no indican de forma fiable si un fondo cotiza o no, por lo que se aplica este criterio uniforme. **El impuesto a pagar es idéntico** (ambos bloques tributan en la base del ahorro al mismo tipo); solo cambia la casilla en la que se anota. Si lo prefieres, puedes mover manualmente en Renta Web las ventas de ETFs cotizados a las casillas 0328/0331.
+
 ## Base del ahorro — Rendimientos del capital mobiliario
 
 | Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
@@ -85,6 +89,33 @@ Solo se bloquea «la correspondiente a las acciones que se consideran recomprada
 
 **Reintegración.** Si se suben los ficheros de varios años juntos, la reintegración de la pérdida diferida es **automática** (el motor procesa todas las operaciones en un único recorrido cronológico). En declaraciones de un solo año por separado, la pérdida diferida debe seguirse **manualmente** (limitación documentada).
 
+### Ventana de dos meses
+
+La ventana se calcula en meses naturales (no en días). Si vendes el 15 de marzo con pérdida:
+
+- Ventana anterior: desde el 15 de enero.
+- Ventana posterior: hasta el 15 de mayo.
+- Si has recomprado valores homogéneos dentro de la ventana aplicable, la pérdida puede quedar **bloqueada**. Para no cotizados/cripto se usa la ventana de 1 año.
+
+### Qué hacer en Renta Web
+
+En Renta Web esto **requiere acción**: no es automático. Por el importe bloqueado debes marcar la casilla **«Pérdidas patrimoniales no imputables»**; y cuando vendas los valores recomprados, debes imputar entonces la pérdida diferida.
+
+### Cómo lo detecta DeclaRenta
+
+El motor de anti-churning recorre todas las operaciones en orden cronológico y, para cada valor homogéneo:
+
+1. Identifica las ventas con pérdida (`gainLossEur < 0`).
+2. Para cada una, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para cotizados, 1 año para no cotizados/cripto), antes o después de la venta.
+3. Bloquea la pérdida de forma **proporcional**: `pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida`. La parte restante se computa ahora.
+4. La pérdida bloqueada queda **diferida**, asociada a los valores recomprados (no se suma a su coste).
+5. **Reintegración:** cuando una venta posterior transmite esos valores recomprados, el motor libera la pérdida diferida correspondiente (de forma proporcional a la cantidad vendida), volviendo a hacerla deducible.
+6. Las operaciones con pérdida bloqueada aparecen resaltadas en la tabla de resultados.
+
+!!! warning
+
+    La regla anti-churning se aplica a **valores homogéneos**: acciones (STK), fondos (FUND), bonos (BOND) y **criptomonedas**. Las criptomonedas (y los valores no cotizados) se tratan como no cotizados y usan la **ventana de 1 año (±12 meses)** en lugar de los 2 meses de los valores cotizados. **No se aplica** a opciones (OPT), futuros (FUT), CFDs ni forex (CASH).
+
 ## Tipo de cambio
 
 DeclaRenta usa exclusivamente los **tipos de cambio diarios del BCE** (European Central Bank), publicados a las 16:00 CET cada día TARGET. Para fines de semana y festivos, se utiliza el último tipo disponible (día hábil anterior).
@@ -101,9 +132,72 @@ DeclaRenta agrupa los lotes por:
 
 Los stock splits y reverse splits ajustan la cantidad y el precio por acción de los lotes existentes, manteniendo el coste total invariable.
 
-## Corporate actions
+### Cómo funcionan los lotes
+
+Cada compra crea un **lote** con su fecha de adquisición, cantidad, precio por acción y coste total en euros. Cuando vendes:
+
+- Se consume el lote más antiguo primero.
+- Si la venta es mayor que un lote, se consume parcialmente el siguiente.
+- El coste base se calcula proporcionalmente: si un lote de 100 acciones con coste de 1.000 EUR pierde 30 acciones, el coste base de esas 30 es 300 EUR.
+- El resto del lote (70 acciones, 700 EUR) permanece en la cola para futuras ventas.
+
+### Tipos de cambio del BCE
+
+La legislación fiscal española exige usar tipos de cambio oficiales, no los del broker. DeclaRenta obtiene los tipos diarios del BCE mediante su API SDMX:
+
+- Se usa el tipo del día de la operación (compra o venta).
+- Si es fin de semana o festivo, se retrocede hasta 10 días para encontrar el último tipo publicado.
+- El BCE publica tipos como "1 EUR = X moneda extranjera". DeclaRenta invierte el tipo para obtener "1 unidad de moneda extranjera = Y EUR".
+- La única conexión a Internet que realiza DeclaRenta es a la API pública del BCE.
+
+### FIFO cross-broker
+
+Si tienes el mismo ISIN en varios brokers (por ejemplo, acciones de Apple compradas en IBKR y en Degiro), DeclaRenta unifica las colas FIFO por ISIN. Al subir ficheros de múltiples brokers, todas las operaciones se ordenan cronológicamente y los lotes se consumen en orden global, independientemente del broker de origen.
+
+### Precisión decimal
+
+DeclaRenta utiliza la librería **Decimal.js** con precisión de 20 dígitos significativos y redondeo `ROUND_HALF_UP`. Esto evita los errores de punto flotante típicos de JavaScript (como `0.1 + 0.2 = 0.30000000000000004`), garantizando que los cálculos fiscales sean exactos hasta el céntimo.
+
+## Acciones corporativas
 
 | Tipo IBKR | Acción | Tratamiento DeclaRenta |
 |-----------|--------|----------------------|
 | **FS** | Stock split / reverse split | Ajusta cantidad × ratio, precio ÷ ratio, coste total sin cambio |
 | **SD** | Scrip dividend (dividendo en acciones) | Añade lotes nuevos con coste = importe IBKR × tipo_ECB |
+
+Las acciones corporativas modifican los lotes FIFO sin generar hechos imponibles (salvo excepciones). DeclaRenta las procesa cronológicamente junto con las operaciones de compraventa.
+
+### Stock splits y reverse splits
+
+Un *split* multiplica el número de acciones por un ratio y divide el precio proporcionalmente. Un *reverse split* hace lo contrario. En ambos casos:
+
+- La **cantidad** de cada lote se multiplica (o divide) por el ratio.
+- El **precio por acción** se ajusta inversamente.
+- El **coste total en euros** del lote no cambia — es una operación fiscalmente neutra.
+- Las fracciones residuales (sub-acciones) se eliminan automáticamente.
+
+### Fusiones (mergers / acquisitions)
+
+Cuando una empresa es adquirida por otra, los lotes del ISIN antiguo se transfieren al ISIN nuevo:
+
+- La cantidad se ajusta por el ratio de canje.
+- El **coste base total se conserva** — es un canje fiscalmente neutro.
+- El precio por acción se recalcula sobre la nueva cantidad.
+- La fecha de adquisición original se mantiene.
+
+### Spin-offs
+
+En un spin-off, una empresa separa una división como entidad independiente. El coste base del lote original se reparte proporcionalmente:
+
+- Se crea un nuevo lote para la entidad escindida con una fracción del coste base original.
+- El lote de la empresa matriz reduce su coste base en la misma proporción.
+- La fecha de adquisición del nuevo lote hereda la fecha original del lote padre.
+- La fracción se estima a partir del ratio de distribución (en la práctica debería basarse en valores de mercado el día de la distribución).
+
+### Scrip dividends (dividendos en acciones)
+
+Un scrip dividend entrega nuevas acciones en lugar de efectivo. DeclaRenta lo trata como:
+
+- Un nuevo lote con el coste base que reporta el broker (importe del dividendo equivalente).
+- La fecha de adquisición es la fecha del evento corporativo.
+- Estos lotes entran en la cola FIFO como cualquier compra.
