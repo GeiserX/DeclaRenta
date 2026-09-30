@@ -324,7 +324,7 @@ Tareas:
 
 #### Bonos y renta fija
 
-- [x] Cupones: rendimiento del capital mobiliario (Casilla 0033) — ya soportado vía Bond Interest Received/Paid
+- [x] Cupones: rendimiento del capital mobiliario (Casilla 0027) — ya soportado vía Bond Interest Received/Paid
 - [x] Compraventa de bonos: ganancia/pérdida patrimonial vía FIFO
 - [x] Letras del Tesoro extranjeras: tratamiento fiscal como BOND
 
@@ -456,23 +456,22 @@ Referencia rápida de las casillas que DeclaRenta calcula:
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
-| **0327** | Valor de transmisión | Suma de (precio_venta × cantidad - comisión_venta) × tipo_ECB para cada venta |
-| **0328** | Valor de adquisición | Suma del coste FIFO en EUR de los lotes consumidos por cada venta |
-| **0358** | Pérdidas patrimoniales a compensar | Pérdidas netas no bloqueadas por anti-churning |
+| **0328** | Valor de transmisión | Suma de (precio_venta × cantidad - comisión_venta) × tipo_ECB para cada venta |
+| **0331** | Valor de adquisición | Suma del coste FIFO en EUR de los lotes consumidos por cada venta |
 
 ### Base del ahorro — Rendimientos del capital mobiliario
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
 | **0029** | Dividendos íntegros | Suma bruta de dividendos × tipo_ECB |
-| **0033** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
-| **0032** | ~~Gastos deducibles~~ | Intereses de margen pagados al broker — **NO deducible** en base del ahorro (Art. 26.1.a LIRPF). Se muestra como valor informativo. |
+| **0027** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
+| **—** | Gastos no deducibles (informativo) | Intereses de margen pagados al broker — **NO deducible** en base del ahorro (Art. 26.1.a LIRPF). Se muestra como valor informativo. |
 
 ### Deducciones
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
-| **0588** | Deducción por doble imposición internacional | Por país: min(retención extranjera, impuesto español sobre esa renta) |
+| **0588** | Deducción por doble imposición internacional | Por país: min(retención extranjera hasta el 15% del bruto, bruto del país × tipo medio del ahorro) |
 
 ### Tramos del ahorro (ejercicio 2025)
 

@@ -8,13 +8,12 @@
 |---------|----------|------------------------|------------------|
 | **0328** | Valor de transmisión (acciones negociadas) | Σ (precio_venta × cantidad × multiplicador − comisión − impuestos) × tipo_ECB_venta | Art. 35.2 y 37.1.a LIRPF |
 | **0331** | Valor de adquisición (acciones negociadas) | Σ (precio_compra × cantidad × multiplicador + comisión + impuestos) × tipo_ECB_compra, siguiendo FIFO sobre los lotes consumidos | Art. 35.1 LIRPF |
-| **0358** | Pérdidas patrimoniales a compensar | Pérdidas netas NO bloqueadas por regla anti-churning | Art. 49 LIRPF |
 
 **Notas:**
 - La casilla **0327** es un campo de texto (denominación de los valores), no un importe. Las opciones, criptomonedas y fondos no cotizados se declaran como «otros elementos patrimoniales» en las casillas **1633/1637**, no en 0328/0331.
 - En valores en **moneda extranjera**, el valor de adquisición mostrado se calcula al tipo de cambio del BCE de la fecha de **venta** (no de compra), de modo que transmisión − adquisición coincide exactamente con la ganancia o pérdida (DGT **V2422-20**: la ganancia se calcula en la moneda del valor y solo la diferencia se convierte a euros). Por eso este importe puede diferir del coste histórico en euros de la fecha de compra.
 - El motor FIFO (Art. 37.2 LIRPF) determina qué lotes se consumen al vender valores homogéneos.
-- La regla anti-churning (Art. 33.5.f/g LIRPF) bloquea **solo la parte proporcional** de la pérdida correspondiente a la cantidad recomprada; el resto se incluye en 0358 y se computa ahora. La parte bloqueada se difiere (no se pierde) y se reporta por separado hasta que se vendan los valores recomprados.
+- La regla anti-churning (Art. 33.5.f/g LIRPF) bloquea **solo la parte proporcional** de la pérdida correspondiente a la cantidad recomprada; el resto se computa ahora. La pérdida entera va dentro de la diferencia entre 0328 y 0331 (o entre 1633 y 1637); la parte bloqueada se difiere (no se pierde) y se reporta por separado hasta que se vendan los valores recomprados.
 - Los impuestos de transacción (STT, FTT, SEC fees) se incluyen en el coste de adquisición (compras) y se deducen del valor de transmisión (ventas).
 
 ## Base del ahorro — Ganancias por transmisión de moneda extranjera
@@ -27,8 +26,9 @@
 **Notas:**
 - La divisa es un elemento patrimonial: la ganancia/pérdida es valor de transmisión − valor de adquisición (Art. **33.1** LIRPF), imputada en la conversión efectiva a euros (Art. 14.2.e). La divisa comparte el bloque «otros elementos patrimoniales» (casillas 1633/1637) con opciones, cripto y fondos no cotizados. La casilla 1626 es «Tipo de elemento patrimonial. Clave», y 1631 es la «Fecha de transmisión» — no son importes.
 - Cada conversión EUR→FCY crea un lote en la cola FIFO de esa divisa (DGT V2324-10).
-- Cada disposición de divisa (FCY→EUR, o compra de valores en FCY) consume lotes por FIFO.
-- Las conversiones automáticas del broker (FXCONV) se excluyen: solo las operaciones deliberadas generan eventos fiscales.
+- Cada conversión de la divisa (por ejemplo, USD→EUR) consume lotes por FIFO y es lo único que realiza una ganancia o pérdida de divisa.
+- Comprar valores en divisa no realiza nada. La divisa gastada queda apartada con su coste de origen y vuelve a la cola cuando vendes los valores.
+- Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker» en el perfil fiscal, o con `--skip-auto-convert` en la CLI.
 - No existe umbral mínimo (de minimis) — toda conversión es declarable.
 - La regla anti-churning (Art. 33.5.f/g) NO se aplica a divisas.
 
@@ -55,10 +55,11 @@
 
 | Casilla | Concepto | Cómo calcula DeclaRenta | Referencia legal |
 |---------|----------|------------------------|------------------|
-| **0588** | Deducción por doble imposición internacional | Por país: min(retención_extranjera, impuesto_español_sobre_esa_renta) | Art. 80 LIRPF |
+| **0588** | Deducción por doble imposición internacional | Por país: min(retención_extranjera hasta el 15% del bruto, bruto_del_país × tipo_medio_del_ahorro) | Art. 80 LIRPF |
 
 **Notas:**
-- El impuesto español se calcula aplicando los tramos del ahorro al ingreso bruto de cada país.
+- El tipo medio del ahorro es la cuota que dan los tramos del ahorro sobre toda tu base del ahorro, dividida entre esa base. Si la base es cero o negativa, se aplican los tramos al bruto de cada país.
+- La retención extranjera solo cuenta hasta el 15% del bruto, el límite de la mayoría de los convenios con España. Lo retenido de más (por ejemplo, el 30% de EE.UU. sin W-8BEN) no se deduce aquí, se reclama en el país de origen.
 - La deducción está limitada al impuesto que España hubiera cobrado sobre esa misma renta.
 
 ## Tramos del ahorro (ejercicio 2025)
@@ -84,7 +85,7 @@ Solo se bloquea «la correspondiente a las acciones que se consideran recomprada
 
 **Ejemplo.** Vender 100 acciones con una pérdida de 1.000 € y recomprar 30 dentro de los 2 meses:
 - Se difieren **300 €** (la pérdida correspondiente a 30 acciones).
-- Se imputan **700 €** ahora (la pérdida de las 70 acciones no recompradas, que sí entra en la casilla 0358).
+- Se imputan **700 €** ahora (la pérdida de las 70 acciones no recompradas).
 - Cuando se vendan esas 30 acciones recompradas, se reintegran los **300 €** diferidos.
 
 **Reintegración.** Si se suben los ficheros de varios años juntos, la reintegración de la pérdida diferida es **automática** (el motor procesa todas las operaciones en un único recorrido cronológico). En declaraciones de un solo año por separado, la pérdida diferida debe seguirse **manualmente** (limitación documentada).
