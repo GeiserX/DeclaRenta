@@ -169,6 +169,14 @@ export function convertDateISO(date: string): string {
   return date.trim().replace(/-/g, "").slice(0, 8);
 }
 
+/** Time of day in a timestamp or time cell ("2025-01-10 09:05:07",
+ *  "2025-01-10T09:05:07Z", "9:05") as "HH:MM:SS"; undefined when there is none. */
+export function timeOfDay(text: string): string | undefined {
+  const match = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return undefined;
+  return `${match[1]!.padStart(2, "0")}:${match[2]}:${match[3] ?? "00"}`;
+}
+
 // ---------------------------------------------------------------------------
 // Fractional (minor-unit) currency normalization
 // Some venues quote in the minor unit: GBX (penny sterling, LSE), ZAc (South
