@@ -8,6 +8,7 @@
 
 import Decimal from "decimal.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { OpenPosition } from "../types/ibkr.js";
 
 const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
 const MAX_RETRIES = 3;
@@ -86,8 +87,10 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
     toFetch.push(normalized);
   }
 
-  for (const currency of toFetch) {
-    const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata`;
+  // One request per currency, all in flight at once (each keeps its own retry).
+  const fetchOne = async (currency: string): Promise<Map<string, string>> => {
+    const ratesByDate = new Map<string, string>();
+    const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata&detail=dataonly`;
 
     let response: Response | undefined;
     let lastError: unknown;
@@ -159,6 +162,17 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
       // Invert: 1 FCY = 1/X EUR
       const eurPerFcy = new Decimal(1).dividedBy(parsedRate).toFixed(10);
 
+      ratesByDate.set(date, eurPerFcy);
+    }
+    return ratesByDate;
+  };
+
+  const perCurrency = await Promise.all(toFetch.map(fetchOne));
+
+  // Merge in `toFetch` order so the map does not depend on response order.
+  for (const [i, ratesByDate] of perCurrency.entries()) {
+    const currency = toFetch[i]!;
+    for (const [date, eurPerFcy] of ratesByDate) {
       if (!rateMap.has(date)) {
         rateMap.set(date, new Map());
       }
@@ -253,6 +267,17 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: string): Decimal | null {
   if (currency === "EUR") return new Decimal(1);
   return lookupRateInMap(rateMap, date, currency);
+}
+
+/**
+ * An open position with units held but a market value of 0: the export gives
+ * no year-end price (Revolut's transaction log, or an IBKR position without a
+ * positionValue). Its EUR value is unknown, not 0 €, so the Modelo 720/721/D-6
+ * callers treat it like a position with no rate: left out of the EUR totals
+ * and surfaced for manual valuation.
+ */
+export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue">): boolean {
+  return new Decimal(p.quantity).greaterThan(0) && new Decimal(p.positionValue).isZero();
 }
 
 /**

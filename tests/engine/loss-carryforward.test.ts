@@ -68,7 +68,7 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
     expect(result.totalCompensated.toFixed(2)).toBe("500.00");
   });
 
-  it("should add current year losses to carryforward", () => {
+  it("should carry forward only what is left of a current-year gains loss after the same-year 25% offset", () => {
     const result = applyLossCarryforward(
       2025,
       new Decimal("-2000"), // Net loss on gains
@@ -76,10 +76,12 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
       [],
     );
 
+    // Art. 49.1.b LIRPF: the loss first offsets 25% of this year's income (125).
+    expect(result.adjustedIncome.toFixed(2)).toBe("375.00");
     expect(result.updatedCarryforward).toHaveLength(1);
     expect(result.updatedCarryforward[0]!.year).toBe(2025);
     expect(result.updatedCarryforward[0]!.category).toBe("gains");
-    expect(result.updatedCarryforward[0]!.remaining.toFixed(2)).toBe("-2000.00");
+    expect(result.updatedCarryforward[0]!.remaining.toFixed(2)).toBe("-1875.00");
   });
 
   it("should use FIFO order for loss consumption (oldest first)", () => {
@@ -113,7 +115,7 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
     expect(result.updatedCarryforward).toHaveLength(0);
   });
 
-  it("should add current year income losses to carryforward", () => {
+  it("should carry forward only what is left of a current-year income loss after the same-year 25% offset", () => {
     const result = applyLossCarryforward(
       2025,
       new Decimal("500"),    // Positive gains
@@ -121,10 +123,12 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
       [],
     );
 
+    // Art. 49.1.a LIRPF: the loss first offsets 25% of this year's gains (125).
+    expect(result.adjustedGains.toFixed(2)).toBe("375.00");
     const incomeLoss = result.updatedCarryforward.find((l) => l.category === "income");
     expect(incomeLoss).toBeDefined();
     expect(incomeLoss!.year).toBe(2025);
-    expect(incomeLoss!.remaining.toFixed(2)).toBe("-1000.00");
+    expect(incomeLoss!.remaining.toFixed(2)).toBe("-875.00");
   });
 
   it("should add both gains and income losses when both negative", () => {
@@ -151,6 +155,66 @@ describe("Loss Carryforward (Art. 49 LIRPF)", () => {
     );
 
     expect(result.updatedCarryforward).toHaveLength(0);
+  });
+
+  describe("Same-year cross-compensation (Art. 49.1.a/b LIRPF)", () => {
+    it("offsets a current-year gains loss against 25% of this year's income before carrying it", () => {
+      const result = applyLossCarryforward(2025, new Decimal("-1000"), new Decimal("2000"), []);
+
+      expect(result.adjustedIncome.toFixed(2)).toBe("1500.00"); // 2000 - 25% of 2000
+      expect(result.adjustedGains.toFixed(2)).toBe("-500.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("500.00");
+      expect(result.updatedCarryforward).toHaveLength(1);
+      expect(result.updatedCarryforward[0]!.category).toBe("gains");
+      expect(result.updatedCarryforward[0]!.year).toBe(2025);
+      expect(result.updatedCarryforward[0]!.remaining.toFixed(2)).toBe("-500.00");
+    });
+
+    it("offsets a current-year income loss against 25% of this year's gains before carrying it", () => {
+      const result = applyLossCarryforward(2025, new Decimal("2000"), new Decimal("-1000"), []);
+
+      expect(result.adjustedGains.toFixed(2)).toBe("1500.00");
+      expect(result.adjustedIncome.toFixed(2)).toBe("-500.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("500.00");
+      expect(result.updatedCarryforward).toHaveLength(1);
+      expect(result.updatedCarryforward[0]!.category).toBe("income");
+      expect(result.updatedCarryforward[0]!.remaining.toFixed(2)).toBe("-500.00");
+    });
+
+    it("shares one 25% cap: the current-year loss uses it first, prior-year losses get the rest", () => {
+      const priorLosses: LossCarryforward[] = [
+        { year: 2023, amount: new Decimal("-1000"), remaining: new Decimal("-1000"), category: "gains" },
+      ];
+      const result = applyLossCarryforward(2025, new Decimal("-1000"), new Decimal("2000"), priorLosses);
+
+      // Cap = 25% of 2000 = 500, all of it taken by the 2025 loss.
+      expect(result.adjustedIncome.toFixed(2)).toBe("1500.00");
+      expect(result.totalCompensated.toFixed(2)).toBe("500.00");
+      const prior = result.updatedCarryforward.find((l) => l.year === 2023);
+      expect(prior!.remaining.toFixed(2)).toBe("-1000.00");
+      const current = result.updatedCarryforward.find((l) => l.year === 2025);
+      expect(current!.remaining.toFixed(2)).toBe("-500.00");
+    });
+
+    it("matches the AEAT Manual práctico IRPF 2025 worked example (cap on the balance before any compensation)", () => {
+      // Chapter 12 caso práctico, base del ahorro: gains +4000, income -800;
+      // pending 2021 gains -700, 2021 income -500, 2022 gains -2100.
+      const priorLosses: LossCarryforward[] = [
+        { year: 2021, amount: new Decimal("-700"), remaining: new Decimal("-700"), category: "gains" },
+        { year: 2021, amount: new Decimal("-500"), remaining: new Decimal("-500"), category: "income" },
+        { year: 2022, amount: new Decimal("-2100"), remaining: new Decimal("-2100"), category: "gains" },
+      ];
+      const result = applyLossCarryforward(2025, new Decimal("4000"), new Decimal("-800"), priorLosses);
+
+      // 800 (2025 income) + 2800 (prior gains) + 200 (2021 income, up to the
+      // 1000 cap shared with the 800) = 3800 compensated; base 200.
+      expect(result.totalCompensated.toFixed(2)).toBe("3800.00");
+      expect(result.adjustedGains.toFixed(2)).toBe("200.00");
+      expect(result.updatedCarryforward).toHaveLength(1);
+      expect(result.updatedCarryforward[0]!.year).toBe(2021);
+      expect(result.updatedCarryforward[0]!.category).toBe("income");
+      expect(result.updatedCarryforward[0]!.remaining.toFixed(2)).toBe("-300.00");
+    });
   });
 
   describe("Early break in same-category gains loop", () => {
