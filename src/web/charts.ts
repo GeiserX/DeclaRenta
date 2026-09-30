@@ -168,6 +168,11 @@ export function renderHorizontalBarChart(title: string, items: { label: string; 
 // Data extraction helpers (called from main.ts with the report)
 // ---------------------------------------------------------------------------
 
+const MONTH_KEYS = [
+  "chart.month_1", "chart.month_2", "chart.month_3", "chart.month_4", "chart.month_5", "chart.month_6",
+  "chart.month_7", "chart.month_8", "chart.month_9", "chart.month_10", "chart.month_11", "chart.month_12",
+] as const;
+
 export interface ChartData {
   assetDistribution: { label: string; value: Decimal }[];
   currencyComposition: { label: string; value: Decimal }[];
@@ -214,20 +219,18 @@ export function extractChartData(report: {
   }));
 
   // Monthly G/P
-  const monthMap = new Map<string, { gain: number; loss: number }>();
-  const MONTHS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const monthMap = new Map<number, { gain: number; loss: number }>();
   for (const d of disposals) {
     const date = d.sellDate;
     const monthIdx = parseInt(date.length === 8 ? date.slice(4, 6) : date.slice(5, 7)) - 1;
-    const key = MONTHS[monthIdx] ?? "?";
-    if (!monthMap.has(key)) monthMap.set(key, { gain: 0, loss: 0 });
-    const entry = monthMap.get(key)!;
+    if (!monthMap.has(monthIdx)) monthMap.set(monthIdx, { gain: 0, loss: 0 });
+    const entry = monthMap.get(monthIdx)!;
     const gl = d.gainLossEur.toNumber();
     if (gl >= 0) entry.gain += gl;
     else entry.loss += gl;
   }
-  const monthlyGainLoss = MONTHS
-    .map((month) => ({ month, ...(monthMap.get(month) ?? { gain: 0, loss: 0 }) }));
+  const monthlyGainLoss = MONTH_KEYS
+    .map((key, i) => ({ month: t(key), ...(monthMap.get(i) ?? { gain: 0, loss: 0 }) }));
 
   return { assetDistribution, currencyComposition, withholdingsByCountry, monthlyGainLoss };
 }

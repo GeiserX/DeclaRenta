@@ -69,6 +69,14 @@ const es = {
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
   "table.currency": "Divisa",
+  "table.fx_origin": "Origen",
+  "table.fx_lot": "Lote FIFO",
+  "fx.trigger.conversion": "Conversión de divisa",
+  "fx.trigger.dividend": "Dividendo",
+  "fx.trigger.interest": "Intereses",
+  "fx.trigger.commission": "Comisión",
+  "fx.trigger.stock_purchase": "Compra de valores",
+  "fx.trigger.stock_sale": "Venta de valores",
 
   // Casillas
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
@@ -97,6 +105,9 @@ const es = {
   "messages.errors_title": "{{count}} error(es) — requiere atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
   "messages.info_title": "{{count}} nota(s) informativa(s)",
+  "pdf.severity_error": "Error",
+  "pdf.severity_warning": "Aviso",
+  "pdf.severity_info": "Nota",
   "pdf.section_messages": "Mensajes",
 
   // Charts
@@ -104,6 +115,27 @@ const es = {
   "chart.monthly_gl": "Ganancia/Pérdida por mes",
   "chart.currency_composition": "Composición por divisa",
   "chart.withholdings_country": "Retenciones por país",
+  "chart.month_1": "Ene",
+  "chart.month_2": "Feb",
+  "chart.month_3": "Mar",
+  "chart.month_4": "Abr",
+  "chart.month_5": "May",
+  "chart.month_6": "Jun",
+  "chart.month_7": "Jul",
+  "chart.month_8": "Ago",
+  "chart.month_9": "Sep",
+  "chart.month_10": "Oct",
+  "chart.month_11": "Nov",
+  "chart.month_12": "Dic",
+  "asset.stk": "Acciones",
+  "asset.fund": "Fondos / ETFs",
+  "asset.opt": "Opciones",
+  "asset.fop": "Opciones sobre futuros",
+  "asset.crypto": "Criptomonedas",
+  "asset.bond": "Bonos",
+  "option.expiration": "Expiración",
+  "option.close": "Cierre anticipado",
+  "option.exercise": "Ejercicio/Asignación",
 
   // Footer
   "footer.docs": "Documentación",
@@ -693,16 +725,16 @@ const es = {
   "fifo.corporate_action_unhandled.hint":
     "Si cambió el número de acciones o el ISIN de la posición, revisa el coste de las ventas posteriores de este valor.",
   "fifo.sell_without_lots":
-    "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
+    "⚠ Venta sin lotes: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
   "fifo.sell_without_lots.hint":
-    "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
+    "¿Incluye tu exportación los años anteriores? Descarga de tu broker un periodo que cubra desde la primera compra de este valor.",
   "fifo.cover_without_lots":
     "⚠ Cierre de corto sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Ganancia no calculada (posición corta abierta fuera del periodo o datos previos incompletos).",
   "fifo.cover_without_lots.hint":
     "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la venta que abrió esta posición corta.",
-  "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0.",
+  "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Coste base = 0.",
   "fifo.insufficient_lots.hint":
-    "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
+    "El fichero no cubre todas las compras previas de este valor. Exporta desde tu broker un periodo más amplio.",
   "fifo.option_invalid_date": "⚠ Evento OptionEAE sin fecha válida para {{symbol}}. Omitido.",
   "fifo.option_invalid_date.hint":
     "Evento de opción omitido por fecha inválida. Revisa que el Flex Query incluye la sección 'Option Exercises, Assignments & Expirations'.",

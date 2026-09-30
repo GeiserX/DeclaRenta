@@ -229,7 +229,7 @@ When adding a new section (like 721), follow this checklist:
 
 ### FOP/FSFOP Asset Category (Hard Trace)
 - IBKR reports futures options on MEFF (Spanish derivatives exchange) as `assetCategory="FOP"` or `"FSFOP"`
-- These must be added to `KNOWN_CATEGORIES` in fifo.ts, `WASH_SALE_EXEMPT` in wash-sale.ts, and `ASSET_LABELS` in charts.ts/operations-annex.ts
+- These must be added to `KNOWN_CATEGORIES` in fifo.ts, `WASH_SALE_EXEMPT` in wash-sale.ts, and `ASSET_LABELS` in web/asset-labels.ts (with its `asset.*` key in all 5 locales)
 - FOP/FSFOP are derivatives → exempt from anti-churning (Art. 33.5.f only applies to homogeneous securities)
 - They share option-like metadata (strike, expiry, putCall) — extend OPT spreads in fifo.ts to also match FOP/FSFOP
 - **Symptom**: massive false blocked losses (~22K EUR) and 75+ "categoría desconocida" warnings
@@ -337,7 +337,8 @@ When adding a new section (like 721), follow this checklist:
 ### Actionable Explanations (Every Tier)
 - Every message (error, warning, info) MUST include a brief, localized explanation of **what likely caused it** and **what the user can try**
 - Common root causes to suggest: missing columns in the export, incomplete date range (doesn't cover prior years' acquisitions), wrong report type selected from broker
-- Example: "Venta sin lotes previos — ¿has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra."
+- Example: "Venta sin lotes — ¿incluye tu exportación los años anteriores? Descarga de tu broker un periodo que cubra desde la primera compra de este valor."
+- Messages that fire for every broker must not assume IBKR (no "Flex Query" advice there); keep IBKR wording for IBKR-only messages
 - These hints are rendered in the user's active locale (use `t()` keys, never hardcoded Spanish)
 - The tone is helpful ("try this"), never blaming ("you forgot to...")
 

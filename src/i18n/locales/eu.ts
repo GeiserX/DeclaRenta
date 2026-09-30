@@ -67,6 +67,14 @@ const eu: TranslationKeys = {
   "table.concept": "Kontzeptua",
   "table.amount_eur": "Zenbatekoa (EUR)",
   "table.currency": "Moneta",
+  "table.fx_origin": "Jatorria",
+  "table.fx_lot": "FIFO lotea",
+  "fx.trigger.conversion": "Dibisa-bihurketa",
+  "fx.trigger.dividend": "Dibidendua",
+  "fx.trigger.interest": "Interesak",
+  "fx.trigger.commission": "Komisioa",
+  "fx.trigger.stock_purchase": "Balore-erosketa",
+  "fx.trigger.stock_sale": "Balore-salmenta",
 
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
@@ -95,12 +103,36 @@ const eu: TranslationKeys = {
   "messages.errors_title": "{{count}} errore — arreta behar du",
   "messages.warnings_title": "{{count}} abisu — berrikusi",
   "messages.info_title": "{{count}} ohar informatibo",
+  "pdf.severity_error": "Errorea",
+  "pdf.severity_warning": "Abisua",
+  "pdf.severity_info": "Oharra",
   "pdf.section_messages": "Mezuak",
 
   "chart.asset_distribution": "Aktibo motaren araberako banaketa",
   "chart.monthly_gl": "Hileko irabazi/galera",
   "chart.currency_composition": "Dibisa konposizioa",
   "chart.withholdings_country": "Atxikipenak herrialdearen arabera",
+  "chart.month_1": "Urt",
+  "chart.month_2": "Ots",
+  "chart.month_3": "Mar",
+  "chart.month_4": "Api",
+  "chart.month_5": "Mai",
+  "chart.month_6": "Eka",
+  "chart.month_7": "Uzt",
+  "chart.month_8": "Abu",
+  "chart.month_9": "Ira",
+  "chart.month_10": "Urr",
+  "chart.month_11": "Aza",
+  "chart.month_12": "Abe",
+  "asset.stk": "Akzioak",
+  "asset.fund": "Funtsak / ETFak",
+  "asset.opt": "Opzioak",
+  "asset.fop": "Etorkizunen gaineko opzioak",
+  "asset.crypto": "Kriptomonetak",
+  "asset.bond": "Bonuak",
+  "option.expiration": "Iraungitzea",
+  "option.close": "Aurretiazko itxiera",
+  "option.exercise": "Erabilera/Esleipena",
 
   "footer.docs": "Dokumentazioa",
   "footer.privacy": "Self-hosted · Pribatutasun osoa",
@@ -657,17 +689,17 @@ const eu: TranslationKeys = {
   "fifo.corporate_action_unhandled.hint":
     "Posizioaren akzio kopurua edo ISINa aldatu bazen, berrikusi balio honen ondorengo salmenten kostua.",
   "fifo.sell_without_lots":
-    "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
+    "⚠ Saltzea loterik gabe: {{symbol}}{{isinSuffix}} × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":
-    "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu balio honen lehen erosketatik estaltzen duen epe bat.",
+    "Zure esportazioak aurreko urteak barne hartzen ditu? Deskargatu zure brokerretik balio honen lehen erosketatik hasten den epe bat.",
   "fifo.cover_without_lots":
     "⚠ Posizio laburraren itxiera loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Irabazia ez da kalkulatu (posizio laburra epetik kanpo irekia edo aurreko datu osatugabeak).",
   "fifo.cover_without_lots.hint":
     "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu posizio labur hau ireki zuen salmentatik estaltzen duen epe bat.",
   "fifo.insufficient_lots":
-    "⚠ Lote nahikorik ez: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0.",
+    "⚠ Lote nahikorik ez: {{symbol}}{{isinSuffix}} × {{quantity}} {{date}} egunean. Kostu-oinarria = 0.",
   "fifo.insufficient_lots.hint":
-    "Flex Query-ak ez ditu balio honen aurreko erosketa guztiak estaltzen. Zabaldu kontsulta-epea.",
+    "Fitxategiak ez ditu balio honen aurreko erosketa guztiak estaltzen. Esportatu epe luzeago bat zure brokerretik.",
   "fifo.option_invalid_date": "⚠ OptionEAE gertaera data baliodunik gabe {{symbol}} baliorako. Baztertua.",
   "fifo.option_invalid_date.hint":
     "Aukera-gertaera baztertua data baliogabeagatik. Egiaztatu Flex Query-ak 'Option Exercises, Assignments & Expirations' atala duela.",

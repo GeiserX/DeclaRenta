@@ -105,6 +105,7 @@ document.addEventListener("localechange", () => {
   rerenderSectionGuide();
   initProfile();
   renderDetectionStatus();
+  if (lastReview) renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
 });
 
 updateStaticText();
@@ -352,6 +353,7 @@ function addFiles(files: File[]) {
   renderFileList();
   // Reset downstream state when files change
   mergedStatement = null;
+  lastReview = null;
   currentReport = null;
   activeYear = null;
   detectedYears = [];
@@ -380,6 +382,7 @@ function renderFileList() {
       pendingFiles.splice(idx, 1);
       renderFileList();
       mergedStatement = null;
+      lastReview = null;
       currentReport = null;
       void updateDetectionStatus();
     });
@@ -583,11 +586,16 @@ async function parseFiles(): Promise<void> {
     unlockStep(3);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    lastReview = null;
     reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
   }
 }
 
+/** The last review shown on step 2, so a language change can draw it again. */
+let lastReview: { merged: Statement; brokers: string[]; perFileBrokers: string[] } | null = null;
+
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
+  lastReview = { merged, brokers, perFileBrokers };
   const tradeCount = merged.trades.length;
   const divCount = merged.cashTransactions.filter(
     (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
@@ -764,6 +772,7 @@ async function processFiles(): Promise<void> {
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    lastReview = null;
     reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
     currentReport = null;
   }
@@ -797,6 +806,7 @@ exportPdfBtn.addEventListener("click", () => {
     })
     .catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
+      lastReview = null;
       reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
     })
     .finally(() => {
