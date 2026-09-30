@@ -58,7 +58,9 @@ Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 // i18n initialization
 // ---------------------------------------------------------------------------
 
-initLocale();
+// Wait for the saved or detected locale's table, so the first render is
+// already in that language.
+await initLocale();
 
 /** Update all static elements with data-i18n attributes */
 function updateStaticText() {
@@ -93,7 +95,11 @@ for (const [code, name] of Object.entries(localeNames)) {
 }
 
 langSelect.addEventListener("change", () => {
-  setLocale(langSelect.value as Locale);
+  setLocale(langSelect.value as Locale).catch(() => {
+    // The locale could not load (offline, missing chunk): keep the selector on
+    // the language still in use.
+    langSelect.value = getCurrentLocale();
+  });
 });
 
 document.addEventListener("localechange", () => {
@@ -886,7 +892,14 @@ divsTable.addEventListener("click", (e) => {
 // Search and filter
 // ---------------------------------------------------------------------------
 
-opsSearch.addEventListener("input", () => renderOperationsTable());
+// Each render rebuilds the whole table, so wait for a pause in typing instead
+// of rendering on every keystroke.
+const OPS_SEARCH_DEBOUNCE_MS = 150;
+let opsSearchTimer: ReturnType<typeof setTimeout> | undefined;
+opsSearch.addEventListener("input", () => {
+  clearTimeout(opsSearchTimer);
+  opsSearchTimer = setTimeout(renderOperationsTable, OPS_SEARCH_DEBOUNCE_MS);
+});
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
@@ -1190,7 +1203,10 @@ if (versionEl) {
 // ---------------------------------------------------------------------------
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {
+  // The build's commit hash in the script URL makes every deploy install a new
+  // worker, whose activate step clears the previous deploy's cached files.
+  // sw.js itself never changes, so without it the first worker stays forever.
+  navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(__COMMIT_HASH__)}`).catch(() => {
     // SW registration is optional — fail silently
   });
 }
