@@ -19,6 +19,16 @@ export function escapeCsv(val: string): string {
   return safe;
 }
 
+/**
+ * Wrap a CSV string as a browser download. The leading UTF-8 byte-order mark
+ * (EF BB BF) makes Excel decode the file as UTF-8, so accents and the "—" in
+ * broker descriptions survive a double-click instead of showing as "Ã©"/"â€”".
+ * Web download only: the CLI prints formatCsv() to stdout unchanged.
+ */
+export function csvDownloadBlob(csv: string): Blob {
+  return new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+}
+
 export function formatCsv(report: TaxSummary): string {
   const lines: string[] = [];
 

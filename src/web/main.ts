@@ -14,7 +14,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
-import { formatCsv } from "../generators/csv.js";
+import { csvDownloadBlob, formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -781,9 +781,7 @@ exportJsonBtn.addEventListener("click", () => {
 
 exportCsvBtn.addEventListener("click", () => {
   if (!currentReport) return;
-  const csv = formatCsv(currentReport);
-  const blob = new Blob([csv], { type: "text/csv" });
-  downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+  downloadBlob(csvDownloadBlob(formatCsv(currentReport)), `declarenta_${currentReport.year}.csv`);
 });
 
 exportPdfBtn.addEventListener("click", () => {
