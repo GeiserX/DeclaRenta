@@ -227,7 +227,7 @@ const eu: TranslationKeys = {
     "Konfigurazioan, gaitu atal hauek:<ul><li><strong>Trades</strong> (nahitaezkoa)</li><li><strong>Cash Transactions</strong> — dibidenduak eta atxikipenak (nahitaezkoa)</li><li><strong>Open Positions</strong> — 720 Eredu/D-6-rako (gomendatua)</li><li><strong>Financial Instrument Information</strong> (gomendatua)</li></ul>",
   "guide.ibkr.step5":
     "Atal bakoitzean, <strong>hautatu eremu guztiak</strong> (markatu lauki guztiak). Zenbat eta datu gehiago sartu, orduan eta kalkulua zehatzagoa. Gutxienez, ziurtatu <strong>Notes</strong> eremua Trades atalean sartzen duzula — dibisa bihurtzeen detekziorako beharrezkoa da.",
-  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>",
+  "guide.ibkr.step6": "Irteera-formatua: <strong>XML</strong>. <em>Date Format</em> aukeran, utzi <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Sartu <strong>eskuragarri dauden urte guztiak</strong> FIFO kalkulu zuzenerako",
   "guide.ibkr.step8": "Gorde kontsulta, exekutatu eta deskargatu <code>.xml</code> fitxategia",
   "guide.degiro.title": "Degiro (CSV)",
@@ -749,6 +749,10 @@ const eu: TranslationKeys = {
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Agindu bakoitzaren komisioen guztizkoa zehatza da; exekuzioen arteko banaketa soilik da gutxi gorabeherakoa.",
+  "flatex.depot.repeated_fills":
+    "Errepikatutako Flatex eragiketak, behin bakarrik zenbatuak: {{fills}}. Kargatuta zegoen beste baten agindu-zenbaki eta idazpen-zenbaki (TA-Nr.) bera zuten.",
+  "flatex.depot.repeated_fills.hint":
+    "Depotumsätze CSV bera bi aldiz igotzean gertatu ohi da, edo datak gainjartzen dituzten bi esportazio igotzean. Benetan eragiketa desberdinak badira, berrikusi fitxategia: Flatex-ek exekuzio bakoitzari bere TA-Nr. ematen dio.",
   "flatex.dividends.net_amounts":
     "Flatex-ek dibidenduak jasotako zenbateko garbiarekin erregistratzen ditu, atxikipena kenduta, eta Kontoumsätze CSVak ez du atxikipena jasotzen.",
   "flatex.dividends.net_amounts.hint":
