@@ -1059,6 +1059,28 @@ export class FifoEngine {
     const key = lotKey(trade);
     const lots = this.shortLots.get(key);
     if (!lots || lots.length === 0) {
+      if (trade.openCloseIndicator === "C") {
+        // A pure cover with no open short: the short was opened outside the data
+        // (or it is missing). Its gain is unknown, and the cover is not a purchase,
+        // so it must not become a long lot that a later sale would consume.
+        this.emit({
+          id: "fifo.cover_without_lots",
+          severity: "error",
+          message: `⚠ Cierre de corto sin lotes: ${trade.symbol} (${trade.isin}) × ${remaining} el ${normalizeDate(trade.tradeDate)}. Ganancia no calculada (posición corta abierta fuera del periodo o datos previos incompletos).`,
+          hint: "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la venta que abrió esta posición corta.",
+          context: {
+            symbol: trade.symbol,
+            description: trade.description,
+            isin: trade.isin,
+            conid: trade.conid ?? "",
+            assetCategory: trade.assetCategory,
+            currency: trade.currency,
+            date: normalizeDate(trade.tradeDate),
+            quantity: remaining.toString(),
+          },
+        });
+        return;
+      }
       this.addLot(trade, rateMap);
       return;
     }
@@ -1085,9 +1107,14 @@ export class FifoEngine {
       const openProceedsFcy = lot.costInFcy.dividedBy(lot.quantity).mul(consumed);
       const gainLossFcy = openProceedsFcy.minus(closeCostFcy);
 
-      const proceedsEur = openProceedsFcy.mul(ecbRate);
+      // Monodivisa (`traditionalCostBasis`): the open sale's proceeds use the
+      // OPEN-date rate (Art. 35.1), keeping the FX drift in this line, as
+      // disposalEur() does for a long position's cost.
+      const proceedsEur = openProceedsFcy.mul(this.traditionalCostBasis ? lot.ecbRate : ecbRate);
       const costBasisEur = closeCostFcy.mul(ecbRate);
-      const gainLossEur = gainLossFcy.mul(ecbRate);
+      const gainLossEur = this.traditionalCostBasis
+        ? proceedsEur.minus(costBasisEur)
+        : gainLossFcy.mul(ecbRate);
 
       const acquireDate = lot.acquireDate;
       const holdingDays = daysBetween(acquireDate, trade.tradeDate);
@@ -1222,7 +1249,8 @@ export class FifoEngine {
         const consumed = Decimal.min(remaining, lot.quantity);
         const costPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
         const costBasisFcy = costPerUnitFcy.mul(consumed);
-        const costBasisEur = costBasisFcy.mul(ecbRate);
+        // Monodivisa: the premium paid converts at the purchase-date rate.
+        const costBasisEur = costBasisFcy.mul(this.traditionalCostBasis ? lot.ecbRate : ecbRate);
 
         this.disposals.push({
           isin: ex.isin,
@@ -1272,7 +1300,8 @@ export class FifoEngine {
         const consumed = Decimal.min(remaining, lot.quantity);
         const proceedsPerUnitFcy = lot.costInFcy.dividedBy(lot.quantity);
         const proceedsFcy = proceedsPerUnitFcy.mul(consumed);
-        const proceedsEur = proceedsFcy.mul(ecbRate);
+        // Monodivisa: the premium received converts at the sale-date rate.
+        const proceedsEur = proceedsFcy.mul(this.traditionalCostBasis ? lot.ecbRate : ecbRate);
 
         this.disposals.push({
           isin: ex.isin,

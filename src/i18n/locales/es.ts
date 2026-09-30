@@ -692,6 +692,10 @@ const es = {
     "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
   "fifo.sell_without_lots.hint":
     "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
+  "fifo.cover_without_lots":
+    "⚠ Cierre de corto sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Ganancia no calculada (posición corta abierta fuera del periodo o datos previos incompletos).",
+  "fifo.cover_without_lots.hint":
+    "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la venta que abrió esta posición corta.",
   "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0.",
   "fifo.insufficient_lots.hint":
     "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
