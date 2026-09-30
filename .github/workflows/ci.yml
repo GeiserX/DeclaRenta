@@ -68,6 +68,23 @@ jobs:
           node dist/cli.js --version
           npm pack --dry-run
 
+  docker-headers:
+    name: docker image headers
+    # The Docker Hub image (Dockerfile.web) serves the app through nginx. Build
+    # it, start it, and check that JS, CSS, sw.js and the HTML page all carry
+    # the security headers from nginx-security-headers.conf.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -f Dockerfile.web -t declarenta-web:ci .
+
+      - name: Check security headers
+        run: |
+          docker run -d --name declarenta-web -p 127.0.0.1:8080:80 declarenta-web:ci
+          scripts/check-docker-headers.sh http://127.0.0.1:8080
+
   docs:
     name: docs (strict)
     # The docs are built into the Pages artifact by deploy.yml at release time;
