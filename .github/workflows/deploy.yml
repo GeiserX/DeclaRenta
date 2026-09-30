@@ -36,8 +36,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The release bump commit cannot land on main (the ruleset requires a PR), so
+      # every tag sits on a commit main never contains and `git describe` on main
+      # finds an old tag. Stamp the site with the newest release tag instead.
       - name: Build web
-        run: npm run build:web
+        run: |
+          APP_VERSION="$(git tag -l 'v*' --sort=-version:refname | head -1)"
+          export APP_VERSION="${APP_VERSION#v}"
+          echo "Building declarenta.com as version ${APP_VERSION}"
+          npm run build:web
 
       # The docs are a directory of the same artifact (declarenta.com/docs/),
       # so they go live with each release and never need a deploy of their own.
