@@ -11,6 +11,7 @@ import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
 import {
   checkModelo720Thresholds,
   findModelo720Omissions,
+  findUndatedExtinctions,
   generateModelo720,
   modelo720DeclarationId,
   modelo720PositionCountry,
@@ -18,11 +19,12 @@ import {
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import type { Lot } from "../types/tax.js";
+import type { FifoDisposal, Lot } from "../types/tax.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { forget720History, recall720, remember720, type Remembered720 } from "./previous-720.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -34,6 +36,15 @@ function effectiveYearEnd(year: number): string {
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
+let cachedDisposals: FifoDisposal[] | undefined;
+
+/** The part of the 720 config that last year's declarations decide (A/M/C origin). */
+function previousConfig(remembered: Remembered720) {
+  return {
+    previousYearSecurities: remembered.values?.securities,
+    previousYearAccounts: remembered.accounts?.codes,
+  };
+}
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
@@ -51,19 +62,28 @@ export function initSection720(): void {
 }
 
 /** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
+export function renderSection720(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  yearEndLots?: Map<string, Lot[]>,
+  disposals?: FifoDisposal[],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
   cachedYearEndLots = yearEndLots;
+  cachedDisposals = disposals;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
 
   const profile = getProfile();
   const year = profile.year;
+  const remembered = recall720(year);
+  const planConfig = { year, ...previousConfig(remembered) };
 
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
-  if (statement.openPositions.length === 0 && !hasCashBalances) {
+  const hasRememberedSecurities = (remembered.values?.securities.length ?? 0) > 0;
+  if (statement.openPositions.length === 0 && !hasCashBalances && !hasRememberedSecurities) {
     container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
     return;
   }
@@ -103,12 +123,12 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
 
-  const categories: { label: string; total: Decimal; exceeds: boolean }[] = [];
+  const categories: { label: string; total: Decimal; exceeds: boolean; previous: { year: number; total: Decimal } | null }[] = [];
   if (thresholds.values.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds });
+    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds, previous: remembered.values });
   }
   if (thresholds.accounts.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds });
+    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds, previous: remembered.accounts });
   }
 
   for (const cat of categories) {
@@ -122,7 +142,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         <span>${t("m720.total_value", { amount: fmtEur(cat.total) })}</span>
         <span>50.000 €</span>
       </div>
-      <p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>
+      ${categoryVerdict(cat)}
     </div>`;
   }
 
@@ -199,7 +219,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   }
 
   // Assets the file leaves out: the user declares them by hand.
-  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year }, statement.cashBalances);
+  const omissions = findModelo720Omissions(statement.openPositions, rateMap, planConfig, statement.cashBalances);
   if (omissions.length > 0) {
     html += `<div class="banner banner-warning">${esc(t("m720.omitted_title"))}<ul>${omissions.map((o) => {
       const label = o.kind === "position"
@@ -211,8 +231,19 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     }).join("")}</ul></div>`;
   }
 
-  // Generate button
-  if (exceeds || positions.length > 0) {
+  // Sales of declared securities the file cannot date or value on its own
+  const undated = findUndatedExtinctions(statement.openPositions, planConfig, disposals);
+  if (undated.length > 0) {
+    html += `<div class="banner banner-warning">${esc(t("m720.extinction_undated_title"))}<ul>${undated.map((u) =>
+      `<li>${esc(u.isin)}: ${esc(t(u.missing === "extinctionDate" ? "m720.extinction_no_date" : "m720.extinction_no_acquisition", { year: String(year) }))}</li>`,
+    ).join("")}</ul></div>`;
+  }
+
+  // Generate button, with where the A/M/C origin of each record comes from
+  const heldIsins = new Set(positions.map((p) => p.isin));
+  const hasSales = (remembered.values?.securities ?? []).some((s) => !heldIsins.has(s.isin));
+  if (exceeds || positions.length > 0 || hasSales) {
+    html += renderPreviousBanner(remembered);
     html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
   }
 
@@ -236,6 +267,38 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   document.getElementById("m720-generate-btn")?.addEventListener("click", () => {
     generate720File();
   });
+  document.getElementById("m720-forget-btn")?.addEventListener("click", () => {
+    forget720History();
+    rerenderSection720();
+  });
+}
+
+/**
+ * Under a category's threshold bar: whether it must be declared. Above 50,000 €
+ * with an earlier declaration remembered, the 20,000 € rule decides instead.
+ */
+function categoryVerdict(cat: { total: Decimal; exceeds: boolean; previous: { year: number; total: Decimal } | null }): string {
+  if (!cat.exceeds) return `<p class="muted">${t("m720.category_not_exceeded")}</p>`;
+  if (!cat.previous) return `<p class="warning">${t("m720.category_exceeded")}</p>`;
+  const increase = cat.total.minus(cat.previous.total);
+  const params = { year: String(cat.previous.year), previous: fmtEur(cat.previous.total), increase: fmtEur(increase) };
+  return increase.greaterThan(20000)
+    ? `<p class="warning">${esc(t("m720.increase_required", params))}</p>`
+    : `<p class="muted">${esc(t("m720.increase_optional", params))}</p>`;
+}
+
+/** Where the A/M/C origin comes from: the 720 files generated here before, or none (all A). */
+function renderPreviousBanner(remembered: Remembered720): string {
+  const years = [...new Set([remembered.values?.year, remembered.accounts?.year])]
+    .filter((y): y is number => y !== undefined)
+    .sort((a, b) => a - b);
+  if (years.length === 0) {
+    return `<div class="banner banner-info m720-previous">${esc(t("m720.previous_none"))}</div>`;
+  }
+  return `<div class="banner banner-info m720-previous">
+    <span>${esc(t("m720.previous_used", { years: years.join(", ") }))}</span>
+    <button type="button" id="m720-forget-btn" class="btn-secondary btn-small">${esc(t("m720.previous_forget"))}</button>
+  </div>`;
 }
 
 function encodeISO885915(str: string): Uint8Array {
@@ -272,6 +335,7 @@ function generate720File(): void {
 
   const profile = getProfile();
   const fullName = `${profile.apellidos} ${profile.nombre}`.trim();
+  const remembered = recall720(profile.year);
 
   const config = {
     nif: profile.nif,
@@ -284,6 +348,7 @@ function generate720File(): void {
     isComplementary: false,
     isReplacement: false,
     titulares: profile.titulares,
+    ...previousConfig(remembered),
   };
 
   // Validate the free-text inputs (taxpayer name, contact, broker-supplied
@@ -313,8 +378,19 @@ function generate720File(): void {
     }
   }
 
-  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances);
+  const result = generateModelo720(
+    cachedStatement.openPositions,
+    cachedRateMap,
+    config,
+    cachedYearEndLots,
+    cachedStatement.cashBalances,
+    cachedDisposals,
+  );
   if (!result) return; // Below threshold
+
+  // Next year's 720 starts from what this one declares
+  const thresholds = checkModelo720Thresholds(cachedStatement.openPositions, cachedRateMap, profile.year, cachedStatement.cashBalances);
+  remember720(profile.year, result, { values: thresholds.values.total, accounts: thresholds.accounts.total });
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
   const url = URL.createObjectURL(blob);
@@ -328,6 +404,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedDisposals);
   }
 }

@@ -345,6 +345,22 @@ const gl: TranslationKeys = {
     "vendido este ano; o Modelo 720 anterior declarouno cunha clave ou un país que o ficheiro non admite",
   "m720.successive_years_note":
     "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
+  "m720.increase_required":
+    "No Modelo 720 de {{year}} esta categoría sumaba {{previous}} € e aumentou {{increase}} €, máis de 20.000 €: é obrigatorio volver declarala.",
+  "m720.increase_optional":
+    "No Modelo 720 de {{year}} esta categoría sumaba {{previous}} € e non aumentou máis de 20.000 € (variación: {{increase}} €): volver declarala só é obrigatorio se vendiches ou cancelaches algo do que declaraches.",
+  "m720.previous_used":
+    "O tipo de cada rexistro sae dos Modelos 720 xerados neste navegador ({{years}}): o que xa declaraches e aínda tes vai como M, o que xa non tes vai como baixa (C) e o novo, como A.",
+  "m720.previous_forget":
+    "Esquecer os 720 anteriores",
+  "m720.previous_none":
+    "Non hai ningún Modelo 720 anterior xerado neste navegador, así que todos os rexistros van como A (primeira declaración). Se xa presentaches o 720 outro ano, cambia a M o que xa declaraches e engade como C o que venderas antes de presentar. Ao xerar o ficheiro, DeclaRenta gárdao neste navegador para usalo o ano que vén.",
+  "m720.extinction_undated_title":
+    "Estes valores do Modelo 720 anterior xa non están en carteira e o seu rexistro de baixa (C) sae incompleto; complétao antes de presentar:",
+  "m720.extinction_no_date":
+    "non hai ningunha venda en {{year}} das accións declaradas, así que sae sen data de extinción e con valoración 0",
+  "m720.extinction_no_acquisition":
+    "vendeuse en {{year}}, pero os datos non inclúen a súa compra, así que sae sen data de adquisición",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",

@@ -345,6 +345,22 @@ const eu: TranslationKeys = {
     "aurten saldua; aurreko 720 Ereduak fitxategiak onartzen ez duen gako edo herrialde batekin aitortu zuen",
   "m720.successive_years_note":
     "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
+  "m720.increase_required":
+    "{{year}}ko 720 Ereduan kategoria honek {{previous}} € batzen zituen, eta {{increase}} € igo da, 20.000 € baino gehiago: berriro aitortu behar duzu.",
+  "m720.increase_optional":
+    "{{year}}ko 720 Ereduan kategoria honek {{previous}} € batzen zituen, eta ez da 20.000 € baino gehiago igo (aldaketa: {{increase}} €): berriro aitortzea derrigorrezkoa da soilik aitortutako zerbait saldu edo ezeztatu baduzu.",
+  "m720.previous_used":
+    "Erregistro bakoitzaren mota nabigatzaile honetan sortutako 720 Ereduetatik dator ({{years}}): aitortu zenuena eta oraindik duzuna M gisa doa, jada ez duzuna baja gisa (C), eta berria A gisa.",
+  "m720.previous_forget":
+    "Aurreko 720ak ahaztu",
+  "m720.previous_none":
+    "Nabigatzaile honetan ez da aurreko 720 Eredurik sortu; beraz, erregistro guztiak A gisa doaz (lehen aitorpena). 720 Eredua beste urte batean aurkeztu bazenuen, aurkeztu aurretik aldatu M-ra jada aitortu zenuena eta gehitu C gisa saldu duzuna. Fitxategia sortzean, DeclaRentak nabigatzaile honetan gordetzen du datorren urtean erabiltzeko.",
+  "m720.extinction_undated_title":
+    "Aurreko 720 Ereduko balore hauek ez daude jada zorroan eta haien baja-erregistroa (C) osatu gabe dago; osatu aurkeztu aurretik:",
+  "m720.extinction_no_date":
+    "{{year}}an ez dago aitortutako akzioen salmentarik; beraz, iraungitze-datarik gabe eta 0 balioarekin doa",
+  "m720.extinction_no_acquisition":
+    "{{year}}an saldu zen, baina datuek ez dute haren erosketa jasotzen; beraz, eskuratze-datarik gabe doa",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",

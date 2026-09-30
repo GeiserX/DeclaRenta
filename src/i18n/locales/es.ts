@@ -375,6 +375,22 @@ const es = {
     "vendido este año; el Modelo 720 anterior lo declaró con una clave o un país que el fichero no admite",
   "m720.successive_years_note":
     "Si ya presentaste el Modelo 720 en un año anterior, solo es obligatorio volver a presentarlo cuando el valor conjunto de una categoría ha aumentado más de 20.000 € respecto de la última declaración, o cuando has vendido o cancelado un bien que declaraste (arts. 42 bis.5 y 42 ter.5 del RD 1065/2007). Si no, presentarlo es opcional.",
+  "m720.increase_required":
+    "En el Modelo 720 de {{year}} esta categoría sumaba {{previous}} € y ha aumentado {{increase}} €, más de 20.000 €: es obligatorio volver a declararla.",
+  "m720.increase_optional":
+    "En el Modelo 720 de {{year}} esta categoría sumaba {{previous}} € y no ha aumentado más de 20.000 € (variación: {{increase}} €): volver a declararla solo es obligatorio si has vendido o cancelado algo de lo que declaraste.",
+  "m720.previous_used":
+    "El tipo de cada registro sale de los Modelos 720 generados en este navegador ({{years}}): lo que ya declaraste y sigues teniendo va como M, lo que ya no tienes va como baja (C) y lo nuevo, como A.",
+  "m720.previous_forget":
+    "Olvidar los 720 anteriores",
+  "m720.previous_none":
+    "No hay ningún Modelo 720 anterior generado en este navegador, así que todos los registros van como A (primera declaración). Si ya presentaste el 720 otro año, cambia a M lo que ya declaraste y añade como C lo que hayas vendido antes de presentar. Al generar el fichero, DeclaRenta lo guarda en este navegador para usarlo el año que viene.",
+  "m720.extinction_undated_title":
+    "Estos valores del Modelo 720 anterior ya no están en cartera y su registro de baja (C) sale incompleto; complétalo antes de presentar:",
+  "m720.extinction_no_date":
+    "no hay ninguna venta en {{year}} de las acciones declaradas, así que sale sin fecha de extinción y con valoración 0",
+  "m720.extinction_no_acquisition":
+    "se vendió en {{year}}, pero los datos no incluyen su compra, así que sale sin fecha de adquisición",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",

@@ -345,6 +345,22 @@ const ca: TranslationKeys = {
     "venut aquest any; el Model 720 anterior el va declarar amb una clau o un país que el fitxer no admet",
   "m720.successive_years_note":
     "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
+  "m720.increase_required":
+    "Al Model 720 de {{year}} aquesta categoria sumava {{previous}} € i ha augmentat {{increase}} €, més de 20.000 €: és obligatori tornar-la a declarar.",
+  "m720.increase_optional":
+    "Al Model 720 de {{year}} aquesta categoria sumava {{previous}} € i no ha augmentat més de 20.000 € (variació: {{increase}} €): tornar-la a declarar només és obligatori si has venut o cancel·lat alguna cosa que vas declarar.",
+  "m720.previous_used":
+    "El tipus de cada registre surt dels Models 720 generats en aquest navegador ({{years}}): el que ja vas declarar i encara tens va com a M, el que ja no tens va com a baixa (C) i el que és nou, com a A.",
+  "m720.previous_forget":
+    "Oblidar els 720 anteriors",
+  "m720.previous_none":
+    "No hi ha cap Model 720 anterior generat en aquest navegador, així que tots els registres van com a A (primera declaració). Si ja vas presentar el 720 un altre any, canvia a M el que ja vas declarar i afegeix com a C el que hagis venut abans de presentar. En generar el fitxer, DeclaRenta el guarda en aquest navegador per fer-lo servir l'any que ve.",
+  "m720.extinction_undated_title":
+    "Aquests valors del Model 720 anterior ja no són en cartera i el seu registre de baixa (C) surt incomplet; completa'l abans de presentar:",
+  "m720.extinction_no_date":
+    "no hi ha cap venda el {{year}} de les accions declarades, així que surt sense data d'extinció i amb valoració 0",
+  "m720.extinction_no_acquisition":
+    "es va vendre el {{year}}, però les dades no inclouen la compra, així que surt sense data d'adquisició",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",

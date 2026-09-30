@@ -344,6 +344,22 @@ const en: TranslationKeys = {
     "sold this year; last year's Modelo 720 declared it with a code or country the file does not accept",
   "m720.successive_years_note":
     "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
+  "m720.increase_required":
+    "In the {{year}} Modelo 720 this category totalled {{previous}} € and it has grown by {{increase}} €, more than 20,000 €: you must declare it again.",
+  "m720.increase_optional":
+    "In the {{year}} Modelo 720 this category totalled {{previous}} € and it has not grown by more than 20,000 € (change: {{increase}} €): declaring it again is only required if you sold or closed something you declared.",
+  "m720.previous_used":
+    "Each record's type comes from the Modelo 720 files generated in this browser ({{years}}): what you declared and still hold goes as M, what you no longer hold goes as a cancellation (C), and anything new as A.",
+  "m720.previous_forget":
+    "Forget earlier 720s",
+  "m720.previous_none":
+    "No earlier Modelo 720 was generated in this browser, so every record goes as A (first declaration). If you filed the 720 in another year, change what you already declared to M and add what you sold as C before filing. When you generate the file, DeclaRenta keeps it in this browser for next year.",
+  "m720.extinction_undated_title":
+    "These securities from the previous Modelo 720 are no longer held and their cancellation record (C) is incomplete; complete it before filing:",
+  "m720.extinction_no_date":
+    "there is no sale of the declared shares in {{year}}, so it has no extinction date and a value of 0",
+  "m720.extinction_no_acquisition":
+    "it was sold in {{year}}, but the data does not include its purchase, so it has no acquisition date",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
