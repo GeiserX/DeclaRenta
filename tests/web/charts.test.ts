@@ -15,6 +15,7 @@ import {
   renderDonutChart,
   renderHorizontalBarChart,
   renderMonthlyGainLossChart,
+  renderTaxBracketCard,
 } from "../../src/web/charts.js";
 import { ASSET_LABELS, assetLabel } from "../../src/web/asset-labels.js";
 
@@ -131,5 +132,20 @@ describe("charts are readable by a screen reader", () => {
     const tag = svgTag(renderDonutChart("A \"quoted\" <title>", [{ label: "X&Y", value: new Decimal(1) }]));
     expect(attr(tag, "aria-label")).toContain("A &quot;quoted&quot; &lt;title&gt;");
     expect(attr(tag, "aria-label")).toContain("X&amp;Y");
+  });
+});
+
+describe("renderTaxBracketCard — Spanish number format", () => {
+  // 60.000 € of savings base in 2025: 6.000 × 19 % + 44.000 × 21 % + 10.000 × 23 % = 12.680 €.
+  const html = renderTaxBracketCard("IRPF", 2025, 60000, 0);
+
+  it("groups every band threshold, four-digit ones included", () => {
+    expect(html).toContain("0 – 6.000");
+    expect(html).toContain("6.000 – 50.000");
+    expect(html).not.toContain("6000");
+  });
+
+  it("writes the effective rate with a decimal comma", () => {
+    expect(html).toContain("21,13%");
   });
 });

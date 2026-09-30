@@ -77,7 +77,7 @@ export function renderDonutChart(title: string, items: { label: string; value: D
   const legend = data.map((d, i) =>
     `<g transform="translate(210, ${20 + i * 22})">
       <rect width="12" height="12" rx="2" fill="${d.color}" opacity="0.85"/>
-      <text x="18" y="10" fill="var(--text)" font-size="11">${escSvg(d.label)} (${((d.value / total) * 100).toFixed(1)}%)</text>
+      <text x="18" y="10" fill="var(--text)" font-size="11">${escSvg(d.label)} (${fmtEur((d.value / total) * 100, 1)}%)</text>
     </g>`
   ).join("");
 
@@ -256,7 +256,9 @@ const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
 
 /** Format a band threshold with Spanish thousands separators (no decimals). */
 function fmtThreshold(n: number): string {
-  return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+  // Not toLocaleString("es-ES"): Spanish CLDR leaves four-digit numbers
+  // ungrouped, which printed "6000" next to "50.000".
+  return fmtEur(n, 0);
 }
 
 /** Spanish range label for a band, e.g. "6.000 – 50.000" or "> 300.000". */
@@ -375,7 +377,7 @@ export function renderTaxBracketCard(
         </tr>
         <tr class="muted">
           <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate"))}</td>
-          <td style="text-align:right">${effectiveRate.toFixed(2)}%</td>
+          <td style="text-align:right">${fmtEur(effectiveRate)}%</td>
         </tr>
       </tbody>
     </table>
@@ -416,7 +418,7 @@ function escSvg(s: string): string {
 }
 
 function formatCompact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toFixed(0);
+  if (Math.abs(n) >= 1_000_000) return `${fmtEur(n / 1_000_000, 1)}M`;
+  if (Math.abs(n) >= 1_000) return `${fmtEur(n / 1_000, 1)}K`;
+  return fmtEur(n, 0);
 }

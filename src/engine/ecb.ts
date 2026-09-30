@@ -14,11 +14,12 @@ const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-/** Stablecoins pegged 1:1 to USD — use USD rate from ECB */
+/** Stablecoins pegged 1:1 to USD or EUR — use that fiat's ECB rate */
 const STABLECOIN_TO_FIAT: Record<string, string> = {
   USDT: "USD", USDC: "USD", BUSD: "USD", DAI: "USD",
   TUSD: "USD", FDUSD: "USD", USDP: "USD", GUSD: "USD",
-  PYUSD: "USD", EURT: "EUR", EUROC: "EUR",
+  PYUSD: "USD", USD1: "USD", RLUSD: "USD", EURT: "EUR", EUROC: "EUR",
+  AEUR: "EUR", EURI: "EUR",
 };
 
 /** Normalize a currency code: map stablecoins to their fiat equivalent */
