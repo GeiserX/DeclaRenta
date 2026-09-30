@@ -707,6 +707,14 @@ const gl: TranslationKeys = {
     "Non se puideron emparellar todas as comisións de Flatex: faltan os apuntamentos de caixa correspondentes.",
   "flatex.commission.unmatched_trades.hint":
     "Sobe tamén o CSV de Kontoumsätze (movementos de conta) xunto co de Depotumsätze para que a comisión de cada operación se teña en conta (sumándose ao custo de adquisición nas compras e restándose do valor de transmisión nas vendas).",
+  "flatex.commission.cross_currency":
+    "Operacións de Flatex sen comisión calculada: {{trades}}. O apuntamento de caixa está nunha moeda distinta á da operación.",
+  "flatex.commission.cross_currency.hint":
+    "A comisión desas operacións deixouse en 0. Consulta o seu importe na liquidación da orde en Flatex e tena en conta ao revisar a declaración: súmase ao valor de adquisición nas compras e réstase do valor de transmisión nas vendas.",
+  "flatex.commission.multi_fill_prorated":
+    "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
+  "flatex.commission.multi_fill_prorated.hint":
+    "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total de comisións de cada orde é exacto; só o reparto entre execucións é aproximado.",
   "flatex.dividends.net_amounts":
     "Flatex anota os dividendos polo importe neto cobrado, xa descontada a retención, e o CSV de Kontoumsätze non inclúe a retención.",
   "flatex.dividends.net_amounts.hint":

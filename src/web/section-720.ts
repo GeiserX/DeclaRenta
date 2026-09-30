@@ -12,6 +12,7 @@ import { checkModelo720Thresholds, generateModelo720 } from "../generators/model
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { Lot } from "../types/tax.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
@@ -26,6 +27,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedYearEndLots: Map<string, Lot[]> | undefined;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
@@ -43,9 +45,10 @@ export function initSection720(): void {
 }
 
 /** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap): void {
+export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedYearEndLots = yearEndLots;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -290,7 +293,7 @@ function generate720File(): void {
     }
   }
 
-  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, undefined, cachedStatement.cashBalances);
+  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances);
   if (!result) return; // Below threshold
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
@@ -305,6 +308,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
   }
 }
