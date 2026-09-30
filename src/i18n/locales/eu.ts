@@ -769,6 +769,14 @@ const eu: TranslationKeys = {
     "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Normalean esportazioan errenkada osatugabeei zor zaie ("amount" zutabea hutsik edo zenbakizkoa ez dena). Eragiketak falta badira, deskargatu berriro transakzioen CSV osoa Trade Republic-etik.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: ez dira aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
+  "trade_republic.corporate_action_not_applied.hint":
+    "Titulu zaharren kostua ez da berrietara pasatzen, beraz balore berriaren ondorengo salmenta batek loterik gabe eta 0 kostuarekin atera daiteke. Fusioa edo trukea izan bazen, gehitu jatorrizko eskuratze-kostua «Eskuzko loteak transferitutako posizioentzat» atalean.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: ez dira inportatu {{isins}} baloreen salerosketarik gabeko {{count}} titulu-entrega (doako akzioak, lekualdaketak).",
+  "trade_republic.delivery_not_applied.hint":
+    "Promozio bateko doako akzioak zerga-oinarri orokorreko ondare-irabazia dira, entrega-eguneko merkatu-balioaren arabera: aitortu itzazu bereiz eta gehitu balio hori kostu gisa «Eskuzko loteak transferitutako posizioentzat» atalean. Beste broker batetik egindako lekualdaketa bada, gehitu bertan jatorrizko erosketa-kostua.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":
