@@ -77,55 +77,105 @@ export function finalizeMergedStatement(statement: Statement): Statement {
  *
  * If legs are present but a trade has no match (e.g. user uploaded only one of
  * the two files), emit an info message — commission can't be recovered then.
+ *
+ * One order filled in parts has several trades (and usually several legs) with
+ * the same order number. Equal counts → pair them 1:1 in date order. Different
+ * counts → recover the order's total fee and split it pro rata by trade value.
+ * The fee is only derived when leg and trade share a currency: a USD-priced
+ * trade settled in EUR would otherwise book the whole FX difference as a fee.
  */
 const FLATEX_ORDER_PREFIX = "flatex-order:";
+
+type Trade = Statement["trades"][number];
+type OrderLeg = NonNullable<Statement["pendingOrderLegs"]>[number];
+
+function byTradeDate(a: { tradeDate: string }, b: { tradeDate: string }): number {
+  return normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+}
 
 function reconcileOrderLegs(statement: Statement): void {
   // Note: we can't early-exit when pendingOrderLegs is empty — a Depot-only
   // upload has no legs but still carries trades with the "flatex-order:" scratch
   // note that must be cleared (and warned about). The per-trade startsWith guard
   // below is a no-op for IBKR/other brokers whose notes never use that prefix.
-  const legByKey = new Map<string, NonNullable<Statement["pendingOrderLegs"]>[number]>();
+  const legsByKey = new Map<string, OrderLeg[]>();
   for (const leg of statement.pendingOrderLegs ?? []) {
-    if (leg.orderKey) legByKey.set(leg.orderKey, leg);
+    if (!leg.orderKey) continue;
+    const legs = legsByKey.get(leg.orderKey);
+    if (legs) legs.push(leg);
+    else legsByKey.set(leg.orderKey, [leg]);
   }
 
-  let tradesNeedingLegs = 0;
-  let unmatchedTrades = 0;
-
+  const tradesByKey = new Map<string, Trade[]>();
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
     // notes was only a reconciliation scratch key — always clear it so it isn't
     // mistaken for an IBKR notes flag (AFx, P) downstream.
     delete trade.notes;
-    tradesNeedingLegs++;
-
     const orderKey = key.slice(FLATEX_ORDER_PREFIX.length);
-    const leg = legByKey.get(orderKey);
-    if (!leg) {
-      unmatchedTrades++;
+    const trades = tradesByKey.get(orderKey);
+    if (trades) trades.push(trade);
+    else tradesByKey.set(orderKey, [trade]);
+  }
+
+  let unmatchedTrades = 0;
+  let crossCurrencyTrades = 0;
+  let proratedOrders = 0;
+
+  // Commission = | net cash settled − gross trade value |. The FIFO engine
+  // (fifo.ts) reads Trade.commission directly and folds it into cost basis
+  // (buys) / out of proceeds (sells) per Art. 35 LIRPF. We follow the IBKR
+  // convention where `cost`/`proceeds` stay GROSS and `commission` is the
+  // separate fee — so we set commission only and never touch cost/proceeds
+  // (mutating them too would double-count the fee for any consumer that adds
+  // commission to them).
+  for (const [orderKey, trades] of tradesByKey) {
+    const legs = legsByKey.get(orderKey);
+    if (!legs) {
+      unmatchedTrades += trades.length;
       continue;
     }
 
-    // Commission = | net cash settled − gross trade value |. The FIFO engine
-    // (fifo.ts) reads Trade.commission directly and folds it into cost basis
-    // (buys) / out of proceeds (sells) per Art. 35 LIRPF. We follow the IBKR
-    // convention where `cost`/`proceeds` stay GROSS and `commission` is the
-    // separate fee — so we set commission only and never touch cost/proceeds
-    // (mutating them too would double-count the fee for any consumer that adds
-    // commission to them).
-    const gross = new Decimal(trade.tradeMoney);
-    const net = new Decimal(leg.netAmount).abs();
-    const fee = net.minus(gross).abs();
+    if (legs.length === trades.length) {
+      // One cash leg per fill: pair in date order. The sort is stable, so
+      // same-day fills keep the order both files list them in.
+      const sortedTrades = [...trades].sort(byTradeDate);
+      const sortedLegs = [...legs].sort(byTradeDate);
+      sortedTrades.forEach((trade, i) => {
+        const leg = sortedLegs[i]!;
+        if (leg.currency !== trade.currency) {
+          crossCurrencyTrades++;
+          return;
+        }
+        const gross = new Decimal(trade.tradeMoney);
+        const net = new Decimal(leg.netAmount).abs();
+        trade.commission = net.minus(gross).abs().toFixed();
+        trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
+      });
+      continue;
+    }
 
-    trade.commission = fee.toFixed();
-    trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
+    // Counts differ (e.g. one combined cash leg for several fills): we can't
+    // tell which leg belongs to which fill, so split the order's total fee
+    // across its fills in proportion to their gross value.
+    if (legs.some((leg) => trades.some((trade) => leg.currency !== trade.currency))) {
+      crossCurrencyTrades += trades.length;
+      continue;
+    }
+    const net = legs.reduce((sum, leg) => sum.plus(new Decimal(leg.netAmount).abs()), new Decimal(0));
+    const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
+    const totalFee = net.minus(gross).abs();
+    for (const trade of trades) {
+      trade.commission = totalFee.mul(trade.tradeMoney).div(gross).toFixed();
+      trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
+    }
+    proratedOrders++;
   }
 
   // Trades present but their settlement legs are not (user uploaded only the
   // Depotumsätze file) → commission can't be recovered. Tell the user.
-  if (tradesNeedingLegs > 0 && unmatchedTrades > 0) {
+  if (unmatchedTrades > 0) {
     addInfoMessage(statement, {
       id: "flatex.commission.unmatched_trades",
       severity: "info",
@@ -133,6 +183,26 @@ function reconcileOrderLegs(statement: Statement): void {
         "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
       hint: "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
       context: { unmatchedTrades: String(unmatchedTrades) },
+    });
+  }
+
+  if (crossCurrencyTrades > 0) {
+    addInfoMessage(statement, {
+      id: "flatex.commission.cross_currency",
+      severity: "info",
+      message: `Operaciones de Flatex sin comisión calculada: ${crossCurrencyTrades}. El apunte de caja está en una moneda distinta a la de la operación.`,
+      hint: "La comisión de esas operaciones se ha dejado en 0. Consulta su importe en la liquidación de la orden en Flatex y tenlo en cuenta al revisar la declaración: se suma al valor de adquisición en las compras y se resta del valor de transmisión en las ventas.",
+      context: { trades: String(crossCurrencyTrades) },
+    });
+  }
+
+  if (proratedOrders > 0) {
+    addInfoMessage(statement, {
+      id: "flatex.commission.multi_fill_prorated",
+      severity: "info",
+      message: `Órdenes de Flatex ejecutadas en varias partes: ${proratedOrders}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.`,
+      hint: "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total de comisiones de cada orden es exacto; solo el reparto entre ejecuciones es aproximado.",
+      context: { orders: String(proratedOrders) },
     });
   }
 

@@ -689,6 +689,14 @@ const ca: TranslationKeys = {
     "No s'han pogut emparellar totes les comissions de Flatex: falten els apunts de caixa corresponents.",
   "flatex.commission.unmatched_trades.hint":
     "Puja també el CSV de Kontoumsätze (moviments de compte) juntament amb el de Depotumsätze perquè la comissió de cada operació es tingui en compte (sumant-se al cost d'adquisició en les compres i restant-se del valor de transmissió en les vendes).",
+  "flatex.commission.cross_currency":
+    "Operacions de Flatex sense comissió calculada: {{trades}}. L'apunt de caixa és en una moneda diferent de la de l'operació.",
+  "flatex.commission.cross_currency.hint":
+    "La comissió d'aquestes operacions s'ha deixat a 0. Consulta'n l'import a la liquidació de l'ordre a Flatex i tingues-lo en compte en revisar la declaració: es suma al valor d'adquisició en les compres i es resta del valor de transmissió en les vendes.",
+  "flatex.commission.multi_fill_prorated":
+    "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
+  "flatex.commission.multi_fill_prorated.hint":
+    "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total de comissions de cada ordre és exacte; només el repartiment entre execucions és aproximat.",
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",

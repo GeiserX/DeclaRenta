@@ -261,7 +261,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     if (ORDER_RE.test(info)) {
       const orderKey = extractOrderKey(info);
       if (orderKey) {
-        pendingOrderLegs.push({ orderKey, netAmount: amount, isin, currency: currency || "EUR" });
+        pendingOrderLegs.push({ orderKey, netAmount: amount, isin, currency: currency || "EUR", tradeDate });
       }
       continue;
     }

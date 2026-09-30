@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import Decimal from "decimal.js";
 import { flatexParser } from "../../src/parsers/flatex.js";
 import { detectBroker } from "../../src/parsers/index.js";
+import { FifoEngine } from "../../src/engine/fifo.js";
 import {
   createEmptyStatement,
   mergeStatement,
@@ -217,6 +218,72 @@ describe("flatexParser — commission reconciliation (both files)", () => {
     // Commission stays zero — it can't be recovered without the Konto file.
     const waste = stmt.trades.find((t) => t.isin === "US94106L1098")!;
     expect(waste.commission).toBe("0");
+  });
+});
+
+describe("flatexParser — multi-fill and foreign-venue commission", () => {
+  const depotHeader =
+    "Nummer;Buchtag;Valuta;ISIN;Bezeichnung;Nominal;;Buchungsinformationen;TA-Nr.;Kurs;;Depot";
+  const kontoHeader =
+    "Buchtag;Valuta;BIC / BLZ;IBAN / Kontonummer;Buchungsinformationen;TA-Nr.;Betrag;;Auftraggeberkonto;Konto";
+
+  function parsePair(depot: string, konto: string) {
+    const merged = createEmptyStatement();
+    mergeStatement(merged, flatexParser.parse(depot));
+    mergeStatement(merged, flatexParser.parse(konto));
+    return finalizeMergedStatement(merged);
+  }
+
+  it("a partially filled order gets each fill's own fee, and a full sale loses only the fees", () => {
+    const depot = [
+      depotHeader,
+      "1;11.03.2025;13.03.2025;US0000000001;TEST CORP.;30;Stk.;Ausführung ORDER Kauf US0000000001 329000001;4000000002;100,00;EUR;***xxx Depot",
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000001;4000000001;100,00;EUR;***xxx Depot",
+    ].join("\n");
+    const konto = [
+      kontoHeader,
+      "11.03.2025;13.03.2025;;;Ausführung ORDER Kauf US0000000001 329000001;4000000012;-3007,9;EUR;1234567890;***xxx Cashkonto",
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000001;4000000011;-1007,9;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+
+    const stmt = parsePair(depot, konto);
+    expect(stmt.trades.map((t) => [t.quantity, t.commission])).toEqual([
+      ["10", "7.9"],
+      ["30", "7.9"],
+    ]);
+
+    const sale: (typeof stmt.trades)[number] = {
+      ...stmt.trades[1]!,
+      tradeID: "S1",
+      tradeDate: "20250401",
+      settlementDate: "20250401",
+      quantity: "-40",
+      tradeMoney: "4000",
+      proceeds: "4000",
+      cost: "0",
+      buySell: "SELL",
+      openCloseIndicator: "C",
+      commission: "0",
+    };
+    const disposals = new FifoEngine().processTrades([...stmt.trades, sale], new Map());
+    const total = disposals.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0));
+    expect(total.toFixed(2)).toBe("-15.80");
+  });
+
+  it("a USD-priced trade settled in EUR keeps commission 0 instead of the FX difference", () => {
+    const depot = [
+      depotHeader,
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000003;4000000003;100,00;USD;***xxx Depot",
+    ].join("\n");
+    const konto = [
+      kontoHeader,
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000003;4000000013;-857,9;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+
+    const stmt = parsePair(depot, konto);
+    expect(stmt.trades[0]!.currency).toBe("USD");
+    expect(stmt.trades[0]!.commission).toBe("0");
+    expect(stmt.parserMessages!.some((m) => m.id === "flatex.commission.cross_currency")).toBe(true);
   });
 });
 

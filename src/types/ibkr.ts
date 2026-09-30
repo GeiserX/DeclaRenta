@@ -46,6 +46,8 @@ export interface OrderLeg {
   /** ISIN of the traded security, for diagnostics. */
   isin: string;
   currency: string;
+  /** Booking date (YYYYMMDD), used to pair the fills of a partially executed order. */
+  tradeDate: string;
 }
 
 export interface Trade {

@@ -687,6 +687,14 @@ const en: TranslationKeys = {
     "Not all Flatex commissions could be matched: the corresponding cash entries are missing.",
   "flatex.commission.unmatched_trades.hint":
     "Also upload the Kontoumsätze (account movements) CSV together with the Depotumsätze one so that each operation's commission is taken into account (added to the acquisition cost on purchases and subtracted from the transfer value on sales).",
+  "flatex.commission.cross_currency":
+    "Flatex trades without a calculated commission: {{trades}}. The cash entry is in a different currency from the trade.",
+  "flatex.commission.cross_currency.hint":
+    "The commission of those trades has been left at 0. Look up its amount in the order's settlement note in Flatex and take it into account when reviewing the return: it is added to the acquisition value on purchases and subtracted from the transfer value on sales.",
+  "flatex.commission.multi_fill_prorated":
+    "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
+  "flatex.commission.multi_fill_prorated.hint":
+    "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",

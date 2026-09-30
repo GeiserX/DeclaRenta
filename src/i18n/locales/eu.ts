@@ -691,6 +691,14 @@ const eu: TranslationKeys = {
     "Ezin izan dira Flatex-en komisio guztiak parekatu: dagozkien kutxa-idazpenak falta dira.",
   "flatex.commission.unmatched_trades.hint":
     "Igo ezazu Kontoumsätze (kontu-mugimenduak) CSVa ere Depotumsätze-rekin batera, eragiketa bakoitzaren komisioa kontuan har dadin (erosketetan eskuratze-kostuari gehituz eta salmentetan transmisio-baliotik kenduz).",
+  "flatex.commission.cross_currency":
+    "Komisio kalkulaturik gabeko Flatex eragiketak: {{trades}}. Kutxa-idazpena eragiketarena ez den beste txanpon batean dago.",
+  "flatex.commission.cross_currency.hint":
+    "Eragiketa horien komisioa 0an utzi da. Kontsultatu haren zenbatekoa Flatex-eko aginduaren likidazioan eta kontuan hartu aitorpena berrikustean: erosketetan eskuratze-balioari gehitzen zaio eta salmentetan transmisio-baliotik kentzen da.",
+  "flatex.commission.multi_fill_prorated":
+    "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
+  "flatex.commission.multi_fill_prorated.hint":
+    "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Agindu bakoitzaren komisioen guztizkoa zehatza da; exekuzioen arteko banaketa soilik da gutxi gorabeherakoa.",
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",
