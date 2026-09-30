@@ -55,14 +55,16 @@ docker run -p 8080:80 drumsergio/declarenta:0.58.28
 
 ## Documentación
 
-- [Primeros pasos](docs/getting-started.md): la web, Docker y los botones de despliegue
-- [Uso](docs/usage.md), con la web y todos los comandos de la CLI
-- [Brokers soportados](docs/brokers.md) y el formato de fichero de cada uno
-- [Modelos fiscales y motor fiscal](docs/modelos-fiscales.md), con las reglas que aplica el motor
-- [Casillas del Modelo 100](docs/casillas.md), cada casilla con su base legal
-- [Traza del motor de divisas (FX)](docs/traza-fx.md), el modo diagnóstico para auditar las casillas 1633/1637
-- [Privacidad](docs/privacidad.md)
-- [Desarrollo, contribuir y soporte](docs/development.md)
+La documentación completa está en **[declarenta.com/docs](https://declarenta.com/docs/)**.
+
+- [Primeros pasos](https://declarenta.com/docs/getting-started/): la web, Docker y los botones de despliegue
+- [Uso](https://declarenta.com/docs/usage/), con la web y todos los comandos de la CLI
+- [Brokers soportados](https://declarenta.com/docs/brokers/) y el formato de fichero de cada uno
+- [Modelos fiscales y motor fiscal](https://declarenta.com/docs/modelos-fiscales/), con las reglas que aplica el motor
+- [Casillas del Modelo 100](https://declarenta.com/docs/casillas/), cada casilla con su base legal
+- [Traza del motor de divisas (FX)](https://declarenta.com/docs/traza-fx/), el modo diagnóstico para auditar las casillas 1633/1637
+- [Privacidad](https://declarenta.com/docs/privacidad/)
+- [Desarrollo, contribuir y soporte](https://declarenta.com/docs/development/)
 - [Roadmap](ROADMAP.md)
 
 Dudas y novedades: [GitHub Issues](https://github.com/GeiserX/DeclaRenta/issues) y el canal de Telegram [@declarenta](https://t.me/declarenta). Listado en [awesome-spain](https://github.com/GeiserX/awesome-spain#readme).

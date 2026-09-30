@@ -5,9 +5,10 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
+  # No paths filter on pull requests: a docs-only PR must still run the strict
+  # docs build below before it can reach a release.
   pull_request:
     branches: [main]
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
 
 permissions:
   contents: read
@@ -59,3 +60,25 @@ jobs:
           test -f dist/cli.js
           node dist/cli.js --version
           npm pack --dry-run
+
+  docs:
+    name: docs (strict)
+    # The docs are built into the Pages artifact by deploy.yml at release time;
+    # this job catches a broken link or an unreachable page before that.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements-docs.txt
+
+      - name: Install dependencies
+        run: pip install -r docs/requirements-docs.txt
+
+      - name: Build
+        run: mkdocs build --strict

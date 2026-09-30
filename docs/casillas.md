@@ -1,4 +1,4 @@
-# Casillas del Modelo 100 — Referencia DeclaRenta
+# Casillas del Modelo 100
 
 > Ejercicio 2025. Referencias legales actualizadas a Ley 7/2024.
 
