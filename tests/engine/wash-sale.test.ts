@@ -536,6 +536,28 @@ describe("proportional blocking + reintegration", () => {
     expect(result[1]!.reintegratedLossEur.toFixed(2)).toBe("1000.00");
   });
 
+  it("applies an IBKR reverse split (type RS) to the remaining-position cap", () => {
+    // Buy 100, 1-for-10 reverse split to 10, sell all 10 at a loss. Nothing remains, so the
+    // loss is deductible (DGT V3282-18). Ignoring the RS row would leave 100 - 10 = 90
+    // "remaining" shares and block the whole loss.
+    const disposals = [
+      makeDisposal({
+        isin: AAPL, symbol: "AAPL", acquireDate: "2025-03-01", sellDate: "2025-04-10",
+        quantity: new Decimal(10), gainLossEur: new Decimal(-1000),
+      }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-03-01", "BUY", "100"),
+      makeTrade(AAPL, "2025-04-10", "SELL", "10"),
+    ];
+
+    const result = detectWashSales(disposals, trades, [
+      { ...makeSplit(AAPL, "2025-03-10", "AAPL(US0378331005) SPLIT 1 FOR 10"), type: "RS" },
+    ]);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[0]!.washSaleBlocked).toBe(false);
+  });
+
   it("prorates deferred-loss release when the replacement lot splits after the block", () => {
     // Sell 100 at a €1000 loss, rebuy 100, then a 2-for-1 split turns that
     // replacement lot into 200 shares. Selling 100 post-split shares releases

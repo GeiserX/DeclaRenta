@@ -624,6 +624,10 @@ const ca: TranslationKeys = {
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ràtio {{ratio}}, cost {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El cost es reparteix proporcionalment entre la matriu i l'empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acció corporativa {{type}} de {{symbol}} ({{isin}}) el {{date}}: no s'aplica al càlcul FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Si va canviar el nombre d'accions o l'ISIN de la posició, revisa el cost de les vendes posteriors d'aquest valor.",
   "fifo.sell_without_lots":
     "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
