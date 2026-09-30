@@ -117,6 +117,9 @@ const gl: TranslationKeys = {
   "a11y.theme_toggle": "Cambiar tema",
   "a11y.drop_zone": "Zona de carga de ficheiros",
   "a11y.file_input": "Seleccionar ficheiros",
+  "a11y.ops_search": "Buscar operacións por ISIN ou símbolo",
+  "a11y.ops_filter": "Filtrar operacións por resultado",
+  "a11y.remove_file": "Quitar {{name}}",
 
   "theme.toggle": "Cambiar tema",
 
@@ -777,6 +780,10 @@ const gl: TranslationKeys = {
     "Omitíronse {{count}} movemento(s) do CSV de Binance con operacións non recoñecidas: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Estes movementos non se incluíron no cálculo. Se son compras, vendas ou ingresos (p. ex. futuros, pagamentos con Binance Card, Auto-Invest ou cashback), engádeos á man na túa declaración e comunica o nome da operación para que se poida incorporar.",
+  "binance.unsupported_pair":
+    "Omitíronse {{count}} operación(s) do CSV de Binance cun par non recoñecido: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Estas operacións non se incluíron no cálculo. Engádeas á man na túa declaración e comunica o par para que se poida incorporar.",
   "etoro.closed_types_skipped":
     "Omitíronse {{count}} posición(s) pechada(s) de eToro dun tipo non admitido: {{types}}.",
   "etoro.closed_types_skipped.hint":

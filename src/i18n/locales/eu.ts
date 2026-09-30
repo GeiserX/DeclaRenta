@@ -118,6 +118,9 @@ const eu: TranslationKeys = {
   "a11y.theme_toggle": "Gaia aldatu",
   "a11y.drop_zone": "Fitxategiak igotzeko eremua",
   "a11y.file_input": "Fitxategiak hautatu",
+  "a11y.ops_search": "Bilatu eragiketak ISIN edo sinboloz",
+  "a11y.ops_filter": "Iragazi eragiketak emaitzaren arabera",
+  "a11y.remove_file": "Kendu {{name}}",
 
   "theme.toggle": "Gaia aldatu",
 
@@ -779,6 +782,10 @@ const eu: TranslationKeys = {
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Mugimendu horiek ez dira kalkuluan sartu. Erosketak, salmentak edo diru-sarrerak badira (adib. futuroak, Binance Card bidezko ordainketak, Auto-Invest edo cashback), gehitu eskuz zure aitorpenean eta jakinarazi eragiketaren izena, sar dadin.",
+  "binance.unsupported_pair":
+    "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Eragiketa horiek ez dira kalkuluan sartu. Gehitu eskuz zure aitorpenean eta jakinarazi parea, sar dadin.",
   "etoro.closed_types_skipped":
     "eToro-ren {{count}} posizio itxi baztertu dira, onartzen ez den mota batekoak direlako: {{types}}.",
   "etoro.closed_types_skipped.hint":

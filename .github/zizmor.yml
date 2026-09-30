@@ -1,0 +1,17 @@
+# Workflow security gate, run by the `workflows (zizmor)` job in ci.yml.
+# It fails CI on any finding from the audits below, at every severity.
+rules:
+  # Third-party actions are pinned to a commit SHA, since a moved tag would run
+  # new code with our tokens. GitHub's own actions/* may stay on a version tag.
+  unpinned-uses:
+    config:
+      policies:
+        "actions/*": ref-pin
+        "*": hash-pin
+  # Not enforced yet: per-job permissions and the Release action swap.
+  excessive-permissions:
+    disable: true
+  superfluous-actions:
+    disable: true
+  self-repository:
+    disable: true

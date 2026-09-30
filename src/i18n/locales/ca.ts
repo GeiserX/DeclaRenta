@@ -117,6 +117,9 @@ const ca: TranslationKeys = {
   "a11y.theme_toggle": "Canviar tema",
   "a11y.drop_zone": "Zona de càrrega de fitxers",
   "a11y.file_input": "Seleccionar fitxers",
+  "a11y.ops_search": "Cercar operacions per ISIN o símbol",
+  "a11y.ops_filter": "Filtrar operacions per resultat",
+  "a11y.remove_file": "Treure {{name}}",
 
   "theme.toggle": "Canviar tema",
 
@@ -777,6 +780,10 @@ const ca: TranslationKeys = {
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Aquests moviments no s'han inclòs en el càlcul. Si són compres, vendes o ingressos (p. ex. futurs, pagaments amb Binance Card, Auto-Invest o cashback), afegeix-los a mà a la teva declaració i comunica el nom de l'operació perquè es pugui incorporar.",
+  "binance.unsupported_pair":
+    "S'han omès {{count}} operació(ns) del CSV de Binance amb un parell no reconegut: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Aquestes operacions no s'han inclòs en el càlcul. Afegeix-les a mà a la teva declaració i comunica el parell perquè es pugui incorporar.",
   "etoro.closed_types_skipped":
     "S'han omès {{count}} posició(ns) tancada(es) d'eToro d'un tipus no admès: {{types}}.",
   "etoro.closed_types_skipped.hint":

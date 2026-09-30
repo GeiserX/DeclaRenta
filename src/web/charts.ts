@@ -77,13 +77,15 @@ export function renderDonutChart(title: string, items: { label: string; value: D
   const legend = data.map((d, i) =>
     `<g transform="translate(210, ${20 + i * 22})">
       <rect width="12" height="12" rx="2" fill="${d.color}" opacity="0.85"/>
-      <text x="18" y="10" fill="var(--text)" font-size="11">${escSvg(d.label)} (${((d.value / total) * 100).toFixed(1)}%)</text>
+      <text x="18" y="10" fill="var(--text)" font-size="11">${escSvg(d.label)} (${fmtEur((d.value / total) * 100, 1)}%)</text>
     </g>`
   ).join("");
 
+  const summary = data.map((d) => `${d.label} ${((d.value / total) * 100).toFixed(1)}%`);
+
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 400 ${Math.max(200, 20 + data.length * 22)}" class="chart-svg">
+    <svg viewBox="0 0 400 ${Math.max(200, 20 + data.length * 22)}" class="chart-svg" ${chartA11y(title, summary)}>
       ${paths.join("")}
       <circle cx="${cx}" cy="${cy}" r="${inner}" fill="var(--surface)"/>
       <text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">${formatCompact(total)}</text>
@@ -110,24 +112,36 @@ export function renderMonthlyGainLossChart(title: string, monthly: MonthlyBar[])
   const scale = (baseY - 10) / maxAbs;
   const offsetX = (chartW - monthly.length * (barW + gap)) / 2;
 
+  const amounts = monthly.map(monthAmounts);
+
   const bars = monthly.map((m, i) => {
     const x = offsetX + i * (barW + gap);
     const gainH = m.gain * scale;
     const lossH = Math.abs(m.loss) * scale;
+    const barsSvg =
+      (gainH > 0 ? `<rect x="${x}" y="${baseY - gainH}" width="${barW}" height="${gainH}" rx="3" fill="var(--success)" opacity="0.8"/>` : "") +
+      (lossH > 0 ? `<rect x="${x}" y="${baseY}" width="${barW}" height="${lossH}" rx="3" fill="var(--danger)" opacity="0.8"/>` : "");
     return `
-      ${gainH > 0 ? `<rect x="${x}" y="${baseY - gainH}" width="${barW}" height="${gainH}" rx="3" fill="var(--success)" opacity="0.8"/>` : ""}
-      ${lossH > 0 ? `<rect x="${x}" y="${baseY}" width="${barW}" height="${lossH}" rx="3" fill="var(--danger)" opacity="0.8"/>` : ""}
+      ${barsSvg ? `<g><title>${escSvg(amounts[i]!)}</title>${barsSvg}</g>` : ""}
       <text x="${x + barW / 2}" y="${chartH + 14}" text-anchor="middle" fill="var(--muted)" font-size="9">${escSvg(m.month)}</text>
     `;
   }).join("");
 
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 ${chartW} ${chartH + 20}" class="chart-svg">
+    <svg viewBox="0 0 ${chartW} ${chartH + 20}" class="chart-svg" ${chartA11y(title, amounts.filter((a) => a !== ""))}>
       <line x1="25" y1="${baseY}" x2="${chartW}" y2="${baseY}" stroke="var(--border)" stroke-width="1"/>
       ${bars}
     </svg>
   </div>`;
+}
+
+/** "Mar: +300,00 € / -200,00 €" for a month with disposals, "" otherwise. */
+function monthAmounts(m: MonthlyBar): string {
+  const parts: string[] = [];
+  if (m.gain > 0) parts.push(`+${fmtEur(m.gain)} €`);
+  if (m.loss < 0) parts.push(`${fmtEur(m.loss)} €`);
+  return parts.length > 0 ? `${m.month}: ${parts.join(" / ")}` : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +174,7 @@ export function renderHorizontalBarChart(title: string, items: { label: string; 
 
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 ${chartW} ${totalH}" class="chart-svg">${bars}</svg>
+    <svg viewBox="0 0 ${chartW} ${totalH}" class="chart-svg" ${chartA11y(title, data.map((d) => `${d.label} ${fmtEur(d.value)} EUR`))}>${bars}</svg>
   </div>`;
 }
 
@@ -242,7 +256,9 @@ const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
 
 /** Format a band threshold with Spanish thousands separators (no decimals). */
 function fmtThreshold(n: number): string {
-  return n.toLocaleString("es-ES", { maximumFractionDigits: 0 });
+  // Not toLocaleString("es-ES"): Spanish CLDR leaves four-digit numbers
+  // ungrouped, which printed "6000" next to "50.000".
+  return fmtEur(n, 0);
 }
 
 /** Spanish range label for a band, e.g. "6.000 – 50.000" or "> 300.000". */
@@ -361,7 +377,7 @@ export function renderTaxBracketCard(
         </tr>
         <tr class="muted">
           <td colspan="3" style="text-align:right">${escSvg(t("tax.effective_rate"))}</td>
-          <td style="text-align:right">${effectiveRate.toFixed(2)}%</td>
+          <td style="text-align:right">${fmtEur(effectiveRate)}%</td>
         </tr>
       </tbody>
     </table>
@@ -384,6 +400,15 @@ function renderBreakdown(b: TaxBaseBreakdown): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * role="img" hides the chart's inner text from screen readers, so the name
+ * carries the title and every value the chart draws.
+ */
+function chartA11y(title: string, values: string[]): string {
+  const label = values.length > 0 ? `${title}. ${values.join("; ")}` : title;
+  return `role="img" aria-label="${escSvg(label)}"`;
+}
+
 function escSvg(s: string): string {
   // Escapes all five chars (incl. the single quote), matching the canonical
   // web/esc.ts. Today escSvg output only lands in SVG text content and
@@ -393,7 +418,7 @@ function escSvg(s: string): string {
 }
 
 function formatCompact(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toFixed(0);
+  if (Math.abs(n) >= 1_000_000) return `${fmtEur(n / 1_000_000, 1)}M`;
+  if (Math.abs(n) >= 1_000) return `${fmtEur(n / 1_000, 1)}K`;
+  return fmtEur(n, 0);
 }

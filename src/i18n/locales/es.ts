@@ -124,6 +124,9 @@ const es = {
   "a11y.theme_toggle": "Cambiar tema",
   "a11y.drop_zone": "Zona de carga de ficheros",
   "a11y.file_input": "Seleccionar ficheros",
+  "a11y.ops_search": "Buscar operaciones por ISIN o símbolo",
+  "a11y.ops_filter": "Filtrar operaciones por resultado",
+  "a11y.remove_file": "Quitar {{name}}",
 
   // Theme
   "theme.toggle": "Cambiar tema",
@@ -814,6 +817,10 @@ const es = {
     "Se han omitido {{count}} movimiento(s) del CSV de Binance con operaciones no reconocidas: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Estos movimientos no se han incluido en el cálculo. Si son compras, ventas o ingresos (p. ej. futuros, pagos con Binance Card, Auto-Invest o cashback), añádelos a mano en tu declaración y comunica el nombre de la operación para que se pueda incorporar.",
+  "binance.unsupported_pair":
+    "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
   "etoro.closed_types_skipped":
     "Se ha(n) omitido {{count}} posición(es) cerrada(s) de eToro de un tipo no soportado: {{types}}.",
   "etoro.closed_types_skipped.hint":
