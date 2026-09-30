@@ -1,36 +1,162 @@
 /* docs/stylesheets/theme.css: the site takes its two colours from the banner
  * (docs/images/banner.svg): black on the left, amber (#f59e0b) on the right.
- * The surfaces match the product's dark theme (src/web/style.css) so the docs
- * and the app read as one site.
+ * The docs take the banner's black and amber; the app itself is blue, and that
+ * is fine: the banner is what a visitor saw last.
  */
 :root {
-  --md-primary-fg-color:        #000000;  /* banner background */
-  --md-primary-fg-color--light: #141820;
+  --md-primary-fg-color:        #000000;  /* banner: left panel */
+  --md-primary-fg-color--light: #141820;  /* app --surface */
   --md-primary-fg-color--dark:  #000000;
-  --md-primary-bg-color:        #E8EAED;  /* text on the header */
-  --md-primary-bg-color--light: #7A8194;
+  --md-primary-bg-color:        #f5f5f5;  /* text on the header */
+  --md-primary-bg-color--light: #7a8194;  /* app --muted */
 
-  --md-accent-fg-color:         #F59E0B;  /* banner accent */
-  --md-accent-fg-color--transparent: #F59E0B1a;
+  --md-accent-fg-color:         #f59e0b;  /* banner: right panel */
+  --md-accent-fg-color--transparent: #f59e0b1a;
 }
 
-/* Dark scheme: the page body uses the product's dark background, so the
-   header and the page read as one surface. */
 [data-md-color-scheme="slate"] {
-  --md-default-bg-color:        #0B0E14;
+  --md-default-bg-color:        #0b0e14;  /* app --bg, so the page matches the app screenshots */
   --md-code-bg-color:           #141820;
-  --md-typeset-a-color:         #F59E0B;
+  --md-typeset-a-color:         #f59e0b;
 }
 
-/* Light scheme: amber on white is 2.1:1, too faint for body links. Same hue,
-   darkened (#B45309, 5.0:1 on white). */
+/* Amber on white is 2.1:1. #b45309 is the same hue at 5.0:1. */
 [data-md-color-scheme="default"] {
-  --md-typeset-a-color:         #B45309;
+  --md-typeset-a-color:         #b45309;
 }
 
-/* Fixed logo size so it does not crowd the site name. */
+/* Header logo at a fixed size (the mark is the app icon without its plate). */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
   height: 1.6rem;
   width: 1.6rem;
+}
+
+/* The site name set like the banner's wordmark: Impact-style, heavy, uppercase,
+   tight. Only the first .md-header__topic is the site name; the second is the
+   page title, swapped in on scroll, and must not change. Impact is a system
+   font on macOS and Windows; elsewhere the stack falls back to a heavy sans
+   (font: false in mkdocs.yml keeps the privacy promise: no Google Fonts). */
+.md-header__topic:first-child .md-ellipsis {
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  font-weight: 900;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: #f59e0b;
+}
+
+/* Keep the mark and the name close, so they read as one unit. */
+.md-header__button.md-logo { padding-right: 0.2rem; }
+.md-header__title { margin-left: 0.2rem; }
+
+/* Buttons.
+ *
+ * Material paints .md-button in --md-primary-fg-color, the header colour. On
+ * the dark page that is also the page background, so a button would show as
+ * plain text. Outline buttons take the link colour instead. */
+.md-typeset .md-button {
+  color: var(--md-typeset-a-color);
+  border-color: var(--md-typeset-a-color);
+  border-radius: 0.5rem;
+}
+
+.md-typeset .md-button:focus,
+.md-typeset .md-button:hover {
+  background-color: var(--md-typeset-a-color);
+  border-color: var(--md-typeset-a-color);
+  color: #ffffff;
+}
+
+.md-typeset .md-button--primary,
+.md-typeset .md-button--primary:focus,
+.md-typeset .md-button--primary:hover {
+  /* White on #f59e0b is 2.1:1. #b45309 -> #92400e keeps every point above
+     4.5:1. */
+  background: linear-gradient(90deg, #b45309 0%, #92400e 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.md-typeset .md-button--primary:focus,
+.md-typeset .md-button--primary:hover {
+  box-shadow: 0 0.2rem 0.8rem #f59e0b59;
+}
+
+/* Grid cards: the border picks up the accent on hover, so the cards match
+   the buttons and links. */
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border-radius: 0.5rem;
+}
+
+.md-typeset .grid.cards > ul > li:focus-within,
+.md-typeset .grid.cards > ul > li:hover,
+.md-typeset .grid > .card:focus-within,
+.md-typeset .grid > .card:hover {
+  border-color: #f59e0b;
+}
+
+/* FAQ entries (??? question). Material draws them lime green, a colour that
+   appears nowhere else here; use the accent instead. */
+.md-typeset .admonition.question,
+.md-typeset details.question {
+  border-color: #f59e0b;
+}
+
+.md-typeset .admonition.question:focus-within,
+.md-typeset details.question:focus-within {
+  box-shadow: 0 0 0 0.2rem #f59e0b1a;
+}
+
+.md-typeset .question > .admonition-title::after,
+.md-typeset .question > summary::after {
+  color: #f59e0b;
+}
+
+.md-typeset .question > .admonition-title,
+.md-typeset .question > summary {
+  background-color: #f59e0b1a;
+}
+
+.md-typeset .question > .admonition-title::before,
+.md-typeset .question > summary::before {
+  background-color: #f59e0b;
+}
+
+/* The home page keeps an H1 for search, screen readers and the browser tab.
+   The banner under it draws the name, so the H1 is hidden visually.
+   Use it as: # DeclaRenta { .dr-visually-hidden } */
+.md-typeset h1.dr-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Casilla formulas in tables, such as tipo_ECB_fecha_venta, must not wrap
+   mid-word. Material sets word-break: break-word on code; normal
+   keeps a name whole but still lets a long log line wrap at its spaces. */
+.md-typeset table:not([class]) code {
+  word-break: normal;
+}
+
+/* The phone screenshots on the home page: three in a row on a wide screen,
+   one per row on a narrow one, each with a short caption. */
+.md-typeset .dr-phone-gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  margin: 1em 0;
+}
+.md-typeset .dr-phone-gallery figure { margin: 0; }
+.md-typeset .dr-phone-gallery img { border-radius: 0.4rem; }
+.md-typeset .dr-phone-gallery figcaption { margin-top: 0.3rem; font-size: 0.7rem; }
+@media screen and (max-width: 44.9375em) {
+  .md-typeset .dr-phone-gallery { grid-template-columns: 1fr; }
 }

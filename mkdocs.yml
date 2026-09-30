@@ -18,7 +18,7 @@ theme:
   # No Google Fonts: the product's privacy policy keeps every page on the
   # system font stack, and Material would otherwise load Roboto from Google.
   font: false
-  logo: images/logo.png
+  logo: images/logo.svg
   favicon: images/icon.svg
   # Dark first: the first palette entry is the default, and the banners are dark.
   palette:
@@ -114,6 +114,8 @@ extra:
       link: https://github.com/GeiserX/DeclaRenta
     - icon: fontawesome/brands/docker
       link: https://hub.docker.com/r/drumsergio/declarenta
+    - icon: fontawesome/brands/telegram
+      link: https://t.me/declarenta
 
 extra_css:
   - stylesheets/theme.css
@@ -130,6 +132,8 @@ exclude_docs: |
   research/
   notes/
   requirements-docs.txt
+  # The social card source references logo.png in the app tree; it is not a site asset.
+  images/social.svg
 
 # One entry per canonical page, in the contract's order. Delete the lines for
 # pages the repo does not have. A repo-specific page goes after the canonical
@@ -137,11 +141,17 @@ exclude_docs: |
 # Configuration). The nav title must equal the page's H1.
 nav:
   - Inicio: index.md
-  - Primeros pasos: getting-started.md
-  - Uso: usage.md
-  - Brokers soportados: brokers.md
-  - Modelos fiscales y motor fiscal: modelos-fiscales.md
-  - Casillas del Modelo 100: casillas.md
-  - Traza del motor de divisas (FX): traza-fx.md
-  - Privacidad: privacidad.md
+  - Primeros pasos:
+      - Primeros pasos: getting-started.md
+      - Uso: usage.md
+      - Brokers soportados: brokers.md
+  - Fiscalidad:
+      - Modelos fiscales y motor fiscal: modelos-fiscales.md
+      - Casillas del Modelo 100: casillas.md
+      - Modelo 720, 721 y D-6: modelos-informativos.md
+      - Traza del motor de divisas (FX): traza-fx.md
+  - Referencia:
+      - Preguntas frecuentes: faq.md
+      - Solución de problemas: troubleshooting.md
+      - Privacidad: privacidad.md
   - Desarrollo: development.md

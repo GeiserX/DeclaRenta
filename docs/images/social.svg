@@ -3,7 +3,7 @@
   <rect width="600" height="630" fill="#000"/>
   <rect x="600" width="600" height="630" fill="#f59e0b"/>
   <!-- Logo on black side -->
-  <image href="logo.png" x="100" y="115" width="400" height="400" opacity="1"/>
+  <image href="../../src/web/assets/logo.png" x="100" y="115" width="400" height="400" opacity="1"/>
   <!-- White frame around logo -->
   <rect x="100" y="115" width="400" height="400" fill="none" stroke="white" stroke-width="4"/>
   <!-- Title on yellow side, stacked huge -->
