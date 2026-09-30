@@ -22,6 +22,7 @@ import {
   detectDelimiter,
   findColumn,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -235,6 +236,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const { base, quote, assumedQuote } = splitPair(pair);
     if (assumedQuote) unrecognizedPairs.set(pair, `${base}/${quote}`);
     const tradeDate = krakenDate(timeStr);
+    const tradeTime = timeOfDay(timeStr);
     const isSell = type === "sell";
 
     trades.push({
@@ -246,6 +248,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
       assetCategory: "CRYPTO",
       currency: quote,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? volDec.neg().toString() : volDec.toString(),
       tradePrice: price,
@@ -277,6 +280,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         assetCategory: "CRYPTO",
         currency: base,
         tradeDate,
+        tradeTime,
         settlementDate: tradeDate,
         quantity: isSell ? costDec.toString() : costDec.neg().toString(),
         tradePrice: volDec.div(costDec).toString(),

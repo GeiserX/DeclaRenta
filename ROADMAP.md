@@ -33,7 +33,7 @@ DeclaRenta se alinea con el calendario tributario español. Cada release se plan
 | **100 (IRPF)** | Renta: ganancias, dividendos, intereses | abr-jun (año siguiente) | XSD (`Renta20XX.xsd`), pero Renta Web NO importa ficheros — entrada manual por casillas |
 | **720** | Bienes y derechos en el extranjero (>50.000 €) | 1 ene - 31 mar | Fixed-width 500 bytes/registro, ISO-8859-15, vía TGVI Online |
 | **721** | Criptomonedas en el extranjero (>50.000 €) | 1 ene - 31 mar | XML (Orden HFP/886/2023) |
-| **D-6** | Inversiones españolas en el exterior | 1-31 ene | Formulario Banco de España (no AEAT) |
+| **D-6** | Inversiones españolas en el exterior | 1-31 ene | Registro de Inversiones Exteriores (Secretaría de Estado de Comercio, no AEAT): programa AFORIX + eAFORIX |
 | **714 (Patrimonio)** | Patrimonio neto (>700.000 € o norma CCAA) | abr-jun (con IRPF) | XSD similar a Modelo 100 |
 
 ---
@@ -239,9 +239,9 @@ Tareas:
 >
 > **Target**: que 720, 721 y D-6 estén listos antes de los deadlines de enero-marzo 2027.
 
-#### Modelo D-6 (Banco de España)
+#### Modelo D-6 (Registro de Inversiones Exteriores)
 
-- [x] Investigar formato exacto de presentación D-6 (Banco de España, no AEAT). No existe fichero de carga: se rellena vía AFORIX web
+- [x] Investigar formato exacto de presentación D-6 (Registro de Inversiones Exteriores de la Secretaría de Estado de Comercio, no AEAT). Se prepara y firma en el programa AFORIX y el fichero `.aforixd` se sube en eAFORIX
 - [x] Generador D-6: guía AFORIX con valores pre-calculados por posición (ISIN, país, exchange, valor EUR)
 - [x] Detección automática de obligación D-6 (cualquier valor en el extranjero a 31/dic)
 - [x] Soporte para declaración negativa (cancelación de posiciones)
@@ -280,7 +280,7 @@ Tareas:
 
 - [x] Publicar **v0.5.0**
 
-**Criterio de éxito**: ficheros 720 y D-6 generados pasan validación de formato AEAT/BdE sin errores.
+**Criterio de éxito**: ficheros 720 y D-6 generados pasan validación de formato AEAT/AFORIX sin errores.
 
 ---
 
@@ -320,11 +320,11 @@ Tareas:
 
 - [x] Operaciones forex spot: clasificación como ganancia/pérdida patrimonial
 - [x] Conversiones de divisa en IBKR (CASH asset category, FIFO por símbolo)
-- [ ] Distinguir entre forex trading y conversiones de divisa para depósitos (pendiente: detectar FXCONV vs trades en Flex Query)
+- [x] Distinguir las conversiones automáticas del bróker (FXCONV/AFx en Flex Query) de las manuales: se procesan por defecto y se pueden excluir con `--skip-auto-convert` o desde el perfil fiscal
 
 #### Bonos y renta fija
 
-- [x] Cupones: rendimiento del capital mobiliario (Casilla 0033) — ya soportado vía Bond Interest Received/Paid
+- [x] Cupones: rendimiento del capital mobiliario (Casilla 0027) — ya soportado vía Bond Interest Received/Paid
 - [x] Compraventa de bonos: ganancia/pérdida patrimonial vía FIFO
 - [x] Letras del Tesoro extranjeras: tratamiento fiscal como BOND
 
@@ -343,7 +343,7 @@ Tareas:
 > **Objetivo**: herramienta completa, validada, documentada, lista para la campaña de renta 2026 (abr-jun 2027) y los modelos 720/D-6 (ene-mar 2027).
 
 - [ ] Todos los tests pasan con datos reales de 4+ brokers
-- [ ] Ficheros 720 y D-6 validados contra formato AEAT/BdE
+- [ ] Ficheros 720 y D-6 validados contra formato AEAT/AFORIX
 - [ ] Documentación completa:
   - Guía de uso paso a paso (web + CLI)
   - FAQ con los 20 casos más frecuentes
@@ -456,23 +456,22 @@ Referencia rápida de las casillas que DeclaRenta calcula:
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
-| **0327** | Valor de transmisión | Suma de (precio_venta × cantidad - comisión_venta) × tipo_ECB para cada venta |
-| **0328** | Valor de adquisición | Suma del coste FIFO en EUR de los lotes consumidos por cada venta |
-| **0358** | Pérdidas patrimoniales a compensar | Pérdidas netas no bloqueadas por anti-churning |
+| **0328** | Valor de transmisión | Suma de (precio_venta × cantidad - comisión_venta) × tipo_ECB para cada venta |
+| **0331** | Valor de adquisición | Suma del coste FIFO en EUR de los lotes consumidos por cada venta |
 
 ### Base del ahorro — Rendimientos del capital mobiliario
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
 | **0029** | Dividendos íntegros | Suma bruta de dividendos × tipo_ECB |
-| **0033** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
-| **0032** | ~~Gastos deducibles~~ | Intereses de margen pagados al broker — **NO deducible** en base del ahorro (Art. 26.1.a LIRPF). Se muestra como valor informativo. |
+| **0027** | Intereses de cuentas y depósitos | Intereses recibidos del broker × tipo_ECB |
+| **—** | Gastos no deducibles (informativo) | Intereses de margen pagados al broker — **NO deducible** en base del ahorro (Art. 26.1.a LIRPF). Se muestra como valor informativo. |
 
 ### Deducciones
 
 | Casilla | Concepto | Cómo se calcula |
 |---------|----------|-----------------|
-| **0588** | Deducción por doble imposición internacional | Por país: min(retención extranjera, impuesto español sobre esa renta) |
+| **0588** | Deducción por doble imposición internacional | Por país: min(retención extranjera hasta el 15% del bruto, bruto del país × tipo medio del ahorro) |
 
 ### Tramos del ahorro (ejercicio 2025)
 
