@@ -8,6 +8,7 @@ import { coinbaseParser } from "../../src/parsers/coinbase.js";
 import { krakenParser } from "../../src/parsers/kraken.js";
 import { trading212Parser } from "../../src/parsers/trading212.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FlexStatement } from "../../src/types/ibkr.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -32,21 +33,9 @@ function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap 
   return map;
 }
 
-/** Wrap a parser `Statement` into the `FlexStatement` shape generateTaxReport expects. */
+/** Run a parser `Statement` through the same merge and finalize steps web and CLI use. */
 function toStatement(parsed: Statement): FlexStatement {
-  return {
-    accountId: "",
-    fromDate: "",
-    toDate: "",
-    period: "",
-    trades: parsed.trades,
-    cashTransactions: parsed.cashTransactions,
-    corporateActions: parsed.corporateActions,
-    openPositions: parsed.openPositions,
-    securitiesInfo: parsed.securitiesInfo,
-    ...(parsed.manualRateHints ? { manualRateHints: parsed.manualRateHints } : {}),
-    ...(parsed.parserMessages ? { parserMessages: parsed.parserMessages } : {}),
-  };
+  return finalizeMergedStatement(mergeStatement(createEmptyStatement(), parsed));
 }
 
 function fixture(name: string): string {
