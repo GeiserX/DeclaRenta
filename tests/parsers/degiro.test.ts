@@ -524,7 +524,8 @@ describe("degiroParser", () => {
     it("should parse all 5 rows without dropping any (buys included)", () => {
       const result = degiroParser.parse(GBX_CSV);
       expect(result.trades).toHaveLength(5);
-      expect(result.parserMessages).toBeUndefined();
+      const ids = (result.parserMessages ?? []).map((m) => m.id);
+      expect(ids).not.toContain("degiro.rows_skipped");
       expect(result.trades.filter((t) => t.buySell === "BUY")).toHaveLength(3);
       expect(result.trades.filter((t) => t.buySell === "SELL")).toHaveLength(2);
     });
@@ -580,6 +581,87 @@ describe("degiroParser", () => {
       )!;
       expect(swapOut.buySell).toBe("SELL");
       expect(swapOut.tradePrice).toBe("4.5889");
+    });
+
+    it("flags the ISIN-swap pair as a possible corporate action and keeps both trades", () => {
+      const result = degiroParser.parse(GBX_CSV);
+      const pairs = (result.parserMessages ?? []).filter((m) => m.id === "degiro.corporate_action_pair");
+      expect(pairs).toHaveLength(1);
+      expect(pairs[0]!.severity).toBe("warning");
+      expect(pairs[0]!.context).toEqual({
+        date: "29/12/2022",
+        oldProduct: "KISTOS PLC",
+        oldIsin: "GB00BLF7NX68",
+        newProduct: "KISTOS HOLDINGS PLC",
+        newIsin: "GB00BP7NQJ77",
+      });
+      // A canje can still be taxable (art. 37.1.e LIRPF), so the rows stay as trades.
+      expect(result.trades).toHaveLength(5);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Corporate-action pairs. Degiro books an ISIN change, a split or a share
+  // exchange as a same-day sale of the old ISIN plus a buy of the new one,
+  // with no order ID and no costs. Taxing that as an ordinary sale can be
+  // wrong (a neutral canje keeps the old cost and date), so the parser warns.
+  // -------------------------------------------------------------------------
+
+  describe("corporate-action pairs", () => {
+    const HEADER =
+      "Fecha,Hora,Producto,ISIN,Bolsa de referencia,Centro de ejecución,Número,Precio,,Valor local,,Valor EUR,Tipo de cambio,Comisión AutoFX,Costes de transacción y/o externos EUR,Total EUR,ID Orden";
+    const BUY_2020 =
+      '15-06-2020,10:00,OLDCO SA,XX0000000OLD,MAD,XMAD,1000,"0,5000",EUR,"-500,00",EUR,"-500,00",,"0,00","-2,00","-502,00",00000000-0000-4000-8000-000000000010';
+
+    it("flags a 1000 -> 100 ISIN change booked as a sale plus a buy", () => {
+      const csv = [
+        HEADER,
+        '10-03-2022,00:00,OLDCO SA,XX0000000OLD,MAD,,-1000,"1,0000",EUR,"1000,00",EUR,"1000,00",,"0,00",,"1000,00",',
+        '10-03-2022,00:00,NEWCO SA,XX0000000NEW,MAD,,100,"10,0000",EUR,"-1000,00",EUR,"-1000,00",,"0,00",,"-1000,00",',
+        BUY_2020,
+      ].join("\n");
+      const result = degiroParser.parse(csv);
+      const pairs = (result.parserMessages ?? []).filter((m) => m.id === "degiro.corporate_action_pair");
+      expect(pairs).toHaveLength(1);
+      expect(pairs[0]!.context).toEqual({
+        date: "10/03/2022",
+        oldProduct: "OLDCO SA",
+        oldIsin: "XX0000000OLD",
+        newProduct: "NEWCO SA",
+        newIsin: "XX0000000NEW",
+      });
+      expect(result.trades).toHaveLength(3);
+    });
+
+    it("does not flag ordinary same-day trades that carry order IDs and costs", () => {
+      const csv = [
+        HEADER,
+        '10-03-2022,10:00,OLDCO SA,XX0000000OLD,MAD,XMAD,-1000,"1,0000",EUR,"1000,00",EUR,"1000,00",,"0,00","-2,00","998,00",00000000-0000-4000-8000-000000000011',
+        '10-03-2022,10:05,NEWCO SA,XX0000000NEW,MAD,XMAD,100,"10,0000",EUR,"-1000,00",EUR,"-1000,00",,"0,00","-2,00","-1002,00",00000000-0000-4000-8000-000000000012',
+        BUY_2020,
+      ].join("\n");
+      const result = degiroParser.parse(csv);
+      const ids = (result.parserMessages ?? []).map((m) => m.id);
+      expect(ids).not.toContain("degiro.corporate_action_pair");
+    });
+
+    it("does not flag an order-less pair whose values do not match", () => {
+      const csv = [
+        HEADER,
+        '10-03-2022,00:00,OLDCO SA,XX0000000OLD,MAD,,-1000,"1,0000",EUR,"1000,00",EUR,"1000,00",,"0,00",,"1000,00",',
+        '10-03-2022,00:00,NEWCO SA,XX0000000NEW,MAD,,10,"30,0000",EUR,"-300,00",EUR,"-300,00",,"0,00",,"-300,00",',
+        BUY_2020,
+      ].join("\n");
+      const result = degiroParser.parse(csv);
+      const ids = (result.parserMessages ?? []).map((m) => m.id);
+      expect(ids).not.toContain("degiro.corporate_action_pair");
+    });
+
+    it("does not flag anything in the 19-column sample export", () => {
+      const sampleCsv = readFileSync(new URL("../fixtures/degiro-transactions-sample.csv", import.meta.url), "utf-8");
+      const result = degiroParser.parse(sampleCsv);
+      const ids = (result.parserMessages ?? []).map((m) => m.id);
+      expect(ids).not.toContain("degiro.corporate_action_pair");
     });
   });
 });

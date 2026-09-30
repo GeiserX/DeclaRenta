@@ -182,7 +182,8 @@ const en: TranslationKeys = {
   "profile.section_personal": "Personal details",
   "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "This NIF/NIE is not valid: check the digits and the control letter.",
   "profile.surname_label": "Surname:",
   "profile.surname_placeholder": "Smith Jones",
   "profile.name_label": "First name:",
@@ -745,6 +746,10 @@ const en: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",
+  "degiro.corporate_action_pair":
+    "Possible corporate action on {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro records it as a sale and a purchase.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro records ISIN changes, splits and share exchanges as a sale of the old security and a purchase of the new one, with no order ID and no costs. DeclaRenta computes them that way: it declares a gain or loss on that day, and the new shares take that price and that date as their cost. Check the notice from Degiro or the issuer. If it was a plain ISIN change, a split or a tax-neutral share exchange (special regime of the Spanish Corporate Income Tax Act), there was no sale: the new shares keep the cost and purchase date of the old ones, so correct that operation in your return. If it was a taxable exchange (art. 37.1.e LIRPF), the calculation is correct.",
   "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",

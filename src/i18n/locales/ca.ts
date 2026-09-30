@@ -182,7 +182,8 @@ const ca: TranslationKeys = {
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "El NIF/NIE no és vàlid: revisa els dígits i la lletra de control.",
   "profile.surname_label": "Cognoms:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nom:",
@@ -747,6 +748,10 @@ const ca: TranslationKeys = {
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
+  "degiro.corporate_action_pair":
+    "Possible operació societària el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro l'anota com una venda i una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota els canvis d'ISIN, els splits i els bescanvis d'accions com una venda del valor antic i una compra del nou, sense número d'ordre ni costos. DeclaRenta els calcula així: declara un guany o una pèrdua aquell dia, i les accions noves prenen aquest preu i aquesta data com a cost. Revisa la comunicació de Degiro o de l'emissor. Si va ser un simple canvi d'ISIN, un split o un bescanvi fiscalment neutre (règim especial de la Llei de l'Impost sobre Societats), no hi va haver venda: les accions noves conserven el cost i la data de compra de les antigues, així que corregeix aquesta operació a la teva declaració. Si va ser un bescanvi que tributa (art. 37.1.e LIRPF), el càlcul és correcte.",
   "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",

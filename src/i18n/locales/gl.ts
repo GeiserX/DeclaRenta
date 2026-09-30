@@ -182,7 +182,8 @@ const gl: TranslationKeys = {
   "profile.section_personal": "Datos persoais",
   "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "O NIF/NIE non é válido: revisa os díxitos e a letra de control.",
   "profile.surname_label": "Apelidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nome:",
@@ -747,6 +748,10 @@ const gl: TranslationKeys = {
   "degiro.rows_skipped": "Omitíronse {{count}} filas sen ISIN/sen importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tiñan cantidade ou prezo pero faltáballes o ISIN ou o importe, polo que non se puideron incluír como operacións. Adoita indicar que as columnas do CSV non se recoñeceron ben: volve exportar o CSV de Transaccións de Degiro sen modificar as cabeceiras.",
+  "degiro.corporate_action_pair":
+    "Posible operación societaria o {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro anótaa como unha venda e unha compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota os cambios de ISIN, os splits e os canxes de accións como unha venda do valor antigo e unha compra do novo, sen número de orde nin custos. DeclaRenta calcúlaos así: declara unha ganancia ou perda ese día, e as accións novas toman ese prezo e esa data como custo. Revisa a comunicación de Degiro ou do emisor. Se foi un simple cambio de ISIN, un split ou un canxe fiscalmente neutro (réxime especial da Lei do Imposto sobre Sociedades), non houbo venda: as accións novas conservan o custo e a data de compra das antigas, así que corrixe esa operación na túa declaración. Se foi un canxe que tributa (art. 37.1.e LIRPF), o cálculo é correcto.",
   "degiro.transaction_tax": "Imposto sobre as transaccións financeiras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este imposto ao comprar accións españolas, francesas ou italianas e só o mostra no CSV de Conta. Forma parte do valor de adquisición (art. 35.1.b LIRPF): súmao ao custo das compras dese valor, porque DeclaRenta non o engade automaticamente.",
