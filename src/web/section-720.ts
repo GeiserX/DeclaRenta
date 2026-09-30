@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
   checkModelo720Thresholds,
   findModelo720Omissions,
@@ -103,12 +103,19 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
 
-  const categories: { label: string; total: Decimal; exceeds: boolean }[] = [];
-  if (thresholds.values.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds });
+  // `unvalued`: holdings left out of the total. Until the user values them the
+  // category cannot be called below the threshold.
+  const categories: { label: string; total: Decimal; exceeds: boolean; unvalued: number }[] = [];
+  if (thresholds.values.total.greaterThan(0) || thresholds.values.unvalued > 0) {
+    categories.push({
+      label: t("m720.category_v"),
+      total: thresholds.values.total,
+      exceeds: thresholds.values.exceeds,
+      unvalued: thresholds.values.unvalued,
+    });
   }
   if (thresholds.accounts.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds });
+    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds, unvalued: 0 });
   }
 
   for (const cat of categories) {
@@ -122,7 +129,11 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         <span>${t("m720.total_value", { amount: fmtEur(cat.total) })}</span>
         <span>50.000 €</span>
       </div>
-      <p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>
+      <p class="${cat.exceeds || cat.unvalued > 0 ? "warning" : "muted"}">${cat.exceeds
+        ? t("m720.category_exceeded")
+        : cat.unvalued > 0
+          ? esc(t("m720.category_undetermined", { count: String(cat.unvalued) }))
+          : t("m720.category_not_exceeded")}</p>
     </div>`;
   }
 
@@ -157,6 +168,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         } else {
           rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
+        // No rate, or no market value in the export: unknown, never 0 €.
+        if (hasNoMarketValue(p)) rate = null;
         if (rate === null) unvaluedCount++;
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td></tr>`;

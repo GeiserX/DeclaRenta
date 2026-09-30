@@ -45,9 +45,13 @@ export default defineConfig({
       // read/write document, window, localStorage, or attach event listeners.
       // Unit-testing them would require standing up a jsdom harness with a built
       // DOM tree (out of scope here); counting them would only depress coverage
-      // with code that has no pure surface to assert against. Their pure
-      // sub-logic already lives in the included modules above (e.g. crypto-rate
-      // parsing is in src/engine/manual-rates.ts, which IS measured).
+      // with code that has no pure surface to assert against. Most of their pure
+      // sub-logic lives in the included modules above (e.g. crypto-rate parsing
+      // is in src/engine/manual-rates.ts, which IS measured), but not all of it:
+      // storage.ts's migrateReport and section-720.ts's ISO-8859-15 encoder are
+      // pure and sit in excluded files. Tests for an excluded file still run
+      // (e.g. tests/web/storage.test.ts, tests/web/year-compare.test.ts); they
+      // just do not count toward coverage.
       exclude: [
         "src/web/main.ts", // app bootstrap, splash, wizard orchestration, file upload (heavy DOM)
         "src/web/section-720.ts", // Modelo 720 DOM renderer

@@ -531,6 +531,8 @@ export class FxFifoEngine {
    *     polarity (SELL base = acquiring quote, BUY base = disposing quote).
    *   - If trade.currency matches the base: quantity is already in
    *     trade.currency, BUY = acquiring, SELL = disposing.
+   * When neither side is EUR (GBP.USD, USD.JPY) the other side of the pair gets
+   * its own event with opposite polarity, so the divisa given up leaves its pool.
    *
    * FXCONV/AFx-marked trades (automatic broker conversions) are PROCESSED as
    * ordinary conversions by default (#239): IBKR does NOT round-trip FCY→EUR when
@@ -631,9 +633,43 @@ export class FxFifoEngine {
           realEurAmount,
         });
       }
+
+      // A non-EUR pair (GBP.USD, USD.JPY) swaps one divisa for another, so the
+      // OTHER side of the pair moves too, with opposite polarity and at its own
+      // ECB rate: the currency given up is disposed (Art. 33.1), the one received
+      // is acquired. Its amount is quantity when it is the base and tradeMoney when
+      // it is the quote. The commission stays on the trade.currency leg only.
+      const pair = FxFifoEngine.pairCurrencies(trade);
+      const tradeCcy = trade.currency.toUpperCase();
+      // quoteIsTarget means trade.currency is the quote; otherwise it must be the
+      // base, or the symbol does not describe this trade and there is no other leg.
+      const other = !pair ? null : quoteIsTarget ? pair.base : pair.base === tradeCcy ? pair.quote : null;
+      if (other && other !== "EUR" && other !== tradeCcy && isEcbResolvable(other)) {
+        const otherAmount = new Decimal(quoteIsTarget ? trade.quantity : trade.tradeMoney).abs();
+        if (otherAmount.greaterThan(0)) {
+          events.push({
+            date,
+            currency: other,
+            quantity: acquiring ? otherAmount.negated() : otherAmount,
+            ecbRate: getEcbRate(rateMap, date, other),
+            trigger: "conversion",
+          });
+        }
+      }
     }
 
     return events;
+  }
+
+  /**
+   * Split a CASH trade's BASE.QUOTE symbol (e.g. "GBP.USD") into its two
+   * currencies, upper-cased. Returns null when the symbol is not a pair.
+   */
+  static pairCurrencies(trade: Trade): { base: string; quote: string } | null {
+    const sym = (trade.symbol || trade.description || "").toUpperCase();
+    const dot = sym.indexOf(".");
+    if (dot <= 0 || dot === sym.length - 1) return null;
+    return { base: sym.slice(0, dot), quote: sym.slice(dot + 1) };
   }
 
   /**
@@ -856,7 +892,9 @@ export class FxFifoEngine {
       if (!d.proceedsFcy.greaterThan(0)) continue; // skip non-positive (defensive)
       events.push({
         kind: "stock_sell",
-        date: normalizeDate(d.sellDate),
+        // Dated on the sale's cash settlement, like the buy's park, so a same-day
+        // round trip parks before it unparks. The rate stays the trade-date one.
+        date: normalizeDate(d.settlementDate || d.sellDate),
         currency: d.currency,
         quantity: new Decimal(0), // unused for stock_sell (amounts are in costFcy/proceedsFcy)
         costFcy: d.costBasisFcy, // principal that was parked at the matching buy
