@@ -819,6 +819,14 @@ const es = {
     "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Suele deberse a filas incompletas en la exportación (columna "amount" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no se han aplicado {{count}} movimiento(s) de acción corporativa (fusión, canje, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El coste de los títulos antiguos no pasa a los nuevos, así que una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no se han importado {{count}} entrega(s) de títulos sin compraventa (acciones gratuitas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Las acciones gratuitas de una promoción son una ganancia patrimonial de la base general por su valor de mercado el día de la entrega: decláralas aparte y añade ese valor como coste en «Lotes manuales para posiciones transferidas». Si es un traspaso desde otro bróker, añade allí el coste de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

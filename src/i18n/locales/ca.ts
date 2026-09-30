@@ -782,6 +782,14 @@ const ca: TranslationKeys = {
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
     "Sol deure's a files incompletes a l'exportació (columna \"amount\" buida o no numèrica). Si falten operacions, torna a descarregar el CSV de transaccions complet des de Trade Republic.",
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no s'han aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El cost dels títols antics no passa als nous, així que una venda posterior del nou valor pot sortir sense lots i amb cost 0. Si va ser una fusió o un bescanvi, afegeix el cost d'adquisició original a «Lots manuals per a posicions transferides».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no s'han importat {{count}} entrega(s) de títols sense compravenda (accions gratuïtes, traspassos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Les accions gratuïtes d'una promoció són un guany patrimonial de la base general pel seu valor de mercat el dia de l'entrega: declara-les a part i afegeix aquest valor com a cost a «Lots manuals per a posicions transferides». Si és un traspàs des d'un altre bròquer, afegeix-hi el cost de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":
