@@ -8,7 +8,12 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { saveReport, loadAllReports, migrateReport, type StoredReport } from "../../src/web/storage.js";
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  saveReport, loadAllReports, migrateReport, clearAllReports, clearLocalData, LOCAL_DATA_KEYS, type StoredReport,
+} from "../../src/web/storage.js";
+import { saveProfile, getProfile } from "../../src/web/profile.js";
 
 const STORAGE_KEY = "declarenta_reports";
 
@@ -88,5 +93,57 @@ describe("storage round-trip", () => {
     const migrated = migrateReport(legacy);
     expect(migrated.casillas.generalGains ?? 0).toBe(0);
     expect(migrated.casillas.netGainLoss).toBe(200);
+  });
+});
+
+/**
+ * The profile form auto-saves NIF, name and phone on every keystroke, so the
+ * app must offer a way to delete everything it stored in this browser. The
+ * year-comparison button clears the saved reports only.
+ */
+describe("clearLocalData", () => {
+  function seedEverything(): void {
+    saveProfile({ ...getProfile(), nif: "00000000T", apellidos: "Prueba", nombre: "Ana", telefono: "600000000" });
+    saveReport(makeStored(2024));
+    store.declarenta_manual_rates = JSON.stringify([{ currency: "SOL", date: "2024-04-01", eurPerUnit: "100" }]);
+    store.declarenta_manual_opening_lots = JSON.stringify([{ symbol: "ACME", quantity: "10", priceEur: "100" }]);
+    store.theme = "dark";
+    store.locale = "en";
+  }
+
+  it("clearAllReports leaves the profile and the manual entries behind (control)", () => {
+    seedEverything();
+    clearAllReports();
+    expect(store[STORAGE_KEY]).toBeUndefined();
+    expect(getProfile().nif).toBe("00000000T");
+    expect(store.declarenta_manual_rates).toBeDefined();
+    expect(store.declarenta_manual_opening_lots).toBeDefined();
+  });
+
+  it("removes the profile, the reports, the manual rates and the opening lots", () => {
+    seedEverything();
+    clearLocalData();
+    expect(localStorage.getItem("declarenta_profile")).toBeNull();
+    expect(localStorage.getItem("declarenta_reports")).toBeNull();
+    expect(localStorage.getItem("declarenta_manual_rates")).toBeNull();
+    expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
+    expect(getProfile().nif).toBe("");
+    expect(getProfile().telefono).toBe("");
+    // Display preferences are not user data and survive.
+    expect(store.theme).toBe("dark");
+    expect(store.locale).toBe("en");
+  });
+
+  it("covers every declarenta_* storage key the web app uses", () => {
+    // A new localStorage key must be added to LOCAL_DATA_KEYS, or the delete
+    // button would leave it behind. declarenta_debug is a developer switch.
+    const dir = resolve(__dirname, "../../src/web");
+    const used = new Set<string>();
+    for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts"))) {
+      for (const m of readFileSync(resolve(dir, f), "utf-8").matchAll(/"(declarenta_[a-z_]+)"/g)) used.add(m[1]!);
+    }
+    used.delete("declarenta_debug");
+    expect(used.size).toBeGreaterThanOrEqual(4);
+    expect([...used].sort()).toEqual([...LOCAL_DATA_KEYS].sort());
   });
 });

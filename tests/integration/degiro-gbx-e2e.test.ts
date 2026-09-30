@@ -53,6 +53,11 @@ describe("Degiro GBX end-to-end (issue #282)", () => {
   const statement = degiroParser.parse(GBX_CSV);
   const report = generateTaxReport(statement, makeRateMap(), 2026);
 
+  it("warns that the 2022 ISIN swap was taxed as a sale plus a buy", () => {
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).toContain("degiro.corporate_action_pair");
+  });
+
   it("consumes the buys as FIFO lots — no sell_without_lots / insufficient_lots", () => {
     const ids = report.messages.map((m) => m.id);
     expect(ids).not.toContain("fifo.sell_without_lots");
