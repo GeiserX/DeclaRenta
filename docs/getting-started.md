@@ -18,7 +18,7 @@ La web es un asistente de tres pasos.
 
 **Resultados.** DeclaRenta descarga los tipos de cambio del BCE que necesita y calcula el ejercicio.
 
-Qué verás al terminar: las casillas 0328, 0331, 1633, 1637, 0029, 0027 y 0588 con su importe (solo las que tienen datos) y un botón para copiar cada una; el selector «Ejercicio» si los ficheros cubren varios años; las gráficas; las tablas de operaciones y de dividendos; y los botones Exportar JSON, Exportar CSV y Exportar PDF. La barra lateral añade la Guía Renta Web y las secciones Modelo 720, Modelo 721 y Modelo D-6, que se rellenan con los mismos ficheros.
+Qué verás al terminar: las casillas 0328, 0331, 1633, 1637, 0029, 0027 y 0588 con su importe (solo las que tienen datos) y un botón para copiar cada una; el selector «Ejercicio» si los ficheros cubren varios años; las gráficas; las tablas de operaciones y de dividendos; y los botones Exportar JSON, Exportar CSV, Exportar CSV para Excel (ES) y Exportar PDF. «Exportar CSV» usa comas y decimales con punto, para programas; la versión para Excel usa «;» y decimales con coma, y se abre por columnas con doble clic en un Excel en español. La barra lateral añade la Guía Renta Web y las secciones Modelo 720, Modelo 721 y Modelo D-6, que se rellenan con los mismos ficheros.
 
 Pruébalo con ficheros de ejemplo. El repositorio trae informes anonimizados, con ISIN y cuentas ficticios, del ejercicio 2024 (el de Degiro incluye además dos operaciones de 2021):
 
