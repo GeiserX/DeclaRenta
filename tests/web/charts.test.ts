@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { extractChartData } from "../../src/web/charts.js";
+import { extractChartData, renderTaxBracketCard } from "../../src/web/charts.js";
 import { ASSET_LABELS, assetLabel } from "../../src/web/asset-labels.js";
 
 /** Minimal disposal shape consumed by extractChartData. */
@@ -62,5 +62,20 @@ describe("extractChartData — asset distribution labels", () => {
     // shared map guarantees.
     const { assetDistribution } = extractChartData(makeReport([disposal("CRYPTO", 500)]));
     expect(assetDistribution[0]!.label).toBe(assetLabel("CRYPTO"));
+  });
+});
+
+describe("renderTaxBracketCard — Spanish number format", () => {
+  // 60.000 € of savings base in 2025: 6.000 × 19 % + 44.000 × 21 % + 10.000 × 23 % = 12.680 €.
+  const html = renderTaxBracketCard("IRPF", 2025, 60000, 0);
+
+  it("groups every band threshold, four-digit ones included", () => {
+    expect(html).toContain("0 – 6.000");
+    expect(html).toContain("6.000 – 50.000");
+    expect(html).not.toContain("6000");
+  });
+
+  it("writes the effective rate with a decimal comma", () => {
+    expect(html).toContain("21,13%");
   });
 });

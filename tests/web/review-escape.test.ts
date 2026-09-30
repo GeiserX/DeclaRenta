@@ -120,7 +120,7 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     );
     const values = [...review.querySelectorAll(".review-value")].map((el) => el.textContent);
     expect(values).toContain("USD");
-    expect(values).toContain("2025-01-10 — 2025-01-10");
+    expect(values).toContain("10/01/2025 — 10/01/2025");
     expect(review.querySelector(INJECTED)).toBeNull();
   });
 
@@ -184,11 +184,18 @@ describe("results tables escape broker-supplied dates", () => {
   it("a short markup date, which the date formatters return unchanged, is shown as text", async () => {
     // Fewer than 8 characters: the casilla and annex formatters skip their
     // slicing and hand the raw string back, so only esc() stands in the way.
+    // The IBKR parser now refuses a date that is not yyyyMMdd, so the raw
+    // string comes in through Freedom24, whose parser passes it along.
+    const freedom24Trade = (operation: string, date: string, p: number) => ({
+      operation, ticker: "ACME.EU", isin: "XX0000000001", date, q: 10, p, curr_c: "EUR",
+      amount: String(10 * p), commission: "0",
+    });
     await uploadAndReview(
-      flexXml(
-        trade("1", { currency: "EUR", tradeDate: "&lt;style&gt;", side: "BUY" }) +
-          trade("2", { currency: "EUR", tradeDate: "20250310", side: "SELL" }),
-      ),
+      JSON.stringify({
+        trades: {
+          detailed: [freedom24Trade("buy", "<style>", 100), freedom24Trade("sell", "2025-03-10 10:00:00", 120)],
+        },
+      }),
     );
     await continueToResults();
 
