@@ -172,7 +172,10 @@ const es = {
   "compare.net_gain_loss": "Ganancia/Pérdida neta (transmisiones, sin divisas)",
 
   // Errors
-  "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
+  "error.no_broker_detected":
+    'No se pudo detectar el broker de "{{filename}}". Si es un informe de broker, selecciona el broker manualmente; si no lo es, quítalo de la lista.',
+  "error.empty_file":
+    'El fichero "{{filename}}" está vacío. Quítalo de la lista o vuelve a exportarlo desde tu broker.',
   "error.file_too_large":
     'El fichero "{{filename}}" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.',
   "error.prefix": "Error: ",
@@ -195,7 +198,8 @@ const es = {
   "profile.section_personal": "Datos personales",
   "profile.section_declaration": "Configuración de la declaración",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "El NIF/NIE no es válido: revisa los dígitos y la letra de control.",
   "profile.surname_label": "Apellidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nombre:",
@@ -678,6 +682,9 @@ const es = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sin aplicar: no hay acciones anteriores con las que calcular la proporción.",
+  "fifo.split_unresolved.hint":
+    "Sube también los extractos de años anteriores, desde la apertura de la cuenta. Si no, el número de acciones y el coste de las ventas posteriores de este valor no serán correctos.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
@@ -782,6 +789,10 @@ const es = {
   "degiro.rows_skipped": "Se omitieron {{count}} filas sin ISIN/sin importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
+  "degiro.corporate_action_pair":
+    "Posible operación societaria el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro la anota como una venta y una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota los cambios de ISIN, los splits y los canjes de acciones como una venta del valor antiguo y una compra del nuevo, sin número de orden ni costes. DeclaRenta los calcula así: declara una ganancia o pérdida ese día, y las acciones nuevas toman ese precio y esa fecha como coste. Revisa la comunicación de Degiro o del emisor. Si fue un simple cambio de ISIN, un split o un canje fiscalmente neutro (régimen especial de la Ley del Impuesto sobre Sociedades), no hubo venta: las acciones nuevas conservan el coste y la fecha de compra de las antiguas, así que corrige esa operación en tu declaración. Si fue un canje que tributa (art. 37.1.e LIRPF), el cálculo es correcto.",
   "degiro.transaction_tax": "Impuesto sobre transacciones financieras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este impuesto al comprar acciones españolas, francesas o italianas y solo lo muestra en el CSV de Cuenta. Forma parte del valor de adquisición (art. 35.1.b LIRPF): súmalo al coste de las compras de ese valor, porque DeclaRenta no lo añade automáticamente.",
@@ -817,6 +828,14 @@ const es = {
     "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Suele deberse a filas incompletas en la exportación (columna "amount" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no se han aplicado {{count}} movimiento(s) de acción corporativa (fusión, canje, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El coste de los títulos antiguos no pasa a los nuevos, así que una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no se han importado {{count}} entrega(s) de títulos sin compraventa (acciones gratuitas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Las acciones gratuitas de una promoción son una ganancia patrimonial de la base general por su valor de mercado el día de la entrega: decláralas aparte y añade ese valor como coste en «Lotes manuales para posiciones transferidas». Si es un traspaso desde otro bróker, añade allí el coste de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

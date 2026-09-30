@@ -163,7 +163,10 @@ const ca: TranslationKeys = {
   "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
   "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
-  "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
+  "error.no_broker_detected":
+    'No s\'ha pogut detectar el broker de "{{filename}}". Si és un informe de broker, selecciona el broker manualment; si no ho és, treu-lo de la llista.',
+  "error.empty_file":
+    'El fitxer "{{filename}}" és buit. Treu-lo de la llista o torna\'l a exportar des del teu broker.',
   "error.file_too_large":
     'El fitxer "{{filename}}" supera el límit de {{limit}} MB i s\'ha descartat. Exporta un període més curt o divideix el fitxer.',
   "error.prefix": "Error: ",
@@ -183,7 +186,8 @@ const ca: TranslationKeys = {
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "El NIF/NIE no és vàlid: revisa els dígits i la lletra de control.",
   "profile.surname_label": "Cognoms:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nom:",
@@ -642,6 +646,9 @@ const ca: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sense aplicar: no hi ha accions anteriors amb què calcular la proporció.",
+  "fifo.split_unresolved.hint":
+    "Puja també els extractes d'anys anteriors, des de l'obertura del compte. Si no, el nombre d'accions i el cost de les vendes posteriors d'aquest valor no seran correctes.",
   "fifo.merger_applied":
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
@@ -745,6 +752,10 @@ const ca: TranslationKeys = {
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
+  "degiro.corporate_action_pair":
+    "Possible operació societària el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro l'anota com una venda i una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota els canvis d'ISIN, els splits i els bescanvis d'accions com una venda del valor antic i una compra del nou, sense número d'ordre ni costos. DeclaRenta els calcula així: declara un guany o una pèrdua aquell dia, i les accions noves prenen aquest preu i aquesta data com a cost. Revisa la comunicació de Degiro o de l'emissor. Si va ser un simple canvi d'ISIN, un split o un bescanvi fiscalment neutre (règim especial de la Llei de l'Impost sobre Societats), no hi va haver venda: les accions noves conserven el cost i la data de compra de les antigues, així que corregeix aquesta operació a la teva declaració. Si va ser un bescanvi que tributa (art. 37.1.e LIRPF), el càlcul és correcte.",
   "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",
@@ -780,6 +791,14 @@ const ca: TranslationKeys = {
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
     "Sol deure's a files incompletes a l'exportació (columna \"amount\" buida o no numèrica). Si falten operacions, torna a descarregar el CSV de transaccions complet des de Trade Republic.",
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no s'han aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El cost dels títols antics no passa als nous, així que una venda posterior del nou valor pot sortir sense lots i amb cost 0. Si va ser una fusió o un bescanvi, afegeix el cost d'adquisició original a «Lots manuals per a posicions transferides».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no s'han importat {{count}} entrega(s) de títols sense compravenda (accions gratuïtes, traspassos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Les accions gratuïtes d'una promoció són un guany patrimonial de la base general pel seu valor de mercat el dia de l'entrega: declara-les a part i afegeix aquest valor com a cost a «Lots manuals per a posicions transferides». Si és un traspàs des d'un altre bròquer, afegeix-hi el cost de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

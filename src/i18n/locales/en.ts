@@ -161,7 +161,10 @@ const en: TranslationKeys = {
   "compare.acquisition_value": "Acquisition value (disposals, excl. FX)",
   "compare.net_gain_loss": "Net gain/loss (disposals, excl. FX)",
 
-  "error.no_broker_detected": 'Could not detect broker for "{{filename}}". Select the broker manually.',
+  "error.no_broker_detected":
+    'Could not detect the broker for "{{filename}}". If it is a broker report, select the broker manually; if not, remove it from the list.',
+  "error.empty_file":
+    'The file "{{filename}}" is empty. Remove it from the list or export it again from your broker.',
   "error.file_too_large":
     'File "{{filename}}" exceeds the {{limit}} MB limit and was discarded. Export a shorter period or split the file.',
   "error.prefix": "Error: ",
@@ -183,7 +186,8 @@ const en: TranslationKeys = {
   "profile.section_personal": "Personal details",
   "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "This NIF/NIE is not valid: check the digits and the control letter.",
   "profile.surname_label": "Surname:",
   "profile.surname_placeholder": "Smith Jones",
   "profile.name_label": "First name:",
@@ -640,6 +644,9 @@ const en: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) applied ({{date}})",
   "fifo.split_applied.hint":
     "Split applied to all lots. The total cost is unchanged — only the number of shares changes.",
+  "fifo.split_unresolved": "⚠ Split of {{symbol}} on {{date}} not applied: no earlier shares to size the ratio from.",
+  "fifo.split_unresolved.hint":
+    "Also upload the statements for earlier years, back to when the account was opened. Otherwise the share count and the cost of later sales of this security will be wrong.",
   "fifo.merger_applied":
     "🔄 Merger: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lots transferred, {{date}})",
   "fifo.merger_applied.hint":
@@ -743,6 +750,10 @@ const en: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",
+  "degiro.corporate_action_pair":
+    "Possible corporate action on {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro records it as a sale and a purchase.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro records ISIN changes, splits and share exchanges as a sale of the old security and a purchase of the new one, with no order ID and no costs. DeclaRenta computes them that way: it declares a gain or loss on that day, and the new shares take that price and that date as their cost. Check the notice from Degiro or the issuer. If it was a plain ISIN change, a split or a tax-neutral share exchange (special regime of the Spanish Corporate Income Tax Act), there was no sale: the new shares keep the cost and purchase date of the old ones, so correct that operation in your return. If it was a taxable exchange (art. 37.1.e LIRPF), the calculation is correct.",
   "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
@@ -778,6 +789,14 @@ const en: TranslationKeys = {
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":
     'This is usually caused by incomplete rows in the export (an empty or non-numeric "amount" column). If operations are missing, re-download the full transactions CSV from Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: {{count}} corporate action row(s) (merger, exchange, split) for {{isins}} were not applied.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "The cost of the old securities is not carried over to the new ones, so a later sale of the new security may show no lots and a cost of 0. If it was a merger or an exchange, add the original acquisition cost under “Manual lots for transferred positions”.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: {{count}} securities delivery row(s) without a trade (free shares, transfers) for {{isins}} were not imported.",
+  "trade_republic.delivery_not_applied.hint":
+    "Free shares from a promotion are a capital gain in the general tax base at their market value on the delivery date: declare them separately and add that value as the cost under “Manual lots for transferred positions”. If it is a transfer from another broker, add the original purchase cost there.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":

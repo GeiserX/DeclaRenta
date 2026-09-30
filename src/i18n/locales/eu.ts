@@ -164,7 +164,10 @@ const eu: TranslationKeys = {
   "compare.acquisition_value": "Eskuratze-balioa (transmisioak, dibisarik gabe)",
   "compare.net_gain_loss": "Irabazi/Galera garbia (transmisioak, dibisarik gabe)",
 
-  "error.no_broker_detected": 'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.',
+  "error.no_broker_detected":
+    'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Broker baten txostena bada, hautatu brokerra eskuz; bestela, kendu zerrendatik.',
+  "error.empty_file":
+    '"{{filename}}" fitxategia hutsik dago. Kendu zerrendatik edo esportatu berriro zure brokerretik.',
   "error.file_too_large":
     '"{{filename}}" fitxategiak {{limit}} MB-ko muga gainditzen du eta baztertu egin da. Esportatu epe laburragoa edo zatitu fitxategia.',
   "error.prefix": "Errorea: ",
@@ -184,7 +187,8 @@ const eu: TranslationKeys = {
   "profile.section_personal": "Datu pertsonalak",
   "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "NIF/NIE hau ez da baliozkoa: egiaztatu digituak eta kontrol-letra.",
   "profile.surname_label": "Abizenak:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Izena:",
@@ -642,6 +646,9 @@ const eu: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",
+  "fifo.split_unresolved": "⚠ {{symbol}}-ren split-a ({{date}}) ez da aplikatu: ez dago aurreko akziorik proportzioa kalkulatzeko.",
+  "fifo.split_unresolved.hint":
+    "Igo aurreko urteetako laburpenak ere, kontua ireki zenetik. Bestela, akzio kopurua eta balio honen ondorengo salmenten kostua ez dira zuzenak izango.",
   "fifo.merger_applied":
     "🔄 Bat-egitea: {{oldIsin}} → {{newIsin}} (ratioa {{ratio}}, {{lotsTransferred}} lote transferituak, {{date}})",
   "fifo.merger_applied.hint":
@@ -747,6 +754,10 @@ const eu: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",
+  "degiro.corporate_action_pair":
+    "Baliteke {{date}} egunean eragiketa korporatibo bat egotea: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degirok salmenta eta erosketa gisa erregistratzen du.",
+  "degiro.corporate_action_pair.hint":
+    "Degirok ISIN aldaketak, splitak eta akzio-trukeak balore zaharraren salmenta eta berriaren erosketa gisa erregistratzen ditu, agindu-zenbakirik eta kosturik gabe. DeclaRentak horrela kalkulatzen ditu: egun horretan irabazi edo galera bat aitortzen du, eta akzio berriek prezio hori eta data hori hartzen dituzte kostu gisa. Berrikusi Degiroren edo jaulkitzailearen jakinarazpena. ISIN aldaketa hutsa, split bat edo fiskalki neutroa den truke bat izan bazen (Sozietateen gaineko Zergaren Legearen araubide berezia), ez zen salmentarik egon: akzio berriek zaharren kostua eta erosketa-data gordetzen dituzte, beraz, zuzendu eragiketa hori zure aitorpenean. Zergapean dagoen truke bat izan bazen (LIRPFren 37.1.e art.), kalkulua zuzena da.",
   "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",
@@ -782,6 +793,14 @@ const eu: TranslationKeys = {
     "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Normalean esportazioan errenkada osatugabeei zor zaie ("amount" zutabea hutsik edo zenbakizkoa ez dena). Eragiketak falta badira, deskargatu berriro transakzioen CSV osoa Trade Republic-etik.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: ez dira aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
+  "trade_republic.corporate_action_not_applied.hint":
+    "Titulu zaharren kostua ez da berrietara pasatzen, beraz balore berriaren ondorengo salmenta batek loterik gabe eta 0 kostuarekin atera daiteke. Fusioa edo trukea izan bazen, gehitu jatorrizko eskuratze-kostua «Eskuzko loteak transferitutako posizioentzat» atalean.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: ez dira inportatu {{isins}} baloreen salerosketarik gabeko {{count}} titulu-entrega (doako akzioak, lekualdaketak).",
+  "trade_republic.delivery_not_applied.hint":
+    "Promozio bateko doako akzioak zerga-oinarri orokorreko ondare-irabazia dira, entrega-eguneko merkatu-balioaren arabera: aitortu itzazu bereiz eta gehitu balio hori kostu gisa «Eskuzko loteak transferitutako posizioentzat» atalean. Beste broker batetik egindako lekualdaketa bada, gehitu bertan jatorrizko erosketa-kostua.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

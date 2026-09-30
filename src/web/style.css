@@ -1870,6 +1870,20 @@ footer a:hover {
   color: var(--muted);
 }
 
+.profile-field-error {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.profile-field-error[hidden] {
+  display: none;
+}
+
+.profile-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .field-detail {
   font-size: 0.78rem;
   color: var(--muted);

@@ -3,6 +3,12 @@ import { readFileSync, existsSync } from "fs";
 import * as XLSX from "xlsx";
 import { revolutParser } from "../../src/parsers/revolut.js";
 import { parseRevolutXlsx, detectRevolutXlsx, parseRevolutDate } from "../../src/parsers/revolut.js";
+import { generateTaxReport } from "../../src/generators/report.js";
+import { computeCasillaBlocks } from "../../src/generators/casillas.js";
+import { createEmptyStatement, mergeStatement, finalizeMergedStatement } from "../../src/parsers/merge.js";
+import type { Statement } from "../../src/types/broker.js";
+import type { FlexStatement } from "../../src/types/ibkr.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -845,5 +851,239 @@ describe("revolutParser — transaction-log format", () => {
       expect(closedStmt.trades.length).toBe(2);
       expect(closedStmt.trades[0]!.tradeID).toMatch(/^revolut-open-/);
     });
+  });
+});
+
+// ===========================================================================
+// Pipeline helpers: parser Statement → generateTaxReport (no network)
+// ===========================================================================
+
+function toFlex(parsed: Statement): FlexStatement {
+  return {
+    accountId: "", fromDate: "", toDate: "", period: "",
+    trades: parsed.trades,
+    cashTransactions: parsed.cashTransactions,
+    corporateActions: parsed.corporateActions,
+    openPositions: parsed.openPositions,
+    securitiesInfo: parsed.securitiesInfo,
+    ...(parsed.parserMessages ? { parserMessages: parsed.parserMessages } : {}),
+  };
+}
+
+function usdRates(dates: string[], rate = "0.90"): EcbRateMap {
+  const map: EcbRateMap = new Map();
+  for (const d of dates) map.set(d, new Map([["USD", rate]]));
+  return map;
+}
+
+describe("Revolut stock tickers that are also crypto symbols", () => {
+  // These US tickers also exist as CoinGecko coin symbols. On Revolut they are
+  // shares: classing them CRYPTO sent the sale to the "otros elementos" block
+  // and the holding to Modelo 721 instead of 720/D-6.
+  const STOCK_TICKERS = [
+    "META", "U", "H", "M", "S", "W", "BILL", "AMP", "TEL", "BIO",
+    "IP", "VVV", "BEAM", "MET", "GT", "LIT", "CASH",
+  ];
+
+  it.each(STOCK_TICKERS)("classifies %s as STK in the transaction log", async (ticker) => {
+    const data = buildTxnLogWorkbook([
+      ["2024-03-01T15:00:00Z", ticker, "BUY - MARKET", "2", "USD 100", "USD 200", "USD", "1.08"],
+    ]);
+    const stmt = await parseRevolutXlsx(data);
+    expect(stmt.trades[0]!.assetCategory).toBe("STK");
+    expect(stmt.openPositions[0]!.assetCategory).toBe("STK");
+  });
+
+  it("puts META and U disposals in the listed-shares block (0328/0331)", async () => {
+    const data = buildRevolutWorkbook([
+      ["2024-02-01", "2024-06-03", "META", "2", "800", "1000", "200", "0", "200", "USD"],
+      ["2024-02-01", "2024-06-03", "U", "10", "250", "200", "-50", "0", "-50", "USD"],
+    ]);
+    const parsed = await parseRevolutXlsx(data);
+    expect(parsed.trades.every((t) => t.assetCategory === "STK")).toBe(true);
+    const report = generateTaxReport(toFlex(parsed), usdRates(["2024-02-01", "2024-06-03"]), 2024);
+    const blocks = computeCasillaBlocks(report.capitalGains.disposals);
+    expect(report.capitalGains.disposals).toHaveLength(2);
+    expect(blocks.listedShares.transmissionValue.toFixed(2)).toBe("1080.00");
+    expect(blocks.otherElements.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it("still classifies real coins (BTC, ETH) as CRYPTO", async () => {
+    const data = buildTxnLogWorkbook([
+      ["2024-03-01T15:00:00Z", "BTC", "BUY - MARKET", "0.001", "USD 60000", "USD 60", "USD", "1.08"],
+      ["2024-03-01T15:00:00Z", "ETH", "BUY - MARKET", "0.01", "USD 3000", "USD 30", "USD", "1.08"],
+    ]);
+    const stmt = await parseRevolutXlsx(data);
+    expect(stmt.trades.map((t) => t.assetCategory)).toEqual(["CRYPTO", "CRYPTO"]);
+  });
+});
+
+describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
+  // Revolut writes a dividend with an empty Quantity and a split as the number
+  // of shares added, with a zero amount. Both used to be dropped silently.
+  const SPLIT_LOG: (string | number)[][] = [
+    ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
+    ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "9", "", "USD 0", "USD", "1.08"],
+    ["2024-07-03T10:00:00Z", "NVDA", "DIVIDEND", "", "", "USD 0.09", "USD", "1.08"],
+    ["2024-08-01T15:00:00Z", "NVDA", "SELL - MARKET", "10", "USD 120", "USD 1200", "USD", "1.08"],
+  ];
+
+  it("turns a DIVIDEND row into a Dividends cash transaction and says it is net", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook(SPLIT_LOG));
+    const divs = stmt.cashTransactions.filter((c) => c.type === "Dividends");
+    expect(divs).toHaveLength(1);
+    expect(divs[0]!.symbol).toBe("NVDA");
+    expect(divs[0]!.currency).toBe("USD");
+    expect(divs[0]!.amount).toBe("0.09");
+    expect(divs[0]!.dateTime).toBe("20240703");
+    const note = stmt.parserMessages?.find((m) => m.id === "revolut.dividends_net");
+    expect(note?.severity).toBe("info");
+    expect(note?.context?.count).toBe("1");
+  });
+
+  it("turns a STOCK SPLIT row into a split, so the later sale finds all its shares", async () => {
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook(SPLIT_LOG));
+    expect(parsed.corporateActions).toHaveLength(1);
+    expect(parsed.corporateActions[0]!.type).toBe("FS");
+    // The parser carries the shares added; the engine sizes the ratio from its lots
+    expect(parsed.corporateActions[0]!.quantity).toBe("9");
+    expect(parsed.corporateActions[0]!.description).not.toMatch(/SPLIT\s+\d+\s+FOR\s+\d+/);
+    expect(parsed.openPositions).toHaveLength(0);
+    expect(parsed.parserMessages?.some((m) => m.id === "revolut.unknown_type")).toBeFalsy();
+
+    const rates = usdRates(["2024-06-03", "2024-06-10", "2024-07-03", "2024-08-01"]);
+    const report = generateTaxReport(toFlex(parsed), rates, 2024);
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(ids).not.toContain("fifo.sell_without_lots");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    // Full 500 USD cost against the 10 post-split shares (Art. 37.1.a: a split is not a disposal)
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("450.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("1080.00");
+    expect(report.dividends.grossIncome.toFixed(4)).toBe("0.0810");
+  });
+
+  it("applies a reverse split given as a negative quantity", async () => {
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "ACME", "BUY - MARKET", "20", "USD 5", "USD 100", "USD", "1.08"],
+      ["2024-06-10T08:00:00Z", "ACME", "STOCK SPLIT", "-18", "", "USD 0", "USD", "1.08"],
+      ["2024-08-01T15:00:00Z", "ACME", "SELL - MARKET", "2", "USD 60", "USD 120", "USD", "1.08"],
+    ]));
+    expect(parsed.corporateActions).toHaveLength(1);
+    expect(parsed.corporateActions[0]!.type).toBe("RS");
+    expect(parsed.corporateActions[0]!.quantity).toBe("-18");
+    const report = generateTaxReport(
+      toFlex(parsed), usdRates(["2024-06-03", "2024-06-10", "2024-08-01"]), 2024,
+    );
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("90.00");
+  });
+
+  it("sizes a split from every merged file, not only the file that has the split row", async () => {
+    // Yearly exports parsed one by one: the 2024 file alone holds 1 share, the
+    // merged holding is 6, so +54 is a 10-for-1 split, not 55-for-1.
+    const file2023 = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2023-03-01T14:00:00Z", "NVDA", "BUY - MARKET", "5", "USD 400", "USD 2000", "USD", "1"],
+    ]));
+    const file2024 = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-02-01T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 700", "USD 700", "USD", "1"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "54", "", "USD 0", "USD", "1"],
+      ["2024-08-01T15:00:00Z", "NVDA", "SELL - MARKET", "60", "USD 120", "USD 7200", "USD", "1"],
+    ]));
+    const merged = createEmptyStatement();
+    mergeStatement(merged, file2023);
+    mergeStatement(merged, file2024);
+    finalizeMergedStatement(merged);
+
+    const rates = usdRates(["2023-03-01", "2024-02-01", "2024-06-10", "2024-08-01"], "1");
+    const report = generateTaxReport(toFlex(merged), rates, 2024);
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(ids).not.toContain("fifo.split_unresolved");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("2700.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("7200.00");
+  });
+
+  it("applies a split before a buy on the split date, which is already in post-split shares", async () => {
+    // Trading on the split date is post-split, so the 2 shares bought that day
+    // are not part of the holding the split multiplies, whatever the row order.
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 1000", "USD 1000", "USD", "1"],
+      ["2024-06-10T07:00:00Z", "NVDA", "BUY - MARKET", "2", "USD 100", "USD 200", "USD", "1"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "9", "", "USD 0", "USD", "1"],
+      ["2024-08-01T15:00:00Z", "NVDA", "SELL - MARKET", "12", "USD 120", "USD 1440", "USD", "1"],
+    ]));
+    const report = generateTaxReport(
+      toFlex(parsed), usdRates(["2024-06-03", "2024-06-10", "2024-08-01"], "1"), 2024,
+    );
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1200.00");
+  });
+
+  it("measures the anti-churning cap in post-split shares with the ratio FIFO applied", async () => {
+    // 10 bought in January, 1 more in February (inside the two months before the
+    // sale), a 10-for-1 split, then a loss sale of the 100 January shares. The
+    // 10 February shares are still held, so 10 of 100 shares' loss is deferred.
+    // Without the split ratio the position looks closed (10 + 1 - 100) and
+    // nothing is deferred.
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-01-02T14:00:00Z", "NVDA", "BUY - MARKET", "10", "USD 100", "USD 1000", "USD", "1"],
+      ["2024-02-20T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 90", "USD 90", "USD", "1"],
+      ["2024-03-01T08:00:00Z", "NVDA", "STOCK SPLIT", "99", "", "USD 0", "USD", "1"],
+      ["2024-03-15T15:00:00Z", "NVDA", "SELL - MARKET", "100", "USD 5", "USD 500", "USD", "1"],
+    ]));
+    const report = generateTaxReport(
+      toFlex(parsed), usdRates(["2024-01-02", "2024-02-20", "2024-03-01", "2024-03-15"], "1"), 2024,
+    );
+    const disposals = report.capitalGains.disposals;
+    expect(disposals).toHaveLength(1);
+    expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("-500.00");
+    expect(disposals[0]!.blockedLossEur.toFixed(2)).toBe("50.00");
+  });
+
+  it("warns when the engine holds no shares to size a split from", async () => {
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "9", "", "USD 0", "USD", "1.08"],
+    ]));
+    expect(parsed.corporateActions).toHaveLength(1);
+    const report = generateTaxReport(toFlex(parsed), usdRates(["2024-06-10"]), 2024);
+    const warning = report.messages.find((m) => m.id === "fifo.split_unresolved");
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.context?.symbol).toBe("NVDA");
+    expect(report.messages.some((m) => m.id === "fifo.split_applied")).toBe(false);
+  });
+
+  it("warns when a STOCK SPLIT row has no quantity", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "", "", "USD 0", "USD", "1.08"],
+    ]));
+    expect(stmt.corporateActions).toHaveLength(0);
+    const warning = stmt.parserMessages?.find((m) => m.id === "revolut.split_unresolved");
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.context?.count).toBe("1");
+  });
+
+  it("skips Revolut's own entity-transfer rows quietly", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
+      ["2024-06-10T08:00:00Z", "NVDA", "TRANSFER FROM REVOLUT TRADING LTD TO REVOLUT SECURITIES EUROPE UAB", "1", "", "USD 0", "USD", "1.08"],
+    ]));
+    expect(stmt.parserMessages?.some((m) => m.id === "revolut.unknown_type")).toBeFalsy();
+    expect(stmt.openPositions[0]!.quantity).toBe("1");
+  });
+
+  it("counts any other ticker row it cannot handle, even with a zero amount", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-10T08:00:00Z", "ACME", "SPINOFF", "3", "", "USD 0", "USD", "1.08"],
+      ["2024-06-11T08:00:00Z", "ACME", "MERGER - STOCK", "", "", "", "USD", "1.08"],
+    ]));
+    const warning = stmt.parserMessages?.find((m) => m.id === "revolut.unknown_type");
+    expect(warning?.context?.count).toBe("2");
   });
 });
