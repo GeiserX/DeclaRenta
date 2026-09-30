@@ -131,6 +131,21 @@ export class FifoEngine {
             context: { symbol: t.symbol, assetCategory: t.assetCategory },
           });
         }
+        // Anything but BUY/SELL (e.g. an unhandled broker cancel code) would fall
+        // through to consumeLots below and be taxed as a sale: skip it and warn.
+        // Widened to string: the type says BUY | SELL, parsed input may not.
+        const direction: string = t.buySell;
+        if (direction !== "BUY" && direction !== "SELL") {
+          const date = normalizeDate(t.tradeDate);
+          this.emit({
+            id: "fifo.unknown_direction",
+            severity: "warning",
+            message: `⚠ Operación con dirección desconocida ("${direction}"): ${t.symbol} el ${date}. No se ha procesado.`,
+            hint: "Solo se procesan compras (BUY) y ventas (SELL). Revisa esta fila en el archivo del broker y, si es una operación real, corrige su dirección.",
+            context: { symbol: t.symbol, date, buySell: direction },
+          });
+          return false;
+        }
         // Skip option BookTrades for exercises/assignments/expirations only when a matching OptionEAE exists
         // (IBKR generates both a BookTrade with notes="Ep"/"Ex"/"A" and an OptionEAE event)
         const isOption = t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP";
