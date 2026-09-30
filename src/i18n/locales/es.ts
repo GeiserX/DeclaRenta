@@ -71,8 +71,6 @@ const es = {
   "table.currency": "Divisa",
 
   // Casillas
-  "casilla.transmission_value": "Valor de transmisión (total transmisiones)",
-  "casilla.acquisition_value": "Valor de adquisición (total transmisiones)",
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (acciones negociadas)",
   "casilla.acquisition_sale_rate_note":
@@ -168,6 +166,9 @@ const es = {
   "compare.saved_reports": "Informes guardados",
   "compare.clear_history": "Borrar historial",
   "compare.clear_confirm": "¿Borrar todos los informes guardados?",
+  "compare.transmission_value": "Valor de transmisión (transmisiones, sin divisas)",
+  "compare.acquisition_value": "Valor de adquisición (transmisiones, sin divisas)",
+  "compare.net_gain_loss": "Ganancia/Pérdida neta (transmisiones, sin divisas)",
 
   // Errors
   "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
@@ -355,10 +356,11 @@ const es = {
   "m720.category_c": "Cuentas (saldos en efectivo)",
   "m720.category_exceeded": "Supera 50.000 € — obligatorio declarar",
   "m720.category_not_exceeded": "Por debajo del umbral",
+  "m720.category_undetermined": "No se puede determinar: {{count}} posición(es) sin valorar",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
   "m720.positions_title": "Posiciones declarables",
   "m720.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
@@ -412,7 +414,7 @@ const es = {
   "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",
   "d6.deadline": "Plazo: 1 – 31 enero del año siguiente",
@@ -431,6 +433,8 @@ const es = {
   "m721.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 721.",
   "m721.threshold_not_exceeded":
     "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
+  "m721.threshold_undetermined":
+    "No se puede determinar si superas el umbral de 50.000 €: el total ({{amount}} €) no incluye {{count}} posición(es) sin valorar. Valóralas antes de concluir que no debes presentar.",
   "m721.no_positions": "Sube un informe con posiciones de criptomonedas en Modelo 100 para analizar el Modelo 721.",
   "m721.positions_title": "Posiciones declarables",
   "m721.generate_btn": "Generar fichero Modelo 721",
@@ -447,7 +451,7 @@ const es = {
   "m721.format_notice":
     "El formato oficial de la AEAT es XML (Orden HFP/886/2023). DeclaRenta solo muestra una revisión orientativa: la generación oficial está desactivada hasta implementar el XML validado.",
   "m721.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
   "m721.empty_title": "No hay posiciones de criptomonedas",
   "m721.empty_description":
     "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
@@ -752,6 +756,10 @@ const es = {
     "Hay {{count}} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
   "report.crypto_income_unvalued.hint":
     "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+  "report.dividend_unvalued":
+    "Hay {{count}} dividendo(s) en {{currencies}} que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
+  "report.dividend_unvalued.hint":
+    "El BCE no publica un tipo de cambio oficial para esa divisa en la fecha de cobro. Calcula el importe en euros a esa fecha, súmalo a mano a la casilla 0029 y ten en cuenta su retención en la deducción por doble imposición internacional (casilla 0588).",
   "report.crypto_general_gain_unvalued":
     "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
   "report.crypto_general_gain_unvalued.hint":
@@ -826,6 +834,14 @@ const es = {
     "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Suele deberse a filas incompletas en la exportación (columna "amount" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no se han aplicado {{count}} movimiento(s) de acción corporativa (fusión, canje, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El coste de los títulos antiguos no pasa a los nuevos, así que una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no se han importado {{count}} entrega(s) de títulos sin compraventa (acciones gratuitas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Las acciones gratuitas de una promoción son una ganancia patrimonial de la base general por su valor de mercado el día de la entrega: decláralas aparte y añade ese valor como coste en «Lotes manuales para posiciones transferidas». Si es un traspaso desde otro bróker, añade allí el coste de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "Se omitieron {{skipped}} operaciones sin precio por acción y con importe en otra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

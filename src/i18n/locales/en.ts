@@ -67,8 +67,6 @@ const en: TranslationKeys = {
   "table.amount_eur": "Amount (EUR)",
   "table.currency": "Currency",
 
-  "casilla.transmission_value": "Transmission value (all disposals)",
-  "casilla.acquisition_value": "Acquisition value (all disposals)",
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
   "casilla.acquisition_sale_rate_note":
@@ -158,6 +156,9 @@ const en: TranslationKeys = {
   "compare.saved_reports": "Saved reports",
   "compare.clear_history": "Clear history",
   "compare.clear_confirm": "Delete all saved reports?",
+  "compare.transmission_value": "Transmission value (disposals, excl. FX)",
+  "compare.acquisition_value": "Acquisition value (disposals, excl. FX)",
+  "compare.net_gain_loss": "Net gain/loss (disposals, excl. FX)",
 
   "error.no_broker_detected": 'Could not detect broker for "{{filename}}". Select the broker manually.',
   "error.file_too_large":
@@ -324,10 +325,11 @@ const en: TranslationKeys = {
   "m720.category_c": "Accounts (cash balances)",
   "m720.category_exceeded": "Exceeds 50,000 EUR — filing required",
   "m720.category_not_exceeded": "Below threshold",
+  "m720.category_undetermined": "Cannot be determined: {{count}} position(s) not valued",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "m720.cash_title": "Cash balances (Accounts)",
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
@@ -381,7 +383,7 @@ const en: TranslationKeys = {
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
   "d6.deadline": "Deadline: January 1 – 31 of the following year",
@@ -400,6 +402,8 @@ const en: TranslationKeys = {
   "m721.threshold_exceeded": "Based on your positions ({{amount}} EUR), you are required to file Modelo 721.",
   "m721.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
+  "m721.threshold_undetermined":
+    "Cannot tell whether you exceed the 50,000 EUR threshold: the total ({{amount}} EUR) leaves out {{count}} position(s) that could not be valued. Value them before concluding that you do not need to file.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
@@ -417,7 +421,7 @@ const en: TranslationKeys = {
   "m721.format_notice":
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",
@@ -713,6 +717,10 @@ const en: TranslationKeys = {
     "There are {{count}} crypto income item(s) (e.g. staking rewards) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_income_unvalued.hint":
     "This income is paid in the crypto itself and has no official ECB rate. Compute its value in euros on the receipt date and declare it manually as investment income (Box 0027).",
+  "report.dividend_unvalued":
+    "There are {{count}} dividend(s) in {{currencies}} that could not be valued automatically and are not included in the calculated amounts.",
+  "report.dividend_unvalued.hint":
+    "The ECB publishes no official rate for that currency on the payment date. Compute the amount in euros on that date, add it by hand to box 0029, and include its withholding in the international double-taxation deduction (box 0588).",
   "report.crypto_general_gain_unvalued":
     "There are {{count}} crypto capital gain(s) (e.g. airdrops or referral commissions) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_general_gain_unvalued.hint":
@@ -787,6 +795,14 @@ const en: TranslationKeys = {
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":
     'This is usually caused by incomplete rows in the export (an empty or non-numeric "amount" column). If operations are missing, re-download the full transactions CSV from Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: {{count}} corporate action row(s) (merger, exchange, split) for {{isins}} were not applied.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "The cost of the old securities is not carried over to the new ones, so a later sale of the new security may show no lots and a cost of 0. If it was a merger or an exchange, add the original acquisition cost under “Manual lots for transferred positions”.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: {{count}} securities delivery row(s) without a trade (free shares, transfers) for {{isins}} were not imported.",
+  "trade_republic.delivery_not_applied.hint":
+    "Free shares from a promotion are a capital gain in the general tax base at their market value on the delivery date: declare them separately and add that value as the cost under “Manual lots for transferred positions”. If it is a transfer from another broker, add the original purchase cost there.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":

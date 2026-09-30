@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -38,7 +38,12 @@ function getValuationRate(rateMap: EcbRateMap, year: number, currency: string, a
 
 /** Per-category threshold status for Modelo 720 */
 export interface Modelo720ThresholdResult {
-  values: { exceeds: boolean; total: Decimal };
+  /**
+   * `unvalued`: held securities left out of `total` because they have no
+   * year-end rate or no market value. Their EUR value is unknown, so while it
+   * is above 0 the category cannot be called below the threshold.
+   */
+  values: { exceeds: boolean; total: Decimal; unvalued: number };
   accounts: { exceeds: boolean; total: Decimal };
   realEstate: { exceeds: boolean; total: Decimal };
 }
@@ -122,21 +127,25 @@ export function checkModelo720Thresholds(
   cashBalances?: CashBalance[],
 ): Modelo720ThresholdResult {
   // Calculate total value for securities (V category: long STK, FUND, BOND)
-  const valuesTotal = positions
-    .filter(isHeldSecurity)
-    .reduce((sum, p) => {
-      const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
-      // Unvaluable position (no resolvable rate) — excluded from the EUR total.
-      if (ecbRate === null) return sum;
-      return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
-    }, new Decimal(0));
+  let valuesTotal = new Decimal(0);
+  let unvalued = 0;
+  for (const p of positions.filter(isHeldSecurity)) {
+    const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
+    // Unvaluable position (no resolvable rate, or no market value in the
+    // export): excluded from the EUR total and counted, never added as 0 €.
+    if (ecbRate === null || hasNoMarketValue(p)) {
+      unvalued++;
+      continue;
+    }
+    valuesTotal = valuesTotal.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
+  }
 
   const cash = cashCategoryTotals(cashBalances, rateMap, year);
 
   const realEstateTotal = new Decimal(0);
 
   return {
-    values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal },
+    values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal, unvalued },
     accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal) },
     realEstate: { exceeds: realEstateTotal.greaterThan(THRESHOLD), total: realEstateTotal },
   };
@@ -396,10 +405,11 @@ function plan720(
     .filter(isHeldSecurity)
     .flatMap((p) => {
       const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
-      // Unvaluable position (no resolvable rate): cannot be written to the
-      // fixed-width record without an EUR value — skip it. The caller surfaces a
-      // warning so the user values and declares it manually.
-      if (ecbRate === null) return [];
+      // Unvaluable position (no resolvable rate, or no market value in the
+      // export): cannot be written to the fixed-width record without an EUR
+      // value — skip it. The caller surfaces a warning so the user values and
+      // declares it manually.
+      if (ecbRate === null || hasNoMarketValue(p)) return [];
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
 
       // One record per acquisition date of the lots held at year end

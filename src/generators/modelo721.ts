@@ -12,7 +12,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -55,8 +55,9 @@ export interface Modelo721Valuation {
  * Only `assetCategory === "CRYPTO"` positions with a positive value qualify
  * (fiat/CASH belongs in Modelo 720). Each position is valued at the year-end
  * ECB rate via {@link lookupPositionRate}; positions whose currency has no
- * resolvable rate (e.g. the crypto coin itself) are kept with `valuationEur: null`
- * and counted in `unvaluedCount` so callers can surface them for manual valuation.
+ * resolvable rate (e.g. the crypto coin itself), or held with no market value in
+ * the export, are kept with `valuationEur: null` and counted in `unvaluedCount`
+ * so callers can surface them for manual valuation.
  *
  * Exchange name and country code are left blank: open positions carry no reliable
  * exchange/country data, and deriving them from the ISIN prefix is forbidden for
@@ -74,9 +75,11 @@ export function buildModelo721Entries(
 
   for (const p of openPositions) {
     if (!CRYPTO_CATEGORIES.has(p.assetCategory)) continue;
-    if (!new Decimal(p.positionValue).greaterThan(0)) continue;
+    // A coin held with no market value in the export is unvalued, not 0 €.
+    const noMarketValue = hasNoMarketValue(p);
+    if (!new Decimal(p.positionValue).greaterThan(0) && !noMarketValue) continue;
 
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = noMarketValue ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
     const valuationEur = rate === null ? null : new Decimal(p.positionValue).mul(rate);
     if (valuationEur === null) {
       unvaluedCount++;

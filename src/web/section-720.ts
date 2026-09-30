@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
   checkModelo720SuccessiveYear,
   checkModelo720Thresholds,
@@ -204,12 +204,28 @@ export function renderSection720(
     : null;
   const sold = successive?.values.sold ?? [];
 
-  const categories: { label: string; total: Decimal; exceeds: boolean; successive?: Modelo720SuccessiveCategory; sold: number }[] = [];
-  if (thresholds.values.total.greaterThan(0) || successive?.values.declaredBefore) {
-    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds, successive: successive?.values, sold: sold.length });
+  // `unvalued`: holdings left out of the total. Until the user values them the
+  // category cannot be called below the threshold.
+  const categories: Modelo720CategoryView[] = [];
+  if (thresholds.values.total.greaterThan(0) || thresholds.values.unvalued > 0 || successive?.values.declaredBefore) {
+    categories.push({
+      label: t("m720.category_v"),
+      total: thresholds.values.total,
+      exceeds: thresholds.values.exceeds,
+      unvalued: thresholds.values.unvalued,
+      successive: successive?.values,
+      sold: sold.length,
+    });
   }
   if (thresholds.accounts.total.greaterThan(0) || successive?.accounts.declaredBefore) {
-    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds, successive: successive?.accounts, sold: 0 });
+    categories.push({
+      label: t("m720.category_c"),
+      total: thresholds.accounts.total,
+      exceeds: thresholds.accounts.exceeds,
+      unvalued: 0,
+      successive: successive?.accounts,
+      sold: 0,
+    });
   }
   const mustFile = categories.some((cat) => (cat.successive?.declaredBefore ? cat.successive.mandatory : cat.exceeds));
 
@@ -234,7 +250,7 @@ export function renderSection720(
   }
   if (!previous720 && exceeds) {
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
-  } else if (previous720 && !mustFile) {
+  } else if (previous720 && !mustFile && categories.every((cat) => cat.unvalued === 0)) {
     html += `<div class="banner banner-info">${esc(t("m720.successive_not_required"))}</div>`;
   }
 
@@ -264,6 +280,8 @@ export function renderSection720(
         } else {
           rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
+        // No rate, or no market value in the export: unknown, never 0 €.
+        if (hasNoMarketValue(p)) rate = null;
         if (rate === null) unvaluedCount++;
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         const origin = declaredIsins ? `<td>${esc(t(declaredIsins.has(p.isin) ? "m720.origin_m" : "m720.origin_a"))}</td>` : "";
@@ -363,25 +381,34 @@ export function renderSection720(
   });
 }
 
+/** A category bar of the section: its total, what could not be valued, and last year's comparison. */
+interface Modelo720CategoryView {
+  label: string;
+  total: Decimal;
+  exceeds: boolean;
+  unvalued: number;
+  successive?: Modelo720SuccessiveCategory;
+  sold: number;
+}
+
 /**
  * The obligation line under a category bar: the 50,000 € threshold, or, for a
  * category last year's file declared, the 20,000 € rule and any sale of it.
  */
-function categoryStatusHtml(cat: { exceeds: boolean; successive?: Modelo720SuccessiveCategory; sold: number }): string {
+function categoryStatusHtml(cat: Modelo720CategoryView): string {
+  // Holdings left out of the total: the category cannot be called below 50,000 € or not up 20,000 €.
+  const undetermined = esc(t("m720.category_undetermined", { count: String(cat.unvalued) }));
   const s = cat.successive;
   if (!s?.declaredBefore) {
-    return `<p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>`;
+    return cat.exceeds
+      ? `<p class="warning">${t("m720.category_exceeded")}</p>`
+      : cat.unvalued > 0 ? `<p class="warning">${undetermined}</p>` : `<p class="muted">${t("m720.category_not_exceeded")}</p>`;
   }
-  const last = esc(t("m720.successive_last", { previous: fmtEur(s.previousTotal), change: fmtChange(s.increase) }));
-  const grew = cat.exceeds && s.increaseExceeded;
-  const [cls, key] = grew
-    ? (["warning", "m720.successive_increase"] as const)
-    : cat.sold > 0
-      ? (["warning", "m720.successive_sold"] as const)
-      : cat.exceeds
-        ? (["muted", "m720.successive_optional"] as const)
-        : (["muted", "m720.category_not_exceeded"] as const);
-  return `<p class="muted">${last}</p><p class="${cls}">${esc(t(key))}</p>`;
+  const last = `<p class="muted">${esc(t("m720.successive_last", { previous: fmtEur(s.previousTotal), change: fmtChange(s.increase) }))}</p>`;
+  if (cat.exceeds && s.increaseExceeded) return `${last}<p class="warning">${esc(t("m720.successive_increase"))}</p>`;
+  if (cat.sold > 0) return `${last}<p class="warning">${esc(t("m720.successive_sold"))}</p>`;
+  if (cat.unvalued > 0) return `${last}<p class="warning">${undetermined}</p>`;
+  return `${last}<p class="muted">${esc(t(cat.exceeds ? "m720.successive_optional" : "m720.category_not_exceeded"))}</p>`;
 }
 
 function encodeISO885915(str: string): Uint8Array {
