@@ -25,6 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -33,7 +35,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Type check
         run: |
@@ -54,7 +56,7 @@ jobs:
           TZ: Europe/Madrid
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage/coverage-final.json
           fail_ci_if_error: false
@@ -89,3 +91,17 @@ jobs:
 
       - name: Build
         run: mkdocs build --strict
+
+  workflows:
+    name: workflows (zizmor)
+    # Static security audit of .github/workflows: fails on an expression pasted
+    # into a run: script, an unpinned third-party action, or a checkout that keeps
+    # the token when the job never pushes. Rules: .github/zizmor.yml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Audit workflows
+        run: pipx run --spec zizmor==1.30.1 zizmor --offline --config .github/zizmor.yml .github/workflows
