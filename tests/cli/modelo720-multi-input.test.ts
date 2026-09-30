@@ -16,6 +16,7 @@ const DE = { isin: "DE0007164600", symbol: "SAP", value: "30000" };
 const dir = tempFiles({
   "a.xml": flexXml("U1111111", [US]),
   "b.xml": flexXml("U2222222", [DE]),
+  "a-2024.xml": flexXml("U1111111", [US], "20241231"),
   "big.xml": flexXml("U1111111", [{ ...US, value: "60000" }]),
 });
 const file = (name: string) => join(dir, name);
@@ -36,6 +37,16 @@ describe("declarenta modelo720 with several input files", () => {
     expect(res.status).toBe(0);
     expect(res.stderr).toContain("3 registro(s) validados");
     expect(detailIsins(res.stdout)).toEqual(["DE0007164600", "US0378331005"]);
+  }, 30_000);
+
+  it("does not add the holdings of a file that ends on another year's 31 December", () => {
+    // 30.000 EUR held at the end of 2024 plus 30.000 EUR at the end of 2025 is
+    // not 60.000 EUR held on 31/12/2025.
+    const res = runCli(["modelo720", "-i", file("a-2024.xml"), "-i", file("b.xml"), ...base]);
+    expect(res.status).toBe(0);
+    expect(res.stderr).toContain("U1111111 a fecha 31/12/2024");
+    expect(res.stderr).toContain("por debajo de 50.000");
+    expect(res.stdout).toBe("");
   }, 30_000);
 
   it("accepts the files after a single --input", () => {

@@ -457,6 +457,10 @@ const ca: TranslationKeys = {
     "Les posicions del teu fitxer són a data {{date}}, no a 31/12/{{year}}. Aquests models declaren el que tenies a 31 de desembre, així que no es genera cap fitxer amb elles. Descarrega un informe que acabi el 31/12/{{year}} (a IBKR, un Flex Query amb data final 31/12/{{year}}) i torna'l a pujar.",
   "section.positions_date_unknown":
     "El teu broker no indica a quina data corresponen les posicions. Comprova que l'informe reflecteixi el que tenies a 31/12/{{year}}: si el vas descarregar més tard, les posicions i els seus valors poden no coincidir.",
+  "merge.holdings_other_date":
+    "Posicions i saldos del compte {{account}} a data {{date}} fora dels models 720, 721 i D-6: no són els de 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "Aquest fitxer acaba en una altra data. Les seves operacions i moviments sí que es tenen en compte, però aquests models declaren el que tenies a 31 de desembre, així que les seves posicions i saldos no se sumen. Si et falta l'informe d'aquest compte a 31/12/{{year}}, puja'l també.",
 
   "badge.complete": "Complet",
   "badge.pending": "Pendent",

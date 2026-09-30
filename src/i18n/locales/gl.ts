@@ -457,6 +457,10 @@ const gl: TranslationKeys = {
     "As posicións do teu ficheiro son a data {{date}}, non a 31/12/{{year}}. Estes modelos declaran o que tiñas a 31 de decembro, así que non se xera ningún ficheiro con elas. Descarga un informe que remate o 31/12/{{year}} (en IBKR, un Flex Query con data final 31/12/{{year}}) e súbeo de novo.",
   "section.positions_date_unknown":
     "O teu broker non indica a que data corresponden as posicións. Comproba que o informe reflicta o que tiñas a 31/12/{{year}}: se o descargaches máis tarde, as posicións e os seus valores poden non coincidir.",
+  "merge.holdings_other_date":
+    "Posicións e saldos da conta {{account}} a data {{date}} fóra dos modelos 720, 721 e D-6: non son os de 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "Ese ficheiro remata noutra data. As súas operacións e movementos si se teñen en conta, pero estes modelos declaran o que tiñas a 31 de decembro, así que as súas posicións e saldos non se suman. Se che falta o informe desa conta a 31/12/{{year}}, súbeo tamén.",
 
   "badge.complete": "Completo",
   "badge.pending": "Pendente",
