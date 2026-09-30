@@ -44,7 +44,7 @@ import type { DividendEntry, FifoDisposal, IssuerDividendGroup, TaxSummary } fro
  * STK as listed and everything else as "otros elementos". This errs toward the
  * conservative side (both blocks feed the same savings base at the same rate, so
  * the *tax due* is identical — only the box placement differs). Revisit if a
- * listing flag becomes available. See docs.html FAQ for the user-facing note.
+ * listing flag becomes available. The user-facing note is in docs/casillas.md.
  */
 const LISTED_SHARE_CATEGORIES: ReadonlySet<string> = new Set(["STK"]);
 
