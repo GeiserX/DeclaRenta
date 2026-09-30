@@ -55,6 +55,53 @@ import Decimal from "decimal.js";
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 // ---------------------------------------------------------------------------
+// Splash screen
+// ---------------------------------------------------------------------------
+// Wired before the locale table is awaited below: the button needs no
+// translation, and a click that lands while the table is still loading must
+// not be lost.
+
+const splash = document.getElementById("splash");
+const splashCta = document.getElementById("splash-cta");
+
+function dismissSplash() {
+  if (!splash) return;
+  splash.classList.add("splash-exit");
+  // The exit animation (style.css .splash-exit) lasts 0.45 s. A browser that
+  // does not run it (reduced motion, a hidden tab, headless under load) never
+  // fires animationend, so a timer finishes the dismissal in either case.
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    splash.style.display = "none";
+    document.body.classList.remove("splash-visible");
+  };
+  splash.addEventListener("animationend", finish, { once: true });
+  splash.addEventListener("animationcancel", finish, { once: true });
+  setTimeout(finish, 600);
+}
+
+function showSplash() {
+  if (!splash) return;
+  splash.style.display = "";
+  splash.classList.remove("splash-exit");
+  document.body.classList.add("splash-visible");
+}
+
+if (splash) {
+  splashCta?.addEventListener("click", dismissSplash);
+  document.body.classList.add("splash-visible");
+}
+
+// Logo/brand click → show splash (but not hamburger)
+document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
+  e.preventDefault();
+  showSplash();
+});
+
+// ---------------------------------------------------------------------------
 // i18n initialization
 // ---------------------------------------------------------------------------
 
@@ -114,45 +161,6 @@ document.addEventListener("localechange", () => {
 });
 
 updateStaticText();
-
-// ---------------------------------------------------------------------------
-// Splash screen
-// ---------------------------------------------------------------------------
-
-const splash = document.getElementById("splash");
-const splashCta = document.getElementById("splash-cta");
-
-function dismissSplash() {
-  if (!splash) return;
-  splash.classList.add("splash-exit");
-  splash.addEventListener(
-    "animationend",
-    () => {
-      splash.style.display = "none";
-      document.body.classList.remove("splash-visible");
-    },
-    { once: true },
-  );
-}
-
-function showSplash() {
-  if (!splash) return;
-  splash.style.display = "";
-  splash.classList.remove("splash-exit");
-  document.body.classList.add("splash-visible");
-}
-
-if (splash) {
-  splashCta?.addEventListener("click", dismissSplash);
-  document.body.classList.add("splash-visible");
-}
-
-// Logo/brand click → show splash (but not hamburger)
-document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
-  e.preventDefault();
-  showSplash();
-});
 
 // ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)
