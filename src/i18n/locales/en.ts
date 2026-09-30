@@ -711,6 +711,18 @@ const en: TranslationKeys = {
     "{{count}} row(s) of the Binance CSV were skipped because they had an unrecognizable date/time (UTC_Time).",
   "binance.unparseable_timestamp.hint":
     "This is usually caused by a manually edited or incompletely exported file. Re-download the original report from Binance without editing it so those operations are included.",
+  "binance.unhandled_operation":
+    "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "etoro.closed_types_skipped":
+    "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta does not import these eToro position types yet (e.g. crypto). Their gain or loss is not included in the calculation: add it to your return by hand using the invested amount and the profit eToro shows.",
+  "lightyear.unknown_types":
+    "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "These movements are not included in the calculation. If they are stock splits, share transfers or other corporate actions, check them by hand: they can change the share count or the acquisition cost of later sales.",
   "coinbase.rewards_income_classification":
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":

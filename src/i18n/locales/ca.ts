@@ -713,6 +713,18 @@ const ca: TranslationKeys = {
     "S'han omès {{count}} fila(es) del CSV de Binance per tenir una data/hora (UTC_Time) no reconeixible.",
   "binance.unparseable_timestamp.hint":
     "Sol deure's a un fitxer modificat manualment o exportat de forma incompleta. Torna a descarregar l'informe original des de Binance sense editar-lo perquè aquestes operacions s'incloguin.",
+  "binance.unhandled_operation":
+    "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "Aquests moviments no s'han inclòs en el càlcul. Si són compres, vendes o ingressos (p. ex. futurs, pagaments amb Binance Card, Auto-Invest o cashback), afegeix-los a mà a la teva declaració i comunica el nom de l'operació perquè es pugui incorporar.",
+  "etoro.closed_types_skipped":
+    "S'han omès {{count}} posició(ns) tancada(es) d'eToro d'un tipus no admès: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta encara no importa aquests tipus de posició d'eToro (p. ex. criptomonedes). El seu guany o pèrdua no està inclòs en el càlcul: afegeix-lo a mà a la teva declaració amb l'import invertit i el benefici que mostra eToro.",
+  "lightyear.unknown_types":
+    "S'han omès {{count}} fila(es) del CSV de Lightyear amb un tipus de moviment no reconegut: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "Aquests moviments no s'han inclòs en el càlcul. Si són desdoblaments (splits), traspassos d'accions o altres operacions societàries, revisa'ls a mà: poden canviar el nombre d'accions o el cost d'adquisició de vendes posteriors.",
   "coinbase.rewards_income_classification":
     "S'han classificat {{count}} ingrés(os) de tipus \"Rewards Income\" de Coinbase com a rendiments del capital mobiliari (base de l'estalvi).",
   "coinbase.rewards_income_classification.hint":
