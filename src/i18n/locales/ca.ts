@@ -642,6 +642,9 @@ const ca: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sense aplicar: no hi ha accions anteriors amb què calcular la proporció.",
+  "fifo.split_unresolved.hint":
+    "Puja també els extractes d'anys anteriors, des de l'obertura del compte. Si no, el nombre d'accions i el cost de les vendes posteriors d'aquest valor no seran correctes.",
   "fifo.merger_applied":
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
