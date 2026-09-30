@@ -55,6 +55,62 @@ import Decimal from "decimal.js";
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 // ---------------------------------------------------------------------------
+// Splash screen
+// ---------------------------------------------------------------------------
+// Wired before the locale table is awaited below. A top-level await does not
+// hold back the page's load event, so a start click can land while the table
+// is still loading; the button needs no translation, so it is wired first.
+
+const splash = document.getElementById("splash");
+const splashCta = document.getElementById("splash-cta");
+
+function dismissSplash() {
+  if (!splash) return;
+  splash.classList.add("splash-exit");
+  // The exit animation (style.css .splash-exit) lasts 0.45 s. A browser that
+  // does not run it (reduced motion, a hidden tab, headless under load) never
+  // fires animationend, so a timer finishes the dismissal in either case.
+  // A splash reopened from the logo meanwhile has lost .splash-exit: leave it.
+  let done = false;
+  // The logo and content run their own animations, whose end events bubble up
+  // here, so the listeners stay until the splash's own event or the timer.
+  const onSplashAnimation = (e: AnimationEvent) => {
+    if (e.target === splash) finish();
+  };
+  const finish = () => {
+    if (done) return;
+    done = true;
+    splash.removeEventListener("animationend", onSplashAnimation);
+    splash.removeEventListener("animationcancel", onSplashAnimation);
+    if (!splash.classList.contains("splash-exit")) return;
+    splash.style.display = "none";
+    document.body.classList.remove("splash-visible");
+  };
+  splash.addEventListener("animationend", onSplashAnimation);
+  splash.addEventListener("animationcancel", onSplashAnimation);
+  setTimeout(finish, 600);
+}
+
+function showSplash() {
+  if (!splash) return;
+  splash.style.display = "";
+  splash.classList.remove("splash-exit");
+  document.body.classList.add("splash-visible");
+}
+
+if (splash) {
+  splashCta?.addEventListener("click", dismissSplash);
+  document.body.classList.add("splash-visible");
+}
+
+// Logo/brand click → show splash (but not hamburger)
+document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
+  e.preventDefault();
+  showSplash();
+});
+
+// ---------------------------------------------------------------------------
 // i18n initialization
 // ---------------------------------------------------------------------------
 
@@ -104,6 +160,7 @@ langSelect.addEventListener("change", () => {
 
 document.addEventListener("localechange", () => {
   updateStaticText();
+  renderFileList();
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
@@ -115,45 +172,6 @@ document.addEventListener("localechange", () => {
 });
 
 updateStaticText();
-
-// ---------------------------------------------------------------------------
-// Splash screen
-// ---------------------------------------------------------------------------
-
-const splash = document.getElementById("splash");
-const splashCta = document.getElementById("splash-cta");
-
-function dismissSplash() {
-  if (!splash) return;
-  splash.classList.add("splash-exit");
-  splash.addEventListener(
-    "animationend",
-    () => {
-      splash.style.display = "none";
-      document.body.classList.remove("splash-visible");
-    },
-    { once: true },
-  );
-}
-
-function showSplash() {
-  if (!splash) return;
-  splash.style.display = "";
-  splash.classList.remove("splash-exit");
-  document.body.classList.add("splash-visible");
-}
-
-if (splash) {
-  splashCta?.addEventListener("click", dismissSplash);
-  document.body.classList.add("splash-visible");
-}
-
-// Logo/brand click → show splash (but not hamburger)
-document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
-  e.preventDefault();
-  showSplash();
-});
 
 // ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)
@@ -400,7 +418,7 @@ function renderFileList() {
   fileListDiv.innerHTML = pendingFiles
     .map(
       (f, i) =>
-        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`,
+        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file" aria-label="${esc(t("a11y.remove_file", { name: f.name }))}">&times;</button></span>`,
     )
     .join(" ");
 
@@ -937,6 +955,11 @@ function nextDir(current: SortDir): SortDir {
   return null;
 }
 
+/** Re-rendering replaces the header, so put keyboard focus back on its button. */
+function refocusSortButton(table: HTMLElement, col: string): void {
+  table.querySelector<HTMLButtonElement>(`th[data-col="${col}"] .sort-btn`)?.focus();
+}
+
 // Event delegation: attach once on stable parent, works across re-renders
 opsTable.addEventListener("click", (e) => {
   const th = (e.target as HTMLElement).closest<HTMLElement>("th.sortable");
@@ -944,7 +967,9 @@ opsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = opsSort.col === col ? nextDir(opsSort.dir) : "asc";
   opsSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   renderOperationsTable();
+  if (hadFocus) refocusSortButton(opsTable, col);
 });
 
 divsTable.addEventListener("click", (e) => {
@@ -953,7 +978,9 @@ divsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = divSort.col === col ? nextDir(divSort.dir) : "asc";
   divSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   if (currentReport) renderDividendsTable(currentReport);
+  if (hadFocus) refocusSortButton(divsTable, col);
 });
 
 // ---------------------------------------------------------------------------
@@ -992,7 +1019,7 @@ function renderResults(report: TaxSummary) {
 
     let hdrHtml = `<div class="section-header-bar">
       <span class="section-year">${t("section.year_label")}
-        <select id="results-year-select" class="year-select">${yearOptions}</select>
+        <select id="results-year-select" class="year-select" aria-label="${esc(t("section.year_label"))}">${yearOptions}</select>
       </span>
     </div>`;
 
@@ -1104,6 +1131,14 @@ function sortIndicator(col: string, state: SortState): string {
   return state.col === col ? ` ${state.dir}` : "";
 }
 
+/** A sortable header: a button for keyboard users, aria-sort on the sorted column. */
+function sortableTh(label: string, col: string, state: SortState): string {
+  const ariaSort = state.col === col && state.dir
+    ? ` aria-sort="${state.dir === "asc" ? "ascending" : "descending"}"`
+    : "";
+  return `<th class="sortable${sortIndicator(col, state)}" data-col="${col}"${ariaSort}><button type="button" class="sort-btn">${label}</button></th>`;
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
@@ -1141,8 +1176,7 @@ function renderOperationsTable() {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, opsSort);
 
   opsTable.innerHTML = `
     <table>
@@ -1206,8 +1240,7 @@ function renderDividendsTable(report: TaxSummary) {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, divSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, divSort);
 
   divsTable.innerHTML = `
     <table>

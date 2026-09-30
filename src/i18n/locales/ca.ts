@@ -149,6 +149,9 @@ const ca: TranslationKeys = {
   "a11y.theme_toggle": "Canviar tema",
   "a11y.drop_zone": "Zona de càrrega de fitxers",
   "a11y.file_input": "Seleccionar fitxers",
+  "a11y.ops_search": "Cercar operacions per ISIN o símbol",
+  "a11y.ops_filter": "Filtrar operacions per resultat",
+  "a11y.remove_file": "Treure {{name}}",
 
   "theme.toggle": "Canviar tema",
 
