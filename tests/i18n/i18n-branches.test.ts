@@ -3,33 +3,33 @@ import { setLocale, getCurrentLocale, detectLocale } from "../../src/i18n/index.
 import type { Locale } from "../../src/i18n/index.js";
 
 describe("setLocale - document dispatch branch", () => {
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllGlobals();
     // Reset locale back to es
-    setLocale("es");
+    await setLocale("es");
   });
 
-  it("should dispatch localechange event when document is available", () => {
+  it("should dispatch localechange event when document is available", async () => {
     const dispatchSpy = vi.fn();
     vi.stubGlobal("document", {
       documentElement: { lang: "es" },
       dispatchEvent: dispatchSpy,
     });
 
-    setLocale("en");
+    await setLocale("en");
     expect(getCurrentLocale()).toBe("en");
     expect(dispatchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("should not throw when document is undefined", () => {
+  it("should not throw when document is undefined", async () => {
     vi.stubGlobal("document", undefined);
-    expect(() => { setLocale("ca"); }).not.toThrow();
+    await expect(setLocale("ca")).resolves.toBeUndefined();
     expect(getCurrentLocale()).toBe("ca");
   });
 
-  it("should reject invalid locale", () => {
-    setLocale("es");
-    setLocale("invalid" as Locale);
+  it("should reject invalid locale", async () => {
+    await setLocale("es");
+    await setLocale("invalid" as Locale);
     expect(getCurrentLocale()).toBe("es");
   });
 });

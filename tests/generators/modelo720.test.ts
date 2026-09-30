@@ -49,7 +49,7 @@ function lastYear(...isins: string[]): Previous720Security[] {
 }
 
 const baseConfig = {
-  nif: "12345678A",
+  nif: "12345678Z",
   surname: "GARCIA LOPEZ",
   name: "JUAN",
   year: 2025,

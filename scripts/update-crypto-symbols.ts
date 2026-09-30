@@ -21,6 +21,11 @@ const STOCK_TICKER_CONFLICTS = new Set([
   "A", "B", "C", "D", "F", "G", "K", "T", "V", "X",
   "AA", "AB", "AG", "AI", "AL", "AM", "AN", "AR", "AS", "AT", "AU", "AV",
   "BA", "BP", "BT", "DB", "GE", "GM", "HP",
+  // Listed US shares and ETFs whose ticker is also a coin symbol
+  "H", "M", "S", "U", "W",
+  "GT", "IP",
+  "AMP", "BIO", "LIT", "MET", "TEL", "VVV",
+  "BEAM", "BILL", "CASH", "META",
 ]);
 
 async function fetchPage(page: number): Promise<string[]> {

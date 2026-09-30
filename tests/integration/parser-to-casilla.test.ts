@@ -8,6 +8,7 @@ import { coinbaseParser } from "../../src/parsers/coinbase.js";
 import { krakenParser } from "../../src/parsers/kraken.js";
 import { trading212Parser } from "../../src/parsers/trading212.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FlexStatement } from "../../src/types/ibkr.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -32,21 +33,9 @@ function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap 
   return map;
 }
 
-/** Wrap a parser `Statement` into the `FlexStatement` shape generateTaxReport expects. */
+/** Run a parser `Statement` through the same merge and finalize steps web and CLI use. */
 function toStatement(parsed: Statement): FlexStatement {
-  return {
-    accountId: "",
-    fromDate: "",
-    toDate: "",
-    period: "",
-    trades: parsed.trades,
-    cashTransactions: parsed.cashTransactions,
-    corporateActions: parsed.corporateActions,
-    openPositions: parsed.openPositions,
-    securitiesInfo: parsed.securitiesInfo,
-    ...(parsed.manualRateHints ? { manualRateHints: parsed.manualRateHints } : {}),
-    ...(parsed.parserMessages ? { parserMessages: parsed.parserMessages } : {}),
-  };
+  return finalizeMergedStatement(mergeStatement(createEmptyStatement(), parsed));
 }
 
 function fixture(name: string): string {
@@ -143,8 +132,9 @@ describe("Degiro degiro-account-sample.csv → dividend casillas", () => {
   it("pins double-taxation: 15.5941 foreign tax paid, deduction Art.80-capped at 12.10", () => {
     const xx = report.doubleTaxation.byCountry["XX"]!;
     expect(xx.taxPaid.toFixed(4)).toBe("15.5941");
-    // Art. 80 caps the deduction below the full foreign tax: the effective
-    // Spanish rate on this savings base limits it to 12.1023.
+    // The 15 % treaty cap binds, not the Spanish tax due: 15 % of the 80.6822
+    // gross is 12.1023, below the 15.5941 withheld. The Spanish-tax limit can
+    // never bind here: the savings rate starts at 19 %, above the 15 % cap.
     expect(report.doubleTaxation.deduction.toFixed(2)).toBe("12.10");
     expect(xx.deductionAllowed.toFixed(4)).toBe("12.1023");
   });
