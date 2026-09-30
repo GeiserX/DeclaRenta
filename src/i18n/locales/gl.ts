@@ -404,6 +404,13 @@ const gl: TranslationKeys = {
     "O Modelo 721 é unha declaración informativa obrigatoria se posúes criptomoedas en exchanges estranxeiros valoradas en máis de 50.000 €. Sube o teu informe do broker na sección Modelo 100 para que DeclaRenta calcule automaticamente se superas o limiar. Prazo: 1 de xaneiro – 31 de marzo.",
   "m721.empty_cta": "Ir a Modelo 100",
   "m721.profile_required": "Completa o teu perfil fiscal antes de xerar o ficheiro do Modelo 721.",
+  "m721.no_holdings_at_year_end": "Segundo as operacións do teu ficheiro, a {{date}} non che quedaba ningunha criptomoeda: non hai nada que declarar no Modelo 721. Se o ficheiro non comeza na túa primeira compra, compróbao co extracto de saldos do exchange.",
+  "m721.derived_notice": "A túa exportación non inclúe os saldos de fin de ano, así que as cantidades calculáronse coas túas operacións: o que quedaba sen vender a {{date}} segundo FIFO. As retiradas á túa propia carteira ou a outro exchange non son vendas e seguen contando aquí, e se o ficheiro non comeza na túa primeira compra faltarán moedas. Compara cada cantidade co extracto de saldos do exchange a {{date}}.",
+  "m721.derived_tag": "calculada coas túas operacións",
+  "m721.col_eur_per_unit": "€ por unidade a {{date}}",
+  "m721.rates_help": "Escribe o prezo en euros de cada moeda a {{date}}; atópalo no extracto de fin de ano do exchange. DeclaRenta non consulta prezos en internet, así que os teus datos non saen do teu equipo.",
+  "m721.rates_save_btn": "Gardar prezos e recalcular",
+  "m721.rates_invalid": "Revisa os prezos marcados: escribe un número maior que cero, por exemplo 84.250,50.",
 
   "section.year_label": "Exercicio",
   "section.profile_source": 'Datos do <a href="#perfil">Perfil fiscal</a>',

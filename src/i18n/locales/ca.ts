@@ -404,6 +404,13 @@ const ca: TranslationKeys = {
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
   "m721.empty_cta": "Anar a Model 100",
   "m721.profile_required": "Completa el teu perfil fiscal abans de generar el fitxer del Model 721.",
+  "m721.no_holdings_at_year_end": "Segons les operacions del teu fitxer, a {{date}} no et quedava cap criptomoneda: no hi ha res a declarar al Model 721. Si el fitxer no comença a la teva primera compra, comprova-ho amb l'extracte de saldos de l'exchange.",
+  "m721.derived_notice": "La teva exportació no inclou els saldos de final d'any, així que les quantitats s'han calculat amb les teves operacions: el que quedava sense vendre a {{date}} segons FIFO. Les retirades a la teva pròpia cartera o a un altre exchange no són vendes i continuen comptant aquí, i si el fitxer no comença a la teva primera compra hi faltaran monedes. Compara cada quantitat amb l'extracte de saldos de l'exchange a {{date}}.",
+  "m721.derived_tag": "calculada amb les teves operacions",
+  "m721.col_eur_per_unit": "€ per unitat a {{date}}",
+  "m721.rates_help": "Escriu el preu en euros de cada moneda a {{date}}; el trobaràs a l'extracte de final d'any de l'exchange. DeclaRenta no consulta preus a internet, així que les teves dades no surten del teu equip.",
+  "m721.rates_save_btn": "Desa els preus i recalcula",
+  "m721.rates_invalid": "Revisa els preus marcats: escriu un nombre més gran que zero, per exemple 84.250,50.",
 
   "section.year_label": "Exercici",
   "section.profile_source": 'Dades del <a href="#perfil">Perfil fiscal</a>',

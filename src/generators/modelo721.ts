@@ -12,7 +12,9 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import type { Lot } from "../types/tax.js";
+import { isFiat, lookupPositionRate } from "../engine/ecb.js";
+import { isFiatPriced, lookupValuationRate } from "../engine/crypto-valuation.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -38,6 +40,48 @@ export interface Modelo721ValuedPosition {
   entry: Modelo721Entry;
   /** Year-end EUR valuation, or null when the currency has no resolvable rate. */
   valuationEur: Decimal | null;
+  /**
+   * True when the quantity comes from the FIFO lots still held at year end,
+   * because no broker position covered this coin (exchange exports such as
+   * Binance, Coinbase or Kraken carry no year-end balances).
+   */
+  derived: boolean;
+  /**
+   * True for a derived coin that only a manual EUR-per-unit quote can value
+   * (not EUR, ECB fiat or a stablecoin). The web section offers an input for it.
+   */
+  manualPriced: boolean;
+  /** EUR per unit used to value a derived row, or null when unvalued (and for broker positions). */
+  eurPerUnit: Decimal | null;
+}
+
+/** Optional inputs for {@link buildModelo721Entries}. */
+export interface Modelo721Options {
+  /** Long lots still held at 31 December (TaxSummary.yearEndLots). */
+  yearEndLots?: Map<string, Lot[]>;
+  /** Manual EUR-per-unit quotes typed by the user (date → currency → rate). */
+  manualRates?: EcbRateMap;
+}
+
+/** Prefix of the FIFO queue key for crypto lots (see `lotKey` in engine/fifo.ts). */
+const CRYPTO_LOT_PREFIX = "CRYPTO:";
+
+/**
+ * Year-end EUR-per-unit rate for a coin derived from lots. EUR, ECB fiat and
+ * stablecoins use the ECB map (weekend walk-back), then a manual quote. Any
+ * other coin only has the user's manual quote for that exact date: we never
+ * call a price API (portfolio fingerprint, see CLAUDE.md "Crypto Permuta
+ * Valuation").
+ */
+function derivedCoinRate(
+  coin: string,
+  rateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+  yearEnd: string,
+): Decimal | null {
+  const manual = manualRates ? lookupValuationRate(manualRates, yearEnd, coin) : null;
+  if (isFiatPriced(coin)) return lookupPositionRate(rateMap, yearEnd, coin) ?? manual;
+  return manual;
 }
 
 export interface Modelo721Valuation {
@@ -62,11 +106,19 @@ export interface Modelo721Valuation {
  * exchange/country data, and deriving them from the ISIN prefix is forbidden for
  * crypto (Art. — see Modelo 721 Crypto Filtering rules). The acquisition cost is
  * taken from `costBasisMoney` (already in EUR) when present.
+ *
+ * When `options.yearEndLots` is given, every crypto coin that no broker position
+ * covers gets a row whose quantity is the sum of its FIFO lots still held at
+ * year end (a 31 December snapshot of the uploaded transactions). Those rows are
+ * valued with {@link derivedCoinRate}; a coin with no rate stays unvalued so the
+ * user can type its year-end price. FIFO merges one coin's lots across brokers,
+ * so a coin that a broker position already reports is never derived again.
  */
 export function buildModelo721Entries(
   openPositions: OpenPosition[],
   rateMap: EcbRateMap,
   yearEnd: string,
+  options: Modelo721Options = {},
 ): Modelo721Valuation {
   const positions: Modelo721ValuedPosition[] = [];
   let unvaluedCount = 0;
@@ -99,6 +151,48 @@ export function buildModelo721Entries(
         acquisitionCostEur,
       },
       valuationEur,
+      derived: false,
+      manualPriced: false,
+      eurPerUnit: null,
+    });
+  }
+
+  const covered = new Set(positions.map((p) => p.entry.assetId.toUpperCase()));
+  const lotEntries = [...(options.yearEndLots ?? new Map<string, Lot[]>()).entries()]
+    .filter(([key]) => key.startsWith(CRYPTO_LOT_PREFIX))
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  for (const [key, lots] of lotEntries) {
+    const coin = key.slice(CRYPTO_LOT_PREFIX.length);
+    // Fiat never belongs in 721, and a coin a broker position reports is not counted twice.
+    if (!coin || isFiat(coin) || covered.has(coin)) continue;
+    const quantity = lots.reduce((s, l) => s.plus(l.quantity), new Decimal(0));
+    if (!quantity.greaterThan(0)) continue;
+
+    const rate = derivedCoinRate(coin, rateMap, options.manualRates, yearEnd);
+    const valuationEur = rate === null ? null : quantity.mul(rate);
+    if (valuationEur === null) {
+      unvaluedCount++;
+    } else {
+      totalValueEur = totalValueEur.plus(valuationEur);
+    }
+    const acquisitionCostEur = lots.reduce((s, l) => s.plus(l.costInFcy.mul(l.ecbRate)), new Decimal(0));
+
+    positions.push({
+      entry: {
+        assetId: coin,
+        // Lot descriptions are trade labels ("Binance Convert USDT to SOL"), not names.
+        description: coin,
+        exchangeName: "",
+        countryCode: "",
+        quantity,
+        valuationEur: valuationEur ?? new Decimal(0),
+        acquisitionCostEur,
+      },
+      valuationEur,
+      derived: true,
+      manualPriced: !isFiatPriced(coin),
+      eurPerUnit: rate,
     });
   }
 

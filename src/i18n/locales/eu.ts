@@ -404,6 +404,13 @@ const eu: TranslationKeys = {
     "721 Eredua aitorpen informatibo nahitaezkoa da atzerriko exchange-etan 50.000 € baino gehiagoko kriptomonedak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun. Epea: urtarrilaren 1etik martxoaren 31ra.",
   "m721.empty_cta": "100 Eredura joan",
   "m721.profile_required": "Osatu zure profil fiskala 721 Ereduaren fitxategia sortu aurretik.",
+  "m721.no_holdings_at_year_end": "Zure fitxategiko eragiketen arabera, {{date}} egunean ez zenuen kriptomonetarik: ez dago ezer aitortzeko 721 Ereduan. Fitxategia zure lehen erosketan hasten ez bada, egiaztatu exchangearen saldo-laburpenarekin.",
+  "m721.derived_notice": "Zure esportazioak ez ditu urte amaierako saldoak, beraz, kopuruak zure eragiketekin kalkulatu dira: FIFO bidez {{date}} egunean saldu gabe geratzen zena. Zure zorro propiora edo beste exchange batera egindako erretiroak ez dira salmentak eta hemen zenbatzen jarraitzen dute; eta fitxategia zure lehen erosketan hasten ez bada, monetak faltako dira. Alderatu kopuru bakoitza exchangearen {{date}} eguneko saldo-laburpenarekin.",
+  "m721.derived_tag": "zure eragiketekin kalkulatua",
+  "m721.col_eur_per_unit": "€ unitateko, {{date}}",
+  "m721.rates_help": "Idatzi moneta bakoitzaren prezioa eurotan {{date}} egunean; exchangearen urte amaierako laburpenean aurkituko duzu. DeclaRentak ez ditu prezioak interneten kontsultatzen, beraz, zure datuak ez dira zure gailutik ateratzen.",
+  "m721.rates_save_btn": "Gorde prezioak eta berriro kalkulatu",
+  "m721.rates_invalid": "Berrikusi markatutako prezioak: idatzi zero baino handiagoa den zenbaki bat, adibidez 84.250,50.",
 
   "section.year_label": "Ekitaldia",
   "section.profile_source": '<a href="#perfil">Profil fiskaleko</a> datuak',

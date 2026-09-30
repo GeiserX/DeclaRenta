@@ -760,7 +760,11 @@ async function processFiles(): Promise<void> {
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
     renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots));
-    renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
+    renderSectionSafely("m721-content", () =>
+      renderSection721(merged, allRates, report.yearEndLots, () => {
+        void processFiles();
+      }),
+    );
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {

@@ -4,6 +4,7 @@ import { generateModelo721, buildModelo721Entries } from "../../src/generators/m
 import type { Modelo721Entry } from "../../src/generators/modelo721.js";
 import type { OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
+import type { Lot } from "../../src/types/tax.js";
 
 function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
   return {
@@ -363,5 +364,107 @@ describe("buildModelo721Entries — 721 valuation source of truth", () => {
     const { positions } = buildModelo721Entries([pos], rateMap, yearEnd);
     expect(positions[0]!.entry.assetId).toBe("CRYPTO-XYZ");
     expect(positions[0]!.entry.description).toBe("CRYPTO-XYZ");
+  });
+});
+
+describe("buildModelo721Entries — holdings derived from year-end FIFO lots", () => {
+  const yearEnd = "2025-12-31";
+
+  function makeLot(overrides: Partial<Lot> = {}): Lot {
+    return {
+      id: "L1",
+      isin: "",
+      symbol: "BTC",
+      description: "Binance Convert USDT to BTC",
+      acquireDate: "2025-03-01",
+      quantity: new Decimal("0.5"),
+      pricePerShare: new Decimal("80000"),
+      costInFcy: new Decimal("40000"),
+      currency: "USD",
+      ecbRate: new Decimal("0.9"),
+      ...overrides,
+    };
+  }
+
+  it("sums the lots still held at year end and values them with a manual quote for that date", () => {
+    const yearEndLots = new Map<string, Lot[]>([
+      ["CRYPTO:BTC", [makeLot(), makeLot({ id: "L2", quantity: new Decimal("0.25"), costInFcy: new Decimal("10000") })]],
+    ]);
+    const manualRates = makeRateMap(yearEnd, { BTC: "90000" });
+    const { positions, unvaluedCount, totalValueEur } = buildModelo721Entries([], new Map(), yearEnd, {
+      yearEndLots,
+      manualRates,
+    });
+    expect(positions).toHaveLength(1);
+    const btc = positions[0]!;
+    expect(btc.derived).toBe(true);
+    expect(btc.manualPriced).toBe(true);
+    expect(btc.entry.assetId).toBe("BTC");
+    expect(btc.entry.description).toBe("BTC");
+    expect(btc.entry.quantity.toString()).toBe("0.75");
+    expect(btc.eurPerUnit!.toString()).toBe("90000");
+    // 0.75 × 90000 = 67500
+    expect(btc.valuationEur!.toString()).toBe("67500");
+    expect(totalValueEur.toString()).toBe("67500");
+    expect(unvaluedCount).toBe(0);
+    // (40000 + 10000) USD × 0.9 = 45000
+    expect(btc.entry.acquisitionCostEur.toString()).toBe("45000");
+  });
+
+  it("keeps a coin with no year-end quote as an unvalued row (no price API, no walk-back to older quotes)", () => {
+    const yearEndLots = new Map<string, Lot[]>([["CRYPTO:SOL", [makeLot({ symbol: "SOL", quantity: new Decimal("10") })]]]);
+    // A quote from a trade on 30 December is not the 31 December price.
+    const manualRates = makeRateMap("2025-12-30", { SOL: "150" });
+    const { positions, unvaluedCount, totalValueEur } = buildModelo721Entries([], new Map(), yearEnd, {
+      yearEndLots,
+      manualRates,
+    });
+    expect(positions).toHaveLength(1);
+    expect(positions[0]!.valuationEur).toBeNull();
+    expect(positions[0]!.eurPerUnit).toBeNull();
+    expect(positions[0]!.manualPriced).toBe(true);
+    expect(unvaluedCount).toBe(1);
+    expect(totalValueEur.toString()).toBe("0");
+  });
+
+  it("values a stablecoin with the ECB rate of its fiat, walking back over the weekend", () => {
+    const yearEndLots = new Map<string, Lot[]>([["CRYPTO:USDT", [makeLot({ symbol: "USDT", quantity: new Decimal("1000") })]]]);
+    const rateMap = makeRateMap("2025-12-29", { USD: "0.9" });
+    const { positions, totalValueEur } = buildModelo721Entries([], rateMap, yearEnd, { yearEndLots });
+    expect(positions[0]!.manualPriced).toBe(false);
+    expect(positions[0]!.eurPerUnit!.toString()).toBe("0.9");
+    expect(totalValueEur.toString()).toBe("900");
+  });
+
+  it("does not derive a coin that a broker position already reports, nor fiat, nor non-crypto lots", () => {
+    const yearEndLots = new Map<string, Lot[]>([
+      ["CRYPTO:BTC", [makeLot()]],
+      ["CRYPTO:EUR", [makeLot({ symbol: "EUR", quantity: new Decimal("100") })]],
+      ["STK:ACME", [makeLot({ symbol: "ACME", quantity: new Decimal("5") })]],
+      ["CRYPTO:ETH", [makeLot({ symbol: "ETH", quantity: new Decimal("0") })]],
+    ]);
+    const rateMap = makeRateMap(yearEnd, { USD: "0.9" });
+    const btcPosition = makePosition({ symbol: "BTC", currency: "USD", positionValue: "60000" });
+    const { positions } = buildModelo721Entries([btcPosition], rateMap, yearEnd, { yearEndLots });
+    expect(positions).toHaveLength(1);
+    expect(positions[0]!.derived).toBe(false);
+    expect(positions[0]!.entry.assetId).toBe("BTC");
+  });
+
+  it("adds derived coins next to broker positions for other coins", () => {
+    const yearEndLots = new Map<string, Lot[]>([["CRYPTO:SOL", [makeLot({ symbol: "SOL", quantity: new Decimal("10") })]]]);
+    const rateMap = makeRateMap(yearEnd, { USD: "0.9" });
+    const manualRates = makeRateMap(yearEnd, { SOL: "100" });
+    const btcPosition = makePosition({ symbol: "BTC", currency: "USD", positionValue: "60000" });
+    const { positions, totalValueEur } = buildModelo721Entries([btcPosition], rateMap, yearEnd, {
+      yearEndLots,
+      manualRates,
+    });
+    expect(positions.map((p) => [p.entry.assetId, p.derived])).toEqual([
+      ["BTC", false],
+      ["SOL", true],
+    ]);
+    // 60000 × 0.9 + 10 × 100
+    expect(totalValueEur.toString()).toBe("55000");
   });
 });

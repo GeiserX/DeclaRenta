@@ -3,14 +3,23 @@
  *
  * Displays threshold indicator, crypto position table, filing guide,
  * and explains that official XML generation is not implemented yet.
+ *
+ * Exchange exports (Binance, Coinbase, Kraken...) carry no year-end balances,
+ * so the coins no broker position covers are derived from the FIFO lots still
+ * held at 31 December. Coins without an ECB rate get an input for the user's
+ * own year-end price (never a price API: see CLAUDE.md "Crypto Permuta Valuation").
  */
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { Lot } from "../types/tax.js";
 import { lookupPositionRate } from "../engine/ecb.js";
+import { formatDateDmy } from "../engine/dates.js";
+import { normalizeManualQuote } from "../engine/manual-rates.js";
 import { buildModelo721Entries } from "../generators/modelo721.js";
+import { getManualRates, setManualRate } from "./manual-rates.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
@@ -25,6 +34,8 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedYearEndLots: Map<string, Lot[]> | undefined;
+let cachedOnRatesSaved: (() => void) | undefined;
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
@@ -41,10 +52,24 @@ export function initSection721(): void {
     </div>`;
 }
 
-/** Render 721 section with processed data */
-export function renderSection721(statement: Statement, rateMap: EcbRateMap): void {
+/**
+ * Render 721 section with processed data.
+ *
+ * @param yearEndLots - Lots still held at 31 December (TaxSummary.yearEndLots),
+ *   used for the coins no broker position covers.
+ * @param onRatesSaved - Called after the user saves year-end prices (main.ts
+ *   re-runs the report). Without it the section re-renders itself.
+ */
+export function renderSection721(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  yearEndLots?: Map<string, Lot[]>,
+  onRatesSaved?: () => void,
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedYearEndLots = yearEndLots;
+  cachedOnRatesSaved = onRatesSaved;
 
   const container = document.getElementById("m721-content");
   if (!container) return;
@@ -54,13 +79,25 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   const yearEnd = effectiveYearEnd(year);
 
   // Build valued crypto positions via the single 721 valuation source of truth.
-  const valuation = buildModelo721Entries(statement.openPositions, rateMap, yearEnd);
+  const valuation = buildModelo721Entries(statement.openPositions, rateMap, yearEnd, {
+    yearEndLots,
+    manualRates: getManualRates(),
+  });
   const positions = valuation.positions;
+  const yearEndDmy = formatDateDmy(yearEnd);
 
   if (positions.length === 0) {
-    container.innerHTML = `<p class="muted">${t("m721.no_positions")}</p>`;
+    // Processed crypto transactions that leave nothing at year end are an answer,
+    // not a missing upload.
+    const hadCrypto = statement.trades.some((tr) => tr.assetCategory === "CRYPTO");
+    container.innerHTML = hadCrypto
+      ? `<p class="muted">${esc(t("m721.no_holdings_at_year_end", { date: yearEndDmy }))}</p>`
+      : `<p class="muted">${t("m721.no_positions")}</p>`;
     return;
   }
+
+  const anyDerived = positions.some((p) => p.derived);
+  const anyManualPriced = positions.some((p) => p.manualPriced);
 
   let html = "";
 
@@ -88,8 +125,14 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
-  // Positions must be the holdings at 31 December of the selected year
-  html += renderPositionsDateBanner(statement, year).html;
+  // Broker positions must be the holdings at 31 December of the selected year.
+  // Derived rows are a 31 December snapshot by construction.
+  if (positions.some((p) => !p.derived)) {
+    html += renderPositionsDateBanner(statement, year).html;
+  }
+  if (anyDerived) {
+    html += `<div class="banner banner-info">${esc(t("m721.derived_notice", { date: yearEndDmy }))}</div>`;
+  }
 
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
   // coin itself) has no resolvable year-end rate are excluded from the EUR total
@@ -120,21 +163,41 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   <div class="table-wrapper"><table>
     <thead><tr>
       <th>${t("table.symbol")}</th><th>${t("m721.exchange")}</th>
-      <th>${t("table.units")}</th><th>${t("table.amount_eur")}</th>
+      <th>${t("table.units")}</th>${anyDerived ? `<th>${esc(t("m721.col_eur_per_unit", { date: yearEndDmy }))}</th>` : ""}<th>${t("table.amount_eur")}</th>
     </tr></thead>
     <tbody>${positions.map((p) => {
       const val = p.valuationEur === null ? "—" : fmtEur(p.valuationEur);
       // Exchange/country are not derived from the ISIN prefix (forbidden for
       // crypto); open positions carry no reliable exchange, so render blank.
       const exchange = p.entry.exchangeName || "—";
+      const tag = p.derived ? ` <span class="muted m721-derived-tag">${esc(t("m721.derived_tag"))}</span>` : "";
+      let rateCell = "";
+      if (anyDerived) {
+        if (p.manualPriced) {
+          rateCell = `<td><input type="text" inputmode="decimal" class="crypto-rate-input m721-rate-input"
+            data-coin="${esc(p.entry.assetId)}" aria-label="${esc(t("m721.col_eur_per_unit", { date: yearEndDmy }))} ${esc(p.entry.assetId)}"
+            placeholder="${esc(t("crypto_rates.placeholder"))}" value="${p.eurPerUnit === null ? "" : esc(p.eurPerUnit.toString())}" /></td>`;
+        } else {
+          rateCell = `<td>${p.eurPerUnit === null ? "" : `${p.eurPerUnit.toFixed(4)} €`}</td>`;
+        }
+      }
       return `<tr>
-        <td class="mono">${esc(p.entry.description)}</td>
+        <td class="mono">${esc(p.entry.description)}${tag}</td>
         <td>${esc(exchange)}</td>
         <td>${p.entry.quantity.toString()}</td>
+        ${rateCell}
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
   </table></div>`;
+
+  if (anyManualPriced) {
+    html += `<div class="m721-rates-entry">
+      <p class="muted">${esc(t("m721.rates_help", { date: yearEndDmy }))}</p>
+      <button type="button" class="btn-cta m721-rates-save">${esc(t("m721.rates_save_btn"))}</button>
+      <span class="manual-opening-lots-error-msg m721-rates-error" role="alert" hidden>${esc(t("m721.rates_invalid"))}</span>
+    </div>`;
+  }
 
   // Exchange rates display. Currencies come from the raw crypto positions
   // (valuation entries don't carry currency); same crypto filter the generator uses.
@@ -174,13 +237,42 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   html += `<div class="deadline-reminder">${t("m721.deadline")}</div>`;
 
   container.innerHTML = html;
+  bindYearEndRates(container, yearEnd);
+}
 
+/**
+ * Save the typed year-end prices as manual quotes for (coin, year end), then
+ * recalculate. Nothing is saved while any typed value is unreadable, so the
+ * re-render cannot wipe the field the user still has to fix.
+ */
+function bindYearEndRates(container: HTMLElement, yearEnd: string): void {
+  const btn = container.querySelector<HTMLButtonElement>(".m721-rates-save");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const inputs = [...container.querySelectorAll<HTMLInputElement>(".m721-rate-input")];
+    const toSave: { coin: string; value: string }[] = [];
+    let invalid = 0;
+    for (const input of inputs) {
+      const value = input.value.trim();
+      const coin = input.dataset.coin ?? "";
+      const ok = value === "" || normalizeManualQuote({ currency: coin, date: yearEnd, eurPerUnit: value }) !== null;
+      if (ok) input.removeAttribute("aria-invalid");
+      else input.setAttribute("aria-invalid", "true");
+      if (!ok) invalid++;
+      else if (value !== "") toSave.push({ coin, value });
+    }
+    const errorEl = container.querySelector<HTMLElement>(".m721-rates-error");
+    if (errorEl) errorEl.hidden = invalid === 0;
+    if (invalid > 0 || toSave.length === 0) return;
+    for (const { coin, value } of toSave) setManualRate(coin, yearEnd, value);
+    (cachedOnRatesSaved ?? rerenderSection721)();
+  });
 }
 
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection721(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection721(cachedStatement, cachedRateMap);
+    renderSection721(cachedStatement, cachedRateMap, cachedYearEndLots, cachedOnRatesSaved);
   } else {
     initSection721();
   }

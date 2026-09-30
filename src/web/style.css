@@ -2937,7 +2937,8 @@ footer a:hover {
   display: none;
 }
 
-.manual-opening-lot-input[aria-invalid="true"] {
+.manual-opening-lot-input[aria-invalid="true"],
+.m721-rate-input[aria-invalid="true"] {
   border-color: var(--danger);
 }
 

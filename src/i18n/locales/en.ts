@@ -405,6 +405,13 @@ const en: TranslationKeys = {
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",
   "m721.empty_cta": "Go to Modelo 100",
   "m721.profile_required": "Complete your tax profile before generating the Modelo 721 file.",
+  "m721.no_holdings_at_year_end": "According to the transactions in your file, you held no crypto on {{date}}, so there is nothing to declare in Modelo 721. If your file does not start at your first purchase, check this against the exchange's balance statement.",
+  "m721.derived_notice": "Your export has no year-end balances, so the quantities were calculated from your transactions: what was still unsold on {{date}} under FIFO. Withdrawals to your own wallet or to another exchange are not sales and still count here, and if your file does not start at your first purchase some coins will be missing. Compare each quantity with the exchange's balance statement on {{date}}.",
+  "m721.derived_tag": "calculated from your transactions",
+  "m721.col_eur_per_unit": "€ per unit on {{date}}",
+  "m721.rates_help": "Type the euro price of each coin on {{date}}; you will find it in the exchange's year-end statement. DeclaRenta does not look up prices online, so your data never leaves your device.",
+  "m721.rates_save_btn": "Save prices and recalculate",
+  "m721.rates_invalid": "Check the highlighted prices: type a number above zero, for example 84250.50.",
 
   "section.year_label": "Tax year",
   "section.profile_source": 'Data from <a href="#perfil">Fiscal profile</a>',
