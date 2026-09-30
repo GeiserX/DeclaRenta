@@ -19,7 +19,11 @@ import {
   normalizeManualQuote,
   type ManualRateQuote,
 } from "../engine/manual-rates.js";
-import { coerceManualOpeningLots, manualOpeningLotKey } from "../engine/manual-opening-lots.js";
+import {
+  coerceManualOpeningLots,
+  manualOpeningLotKey,
+  normalizeManualOpeningLot,
+} from "../engine/manual-opening-lots.js";
 import { esc } from "./esc.js";
 
 const STORAGE_KEY = "declarenta_manual_rates";
@@ -364,6 +368,7 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
         <button type="button" id="manual-opening-lots-clear-btn" class="btn-secondary">${esc(tr("opening_lots.clear_btn"))}</button>
       </div>
       <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg" hidden>${esc(tr("opening_lots.saved"))}</span>
+      <span class="manual-opening-lots-error-msg" role="alert" hidden>${esc(tr("opening_lots.row_invalid"))}</span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("opening_lots.recalculate_hint"))}</p>
     </div>
   </details>`;
@@ -453,6 +458,8 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () =>
   btn.addEventListener("click", () => {
     let savedCount = 0;
     const groups = [...container.querySelectorAll<HTMLElement>(".manual-opening-lot-group")];
+    const toSave: { groupKey: string; lots: ManualOpeningLot[] }[] = [];
+    let invalidRows = 0;
     for (const group of groups) {
       const rows = [...group.querySelectorAll<HTMLTableRowElement>(".manual-opening-lot-row")];
       const symbol = group.dataset.symbol ?? "";
@@ -467,7 +474,7 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () =>
         const acquireDate = row.querySelector<HTMLInputElement>("[data-field='acquireDate']")?.value.trim() ?? "";
         const quantity = row.querySelector<HTMLInputElement>("[data-field='quantity']")?.value.trim() ?? "";
         const pricePerShare = row.querySelector<HTMLInputElement>("[data-field='pricePerShare']")?.value.trim() ?? "";
-        return {
+        const lot = {
           symbol,
           description,
           isin,
@@ -478,12 +485,35 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () =>
           quantity,
           pricePerShare,
         };
+        // Flag a partly filled or unreadable row instead of dropping it
+        // silently; a row left completely empty is simply ignored.
+        const invalid =
+          (acquireDate !== "" || quantity !== "" || pricePerShare !== "") && normalizeManualOpeningLot(lot) === null;
+        row.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
+          if (invalid) input.setAttribute("aria-invalid", "true");
+          else input.removeAttribute("aria-invalid");
+        });
+        if (invalid) invalidRows++;
+        return lot;
       });
 
-      savedCount += setManualOpeningLots(groupKey, lots);
+      toSave.push({ groupKey, lots });
     }
 
     const msg = container.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
+    const errorMsg = container.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+    if (errorMsg) errorMsg.hidden = invalidRows === 0;
+    // Save nothing while a row is flagged: saving recalculates and re-renders
+    // the panel, which would wipe the row the user still has to fix.
+    if (invalidRows > 0) {
+      if (msg) msg.hidden = true;
+      return;
+    }
+
+    for (const { groupKey, lots } of toSave) {
+      savedCount += setManualOpeningLots(groupKey, lots);
+    }
+
     if (msg) msg.hidden = savedCount === 0;
 
     if (savedCount > 0) onSave();

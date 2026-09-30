@@ -27,11 +27,17 @@ export type { ManualRateQuote };
  * Normalize a human-typed decimal string to the dot-decimal form decimal.js
  * accepts. Spanish/EU users type "142,50" or "1.234,56"; we strip thousands
  * separators (spaces, NBSP, thin space) and convert a comma decimal mark to a
- * dot. A dot-only string (already canonical) passes through untouched.
+ * dot. A dot after the last comma ("1,234.56") is the decimal mark, so the
+ * commas are thousands. A dot-only string (already canonical) passes through
+ * untouched. Shared by every hand-typed amount (manual rates, opening lots).
  */
-function normalizeDecimalString(raw: string): string {
+export function normalizeDecimalString(raw: string): string {
   let s = raw.trim().replace(/[\s  ]/g, "");
-  if (s.includes(",")) {
+  const lastComma = s.lastIndexOf(",");
+  if (lastComma >= 0 && s.lastIndexOf(".") > lastComma) {
+    // "1,234.56" → the dot is the decimal mark, commas are thousands.
+    s = s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
     // Comma present → treat comma as the decimal mark and dots as thousands.
     s = s.replace(/\./g, "").replace(",", ".");
   }

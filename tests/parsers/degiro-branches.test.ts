@@ -88,12 +88,14 @@ describe("degiroParser - Account CSV branches", () => {
   });
 
   it("should recognize English withholding tax description", () => {
-    const header = "Date;Time;Product;ISIN;Description;Value date;FX;;Amount;;Balance;;Order ID";
-    const row = "15-01-2025;10:00;APPLE INC;US0378331005;Withholding tax;15-01-2025;0.92;USD;-0.38;EUR;999.62;EUR;";
+    const header = "Date;Time;Value date;Product;ISIN;Description;FX;Change;;Balance;;Order Id";
+    const row = "15-01-2025;10:00;15-01-2025;APPLE INC;US0378331005;Withholding tax;;USD;-0,38;USD;999,62;";
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
     expect(result.cashTransactions[0].type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0].amount).toBe("-0.38");
+    expect(result.cashTransactions[0].currency).toBe("USD");
   });
 
   it("should skip non-dividend/withholding rows in account CSV", () => {

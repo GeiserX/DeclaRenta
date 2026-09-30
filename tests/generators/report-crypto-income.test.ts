@@ -120,6 +120,46 @@ describe("generateTaxReport — crypto reward income", () => {
     expect(report.interest.earned.toFixed(2)).toBe("120.00");
   });
 
+  describe("a coin price inferred on an earlier day is never reused for a later reward", () => {
+    // 2025-03-03: BUY 2000 USDT paying ETH → the valuation pass infers ETH = 2000 EUR
+    // for 03-03 only. The 2 ETH reward arrives on 03-06 with no EUR value.
+    const inferEth: Trade = {
+      tradeID: "buy-usdt", accountId: "ACC", symbol: "USDT", description: "Convert ETH to USDT",
+      isin: "", assetCategory: "CRYPTO", currency: "ETH", tradeDate: "2025-03-03",
+      settlementDate: "2025-03-03", quantity: "2000", tradePrice: "0.0005", tradeMoney: "1",
+      proceeds: "0", cost: "1", fifoPnlRealized: "0", fxRateToBase: "0",
+      buySell: "BUY", openCloseIndicator: "O", exchange: "BINANCE",
+      commissionCurrency: "ETH", commission: "0", taxes: "0", multiplier: "1",
+    };
+    const ethReward = income({
+      transactionID: "eth-reward", rewardCostBasisEur: undefined, currency: "ETH", symbol: "ETH",
+      amount: "2", rewardQuantity: "2", dateTime: "2025-03-06", settleDate: "2025-03-06",
+    });
+    const ecb = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-06": { USD: "1" } });
+
+    it("uses the user's manual quote for the reward's own day", () => {
+      const manualRates = makeRateMap({ "2025-03-06": { ETH: "3000" } });
+      const report = generateTaxReport(makeStatement([inferEth], [ethReward]), ecb, 2025, { manualRates });
+      expect(report.interest.earned.toFixed(2)).toBe("6000.00");
+    });
+
+    it("warns instead of valuing the reward at the 03-03 price when no quote exists for 03-06", () => {
+      const report = generateTaxReport(makeStatement([inferEth], [ethReward]), ecb, 2025);
+      expect(report.interest.earned.toFixed(2)).toBe("0.00");
+      expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(true);
+    });
+
+    it.each(["EURT", "EUROC"])("still values a %s reward with no EUR value at 1:1", (euroCoin) => {
+      const reward = income({
+        transactionID: "euro-reward", rewardCostBasisEur: undefined, currency: euroCoin, symbol: euroCoin,
+        amount: "50", rewardQuantity: "50", dateTime: "2025-03-06", settleDate: "2025-03-06",
+      });
+      const report = generateTaxReport(makeStatement([], [reward]), new Map(), 2025);
+      expect(report.interest.earned.toFixed(2)).toBe("50.00");
+      expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(false);
+    });
+  });
+
   it("values an explicit 0-EUR micro-reward at zero with no unvalued warning", () => {
     const statement = makeStatement([], [
       income({ rewardCostBasisEur: "0", amount: "0.00000002", rewardQuantity: "0.00000002", currency: "BTC", symbol: "BTC" }),

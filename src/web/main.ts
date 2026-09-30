@@ -965,7 +965,9 @@ function renderResults(report: TaxSummary) {
   if (unresolved && unresolved.length > 0) {
     const panelHtml = renderManualRatesPanel(unresolved);
     casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel");
+    // The opening-lots panel also carries .crypto-rates-panel (shared styling)
+    // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");
     if (panel) {
       bindManualRatesPanel(panel, () => {
         // Re-run the full pipeline so the newly-entered manual rates take
