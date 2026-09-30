@@ -298,6 +298,47 @@ describe("Corporate Actions in FIFO Engine", () => {
       expect(disposals).toHaveLength(0);
       expect(engine.messages.map((m) => m.id)).not.toContain("fifo.cash_merger_disposal");
     });
+
+    it("applies a 1-for-3 merger ratio exactly, so selling every new share leaves no dust", () => {
+      const engine = new FifoEngine();
+      const trades: Trade[] = [
+        makeTrade({ tradeDate: "20240115", isin: "US1111111111", quantity: "300", tradePrice: "50", commission: "0" }),
+        makeTrade({
+          tradeID: "T2",
+          tradeDate: "20240901",
+          isin: "US2222222222",
+          symbol: "NEW",
+          quantity: "-100",
+          tradePrice: "160",
+          buySell: "SELL",
+          openCloseIndicator: "C",
+          commission: "0",
+        }),
+      ];
+      const corporateActions: CorporateAction[] = [
+        {
+          transactionID: "CA1",
+          accountId: "",
+          symbol: "NEW",
+          description: "OLD(US1111111111) MERGED(Acquisition) 1 FOR 3 NEW(US2222222222)",
+          isin: "US1111111111",
+          currency: "USD",
+          reportDate: "20240601",
+          dateTime: "20240601",
+          quantity: "100",
+          amount: "0",
+          type: "TC",
+          actionDescription: "Merger 1:3",
+        },
+      ];
+
+      const disposals = engine.processTrades(trades, rateMap, corporateActions);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.quantity.toString()).toBe("100");
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("15000.00");
+      expect(engine.messages.map((m) => m.id)).not.toContain("fifo.insufficient_lots");
+    });
   });
 
   describe("Spin-offs (SO)", () => {
@@ -404,6 +445,48 @@ describe("Corporate Actions in FIFO Engine", () => {
 
       const spinLots = engine.getRemainingLots().get("US3333333333")!;
       expect(spinLots[0]!.acquireDate).toBe("20240115"); // Same as parent
+    });
+
+    it("applies a 1-for-3 spin-off ratio exactly, so selling every spun-off share leaves no dust", () => {
+      const engine = new FifoEngine();
+      const trades: Trade[] = [
+        makeTrade({ tradeDate: "20240115", isin: "US1111111111", quantity: "300", tradePrice: "100", commission: "0" }),
+        makeTrade({
+          tradeID: "T2",
+          tradeDate: "20240901",
+          isin: "US3333333333",
+          symbol: "SPINCO",
+          quantity: "-100",
+          tradePrice: "80",
+          buySell: "SELL",
+          openCloseIndicator: "C",
+          commission: "0",
+        }),
+      ];
+      const corporateActions: CorporateAction[] = [
+        {
+          transactionID: "CA1",
+          accountId: "",
+          symbol: "SPINCO",
+          // 1 FOR 3 → 100 new shares, costFraction = 1/(1+3) = 25% of 30000
+          description: "PARENT(US1111111111) SPINOFF 1 FOR 3 SPINCO(US3333333333)",
+          isin: "US3333333333",
+          currency: "USD",
+          reportDate: "20240701",
+          dateTime: "20240701",
+          quantity: "100",
+          amount: "0",
+          type: "SO",
+          actionDescription: "Spin-off",
+        },
+      ];
+
+      const disposals = engine.processTrades(trades, rateMap, corporateActions);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.quantity.toString()).toBe("100");
+      expect(disposals[0]!.costBasisEur.toFixed(2)).toBe("7500.00");
+      expect(engine.messages.map((m) => m.id)).not.toContain("fifo.insufficient_lots");
     });
   });
 });

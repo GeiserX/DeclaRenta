@@ -40,6 +40,32 @@ function lotKey(trade: { isin: string; symbol: string; assetCategory: string; co
   return `${trade.assetCategory}:${trade.symbol}`;
 }
 
+/** A stock split (IBKR FS/RS) as an exact ratio: `num` new shares for every `den` old ones. */
+interface Split {
+  /** ISIN whose lots are split (the old ISIN when the split also changes it) */
+  isin: string;
+  /** ISINs of the corporate-action rows; one that differs from `isin` is the new ISIN */
+  isins: Set<string>;
+  newSymbol: string;
+  date: string;
+  num: Decimal;
+  den: Decimal;
+}
+
+/**
+ * Scale lots by a split ratio. A split is not a disposal (Art. 37.1.a LIRPF): every
+ * lot keeps its full cost, fractional quantities included. A cash-in-lieu sale of a
+ * fraction consumes it like any other sale. Multiply before dividing so 300 shares
+ * under a 1-for-3 split become exactly 100.
+ */
+function scaleLotsForSplit(lots: Lot[], split: Split): void {
+  for (const lot of lots) {
+    lot.quantity = lot.quantity.mul(split.num).div(split.den);
+    lot.pricePerShare = lot.pricePerShare.mul(split.den).div(split.num);
+    // costInFcy stays the same — total cost doesn't change on a split
+  }
+}
+
 export class FifoEngine {
   /** FIFO queue per security (ISIN or symbol) — long positions */
   private lots: Map<string, Lot[]> = new Map();
@@ -88,6 +114,17 @@ export class FifoEngine {
     // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
     // gain/loss already embedded in securities trades via ECB rate conversion)
     const optionEaeKeys = new Set((optionExercises ?? []).map((ex) => (ex.conid ? `conid:${ex.conid}` : ex.symbol)));
+    // Underlyings delivered by an exercise/assignment event, keyed by date + ISIN and date + symbol
+    const deliveryKeys = new Set(
+      (optionExercises ?? [])
+        .filter((ex) => ex.action !== "Expiration")
+        .flatMap((ex) => {
+          const date = normalizeDate(ex.date);
+          const keys = [`${date}|${ex.underlyingSymbol}`];
+          if (ex.underlyingIsin) keys.push(`${date}|${ex.underlyingIsin}`);
+          return keys;
+        }),
+    );
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
@@ -99,16 +136,38 @@ export class FifoEngine {
             context: { symbol: t.symbol, assetCategory: t.assetCategory },
           });
         }
-        // Skip option BookTrades for exercises/expirations only when a matching OptionEAE exists
-        // (IBKR generates both a BookTrade with notes="Ep"/"Ex" and an OptionEAE event)
-        if (
-          optionEaeKeys.size > 0 &&
-          (t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP")
-        ) {
+        // Anything but BUY/SELL (e.g. an unhandled broker cancel code) would fall
+        // through to consumeLots below and be taxed as a sale: skip it and warn.
+        // Widened to string: the type says BUY | SELL, parsed input may not.
+        const direction: string = t.buySell;
+        if (direction !== "BUY" && direction !== "SELL") {
+          const date = normalizeDate(t.tradeDate);
+          this.emit({
+            id: "fifo.unknown_direction",
+            severity: "warning",
+            message: `⚠ Operación con dirección desconocida ("${direction}"): ${t.symbol} el ${date}. No se ha procesado.`,
+            hint: "Solo se procesan compras (BUY) y ventas (SELL). Revisa esta fila en el archivo del broker y, si es una operación real, corrige su dirección.",
+            context: { symbol: t.symbol, date, buySell: direction },
+          });
+          return false;
+        }
+        // Skip option BookTrades for exercises/assignments/expirations only when a matching OptionEAE exists
+        // (IBKR generates both a BookTrade with notes="Ep"/"Ex"/"A" and an OptionEAE event)
+        const isOption = t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP";
+        if (optionEaeKeys.size > 0 && isOption) {
           const notes = (t.notes || "").split(";");
-          if (notes.includes("Ep") || notes.includes("Ex")) {
+          if (notes.includes("Ep") || notes.includes("Ex") || notes.includes("A")) {
             const tradeKey = t.conid ? `conid:${t.conid}` : t.symbol;
             if (optionEaeKeys.has(tradeKey)) return false;
+          }
+        }
+        // Skip the underlying's delivery BookTrade (notes "Ex"/"A") when the OptionEAE event already
+        // delivers it (processOptionExercise), or the shares would be acquired or disposed twice
+        if (deliveryKeys.size > 0 && !isOption) {
+          const notes = (t.notes || "").split(";");
+          if (notes.includes("Ex") || notes.includes("A")) {
+            const date = normalizeDate(t.tradeDate);
+            if ((t.isin && deliveryKeys.has(`${date}|${t.isin}`)) || deliveryKeys.has(`${date}|${t.symbol}`)) return false;
           }
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
@@ -125,19 +184,48 @@ export class FifoEngine {
         return 0;
       });
 
-    // Parse splits from corporate actions (deduplicate by ISIN+date)
-    const splitMap = new Map<string, { isin: string; date: string; ratio: number }>();
-    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "FS")) {
+    // Parse splits from corporate actions: IBKR type FS (forward) and RS (reverse).
+    // The ratio stays as two Decimals so 1-for-3 is exact. When a split moves the
+    // position to a new ISIN, IBKR sends one row per ISIN, both described as
+    // "SYM(OLD_ISIN) SPLIT a FOR b (...)": group them by that old ISIN and date.
+    const splitMap = new Map<string, Split>();
+    for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "FS" || ca.type === "RS")) {
       const ratioMatch = ca.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
-      const ratio = ratioMatch ? parseInt(ratioMatch[1]!) / parseInt(ratioMatch[2]!) : 0;
-      if (ratio <= 0) continue;
+      if (!ratioMatch) continue;
+      const num = new Decimal(ratioMatch[1]!);
+      const den = new Decimal(ratioMatch[2]!);
+      if (num.lessThanOrEqualTo(0) || den.lessThanOrEqualTo(0)) continue;
       const date = normalizeDate(ca.dateTime.slice(0, 8));
-      const key = `${ca.isin}:${date}`;
-      if (!splitMap.has(key)) {
-        splitMap.set(key, { isin: ca.isin, date, ratio });
+      const fromIsin = ca.description.match(/\(([A-Z]{2}[A-Z0-9]{9}\d)\)\s+SPLIT\s/i)?.[1]?.toUpperCase();
+      const groupIsin = fromIsin ?? ca.isin;
+      const key = `${groupIsin}:${date}`;
+      let split = splitMap.get(key);
+      if (!split) {
+        split = { isin: groupIsin, isins: new Set(), newSymbol: ca.symbol, date, num, den };
+        splitMap.set(key, split);
       }
+      split.isins.add(ca.isin);
+      if (ca.isin !== groupIsin) split.newSymbol = ca.symbol;
     }
     const splits = [...splitMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Corporate action types the engine does not apply: tell the user once per action.
+    const handledTypes = new Set(["FS", "RS", "TC", "SO", "SD"]);
+    const unhandledSeen = new Set<string>();
+    for (const ca of corporateActions ?? []) {
+      if (handledTypes.has(ca.type)) continue;
+      const date = normalizeDate(ca.dateTime.slice(0, 8));
+      const key = `${ca.type}:${ca.isin || ca.symbol}:${date}`;
+      if (unhandledSeen.has(key)) continue;
+      unhandledSeen.add(key);
+      this.emit({
+        id: "fifo.corporate_action_unhandled",
+        severity: "info",
+        message: `ℹ Acción corporativa ${ca.type} de ${ca.symbol} (${ca.isin}) el ${date}: no se aplica al cálculo FIFO.`,
+        hint: "Si cambió el número de acciones o el ISIN de la posición, revisa el coste de las ventas posteriores de este valor.",
+        context: { type: ca.type, symbol: ca.symbol, isin: ca.isin, date },
+      });
+    }
 
     // Parse mergers (TC = Tender/Change / Acquisition) from corporate actions
     const mergers: {
@@ -146,7 +234,8 @@ export class FifoEngine {
       newIsin: string;
       newSymbol: string;
       newDescription: string;
-      ratio: number;
+      num: Decimal;
+      den: Decimal;
     }[] = [];
     // Cash buyouts (TC row that removes shares and pays cash) become synthetic SELLs
     const cashMergers: Trade[] = [];
@@ -160,10 +249,10 @@ export class FifoEngine {
         const oldIsin = mergeMatch[2]!;
         const newIsin = mergeMatch[6]!;
         const newSymbol = mergeMatch[5]!;
-        const ratioNew = parseFloat(mergeMatch[3]!);
-        const ratioOld = parseFloat(mergeMatch[4] ?? "1");
+        const num = new Decimal(mergeMatch[3]!);
+        const den = new Decimal(mergeMatch[4] ?? "1");
         const date = normalizeDate(ca.dateTime.slice(0, 8));
-        mergers.push({ date, oldIsin, newIsin, newSymbol, newDescription: ca.description, ratio: ratioNew / ratioOld });
+        mergers.push({ date, oldIsin, newIsin, newSymbol, newDescription: ca.description, num, den });
         continue;
       }
       // Simpler format: just transfer all lots from old ISIN to new ISIN
@@ -215,7 +304,8 @@ export class FifoEngine {
             newIsin: ca.isin, // Same ISIN if no new one detected
             newSymbol: ca.symbol,
             newDescription: ca.description,
-            ratio: 1,
+            num: new Decimal(1),
+            den: new Decimal(1),
           });
         }
       }
@@ -232,8 +322,8 @@ export class FifoEngine {
       newIsin: string;
       newSymbol: string;
       newDescription: string;
-      ratio: number;
-      costFraction: number;
+      num: Decimal;
+      den: Decimal;
     }[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SO")) {
       // IBKR: "PARENT_SYM(PARENT_ISIN) SPINOFF RATIO FOR 1 NEW_SYM(NEW_ISIN)"
@@ -244,8 +334,8 @@ export class FifoEngine {
         const parentIsin = soMatch[2]!;
         const newIsin = soMatch[6]!;
         const newSymbol = soMatch[5]!;
-        const ratioNew = parseFloat(soMatch[3]!);
-        const ratioOld = parseFloat(soMatch[4]!);
+        const num = new Decimal(soMatch[3]!);
+        const den = new Decimal(soMatch[4]!);
         const date = normalizeDate(ca.dateTime.slice(0, 8));
         // Cost-basis split fraction for the spin-off entity.
         //
@@ -256,15 +346,15 @@ export class FifoEngine {
         // either the parent or the new entity. With no value data available, the share
         // ratio is the only proxy we can compute without fabricating numbers. If a future
         // data source exposes FMVs, switch this to (spinoffValue / (parentValue + spinoffValue)).
-        const costFraction = ratioNew / (ratioNew + ratioOld);
+        // applySpinOff gives the spin-off num / (num + den) of the cost.
         spinOffs.push({
           date,
           parentIsin,
           newIsin,
           newSymbol,
           newDescription: ca.description,
-          ratio: ratioNew / ratioOld,
-          costFraction,
+          num,
+          den,
         });
       }
     }
@@ -417,32 +507,45 @@ export class FifoEngine {
     return this.disposals;
   }
 
-  private applySplit(split: { isin: string; date: string; ratio: number }): void {
+  private applySplit(split: Split): void {
+    const emitApplied = (isin: string): void => {
+      const direction = split.num.greaterThanOrEqualTo(split.den) ? "forward" : "reverse";
+      const ratio = `${split.num.toString()}:${split.den.toString()}`;
+      this.emit({
+        id: "fifo.split_applied",
+        severity: "info",
+        message: `⚡ Split ${isin} ${ratio} (${direction}) aplicado (${split.date})`,
+        hint: "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
+        context: { isin, date: split.date, ratio, direction },
+      });
+    };
+
     const lots = this.lots.get(split.isin);
-    if (!lots || lots.length === 0) return;
-
-    const ratio = new Decimal(split.ratio);
-    for (const lot of lots) {
-      // Multiply quantity by ratio, keep total cost the same
-      lot.quantity = lot.quantity.mul(ratio);
-      lot.pricePerShare = lot.pricePerShare.dividedBy(ratio);
-      // costInFcy stays the same — total cost doesn't change on a split
+    if (lots && lots.length > 0) {
+      scaleLotsForSplit(lots, split);
+      // ISIN change: the split lots continue under the new ISIN, ahead of any newer lots there
+      const newIsin = [...split.isins].find((isin) => isin && isin !== split.isin);
+      if (newIsin) {
+        for (const lot of lots) {
+          lot.isin = newIsin;
+          lot.symbol = split.newSymbol || lot.symbol;
+        }
+        this.lots.delete(split.isin);
+        this.lots.set(newIsin, [...lots, ...(this.lots.get(newIsin) ?? [])]);
+        emitApplied(`${split.isin} → ${newIsin}`);
+      } else {
+        emitApplied(split.isin);
+      }
+      return;
     }
 
-    // Remove sub-share lots after split (fractional remainders become cash-in-lieu)
-    const remaining = lots.filter((l) => l.quantity.greaterThanOrEqualTo(1));
-    if (remaining.length < lots.length) {
-      this.lots.set(split.isin, remaining);
+    // No lots under the ISIN named in the description: apply to each row's own ISIN
+    for (const isin of split.isins) {
+      const rowLots = this.lots.get(isin);
+      if (!rowLots || rowLots.length === 0) continue;
+      scaleLotsForSplit(rowLots, split);
+      emitApplied(isin);
     }
-
-    const direction = split.ratio >= 1 ? "forward" : "reverse";
-    this.emit({
-      id: "fifo.split_applied",
-      severity: "info",
-      message: `⚡ Split ${split.isin} ${split.ratio}:1 (${direction}) aplicado (${split.date})`,
-      hint: "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
-      context: { isin: split.isin, date: split.date, ratio: `${split.ratio}:1`, direction },
-    });
   }
 
   private addScripDividendLot(sd: {
@@ -481,18 +584,17 @@ export class FifoEngine {
     newIsin: string;
     newSymbol: string;
     newDescription: string;
-    ratio: number;
+    num: Decimal;
+    den: Decimal;
   }): void {
     const oldLots = this.lots.get(merger.oldIsin);
     if (!oldLots || oldLots.length === 0) return;
-
-    const ratio = new Decimal(merger.ratio);
 
     // Transfer all lots from old ISIN to new ISIN, adjusting quantity by ratio
     // Total cost basis is preserved (tax-neutral exchange)
     const newLots: Lot[] = [];
     for (const lot of oldLots) {
-      const newQuantity = lot.quantity.mul(ratio);
+      const newQuantity = lot.quantity.mul(merger.num).div(merger.den);
       newLots.push({
         ...lot,
         id: `LOT-${this.nextLotId++}`,
@@ -512,16 +614,17 @@ export class FifoEngine {
     }
     this.lots.get(merger.newIsin)!.push(...newLots);
 
+    const ratio = `${merger.num.toString()}:${merger.den.toString()}`;
     this.emit({
       id: "fifo.merger_applied",
       severity: "info",
-      message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${merger.ratio}:1, ${oldLots.length} lotes transferidos, ${merger.date})`,
+      message: `🔄 Fusión: ${merger.oldIsin} → ${merger.newIsin} (ratio ${ratio}, ${oldLots.length} lotes transferidos, ${merger.date})`,
       hint: "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.",
       context: {
         oldIsin: merger.oldIsin,
         newIsin: merger.newIsin,
         date: merger.date,
-        ratio: `${merger.ratio}:1`,
+        ratio,
         lotsTransferred: String(oldLots.length),
       },
     });
@@ -548,24 +651,21 @@ export class FifoEngine {
     newIsin: string;
     newSymbol: string;
     newDescription: string;
-    ratio: number;
-    costFraction: number;
+    num: Decimal;
+    den: Decimal;
   }): void {
     const parentLots = this.lots.get(spinOff.parentIsin);
     if (!parentLots || parentLots.length === 0) return;
 
-    const ratio = new Decimal(spinOff.ratio);
-    const costFraction = new Decimal(spinOff.costFraction);
-    const parentFraction = new Decimal(1).minus(costFraction);
-
     // For each parent lot: split cost basis proportionally and create new lot for spin-off
     const newLots: Lot[] = [];
     for (const lot of parentLots) {
-      const spinOffCost = lot.costInFcy.mul(costFraction);
-      const spinOffQuantity = lot.quantity.mul(ratio);
+      // The spin-off takes num / (num + den) of the cost; multiply before dividing
+      const spinOffCost = lot.costInFcy.mul(spinOff.num).div(spinOff.num.plus(spinOff.den));
+      const spinOffQuantity = lot.quantity.mul(spinOff.num).div(spinOff.den);
 
-      // Reduce parent lot cost basis (in FCY)
-      lot.costInFcy = lot.costInFcy.mul(parentFraction);
+      // Reduce parent lot cost basis (in FCY); parent + spin-off add up to the original cost
+      lot.costInFcy = lot.costInFcy.minus(spinOffCost);
       lot.pricePerShare = lot.costInFcy.dividedBy(lot.quantity);
 
       // Create new lot for spin-off entity
@@ -588,17 +688,19 @@ export class FifoEngine {
     }
     this.lots.get(spinOff.newIsin)!.push(...newLots);
 
+    const ratio = `${spinOff.num.toString()}:${spinOff.den.toString()}`;
+    const costPercent = spinOff.num.mul(100).div(spinOff.num.plus(spinOff.den)).toFixed(0);
     this.emit({
       id: "fifo.spinoff_applied",
       severity: "info",
-      message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${spinOff.ratio}:1, coste ${(spinOff.costFraction * 100).toFixed(0)}% al spin-off, ${spinOff.date})`,
+      message: `🔀 Spin-off: ${spinOff.parentIsin} → ${spinOff.newIsin} (ratio ${ratio}, coste ${costPercent}% al spin-off, ${spinOff.date})`,
       hint: "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.",
       context: {
         parentIsin: spinOff.parentIsin,
         newIsin: spinOff.newIsin,
         date: spinOff.date,
-        ratio: `${spinOff.ratio}:1`,
-        costPercent: (spinOff.costFraction * 100).toFixed(0),
+        ratio,
+        costPercent,
       },
     });
   }
@@ -1090,11 +1192,9 @@ export class FifoEngine {
     }
   }
 
-  /** Resolve option lot key using same logic as lotKey() to avoid mismatches */
+  /** Resolve option lot key with lotKey() itself, so FOP/FSFOP lots match too */
   private optionLotKey(ex: OptionExercise): string {
-    if (ex.isin) return ex.isin;
-    if (ex.conid) return `OPT:conid:${ex.conid}`;
-    return `OPT:${ex.symbol}`;
+    return lotKey({ isin: ex.isin, symbol: ex.symbol, assetCategory: ex.assetCategory ?? "OPT", conid: ex.conid });
   }
 
   /** Resolve underlying key: find existing lots by symbol when ISIN is unknown */
@@ -1102,7 +1202,7 @@ export class FifoEngine {
     if (ex.underlyingIsin) return ex.underlyingIsin;
     // Scan existing lots for a matching symbol (trades processed first, so ISIN-keyed lots exist)
     for (const [key, lots] of this.lots) {
-      if (lots.length > 0 && lots[0]!.symbol === ex.underlyingSymbol && key !== `OPT:${ex.symbol}`) {
+      if (lots.length > 0 && lots[0]!.symbol === ex.underlyingSymbol && key !== this.optionLotKey(ex)) {
         return key;
       }
     }

@@ -614,6 +614,8 @@ const eu: TranslationKeys = {
   "fifo.roll_operation": "⚠ C;O eragiketa (roll): {{symbol}} {{date}} egunean. Itxiera + irekiera gisa prozesatzen da.",
   "fifo.roll_operation.hint":
     "Roll eragiketa zuzen prozesatu da, aurreko posizioaren itxiera eta berriaren irekiera gisa.",
+  "fifo.unknown_direction": '⚠ Norabide ezezaguneko eragiketa ("{{buySell}}"): {{symbol}} {{date}} egunean. Ez da prozesatu.',
+  "fifo.unknown_direction.hint": "Erosketak (BUY) eta salmentak (SELL) bakarrik prozesatzen dira. Berrikusi errenkada hau brokerraren fitxategian eta, benetako eragiketa bada, zuzendu haren norabidea.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",
@@ -628,6 +630,10 @@ const eu: TranslationKeys = {
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratioa {{ratio}}, kostuaren {{costPercent}}% spin-off-era, {{date}})",
   "fifo.spinoff_applied.hint": "Kostua proportzionalki banatzen da matrizearen eta enpresa eskindituaren artean.",
+  "fifo.corporate_action_unhandled":
+    "ℹ {{symbol}} ({{isin}}) balioaren {{type}} ekintza korporatiboa ({{date}}): ez da FIFO kalkuluan aplikatzen.",
+  "fifo.corporate_action_unhandled.hint":
+    "Posizioaren akzio kopurua edo ISINa aldatu bazen, berrikusi balio honen ondorengo salmenten kostua.",
   "fifo.sell_without_lots":
     "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":
@@ -723,6 +729,10 @@ const eu: TranslationKeys = {
   "parser.order_level_duplicates": "{{skipped}} ORDER motako errenkada agregatu bikoiztu baztertu dira eragiketetan.",
   "parser.order_level_duplicates.hint":
     'Zure Flex Query-ak "Orders" xehetasun-maila aktibatuta du "Executions"-ez gain Trades atalean, eta horrek eragiketa bakoitza bikoizten du. "Orders" desaktiba dezakezu Flex Query-aren konfigurazioan, baina ez da beharrezkoa: errenkada hauek automatikoki ezikusi dira kopuruak, zenbatekoak eta komisioak ez bikoizteko.',
+  "parser.cancelled_trades": "IBKRk ezeztatutako {{count}} eragiketa baztertu dira, beren ezeztapenarekin batera.",
+  "parser.cancelled_trades.hint": 'IBKRk ezeztatutako egikaritze bat ezeztapen-errenkada batekin markatzen du ("(Ca.)"). Jatorrizko eragiketa eta haren ezeztapena baztertu dira: ez ziren inoiz benetako erosketa edo salmenta izan.',
+  "parser.cancelled_trades_unmatched": "IBKRren {{count}} ezeztapen baztertu dira, jatorrizko eragiketa fitxategi honetan ez dagoelako.",
+  "parser.cancelled_trades_unmatched.hint": "Ezeztatutako eragiketa Flex Query honen alditik kanpo dago. Beste fitxategi batetik kargatzen baduzu, benetakotzat hartzen jarraituko du: esportatu eragiketa eta haren ezeztapena fitxategi berean biltzen dituen aldi bat.",
 };
 
 export default eu;
