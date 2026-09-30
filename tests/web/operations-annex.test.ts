@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { renderOperationsAnnex } from "../../src/web/operations-annex.js";
-import { ASSET_LABELS } from "../../src/web/asset-labels.js";
+import { assetLabel } from "../../src/web/asset-labels.js";
 import type { TaxSummary, FifoDisposal } from "../../src/types/tax.js";
 
 function makeDisposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
@@ -74,7 +74,7 @@ describe("renderOperationsAnnex — shared asset labels", () => {
     const html = renderOperationsAnnex(makeSummary([
       makeDisposal({ assetCategory: "CRYPTO", isin: "", symbol: "BTC", description: "Bitcoin" }),
     ]));
-    expect(html).toContain(ASSET_LABELS.CRYPTO);
+    expect(html).toContain(assetLabel("CRYPTO"));
     expect(html).toContain("Criptomonedas");
     // The pre-consolidation chart label must no longer appear as a group name.
     expect(html).not.toContain(">Crypto<");
@@ -82,7 +82,7 @@ describe("renderOperationsAnnex — shared asset labels", () => {
 
   it("labels an STK group with the canonical 'Acciones'", () => {
     const html = renderOperationsAnnex(makeSummary([makeDisposal({ assetCategory: "STK" })]));
-    expect(html).toContain(ASSET_LABELS.STK);
+    expect(html).toContain(assetLabel("STK"));
     // The old annex-only label is gone.
     expect(html).not.toContain("Acciones cotizadas");
   });
@@ -91,7 +91,7 @@ describe("renderOperationsAnnex — shared asset labels", () => {
     const html = renderOperationsAnnex(makeSummary([
       makeDisposal({ assetCategory: "FUND", symbol: "VWCE", description: "Vanguard FTSE All-World" }),
     ]));
-    expect(html).toContain(ASSET_LABELS.FUND);
+    expect(html).toContain(assetLabel("FUND"));
     expect(html).toContain("Fondos / ETFs");
   });
 

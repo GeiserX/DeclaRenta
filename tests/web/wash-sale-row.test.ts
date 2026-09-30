@@ -39,7 +39,9 @@ function makeDisposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
 const blocked = (dates?: string[]) =>
   makeDisposal({ washSaleBlocked: true, blockedLossEur: new Decimal(400), washSaleRepurchaseDates: dates });
 
-afterEach(() => setLocale("es"));
+afterEach(async () => {
+  await setLocale("es");
+});
 
 describe("washSaleRowAttr", () => {
   it("highlights a blocked disposal's row", () => {
@@ -83,8 +85,8 @@ describe("renderWashSaleDetailRow", () => {
     expect(html).not.toContain("Compras del mismo valor");
   });
 
-  it("follows the active locale", () => {
-    setLocale("en");
+  it("follows the active locale", async () => {
+    await setLocale("en");
     const html = renderWashSaleDetailRow(blocked(["2025-07-01"]), 9);
     expect(html).toContain("Loss blocked by repurchase");
     expect(html).toContain("Purchases of the same security that block it: 01/07/2025");

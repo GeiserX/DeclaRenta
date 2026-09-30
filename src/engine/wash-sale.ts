@@ -114,12 +114,16 @@ interface DeferredLot {
  * @param disposals - FIFO disposals to check (pass all years for cross-year reintegration)
  * @param allTrades - All trades for the period (homogeneous repurchases)
  * @param corporateActions - Corporate actions for split-adjusted remaining-position caps
+ * @param splitRatios - Ratio the FIFO engine applied per FS/RS transactionID
+ *   (`FifoEngine.getSplitRatios()`); required for splits given only as shares
+ *   added (Revolut), whose ratio depends on the holding at the split date
  * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, and `washSaleBlocked` set
  */
 export function detectWashSales(
   disposals: FifoDisposal[],
   allTrades: Trade[],
   corporateActions: CorporateAction[] = [],
+  splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }> = new Map(),
 ): FifoDisposal[] {
   // Index in-window-eligible BUY events and signed position movements by key.
   const buysByAsset = new Map<string, BuyEvent[]>();
@@ -157,7 +161,7 @@ export function detectWashSales(
   for (const events of positionEventsByAsset.values()) {
     events.sort((a, b) => a.time - b.time);
   }
-  const splitsByAsset = buildSplitEvents(corporateActions);
+  const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
 
   // Deferred-loss ledger: key → (buy date → deferred lots). A loss blocked by a
   // repurchase on date D is recoverable when shares acquired on D are later sold.
@@ -184,6 +188,18 @@ export function detectWashSales(
   const holdingAfterByAssetTime = new Map<string, Map<number, Decimal>>();
   const holdingAfterBudgetByAssetTime = new Map<string, Map<number, Decimal>>();
 
+  // Running split-adjusted position per key, advanced forward as sell dates grow
+  // (disposals are visited in sell-date order). `splitsApplied` is how many of the
+  // key's splits fall on or before the sell date the sum is expressed in; crossing
+  // a new split changes every earlier event's conversion, so the sum is rebuilt
+  // once per split. Each event adds the same term in the same order as a full
+  // re-walk from the start would, so the result is identical, in O(events + splits
+  // × events) per key instead of O(sell dates × events).
+  const positionSweepByAsset = new Map<
+    string,
+    { nextEvent: number; position: Decimal; splitsApplied: number; lastSellTime: number }
+  >();
+
   const holdingAfter = (key: string, sellTime: number): Decimal => {
     let perTime = holdingAfterByAssetTime.get(key);
     if (!perTime) {
@@ -193,13 +209,23 @@ export function detectWashSales(
     const cached = perTime.get(sellTime);
     if (cached) return cached;
 
-    let position = new Decimal(0);
-    for (const ev of positionEventsByAsset.get(key) ?? []) {
-      if (ev.time > sellTime) break;
-      const conversion = splitFactorBetween(splitsByAsset, key, ev.time, sellTime);
-      position = position.plus(ev.qty.mul(conversion.num).div(conversion.den));
+    const events = positionEventsByAsset.get(key) ?? [];
+    const splits = splitsByAsset.get(key) ?? [];
+    let splitsApplied = 0;
+    while (splitsApplied < splits.length && splits[splitsApplied]!.time <= sellTime) splitsApplied++;
+    let sweep = positionSweepByAsset.get(key);
+    if (!sweep || sellTime < sweep.lastSellTime || splitsApplied !== sweep.splitsApplied) {
+      sweep = { nextEvent: 0, position: new Decimal(0), splitsApplied, lastSellTime: sellTime };
+      positionSweepByAsset.set(key, sweep);
     }
-    const remaining = Decimal.max(position, 0);
+    sweep.lastSellTime = sellTime;
+    while (sweep.nextEvent < events.length && events[sweep.nextEvent]!.time <= sellTime) {
+      const ev = events[sweep.nextEvent]!;
+      const conversion = splitFactorBetween(splitsByAsset, key, ev.time, sellTime);
+      sweep.position = sweep.position.plus(ev.qty.mul(conversion.num).div(conversion.den));
+      sweep.nextEvent++;
+    }
+    const remaining = Decimal.max(sweep.position, 0);
     perTime.set(sellTime, remaining);
     return remaining;
   };
@@ -294,15 +320,16 @@ export function detectWashSales(
     // than remain after the full sale date.
     let remainingToAbsorb = qty;
     const consumed: { date: string; qty: Decimal }[] = [];
-    const consume = (predicate: (evTime: number) => boolean, maxQty?: Decimal, reverse = false): Decimal => {
+    // buyEvents is sorted by time, so each pass walks only its slice of the
+    // window, found by binary search: (sellTime, windowEnd] forward for post-sale
+    // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
+    // outside both slices.
+    const consume = (from: number, to: number, step: 1 | -1, maxQty?: Decimal): Decimal => {
       let remainingBudget = maxQty ?? qty;
-      const events = reverse ? [...buyEvents].reverse() : buyEvents;
-      for (const ev of events) {
+      for (let i = from; i !== to; i += step) {
+        const ev = buyEvents[i]!;
         if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
         if (remainingBudget.lessThanOrEqualTo(0)) break;
-        if (ev.time < windowStart || ev.time > windowEnd) continue;
-        if (ev.time === sellTime) continue;
-        if (!predicate(ev.time)) continue;
         if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
         const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
         const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
@@ -315,10 +342,16 @@ export function detectWashSales(
       }
       return (maxQty ?? qty).minus(remainingBudget);
     };
-    consume((evTime) => evTime > sellTime); // post-sale repurchases first (surviving replacements)
+    // post-sale repurchases first (surviving replacements)
+    consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1);
     // FIFO leaves the newest pre-sale lots behind after a partial sale, so attach
     // capped pre-sale deferrals newest-first to the lots that actually survive.
-    const preSaleConsumed = consume((evTime) => evTime < sellTime, remainingHoldingBudget(key, sellTime), true);
+    const preSaleConsumed = consume(
+      firstIndexAtOrAfter(buyEvents, sellTime) - 1,
+      firstIndexAtOrAfter(buyEvents, windowStart) - 1,
+      -1,
+      remainingHoldingBudget(key, sellTime),
+    );
     consumeHoldingBudget(key, sellTime, preSaleConsumed);
 
     const absorbed = qty.minus(remainingToAbsorb);
@@ -366,6 +399,30 @@ function parseQty(q: string): Decimal {
   }
 }
 
+/** First index of the time-sorted `events` whose time is strictly after `time` (length if none). */
+function firstIndexAfter(events: readonly { time: number }[], time: number): number {
+  let lo = 0;
+  let hi = events.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (events[mid]!.time > time) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+/** First index of the time-sorted `events` whose time is at or after `time` (length if none). */
+function firstIndexAtOrAfter(events: readonly { time: number }[], time: number): number {
+  let lo = 0;
+  let hi = events.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (events[mid]!.time >= time) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
 /** Normalize a date string (YYYY-MM-DD or YYYYMMDD) to YYYY-MM-DD for ledger keys. */
 function normalizeDay(date: string): string {
   const t = date.trim();
@@ -373,16 +430,23 @@ function normalizeDay(date: string): string {
   return t.slice(0, 10);
 }
 
-function buildSplitEvents(corporateActions: CorporateAction[]): Map<string, SplitEvent[]> {
+function buildSplitEvents(
+  corporateActions: CorporateAction[],
+  splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }>,
+): Map<string, SplitEvent[]> {
   const splitsByAsset = new Map<string, SplitEvent[]>();
   const seen = new Set<string>();
 
   for (const action of corporateActions) {
     if (action.type !== "FS" && action.type !== "RS") continue;
+    // Same ratio as FIFO: from the description, or the one FIFO sized from the
+    // holding when the broker gives only the shares added. A split FIFO did not
+    // apply has no ratio and is skipped here too.
     const ratioMatch = action.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
-    if (!ratioMatch) continue;
-    const numerator = new Decimal(ratioMatch[1]!);
-    const denominator = new Decimal(ratioMatch[2]!);
+    const applied = ratioMatch ? undefined : splitRatios.get(action.transactionID);
+    if (!ratioMatch && !applied) continue;
+    const numerator = ratioMatch ? new Decimal(ratioMatch[1]!) : applied!.num;
+    const denominator = ratioMatch ? new Decimal(ratioMatch[2]!) : applied!.den;
     if (numerator.lessThanOrEqualTo(0) || denominator.lessThanOrEqualTo(0)) continue;
 
     const key = corporateActionKey(action);
