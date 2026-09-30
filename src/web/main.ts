@@ -223,6 +223,12 @@ let detectedBrokers: string[] = [];
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
 let activeYear: number | null = null;
+/**
+ * The year of the results currently rendered on the Results step, or null when
+ * none are. Kept apart from `currentReport`, which a failed re-run clears while
+ * the previous results stay on screen.
+ */
+let shownResultsYear: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Wizard initialization
@@ -371,7 +377,10 @@ function resetDownstream(): void {
   mergedStatement = null;
   currentReport = null;
   activeYear = null;
+  shownResultsYear = null;
   detectedYears = [];
+  // Drop any processFiles run still in flight: it was built from the old list.
+  processRunToken++;
   initSection720();
   initSection721();
   initSectionD6();
@@ -791,6 +800,7 @@ async function processFiles(): Promise<void> {
     unlockStep(3);
     clearWizardError();
     renderResults(report);
+    shownResultsYear = report.year;
 
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
@@ -804,9 +814,9 @@ async function processFiles(): Promise<void> {
     // A failed re-run from the Results step leaves the previous results on
     // screen: put the year back to theirs so the select does not label them
     // with a year that was never computed.
-    const shownYear = currentReport?.year;
+    const shownYear = shownResultsYear;
     currentReport = null;
-    if (shownYear !== undefined && activeYear !== shownYear) {
+    if (shownYear !== null && activeYear !== shownYear) {
       activeYear = shownYear;
       const profile = getProfile();
       profile.year = shownYear;

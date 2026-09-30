@@ -187,6 +187,45 @@ describe("removing an uploaded file resets everything built from it", () => {
   });
 });
 
+describe("a run still in flight when the upload list changes", () => {
+  it("is dropped, so the removed file's results do not come back when it finishes", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let started = false;
+    vi.doMock("../../src/engine/ecb-orchestrator.js", async (importOriginal) => {
+      const real = await importOriginal<typeof import("../../src/engine/ecb-orchestrator.js")>();
+      return {
+        ...real,
+        buildEcbRateMap: async (...args: Parameters<typeof real.buildEcbRateMap>) => {
+          started = true;
+          await gate;
+          return real.buildEcbRateMap(...args);
+        },
+      };
+    });
+    await boot();
+    pick([xmlFile("a.xml", FILE_2025)]);
+    await toReview();
+    await waitFor(() => byId("review-content").querySelector(".review-grid"), "review grid");
+    nextBtn().click();
+    await waitFor(() => started || null, "rate fetch started");
+
+    // The user goes back and removes the file while the rates are still loading.
+    byId("wizard-back").click();
+    byId("file-list").querySelector<HTMLButtonElement>(".remove-file")!.click();
+
+    release();
+    await waitFor(() => !byId("wizard-step-2").querySelector(".processing-overlay") || null, "run settled");
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(byId("badge-renta").textContent).toBe("");
+    expect(byId("m720-content").textContent).not.toContain("GLOBEX");
+    expect(byId("m720-content").querySelector(".empty-state")).not.toBeNull();
+    expect(byId("d6-content").textContent).not.toContain("GLOBEX");
+    expect(byId("wizard-step-3").hidden).toBe(true);
+  });
+});
+
 describe("the file picker can re-add the same file", () => {
   it("clears #file-input after reading it, so picking the same file fires change again", async () => {
     await boot();
@@ -255,6 +294,16 @@ describe("errors raised on the Results step are shown on the Results step", () =
     expect(error.textContent).toContain("BCE no disponible");
     // The results on screen are still the 2025 ones, so the select must say so.
     expect((byId("results-year-select") as HTMLSelectElement).value).toBe("2025");
+
+    // Still offline, the user picks 2024 again: the second failure must put the
+    // year back too, in the select and in the profile the sections read.
+    error.remove();
+    select.value = "2024";
+    select.dispatchEvent(new Event("change"));
+    await waitFor(() => step3.querySelector<HTMLElement>(".wizard-error"), "second error on step 3");
+    expect(calls).toBe(3);
+    expect((byId("results-year-select") as HTMLSelectElement).value).toBe("2025");
+    expect((JSON.parse(localStorage.getItem("declarenta_profile")!) as { year: number }).year).toBe(2025);
   });
 
   it("a failed PDF export shows the error on the Results step", async () => {
