@@ -462,6 +462,7 @@ const ca: TranslationKeys = {
   "annex.title": "Annex d'operacions (Anexo C1)",
   "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
   "annex.operations": "operaci\u00f3(ns)",
+  "annex.blocked_loss_badge": "Pèrdua bloquejada {{amount}} € (art. {{article}})",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3 fiscal (base de l'estalvi)",

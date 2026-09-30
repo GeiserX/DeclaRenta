@@ -462,7 +462,7 @@ function buyQtyConversionToSellUnits(
  * approximation; precise classification would require per-instrument market
  * admission data we do not collect.
  */
-function windowMonths(assetCategory: string, isin: string): number {
+export function windowMonths(assetCategory: string, isin: string): number {
   if (assetCategory === "CRYPTO") return 12;
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.

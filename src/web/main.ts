@@ -47,7 +47,7 @@ import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
-import { renderOperationsAnnex } from "./operations-annex.js";
+import { renderOperationsAnnex, blockedLossBadge } from "./operations-annex.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import { fmtEur } from "./format.js";
 import Decimal from "decimal.js";
@@ -1087,9 +1087,9 @@ function renderOperationsTable() {
         ${disposals
           .map(
             (d) => `
-          <tr>
+          <tr${d.blockedLossEur.greaterThan(0) ? ' class="wash-sale-blocked"' : ""}>
             <td class="mono">${esc(d.isin)}</td>
-            <td>${esc(d.symbol)}</td>
+            <td>${esc(d.symbol)}${blockedLossBadge(d)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
             <td>${esc(formatDate(d.sellDate))}</td>
             <td>${d.quantity.toString()}</td>

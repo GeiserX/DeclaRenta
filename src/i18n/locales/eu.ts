@@ -462,6 +462,7 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.blocked_loss_badge": "Galera blokeatua {{amount}} € ({{article}} art.)",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",

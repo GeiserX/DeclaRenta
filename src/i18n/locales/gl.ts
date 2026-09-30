@@ -462,6 +462,7 @@ const gl: TranslationKeys = {
   "annex.title": "Anexo de operaci\u00f3ns (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaci\u00f3ns agrupadas por tipo de activo.",
   "annex.operations": "operaci\u00f3n(s)",
+  "annex.blocked_loss_badge": "Perda bloqueada {{amount}} € (art. {{article}})",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3n fiscal (base do aforro)",

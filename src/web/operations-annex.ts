@@ -9,6 +9,7 @@ import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
+import { windowMonths } from "../engine/wash-sale.js";
 
 // TODO(i18n): needs keys "option.expiration" / "option.close" / "option.exercise"
 // in all 5 locales — kept as Spanish literals for now so the 4 non-Spanish
@@ -26,6 +27,19 @@ function fmtDate(d: string): string {
   return `${clean.slice(6, 8)}/${clean.slice(4, 6)}/${clean.slice(0, 4)}`;
 }
 
+/**
+ * Per-row marker for a sale whose loss is (partly) blocked by anti-churning.
+ * Renta Web asks for the non-imputable loss transmission by transmission, so
+ * the user needs to see WHICH sales carry it and how much. Cites 33.5.f for
+ * listed securities (2-month window) and 33.5.g for unlisted ones (1 year),
+ * using the same listed/unlisted heuristic the detector applied.
+ */
+export function blockedLossBadge(d: FifoDisposal): string {
+  if (!d.blockedLossEur.greaterThan(0)) return "";
+  const article = windowMonths(d.assetCategory, d.isin) === 2 ? "33.5.f" : "33.5.g";
+  const text = t("annex.blocked_loss_badge", { amount: fmtEur(d.blockedLossEur), article });
+  return ` <span class="wash-sale-badge">${esc(text)}</span>`;
+}
 
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
@@ -87,7 +101,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
             <tr${blocked}>
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
-              <td>${esc(d.symbol)}${optionInfo}</td>
+              <td>${esc(d.symbol)}${optionInfo}${blockedLossBadge(d)}</td>
               <td>${esc(fmtDate(d.acquireDate))}</td>
               <td>${esc(fmtDate(d.sellDate))}</td>
               <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>

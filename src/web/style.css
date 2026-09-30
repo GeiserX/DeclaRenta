@@ -906,6 +906,24 @@ tbody tr:hover {
   color: var(--danger);
 }
 
+/* Sale whose loss is (partly) deferred by anti-churning (Art. 33.5.f/g). */
+tr.wash-sale-blocked td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.wash-sale-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: 99px;
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .warning {
   margin-top: 1rem;
   padding: 0.75rem 1rem;

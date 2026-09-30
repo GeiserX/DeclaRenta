@@ -460,6 +460,7 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.blocked_loss_badge": "Blocked loss {{amount}} € (art. {{article}})",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",

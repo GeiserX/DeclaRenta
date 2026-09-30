@@ -495,6 +495,7 @@ const es = {
   "annex.title": "Anexo de operaciones (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaciones agrupadas por tipo de activo.",
   "annex.operations": "operación(es)",
+  "annex.blocked_loss_badge": "Pérdida bloqueada {{amount}} € (art. {{article}})",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
