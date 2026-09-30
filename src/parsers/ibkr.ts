@@ -265,19 +265,36 @@ function mapTrade(raw: Record<string, string>): Trade {
 const NOTE_CANCELLED = "Ca";
 /** Suffix IBKR appends to buySell on the row that cancels an execution ("SELL (Ca.)"). */
 const CANCEL_SUFFIX = /\s*\(Ca\.\)\s*$/i;
+/** IBKR transactionType of the row that cancels an execution. */
+const TRANSACTION_TYPE_CANCEL = "TradeCancel";
 
 function isCancelRow(raw: Record<string, string>): boolean {
+  if ((raw.transactionType ?? "").trim() === TRANSACTION_TYPE_CANCEL) return true;
   if (CANCEL_SUFFIX.test(raw.buySell ?? "")) return true;
   return (raw.notes ?? "").split(";").some((n) => n.trim() === NOTE_CANCELLED);
 }
 
+/** transactionID of the fill a cancel row reverses, or "" when the export lacks the link. */
+function cancelledTransactionId(cancel: Record<string, string>): string {
+  const id = (cancel.origTransactionID ?? "").trim();
+  return id === "0" ? "" : id;
+}
+
 /**
  * Remove cancelled executions. IBKR keeps the original fill in the Flex file
- * and adds a reversing row (buySell "SELL (Ca.)"/"BUY (Ca.)", notes "Ca",
- * opposite quantity). Neither row is a real transmission or acquisition, so
- * each cancel row is paired with the fill it cancels (same instrument,
- * currency, price and direction, exactly opposite quantity; a matching
- * ibExecID, ibOrderID or tradeDate breaks ties) and both are dropped.
+ * and adds a reversing row (transactionType "TradeCancel", buySell
+ * "SELL (Ca.)"/"BUY (Ca.)", notes "Ca", opposite quantity). Neither row is a
+ * real transmission or acquisition, so each cancel row is paired with the fill
+ * it cancels and both are dropped.
+ *
+ * The pairing uses IBKR's own link when the export has it: the cancel row's
+ * origTransactionID is the transactionID of the cancelled fill. That matters
+ * when IBKR busts a fill and rebooks it (for example with a corrected
+ * commission): the original and the rebook share instrument, price, quantity,
+ * ibOrderID and tradeDate, and only the link says which one was cancelled.
+ * Exports without that column fall back to a heuristic: same instrument,
+ * currency, price and direction, exactly opposite quantity, with a matching
+ * ibExecID, ibOrderID or tradeDate breaking ties.
  *
  * A cancel row with no original in this statement (the fill is outside the
  * export's period) is dropped alone and counted separately so the user is
@@ -298,6 +315,17 @@ function dropCancelledExecutions(
   let unmatchedCount = 0;
   for (const ci of cancelIdx) {
     const cancel = rows[ci]!;
+    const origId = cancelledTransactionId(cancel);
+    if (origId) {
+      const oi = rows.findIndex((o, i) => !dropped.has(i) && (o.transactionID ?? "").trim() === origId);
+      if (oi >= 0) {
+        dropped.add(oi);
+        pairedCount++;
+      } else {
+        unmatchedCount++;
+      }
+      continue;
+    }
     const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
     const originalQty = new Decimal(cancel.quantity || "0").neg();
     const price = new Decimal(cancel.tradePrice || "0");

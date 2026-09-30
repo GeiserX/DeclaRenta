@@ -1378,6 +1378,77 @@ describe("parseIbkrFlexXml — cancelled executions (buySell \"(Ca.)\")", () => 
     });
   });
 
+  // Cancel-and-rebook as IBKR exports it: the fill is busted and booked again
+  // with a corrected commission. The original and the rebook share conid,
+  // price, quantity, ibOrderID and tradeDate; only the cancel row's
+  // origTransactionID says which one was cancelled.
+  function linkedRow(attrs: {
+    transactionID: string;
+    transactionType: "ExchTrade" | "TradeCancel";
+    qty: string;
+    buySell: string;
+    commission: string;
+    execId: string;
+    origTransactionID?: string;
+  }): string {
+    const cancel = attrs.transactionType === "TradeCancel";
+    return `<Trade accountId="U9999999" currency="AUD" assetCategory="STK" fxRateToBase="0.65" symbol="GCM"
+             description="GRAN COLOMBIA GOLD CORP" conid="80845553" isin="CA38501D2041" multiplier="1"
+             tradeID="${cancel ? "" : "2001"}" tradeDate="20250911" settlementDate="20250913"
+             transactionType="${attrs.transactionType}" exchange="${cancel ? "--" : "ASX"}"
+             quantity="${attrs.qty}" tradePrice="0.32" tradeMoney="${Number(attrs.qty) * 0.32}"
+             proceeds="${-Number(attrs.qty) * 0.32}" taxes="0" ibCommission="${attrs.commission}"
+             ibCommissionCurrency="AUD" openCloseIndicator="${cancel ? "" : "O"}" notes="${cancel ? "Ca" : ""}"
+             cost="0" fifoPnlRealized="0" origTradeID="${cancel ? "2001" : ""}" origOrderID="${cancel ? "900001" : "0"}"
+             origTransactionID="${attrs.origTransactionID ?? ""}" transactionID="${attrs.transactionID}"
+             buySell="${attrs.buySell}" ibOrderID="900001" ibExecID="${attrs.execId}" levelOfDetail="EXECUTION" />`;
+  }
+
+  const ORIGINAL = linkedRow({
+    transactionID: "1001", transactionType: "ExchTrade", qty: "5000", buySell: "BUY", commission: "-6",
+    execId: "0000d514.5159662d.01.01",
+  });
+  const CANCEL = linkedRow({
+    transactionID: "1002", transactionType: "TradeCancel", qty: "-5000", buySell: "BUY (Ca.)", commission: "0",
+    execId: "", origTransactionID: "1001",
+  });
+  const REBOOK = linkedRow({
+    transactionID: "1003", transactionType: "ExchTrade", qty: "5000", buySell: "BUY", commission: "0",
+    execId: "0000d514.5159662d.01.02",
+  });
+
+  it.each([
+    ["original, cancel, rebook", ORIGINAL + CANCEL + REBOOK],
+    ["rebook, original, cancel", REBOOK + ORIGINAL + CANCEL],
+    ["cancel, rebook, original", CANCEL + REBOOK + ORIGINAL],
+  ])("cancel-and-rebook keeps the rebook and drops the original named by origTransactionID (%s)", (_, xml) => {
+    const result = parseIbkrFlexXml(wrap(xml));
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.buySell).toBe("BUY");
+    expect(result.trades[0]!.quantity).toBe("5000");
+    expect(result.trades[0]!.commission).toBe("0");
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades")?.context).toEqual({ count: "1" });
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades_unmatched")).toBeUndefined();
+  });
+
+  it("a linked cancellation whose original is outside the export never takes the rebook with it", () => {
+    const result = parseIbkrFlexXml(wrap(REBOOK + CANCEL));
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]!.commission).toBe("0");
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades_unmatched")?.context).toEqual({
+      count: "1",
+    });
+  });
+
+  it("recognises a cancellation flagged only by transactionType TradeCancel", () => {
+    const typeOnly = linkedRow({
+      transactionID: "1002", transactionType: "TradeCancel", qty: "-5000", buySell: "BUY", commission: "0",
+      execId: "", origTransactionID: "1001",
+    }).replace(' notes="Ca"', ' notes=""');
+    const result = parseIbkrFlexXml(wrap(ORIGINAL + typeOnly + REBOOK));
+    expect(result.trades.map((t) => t.commission)).toEqual(["0"]);
+  });
+
   it("end to end: a cancelled sale adds nothing to casilla 0328", () => {
     const rates: EcbRateMap = new Map([
       ["2025-03-10", new Map([["USD", "0.9"]])],
