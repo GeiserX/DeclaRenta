@@ -331,7 +331,9 @@ const en: TranslationKeys = {
   "m720.cash_title": "Cash balances (Accounts)",
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
-    "Some balances do not include the Q4 average required for Modelo 720 account records. They are shown for review but excluded from the generated file.",
+    "Some balances do not include the Q4 average required for Modelo 720 account records. Their 31 December balance does count toward the 50,000 EUR threshold, but those accounts are left out of the generated file: add them by hand, with their Q4 average balance, before filing.",
+  "m720.successive_years_note":
+    "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",

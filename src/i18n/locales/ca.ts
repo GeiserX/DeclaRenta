@@ -332,7 +332,9 @@ const ca: TranslationKeys = {
   "m720.cash_title": "Saldos en efectiu (Comptes)",
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
-    "Alguns saldos no inclouen la mitjana del quart trimestre obligatòria per als comptes del Model 720. Es mostren per revisar-los, però no s'inclouen al fitxer generat.",
+    "Alguns saldos no inclouen la mitjana del quart trimestre obligatòria per als comptes del Model 720. El seu saldo a 31 de desembre sí que compta per al llindar de 50.000 €, però aquests comptes no s'inclouen al fitxer generat: afegeix-los a mà, amb el seu saldo mitjà del quart trimestre, abans de presentar.",
+  "m720.successive_years_note":
+    "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",
