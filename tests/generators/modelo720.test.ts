@@ -1109,6 +1109,20 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
     });
   });
 
+  it("reads the account of a C record written by versions before 0.59.0 (132-143, with 156-189 blank)", () => {
+    const account = { accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" };
+    const current = generateModelo720([], rateMap, baseConfig, undefined, [account]).split("\n");
+    // Up to 0.58.x the C record carried clave "C" alone, 131 = 5, the account id
+    // in 132-143 and 144-189 blank.
+    const legacy = current[1]!.slice(0, 101) + "C " + current[1]!.slice(103, 130) + "5" + "U1234567".padEnd(12) + " ".repeat(46) + current[1]!.slice(189);
+    expect(legacy).toHaveLength(500);
+    const previous = readPrevious720([current[0], legacy].join("\n"));
+    expect(previous.accounts).toEqual(["U1234567"]);
+
+    const thisYear = generateModelo720([], rateMap, { ...baseConfig, previousYearAccounts: previous.accounts }, undefined, [account]).split("\n")[1]!;
+    expect(boeField(thisYear, d.origen)).toBe("M");
+  });
+
   describe("sales since last year (origin C, from --previous-720)", () => {
     const cancelledRecords = (records: string[]) => records.filter((l) => l[0] === "2" && boeField(l, d.origen) === "C");
 
@@ -1146,6 +1160,24 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
         { kind: "cancelled", reason: "invalid_code", security: oldBond },
         { kind: "cancelled", reason: "invalid_code", security: oldShare },
       ]);
+    });
+
+    it("writes no file when the securities are below 50,000 € and the only sale cannot be written", () => {
+      // 30,000 USD x 0.92 = 27,600 € of securities: below the threshold. The
+      // sale's record from an older version has a blank subclave, so it is
+      // left out; it must not pull the below-threshold holding into a file.
+      const oldShare = { isin: "US0378331005", claveSubclave: "V ", country: "US" };
+      const config = { ...baseConfig, previousYearSecurities: [oldShare] };
+      const below = held({ positionValue: "30000" });
+      expect(generateModelo720([below], rateMap, config)).toBe("");
+      // The sale is still reported, so the user declares it by hand.
+      expect(findModelo720Omissions([below], rateMap, config)).toEqual([
+        { kind: "cancelled", reason: "invalid_code", security: oldShare },
+      ]);
+      // Control: above the threshold the holding is written.
+      const records = generateModelo720([held()], rateMap, config).split("\n");
+      expect(records).toHaveLength(2);
+      expect(boeField(records[1]!, d.isin)).toBe("US78462F1030");
     });
 
     it("never repeats the blank subclave of a file written by an older version", () => {
@@ -1376,6 +1408,45 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
       ["20230502", "20250303", "00000000360000"], // 60 x 60 EUR
       ["20240212", "20250303", "00000000240000"], // 40 x 60 EUR
     ]);
+  });
+
+  it("repeats each sold record's own country when last year's file held the ISIN at custodians in two countries", () => {
+    // Last year's file: VWCE bought 2022-03-01 at an Irish custodian and
+    // 2023-06-01 at a German one, one V record each.
+    const vwceLot = (acquireDate: string): Lot => ({
+      id: acquireDate, isin: "IE00BK5BQT80", symbol: "VWCE", description: "", acquireDate,
+      quantity: new Decimal(50), pricePerShare: new Decimal(50), costInFcy: new Decimal(2500),
+      currency: "EUR", ecbRate: new Decimal(1),
+    });
+    const lastYearRecord = (custodianCountry: string, acquireDate: string) => generateModelo720(
+      [makePosition({ isin: "IE00BK5BQT80", symbol: "VWCE", currency: "EUR", quantity: "50", positionValue: "60000", custodianCountry })],
+      new Map(),
+      { ...baseConfig, year: 2024 },
+      new Map([["IE00BK5BQT80", [vwceLot(acquireDate)]]]),
+    ).split("\n").find((l) => l[0] === "2")!;
+    const previous = readPrevious720([lastYearRecord("IE", "20220301"), lastYearRecord("DE", "20230601")].join("\n")).securities;
+
+    // Both holdings sold in 2025.
+    const s: FlexStatement = {
+      ...statement, toDate: "20251231",
+      trades: [
+        vwce({ tradeDate: "2022-03-01", quantity: "50", tradePrice: "50" }),
+        vwce({ tradeDate: "2023-06-01", quantity: "50", tradePrice: "50" }),
+        sell("2025-03-03", "100", "60"),
+      ],
+    };
+    const disposals = generateTaxReport(s, new Map(), 2025).capitalGains.disposals;
+    const lines = generateModelo720(s.openPositions, rateMap, { ...baseConfig, previousYearSecurities: previous }, undefined, undefined, disposals)
+      .split("\n");
+    const cancelled = lines
+      .filter((l) => l[0] === "2" && l[422] === "C")
+      .map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.pais), boeField(l, BOE_720.detail.valoracion1)]);
+    expect(cancelled).toEqual([
+      ["20220301", "IE", "00000000300000"], // 50 x 60 EUR
+      ["20230601", "DE", "00000000300000"],
+    ]);
+    expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
+    expect(previous.map((s) => [s.country, s.acquireDate])).toEqual([["IE", "20220301"], ["DE", "20230601"]]);
   });
 
   it("asks for no extinction date on a sale the file leaves out for an old code", () => {

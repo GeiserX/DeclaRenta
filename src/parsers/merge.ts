@@ -46,10 +46,14 @@ export function mergeStatement(target: Statement, source: Statement): Statement 
 export function finalizeMergedStatement(statement: Statement): Statement {
   reconcileOrderLegs(statement);
 
+  // Same-day trades go by time of day, then keep the parser's row order (the
+  // sort is stable). Never by tradeID: Kraken txids are random and row-index
+  // IDs compare as text ("-10" before "-9"), so FIFO would consume a later
+  // purchase first (Art. 37.2 LIRPF).
   statement.trades.sort((a, b) => {
     const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
     if (dateCmp !== 0) return dateCmp;
-    return a.tradeID.localeCompare(b.tradeID);
+    return (a.tradeTime ?? "").localeCompare(b.tradeTime ?? "");
   });
   statement.cashTransactions.sort((a, b) =>
     normalizeDate(a.dateTime).localeCompare(normalizeDate(b.dateTime)),

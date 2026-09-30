@@ -105,6 +105,31 @@ describe("calculateDoubleTaxation", () => {
     expect(result.spanishWithholding.toFixed(2)).toBe("190.00");
   });
 
+  it("should return each foreign country's gross income, never the Spanish one", () => {
+    // Renta Web's double-taxation dialog asks, per country, for the income
+    // obtained abroad. Casilla 0029 cannot fill it: it also holds Spanish
+    // dividends and foreign ones with no tax withheld. The per-country gross
+    // is the figure the user needs, so byCountry must carry it.
+    const entries = [
+      makeEntry({ withholdingCountry: "US", grossAmountEur: new Decimal(1000), withholdingTaxEur: new Decimal(150) }),
+      makeEntry({
+        isin: "ES0000000000",
+        withholdingCountry: "ES",
+        grossAmountEur: new Decimal(500),
+        withholdingTaxEur: new Decimal(95),
+      }),
+      makeEntry({ withholdingCountry: "IE", grossAmountEur: new Decimal(300), withholdingTaxEur: new Decimal(0) }),
+    ];
+
+    const result = calculateDoubleTaxation(entries, YEAR);
+
+    expect(result.byCountry["US"]!.grossIncome.toFixed(2)).toBe("1000.00");
+    expect(result.byCountry["ES"]).toBeUndefined();
+    expect(result.byCountry["IE"]).toBeUndefined();
+    const foreignGross = Object.values(result.byCountry).reduce((sum, c) => sum.plus(c.grossIncome), new Decimal(0));
+    expect(foreignGross.toFixed(2)).toBe("1000.00");
+  });
+
   it("should report zero Spanish withholding when no ES dividend is present", () => {
     // Purely-foreign holdings have no retención a cuenta española → casilla 0597
     // is 0 (the byCountry["ES"]?.taxPaid ?? 0 fallback). Guards the split so a

@@ -38,7 +38,7 @@ DeclaRenta is designed so that **no financial data ever leaves your machine**:
 - **CLI mode**: Runs entirely on your local machine. Network calls only for ECB rates (cacheable).
 - **No analytics, no tracking, no telemetry**.
 - **No user accounts, no authentication**.
-- **Browser storage**: fiscal profile and inter-year report summaries are kept in `localStorage` on the user's device only. They are never uploaded.
+- **Browser storage**: fiscal profile, inter-year report summaries and manually entered crypto rates and opening lots are kept in `localStorage` on the user's device only. They are never uploaded. The "Delete my data from this browser" button in the fiscal profile removes all of them.
 
 ### Data Flow
 

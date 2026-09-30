@@ -1288,14 +1288,16 @@ export class FxFifoEngine {
     // Insert keeping the pool sorted ascending by acquireDate (FIFO frontier).
     // Find the first lot strictly newer than this one and splice in before it;
     // if none, append. localeCompare on the ISO yyyy-mm-dd dates is a date order.
-    let idx = lots.length;
-    for (let i = 0; i < lots.length; i++) {
-      if (lots[i]!.acquireDate.localeCompare(date) > 0) {
-        idx = i;
-        break;
-      }
+    // The pool is already sorted, so a binary search finds the same index as a
+    // front-to-back scan without walking thousands of lots on every sell.
+    let lo = 0;
+    let hi = lots.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (lots[mid]!.acquireDate.localeCompare(date) > 0) hi = mid;
+      else lo = mid + 1;
     }
-    lots.splice(idx, 0, lot);
+    lots.splice(lo, 0, lot);
   }
 
   /**

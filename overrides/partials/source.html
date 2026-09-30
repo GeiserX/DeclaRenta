@@ -1,0 +1,15 @@
+{#-
+  Material's partials/source.html without data-md-component="source". That
+  attribute makes the theme fetch the repo's stars and latest release from
+  api.github.com in every reader's browser; the docs make no third-party calls.
+  The header link and icon stay.
+-#}
+<a href="{{ config.repo_url }}" title="{{ lang.t('source') }}" class="md-source">
+  <div class="md-source__icon md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.repo_name }}
+  </div>
+</a>
