@@ -34,9 +34,16 @@ function effectiveYearEnd(year: number): string {
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
+  cachedYearEndLots = undefined;
   const container = document.getElementById("m720-content");
   if (!container) return;
   container.innerHTML = `
@@ -61,6 +68,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
 
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (statement.openPositions.length === 0 && !hasCashBalances) {
@@ -186,7 +194,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         <h4>${t("m720.rates_title")}</h4>
         <div class="rates-grid">${uniqueCurrencies.map((cur) => {
           const rate = lookupPositionRate(rateMap, `${year}-12-31`, cur);
-          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
         }).join("")}</div>
       </div>`;
     }
@@ -271,7 +279,7 @@ function encodeISO885915(str: string): Uint8Array {
 }
 
 function generate720File(): void {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("m720-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -290,7 +298,7 @@ function generate720File(): void {
     nif: profile.nif,
     surname: profile.apellidos,
     name: profile.nombre,
-    year: profile.year,
+    year: cachedYear,
     phone: profile.telefono,
     contactName: fullName || "CONTRIBUYENTE",
     declarationId: modelo720DeclarationId(),
@@ -333,7 +341,7 @@ function generate720File(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `modelo720_${profile.year}.txt`;
+  a.download = `modelo720_${cachedYear}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

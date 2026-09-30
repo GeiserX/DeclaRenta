@@ -10,8 +10,9 @@
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import type { TaxSummary } from "../types/tax.js";
-import { localizeMessage } from "../i18n/index.js";
+import { localizeHint, localizeMessage, t } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { pdfSafeText } from "./pdf-text.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -132,6 +133,14 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         ["Casilla 0588", "Deducción doble imposición", formatEur(report.doubleTaxation.deduction)],
         ["Casilla 0597", "Retenciones capital mobiliario", formatEur(report.dividends.spanishWithholding)],
       );
+      // Anti-churning (Art. 33.5.f): informative only, Renta Web applies it per
+      // disposal and has no aggregate casilla. Same rows as the web PDF.
+      if (report.capitalGains.blockedLosses.greaterThan(0)) {
+        casillas.push(["Informativo", "Pérdidas bloqueadas anti-churning", formatEur(report.capitalGains.blockedLosses)]);
+      }
+      if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
+        casillas.push(["Informativo", "Pérdidas reintegradas (anti-churning)", formatEur(report.capitalGains.reintegratedLosses)]);
+      }
 
       for (const [casilla, desc, value] of casillas) {
         const y = doc.y;
@@ -244,7 +253,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         for (const [country, data] of Object.entries(report.doubleTaxation.byCountry)) {
           doc.fontSize(FONT_SIZE.body).fillColor(COLORS.text)
             .text(
-              `${country}: Impuesto pagado ${data.taxPaid.toFixed(2)} EUR → Deducción permitida ${data.deductionAllowed.toFixed(2)} EUR`,
+              `${country}: Impuesto pagado ${data.taxPaid.toFixed(2)} EUR — Deducción permitida ${data.deductionAllowed.toFixed(2)} EUR`,
               MARGIN,
             );
           doc.moveDown(0.3);
@@ -257,11 +266,26 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
       if (report.messages.length > 0) {
         checkPageBreak(doc);
         sectionHeader(doc, "Mensajes");
-        for (const m of report.messages.slice(0, 20)) {
-          const prefix = m.severity === "error" ? "⛔ " : m.severity === "warning" ? "⚠ " : "ℹ ";
+        // Errors and warnings always render in full, errors first; only the
+        // informative notes are capped.
+        const MAX_INFOS = 20;
+        const infos = report.messages.filter((m) => m.severity === "info");
+        const shown = [
+          ...report.messages.filter((m) => m.severity === "error"),
+          ...report.messages.filter((m) => m.severity === "warning"),
+          ...infos.slice(0, MAX_INFOS),
+        ];
+        for (const m of shown) {
+          const label = t(m.severity === "error" ? "pdf.severity_error" : m.severity === "warning" ? "pdf.severity_warning" : "pdf.severity_info");
           const color = m.severity === "error" ? COLORS.accent : COLORS.muted;
-          doc.fontSize(FONT_SIZE.small).fillColor(color).text(prefix + localizeMessage(m), MARGIN);
+          const hint = localizeHint(m);
+          const text = `${label}: ${pdfSafeText(localizeMessage(m))}${hint ? ` — ${pdfSafeText(hint)}` : ""}`;
+          doc.fontSize(FONT_SIZE.small).fillColor(color).text(text, MARGIN);
           doc.moveDown(0.2);
+        }
+        if (infos.length > MAX_INFOS) {
+          doc.fontSize(FONT_SIZE.small).fillColor(COLORS.muted)
+            .text(`... y ${infos.length - MAX_INFOS} mensajes informativos más`, MARGIN);
         }
       }
 

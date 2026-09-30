@@ -14,6 +14,7 @@ function report(): TaxSummary {
       acquisitionValue: new Decimal(0),
       netGainLoss: new Decimal(0),
       blockedLosses: new Decimal(0),
+      reintegratedLosses: new Decimal(0),
       disposals: [],
     },
     dividends: {

@@ -833,3 +833,32 @@ describe("proportional blocking + reintegration", () => {
     expect(laterSale.reintegratedLossEur.toFixed(2)).toBe("1000.00");
   });
 });
+
+describe("detectWashSales at scale (one heavily traded ISIN)", () => {
+  it("checks 20,000 same-ISIN trades without re-scanning every trade per sale", () => {
+    // 10,000 round trips, 40 a day across 2024: buy one day, sell the next, every
+    // other sale at a loss. Each loss sits inside the 2-month window of thousands
+    // of buys and each sell day needs the position left after it. Walking every
+    // trade for each sale took several seconds here; a sorted sweep takes well
+    // under a second. The bound is loose on purpose so a slow CI runner passes.
+    const isin = "US0378331005";
+    const day = (n: number): string => new Date(Date.UTC(2024, 0, 2 + n)).toISOString().slice(0, 10);
+    const trades: Trade[] = [];
+    const disposals: FifoDisposal[] = [];
+    for (let i = 0; i < 10_000; i++) {
+      const buyDate = day(Math.floor(i / 40));
+      const sellDate = day(Math.floor(i / 40) + 1);
+      trades.push(makeTrade(isin, buyDate, "BUY"), makeTrade(isin, sellDate, "SELL"));
+      disposals.push(
+        makeDisposal({ isin, sellDate, acquireDate: buyDate, gainLossEur: new Decimal(i % 2 === 0 ? -10 : 10) }),
+      );
+    }
+
+    const start = performance.now();
+    const result = detectWashSales(disposals, trades);
+    const elapsedMs = performance.now() - start;
+
+    expect(result.filter((d) => d.washSaleBlocked).length).toBeGreaterThan(0);
+    expect(elapsedMs).toBeLessThan(2_000);
+  });
+});

@@ -368,8 +368,8 @@ export interface TaxSummary {
   doubleTaxation: {
     /** Casilla 0588: Deducción */
     deduction: Decimal;
-    /** Breakdown by country */
-    byCountry: Record<string, { taxPaid: Decimal; deductionAllowed: Decimal }>;
+    /** Breakdown by country (only foreign countries with tax withheld; never ES) */
+    byCountry: Record<string, { grossIncome: Decimal; taxPaid: Decimal; deductionAllowed: Decimal }>;
   };
 
   /** FX gains: Ganancias/pérdidas por transmisión de moneda extranjera (Casillas 1633/1637) */

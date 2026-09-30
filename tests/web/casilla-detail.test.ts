@@ -1,10 +1,10 @@
+// @vitest-environment jsdom
 /**
  * Tests for the casilla-detail rendering logic.
  *
- * DOM limitation: renderCasillaCards() requires an HTMLElement and vitest has no
- * jsdom environment configured (vitest.config.ts has no `environment: "jsdom"`).
- * We therefore test the underlying pure functions that casilla-detail.ts imports
- * and re-exports indirectly:
+ * Most tests exercise the pure functions that casilla-detail.ts imports and
+ * re-exports indirectly; the last block renders the cards with
+ * renderCasillaCards() into a jsdom container:
  *   - isListedShare()         — determines which block a disposal routes to
  *   - computeCasillaBlocksWithFx() — builds the CasillaBlocks that drive visible()
  *   - combinedNetGainLoss()   — the value shown on the net gain/loss card
@@ -19,7 +19,8 @@ import {
   computeCasillaBlocksWithFx,
   combinedNetGainLoss,
 } from "../../src/generators/casillas.js";
-import { renderDividendsDetail } from "../../src/web/casilla-detail.js";
+import { renderDividendsDetail, renderDoubleTaxDetail, renderCasillaCards } from "../../src/web/casilla-detail.js";
+import { t } from "../../src/i18n/index.js";
 import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, DividendEntry } from "../../src/types/tax.js";
 
@@ -87,6 +88,7 @@ function makeSummaryWithDisposals(
       acquisitionValue,
       netGainLoss: transmissionValue.minus(acquisitionValue),
       blockedLosses: new Decimal(0),
+      reintegratedLosses: new Decimal(0),
       disposals,
     },
     dividends: {
@@ -336,5 +338,82 @@ describe("renderDividendsDetail (Casilla 0029 card)", () => {
     const html = renderDividendsDetail([]);
     expect(html).not.toContain("0588"); // note guarded behind the early return
     expect(html).not.toContain("<table");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renderCasillaCards — the net row and the informational interest-paid card
+// ---------------------------------------------------------------------------
+
+describe("renderCasillaCards", () => {
+  function cardFor(container: HTMLElement, i18nKey: Parameters<typeof t>[0]): HTMLElement {
+    const label = t(i18nKey);
+    const card = [...container.querySelectorAll<HTMLElement>(".casilla-card")]
+      .find((c) => c.querySelector(".casilla-concept")?.textContent === label);
+    if (!card) throw new Error(`no card for ${i18nKey}`);
+    return card;
+  }
+
+  it("shows a net that rounds to zero as 0,00, not as a red -0,00 loss", () => {
+    const report = makeSummaryWithDisposals([
+      makeDisposal({ proceedsEur: new Decimal("100"), costBasisEur: new Decimal("100.004"), gainLossEur: new Decimal("-0.004") }),
+    ]);
+    const container = document.createElement("div");
+    renderCasillaCards(container, report);
+
+    const net = cardFor(container, "casilla.net_gain_loss");
+    expect(net.querySelector(".casilla-value")!.textContent).toBe("0,00 EUR");
+    expect(net.classList.contains("loss")).toBe(false);
+    expect(net.querySelector<HTMLElement>(".casilla-copy")!.dataset.copy).toBe("0,00");
+  });
+
+  it("renders the interest-paid card as informational: no net styling, no copy button, a working drill-down", () => {
+    const report = makeSummaryWithDisposals([]);
+    report.interest.paid = new Decimal("12.30");
+    report.interest.entries = [{
+      type: "paid",
+      description: "USD DEBIT INT FOR JAN-2025",
+      date: "20250203",
+      amountEur: new Decimal("12.30"),
+      currency: "USD",
+      ecbRate: new Decimal("0.95"),
+    }];
+    const container = document.createElement("div");
+    renderCasillaCards(container, report);
+
+    const paid = cardFor(container, "casilla.interest_paid");
+    expect(paid.classList.contains("casilla-net")).toBe(false);
+    expect(paid.querySelector(".casilla-copy")).toBeNull();
+    expect(paid.classList.contains("expandable")).toBe(true);
+    // The drill-down is built on the first expand.
+    paid.querySelector<HTMLElement>(".casilla-trigger")!.click();
+    expect(paid.querySelector(".casilla-detail")?.textContent).toContain("USD DEBIT INT FOR JAN-2025");
+
+    // The net total stays the bold net row.
+    expect(cardFor(container, "casilla.net_gain_loss").classList.contains("casilla-net")).toBe(true);
+  });
+});
+
+describe("renderDoubleTaxDetail (Casilla 0588 card)", () => {
+  it("shows each country's gross income and the foreign-only total the Renta Web dialog asks for", () => {
+    // Renta Web asks, per country, for the income obtained abroad. Casilla 0029
+    // also counts Spanish dividends, so the card must show the foreign figures.
+    const report = makeSummaryWithDisposals([]);
+    report.doubleTaxation = {
+      deduction: new Decimal(180),
+      byCountry: {
+        US: { grossIncome: new Decimal(1000), taxPaid: new Decimal(150), deductionAllowed: new Decimal(150) },
+        DE: { grossIncome: new Decimal(200), taxPaid: new Decimal("52.75"), deductionAllowed: new Decimal(30) },
+      },
+    };
+
+    const html = renderDoubleTaxDetail(report);
+
+    const headerRow = html.slice(html.indexOf("<thead>"), html.indexOf("</thead>"));
+    expect(headerRow).toContain("Bruto EUR");
+    expect(html).toContain("1.000,00");
+    expect(html).toContain("200,00");
+    const footer = html.slice(html.indexOf("<tfoot>"), html.indexOf("</tfoot>"));
+    expect(footer).toContain("1.200,00");
   });
 });
