@@ -779,6 +779,14 @@ const gl: TranslationKeys = {
     "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Adoita deberse a filas incompletas na exportación (columna "amount" baleira ou non numérica). Se faltan operacións, volve descargar o CSV de transaccións completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: non se aplicaron {{count}} movemento(s) de acción corporativa (fusión, canxe, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "O custo dos títulos antigos non pasa aos novos, así que unha venda posterior do novo valor pode saír sen lotes e con custo 0. Se foi unha fusión ou un canxe, engade o custo de adquisición orixinal en «Lotes manuais para posicións transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: non se importaron {{count}} entrega(s) de títulos sen compravenda (accións gratuítas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "As accións gratuítas dunha promoción son unha ganancia patrimonial da base xeral polo seu valor de mercado o día da entrega: declaraas á parte e engade ese valor como custo en «Lotes manuais para posicións transferidas». Se é un traspaso desde outro bróker, engade alí o custo de compra orixinal.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":
