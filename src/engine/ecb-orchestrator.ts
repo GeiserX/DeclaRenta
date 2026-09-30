@@ -20,6 +20,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import type { ManualOpeningLot } from "../types/tax.js";
 import { fetchEcbRates, normalizeCurrency } from "./ecb.js";
 import { normalizeDate } from "./dates.js";
+import { FxFifoEngine } from "./fx-fifo.js";
 
 /**
  * The set of (currency, year) pairs a statement needs ECB rates for.
@@ -87,7 +88,17 @@ export function deriveEcbNeeds(
   manualOpeningLots: ManualOpeningLot[] = [],
 ): EcbNeeds {
   const currencies = new Set<string>();
-  for (const t of statement.trades) currencies.add(t.currency);
+  for (const t of statement.trades) {
+    currencies.add(t.currency);
+    // A non-EUR CASH pair (GBP.USD) also books its other side, at that side's rate.
+    if (t.assetCategory === "CASH") {
+      const pair = FxFifoEngine.pairCurrencies(t);
+      if (pair) {
+        currencies.add(pair.base);
+        currencies.add(pair.quote);
+      }
+    }
+  }
   for (const c of statement.cashTransactions) currencies.add(c.currency);
   for (const lot of manualOpeningLots) currencies.add(lot.currency);
   currencies.delete("EUR");
