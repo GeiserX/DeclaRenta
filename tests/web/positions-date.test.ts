@@ -1,5 +1,6 @@
 /**
- * Tests for src/web/positions-date.ts — the guard that stops Modelo 720/721/D-6
+ * Tests for positionsDateMismatch (src/engine/dates.ts) and the web banner in
+ * src/web/positions-date.ts — the guard that stops Modelo 720/721/D-6
  * from declaring a statement's open positions as the holdings at 31 December of
  * a year the statement does not end on.
  *
@@ -10,7 +11,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { positionsDateMismatch, renderPositionsDateBanner } from "../../src/web/positions-date.js";
+import { positionsDateMismatch } from "../../src/engine/dates.js";
+import { renderPositionsDateBanner } from "../../src/web/positions-date.js";
 import { createEmptyStatement, mergeStatement } from "../../src/parsers/merge.js";
 
 function withToDate(toDate: string) {
@@ -44,6 +46,8 @@ describe("positionsDateMismatch", () => {
   it("flags a period end that leaves business days before 31 December", () => {
     // Thursday 28/12/2023: Friday 29/12 still followed.
     expect(positionsDateMismatch(withToDate("20231228"), 2023)).toBe(true);
+    // Thursday 29/12/2022: Friday 30/12 still followed (31/12 was a Saturday).
+    expect(positionsDateMismatch(withToDate("20221229"), 2022)).toBe(true);
     // 31/12/2025 is a Wednesday, so 30/12 is not the year end.
     expect(positionsDateMismatch(withToDate("20251230"), 2025)).toBe(true);
     // The last weekday of 2023 does not stand in for 2024.
