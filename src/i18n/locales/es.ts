@@ -730,6 +730,10 @@ const es = {
     "Hay {{count}} ingreso(s) en criptomoneda (p. ej. recompensas de staking) que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
   "report.crypto_income_unvalued.hint":
     "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
+  "report.dividend_unvalued":
+    "Hay {{count}} dividendo(s) en {{currencies}} que no se han podido valorar automáticamente y no están incluidos en los importes calculados.",
+  "report.dividend_unvalued.hint":
+    "El BCE no publica un tipo de cambio oficial para esa divisa en la fecha de cobro. Calcula el importe en euros a esa fecha, súmalo a mano a la casilla 0029 y ten en cuenta su retención en la deducción por doble imposición internacional (casilla 0588).",
   "report.crypto_general_gain_unvalued":
     "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
   "report.crypto_general_gain_unvalued.hint":

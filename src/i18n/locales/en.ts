@@ -691,6 +691,10 @@ const en: TranslationKeys = {
     "There are {{count}} crypto income item(s) (e.g. staking rewards) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_income_unvalued.hint":
     "This income is paid in the crypto itself and has no official ECB rate. Compute its value in euros on the receipt date and declare it manually as investment income (Box 0027).",
+  "report.dividend_unvalued":
+    "There are {{count}} dividend(s) in {{currencies}} that could not be valued automatically and are not included in the calculated amounts.",
+  "report.dividend_unvalued.hint":
+    "The ECB publishes no official rate for that currency on the payment date. Compute the amount in euros on that date, add it by hand to box 0029, and include its withholding in the international double-taxation deduction (box 0588).",
   "report.crypto_general_gain_unvalued":
     "There are {{count}} crypto capital gain(s) (e.g. airdrops or referral commissions) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_general_gain_unvalued.hint":
