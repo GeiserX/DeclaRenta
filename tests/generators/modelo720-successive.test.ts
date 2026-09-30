@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import Decimal from "decimal.js";
 import {
   checkModelo720SuccessiveYear,
@@ -43,6 +45,13 @@ describe("readPrevious720Totals", () => {
     expect(totals.values.toString()).toBe("65200.55");
     expect(totals.accountsEnding.toString()).toBe("60000");
     expect(totals.accountsAverage.toString()).toBe("55000.25");
+  });
+
+  it("reads the sample 2023 file in tests/fixtures (GLOBEX and INITECH declared)", () => {
+    const sample = readFileSync(resolve(__dirname, "../fixtures/modelo720-2023-sample.txt"), "latin1");
+    expect(readPrevious720(sample).securities.map((s) => s.isin)).toEqual(["XX0000000002", "XX0000000009"]);
+    expect(readPrevious720Totals(sample)).toMatchObject({ year: 2023 });
+    expect(readPrevious720Totals(sample).values.toString()).toBe("55000");
   });
 
   it("leaves out the records with origin C: what was sold is no longer held", () => {
