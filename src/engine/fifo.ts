@@ -845,6 +845,7 @@ export class FifoEngine {
       symbol: trade.symbol,
       description: trade.description,
       sellDate: trade.tradeDate,
+      ...(trade.settlementDate ? { settlementDate: trade.settlementDate } : {}),
       acquireDate: parts.acquireDate,
       quantity: parts.quantity,
       gainLossFcy: parts.gainLossFcy,

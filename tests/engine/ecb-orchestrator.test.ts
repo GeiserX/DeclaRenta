@@ -166,6 +166,14 @@ describe("deriveEcbNeeds", () => {
     expect(needs.years).toContain(2022); // minYear (2023) - 1
   });
 
+  it("includes both sides of a non-EUR currency pair (GBP.USD books a GBP leg too)", () => {
+    const statement = makeStatement([
+      makeTrade({ symbol: "GBP.USD", description: "GBP.USD", assetCategory: "CASH", currency: "USD", tradeDate: "2025-03-15" }),
+    ]);
+    const needs = deriveEcbNeeds(statement, 2025);
+    expect([...needs.currencies].sort()).toEqual(["GBP", "USD"]);
+  });
+
   it("includes manual opening lots in currencies and years", () => {
     const statement = makeStatement([]);
     const manualOpeningLots: ManualOpeningLot[] = [
