@@ -123,6 +123,12 @@ function parseTrCsv(lines: string[]): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   let skippedNoAmount = 0;
+  // Rows that move securities without a trade (mergers, free shares, transfers
+  // in). They are not imported, so the user is told which ISINs to review.
+  const corporateActionIsins = new Set<string>();
+  let corporateActionRows = 0;
+  const deliveryIsins = new Set<string>();
+  let deliveryRows = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -165,23 +171,34 @@ function parseTrCsv(lines: string[]): Statement {
         skippedNoAmount++;
         continue;
       }
-      const absShares = toFiniteDecimal(sharesStr).abs().toString();
+      const absSharesDec = toFiniteDecimal(sharesStr).abs();
+      const absShares = absSharesDec.toString();
       const absAmount = absAmountDec.toString();
       const absFee = toFiniteDecimal(feeStr).abs();
       const absTax = toFiniteDecimal(taxStr).abs();
+      // FIFO values the lot from tradePrice, not amount. When the price column
+      // is empty, take it from amount / shares (amount excludes the fee).
+      const priceDec = toFiniteDecimal(priceStr);
+      const tradePrice = priceDec.isZero() && !absSharesDec.isZero()
+        ? absAmountDec.div(absSharesDec).toString()
+        : priceStr;
+      const assetCategory = mapAssetCategory(assetClass);
+      // For crypto the symbol column holds the ticker (BTC), not an ISIN. FIFO
+      // pools crypto by ticker across brokers, so the ticker is the symbol.
+      const isCrypto = assetCategory === "CRYPTO";
 
       trades.push({
         tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
         accountId: "",
-        symbol: name,
+        symbol: isCrypto ? symbol : name,
         description: name,
-        isin: symbol,
-        assetCategory: mapAssetCategory(assetClass),
+        isin: isCrypto ? "" : symbol,
+        assetCategory,
         currency,
         tradeDate,
         settlementDate: tradeDate,
         quantity: isSell ? `-${absShares}` : absShares,
-        tradePrice: priceStr,
+        tradePrice,
         tradeMoney: amountStr,
         proceeds: isSell ? absAmount : "0",
         cost: isSell ? "0" : absAmount,
@@ -286,18 +303,52 @@ function parseTrCsv(lines: string[]): Statement {
       continue;
     }
 
-    // Skip: CUSTOMER_INBOUND, CUSTOMER_OUTBOUND, TRANSFER_*, CORPORATE_ACTION, DELIVERY
+    // --- CORPORATE_ACTION (mergers, ...) / DELIVERY (free shares, ...) ---
+    // Not imported: count them and warn below.
+    if (category === "CORPORATE_ACTION") {
+      corporateActionRows++;
+      if (symbol) corporateActionIsins.add(symbol);
+      continue;
+    }
+    if (category === "DELIVERY") {
+      deliveryRows++;
+      if (symbol) deliveryIsins.add(symbol);
+      continue;
+    }
+
+    // Skip: CUSTOMER_INBOUND, CUSTOMER_OUTBOUND, TRANSFER_*
   }
 
-  const parserMessages: TaxMessage[] = skippedNoAmount > 0
-    ? [{
-        id: "trade_republic.trade_skipped_no_amount",
-        severity: "warning" as const,
-        message: `Se ha(n) omitido ${skippedNoAmount} operación(es) de compraventa de Trade Republic sin importe utilizable.`,
-        hint: "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
-        context: { count: String(skippedNoAmount) },
-      }]
-    : [];
+  const parserMessages: TaxMessage[] = [];
+  if (skippedNoAmount > 0) {
+    parserMessages.push({
+      id: "trade_republic.trade_skipped_no_amount",
+      severity: "warning",
+      message: `Se ha(n) omitido ${skippedNoAmount} operación(es) de compraventa de Trade Republic sin importe utilizable.`,
+      hint: "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
+      context: { count: String(skippedNoAmount) },
+    });
+  }
+  if (corporateActionRows > 0) {
+    const isins = [...corporateActionIsins].join(", ");
+    parserMessages.push({
+      id: "trade_republic.corporate_action_not_applied",
+      severity: "warning",
+      message: `Trade Republic: no se han aplicado ${corporateActionRows} movimiento(s) de acción corporativa (fusión, canje, split) de ${isins}.`,
+      hint: "El coste de los títulos antiguos no pasa a los nuevos, así que una venta posterior del nuevo valor puede salir sin lotes y con coste 0. Si fue una fusión o un canje, añade el coste de adquisición original en «Lotes manuales para posiciones transferidas».",
+      context: { count: String(corporateActionRows), isins },
+    });
+  }
+  if (deliveryRows > 0) {
+    const isins = [...deliveryIsins].join(", ");
+    parserMessages.push({
+      id: "trade_republic.delivery_not_applied",
+      severity: "warning",
+      message: `Trade Republic: no se han importado ${deliveryRows} entrega(s) de títulos sin compraventa (acciones gratuitas, traspasos) de ${isins}.`,
+      hint: "Las acciones gratuitas de una promoción son una ganancia patrimonial de la base general por su valor de mercado el día de la entrega: decláralas aparte y añade ese valor como coste en «Lotes manuales para posiciones transferidas». Si es un traspaso desde otro bróker, añade allí el coste de compra original.",
+      context: { count: String(deliveryRows), isins },
+    });
+  }
 
   return {
     accountId: "",

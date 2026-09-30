@@ -178,6 +178,17 @@
   outline-offset: 2px;
 }
 
+/* Near-zero durations instead of none, so animationend still fires (the splash waits for it). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
@@ -1186,6 +1197,23 @@ th.sortable:hover {
   color: var(--accent);
 }
 
+/* The header's button only makes it reachable by keyboard; it looks like plain header text. */
+th.sortable .sort-btn,
+th.sortable .sort-btn:hover,
+th.sortable .sort-btn:active {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  transform: none;
+  box-shadow: none;
+}
+
 th.sortable::after {
   content: "";
   position: absolute;
@@ -1777,6 +1805,11 @@ footer a:hover {
   padding: 0.3rem 0.5rem;
 }
 
+.detail-table tfoot td {
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+
 /* Foreign-withholding redirect note under the Casilla 0029 dividends detail. */
 .detail-note {
   margin: 0.75rem 0 0;
@@ -1863,6 +1896,20 @@ footer a:hover {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--muted);
+}
+
+.profile-field-error {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.profile-field-error[hidden] {
+  display: none;
+}
+
+.profile-form input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .field-detail {

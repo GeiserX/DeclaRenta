@@ -5,7 +5,7 @@
  * All processing happens in the browser. No data is uploaded anywhere.
  */
 
-import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
+import { detectBroker, getBroker } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
@@ -48,17 +48,75 @@ import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
-import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
-import { fmtEur } from "./format.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
+import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
 // ---------------------------------------------------------------------------
+// Splash screen
+// ---------------------------------------------------------------------------
+// Wired before the locale table is awaited below. A top-level await does not
+// hold back the page's load event, so a start click can land while the table
+// is still loading; the button needs no translation, so it is wired first.
+
+const splash = document.getElementById("splash");
+const splashCta = document.getElementById("splash-cta");
+
+function dismissSplash() {
+  if (!splash) return;
+  splash.classList.add("splash-exit");
+  // The exit animation (style.css .splash-exit) lasts 0.45 s. A browser that
+  // does not run it (reduced motion, a hidden tab, headless under load) never
+  // fires animationend, so a timer finishes the dismissal in either case.
+  // A splash reopened from the logo meanwhile has lost .splash-exit: leave it.
+  let done = false;
+  // The logo and content run their own animations, whose end events bubble up
+  // here, so the listeners stay until the splash's own event or the timer.
+  const onSplashAnimation = (e: AnimationEvent) => {
+    if (e.target === splash) finish();
+  };
+  const finish = () => {
+    if (done) return;
+    done = true;
+    splash.removeEventListener("animationend", onSplashAnimation);
+    splash.removeEventListener("animationcancel", onSplashAnimation);
+    if (!splash.classList.contains("splash-exit")) return;
+    splash.style.display = "none";
+    document.body.classList.remove("splash-visible");
+  };
+  splash.addEventListener("animationend", onSplashAnimation);
+  splash.addEventListener("animationcancel", onSplashAnimation);
+  setTimeout(finish, 600);
+}
+
+function showSplash() {
+  if (!splash) return;
+  splash.style.display = "";
+  splash.classList.remove("splash-exit");
+  document.body.classList.add("splash-visible");
+}
+
+if (splash) {
+  splashCta?.addEventListener("click", dismissSplash);
+  document.body.classList.add("splash-visible");
+}
+
+// Logo/brand click → show splash (but not hamburger)
+document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
+  e.preventDefault();
+  showSplash();
+});
+
+// ---------------------------------------------------------------------------
 // i18n initialization
 // ---------------------------------------------------------------------------
 
-initLocale();
+// Wait for the saved or detected locale's table, so the first render is
+// already in that language.
+await initLocale();
 
 /** Update all static elements with data-i18n attributes */
 function updateStaticText() {
@@ -93,11 +151,16 @@ for (const [code, name] of Object.entries(localeNames)) {
 }
 
 langSelect.addEventListener("change", () => {
-  setLocale(langSelect.value as Locale);
+  setLocale(langSelect.value as Locale).catch(() => {
+    // The locale could not load (offline, missing chunk): keep the selector on
+    // the language still in use.
+    langSelect.value = getCurrentLocale();
+  });
 });
 
 document.addEventListener("localechange", () => {
   updateStaticText();
+  renderFileList();
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
@@ -105,48 +168,10 @@ document.addEventListener("localechange", () => {
   rerenderSectionGuide();
   initProfile();
   renderDetectionStatus();
+  if (lastReview) renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
 });
 
 updateStaticText();
-
-// ---------------------------------------------------------------------------
-// Splash screen
-// ---------------------------------------------------------------------------
-
-const splash = document.getElementById("splash");
-const splashCta = document.getElementById("splash-cta");
-
-function dismissSplash() {
-  if (!splash) return;
-  splash.classList.add("splash-exit");
-  splash.addEventListener(
-    "animationend",
-    () => {
-      splash.style.display = "none";
-      document.body.classList.remove("splash-visible");
-    },
-    { once: true },
-  );
-}
-
-function showSplash() {
-  if (!splash) return;
-  splash.style.display = "";
-  splash.classList.remove("splash-exit");
-  document.body.classList.add("splash-visible");
-}
-
-if (splash) {
-  splashCta?.addEventListener("click", dismissSplash);
-  document.body.classList.add("splash-visible");
-}
-
-// Logo/brand click → show splash (but not hamburger)
-document.querySelector(".top-bar-brand")?.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("#sidebar-toggle")) return;
-  e.preventDefault();
-  showSplash();
-});
 
 // ---------------------------------------------------------------------------
 // Theme toggle (auto / light / dark)
@@ -223,6 +248,12 @@ let detectedBrokers: string[] = [];
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
 let activeYear: number | null = null;
+/**
+ * The year of the results currently rendered on the Results step, or null when
+ * none are. Kept apart from `currentReport`, which a failed re-run clears while
+ * the previous results stay on screen.
+ */
+let shownResultsYear: number | null = null;
 
 // ---------------------------------------------------------------------------
 // Wizard initialization
@@ -313,6 +344,9 @@ fileInput.addEventListener("change", () => {
   if (fileInput.files) {
     addFiles(Array.from(fileInput.files));
   }
+  // Browsers fire no change event when the same selection is picked again, so
+  // clear it: a file removed with × can then be picked again.
+  fileInput.value = "";
 });
 
 // Reject pathologically large uploads before any parsing to avoid a
@@ -350,11 +384,7 @@ function addFiles(files: File[]) {
     }
   }
   renderFileList();
-  // Reset downstream state when files change
-  mergedStatement = null;
-  currentReport = null;
-  activeYear = null;
-  detectedYears = [];
+  resetDownstream();
   (document.getElementById("wizard-next") as HTMLButtonElement).disabled = pendingFiles.length === 0;
   // Refresh detection unless every file was rejected for size — in that case
   // keep the "file too large" message visible instead of clearing it.
@@ -363,11 +393,32 @@ function addFiles(files: File[]) {
   }
 }
 
+/**
+ * Forget everything built from the previous upload list: the parsed statement,
+ * the report, the year picked from it, the 720/721/D-6 sections (and the data
+ * they cache) and the Renta badge. Called whenever a file is added or removed.
+ */
+function resetDownstream(): void {
+  mergedStatement = null;
+  lastReview = null;
+  currentReport = null;
+  activeYear = null;
+  shownResultsYear = null;
+  detectedYears = [];
+  // Drop any processFiles run still in flight: it was built from the old list.
+  processRunToken++;
+  initSection720();
+  initSection721();
+  initSectionD6();
+  updateBadge("renta", "");
+  clearWizardError();
+}
+
 function renderFileList() {
   fileListDiv.innerHTML = pendingFiles
     .map(
       (f, i) =>
-        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`,
+        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file" aria-label="${esc(t("a11y.remove_file", { name: f.name }))}">&times;</button></span>`,
     )
     .join(" ");
 
@@ -379,8 +430,7 @@ function renderFileList() {
       fileBytesCache.delete(removed);
       pendingFiles.splice(idx, 1);
       renderFileList();
-      mergedStatement = null;
-      currentReport = null;
+      resetDownstream();
       void updateDetectionStatus();
     });
   });
@@ -516,6 +566,9 @@ async function parseFiles(): Promise<void> {
       }
 
       const content = new TextDecoder("utf-8").decode(uint8);
+      if (content.trim() === "") {
+        throw new Error(t("error.empty_file", { filename: file.name }));
+      }
       const selectedBroker = brokerSelect.value;
       let parser =
         selectedBroker !== "auto"
@@ -543,9 +596,7 @@ async function parseFiles(): Promise<void> {
       }
 
       if (!parser) {
-        throw new Error(
-          t("error.no_broker_detected", { filename: file.name }) + ` ${brokerParsers.map((p) => p.name).join(", ")}`,
-        );
+        throw new Error(t("error.no_broker_detected", { filename: file.name }));
       }
 
       const statement = parser.parse(content);
@@ -577,17 +628,44 @@ async function parseFiles(): Promise<void> {
       const profile = getProfile();
       profile.year = activeYear;
       saveProfile(profile);
+      // Redraw the form, or its stale year select is saved back on the next edit.
+      initProfile();
     }
 
     renderReview(merged, detectedBrokers, brokerNames);
     unlockStep(3);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+    showWizardError(err instanceof Error ? err.message : String(err));
   }
 }
 
+/**
+ * Show an error on the wizard step the user is looking at. Step 2 (and step 1,
+ * which never raises one) uses the Review panel as before. On step 3 the Review
+ * panel is hidden, so the error goes in a banner at the top of the Results step.
+ */
+/** The last review shown on step 2, so a language change can draw it again. */
+let lastReview: { merged: Statement; brokers: string[]; perFileBrokers: string[] } | null = null;
+
+function showWizardError(msg: string): void {
+  const html = `${t("error.prefix")}${esc(msg)}`;
+  if (getCurrentWizardStep() !== 3) {
+    lastReview = null;
+    reviewContent.innerHTML = `<p class="warning">${html}</p>`;
+    return;
+  }
+  clearWizardError();
+  document
+    .getElementById("wizard-step-3")!
+    .insertAdjacentHTML("afterbegin", `<div class="banner banner-warning wizard-error" role="alert"><span>${html}</span></div>`);
+}
+
+function clearWizardError(): void {
+  document.querySelectorAll(".wizard-error").forEach((el) => el.remove());
+}
+
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
+  lastReview = { merged, brokers, perFileBrokers };
   const tradeCount = merged.trades.length;
   const divCount = merged.cashTransactions.filter(
     (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
@@ -699,8 +777,9 @@ async function processFiles(): Promise<void> {
   const isStale = () => runToken !== processRunToken;
 
   try {
-    const merged = mergedStatement;
     const year = activeYear ?? getProfile().year;
+    // 720/721/D-6 take only the holdings of files that end at this year's end.
+    const merged = yearEndHoldings(mergedStatement, year);
     const manualOpeningLots = getManualOpeningLots();
     // Build the ECB rate map via the shared orchestrator. `deriveEcbNeeds`
     // (inside buildEcbRateMap) collects trade, cashTransaction, open-position and
@@ -753,7 +832,9 @@ async function processFiles(): Promise<void> {
     persistReport(report, currentBrokers);
 
     unlockStep(3);
+    clearWizardError();
     renderResults(report);
+    shownResultsYear = report.year;
 
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
@@ -763,9 +844,22 @@ async function processFiles(): Promise<void> {
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+    if (isStale()) return; // a newer run owns the screen now
+    // A failed re-run from the Results step leaves the previous results on
+    // screen: put the year back to theirs so the select does not label them
+    // with a year that was never computed.
+    const shownYear = shownResultsYear;
     currentReport = null;
+    if (shownYear !== null && activeYear !== shownYear) {
+      activeYear = shownYear;
+      const profile = getProfile();
+      profile.year = shownYear;
+      saveProfile(profile);
+      initProfile();
+      const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement | null;
+      if (yearSelect) yearSelect.value = String(shownYear);
+    }
+    showWizardError(err instanceof Error ? err.message : String(err));
   }
 }
 
@@ -796,8 +890,7 @@ exportPdfBtn.addEventListener("click", () => {
       downloadBlob(blob, `declarenta_${report.year}.pdf`);
     })
     .catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      reviewContent.innerHTML = `<p class="warning">${t("error.prefix")}${esc(msg)}</p>`;
+      showWizardError(err instanceof Error ? err.message : String(err));
     })
     .finally(() => {
       exportPdfBtn.disabled = false;
@@ -863,6 +956,11 @@ function nextDir(current: SortDir): SortDir {
   return null;
 }
 
+/** Re-rendering replaces the header, so put keyboard focus back on its button. */
+function refocusSortButton(table: HTMLElement, col: string): void {
+  table.querySelector<HTMLButtonElement>(`th[data-col="${col}"] .sort-btn`)?.focus();
+}
+
 // Event delegation: attach once on stable parent, works across re-renders
 opsTable.addEventListener("click", (e) => {
   const th = (e.target as HTMLElement).closest<HTMLElement>("th.sortable");
@@ -870,7 +968,9 @@ opsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = opsSort.col === col ? nextDir(opsSort.dir) : "asc";
   opsSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   renderOperationsTable();
+  if (hadFocus) refocusSortButton(opsTable, col);
 });
 
 divsTable.addEventListener("click", (e) => {
@@ -879,24 +979,28 @@ divsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = divSort.col === col ? nextDir(divSort.dir) : "asc";
   divSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   if (currentReport) renderDividendsTable(currentReport);
+  if (hadFocus) refocusSortButton(divsTable, col);
 });
 
 // ---------------------------------------------------------------------------
 // Search and filter
 // ---------------------------------------------------------------------------
 
-opsSearch.addEventListener("input", () => renderOperationsTable());
+// Each render rebuilds the whole table, so wait for a pause in typing instead
+// of rendering on every keystroke.
+const OPS_SEARCH_DEBOUNCE_MS = 150;
+let opsSearchTimer: ReturnType<typeof setTimeout> | undefined;
+opsSearch.addEventListener("input", () => {
+  clearTimeout(opsSearchTimer);
+  opsSearchTimer = setTimeout(renderOperationsTable, OPS_SEARCH_DEBOUNCE_MS);
+});
 opsFilter.addEventListener("change", () => renderOperationsTable());
 
 // ---------------------------------------------------------------------------
 // Render results (Step 3)
 // ---------------------------------------------------------------------------
-
-function formatDate(d: string): string {
-  if (d.length === 8) return `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
-  return d;
-}
 
 function renderResults(report: TaxSummary) {
   // Year header bar with selector + mismatch warning
@@ -916,7 +1020,7 @@ function renderResults(report: TaxSummary) {
 
     let hdrHtml = `<div class="section-header-bar">
       <span class="section-year">${t("section.year_label")}
-        <select id="results-year-select" class="year-select">${yearOptions}</select>
+        <select id="results-year-select" class="year-select" aria-label="${esc(t("section.year_label"))}">${yearOptions}</select>
       </span>
     </div>`;
 
@@ -1028,6 +1132,14 @@ function sortIndicator(col: string, state: SortState): string {
   return state.col === col ? ` ${state.dir}` : "";
 }
 
+/** A sortable header: a button for keyboard users, aria-sort on the sorted column. */
+function sortableTh(label: string, col: string, state: SortState): string {
+  const ariaSort = state.col === col && state.dir
+    ? ` aria-sort="${state.dir === "asc" ? "ascending" : "descending"}"`
+    : "";
+  return `<th class="sortable${sortIndicator(col, state)}" data-col="${col}"${ariaSort}><button type="button" class="sort-btn">${label}</button></th>`;
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
@@ -1054,8 +1166,8 @@ function renderOperationsTable() {
       let cmp = 0;
       if (col === "isin") cmp = a.isin.localeCompare(b.isin);
       else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
-      else if (col === "buyDate") cmp = a.acquireDate.localeCompare(b.acquireDate);
-      else if (col === "sellDate") cmp = a.sellDate.localeCompare(b.sellDate);
+      else if (col === "buyDate") cmp = normalizeDate(a.acquireDate).localeCompare(normalizeDate(b.acquireDate));
+      else if (col === "sellDate") cmp = normalizeDate(a.sellDate).localeCompare(normalizeDate(b.sellDate));
       else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
       else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
       else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
@@ -1065,8 +1177,7 @@ function renderOperationsTable() {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, opsSort);
 
   opsTable.innerHTML = `
     <table>
@@ -1092,7 +1203,7 @@ function renderOperationsTable() {
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
             <td>${esc(formatDate(d.sellDate))}</td>
-            <td>${d.quantity.toString()}</td>
+            <td>${fmtQty(d.quantity)}</td>
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
@@ -1122,7 +1233,7 @@ function renderDividendsTable(report: TaxSummary) {
       let cmp = 0;
       if (col === "isin") cmp = a.isin.localeCompare(b.isin);
       else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
-      else if (col === "date") cmp = a.payDate.localeCompare(b.payDate);
+      else if (col === "date") cmp = normalizeDate(a.payDate).localeCompare(normalizeDate(b.payDate));
       else if (col === "gross") cmp = a.grossAmountEur.minus(b.grossAmountEur).toNumber();
       else if (col === "wht") cmp = a.withholdingTaxEur.minus(b.withholdingTaxEur).toNumber();
       else if (col === "country") cmp = a.withholdingCountry.localeCompare(b.withholdingCountry);
@@ -1130,8 +1241,7 @@ function renderDividendsTable(report: TaxSummary) {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, divSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, divSort);
 
   divsTable.innerHTML = `
     <table>
@@ -1190,7 +1300,10 @@ if (versionEl) {
 // ---------------------------------------------------------------------------
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {
+  // The build's commit hash in the script URL makes every deploy install a new
+  // worker, whose activate step clears the previous deploy's cached files.
+  // sw.js itself never changes, so without it the first worker stays forever.
+  navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(__COMMIT_HASH__)}`).catch(() => {
     // SW registration is optional — fail silently
   });
 }

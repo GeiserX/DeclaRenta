@@ -1094,9 +1094,9 @@ describe("generateTaxReport", () => {
       // Spanish-tax cap (b) at either base (~19–21 % of 7 360 ≈ 1 400+) exceeds the
       // 1 104 EUR foreign withholding, so cap (a) wins and the deduction = withholding,
       // which halves cleanly: solo = 1 104.00, split = 552.00, split × 2 = solo.
-      // The progressive bracket only changes the result when the Spanish cap binds
-      // (low foreign withholding) — covered conceptually here; we pin the observed
-      // treaty-capped values to lock the behaviour against regressions.
+      // The progressive bracket would only change the result if cap (b) bound, and
+      // it cannot today: the savings rate starts at 19 %, above the 15 % treaty cap.
+      // We pin the observed treaty-capped values to lock the behaviour.
       const bigDividendRates = makeRateMap({
         "2025-03-15": "0.9200",
         "2025-09-20": "0.9100",
@@ -1144,8 +1144,8 @@ describe("generateTaxReport", () => {
       expect(split.doubleTaxation.deduction.lessThanOrEqualTo(solo.doubleTaxation.deduction)).toBe(true);
 
       // When the foreign cap binds, the split is exactly linear (withholding scales 1/N),
-      // even though the bases straddle the 6 000 EUR bracket. Locks the behaviour so a
-      // regression to a base-independent / wrongly-scaled deduction is caught.
+      // even though the bases straddle the 6 000 EUR bracket. This catches a wrongly
+      // scaled split; it cannot tell a base-dependent cap (b) from none at all.
       expect(split.doubleTaxation.deduction.times(2).toFixed(2)).toBe(solo.doubleTaxation.deduction.toFixed(2));
     });
   });
@@ -1338,5 +1338,150 @@ describe("crypto reward income valuation degrades gracefully when its rate is mi
     // 50 USDT × 0.92 EUR/USD = 46.00, taxed as savings-base income (0027).
     expect(report.interest.earned.toFixed(2)).toBe("46.00");
     expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(false);
+  });
+});
+
+describe("dividend country, valuation and year boundary", () => {
+  it("sends a US withholding on ticker ES to 0588, never to the Spanish 0597", () => {
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "d-es-ticker",
+          symbol: "ES",
+          isin: "US30040W1080",
+          description: "ES(US30040W1080) Cash Dividend USD 0.7125 per Share (Ordinary Dividend)",
+          amount: "100",
+          type: "Dividends",
+        }),
+        makeCashTx({
+          transactionID: "w-es-ticker",
+          symbol: "ES",
+          isin: "US30040W1080",
+          description: "ES(US30040W1080) Cash Dividend USD 0.7125 per Share - US Tax",
+          amount: "-15",
+          type: "Withholding Tax",
+        }),
+      ],
+    });
+
+    const report = generateTaxReport(statement, rates, 2025);
+
+    expect(report.dividends.entries[0]!.withholdingCountry).toBe("US");
+    expect(report.dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+    expect(report.doubleTaxation.deduction.toFixed(2)).toBe("13.80");
+    expect(report.doubleTaxation.byCountry["ES"]).toBeUndefined();
+  });
+
+  describe("a dividend in a currency with no ECB rate (CNH)", () => {
+    const statement = makeStatement({
+      cashTransactions: [
+        makeCashTx({
+          transactionID: "d-cnh",
+          symbol: "600519",
+          isin: "CNE0000018R8",
+          currency: "CNH",
+          amount: "1000",
+          type: "Dividends",
+        }),
+        makeCashTx({
+          transactionID: "w-cnh",
+          symbol: "600519",
+          isin: "CNE0000018R8",
+          currency: "CNH",
+          amount: "-100",
+          type: "Withholding Tax",
+        }),
+        makeCashTx({ transactionID: "d-usd", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w-usd", amount: "-15", type: "Withholding Tax" }),
+      ],
+    });
+    const rates = makeRateMap({ "2025-06-01": "0.9200" });
+
+    it("skips it with a warning and still reports the USD dividend", () => {
+      const report = generateTaxReport(statement, rates, 2025);
+
+      expect(report.dividends.grossIncome.toFixed(2)).toBe("92.00");
+      expect(report.dividends.entries.map((d) => d.currency)).toEqual(["USD"]);
+      expect(report.doubleTaxation.deduction.toFixed(2)).toBe("13.80");
+      const msg = report.messages.find((m) => m.id === "report.dividend_unvalued");
+      expect(msg?.context).toEqual({ count: "1", currencies: "CNH" });
+    });
+
+    it("values it once the user enters a manual CNH rate", () => {
+      const manualRates: EcbRateMap = new Map([["2025-06-01", new Map([["CNH", "0.13"]])]]);
+      const report = generateTaxReport(statement, rates, 2025, { manualRates });
+
+      // 1000 × 0.13 + 100 × 0.92
+      expect(report.dividends.grossIncome.toFixed(2)).toBe("222.00");
+      expect(report.messages.some((m) => m.id === "report.dividend_unvalued")).toBe(false);
+    });
+  });
+
+  describe("withholding booked across 31 December", () => {
+    const rates = makeRateMap({ "2025-12-29": "0.9000", "2025-12-31": "0.9000", "2026-01-02": "0.9000" });
+
+    it("credits a 2-Jan withholding to the 31-Dec dividend's year, and not to the next", () => {
+      const statement = makeStatement({
+        toDate: "20260131",
+        cashTransactions: [
+          makeCashTx({ transactionID: "d-dec", dateTime: "20251231", amount: "100", type: "Dividends" }),
+          makeCashTx({ transactionID: "w-jan", dateTime: "20260102", amount: "-15", type: "Withholding Tax" }),
+        ],
+      });
+
+      const y2025 = generateTaxReport(statement, rates, 2025);
+      expect(y2025.dividends.grossIncome.toFixed(2)).toBe("90.00");
+      expect(y2025.doubleTaxation.deduction.toFixed(2)).toBe("13.50");
+
+      const y2026 = generateTaxReport(statement, rates, 2026);
+      expect(y2026.dividends.grossIncome.toFixed(2)).toBe("0.00");
+      expect(y2026.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+    });
+
+    it("credits a 29-Dec withholding to the 2-Jan dividend's year, and not to the previous", () => {
+      const statement = makeStatement({
+        toDate: "20260131",
+        cashTransactions: [
+          makeCashTx({ transactionID: "w-dec", dateTime: "20251229", amount: "-15", type: "Withholding Tax" }),
+          makeCashTx({ transactionID: "d-jan", dateTime: "20260102", amount: "100", type: "Dividends" }),
+        ],
+      });
+
+      const y2025 = generateTaxReport(statement, rates, 2025);
+      expect(y2025.dividends.grossIncome.toFixed(2)).toBe("0.00");
+      expect(y2025.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+
+      const y2026 = generateTaxReport(statement, rates, 2026);
+      expect(y2026.dividends.grossIncome.toFixed(2)).toBe("90.00");
+      expect(y2026.doubleTaxation.deduction.toFixed(2)).toBe("13.50");
+    });
+
+    it("keeps a weekly payer's late-December withholding on its own December dividend", () => {
+      const weeklyRates = makeRateMap({
+        "2024-12-19": "1.0000",
+        "2024-12-26": "1.0000",
+        "2025-01-02": "1.0000",
+      });
+      const statement = makeStatement({
+        fromDate: "20240101",
+        toDate: "20250131",
+        cashTransactions: [
+          makeCashTx({ transactionID: "d-1219", dateTime: "20241219", amount: "20", type: "Dividends" }),
+          makeCashTx({ transactionID: "w-1226", dateTime: "20241226", amount: "-3", type: "Withholding Tax" }),
+          makeCashTx({ transactionID: "d-0102", dateTime: "20250102", amount: "10", type: "Dividends" }),
+          makeCashTx({ transactionID: "w-0102", dateTime: "20250102", amount: "-1.50", type: "Withholding Tax" }),
+        ],
+      });
+
+      const y2025 = generateTaxReport(statement, weeklyRates, 2025);
+      expect(y2025.dividends.entries).toHaveLength(1);
+      expect(y2025.dividends.entries[0]!.grossAmountEur.toFixed(2)).toBe("10.00");
+      expect(y2025.dividends.entries[0]!.withholdingTaxEur.toFixed(2)).toBe("1.50");
+
+      const y2024 = generateTaxReport(statement, weeklyRates, 2024);
+      expect(y2024.dividends.entries).toHaveLength(1);
+      expect(y2024.dividends.entries[0]!.withholdingTaxEur.toFixed(2)).toBe("3.00");
+    });
   });
 });

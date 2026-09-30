@@ -92,6 +92,14 @@ describe("D-6 Guide Generator", () => {
     expect(report.guide.some((l) => l.includes("Test User"))).toBe(true);
   });
 
+  it("sends the user to eAFORIX at the Ministry of Commerce, not to the Banco de España", () => {
+    const report = generateD6Report([makePosition()], rateMap, 2025, "Test User", "12345678A");
+    const text = report.guide.join("\n");
+
+    expect(text).toContain("https://oficinavirtual.comercio.gob.es/eAFORIX/");
+    expect(text).not.toContain("bde.es");
+  });
+
   it("should map ISIN prefix to exchange code", () => {
     const positions = [
       makePosition({ isin: "US78462F1030" }),
@@ -239,5 +247,17 @@ describe("D-6 — unvaluable position (missing year-end rate) degrades, does not
     // The unvaluable position is excluded; the valuable USD one remains.
     expect(report.positions.every((p) => p.currency !== "ZZZ")).toBe(true);
     expect(report.positions.some((p) => p.currency === "USD")).toBe(true);
+  });
+});
+
+describe("D-6 — a holding with no market value", () => {
+  it("is counted as unvalued and never written with a 0 € value", () => {
+    const valued = makePosition();
+    const unpriced = makePosition({
+      isin: "US0378331005", symbol: "AAPL", description: "APPLE INC", quantity: "400", markPrice: "0", positionValue: "0",
+    });
+    const report = generateD6Report([valued, unpriced], rateMap, 2025, "Test", "12345678A");
+    expect(report.positions.map((p) => p.isin)).toEqual(["US78462F1030"]);
+    expect(report.unvaluedCount).toBe(1);
   });
 });

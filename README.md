@@ -20,7 +20,7 @@ DeclaRenta es una aplicación web gratuita que lee los informes de tu broker ext
 - Las casillas 0328, 0331, 1633, 1637, 0029, 0027 y 0588 del Modelo 100 con su importe, y una guía de dónde escribir cada una en Renta Web.
 - El fichero del Modelo 720 listo para subir a la AEAT, validado contra la especificación del BOE, y el aviso de si superas los 50.000 EUR.
 - La revisión del Modelo 721 (cripto) y la guía del D-6 a partir de los mismos ficheros.
-- La regla anti-churning aplicada de forma proporcional, la deducción por doble imposición por país y la compensación de pérdidas de cuatro años.
+- La regla anti-churning aplicada de forma proporcional y la deducción por doble imposición por país. La compensación de pérdidas de los cuatro años anteriores solo está en la CLI (`--prior-losses`), que muestra el resultado en la consola.
 - Splits, fusiones, spin-offs y scrip dividends tratados según la LIRPF, para acciones, ETFs, opciones, futuros, forex, bonos, CFDs y cripto.
 - Gráficas, comparativa con años anteriores, exportación a JSON, CSV y PDF, y una traza del motor de divisas para auditar cada cifra.
 - Todo se calcula en tu navegador: sin cuenta, sin analítica y sin subir nada; la única conexión es al BCE para los tipos de cambio.
