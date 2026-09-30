@@ -1123,6 +1123,9 @@ details ul {
 
 /* App content */
 .app-content {
+  /* Auto inline margins stop a grid item from stretching, so without an
+     explicit width it grows to its widest table and overflows a phone. */
+  width: 100%;
   min-width: 0;
   padding: 2rem 2rem;
   max-width: 1100px;
@@ -2755,6 +2758,12 @@ footer a:hover {
     flex-wrap: wrap;
   }
 
+  /* The value lives inside the trigger button, so the trigger must wrap too
+     or the amount is pushed past the right edge. */
+  .casilla-trigger {
+    flex-wrap: wrap;
+  }
+
   .casilla-value {
     width: 100%;
     text-align: right;
@@ -2790,6 +2799,12 @@ footer a:hover {
 
   button {
     width: 100%;
+  }
+
+  /* Casilla cards keep the trigger and copy icon on one row. */
+  .casilla-trigger,
+  .casilla-copy {
+    width: auto;
   }
 
   th.sortable {
