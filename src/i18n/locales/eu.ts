@@ -626,6 +626,10 @@ const eu: TranslationKeys = {
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratioa {{ratio}}, kostuaren {{costPercent}}% spin-off-era, {{date}})",
   "fifo.spinoff_applied.hint": "Kostua proportzionalki banatzen da matrizearen eta enpresa eskindituaren artean.",
+  "fifo.corporate_action_unhandled":
+    "ℹ {{symbol}} ({{isin}}) balioaren {{type}} ekintza korporatiboa ({{date}}): ez da FIFO kalkuluan aplikatzen.",
+  "fifo.corporate_action_unhandled.hint":
+    "Posizioaren akzio kopurua edo ISINa aldatu bazen, berrikusi balio honen ondorengo salmenten kostua.",
   "fifo.sell_without_lots":
     "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":

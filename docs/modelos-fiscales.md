@@ -46,7 +46,7 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
 - **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto) — solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se reintegra al transmitir los valores recomprados. Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
-- **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
+- **Stock splits**: forward y reverse (tipos FS y RS de IBKR); las fracciones de acción conservan su coste y, si el split cambia el ISIN, los lotes pasan al nuevo
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
 - **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%
 - **Validador Modelo 720**: verificación contra la especificación BOE del formato de registro

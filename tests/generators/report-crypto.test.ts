@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { binanceParser } from "../../src/parsers/binance.js";
+import { krakenParser } from "../../src/parsers/kraken.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -224,5 +225,88 @@ describe("Binance plain SPOT trades → FIFO lots end-to-end (the ~€200 acquis
     // 10 USDT × 0.93 = 9.30 EUR as a general gain; not interest, not a disposal.
     expect(report.generalGains.total.toFixed(2)).toBe("9.30");
     expect(report.capitalGains.disposals).toHaveLength(0);
+  });
+});
+
+describe("Trade History crypto↔crypto pairs → permuta end-to-end (Binance and Kraken)", () => {
+  const BINANCE = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+  const KRAKEN = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
+
+  function toStatement(p: FlexStatement): FlexStatement {
+    return {
+      accountId: "", fromDate: "", toDate: "", period: "",
+      trades: p.trades, cashTransactions: p.cashTransactions,
+      corporateActions: [], openPositions: [], securitiesInfo: [],
+    };
+  }
+
+  const rateMap = makeRateMap({
+    "2024-01-15": { EUR: "1" },
+    "2024-06-03": { EUR: "1" },
+    "2024-09-10": { EUR: "1" },
+  });
+  // The user's EUR value for BTC on the swap date (mechanism B, no price oracle).
+  const manualRates = makeRateMap({ "2024-06-03": { BTC: "60000" } });
+
+  it("Binance: paying 1 BTC (cost €20,000) for ETH when BTC is worth €60,000 is a €40,000 BTC gain", () => {
+    const csv = [
+      BINANCE,
+      "2024-01-15 10:00:00,BTCEUR,BUY,20000,1BTC,20000EUR,",
+      "2024-06-03 10:00:00,ETHBTC,BUY,0.05,20ETH,1BTC,",
+    ].join("\n");
+    const report = generateTaxReport(toStatement(binanceParser.parse(csv)), rateMap, 2024, { manualRates });
+
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    const d = report.capitalGains.disposals[0]!;
+    expect(d.symbol).toBe("BTC");
+    expect(d.proceedsEur.toFixed(2)).toBe("60000.00");
+    expect(d.costBasisEur.toFixed(2)).toBe("20000.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("40000.00");
+  });
+
+  it("Binance: BTC received in an ETHBTC SELL has a lot, so its later EUR sale is not 'sin lotes'", () => {
+    const csv = [
+      BINANCE,
+      "2024-01-15 10:00:00,ETHEUR,BUY,2000,10ETH,20000EUR,",
+      "2024-06-03 10:00:00,ETHBTC,SELL,0.05,10ETH,0.5BTC,",
+      "2024-09-10 10:00:00,BTCEUR,SELL,60000,0.5BTC,30000EUR,",
+    ].join("\n");
+    const report = generateTaxReport(toStatement(binanceParser.parse(csv)), rateMap, 2024, { manualRates });
+
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    const btc = report.capitalGains.disposals.find((d) => d.symbol === "BTC")!;
+    // Cost = the EUR value of the 10 ETH given up for it on the swap date (€30,000).
+    expect(btc.costBasisEur.toFixed(2)).toBe("30000.00");
+    expect(btc.gainLossEur.toFixed(2)).toBe("0.00");
+    // ETH: €30,000 received value − €20,000 cost.
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("10000.00");
+  });
+
+  it("Kraken: paying 1 BTC for ETH (XETHXXBT) is the same €40,000 BTC gain", () => {
+    const csv = [
+      KRAKEN,
+      '"K1","O1","XXBTZEUR","2024-01-15 10:00:00","buy","limit","20000","20000","0","1","0","",""',
+      '"K2","O2","XETHXXBT","2024-06-03 10:00:00","buy","limit","0.05","1","0","20","0","",""',
+    ].join("\n");
+    const report = generateTaxReport(toStatement(krakenParser.parse(csv)), rateMap, 2024, { manualRates });
+
+    expect(report.capitalGains.disposals).toHaveLength(1);
+    expect(report.capitalGains.disposals[0]!.symbol).toBe("BTC");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("40000.00");
+  });
+
+  it("Kraken: BTC received in an XETHXXBT sell has a lot, so its later EUR sale is not 'sin lotes'", () => {
+    const csv = [
+      KRAKEN,
+      '"K1","O1","XETHZEUR","2024-01-15 10:00:00","buy","limit","2000","20000","0","10","0","",""',
+      '"K2","O2","XETHXXBT","2024-06-03 10:00:00","sell","limit","0.05","0.5","0","10","0","",""',
+      '"K3","O3","XXBTZEUR","2024-09-10 10:00:00","sell","limit","60000","30000","0","0.5","0","",""',
+    ].join("\n");
+    const report = generateTaxReport(toStatement(krakenParser.parse(csv)), rateMap, 2024, { manualRates });
+
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    const btc = report.capitalGains.disposals.find((d) => d.symbol === "BTC")!;
+    expect(btc.costBasisEur.toFixed(2)).toBe("30000.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("10000.00");
   });
 });
