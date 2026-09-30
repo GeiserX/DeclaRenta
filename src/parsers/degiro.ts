@@ -26,6 +26,7 @@ import {
   normalizeFractionalCurrency,
   stripBom,
 } from "./csv-utils.js";
+import { formatDateDmy } from "../engine/dates.js";
 
 // ---------------------------------------------------------------------------
 // Header detection patterns (multi-language)
@@ -70,6 +71,12 @@ const TRANSACTION_TAX_PATTERNS = [
   /impuesto sobre (las )?transacciones financieras/i,
   /taxe sur les transactions financi[eè]res/i,
 ];
+
+/**
+ * Relative gap allowed between the two legs of a corporate-action pair. Degiro
+ * books both legs at the same value; the margin only absorbs price rounding.
+ */
+const PAIR_VALUE_TOLERANCE = new Decimal("0.01");
 
 // ---------------------------------------------------------------------------
 // Transactions CSV parser
@@ -216,6 +223,12 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
   // non-trade lines (deposits, cash sweeps: no qty, no price) are NOT counted,
   // nor are documented zero-price rights assignments.
   let tradeLikeRowsSkipped = 0;
+  // Rows with no order ID and no costs. Degiro books an ISIN change, a split
+  // or a share exchange as such a same-day sale of the old ISIN plus a buy of
+  // the new one at the same value. They stay trades (a canje can be taxable
+  // under art. 37.1.e LIRPF) but the user is warned, since a neutral one keeps
+  // the old cost and acquisition date instead.
+  const orderlessRows: { trade: Trade; value: Decimal }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -309,7 +322,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       }
     }
 
-    trades.push({
+    const trade: Trade = {
       tradeID: orderId,
       accountId: "",
       symbol: product,
@@ -333,7 +346,16 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       commission: commissionValue,
       taxes: "0",
       multiplier: "1",
-    });
+    };
+    trades.push(trade);
+
+    if (!orderId && commDec.isZero()) {
+      // Compare legs by EUR value (the two ISINs may quote in different units);
+      // fall back to the local value when the EUR column is missing or empty.
+      const eurDec = toFiniteDecimal(eurValue || "0").abs();
+      const pairValue = eurDec.isZero() ? valueDec.abs() : eurDec;
+      if (!pairValue.isZero()) orderlessRows.push({ trade, value: pairValue });
+    }
   }
 
   const parserMessages: TaxMessage[] = [];
@@ -344,6 +366,33 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       message: `Se omitieron ${tradeLikeRowsSkipped} filas sin ISIN/sin importe.`,
       hint: "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
       context: { count: String(tradeLikeRowsSkipped) },
+    });
+  }
+
+  const pairedBuys = new Set<Trade>();
+  for (const out of orderlessRows) {
+    if (out.trade.buySell !== "SELL") continue;
+    const inc = orderlessRows.find(
+      (c) =>
+        c.trade.buySell === "BUY" &&
+        !pairedBuys.has(c.trade) &&
+        c.trade.tradeDate === out.trade.tradeDate &&
+        c.trade.isin !== out.trade.isin &&
+        c.value.minus(out.value).abs().lessThanOrEqualTo(out.value.times(PAIR_VALUE_TOLERANCE)),
+    );
+    if (!inc) continue;
+    pairedBuys.add(inc.trade);
+    const date = formatDateDmy(out.trade.tradeDate);
+    const oldProduct = out.trade.description;
+    const oldIsin = out.trade.isin;
+    const newProduct = inc.trade.description;
+    const newIsin = inc.trade.isin;
+    parserMessages.push({
+      id: "degiro.corporate_action_pair",
+      severity: "warning",
+      message: `Posible operación societaria el ${date}: ${oldProduct} (${oldIsin}) → ${newProduct} (${newIsin}). Degiro la anota como una venta y una compra.`,
+      hint: "Degiro anota los cambios de ISIN, los splits y los canjes de acciones como una venta del valor antiguo y una compra del nuevo, sin número de orden ni costes. DeclaRenta los calcula así: declara una ganancia o pérdida ese día, y las acciones nuevas toman ese precio y esa fecha como coste. Revisa la comunicación de Degiro o del emisor. Si fue un simple cambio de ISIN, un split o un canje fiscalmente neutro (régimen especial de la Ley del Impuesto sobre Sociedades), no hubo venta: las acciones nuevas conservan el coste y la fecha de compra de las antiguas, así que corrige esa operación en tu declaración. Si fue un canje que tributa (art. 37.1.e LIRPF), el cálculo es correcto.",
+      context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
 
