@@ -68,8 +68,6 @@ const ca: TranslationKeys = {
   "table.amount_eur": "Import (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmissió (total transmissions)",
-  "casilla.acquisition_value": "Valor d'adquisició (total transmissions)",
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
   "casilla.acquisition_sale_rate_note":
@@ -160,6 +158,9 @@ const ca: TranslationKeys = {
   "compare.saved_reports": "Informes desats",
   "compare.clear_history": "Esborrar historial",
   "compare.clear_confirm": "Esborrar tots els informes desats?",
+  "compare.transmission_value": "Valor de transmissió (transmissions, sense divises)",
+  "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
+  "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
   "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
   "error.file_too_large":

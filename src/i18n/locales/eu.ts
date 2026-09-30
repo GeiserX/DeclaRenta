@@ -68,8 +68,6 @@ const eu: TranslationKeys = {
   "table.amount_eur": "Zenbatekoa (EUR)",
   "table.currency": "Moneta",
 
-  "casilla.transmission_value": "Transmisio-balioa (transmisio guztiak)",
-  "casilla.acquisition_value": "Eskuratze-balioa (transmisio guztiak)",
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
   "casilla.acquisition_sale_rate_note":
@@ -161,6 +159,9 @@ const eu: TranslationKeys = {
   "compare.saved_reports": "Gordetako txostenak",
   "compare.clear_history": "Historiala ezabatu",
   "compare.clear_confirm": "Gordetako txosten guztiak ezabatu?",
+  "compare.transmission_value": "Transmisio-balioa (transmisioak, dibisarik gabe)",
+  "compare.acquisition_value": "Eskuratze-balioa (transmisioak, dibisarik gabe)",
+  "compare.net_gain_loss": "Irabazi/Galera garbia (transmisioak, dibisarik gabe)",
 
   "error.no_broker_detected": 'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.',
   "error.file_too_large":

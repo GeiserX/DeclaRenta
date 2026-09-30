@@ -71,8 +71,6 @@ const es = {
   "table.currency": "Divisa",
 
   // Casillas
-  "casilla.transmission_value": "Valor de transmisión (total transmisiones)",
-  "casilla.acquisition_value": "Valor de adquisición (total transmisiones)",
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (acciones negociadas)",
   "casilla.acquisition_sale_rate_note":
@@ -168,6 +166,9 @@ const es = {
   "compare.saved_reports": "Informes guardados",
   "compare.clear_history": "Borrar historial",
   "compare.clear_confirm": "¿Borrar todos los informes guardados?",
+  "compare.transmission_value": "Valor de transmisión (transmisiones, sin divisas)",
+  "compare.acquisition_value": "Valor de adquisición (transmisiones, sin divisas)",
+  "compare.net_gain_loss": "Ganancia/Pérdida neta (transmisiones, sin divisas)",
 
   // Errors
   "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
