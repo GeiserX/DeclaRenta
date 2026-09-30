@@ -1109,6 +1109,20 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
     });
   });
 
+  it("reads the account of a C record written by versions before 0.59.0 (132-143, with 156-189 blank)", () => {
+    const account = { accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" };
+    const current = generateModelo720([], rateMap, baseConfig, undefined, [account]).split("\n");
+    // Up to 0.58.x the C record carried clave "C" alone, 131 = 5, the account id
+    // in 132-143 and 144-189 blank.
+    const legacy = current[1]!.slice(0, 101) + "C " + current[1]!.slice(103, 130) + "5" + "U1234567".padEnd(12) + " ".repeat(46) + current[1]!.slice(189);
+    expect(legacy).toHaveLength(500);
+    const previous = readPrevious720([current[0], legacy].join("\n"));
+    expect(previous.accounts).toEqual(["U1234567"]);
+
+    const thisYear = generateModelo720([], rateMap, { ...baseConfig, previousYearAccounts: previous.accounts }, undefined, [account]).split("\n")[1]!;
+    expect(boeField(thisYear, d.origen)).toBe("M");
+  });
+
   describe("sales since last year (origin C, from --previous-720)", () => {
     const cancelledRecords = (records: string[]) => records.filter((l) => l[0] === "2" && boeField(l, d.origen) === "C");
 

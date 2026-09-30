@@ -252,7 +252,8 @@ export function readPrevious720(content: string): { securities: Previous720Secur
       .filter((security) => security.isin.length > 0),
     accounts: details
       .filter((line) => line[101] === "C")
-      .map((line) => line.slice(155, 189).trim())
+      // Versions before 0.59.0 wrote the account in 132-143 and left 156-189 blank.
+      .map((line) => line.slice(155, 189).trim() || line.slice(131, 143).trim())
       .filter((account) => account.length > 0),
   };
 }
