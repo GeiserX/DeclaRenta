@@ -37,6 +37,11 @@ let cachedYearEndLots: Map<string, Lot[]> | undefined;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
+  cachedYearEndLots = undefined;
   const container = document.getElementById("m720-content");
   if (!container) return;
   container.innerHTML = `

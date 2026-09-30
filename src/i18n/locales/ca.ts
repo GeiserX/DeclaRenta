@@ -162,7 +162,10 @@ const ca: TranslationKeys = {
   "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
   "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
-  "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
+  "error.no_broker_detected":
+    'No s\'ha pogut detectar el broker de "{{filename}}". Si és un informe de broker, selecciona el broker manualment; si no ho és, treu-lo de la llista.',
+  "error.empty_file":
+    'El fitxer "{{filename}}" és buit. Treu-lo de la llista o torna\'l a exportar des del teu broker.',
   "error.file_too_large":
     'El fitxer "{{filename}}" supera el límit de {{limit}} MB i s\'ha descartat. Exporta un període més curt o divideix el fitxer.',
   "error.prefix": "Error: ",

@@ -37,6 +37,10 @@ let cachedRateMap: EcbRateMap | null = null;
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("d6-content");
   if (!container) return;
   container.innerHTML = `

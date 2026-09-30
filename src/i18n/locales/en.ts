@@ -160,7 +160,10 @@ const en: TranslationKeys = {
   "compare.acquisition_value": "Acquisition value (disposals, excl. FX)",
   "compare.net_gain_loss": "Net gain/loss (disposals, excl. FX)",
 
-  "error.no_broker_detected": 'Could not detect broker for "{{filename}}". Select the broker manually.',
+  "error.no_broker_detected":
+    'Could not detect the broker for "{{filename}}". If it is a broker report, select the broker manually; if not, remove it from the list.',
+  "error.empty_file":
+    'The file "{{filename}}" is empty. Remove it from the list or export it again from your broker.',
   "error.file_too_large":
     'File "{{filename}}" exceeds the {{limit}} MB limit and was discarded. Export a shorter period or split the file.',
   "error.prefix": "Error: ",
