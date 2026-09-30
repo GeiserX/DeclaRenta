@@ -246,7 +246,7 @@ When adding a new section (like 721), follow this checklist:
 - `src/web/public/logo.png` = the realistic bull app logo (1.9MB, 1024×1024). Used for splash screen and top-bar branding.
 - `src/web/public/favicon.svg` / `favicon-16.png` / `favicon-32.png` = small icon for browser tabs only.
 - **NEVER** use `favicon.svg` as the `src` for `.splash-logo` or `.brand-logo` in index.html. Those must reference `logo.png`.
-- `docs/images/logo.png` and `src/web/assets/logo.png` are copies of the same logo for docs/README.
+- `src/web/assets/logo.png` is a copy of the same logo; `docs/images/social.svg` references it. The docs header uses `docs/images/logo.svg` (the favicon mark without its plate).
 
 ### ECB Rate Handling
 - ECB publishes rates as "1 EUR = X FCY"
