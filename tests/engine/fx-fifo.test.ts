@@ -214,31 +214,117 @@ describe("FxFifoEngine", () => {
       expect(events[0]!.currency).toBe("GBP");
     });
 
-    it("non-EUR base pair where currency=base: BUY = acquiring (uses quantity)", () => {
+    // A non-EUR pair (GBP.USD, USD.JPY) swaps one foreign currency for another:
+    // BOTH legs are divisa, so the currency given up is disposed and the one
+    // received is acquired, each at its own ECB rate. Rates for all three sides.
+    const crossRateMap: EcbRateMap = new Map([
+      ["2025-03-15", new Map([
+        ["USD", new Decimal("0.92")],
+        ["GBP", new Decimal("1.17")],
+        ["JPY", new Decimal("0.0062")],
+      ])],
+    ]);
+
+    it("non-EUR base pair where currency=base: BUY = acquiring base (quantity) + disposing quote (tradeMoney)", () => {
       // USD.JPY with currency=USD — currency matches base, so quantity (in USD) is the right field
       const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "BUY", quantity: "5000", tradeMoney: "625000", settlementDate: "20250315" })];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
+      const events = FxFifoEngine.extractFxEvents(trades, crossRateMap);
 
-      expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("5000");
-    });
-
-    it("non-EUR base pair where currency=base: SELL = disposing (uses quantity)", () => {
-      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "SELL", quantity: "5000", tradeMoney: "625000", settlementDate: "20250315" })];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-
-      expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("-5000");
-    });
-
-    it("cross-rate pair where currency=quote: GBP.USD with currency=USD (uses tradeMoney, inverted)", () => {
-      // GBP.USD: quantity=GBP (base), tradeMoney=USD (quote=currency). SELL = acquiring USD.
-      const trades = [makeTrade({ symbol: "GBP.USD", description: "GBP.USD", currency: "USD", buySell: "SELL", quantity: "-3000", tradeMoney: "-3900", settlementDate: "20250315" })];
-      const events = FxFifoEngine.extractFxEvents(trades, rateMap);
-
-      expect(events).toHaveLength(1);
-      expect(events[0]!.quantity.toString()).toBe("3900");
+      expect(events).toHaveLength(2);
       expect(events[0]!.currency).toBe("USD");
+      expect(events[0]!.quantity.toString()).toBe("5000");
+      expect(events[1]!.currency).toBe("JPY");
+      expect(events[1]!.quantity.toString()).toBe("-625000");
+      expect(events[1]!.ecbRate.toString()).toBe("0.0062");
+    });
+
+    it("non-EUR base pair where currency=base: SELL = disposing base (quantity) + acquiring quote (tradeMoney)", () => {
+      const trades = [makeTrade({ symbol: "USD.JPY", description: "USD.JPY", currency: "USD", buySell: "SELL", quantity: "5000", tradeMoney: "625000", settlementDate: "20250315" })];
+      const events = FxFifoEngine.extractFxEvents(trades, crossRateMap);
+
+      expect(events).toHaveLength(2);
+      expect(events[0]!.currency).toBe("USD");
+      expect(events[0]!.quantity.toString()).toBe("-5000");
+      expect(events[1]!.currency).toBe("JPY");
+      expect(events[1]!.quantity.toString()).toBe("625000");
+    });
+
+    it("cross-rate pair where currency=quote: GBP.USD SELL acquires USD (tradeMoney) AND disposes GBP (quantity)", () => {
+      // GBP.USD: quantity=GBP (base), tradeMoney=USD (quote=currency). SELL = acquiring USD, giving up GBP.
+      const trades = [makeTrade({ symbol: "GBP.USD", description: "GBP.USD", currency: "USD", buySell: "SELL", quantity: "-3000", tradeMoney: "-3900", settlementDate: "20250315" })];
+      const events = FxFifoEngine.extractFxEvents(trades, crossRateMap);
+
+      expect(events).toHaveLength(2);
+      expect(events[0]!.currency).toBe("USD");
+      expect(events[0]!.quantity.toString()).toBe("3900");
+      expect(events[0]!.ecbRate.toString()).toBe("0.92");
+      expect(events[1]!.currency).toBe("GBP");
+      expect(events[1]!.quantity.toString()).toBe("-3000");
+      expect(events[1]!.ecbRate.toString()).toBe("1.17");
+      expect(events[1]!.trigger).toBe("conversion");
+    });
+
+    it("cross-rate pair: the commission is booked on the trade-currency leg only", () => {
+      const trades = [makeTrade({ symbol: "GBP.USD", description: "GBP.USD", currency: "USD", commissionCurrency: "USD", commission: "-2", buySell: "BUY", quantity: "1000", tradeMoney: "1270", settlementDate: "20250315" })];
+      const events = FxFifoEngine.extractFxEvents(trades, crossRateMap);
+
+      expect(events).toHaveLength(2);
+      // BUY GBP.USD = give up USD, receive GBP
+      expect(events[0]!.currency).toBe("USD");
+      expect(events[0]!.quantity.toString()).toBe("-1270");
+      expect(events[0]!.commissionEur!.toFixed(2)).toBe("1.84");
+      expect(events[1]!.currency).toBe("GBP");
+      expect(events[1]!.quantity.toString()).toBe("1000");
+      expect(events[1]!.commissionEur).toBeUndefined();
+    });
+
+    it("cross-rate pair: GBP spent on USD leaves the GBP pool, and later GBP disposals consume the right lots", () => {
+      const gbpRates: EcbRateMap = new Map([
+        ["2025-01-10", new Map([["GBP", new Decimal("1.20")]])],
+        ["2025-03-15", new Map([["GBP", new Decimal("1.17")], ["USD", new Decimal("0.92")]])],
+        ["2025-06-15", new Map([["GBP", new Decimal("1.18")]])],
+        ["2025-09-01", new Map([["GBP", new Decimal("1.10")]])],
+      ]);
+      const trades = [
+        // Buy 1000 GBP with EUR
+        makeTrade({ tradeID: "1", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-1176", tradeMoney: "-1000", settlementDate: "20250110" }),
+        // Swap those 1000 GBP for 1270 USD
+        makeTrade({ tradeID: "2", symbol: "GBP.USD", description: "GBP.USD", currency: "USD", commission: "0", buySell: "SELL", quantity: "-1000", tradeMoney: "-1270", settlementDate: "20250315" }),
+        // Buy 500 GBP with EUR
+        makeTrade({ tradeID: "3", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-590", tradeMoney: "-500", settlementDate: "20250615" }),
+        // Convert 500 GBP back to EUR
+        makeTrade({ tradeID: "4", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "BUY", quantity: "550", tradeMoney: "500", settlementDate: "20250901" }),
+      ];
+
+      const engine = new FxFifoEngine();
+      const disposals = engine.processEvents(FxFifoEngine.extractFxEvents(trades, gbpRates));
+      const gbp = disposals.filter((d) => d.currency === "GBP");
+
+      // The GBP→USD swap disposes of the 1000 GBP bought in January.
+      expect(gbp).toHaveLength(2);
+      expect(gbp[0]!.disposeDate).toBe("2025-03-15");
+      expect(gbp[0]!.acquireDate).toBe("2025-01-10");
+      expect(gbp[0]!.quantity.toString()).toBe("1000");
+      expect(gbp[0]!.costBasisEur.toFixed(2)).toBe("1200.00");
+      expect(gbp[0]!.proceedsEur.toFixed(2)).toBe("1170.00");
+      // The September conversion consumes the June lot, the only GBP still held.
+      expect(gbp[1]!.disposeDate).toBe("2025-09-01");
+      expect(gbp[1]!.acquireDate).toBe("2025-06-15");
+      expect(gbp[1]!.gainLossEur.toFixed(2)).toBe("-40.00");
+      // Nothing left in GBP; the USD received stays as a lot.
+      expect(engine.getRemainingLots().get("GBP") ?? []).toHaveLength(0);
+      expect(engine.getRemainingLots().get("USD")![0]!.quantity.toString()).toBe("1270");
+      expect(engine.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+    });
+
+    it("EUR pairs still emit a single leg (EUR needs no pool)", () => {
+      const trades = [
+        makeTrade({ buySell: "SELL", quantity: "-998", tradeMoney: "-1080.24" }),
+        makeTrade({ symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commissionCurrency: "GBP", buySell: "BUY", quantity: "1000", tradeMoney: "850", settlementDate: "20250315" }),
+      ];
+      const events = FxFifoEngine.extractFxEvents(trades, crossRateMap);
+
+      expect(events.map((e) => `${e.currency}:${e.quantity.toString()}`)).toEqual(["USD:1080.24", "GBP:-850"]);
     });
 
     it("DEFAULT processes FXCONV/CASH-RECEIPTS trades; OPT-OUT skips them (issue #239)", () => {
