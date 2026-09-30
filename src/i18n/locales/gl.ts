@@ -45,6 +45,8 @@ const gl: TranslationKeys = {
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
+  "results.open_year":
+    "Exercicio {{year}} en curso: cifras provisionais. O ano aínda non rematou e os importes cambiarán con cada operación ata o 31 de decembro. Se estás a preparar a declaración dun ano xa pechado, escólleo no despregable superior.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",

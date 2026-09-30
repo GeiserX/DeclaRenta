@@ -45,6 +45,8 @@ const ca: TranslationKeys = {
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch":
     "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
+  "results.open_year":
+    "Exercici {{year}} en curs: xifres provisionals. L'any encara no ha acabat i els imports canviaran amb cada operació fins al 31 de desembre. Si prepares la declaració d'un any ja tancat, tria'l al desplegable superior.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbol",

@@ -30,6 +30,7 @@ import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile } from "./profile.js";
+import { pickDefaultYear, renderOpenYearBanner } from "./year-default.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
@@ -569,12 +570,12 @@ async function parseFiles(): Promise<void> {
     for (const ct of merged.cashTransactions) addYear(ct.dateTime);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
     if (!activeYear) {
-      // detectedYears[0] is undefined when no valid year was found (all dates
-      // corrupt / empty file) — fall back to the current calendar year so we
-      // never persist NaN as the active year.
-      activeYear = detectedYears[0] ?? new Date().getFullYear();
-      // Sync profile so 720/721/D-6 use the same year
+      // Saved profile year if the data covers it, else the last closed year,
+      // else the newest year (see year-default.ts). Never NaN: with no valid
+      // year detected it keeps the saved year.
       const profile = getProfile();
+      activeYear = pickDefaultYear(detectedYears, profile.year, new Date());
+      // Sync profile so 720/721/D-6 use the same year
       profile.year = activeYear;
       saveProfile(profile);
     }
@@ -920,6 +921,8 @@ function renderResults(report: TaxSummary) {
         <select id="results-year-select" class="year-select">${yearOptions}</select>
       </span>
     </div>`;
+
+    hdrHtml += renderOpenYearBanner(year, new Date());
 
     if (!hasData && detectedYears.length > 0 && !detectedYears.includes(year)) {
       hdrHtml += `<div class="banner banner-warning">

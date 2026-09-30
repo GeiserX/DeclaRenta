@@ -46,6 +46,8 @@ const es = {
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch":
     "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
+  "results.open_year":
+    "Ejercicio {{year}} en curso: cifras provisionales. El año aún no ha terminado y los importes cambiarán con cada operación hasta el 31 de diciembre. Si estás preparando la declaración de un año ya cerrado, elígelo en el desplegable superior.",
 
   // Table headers
   "table.isin": "ISIN",

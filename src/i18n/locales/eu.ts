@@ -45,6 +45,8 @@ const eu: TranslationKeys = {
   "results.dividends_count": "{{count}} dibidendu",
   "results.year_mismatch":
     "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
+  "results.open_year":
+    "{{year}} ekitaldia martxan dago: zifrak behin-behinekoak dira. Urtea ez da oraindik amaitu, eta zenbatekoak aldatu egingo dira eragiketa bakoitzarekin abenduaren 31ra arte. Itxitako urte baten aitorpena prestatzen ari bazara, aukeratu goiko zerrendan.",
 
   "table.isin": "ISIN",
   "table.symbol": "Sinboloa",

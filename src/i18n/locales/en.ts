@@ -44,6 +44,8 @@ const en: TranslationKeys = {
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
+  "results.open_year":
+    "Tax year {{year}} is still in progress: these figures are provisional. The year has not ended yet, so the amounts will change with every transaction until 31 December. If you are preparing the return for a closed year, pick it in the dropdown above.",
 
   "table.isin": "ISIN",
   "table.symbol": "Symbol",
