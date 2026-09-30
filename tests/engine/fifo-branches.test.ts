@@ -232,8 +232,8 @@ describe("FifoEngine - lotKey with conid", () => {
   });
 });
 
-describe("FifoEngine - split with fractional share removal", () => {
-  it("should remove sub-share lots after reverse split", () => {
+describe("FifoEngine - split with fractional shares", () => {
+  it("should keep a sub-share lot and its cost after reverse split", () => {
     const rateMap = makeRateMap({ "2025-03-15": { EUR: "1" } });
     const engine = new FifoEngine();
 
@@ -260,10 +260,12 @@ describe("FifoEngine - split with fractional share removal", () => {
     ];
 
     engine.processTrades(trades, rateMap, corporateActions);
-    // After 1:4 reverse split, 3 shares * 0.25 = 0.75 — less than 1, should be removed
+    // After 1:4 reverse split, 3 shares * 0.25 = 0.75 — the fraction keeps the full cost (3 × 100 + 1 commission)
     const lots = engine.getRemainingLots();
     const lotArr = lots.get("US0378331005") ?? [];
-    expect(lotArr).toHaveLength(0);
+    expect(lotArr).toHaveLength(1);
+    expect(lotArr[0]!.quantity.toString()).toBe("0.75");
+    expect(lotArr[0]!.costInFcy.toFixed(2)).toBe("301.00");
   });
 });
 

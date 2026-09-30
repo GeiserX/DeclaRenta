@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
+import { readFileSync } from "fs";
 import { FifoEngine } from "../../src/engine/fifo.js";
+import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import type { Trade, OptionExercise } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -463,6 +465,155 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
       expect(d.expiry).toBe("20250321");
       expect(d.underlyingSymbol).toBe("AAPL");
       expect(d.underlyingIsin).toBe("US0378331005");
+    });
+  });
+
+  describe("Real IBKR OptionEAE shape (underlying ISIN from underlyingSecurityID)", () => {
+    it("call exercise on a stock not held before: the later ISIN-keyed sale finds the exercised shares", () => {
+      const xml = readFileSync(new URL("../fixtures/ibkr-options.xml", import.meta.url), "utf-8");
+      const hut = parseIbkrFlexXml(xml).optionExercises!.find((e) => e.underlyingSymbol === "HUT")!;
+      const usd = new Map([["USD", new Decimal("0.96")]]);
+      const rates: EcbRateMap = new Map([
+        ["2024-12-10", usd],
+        ["2025-01-17", usd],
+        ["2025-02-10", usd],
+      ]);
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(
+        [
+          makeOptionTrade({
+            conid: hut.conid,
+            symbol: hut.symbol,
+            tradeDate: "20241210",
+            quantity: "6",
+            tradePrice: "3",
+            tradeMoney: "1800",
+            commission: "0",
+          }),
+          makeStockTrade({
+            symbol: "HUT",
+            description: "HUT 8 CORP",
+            isin: "US44812J1043",
+            tradeDate: "20250210",
+            quantity: "-600",
+            tradePrice: "27",
+            tradeMoney: "-16200",
+            buySell: "SELL",
+            openCloseIndicator: "C",
+            commission: "0",
+          }),
+        ],
+        rates,
+        undefined,
+        [hut],
+      );
+
+      expect(engine.messages.map((m) => m.id)).not.toContain("fifo.sell_without_lots");
+      expect(disposals).toHaveLength(1);
+      // 600 × 20 strike + 1800 premium (DGT V0137-23)
+      expect(disposals[0]!.costBasisFcy.toFixed(2)).toBe("13800.00");
+      // (16200 − 13800) × 0.96
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("2304.00");
+      expect(engine.getRemainingLots().get("STK:HUT")).toBeUndefined();
+    });
+  });
+
+  describe("FOP/FSFOP expirations (MEFF, empty ISIN)", () => {
+    function fopTrade(assetCategory: "FOP" | "FSFOP", overrides: Partial<Trade> = {}): Trade {
+      return makeOptionTrade({
+        conid: "777",
+        symbol: "MEFF IBEX C 12000",
+        description: "IBEX 21MAR25 12000 C",
+        isin: "",
+        assetCategory,
+        currency: "EUR",
+        tradeDate: "20250110",
+        quantity: "2",
+        tradePrice: "50",
+        tradeMoney: "100",
+        commission: "0",
+        multiplier: "1",
+        underlyingSymbol: "IBEX",
+        underlyingIsin: undefined,
+        ...overrides,
+      });
+    }
+
+    function fopExpiration(assetCategory: "FOP" | "FSFOP"): OptionExercise {
+      return makeExercise({
+        conid: "777",
+        symbol: "MEFF IBEX C 12000",
+        description: "IBEX 21MAR25 12000 C",
+        isin: "",
+        assetCategory,
+        currency: "EUR",
+        action: "Expiration",
+        quantity: "-2",
+        multiplier: "1",
+        underlyingSymbol: "IBEX",
+        underlyingIsin: "",
+      });
+    }
+
+    it.each(["FOP", "FSFOP"] as const)("%s buyer: expiration books the full premium loss", (cat) => {
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(
+        [
+          fopTrade(cat),
+          // The Ep BookTrade is skipped because the OptionEAE event exists
+          fopTrade(cat, {
+            tradeID: "2",
+            tradeDate: "20250321",
+            quantity: "-2",
+            tradePrice: "0",
+            tradeMoney: "0",
+            buySell: "SELL",
+            openCloseIndicator: "C",
+            notes: "Ep",
+          }),
+        ],
+        rateMap,
+        undefined,
+        [fopExpiration(cat)],
+      );
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.optionScenario).toBe("expiration");
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("-100.00");
+      const ids = engine.messages.map((m) => m.id);
+      expect(ids).not.toContain("fifo.option_expiry_no_lots");
+      expect(ids).not.toContain("fifo.unknown_category");
+      expect([...engine.getRemainingLots().values()].flat()).toEqual([]);
+    });
+
+    it("FOP writer: expiration books the full premium gain", () => {
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(
+        [
+          fopTrade("FOP", { quantity: "-2", tradeMoney: "-100", buySell: "SELL", openCloseIndicator: "O" }),
+          fopTrade("FOP", {
+            tradeID: "2",
+            tradeDate: "20250321",
+            quantity: "2",
+            tradePrice: "0",
+            tradeMoney: "0",
+            buySell: "BUY",
+            openCloseIndicator: "C",
+            notes: "Ep",
+          }),
+        ],
+        rateMap,
+        undefined,
+        [fopExpiration("FOP")],
+      );
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.optionScenario).toBe("expiration");
+      expect(disposals[0]!.isShort).toBe(true);
+      expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("100.00");
+      expect(engine.messages.map((m) => m.id)).not.toContain("fifo.option_expiry_no_lots");
+      expect([...engine.getRemainingShortLots().values()].flat()).toEqual([]);
     });
   });
 });
