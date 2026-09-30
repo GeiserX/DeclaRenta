@@ -346,6 +346,8 @@ const gl: TranslationKeys = {
   "m720.successive_years_note":
     "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
+  "m720.generate_below_threshold":
+    "Fáltanche {{amount}} € para superar os 50.000 € nalgunha categoría. Por debaixo dese importe non estás obrigado a presentar o Modelo 720 e non hai ficheiro que xerar.",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",
   "m720.filing_title": "Como presentalo?",

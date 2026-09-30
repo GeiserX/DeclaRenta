@@ -14,6 +14,7 @@ import {
   generateModelo720,
   modelo720DeclarationId,
   modelo720PositionCountry,
+  modelo720ThresholdShortfall,
 } from "../generators/modelo720.js";
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
@@ -211,9 +212,16 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     }).join("")}</ul></div>`;
   }
 
-  // Generate button
-  if (exceeds || positions.length > 0) {
-    html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
+  // Generate button. Below 50,000 € in every category there is no file to
+  // generate: the button stays visible but disabled, and says how far off it is.
+  if (exceeds || positions.length > 0 || cashBalances.length > 0) {
+    const shortfall = modelo720ThresholdShortfall(thresholds);
+    const reason = shortfall ? t("m720.generate_below_threshold", { amount: fmtEur(shortfall) }) : "";
+    const disabled = positionsDate.blocked || shortfall !== null;
+    html += `<button id="m720-generate-btn"${disabled ? " disabled" : ""}${reason
+      ? ` title="${esc(reason)}" aria-describedby="m720-generate-reason"`
+      : ""}>${t("m720.generate_btn")}</button>`;
+    if (reason) html += `<span id="m720-generate-reason" class="sr-only">${esc(reason)}</span>`;
   }
 
   // Filing guide
@@ -314,7 +322,9 @@ function generate720File(): void {
   }
 
   const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances);
-  if (!result) return; // Below threshold
+  // Below the threshold the button is disabled; an empty file here means every
+  // record had to be left out, which the omissions banner already explains.
+  if (!result) return;
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
   const url = URL.createObjectURL(blob);

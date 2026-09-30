@@ -143,6 +143,18 @@ export function checkModelo720Thresholds(
 }
 
 /**
+ * How many euros the largest category still needs to pass 50,000 €, or null
+ * when some category already passes it. The threshold is "more than", so a
+ * category at exactly 50,000 € is still 0,01 € short.
+ */
+export function modelo720ThresholdShortfall(thresholds: Modelo720ThresholdResult): Decimal | null {
+  const { values, accounts, realEstate } = thresholds;
+  if (values.exceeds || accounts.exceeds || realEstate.exceeds) return null;
+  const largest = Decimal.max(values.total, accounts.total, realEstate.total);
+  return Decimal.max(THRESHOLD.minus(largest), new Decimal("0.01"));
+}
+
+/**
  * Country written in positions 129-130 of a security record, or null when it is
  * unknown. Clave V: where the securities are deposited (the broker's country).
  * Clave I (foreign funds): where the fund is situated, which the ISIN's country

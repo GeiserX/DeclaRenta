@@ -6,6 +6,7 @@ import {
   findModelo720Omissions,
   findUndatedExtinctions,
   modelo720DeclarationId,
+  modelo720ThresholdShortfall,
   readPrevious720,
   type Previous720Security,
 } from "../../src/generators/modelo720.js";
@@ -1416,5 +1417,35 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     ]);
     expect(records).toEqual([["        ", "        ", "00000000000000"]]);
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
+  });
+});
+
+describe("modelo720ThresholdShortfall", () => {
+  const status = (values: string, accounts: string) => ({
+    values: { exceeds: new Decimal(values).greaterThan(50000), total: new Decimal(values) },
+    accounts: { exceeds: new Decimal(accounts).greaterThan(50000), total: new Decimal(accounts) },
+    realEstate: { exceeds: false, total: new Decimal(0) },
+  });
+
+  it("is null once any category passes 50,000 EUR", () => {
+    expect(modelo720ThresholdShortfall(status("60000", "0"))).toBeNull();
+    expect(modelo720ThresholdShortfall(status("0", "50000.01"))).toBeNull();
+  });
+
+  it("is what the largest category still needs, not the sum", () => {
+    expect(modelo720ThresholdShortfall(status("30000", "45000"))!.toString()).toBe("5000");
+    expect(modelo720ThresholdShortfall(status("0", "0"))!.toString()).toBe("50000");
+  });
+
+  it("is one cent at exactly 50,000 EUR, since the rule is more than 50,000", () => {
+    expect(modelo720ThresholdShortfall(status("50000", "0"))!.toString()).toBe("0.01");
+    expect(modelo720ThresholdShortfall(status("49999.999", "0"))!.toString()).toBe("0.01");
+  });
+
+  it("agrees with checkModelo720Thresholds on real positions", () => {
+    const below = checkModelo720Thresholds([makePosition({ currency: "EUR", positionValue: "30000" })], rateMap, 2025);
+    expect(modelo720ThresholdShortfall(below)!.toString()).toBe("20000");
+    const above = checkModelo720Thresholds([makePosition({ currency: "EUR", positionValue: "60000" })], rateMap, 2025);
+    expect(modelo720ThresholdShortfall(above)).toBeNull();
   });
 });

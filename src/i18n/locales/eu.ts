@@ -346,6 +346,8 @@ const eu: TranslationKeys = {
   "m720.successive_years_note":
     "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
+  "m720.generate_below_threshold":
+    "{{amount}} € falta zaizkizu kategoriaren batean 50.000 € gainditzeko. Zenbateko horretatik behera ez zaude 720 Eredua aurkeztera behartuta, eta ez dago sortzeko fitxategirik.",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
   "m720.filing_title": "Nola aurkeztu?",

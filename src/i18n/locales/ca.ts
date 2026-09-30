@@ -346,6 +346,8 @@ const ca: TranslationKeys = {
   "m720.successive_years_note":
     "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
   "m720.generate_btn": "Generar fitxer Model 720",
+  "m720.generate_below_threshold":
+    "Et falten {{amount}} € per superar els 50.000 € en alguna categoria. Per sota d'aquest import no estàs obligat a presentar el Model 720 i no hi ha cap fitxer per generar.",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",
   "m720.filing_title": "Com presentar-lo?",

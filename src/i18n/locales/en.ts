@@ -345,6 +345,8 @@ const en: TranslationKeys = {
   "m720.successive_years_note":
     "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
   "m720.generate_btn": "Generate Modelo 720 file",
+  "m720.generate_below_threshold":
+    "You are {{amount}} EUR short of passing 50,000 EUR in any category. Below that amount you do not have to file Modelo 720, so there is no file to generate.",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
   "m720.filing_title": "How to file?",
