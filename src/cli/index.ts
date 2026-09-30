@@ -498,10 +498,13 @@ program
           disposals,
         );
 
-        for (const isin of findUndatedExtinctions(statement.openPositions, config720, disposals)) {
+        for (const { isin, missing } of findUndatedExtinctions(statement.openPositions, config720, disposals)) {
           console.error(
-            `⚠ ${isin} figuraba en el 720 anterior y ya no está en cartera, pero no hay ninguna venta suya en ${opts.year}. ` +
-              "Su registro de extinción (C) sale sin fecha de extinción y con valoración 0: complétalos antes de presentar.",
+            missing === "extinctionDate"
+              ? `⚠ ${isin} figuraba en el 720 anterior y ya no está en cartera, pero no hay ninguna venta en ${opts.year} de las acciones declaradas. ` +
+                  "Su registro de extinción (C) sale sin fecha de extinción y con valoración 0: complétalos antes de presentar."
+              : `⚠ ${isin} figuraba en el 720 anterior y se vendió en ${opts.year}, pero los datos no incluyen su compra. ` +
+                  "Su registro de extinción (C) sale sin fecha de adquisición: complétala antes de presentar.",
           );
         }
 

@@ -180,7 +180,7 @@ describe("Modelo 720 Generator", () => {
       const cancelled = result.split("\n").find((l) => l[0] === "2" && l[422] === "C")!;
       // Extinction date at positions 424-431 (0-indexed: 423-430): never an invented 31-Dec
       expect(cancelled.slice(423, 431)).toBe("        ");
-      expect(findUndatedExtinctions(positions, config, [])).toEqual(["DE000A0F5UF5"]);
+      expect(findUndatedExtinctions(positions, config, [])).toEqual([{ isin: "DE000A0F5UF5", missing: "extinctionDate" }]);
     });
   });
 
@@ -863,5 +863,63 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000006600000");
     expect(findUndatedExtinctions(statement.openPositions, config, report.capitalGains.disposals)).toEqual([]);
     expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
+  });
+
+  // VWCE declared last year (100 shares bought 2023-05-02 unless the upload
+  // has no history), no longer held at 31 December 2025.
+  const vwce = (overrides: Partial<Trade>) =>
+    eurTrade({ symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", ...overrides });
+  const sell = (tradeDate: string, quantity: string, tradePrice: string) =>
+    vwce({ tradeDate, quantity: `-${quantity}`, tradePrice, buySell: "SELL" });
+  function extinctions(trades: Trade[]) {
+    const s: FlexStatement = { ...statement, fromDate: "20230101", toDate: "20251231", trades };
+    const report = generateTaxReport(s, new Map(), 2025);
+    const cfg = { ...baseConfig, previousYearIsins: ["IE00BK5BQT80"] };
+    const lines = generateModelo720(s.openPositions, rateMap, cfg, undefined, undefined, report.capitalGains.disposals).split("\n");
+    const records = lines
+      .filter((l) => l[0] === "2" && l[422] === "C")
+      .map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.fechaExtincion), boeField(l, BOE_720.detail.valoracion1)]);
+    return { records, undated: findUndatedExtinctions(s.openPositions, cfg, report.capitalGains.disposals), lines };
+  }
+
+  it("dates the extinction by the sale of the declared shares, not a later sale of shares bought and sold within the year", () => {
+    const { records, undated, lines } = extinctions([
+      vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }),
+      sell("2025-03-03", "100", "60"),
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["20230502", "20250303", "00000000600000"]]); // 100 x 60 EUR
+    expect(undated).toEqual([]);
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000006600000"); // 60,000 held + 6,000, not the 700 sale
+  });
+
+  it("writes one extinction record for the declared lots when the last sale also sells shares bought within the year", () => {
+    const { records, undated } = extinctions([
+      vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }),
+      vwce({ tradeDate: "2025-02-03", quantity: "20", tradePrice: "55" }),
+      sell("2025-06-10", "120", "70"),
+    ]);
+    expect(records).toEqual([["20230502", "20250610", "00000000700000"]]); // the 100 declared x 70 EUR
+    expect(undated).toEqual([]);
+  });
+
+  it("dates the extinction by a sale with no history behind it, leaves its acquisition date blank and flags it", () => {
+    const { records, undated } = extinctions([
+      sell("2025-03-03", "100", "60"),
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["        ", "20250303", "00000000600000"]]);
+    expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "acquisitionDate" }]);
+  });
+
+  it("leaves the extinction undated when the only sales in the year are of shares bought within the year", () => {
+    const { records, undated } = extinctions([
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["        ", "        ", "00000000000000"]]);
+    expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
   });
 });

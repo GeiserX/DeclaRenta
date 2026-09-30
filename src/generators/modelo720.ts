@@ -165,7 +165,7 @@ export function generateModelo720(
     });
 
   // "C" (cancelled) records for ISINs in previous year but no longer HELD, dated
-  // and valued by the sale that ended the holding. Without such a sale the
+  // and valued by the last sale of declared shares. Without such a sale the
   // record keeps a blank date and a zero value (see findUndatedExtinctions).
   const cancelledEntries = findCancelledIsins(positions, config.previousYearIsins).flatMap((isin) => {
     const tranches = extinctionTranches(isin, config.year, disposals);
@@ -293,29 +293,43 @@ function findCancelledIsins(positions: OpenPosition[], previousYearIsins: string
 }
 
 /**
- * The sale that ended the holding of a previously declared ISIN: its last sale
- * in the year. Its date is the extinction date (424-431) and its proceeds the
- * value at that date (valoración 1, "saldo ... en la fecha de extinción").
- * One tranche per acquisition date of the lots it consumed. A lot bought in the
- * declaration year cannot be the one declared last year (and a sale without
- * lots carries its own date), so those keep a blank acquisition date.
+ * A FIFO disposal of shares the upload holds no lot for (a sale with no history
+ * behind it): the engine records it with the sale date as acquisition date and
+ * a zero cost ("Venta sin lotes" / "Lotes insuficientes").
+ */
+function isSaleWithoutLots(d: FifoDisposal): boolean {
+  return recordDate(d.acquireDate) === recordDate(d.sellDate) && d.costBasisFcy.isZero() && d.holdingPeriodDays === 0;
+}
+
+/**
+ * The sale that ended the holding of a previously declared ISIN. Only lots
+ * bought before the declaration year were declared, so the extinction is the
+ * last sale in the year that consumed such a lot: its date is the extinction
+ * date (424-431) and the proceeds of those lots the value at that date
+ * (valoración 1, "saldo ... en la fecha de extinción"), one tranche per
+ * acquisition date. Shares bought and sold within the year were never declared,
+ * so their sales neither date the extinction nor add a tranche. A sale with no
+ * lot in the upload (no history) also sold declared shares; it keeps a blank
+ * acquisition date, which findUndatedExtinctions reports.
  */
 function extinctionTranches(
   isin: string,
   year: number,
   disposals: FifoDisposal[] | undefined,
 ): { acquireDate: string; sellDate: string; valueEur: Decimal }[] {
-  const sales = (disposals ?? []).filter(
-    (d) => d.isin === isin && !d.isShort && recordDate(d.sellDate).startsWith(String(year)),
-  );
-  if (sales.length === 0) return [];
-  const sellDate = sales.map((d) => recordDate(d.sellDate)).sort().at(-1)!;
-  const byAcquireDate = new Map<string, Decimal>();
-  for (const d of sales) {
-    if (recordDate(d.sellDate) !== sellDate) continue;
+  const yearStart = `${year}0101`;
+  const declared = (disposals ?? []).flatMap((d) => {
+    if (d.isin !== isin || d.isShort || !recordDate(d.sellDate).startsWith(String(year))) return [];
     const acquired = recordDate(d.acquireDate);
-    const key = acquired < `${year}0101` ? acquired : "";
-    byAcquireDate.set(key, (byAcquireDate.get(key) ?? new Decimal(0)).plus(d.proceedsEur));
+    if (/^\d{8}$/.test(acquired) && acquired < yearStart) return [{ d, acquireDate: acquired }];
+    return isSaleWithoutLots(d) ? [{ d, acquireDate: "" }] : [];
+  });
+  if (declared.length === 0) return [];
+  const sellDate = declared.map(({ d }) => recordDate(d.sellDate)).sort().at(-1)!;
+  const byAcquireDate = new Map<string, Decimal>();
+  for (const { d, acquireDate } of declared) {
+    if (recordDate(d.sellDate) !== sellDate) continue;
+    byAcquireDate.set(acquireDate, (byAcquireDate.get(acquireDate) ?? new Decimal(0)).plus(d.proceedsEur));
   }
   return [...byAcquireDate.keys()].sort().map((acquireDate) => ({
     acquireDate,
@@ -324,20 +338,32 @@ function extinctionTranches(
   }));
 }
 
+/** An extinction record with a field the file leaves blank (see findUndatedExtinctions). */
+export interface UndatedExtinction {
+  isin: string;
+  missing: "extinctionDate" | "acquisitionDate";
+}
+
 /**
- * ISINs declared last year, no longer held, and with no sale in the year to
- * date their extinction (a transfer out, or a sale outside the uploaded data).
- * Their "C" record is written with a blank extinction date and a zero value,
- * never an invented 31 December, so the caller must warn the user to fill both.
+ * Extinction ("C") records the file cannot fill on its own, so the caller must
+ * warn the user to complete them before filing:
+ * - `extinctionDate`: an ISIN declared last year, no longer held, with no sale
+ *   of declared shares in the year (a transfer out, or a sale outside the
+ *   uploaded data). Its record has a blank extinction date and a zero value,
+ *   never an invented 31 December.
+ * - `acquisitionDate`: the extinction is dated by a sale the upload holds no
+ *   lot for (no history), so its acquisition date (415-422) is blank.
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
   config: Pick<Modelo720Config, "year" | "previousYearIsins">,
   disposals?: FifoDisposal[],
-): string[] {
-  return findCancelledIsins(positions, config.previousYearIsins).filter(
-    (isin) => extinctionTranches(isin, config.year, disposals).length === 0,
-  );
+): UndatedExtinction[] {
+  return findCancelledIsins(positions, config.previousYearIsins).flatMap((isin): UndatedExtinction[] => {
+    const tranches = extinctionTranches(isin, config.year, disposals);
+    if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
+    return tranches.some((t) => t.acquireDate === "") ? [{ isin, missing: "acquisitionDate" }] : [];
+  });
 }
 
 /**
