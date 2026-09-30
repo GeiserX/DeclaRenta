@@ -659,6 +659,10 @@ const eu: TranslationKeys = {
     "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":
     "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu balio honen lehen erosketatik estaltzen duen epe bat.",
+  "fifo.cover_without_lots":
+    "⚠ Posizio laburraren itxiera loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Irabazia ez da kalkulatu (posizio laburra epetik kanpo irekia edo aurreko datu osatugabeak).",
+  "fifo.cover_without_lots.hint":
+    "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu posizio labur hau ireki zuen salmentatik estaltzen duen epe bat.",
   "fifo.insufficient_lots":
     "⚠ Lote nahikorik ez: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0.",
   "fifo.insufficient_lots.hint":
@@ -698,6 +702,10 @@ const eu: TranslationKeys = {
     "{{count}} kriptomonetako diru-sarrera daude (adib. staking sariak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_income_unvalued.hint":
     "Diru-sarrera hauek kripto berean ordaintzen dira eta ez dute BCEren kanbio-tasa ofizialik. Kalkulatu eurotako balioa kobratze-datan eta deklaratu eskuz kapital higigarriaren etekin gisa (0027 kasila).",
+  "report.dividend_unvalued":
+    "{{currencies}} dibisako {{count}} dibidendu daude automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
+  "report.dividend_unvalued.hint":
+    "BCEk ez du dibisa horren kanbio-tasa ofizialik argitaratzen kobratze-datan. Kalkulatu zenbatekoa eurotan data horretan, gehitu eskuz 0029 laukian eta kontuan hartu haren atxikipena nazioarteko zergapetze bikoitzaren kenkarian (0588 laukia).",
   "report.crypto_general_gain_unvalued":
     "{{count}} kriptomonetako ondare-irabazi daude (adib. airdropak edo gomendio-komisioak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_general_gain_unvalued.hint":

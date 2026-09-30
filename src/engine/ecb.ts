@@ -87,8 +87,10 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
     toFetch.push(normalized);
   }
 
-  for (const currency of toFetch) {
-    const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata`;
+  // One request per currency, all in flight at once (each keeps its own retry).
+  const fetchOne = async (currency: string): Promise<Map<string, string>> => {
+    const ratesByDate = new Map<string, string>();
+    const url = `${ECB_SDMX_URL}/D.${currency}.EUR.SP00.A?startPeriod=${startDate}&endPeriod=${endDate}&format=csvdata&detail=dataonly`;
 
     let response: Response | undefined;
     let lastError: unknown;
@@ -160,6 +162,17 @@ export async function fetchEcbRates(year: number, currencies: string[]): Promise
       // Invert: 1 FCY = 1/X EUR
       const eurPerFcy = new Decimal(1).dividedBy(parsedRate).toFixed(10);
 
+      ratesByDate.set(date, eurPerFcy);
+    }
+    return ratesByDate;
+  };
+
+  const perCurrency = await Promise.all(toFetch.map(fetchOne));
+
+  // Merge in `toFetch` order so the map does not depend on response order.
+  for (const [i, ratesByDate] of perCurrency.entries()) {
+    const currency = toFetch[i]!;
+    for (const [date, eurPerFcy] of ratesByDate) {
       if (!rateMap.has(date)) {
         rateMap.set(date, new Map());
       }

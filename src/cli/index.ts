@@ -19,7 +19,6 @@ import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { fetchEcbRates } from "../engine/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
@@ -39,6 +38,7 @@ import { formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
+import { savingsBalances } from "../engine/taxable-base.js";
 import type { LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 
@@ -334,8 +334,7 @@ program
             priorLosses.push({ year, amount, remaining, category: l.category });
           }
 
-          const netGains = report.capitalGains.netGainLoss;
-          const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
+          const { gains: netGains, income: netIncome } = savingsBalances(report);
           const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
 
           // Log carryforward details
@@ -486,13 +485,8 @@ program
 
         // Rates for every year with a trade: the FIFO run dates the lots held at
         // 31 December and the sales that ended a previously declared holding.
-        const needs = deriveEcbNeeds(statement, opts.year);
-        const currencies = new Set(needs.currencies);
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        for (const cb of statement.cashBalances ?? []) currencies.add(cb.currency);
-        currencies.delete("EUR");
-
-        const rateMap = await buildEcbRateMap({ currencies: [...currencies], years: needs.years });
+        // The needs include the currencies of positions and cash balances.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateTaxReport(statement, rateMap, opts.year);
 
         const nameParts = opts.name.split(",").map((s) => s.trim());
@@ -663,10 +657,6 @@ program
         const statement = parser.parse(content);
         assertYearEndPositions(statement, opts.year);
 
-        const currencies = new Set<string>();
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        currencies.delete("EUR");
-
         // Extract ISINs from previous year's D-6 JSON output
         let previousYearIsins: string[] | undefined;
         if (opts.previousD6) {
@@ -680,7 +670,8 @@ program
           previousYearIsins = (prevJson.positions ?? []).map((p) => p.isin);
         }
 
-        const rateMap = await fetchEcbRates(opts.year, [...currencies]);
+        // Same rate set as the web D-6 (shared orchestrator), positions included.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateD6Report(
           statement.openPositions,
           rateMap,
