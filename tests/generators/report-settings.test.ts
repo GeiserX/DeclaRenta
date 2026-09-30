@@ -29,7 +29,7 @@ describe("generateTaxReport settings", () => {
 });
 
 describe("formatReportSettings", () => {
-  afterEach(() => setLocale("es"));
+  afterEach(() => { setLocale("es"); });
 
   it("reads in Spanish", () => {
     setLocale("es");

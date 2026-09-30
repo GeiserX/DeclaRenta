@@ -5,11 +5,14 @@
  * Results header shows the settings the figures were computed with. Editing
  * a field that does not change the figures (the NIF) runs nothing.
  *
- * Driven through the real app. The statement is a EUR buy and sell, so no ECB
- * request is needed and fetch is stubbed to fail.
+ * Driven through the real app, loaded once: the app listens on `document`,
+ * which outlives a module reset, so a fresh import per test would leave the
+ * earlier instances reacting too. Each test counts the engine runs it causes.
+ * The statement is a EUR buy and sell, so no ECB request is needed and fetch
+ * is stubbed to fail.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi, type Mock } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -106,15 +109,17 @@ function settingsText(): string {
   return document.getElementById("results-settings")?.textContent ?? "";
 }
 
-async function waitForCalls(n: number): Promise<void> {
-  await waitFor(() => generateTaxReport.mock.calls.length >= n || null, `${n} engine runs`);
+/** Wait until the engine has run once more than `before` times. */
+async function waitForRecalc(before: number): Promise<void> {
+  await waitFor(() => generateTaxReport.mock.calls.length > before || null, "another engine run");
   // The header is rendered right after the engine returns.
   await new Promise((r) => setTimeout(r, 0));
 }
 
-beforeEach(async () => {
-  vi.resetModules();
-  vi.stubGlobal("localStorage", memoryStorage());
+beforeAll(async () => {
+  const storage = memoryStorage();
+  storage.setItem("locale", "es");
+  vi.stubGlobal("localStorage", storage);
   vi.stubGlobal("__APP_VERSION__", "test");
   vi.stubGlobal("__COMMIT_HASH__", "test");
   document.documentElement.innerHTML = new DOMParser().parseFromString(
@@ -128,7 +133,7 @@ beforeEach(async () => {
   await openResults();
 });
 
-afterEach(() => {
+afterAll(() => {
   vi.unstubAllGlobals();
 });
 
@@ -138,30 +143,43 @@ describe("results follow the profile settings", () => {
     expect(settingsText()).toBe("Ajustes del cálculo: monodivisa no, titulares 1, autoconversiones sí");
   });
 
+  it("does not recalculate when only the NIF is edited", async () => {
+    const before = generateTaxReport.mock.calls.length;
+    edit("profile-nif", (el) => { el.value = "12345678Z"; });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(generateTaxReport).toHaveBeenCalledTimes(before);
+  });
+
   it("recalculates when monodivisa is ticked", async () => {
+    const before = generateTaxReport.mock.calls.length;
     edit("profile-monodivisa", (el) => { el.checked = true; });
-    await waitForCalls(2);
+    await waitForRecalc(before);
     expect(lastOptions().skipFx).toBe(true);
     expect(settingsText()).toContain("monodivisa sí");
   });
 
   it("recalculates when the number of titulares changes", async () => {
+    const before = generateTaxReport.mock.calls.length;
     edit("profile-titulares", (el) => { el.value = "2"; });
-    await waitForCalls(2);
+    await waitForRecalc(before);
     expect(lastOptions().titulares).toBe(2);
     expect(settingsText()).toContain("titulares 2");
   });
 
   it("recalculates when auto-conversions are switched off", async () => {
+    const before = generateTaxReport.mock.calls.length;
     edit("profile-track-autoconvert", (el) => { el.checked = false; });
-    await waitForCalls(2);
+    await waitForRecalc(before);
     expect(lastOptions().trackAutoConvert).toBe(false);
     expect(settingsText()).toContain("autoconversiones no");
   });
 
-  it("does not recalculate when only the NIF is edited", async () => {
-    edit("profile-nif", (el) => { el.value = "12345678Z"; });
+  it("runs the engine once per settings change", async () => {
+    const before = generateTaxReport.mock.calls.length;
+    edit("profile-monodivisa", (el) => { el.checked = false; });
+    await waitForRecalc(before);
     await new Promise((r) => setTimeout(r, 100));
-    expect(generateTaxReport).toHaveBeenCalledTimes(1);
+    expect(generateTaxReport).toHaveBeenCalledTimes(before + 1);
+    expect(settingsText()).toBe("Ajustes del cálculo: monodivisa no, titulares 2, autoconversiones no");
   });
 });
