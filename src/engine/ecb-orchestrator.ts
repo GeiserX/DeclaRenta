@@ -9,10 +9,11 @@
  * orchestration so the two call sites can never drift apart.
  *
  * It also memoizes per-(currency, year) so a re-run for the same — or a
- * superset of — needs reuses the already-fetched immutable historical rates
- * instead of doing a second network round-trip. The web reprocesses on every
- * option toggle (monodivisa, titulares, …); without this it refetched every
- * rate each time.
+ * superset of — needs reuses the already-fetched rates of past years instead of
+ * doing a second network round-trip. The web reprocesses on every option toggle
+ * (monodivisa, titulares, …); without this it refetched every rate each time.
+ * The current year is never cached: the ECB adds a rate every business day, so
+ * its batch is still growing.
  */
 
 import type { Statement } from "../types/broker.js";
@@ -26,8 +27,9 @@ import { FxFifoEngine } from "./fx-fifo.js";
  * The set of (currency, year) pairs a statement needs ECB rates for.
  *
  * `currencies` is already EUR-stripped (EUR needs no rate). `years` includes
- * the declaration year and `minYear - 1` so the 10-day weekend/holiday lookback
- * can reach late-December rates for early-January transactions.
+ * the declaration year and the year before every year in the set, so the 10-day
+ * weekend/holiday lookback can reach late-December rates for early-January
+ * transactions.
  */
 export interface EcbNeeds {
   currencies: string[];
@@ -46,7 +48,7 @@ export interface BuildEcbRateMapOptions {
   /**
    * Skip the module-level memoization cache (read AND write). Use for a
    * logically-distinct run that must not share or pollute the global cache.
-   * Defaults to `false` — ECB rates are immutable historical data, so caching
+   * Defaults to `false` — past years' ECB rates never change, so caching them
    * across runs is correct and saves network round-trips.
    */
   noCache?: boolean;
@@ -58,8 +60,9 @@ export interface BuildEcbRateMapOptions {
  * Keyed by `${year}:${normalizedCurrency}` so a superset request only fetches
  * the missing pairs (we cache the per-pair result, not the whole map). The
  * cached value is the slice of the rate map containing only that currency's
- * observations for that year. ECB historical rates never change, so entries
- * live for the process lifetime.
+ * observations for that year. Past years' rates never change, so entries live
+ * for the process lifetime. The current (and any later) year is neither read
+ * from nor written to it, because its batch grows every business day.
  */
 const rateCache = new Map<string, EcbRateMap>();
 
@@ -77,10 +80,11 @@ export function __resetEcbCache(): void {
  * Derive the (currency, year) pairs a statement needs ECB rates for.
  *
  * Mirrors the logic previously duplicated in cli/index.ts and web/main.ts:
- * collect every trade/cash-transaction currency (minus EUR), every year that
- * has a trade OR a cash transaction (dividends/interest/crypto income can fall
- * in a year with no trades), the declaration year, and `minYear - 1` for the
- * early-January lookback.
+ * collect every trade/cash-transaction/open-position/cash-balance currency
+ * (minus EUR), every year that has a trade OR a cash transaction
+ * (dividends/interest/crypto income can fall in a year with no trades), the
+ * declaration year, and the year before each of them for the early-January
+ * lookback.
  */
 export function deriveEcbNeeds(
   statement: Statement,
@@ -101,6 +105,10 @@ export function deriveEcbNeeds(
   }
   for (const c of statement.cashTransactions) currencies.add(c.currency);
   for (const lot of manualOpeningLots) currencies.add(lot.currency);
+  // Modelo 720/D-6 value year-end holdings and cash, whose currency may appear in
+  // no trade or cash transaction of the file.
+  for (const p of statement.openPositions) currencies.add(p.currency);
+  for (const cb of statement.cashBalances ?? []) currencies.add(cb.currency);
   currencies.delete("EUR");
 
   const years = new Set<number>();
@@ -120,11 +128,10 @@ export function deriveEcbNeeds(
     if (Number.isFinite(y)) years.add(y);
   }
   years.add(year);
-  // Fetch the previous year for the earliest year so the 10-day lookback can
-  // find late-December rates for early-January transactions (e.g. Jan 1-2).
-  if (years.size > 0) {
-    years.add(Math.min(...years) - 1);
-  }
+  // Fetch the previous year of every year so the 10-day lookback can find
+  // late-December rates for early-January transactions (e.g. Jan 1-2), even
+  // after a year with no activity.
+  for (const y of [...years]) years.add(y - 1);
 
   return { currencies: [...currencies], years: [...years] };
 }
@@ -150,10 +157,10 @@ function mergeInto(target: EcbRateMap, source: EcbRateMap): void {
 /**
  * Build the unified ECB rate map for a parsed statement (or pre-derived needs).
  *
- * Encapsulates the derive → fetch (per-year batched, preserving the existing
- * `fetchEcbRates` behavior) → merge pipeline shared by CLI and web. Memoizes
- * per-(currency, year): a repeated call for the same needs does zero network
- * I/O, and a superset call fetches only the missing pairs.
+ * Encapsulates the derive → fetch (one `fetchEcbRates` batch per year, all
+ * years in parallel) → merge pipeline shared by CLI and web. Memoizes past
+ * years per-(currency, year): a repeated call for the same needs does zero
+ * network I/O for them, and a superset call fetches only the missing pairs.
  *
  * @param input - A parsed statement plus the declaration year, OR pre-derived needs.
  * @param opts - Optional injectable fetcher / cache bypass.
@@ -167,11 +174,15 @@ export async function buildEcbRateMap(
     "statement" in input ? deriveEcbNeeds(input.statement, input.year, input.manualOpeningLots ?? []) : input;
 
   const fetcher = opts.fetcher ?? fetchEcbRates;
-  const useCache = !opts.noCache;
+  const currentYear = new Date().getUTCFullYear();
 
   const merged: EcbRateMap = new Map();
+  const toFetch: Array<{ yr: number; missing: string[]; cacheable: boolean }> = [];
 
   for (const yr of needs.years) {
+    // The current year's batch grows every business day, so it is always
+    // refetched and never cached.
+    const cacheable = !opts.noCache && yr < currentYear;
     // Split this year's currencies into those already cached and those missing,
     // so a superset request fetches ONLY the new pairs. Crypto currencies
     // normalize to themselves and are never ECB-resolvable — fetchEcbRates skips
@@ -179,7 +190,7 @@ export async function buildEcbRateMap(
     const missing: string[] = [];
     for (const currency of needs.currencies) {
       const key = cacheKey(yr, currency);
-      const cached = useCache ? rateCache.get(key) : undefined;
+      const cached = cacheable ? rateCache.get(key) : undefined;
       if (cached) {
         mergeInto(merged, cached);
       } else {
@@ -187,12 +198,17 @@ export async function buildEcbRateMap(
       }
     }
 
-    if (missing.length === 0) continue;
+    if (missing.length > 0) toFetch.push({ yr, missing, cacheable });
+  }
 
-    const fetched = await fetcher(yr, missing);
+  // One request batch per year, all in flight at once; merged in year order.
+  const results = await Promise.all(toFetch.map(({ yr, missing }) => fetcher(yr, missing)));
+
+  for (const [i, { yr, missing, cacheable }] of toFetch.entries()) {
+    const fetched = results[i]!;
     mergeInto(merged, fetched);
 
-    if (useCache) {
+    if (cacheable) {
       // Cache per (currency, year): slice the fetched map into one sub-map per
       // normalized currency so a later superset request can reuse each pair
       // independently. A missing currency that returned no rows (e.g. crypto, or

@@ -253,7 +253,8 @@ When adding a new section (like 721), follow this checklist:
 - We store the inverse: "1 FCY = X EUR" for direct multiplication with broker amounts
 - Weekends/holidays: walk backward up to 10 business days
 - Rate source: `https://data-api.ecb.europa.eu/service/data/EXR`
-- **Early-January lookback (Hard Trace)**: `fetchEcbRates(year)` only fetches rates for that calendar year. Trades on Jan 1-2 trigger a 10-day lookback into late December of the *previous* year, but those rates won't exist in the map unless `year - 1` is also fetched. **Both `main.ts` and `cli/index.ts` must add `minYear - 1` to the years set** before the fetch loop. This bug surfaces every time a new parser is added with sample data containing early-January trades.
+- **Early-January lookback (Hard Trace)**: `fetchEcbRates(year)` only fetches rates for that calendar year. Trades on Jan 1-2 trigger a 10-day lookback into late December of the *previous* year, but those rates won't exist in the map unless `year - 1` is also fetched. **`deriveEcbNeeds` (`src/engine/ecb-orchestrator.ts`, shared by web and CLI) adds `y - 1` for EVERY year in the set**, not only the earliest: a file with activity in 2023 and a dividend on 1 January 2025 needs late-December 2024 even though 2024 had no activity. This bug surfaces every time a new parser is added with sample data containing early-January trades.
+- **Current-year rates are never cached**: the orchestrator memoizes past years per (currency, year), but the current UTC year's batch grows every business day, so it is refetched on every run.
 
 ### Monodivisa Mode
 - Optional toggle in fiscal profile (`monodivisa: boolean`) + CLI `--monodivisa` flag
