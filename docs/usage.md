@@ -26,8 +26,10 @@ node dist/cli.js convert --input flex_query.xml --year 2025 --prior-losses perdi
 # Modelo 720
 node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
 
-# Modelo 720 con varios brokers (el umbral de 50.000 EUR se aplica al total)
-node dist/cli.js modelo720 --input ibkr.xml --input degiro.csv --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
+# Modelo 720 con varias cuentas (el umbral de 50.000 EUR se aplica al total).
+# Solo suman los ficheros que traen las posiciones a 31/12, como el Flex Query de IBKR;
+# los extractos de Degiro, eToro y la mayoría de brokers solo traen operaciones y no cuentan.
+node dist/cli.js modelo720 --input ibkr_cuenta1.xml --input ibkr_cuenta2.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
 
 # Modelo 720 con tipos A/M/C (comparando con declaración del año anterior)
 node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE" --previous-720 720_2024.txt
