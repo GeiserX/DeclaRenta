@@ -148,6 +148,16 @@ describe("generateTaxReport — crypto reward income", () => {
       expect(report.interest.earned.toFixed(2)).toBe("0.00");
       expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(true);
     });
+
+    it.each(["EURT", "EUROC"])("still values a %s reward with no EUR value at 1:1", (euroCoin) => {
+      const reward = income({
+        transactionID: "euro-reward", rewardCostBasisEur: undefined, currency: euroCoin, symbol: euroCoin,
+        amount: "50", rewardQuantity: "50", dateTime: "2025-03-06", settleDate: "2025-03-06",
+      });
+      const report = generateTaxReport(makeStatement([], [reward]), new Map(), 2025);
+      expect(report.interest.earned.toFixed(2)).toBe("50.00");
+      expect(report.messages.some((m) => m.id === "report.crypto_income_unvalued")).toBe(false);
+    });
   });
 
   it("values an explicit 0-EUR micro-reward at zero with no unvalued warning", () => {

@@ -262,6 +262,16 @@ describe("resolveCryptoTradeValues", () => {
       expect(result.unresolved).toHaveLength(0);
       expect(lookupRateInMap(result.rateMap, "2025-03-09", "USDT")!.toFixed(2)).toBe("0.92");
     });
+
+    it.each(["EURT", "EUROC"])("still values a %s-quoted trade at 1:1 with EUR", (euroCoin) => {
+      const buy = makeCryptoTrade({ tradeDate: "2025-03-06", symbol: "BTC", currency: euroCoin, tradePrice: "80000", quantity: "0.01", commissionCurrency: euroCoin });
+
+      const result = resolveCryptoTradeValues([buy], new Map());
+
+      expect(result.trades).toHaveLength(1);
+      expect(result.unresolved).toEqual([]);
+      expect(lookupRateInMap(result.rateMap, "2025-03-06", euroCoin)!.toFixed(2)).toBe("1.00");
+    });
   });
 
   describe("pass-through", () => {
