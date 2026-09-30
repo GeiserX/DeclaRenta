@@ -68,8 +68,6 @@ const ca: TranslationKeys = {
   "table.amount_eur": "Import (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmissió (total transmissions)",
-  "casilla.acquisition_value": "Valor d'adquisició (total transmissions)",
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
   "casilla.acquisition_sale_rate_note":
@@ -160,6 +158,9 @@ const ca: TranslationKeys = {
   "compare.saved_reports": "Informes desats",
   "compare.clear_history": "Esborrar historial",
   "compare.clear_confirm": "Esborrar tots els informes desats?",
+  "compare.transmission_value": "Valor de transmissió (transmissions, sense divises)",
+  "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
+  "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
   "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
   "error.file_too_large":
@@ -325,10 +326,11 @@ const ca: TranslationKeys = {
   "m720.category_c": "Comptes (saldos en efectiu)",
   "m720.category_exceeded": "Supera 50.000 € — obligatori declarar",
   "m720.category_not_exceeded": "Per sota del llindar",
+  "m720.category_undetermined": "No es pot determinar: {{count}} posició(ns) sense valorar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "m720.cash_title": "Saldos en efectiu (Comptes)",
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
@@ -363,7 +365,7 @@ const ca: TranslationKeys = {
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
   "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
@@ -382,6 +384,8 @@ const ca: TranslationKeys = {
   "m721.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 721.",
   "m721.threshold_not_exceeded":
     "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
+  "m721.threshold_undetermined":
+    "No es pot determinar si superes el llindar de 50.000 €: el total ({{amount}} €) no inclou {{count}} posició(ns) sense valorar. Valora-les abans de concloure que no has de presentar.",
   "m721.no_positions": "Puja un informe amb posicions de criptomonedes al Model 100 per analitzar el Model 721.",
   "m721.positions_title": "Posicions declarables",
   "m721.generate_btn": "Generar fitxer Model 721",
@@ -398,7 +402,7 @@ const ca: TranslationKeys = {
   "m721.format_notice":
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
@@ -656,6 +660,10 @@ const ca: TranslationKeys = {
     "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
     "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la primera compra d'aquest valor.",
+  "fifo.cover_without_lots":
+    "⚠ Tancament de curt sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Guany no calculat (posició curta oberta fora del període o dades prèvies incompletes).",
+  "fifo.cover_without_lots.hint":
+    "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la venda que va obrir aquesta posició curta.",
   "fifo.insufficient_lots": "⚠ Lots insuficients: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0.",
   "fifo.insufficient_lots.hint":
     "El Flex Query no cobreix totes les compres prèvies d'aquest valor. Amplia el període de consulta.",
@@ -693,6 +701,10 @@ const ca: TranslationKeys = {
     "Hi ha {{count}} ingrés(os) en criptomoneda (p. ex. recompenses de staking) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_income_unvalued.hint":
     "Aquests ingressos es paguen en la mateixa cripto i no tenen tipus de canvi oficial del BCE. Calcula'n el valor en euros a la data de cobrament i declara'ls manualment com a rendiments del capital mobiliari (Casella 0027).",
+  "report.dividend_unvalued":
+    "Hi ha {{count}} dividend(s) en {{currencies}} que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
+  "report.dividend_unvalued.hint":
+    "El BCE no publica cap tipus de canvi oficial per a aquesta divisa a la data de cobrament. Calcula l'import en euros a aquesta data, suma'l a mà a la casella 0029 i tingues en compte la seva retenció en la deducció per doble imposició internacional (casella 0588).",
   "report.crypto_general_gain_unvalued":
     "Hi ha {{count}} guany(s) patrimonial(s) en criptomoneda (p. ex. airdrops o comissions de referits) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_general_gain_unvalued.hint":
@@ -771,6 +783,14 @@ const ca: TranslationKeys = {
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
     "Sol deure's a files incompletes a l'exportació (columna \"amount\" buida o no numèrica). Si falten operacions, torna a descarregar el CSV de transaccions complet des de Trade Republic.",
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no s'han aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El cost dels títols antics no passa als nous, així que una venda posterior del nou valor pot sortir sense lots i amb cost 0. Si va ser una fusió o un bescanvi, afegeix el cost d'adquisició original a «Lots manuals per a posicions transferides».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no s'han importat {{count}} entrega(s) de títols sense compravenda (accions gratuïtes, traspassos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Les accions gratuïtes d'una promoció són un guany patrimonial de la base general pel seu valor de mercat el dia de l'entrega: declara-les a part i afegeix aquest valor com a cost a «Lots manuals per a posicions transferides». Si és un traspàs des d'un altre bròquer, afegeix-hi el cost de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

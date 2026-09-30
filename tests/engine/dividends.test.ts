@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { calculateDividends } from "../../src/engine/dividends.js";
 import type { CashTransaction } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -385,6 +386,114 @@ describe("calculateDividends", () => {
 
       expect(entries).toHaveLength(1);
       expect(entries[0]!.withholdingCountry).toBe("US");
+    });
+
+    it("does not take a 2-letter ticker for the country (IBKR, ticker ES with a US ISIN)", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      // Eversource trades as ES. IBKR puts the ticker first and the real
+      // withholding country before "Tax".
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          symbol: "ES",
+          isin: "US30040W1080",
+          amount: "100",
+          type: "Dividends",
+          description: "ES(US30040W1080) Cash Dividend USD 0.7125 per Share (Ordinary Dividend)",
+        }),
+        makeCashTx({
+          transactionID: "2",
+          symbol: "ES",
+          isin: "US30040W1080",
+          amount: "-15",
+          type: "Withholding Tax",
+          description: "ES(US30040W1080) Cash Dividend USD 0.7125 per Share - US Tax",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("US");
+    });
+
+    it("keeps an explicit IBKR country marker over the ISIN (ADR with DK TAX)", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          symbol: "NVO",
+          isin: "US6701002056",
+          amount: "100",
+          type: "Dividends",
+          description: "NVO(US6701002056) CASH DIVIDEND USD 0.58432 PER SHARE (Ordinary Dividend)",
+        }),
+        makeCashTx({
+          transactionID: "2",
+          symbol: "NVO",
+          isin: "US6701002056",
+          amount: "-27",
+          type: "Withholding Tax",
+          description: "NVO(US6701002056) CASH DIVIDEND USD 0.58432 PER SHARE - DK TAX",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries[0]!.withholdingCountry).toBe("DK");
+    });
+
+    it("uses the ISIN when the withholding only names the ticker (Trading 212, ticker DE)", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+
+      // Deere trades as DE, which must not become Germany.
+      const transactions: CashTransaction[] = [
+        makeCashTx({
+          transactionID: "1",
+          symbol: "DE",
+          isin: "US2441991054",
+          amount: "100",
+          type: "Dividends",
+          description: "Dividend (Ordinary) - DE",
+        }),
+        makeCashTx({
+          transactionID: "2",
+          symbol: "DE",
+          isin: "US2441991054",
+          amount: "-15",
+          type: "Withholding Tax",
+          description: "Withholding tax - DE",
+        }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingCountry).toBe("US");
+    });
+  });
+
+  describe("non-throwing rate lookup", () => {
+    it("skips a dividend it cannot value, with its withholding, and reports it", () => {
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "1", currency: "CNH", isin: "CNE000001R84", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "2", currency: "CNH", isin: "CNE000001R84", amount: "-10", type: "Withholding Tax" }),
+        makeCashTx({ transactionID: "3", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "4", amount: "-15", type: "Withholding Tax" }),
+      ];
+      const unvalued: string[] = [];
+
+      const entries = calculateDividends(transactions, new Map(), {
+        lookupRate: (_date, currency) => (currency === "USD" ? new Decimal("0.92") : null),
+        onUnvalued: (div) => unvalued.push(div.transactionID),
+      });
+
+      expect(unvalued).toEqual(["1"]);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.currency).toBe("USD");
+      expect(entries[0]!.withholdingTaxEur.toFixed(2)).toBe("13.80");
     });
   });
 });

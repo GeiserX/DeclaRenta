@@ -158,6 +158,23 @@ function mergeManualRateHints(
 }
 
 /**
+ * Non-throwing EUR-per-unit rate for cash income (interest, rewards, dividends).
+ * EUR, ECB fiat and stablecoins: the resolved map (weekend walk-back), then the
+ * manual-rate map. Any other coin: the manual-rate map, then a synthetic rate,
+ * both for the exact date. Null when nothing values it.
+ */
+function lookupIncomeRate(
+  date: string,
+  currency: string,
+  resolvedRateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+): Decimal | null {
+  const mapRate = lookupValuationRate(resolvedRateMap, date, currency);
+  const manualRate = manualRates ? lookupValuationRate(manualRates, date, currency) : null;
+  return isFiatPriced(currency) ? (mapRate ?? manualRate) : (manualRate ?? mapRate);
+}
+
+/**
  * Value a cash income transaction in EUR. Precedence:
  *   1. An explicit `rewardCostBasisEur` (authoritative — already the EUR value,
  *      e.g. from a Binance EUR_Value column). Returns rate as amountEur/|amount|.
@@ -199,9 +216,7 @@ function valueIncomeEur(
   // fiat/stablecoin) both lookups match the receipt date exactly and the manual
   // quote wins, the same order as the valuation pass, so a price inferred on an
   // earlier day is never reused for this reward.
-  const mapRate = lookupValuationRate(resolvedRateMap, date, t.currency);
-  const manualRate = manualRates ? lookupValuationRate(manualRates, date, t.currency) : null;
-  const rate = isFiatPriced(t.currency) ? (mapRate ?? manualRate) : (manualRate ?? mapRate);
+  const rate = lookupIncomeRate(date, t.currency, resolvedRateMap, manualRates);
   if (rate !== null) {
     return { amountEur: amount.mul(rate).abs(), rate };
   }
@@ -464,10 +479,25 @@ export function generateTaxReport(
   // withholding — instead of the reversal being .abs()'d into an addition
   // (dividends.ts) that triples the retención. Only exact opposite-sign pairs
   // cancel; a file with no reversals is unchanged.
-  const yearCashTransactions = collapseCorrections(
-    statement.cashTransactions.filter((t) => t.dateTime.startsWith(yearStr)),
-  );
-  let dividendEntries = calculateDividends(yearCashTransactions, rateMap);
+  // A withholding can be booked days away from its dividend, so a late-December
+  // dividend may have its withholding in January (and the other way round).
+  // Match over every cash row in the statement, then keep the dividends paid in
+  // the year. A fixed window around the year would cut some dividends off from
+  // their own withholding and hand it to an in-year dividend of the same ISIN.
+  // collapseCorrections pairs rows by exact date, so running it on every row
+  // leaves the in-year rows unchanged.
+  const allCashTransactions = collapseCorrections(statement.cashTransactions);
+  const yearCashTransactions = allCashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
+  // Dividends are valued like interest: a currency with no ECB or manual rate
+  // (e.g. IBKR's CNH) is skipped with a warning instead of aborting the report.
+  const unvaluedDividendCurrencies = new Map<string, number>();
+  let dividendEntries = calculateDividends(allCashTransactions, resolvedRateMap, {
+    lookupRate: (date, currency) => lookupIncomeRate(date, currency, resolvedRateMap, manualRates),
+    onUnvalued: (div) => {
+      if (!div.dateTime.startsWith(yearStr)) return;
+      unvaluedDividendCurrencies.set(div.currency, (unvaluedDividendCurrencies.get(div.currency) ?? 0) + 1);
+    },
+  }).filter((d) => d.payDate.startsWith(yearStr));
   if (titulares > 1) dividendEntries = dividendEntries.map((d) => splitDividend(d, titulares));
   const grossDividends = dividendEntries.reduce((sum, d) => sum.plus(d.grossAmountEur), new Decimal(0));
 
@@ -680,6 +710,20 @@ export function generateTaxReport(
       context: { count: String(unresolvableInterest) },
     });
     allWarnings.push(cryptoMsg);
+  }
+
+  if (unvaluedDividendCurrencies.size > 0) {
+    const count = [...unvaluedDividendCurrencies.values()].reduce((a, b) => a + b, 0);
+    const currencies = [...unvaluedDividendCurrencies.keys()].sort().join(", ");
+    const divMsg = `Hay ${count} dividendo(s) en ${currencies} que no se han podido valorar automáticamente y no están incluidos en los importes calculados.`;
+    allMessages.push({
+      id: "report.dividend_unvalued",
+      severity: "warning",
+      message: divMsg,
+      hint: "El BCE no publica un tipo de cambio oficial para esa divisa en la fecha de cobro. Calcula el importe en euros a esa fecha, súmalo a mano a la casilla 0029 y ten en cuenta su retención en la deducción por doble imposición internacional (casilla 0588).",
+      context: { count: String(count), currencies },
+    });
+    allWarnings.push(divMsg);
   }
 
   if (unresolvableGeneralGains > 0) {
