@@ -7,16 +7,16 @@
                isin="XX0000000001" assetCategory="STK" currency="USD"
                tradeDate="20240315" settlementDate="20240318"
                quantity="10" tradePrice="150.00" tradeMoney="1500.00"
-               proceeds="1500.00" cost="0" fifoPnlRealized="0"
+               proceeds="-1500.00" cost="1501.00" fifoPnlRealized="0"
                fxRateToBase="0.92" buySell="BUY" openCloseIndicator="O"
-               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
         <Trade tradeID="100000002" accountId="U1234567" symbol="ACME" description="ACME CORP"
                isin="XX0000000001" assetCategory="STK" currency="USD"
                tradeDate="20240920" settlementDate="20240923"
                quantity="-10" tradePrice="175.00" tradeMoney="-1750.00"
-               proceeds="-1750.00" cost="-1500.00" fifoPnlRealized="250.00"
+               proceeds="1750.00" cost="-1501.00" fifoPnlRealized="248.00"
                fxRateToBase="0.91" buySell="SELL" openCloseIndicator="C"
-               exchange="NASDAQ" commissionCurrency="USD" commission="-1.00" taxes="0" />
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
       </Trades>
       <CashTransactions>
         <CashTransaction transactionID="200000001" accountId="U1234567"
