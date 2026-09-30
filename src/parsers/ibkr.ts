@@ -197,6 +197,19 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   };
 }
 
+const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
+
+/**
+ * IBKR sends the underlying's identifier as underlyingSecurityID (an ISIN, or a
+ * CUSIP for some listings), not as underlyingIsin. Take it only when it has the
+ * ISIN shape, so the underlying lot key matches the ISIN-keyed stock trades.
+ */
+function underlyingIsinOf(raw: Record<string, string>): string {
+  if (raw.underlyingIsin) return raw.underlyingIsin;
+  const id = raw.underlyingSecurityID?.trim() ?? "";
+  return ISIN_SHAPE.test(id) ? id : "";
+}
+
 function mapTrade(raw: Record<string, string>): Trade {
   return {
     tradeID: raw.tradeID ?? "",
@@ -228,7 +241,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     strike: raw.strike || undefined,
     expiry: raw.expiry || undefined,
     underlyingSymbol: raw.underlyingSymbol || undefined,
-    underlyingIsin: raw.underlyingIsin || undefined,
+    underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
 }
@@ -502,6 +515,7 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
 interface OptionEaeDelivery {
   date: string;
   symbol: string;
+  isin: string;
   underlyingSymbol: string;
   tradePrice: string;
   action: string;
@@ -513,7 +527,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
 
   for (const raw of rawRows) {
     if (raw.strike?.trim()) {
-      const action = (raw.action ?? raw.type ?? "").toLowerCase();
+      const action = (raw.action ?? raw.type ?? raw.transactionType ?? "").toLowerCase();
       let mappedAction: OptionExercise["action"] = "Exercise";
       if (action.includes("assign")) mappedAction = "Assignment";
       else if (action.includes("expir") || action.includes("lapse")) mappedAction = "Expiration";
@@ -522,6 +536,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
         transactionID: raw.transactionID ?? "",
         accountId: raw.accountId ?? "",
         ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+        ...(raw.assetCategory?.trim() ? { assetCategory: raw.assetCategory.trim() as OptionExercise["assetCategory"] } : {}),
         symbol: raw.symbol ?? "",
         description: raw.description ?? "",
         isin: raw.isin ?? "",
@@ -534,13 +549,14 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
         quantity: raw.quantity ?? "0",
         proceeds: raw.proceeds ?? raw.amount ?? "0",
         underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
-        underlyingIsin: raw.underlyingIsin ?? "",
+        underlyingIsin: underlyingIsinOf(raw),
         multiplier: raw.multiplier ?? "100",
       });
     } else if (raw.tradePrice?.trim()) {
       deliveryRows.push({
         date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
         symbol: raw.symbol ?? "",
+        isin: raw.isin ?? "",
         underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
         tradePrice: raw.tradePrice,
         action: (raw.action ?? raw.type ?? "").toLowerCase(),
@@ -556,6 +572,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
     );
     if (delivery) {
       opt.marketPrice = delivery.tradePrice;
+      if (!opt.underlyingIsin && delivery.isin) opt.underlyingIsin = delivery.isin;
     }
   }
 
