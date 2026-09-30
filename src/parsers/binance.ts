@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom, toFiniteDecimal } from "./csv-utils.js";
+import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
@@ -1140,6 +1140,7 @@ function parseBinanceCsv(lines: string[]): Statement {
 
     const dateStr = (fields[cols.date] ?? "").trim();
     const tradeDate = convertBinanceDate(dateStr);
+    const tradeTime = timeOfDay(dateStr);
 
     const pairStr = (fields[cols.pair] ?? "").trim();
     const pair = parsePair(pairStr);
@@ -1179,6 +1180,7 @@ function parseBinanceCsv(lines: string[]): Statement {
       if (isBuy) emitCryptoSwap(trades, quoteLeg, baseLeg, "Spot");
       else emitCryptoSwap(trades, baseLeg, quoteLeg, "Spot");
       const emitted = trades.slice(before);
+      for (const t of emitted) t.tradeTime = tradeTime;
       const target = emitted.find((t) => t.symbol === symbol) ?? emitted[0];
       if (target) {
         target.commissionCurrency = fee.asset || currency;
@@ -1198,6 +1200,7 @@ function parseBinanceCsv(lines: string[]): Statement {
       assetCategory: "CRYPTO",
       currency,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: isBuy ? executed.toString() : executed.neg().toString(),
       tradePrice: price.toString(),
