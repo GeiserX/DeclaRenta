@@ -153,7 +153,10 @@ describe("results follow the profile settings", () => {
   it("recalculates when monodivisa is ticked", async () => {
     const before = generateTaxReport.mock.calls.length;
     edit("profile-monodivisa", (el) => { el.checked = true; });
+    // The old figures are covered while the new run is in progress.
+    expect(document.querySelector("#wizard-step-3 .processing-overlay")).not.toBeNull();
     await waitForRecalc(before);
+    await waitFor(() => document.querySelector("#wizard-step-3 .processing-overlay") === null || null, "overlay removed");
     expect(lastOptions().skipFx).toBe(true);
     expect(settingsText()).toContain("monodivisa sí");
   });

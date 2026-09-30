@@ -70,9 +70,15 @@ const ca: TranslationKeys = {
   "table.concept": "Concepte",
   "table.amount_eur": "Import (EUR)",
   "table.currency": "Divisa",
+  "table.fx_origin": "Origen",
+  "table.fx_lot": "Lot FIFO",
+  "fx.trigger.conversion": "Conversió de divisa",
+  "fx.trigger.dividend": "Dividend",
+  "fx.trigger.interest": "Interessos",
+  "fx.trigger.commission": "Comissió",
+  "fx.trigger.stock_purchase": "Compra de valors",
+  "fx.trigger.stock_sale": "Venda de valors",
 
-  "casilla.transmission_value": "Valor de transmissió (total transmissions)",
-  "casilla.acquisition_value": "Valor d'adquisició (total transmissions)",
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
   "casilla.acquisition_sale_rate_note":
@@ -91,6 +97,7 @@ const ca: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Retenció a compte de l'IRPF practicada en origen sobre dividends o interessos d'emissors espanyols (p. ex. accions de l'IBEX), encara que estiguin en un bróker estranger. És un pagament a compte deduïble de la quota; NO és la deducció per doble imposició (casella 0588), que només s'aplica a impost estranger.",
   "casilla.double_taxation": "Deducció doble imposició",
+  "casilla.dt_foreign_income_total": "Total rendiments estrangers",
   "casilla.reintegrated_losses":
     "Pèrdues diferides d'anys anteriors ara deduïbles (es van vendre els valors recomprats): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -99,12 +106,36 @@ const ca: TranslationKeys = {
   "messages.errors_title": "{{count}} error(s) — requereix atenció",
   "messages.warnings_title": "{{count}} avís(os) — revisa",
   "messages.info_title": "{{count}} nota/es informativa/es",
+  "pdf.severity_error": "Error",
+  "pdf.severity_warning": "Avís",
+  "pdf.severity_info": "Nota",
   "pdf.section_messages": "Missatges",
 
   "chart.asset_distribution": "Distribució per tipus d'actiu",
   "chart.monthly_gl": "Guany/Pèrdua per mes",
   "chart.currency_composition": "Composició per divisa",
   "chart.withholdings_country": "Retencions per país",
+  "chart.month_1": "Gen",
+  "chart.month_2": "Febr",
+  "chart.month_3": "Març",
+  "chart.month_4": "Abr",
+  "chart.month_5": "Maig",
+  "chart.month_6": "Juny",
+  "chart.month_7": "Jul",
+  "chart.month_8": "Ag",
+  "chart.month_9": "Set",
+  "chart.month_10": "Oct",
+  "chart.month_11": "Nov",
+  "chart.month_12": "Des",
+  "asset.stk": "Accions",
+  "asset.fund": "Fons / ETF",
+  "asset.opt": "Opcions",
+  "asset.fop": "Opcions sobre futurs",
+  "asset.crypto": "Criptomonedes",
+  "asset.bond": "Bons",
+  "option.expiration": "Venciment",
+  "option.close": "Tancament anticipat",
+  "option.exercise": "Exercici/Assignació",
 
   "footer.docs": "Documentació",
   "footer.privacy": "Self-hosted · Privacitat total",
@@ -121,6 +152,9 @@ const ca: TranslationKeys = {
   "a11y.theme_toggle": "Canviar tema",
   "a11y.drop_zone": "Zona de càrrega de fitxers",
   "a11y.file_input": "Seleccionar fitxers",
+  "a11y.ops_search": "Cercar operacions per ISIN o símbol",
+  "a11y.ops_filter": "Filtrar operacions per resultat",
+  "a11y.remove_file": "Treure {{name}}",
 
   "theme.toggle": "Canviar tema",
 
@@ -163,8 +197,14 @@ const ca: TranslationKeys = {
   "compare.saved_reports": "Informes desats",
   "compare.clear_history": "Esborrar historial",
   "compare.clear_confirm": "Esborrar tots els informes desats?",
+  "compare.transmission_value": "Valor de transmissió (transmissions, sense divises)",
+  "compare.acquisition_value": "Valor d'adquisició (transmissions, sense divises)",
+  "compare.net_gain_loss": "Guany/Pèrdua net (transmissions, sense divises)",
 
-  "error.no_broker_detected": 'No s\'ha pogut detectar el broker de "{{filename}}". Selecciona el broker manualment.',
+  "error.no_broker_detected":
+    'No s\'ha pogut detectar el broker de "{{filename}}". Si és un informe de broker, selecciona el broker manualment; si no ho és, treu-lo de la llista.',
+  "error.empty_file":
+    'El fitxer "{{filename}}" és buit. Treu-lo de la llista o torna\'l a exportar des del teu broker.',
   "error.file_too_large":
     'El fitxer "{{filename}}" supera el límit de {{limit}} MB i s\'ha descartat. Exporta un període més curt o divideix el fitxer.',
   "error.prefix": "Error: ",
@@ -180,11 +220,12 @@ const ca: TranslationKeys = {
   "sidebar.toggle": "Obrir/tancar menú",
 
   "profile.title": "Perfil fiscal",
-  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6.",
+  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6. Només es desen en aquest navegador, mai en un servidor.",
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "El NIF/NIE no és vàlid: revisa els dígits i la lletra de control.",
   "profile.surname_label": "Cognoms:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nom:",
@@ -205,6 +246,8 @@ const ca: TranslationKeys = {
     "Si el compte té diversos titulars (p. ex. compte conjunt o de guanys), DeclaRenta divideix tots els imports a parts iguals per mostrar la part que correspon a cada contribuent (Art. 11.3 LIRPF). Cada titular presenta la seva declaració individual per la seva part.",
   "profile.saved": "Perfil desat",
   "profile.save_btn": "Desar perfil",
+  "profile.clear_btn": "Esborrar les meves dades d'aquest navegador",
+  "profile.clear_confirm": "Vols esborrar d'aquest navegador el teu perfil fiscal, els informes desats i els valors introduïts a mà?",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
   "profile.go_to_profile": "Anar al perfil",
 
@@ -221,7 +264,7 @@ const ca: TranslationKeys = {
     "A la configuració, activa les seccions:<ul><li><strong>Trades</strong> (obligatori)</li><li><strong>Cash Transactions</strong> — dividends i retencions (obligatori)</li><li><strong>Open Positions</strong> — per al Model 720/D-6 (recomanat)</li><li><strong>Financial Instrument Information</strong> (recomanat)</li></ul>",
   "guide.ibkr.step5":
     "A cada secció, <strong>selecciona tots els camps disponibles</strong> (marca totes les caselles). Com més dades incloguis, més precís serà el càlcul. Com a mínim, assegura't d'incloure el camp <strong>Notes</strong> a Trades — és necessari per detectar conversions automàtiques de divisa.",
-  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Format de sortida: <strong>XML</strong>. A <em>Date Format</em>, deixa <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Inclou <strong>tots els anys disponibles</strong> per al càlcul FIFO correcte",
   "guide.ibkr.step8": "Desa la consulta, executa-la i descarrega el fitxer <code>.xml</code>",
   "guide.degiro.title": "Degiro (CSV)",
@@ -328,10 +371,11 @@ const ca: TranslationKeys = {
   "m720.category_c": "Comptes (saldos en efectiu)",
   "m720.category_exceeded": "Supera 50.000 € — obligatori declarar",
   "m720.category_not_exceeded": "Per sota del llindar",
+  "m720.category_undetermined": "No es pot determinar: {{count}} posició(ns) sense valorar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "m720.cash_title": "Saldos en efectiu (Comptes)",
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
@@ -366,7 +410,7 @@ const ca: TranslationKeys = {
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
   "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
@@ -385,6 +429,8 @@ const ca: TranslationKeys = {
   "m721.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 721.",
   "m721.threshold_not_exceeded":
     "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
+  "m721.threshold_undetermined":
+    "No es pot determinar si superes el llindar de 50.000 €: el total ({{amount}} €) no inclou {{count}} posició(ns) sense valorar. Valora-les abans de concloure que no has de presentar.",
   "m721.no_positions": "Puja un informe amb posicions de criptomonedes al Model 100 per analitzar el Model 721.",
   "m721.positions_title": "Posicions declarables",
   "m721.generate_btn": "Generar fitxer Model 721",
@@ -401,7 +447,7 @@ const ca: TranslationKeys = {
   "m721.format_notice":
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense tipus de canvi disponible per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
@@ -414,6 +460,10 @@ const ca: TranslationKeys = {
     "Les posicions del teu fitxer són a data {{date}}, no a 31/12/{{year}}. Aquests models declaren el que tenies a 31 de desembre, així que no es genera cap fitxer amb elles. Descarrega un informe que acabi el 31/12/{{year}} (a IBKR, un Flex Query amb data final 31/12/{{year}}) i torna'l a pujar.",
   "section.positions_date_unknown":
     "El teu broker no indica a quina data corresponen les posicions. Comprova que l'informe reflecteixi el que tenies a 31/12/{{year}}: si el vas descarregar més tard, les posicions i els seus valors poden no coincidir.",
+  "merge.holdings_other_date":
+    "Posicions i saldos del compte {{account}} a data {{date}} fora dels models 720, 721 i D-6: no són els de 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "Aquest fitxer acaba en una altra data. Les seves operacions i moviments sí que es tenen en compte, però aquests models declaren el que tenies a 31 de desembre, així que les seves posicions i saldos no se sumen. Si et falta l'informe d'aquest compte a 31/12/{{year}}, puja'l també.",
 
   "badge.complete": "Complet",
   "badge.pending": "Pendent",
@@ -498,7 +548,7 @@ const ca: TranslationKeys = {
   "guide_rw.double_taxation_title": "Deducció per doble imposició internacional",
   "guide_rw.entidad_emisora_label": "Entitat emissora",
   "guide_rw.entidad_emisora_value":
-    "Nom del broker (ex. Interactive Brokers, Degiro, eToro…). Si consolides diverses operacions en una sola línia, indica el broker principal.",
+    "Nom de l'empresa o del valor que vens (ex. Apple Inc.), no el del broker. En divises, la moneda (ex. USD). Si consolides diverses operacions en una sola línia, indica el valor principal.",
   "guide_rw.tipo_elemento_label": "Tipus d'element patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Accions admeses a negociació»</strong> per a accions cotitzades. Per a fons: «Participacions en IIC». Per a derivats/opcions: «Altres elements patrimonials».",
@@ -538,7 +588,7 @@ const ca: TranslationKeys = {
     "L'import de la casella <strong>0588</strong> de DeclaRenta. És el menor entre la retenció estrangera pagada i la quota espanyola corresponent (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "En quin camp del quadre?",
   "guide_rw.dt_campo_hint":
-    "Al quadre de doble imposició, omple DUES files:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → import brut dels dividends estrangers (mateix valor que casella 0029).<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → import de la casella 0588 de DeclaRenta.<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
+    "Al quadre de doble imposició, omple DUES files per cada país:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → la columna «Brut EUR» d'aquest país al detall de la casella 0588 de DeclaRenta. Si només hi ha un país, és la fila «Total rendiments estrangers» d'aquest detall. No inclou els dividends espanyols ni els de països sense retenció.<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → la deducció d'aquest país al mateix detall (amb un sol país, l'import de la casella 0588).<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
@@ -640,6 +690,9 @@ const ca: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sense aplicar: no hi ha accions anteriors amb què calcular la proporció.",
+  "fifo.split_unresolved.hint":
+    "Puja també els extractes d'anys anteriors, des de l'obertura del compte. Si no, el nombre d'accions i el cost de les vendes posteriors d'aquest valor no seran correctes.",
   "fifo.merger_applied":
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
@@ -656,16 +709,16 @@ const ca: TranslationKeys = {
   "fifo.corporate_action_unhandled.hint":
     "Si va canviar el nombre d'accions o l'ISIN de la posició, revisa el cost de les vendes posteriors d'aquest valor.",
   "fifo.sell_without_lots":
-    "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
+    "⚠ Venda sense lots: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
-    "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la primera compra d'aquest valor.",
+    "La teva exportació inclou els anys anteriors? Descarrega del teu broker un període que cobreixi des de la primera compra d'aquest valor.",
   "fifo.cover_without_lots":
     "⚠ Tancament de curt sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Guany no calculat (posició curta oberta fora del període o dades prèvies incompletes).",
   "fifo.cover_without_lots.hint":
     "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la venda que va obrir aquesta posició curta.",
-  "fifo.insufficient_lots": "⚠ Lots insuficients: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0.",
+  "fifo.insufficient_lots": "⚠ Lots insuficients: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Cost base = 0.",
   "fifo.insufficient_lots.hint":
-    "El Flex Query no cobreix totes les compres prèvies d'aquest valor. Amplia el període de consulta.",
+    "El fitxer no cobreix totes les compres prèvies d'aquest valor. Exporta des del teu broker un període més ampli.",
   "fifo.option_invalid_date": "⚠ Esdeveniment OptionEAE sense data vàlida per a {{symbol}}. Omès.",
   "fifo.option_invalid_date.hint":
     "Esdeveniment d'opció omès per data no vàlida. Revisa que el Flex Query inclou la secció 'Option Exercises, Assignments & Expirations'.",
@@ -700,6 +753,10 @@ const ca: TranslationKeys = {
     "Hi ha {{count}} ingrés(os) en criptomoneda (p. ex. recompenses de staking) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_income_unvalued.hint":
     "Aquests ingressos es paguen en la mateixa cripto i no tenen tipus de canvi oficial del BCE. Calcula'n el valor en euros a la data de cobrament i declara'ls manualment com a rendiments del capital mobiliari (Casella 0027).",
+  "report.dividend_unvalued":
+    "Hi ha {{count}} dividend(s) en {{currencies}} que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
+  "report.dividend_unvalued.hint":
+    "El BCE no publica cap tipus de canvi oficial per a aquesta divisa a la data de cobrament. Calcula l'import en euros a aquesta data, suma'l a mà a la casella 0029 i tingues en compte la seva retenció en la deducció per doble imposició internacional (casella 0588).",
   "report.crypto_general_gain_unvalued":
     "Hi ha {{count}} guany(s) patrimonial(s) en criptomoneda (p. ex. airdrops o comissions de referits) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_general_gain_unvalued.hint":
@@ -732,6 +789,10 @@ const ca: TranslationKeys = {
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total de comissions de cada ordre és exacte; només el repartiment entre execucions és aproximat.",
+  "flatex.depot.repeated_fills":
+    "Operacions de Flatex repetides i comptades una sola vegada: {{fills}}. Tenien el mateix número d'ordre i d'apunt (TA-Nr.) que una altra ja carregada.",
+  "flatex.depot.repeated_fills.hint":
+    "Sol passar en pujar el mateix CSV de Depotumsätze dues vegades, o dues exportacions amb dates que se solapen. Si de debò són operacions diferents, revisa el fitxer: Flatex dona a cada execució el seu propi TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota els dividends per l'import net cobrat, ja descomptada la retenció, i el CSV de Kontoumsätze no inclou la retenció.",
   "flatex.dividends.net_amounts.hint":
@@ -739,6 +800,10 @@ const ca: TranslationKeys = {
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
+  "degiro.corporate_action_pair":
+    "Possible operació societària el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro l'anota com una venda i una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota els canvis d'ISIN, els splits i els bescanvis d'accions com una venda del valor antic i una compra del nou, sense número d'ordre ni costos. DeclaRenta els calcula així: declara un guany o una pèrdua aquell dia, i les accions noves prenen aquest preu i aquesta data com a cost. Revisa la comunicació de Degiro o de l'emissor. Si va ser un simple canvi d'ISIN, un split o un bescanvi fiscalment neutre (règim especial de la Llei de l'Impost sobre Societats), no hi va haver venda: les accions noves conserven el cost i la data de compra de les antigues, així que corregeix aquesta operació a la teva declaració. Si va ser un bescanvi que tributa (art. 37.1.e LIRPF), el càlcul és correcte.",
   "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",
@@ -750,6 +815,10 @@ const ca: TranslationKeys = {
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Aquests moviments no s'han inclòs en el càlcul. Si són compres, vendes o ingressos (p. ex. futurs, pagaments amb Binance Card, Auto-Invest o cashback), afegeix-los a mà a la teva declaració i comunica el nom de l'operació perquè es pugui incorporar.",
+  "binance.unsupported_pair":
+    "S'han omès {{count}} operació(ns) del CSV de Binance amb un parell no reconegut: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Aquestes operacions no s'han inclòs en el càlcul. Afegeix-les a mà a la teva declaració i comunica el parell perquè es pugui incorporar.",
   "etoro.closed_types_skipped":
     "S'han omès {{count}} posició(ns) tancada(es) d'eToro d'un tipus no admès: {{types}}.",
   "etoro.closed_types_skipped.hint":
@@ -774,6 +843,14 @@ const ca: TranslationKeys = {
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
     "Sol deure's a files incompletes a l'exportació (columna \"amount\" buida o no numèrica). Si falten operacions, torna a descarregar el CSV de transaccions complet des de Trade Republic.",
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: no s'han aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "El cost dels títols antics no passa als nous, així que una venda posterior del nou valor pot sortir sense lots i amb cost 0. Si va ser una fusió o un bescanvi, afegeix el cost d'adquisició original a «Lots manuals per a posicions transferides».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: no s'han importat {{count}} entrega(s) de títols sense compravenda (accions gratuïtes, traspassos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "Les accions gratuïtes d'una promoció són un guany patrimonial de la base general pel seu valor de mercat el dia de l'entrega: declara-les a part i afegeix aquest valor com a cost a «Lots manuals per a posicions transferides». Si és un traspàs des d'un altre bròquer, afegeix-hi el cost de compra original.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

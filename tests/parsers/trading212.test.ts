@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
+import Decimal from "decimal.js";
 import { trading212Parser } from "../../src/parsers/trading212.js";
+import { FifoEngine } from "../../src/engine/fifo.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -574,6 +577,72 @@ describe("trading212Parser", () => {
       expect(allIds.some((id) => id.toLowerCase().includes("card-"))).toBe(false);
       expect(allIds.some((id) => id.toLowerCase().includes("cb-"))).toBe(false);
       expect(allIds.some((id) => id.toLowerCase().includes("dep-"))).toBe(false);
+    });
+
+    it("should carry the currency conversion fee as the trade's commission", () => {
+      const result = trading212Parser.parse(csv);
+      const buy = result.trades.find((t) => t.tradeID === "trading212-buy-ord-001")!;
+      expect(buy.commission).toBe("-0.05");
+      expect(buy.commissionCurrency).toBe("EUR");
+      const sell = result.trades.find((t) => t.tradeID === "trading212-sell-ord-002")!;
+      expect(sell.commission).toBe("-0.04");
+      expect(sell.commissionCurrency).toBe("EUR");
+      // An EUR trade with an empty fee cell has no fee.
+      const eurBuy = result.trades.find((t) => t.tradeID === "trading212-buy-ord-005")!;
+      expect(eurBuy.commission).toBe("0");
+      expect(eurBuy.taxes).toBe("0");
+    });
+
+    it("should include the conversion fee in the FIFO lot cost (ord-001)", () => {
+      const result = trading212Parser.parse(csv);
+      const buy = result.trades.find((t) => t.tradeID === "trading212-buy-ord-001")!;
+      const rates: EcbRateMap = new Map([["2025-05-05", new Map([["USD", "0.9"]])]]);
+      const fifo = new FifoEngine();
+      fifo.processTrades([buy], rates);
+      const lots = [...fifo.getRemainingLots().values()].flat();
+      expect(lots).toHaveLength(1);
+      // 30.97604 × 1.24 USD, plus the 0.05 EUR fee in USD at the trade-date cross-rate (1 / 0.9).
+      const expected = new Decimal("30.97604").mul("1.24").plus(new Decimal("0.05").div("0.9"));
+      expect(lots[0]!.costInFcy.toFixed(8)).toBe(expected.toFixed(8));
+    });
+  });
+
+  describe("fee and transaction-tax columns", () => {
+    const FEE_HEADER = "Action,Time,ISIN,Ticker,Name,Notes,ID,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Stamp duty reserve tax,Currency (Stamp duty reserve tax),Currency conversion fee,Currency (Currency conversion fee),French transaction tax,Currency (French transaction tax),Finra fee,Currency (Finra fee)";
+    const FEE_CSV = [
+      FEE_HEADER,
+      "Market buy,2025-03-10 10:00:00,GB0031215220,BARC,Barclays PLC,,uk-001,100,185.50,GBX,0.84,,,222.00,EUR,0.93,GBP,0.33,EUR,,,,",
+      "Market buy,2025-03-11 10:00:00,FR0000120271,TTE,TotalEnergies SE,,fr-001,10,60.00,EUR,1.00,,,601.80,EUR,,,,,1.80,EUR,,",
+      "Market sell,2025-03-12 15:00:00,US0378331005,AAPL,Apple Inc,,us-001,10,200.00,USD,1.08,5.00,EUR,1848.00,EUR,,,-2.78,EUR,,,0.02,USD",
+    ].join("\n");
+
+    it("should put a fee in the instrument's currency into taxes and one in another currency into commission", () => {
+      const result = trading212Parser.parse(FEE_CSV);
+      const uk = result.trades.find((t) => t.symbol === "BARC")!;
+      expect(uk.currency).toBe("GBP");
+      expect(uk.taxes).toBe("-0.93");
+      expect(uk.commission).toBe("-0.33");
+      expect(uk.commissionCurrency).toBe("EUR");
+
+      const fr = result.trades.find((t) => t.symbol === "TTE")!;
+      expect(fr.taxes).toBe("-1.8");
+      expect(fr.commission).toBe("0");
+
+      const us = result.trades.find((t) => t.symbol === "AAPL")!;
+      expect(us.taxes).toBe("-0.02");
+      expect(us.commission).toBe("-2.78");
+      expect(us.commissionCurrency).toBe("EUR");
+    });
+
+    it("should not add the fees again when the trade is valued from Total (no price)", () => {
+      const csv = [
+        FEE_HEADER,
+        "Market buy,2025-03-11 10:00:00,FR0000120271,TTE,TotalEnergies SE,,fr-002,10,,EUR,1.00,,,601.80,EUR,,,,,1.80,EUR,,",
+      ].join("\n");
+      const trade = trading212Parser.parse(csv).trades[0]!;
+      expect(trade.cost).toBe("-601.8");
+      expect(trade.taxes).toBe("0");
+      expect(trade.commission).toBe("0");
     });
   });
 });

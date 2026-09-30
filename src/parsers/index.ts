@@ -48,11 +48,21 @@ export function detectBroker(input: string): BrokerParser | undefined {
   return brokerParsers.find((p) => p.detect(input));
 }
 
+/** Short names the CLI documents that are not part of the parser's display name. */
+const BROKER_ALIASES: Record<string, string> = { ibkr: "interactivebrokers" };
+
+/** Lower-case and drop spaces, so "traderepublic" matches "Trade Republic". */
+function brokerKey(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, "");
+}
+
 /**
- * Look up a broker parser by name (case-insensitive).
- * Returns undefined if no parser matches.
+ * Look up a broker parser by name (case-insensitive, spaces ignored, "ibkr"
+ * accepted). Returns undefined if no parser matches.
  */
 export function getBroker(name: string): BrokerParser | undefined {
-  const lower = name.toLowerCase();
-  return brokerParsers.find((p) => p.name.toLowerCase().includes(lower));
+  const key = brokerKey(name);
+  if (!key) return undefined;
+  const wanted = BROKER_ALIASES[key] ?? key;
+  return brokerParsers.find((p) => brokerKey(p.name).includes(wanted));
 }

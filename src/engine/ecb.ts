@@ -8,16 +8,18 @@
 
 import Decimal from "decimal.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { OpenPosition } from "../types/ibkr.js";
 
 const ECB_SDMX_URL = "https://data-api.ecb.europa.eu/service/data/EXR";
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 2000;
 
-/** Stablecoins pegged 1:1 to USD — use USD rate from ECB */
+/** Stablecoins pegged 1:1 to USD or EUR — use that fiat's ECB rate */
 const STABLECOIN_TO_FIAT: Record<string, string> = {
   USDT: "USD", USDC: "USD", BUSD: "USD", DAI: "USD",
   TUSD: "USD", FDUSD: "USD", USDP: "USD", GUSD: "USD",
-  PYUSD: "USD", EURT: "EUR", EUROC: "EUR",
+  PYUSD: "USD", USD1: "USD", RLUSD: "USD", EURT: "EUR", EUROC: "EUR",
+  AEUR: "EUR", EURI: "EUR",
 };
 
 /** Normalize a currency code: map stablecoins to their fiat equivalent */
@@ -266,6 +268,17 @@ export function getEcbRate(rateMap: EcbRateMap, date: string, currency: string):
 export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: string): Decimal | null {
   if (currency === "EUR") return new Decimal(1);
   return lookupRateInMap(rateMap, date, currency);
+}
+
+/**
+ * An open position with units held but a market value of 0: the export gives
+ * no year-end price (Revolut's transaction log, or an IBKR position without a
+ * positionValue). Its EUR value is unknown, not 0 €, so the Modelo 720/721/D-6
+ * callers treat it like a position with no rate: left out of the EUR totals
+ * and surfaced for manual valuation.
+ */
+export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue">): boolean {
+  return new Decimal(p.quantity).greaterThan(0) && new Decimal(p.positionValue).isZero();
 }
 
 /**

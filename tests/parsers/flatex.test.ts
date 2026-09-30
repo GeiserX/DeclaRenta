@@ -237,17 +237,16 @@ describe("flatexParser — commission reconciliation (both files)", () => {
     ).toBe(false);
   });
 
-  it("the same Depot export uploaded twice gives each copy the single-upload commission", () => {
+  it("the same Depot export uploaded twice keeps each trade once, with its commission", () => {
     const merged = createEmptyStatement();
     mergeStatement(merged, flatexParser.parse(depotCsv));
     mergeStatement(merged, flatexParser.parse(depotCsv));
     mergeStatement(merged, flatexParser.parse(kontoCsv));
     const twice = finalizeMergedStatement(merged);
 
-    const once = new Map(parseBoth().trades.map((t) => [t.tradeID, t.commission]));
-    expect(twice.trades.map((t) => [t.tradeID, t.commission])).toEqual(
-      twice.trades.map((t) => [t.tradeID, once.get(t.tradeID)]),
-    );
+    const trades = (stmt: typeof twice) =>
+      stmt.trades.map((t) => [t.tradeID, t.quantity, t.commission]);
+    expect(trades(twice)).toEqual(trades(parseBoth()));
     expect(
       (twice.parserMessages ?? []).some((m) => m.id === "flatex.commission.multi_fill_prorated"),
     ).toBe(false);
@@ -320,6 +319,64 @@ describe("flatexParser — multi-fill and foreign-venue commission", () => {
     expect(byQuantity.map((t) => [t.quantity, t.commission])).toEqual([
       ["10", "7.9"],
       ["30", "7.9"],
+    ]);
+    expect(stmt.parserMessages ?? []).toEqual([]);
+  });
+
+  it("a Depot export uploaded twice gives the same FIFO disposals and totals as one upload", () => {
+    const depot = [
+      depotHeader,
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000011;4000000041;100,00;EUR;***xxx Depot",
+      "1;10.04.2025;14.04.2025;US0000000001;TEST CORP.;-10;Stk.;Ausführung ORDER Verkauf US0000000001 329000012;4000000042;120,00;EUR;***xxx Depot",
+    ].join("\n");
+    const konto = [
+      kontoHeader,
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000011;4000000051;-1007,9;EUR;1234567890;***xxx Cashkonto",
+      "10.04.2025;14.04.2025;;;Ausführung ORDER Verkauf US0000000001 329000012;4000000052;1192,1;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+
+    const once = parsePair(depot, konto);
+    const merged = createEmptyStatement();
+    mergeStatement(merged, flatexParser.parse(depot));
+    mergeStatement(merged, flatexParser.parse(depot));
+    mergeStatement(merged, flatexParser.parse(konto));
+    const twice = finalizeMergedStatement(merged);
+
+    const summary = (stmt: typeof once) => {
+      const disposals = new FifoEngine().processTrades(stmt.trades, new Map());
+      return {
+        disposals: disposals.map((d) => [d.quantity.toFixed(), d.gainLossEur.toFixed(2)]),
+        total: disposals.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)).toFixed(2),
+      };
+    };
+    expect(summary(once)).toEqual({ disposals: [["10", "184.20"]], total: "184.20" });
+    expect(summary(twice)).toEqual(summary(once));
+    expect(twice.trades).toHaveLength(2);
+
+    const msg = (twice.parserMessages ?? []).find((m) => m.id === "flatex.depot.repeated_fills");
+    expect(msg?.severity).toBe("info");
+    expect(msg?.context?.fills).toBe("2");
+    expect((once.parserMessages ?? []).some((m) => m.id === "flatex.depot.repeated_fills")).toBe(
+      false,
+    );
+  });
+
+  it("two real same-day fills with equal amounts but different TA-Nr. stay two", () => {
+    const depot = [
+      depotHeader,
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000013;4000000061;100,00;EUR;***xxx Depot",
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000013;4000000062;100,00;EUR;***xxx Depot",
+    ].join("\n");
+    const konto = [
+      kontoHeader,
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000013;4000000071;-1007,9;EUR;1234567890;***xxx Cashkonto",
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000013;4000000072;-1007,9;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+
+    const stmt = parsePair(depot, konto);
+    expect(stmt.trades.map((t) => [t.tradeID, t.quantity, t.commission])).toEqual([
+      ["4000000061", "10", "7.9"],
+      ["4000000062", "10", "7.9"],
     ]);
     expect(stmt.parserMessages ?? []).toEqual([]);
   });

@@ -34,7 +34,7 @@ Sí. Los scrip dividends (dividendos pagados en acciones) se detectan como accio
 
 ### ¿Cómo se calcula la deducción por doble imposición?
 
-Para cada país, se compara el impuesto retenido en origen con la cuota española que correspondería sobre esa renta (aplicando los tramos del ahorro). La deducción es el menor de ambos importes. Véase la sección [Doble imposición internacional](modelos-fiscales.md#doble-imposicion-internacional).
+Para cada país, se compara el impuesto retenido en origen (contado hasta el 15% del bruto, el límite de la mayoría de los convenios) con la cuota española que correspondería sobre esa renta (el bruto por tu tipo medio del ahorro). La deducción es el menor de ambos importes. Véase la sección [Doble imposición internacional](modelos-fiscales.md#doble-imposicion-internacional).
 
 ### ¿Puedo procesar varios años a la vez?
 

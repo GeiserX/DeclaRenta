@@ -29,25 +29,27 @@ describe("generateTaxReport settings", () => {
 });
 
 describe("formatReportSettings", () => {
-  afterEach(() => { setLocale("es"); });
+  afterEach(async () => {
+    await setLocale("es");
+  });
 
-  it("reads in Spanish", () => {
-    setLocale("es");
+  it("reads in Spanish", async () => {
+    await setLocale("es");
     expect(formatReportSettings({ monodivisa: true, trackAutoConvert: true, titulares: 2 }, t)).toBe(
       "Ajustes del cálculo: monodivisa sí, titulares 2, autoconversiones sí",
     );
   });
 
-  it("follows the active locale", () => {
-    setLocale("en");
+  it("follows the active locale", async () => {
+    await setLocale("en");
     expect(formatReportSettings({ monodivisa: false, trackAutoConvert: false, titulares: 1 }, t)).toBe(
       "Calculation settings: single-currency no, holders 1, auto-conversions no",
     );
   });
 
-  it("fills every placeholder in all five locales", () => {
+  it("fills every placeholder in all five locales", async () => {
     for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {
-      setLocale(locale);
+      await setLocale(locale);
       expect(formatReportSettings({ monodivisa: true, trackAutoConvert: false, titulares: 3 }, t)).not.toMatch(/\{\{|results\./);
     }
   });

@@ -14,6 +14,9 @@ strict: true
 
 theme:
   name: material
+  # overrides/partials/source.html keeps the GitHub link in the header but
+  # stops Material fetching repo facts from api.github.com in the reader's browser.
+  custom_dir: overrides
   language: es
   # No Google Fonts: the product's privacy policy keeps every page on the
   # system font stack, and Material would otherwise load Roboto from Google.
