@@ -6,7 +6,7 @@
 import Decimal from "decimal.js";
 import { t, type TranslationKey } from "../i18n/index.js";
 import type { TaxSummary, FifoDisposal } from "../types/tax.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
 
@@ -20,14 +20,6 @@ function optionScenarioLabel(scenario: string): string {
   const key = OPTION_SCENARIO_LABELS[scenario];
   return key ? t(key) : scenario;
 }
-
-function fmtDate(d: string): string {
-  // YYYYMMDD or YYYY-MM-DD -> DD/MM/YYYY
-  const clean = d.replace(/-/g, "").slice(0, 8);
-  if (clean.length !== 8) return d;
-  return `${clean.slice(6, 8)}/${clean.slice(4, 6)}/${clean.slice(0, 4)}`;
-}
-
 
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
@@ -49,7 +41,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     const label = assetLabel(cat);
     const subtotalProceeds = ops.reduce((s, d) => s.plus(d.proceedsEur), new Decimal(0));
     const subtotalCost = ops.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
-    const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    // Rounded to the shown cents, so a subtotal of -0,004 € is not classed as a loss.
+    const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toDecimalPlaces(2);
     const glClass = subtotalGL.greaterThanOrEqualTo(0) ? "gain" : "loss";
 
     // Collapsed by default: the per-operation tables can be hundreds of rows
@@ -90,9 +83,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
               <td>${esc(d.symbol)}${optionInfo}</td>
-              <td>${esc(fmtDate(d.acquireDate))}</td>
-              <td>${esc(fmtDate(d.sellDate))}</td>
-              <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>
+              <td>${esc(formatDate(d.acquireDate))}</td>
+              <td>${esc(formatDate(d.sellDate))}</td>
+              <td>${fmtQty(d.quantity)}</td>
               <td class="num">${fmtEur(d.costBasisEur)}</td>
               <td class="num">${fmtEur(d.proceedsEur)}</td>
               <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>

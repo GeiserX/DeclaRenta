@@ -777,6 +777,10 @@ const en: TranslationKeys = {
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
+  "flatex.depot.repeated_fills":
+    "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
+  "flatex.depot.repeated_fills.hint":
+    "This usually happens when the same Depotumsätze CSV is uploaded twice, or two exports with overlapping dates. If they really are different trades, check the file: Flatex gives each execution its own TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
   "flatex.dividends.net_amounts.hint":
@@ -799,6 +803,10 @@ const en: TranslationKeys = {
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":
     "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "binance.unsupported_pair":
+    "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "These trades are not included in the calculation. Add them to your return by hand and report the pair so it can be supported.",
   "etoro.closed_types_skipped":
     "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
   "etoro.closed_types_skipped.hint":
