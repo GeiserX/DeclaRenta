@@ -88,8 +88,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
               <td>${esc(d.symbol)}${optionInfo}</td>
-              <td>${fmtDate(d.acquireDate)}</td>
-              <td>${fmtDate(d.sellDate)}</td>
+              <td>${esc(fmtDate(d.acquireDate))}</td>
+              <td>${esc(fmtDate(d.sellDate))}</td>
               <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>
               <td class="num">${fmtEur(d.costBasisEur)}</td>
               <td class="num">${fmtEur(d.proceedsEur)}</td>

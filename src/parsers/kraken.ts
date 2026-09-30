@@ -13,6 +13,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
+import { isFiat } from "../engine/ecb.js";
 import {
   parseCsvLine,
   parseNumber,
@@ -248,6 +249,38 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
       taxes: "0",
       multiplier: "1",
     });
+
+    // A crypto-quoted pair (XETHXXBT) is a permuta (Art. 37.1.h LIRPF): the
+    // quote coin is given up on a buy and received on a sell, so it needs its
+    // own leg (a disposal, or the lot a later sale consumes), priced in the
+    // base coin exactly like the Binance two-leg permuta. Fiat quotes have none.
+    if (!isFiat(quote) && !volDec.isZero() && !costDec.isZero()) {
+      trades.push({
+        tradeID: `${txid}-${quote}`,
+        accountId: "",
+        symbol: quote,
+        description: `${base}/${quote}`,
+        isin: "",
+        assetCategory: "CRYPTO",
+        currency: base,
+        tradeDate,
+        settlementDate: tradeDate,
+        quantity: isSell ? costDec.toString() : costDec.neg().toString(),
+        tradePrice: volDec.div(costDec).toString(),
+        tradeMoney: volDec.toString(),
+        proceeds: isSell ? "0" : volDec.toString(),
+        cost: isSell ? volDec.toString() : "0",
+        fifoPnlRealized: "0",
+        fxRateToBase: "1",
+        buySell: isSell ? "BUY" : "SELL",
+        openCloseIndicator: isSell ? "O" : "C",
+        exchange: "KRAKEN",
+        commissionCurrency: base,
+        commission: "0",
+        taxes: "0",
+        multiplier: "1",
+      });
+    }
   }
 
   // A pair we couldn't split (no known quote suffix, too short for the last-3
