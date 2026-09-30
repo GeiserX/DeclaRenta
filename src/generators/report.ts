@@ -398,7 +398,6 @@ export function generateTaxReport(
   );
   const manualOpeningLotTrades = buildManualOpeningLotTrades(usableManualOpeningLots);
   const resolvedTrades = [...valuation.trades, ...rewardLots, ...manualOpeningLotTrades];
-  const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades];
 
   // 1. FIFO capital gains (process ALL years, filter to target year).
   //    Monodivisa (skipFx) → traditional cost basis: a FCY security's cost is
@@ -407,6 +406,9 @@ export function generateTaxReport(
   //    same-fiat cost at the sale-date rate (V2422-20), drift to the FX engine.
   const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
+  // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
+  // see it too, or the bought-out shares still count as held (V3282-18 total exit).
+  const washSaleTrades = [...statement.trades, ...manualOpeningLotTrades, ...fifoEngine.getCashBuyoutSales()];
 
   // Number of account holders. >1 splits every reported amount equally per
   // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.

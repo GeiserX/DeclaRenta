@@ -46,6 +46,8 @@ export class FifoEngine {
   /** FIFO queue per security — short positions (opened via SELL+O) */
   private shortLots: Map<string, Lot[]> = new Map();
   private disposals: FifoDisposal[] = [];
+  /** Synthetic SELLs booked for cash buyouts (TC rows), for callers that also need them as trades */
+  private cashBuyoutSales: Trade[] = [];
   private nextLotId = 1;
   /**
    * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
@@ -536,6 +538,7 @@ export class FifoEngine {
       hint: "Una fusión o adquisición pagada en efectivo es una transmisión: la ganancia o pérdida se calcula como en una venta, con el efectivo recibido como valor de transmisión.",
       context: { symbol: sell.symbol, isin: sell.isin, date, quantity },
     });
+    this.cashBuyoutSales.push(sell);
     this.consumeLots(sell, rateMap);
   }
 
@@ -1566,6 +1569,11 @@ export class FifoEngine {
 
   getDisposals(): FifoDisposal[] {
     return this.disposals;
+  }
+
+  /** The synthetic SELL trades booked for cash buyouts, so the anti-churning check sees the exit. */
+  getCashBuyoutSales(): Trade[] {
+    return this.cashBuyoutSales;
   }
 
   getRemainingLots(): Map<string, Lot[]> {
