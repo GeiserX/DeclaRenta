@@ -234,7 +234,7 @@ const en: TranslationKeys = {
   "guide.flatex.step2": "Go to <strong>Transactions</strong> → <strong>Depotumsätze</strong> (portfolio movements)",
   "guide.flatex.step3": "Select <strong>the full history</strong> (needed for FIFO) and export the CSV file",
   "guide.flatex.step4":
-    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV",
+    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV. Note: dividends there show the net amount, after withholding; take the gross amount and the withholding from each dividend's PDF statement",
   "guide.flatex.step5":
     "Upload <strong>both CSV files</strong> (Depotumsätze for trades and Kontoumsätze for dividends)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -687,6 +687,10 @@ const en: TranslationKeys = {
     "Not all Flatex commissions could be matched: the corresponding cash entries are missing.",
   "flatex.commission.unmatched_trades.hint":
     "Also upload the Kontoumsätze (account movements) CSV together with the Depotumsätze one so that each operation's commission is taken into account (added to the acquisition cost on purchases and subtracted from the transfer value on sales).",
+  "flatex.dividends.net_amounts":
+    "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
+  "flatex.dividends.net_amounts.hint":
+    "Take the gross amount and the withholding of each payment from the PDF statement Flatex puts in your document inbox, and correct boxes 0029 (gross amount), 0588 (foreign withholding) and 0597 (Spanish withholding) by hand.",
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",

@@ -253,7 +253,7 @@ const es = {
   "guide.flatex.step3":
     "Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV",
   "guide.flatex.step4":
-    "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV",
+    "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV. Ojo: ahí los dividendos aparecen por el importe neto, ya descontada la retención; toma el importe íntegro y la retención del justificante en PDF de cada dividendo",
   "guide.flatex.step5":
     "Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos)",
 
@@ -726,6 +726,10 @@ const es = {
     "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
   "flatex.commission.unmatched_trades.hint":
     "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota los dividendos por el importe neto cobrado, ya descontada la retención, y el CSV de Kontoumsätze no incluye la retención.",
+  "flatex.dividends.net_amounts.hint":
+    "Toma el importe íntegro y la retención de cada cobro del justificante en PDF que Flatex deja en tu buzón de documentos, y corrige a mano las casillas 0029 (importe íntegro), 0588 (retención extranjera) y 0597 (retención española).",
   "degiro.rows_skipped": "Se omitieron {{count}} filas sin ISIN/sin importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",

@@ -236,7 +236,7 @@ const eu: TranslationKeys = {
     "Joan <strong>Mugimenduak</strong> \u2192 <strong>Depotums\u00e4tze</strong> (zorroaren mugimenduak) atalera",
   "guide.flatex.step3": "Hautatu <strong>historia osoa</strong> (FIFOrako beharrezkoa) eta esportatu CSV fitxategia",
   "guide.flatex.step4":
-    "Dibidenduetarako: joan <strong>Kontoums\u00e4tze</strong> (kontuaren mugimenduak) atalera, data-tarte bera, eta esportatu CSVa",
+    "Dibidenduetarako: joan <strong>Kontoums\u00e4tze</strong> (kontuaren mugimenduak) atalera, data-tarte bera, eta esportatu CSVa. Kontuz: han dibidenduak zenbateko garbiarekin agertzen dira, atxikipena kenduta; hartu zenbateko osoa eta atxikipena dibidendu bakoitzaren PDF egiaztagiritik",
   "guide.flatex.step5":
     "Igo <strong>bi CSV fitxategiak</strong> (Depotums\u00e4tze eragiketetarako eta Kontoums\u00e4tze dibidenduetarako)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -691,6 +691,10 @@ const eu: TranslationKeys = {
     "Ezin izan dira Flatex-en komisio guztiak parekatu: dagozkien kutxa-idazpenak falta dira.",
   "flatex.commission.unmatched_trades.hint":
     "Igo ezazu Kontoumsätze (kontu-mugimenduak) CSVa ere Depotumsätze-rekin batera, eragiketa bakoitzaren komisioa kontuan har dadin (erosketetan eskuratze-kostuari gehituz eta salmentetan transmisio-baliotik kenduz).",
+  "flatex.dividends.net_amounts":
+    "Flatex-ek dibidenduak jasotako zenbateko garbiarekin erregistratzen ditu, atxikipena kenduta, eta Kontoumsätze CSVak ez du atxikipena jasotzen.",
+  "flatex.dividends.net_amounts.hint":
+    "Hartu kobrantza bakoitzaren zenbateko osoa eta atxikipena Flatex-ek zure dokumentu-postontzian uzten duen PDF egiaztagiritik, eta zuzendu eskuz 0029 laukia (zenbateko osoa), 0588 laukia (atzerriko atxikipena) eta 0597 laukia (atxikipen espainiarra).",
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",

@@ -236,7 +236,7 @@ const ca: TranslationKeys = {
   "guide.flatex.step3":
     "Selecciona <strong>tot l'hist\u00f2ric</strong> (necessari per al c\u00e0lcul FIFO) i exporta el fitxer CSV",
   "guide.flatex.step4":
-    "Per a dividends: ves a <strong>Kontoums\u00e4tze</strong> (moviments del compte), mateix rang de dates, i exporta el CSV",
+    "Per a dividends: ves a <strong>Kontoums\u00e4tze</strong> (moviments del compte), mateix rang de dates, i exporta el CSV. Compte: allà els dividends apareixen per l'import net, ja descomptada la retenció; pren l'import íntegre i la retenció del justificant en PDF de cada dividend",
   "guide.flatex.step5":
     "Puja <strong>els dos fitxers</strong> CSV (Depotums\u00e4tze per a operacions i Kontoums\u00e4tze per a dividends)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -689,6 +689,10 @@ const ca: TranslationKeys = {
     "No s'han pogut emparellar totes les comissions de Flatex: falten els apunts de caixa corresponents.",
   "flatex.commission.unmatched_trades.hint":
     "Puja també el CSV de Kontoumsätze (moviments de compte) juntament amb el de Depotumsätze perquè la comissió de cada operació es tingui en compte (sumant-se al cost d'adquisició en les compres i restant-se del valor de transmissió en les vendes).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota els dividends per l'import net cobrat, ja descomptada la retenció, i el CSV de Kontoumsätze no inclou la retenció.",
+  "flatex.dividends.net_amounts.hint":
+    "Pren l'import íntegre i la retenció de cada cobrament del justificant en PDF que Flatex deixa a la teva bústia de documents, i corregeix a mà les caselles 0029 (import íntegre), 0588 (retenció estrangera) i 0597 (retenció espanyola).",
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
