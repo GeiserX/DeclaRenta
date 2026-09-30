@@ -398,6 +398,10 @@ const en: TranslationKeys = {
 
   "section.year_label": "Tax year",
   "section.profile_source": 'Data from <a href="#perfil">Fiscal profile</a>',
+  "section.positions_date_mismatch":
+    "The positions in your file are dated {{date}}, not 31/12/{{year}}. These models declare what you held on 31 December, so no file is generated from them. Download a report that ends on 31/12/{{year}} (in IBKR, a Flex Query with end date 31/12/{{year}}) and upload it again.",
+  "section.positions_date_unknown":
+    "Your broker does not say which date the positions are from. Check that the report shows what you held on 31/12/{{year}}: if you downloaded it later, the positions and their values may not match.",
 
   "badge.complete": "Complete",
   "badge.pending": "Pending",

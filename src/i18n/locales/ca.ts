@@ -397,6 +397,10 @@ const ca: TranslationKeys = {
 
   "section.year_label": "Exercici",
   "section.profile_source": 'Dades del <a href="#perfil">Perfil fiscal</a>',
+  "section.positions_date_mismatch":
+    "Les posicions del teu fitxer són a data {{date}}, no a 31/12/{{year}}. Aquests models declaren el que tenies a 31 de desembre, així que no es genera cap fitxer amb elles. Descarrega un informe que acabi el 31/12/{{year}} (a IBKR, un Flex Query amb data final 31/12/{{year}}) i torna'l a pujar.",
+  "section.positions_date_unknown":
+    "El teu broker no indica a quina data corresponen les posicions. Comprova que l'informe reflecteixi el que tenies a 31/12/{{year}}: si el vas descarregar més tard, les posicions i els seus valors poden no coincidir.",
 
   "badge.complete": "Complet",
   "badge.pending": "Pendent",
