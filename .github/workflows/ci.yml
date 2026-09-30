@@ -89,3 +89,17 @@ jobs:
 
       - name: Build
         run: mkdocs build --strict
+
+      # Material fetches the repo's stars and latest release from api.github.com
+      # for every element marked data-md-component="source", which would send
+      # each reader's IP to GitHub. overrides/partials/source.html keeps the
+      # header link without that marker. The last two lines are controls: the
+      # fetch code is still in the bundle, and the link still renders.
+      - name: No GitHub API call from the docs pages
+        run: |
+          if grep -rl 'data-md-component="source"' site/; then
+            echo "::error::The docs would call api.github.com from the reader's browser (see overrides/partials/source.html)"
+            exit 1
+          fi
+          grep -rlq 'api.github.com' site/assets/javascripts/
+          grep -q 'class="md-source"' site/index.html

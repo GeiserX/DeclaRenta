@@ -179,7 +179,7 @@ const eu: TranslationKeys = {
   "sidebar.toggle": "Menua ireki/itxi",
 
   "profile.title": "Profil fiskala",
-  "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira.",
+  "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira. Nabigatzaile honetan bakarrik gordetzen dira, inoiz ez zerbitzari batean.",
   "profile.section_personal": "Datu pertsonalak",
   "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
@@ -204,6 +204,8 @@ const eu: TranslationKeys = {
     "Kontuak hainbat titular baditu (adib. kontu bateratua edo irabazpidezkoa), DeclaRentak zenbateko guztiak zati berdinetan banatzen ditu zergadun bakoitzari dagokion partea erakusteko (LIRPF 11.3 art.). Titular bakoitzak bere aitorpen indibiduala aurkezten du bere partearengatik.",
   "profile.saved": "Profila gordeta",
   "profile.save_btn": "Profila gorde",
+  "profile.clear_btn": "Ezabatu nire datuak nabigatzaile honetatik",
+  "profile.clear_confirm": "Nabigatzaile honetatik ezabatu zure profil fiskala, gordetako txostenak eta eskuz sartutako balioak?",
   "profile.incomplete_banner": "Osatu zure profil fiskala 720 eta D-6 ereduak sortzeko.",
   "profile.go_to_profile": "Profilara joan",
 

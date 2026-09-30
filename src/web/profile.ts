@@ -7,6 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { esc } from "./esc.js";
+import { clearLocalData } from "./storage.js";
 
 const PROFILE_KEY = "declarenta_profile";
 
@@ -193,6 +194,7 @@ export function initProfile(): void {
       <div class="profile-actions">
         <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
         <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
+        <button type="button" class="btn-small btn-danger" id="profile-clear-btn">${t("profile.clear_btn")}</button>
       </div>
     </form>
   `;
@@ -220,6 +222,14 @@ export function initProfile(): void {
   // Auto-save on any input change
   document.getElementById("profile-form")!.addEventListener("input", () => {
     saveProfile(collectProfile());
+  });
+
+  // Delete everything stored in this browser, then reload so no screen keeps
+  // showing the old NIF, name or reports.
+  document.getElementById("profile-clear-btn")!.addEventListener("click", () => {
+    if (!confirm(t("profile.clear_confirm"))) return;
+    clearLocalData();
+    location.reload();
   });
 
   // Explicit save button

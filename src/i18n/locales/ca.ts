@@ -178,7 +178,7 @@ const ca: TranslationKeys = {
   "sidebar.toggle": "Obrir/tancar menú",
 
   "profile.title": "Perfil fiscal",
-  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6.",
+  "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6. Només es desen en aquest navegador, mai en un servidor.",
   "profile.section_personal": "Dades personals",
   "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
@@ -203,6 +203,8 @@ const ca: TranslationKeys = {
     "Si el compte té diversos titulars (p. ex. compte conjunt o de guanys), DeclaRenta divideix tots els imports a parts iguals per mostrar la part que correspon a cada contribuent (Art. 11.3 LIRPF). Cada titular presenta la seva declaració individual per la seva part.",
   "profile.saved": "Perfil desat",
   "profile.save_btn": "Desar perfil",
+  "profile.clear_btn": "Esborrar les meves dades d'aquest navegador",
+  "profile.clear_confirm": "Vols esborrar d'aquest navegador el teu perfil fiscal, els informes desats i els valors introduïts a mà?",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
   "profile.go_to_profile": "Anar al perfil",
 

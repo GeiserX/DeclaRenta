@@ -178,7 +178,7 @@ const gl: TranslationKeys = {
   "sidebar.toggle": "Abrir/pechar menú",
 
   "profile.title": "Perfil fiscal",
-  "profile.description": "Estes datos utilízanse para xerar os ficheiros dos modelos 720 e D-6.",
+  "profile.description": "Estes datos utilízanse para xerar os ficheiros dos modelos 720 e D-6. Gárdanse só neste navegador, nunca nun servidor.",
   "profile.section_personal": "Datos persoais",
   "profile.section_declaration": "Configuración da declaración",
   "profile.nif_label": "NIF/NIE:",
@@ -203,6 +203,8 @@ const gl: TranslationKeys = {
     "Se a conta ten varios titulares (p. ex. conta conxunta ou de gananciais), DeclaRenta divide todos os importes a partes iguais para amosar a parte que corresponde a cada contribuínte (Art. 11.3 LIRPF). Cada titular presenta a súa declaración individual pola súa parte.",
   "profile.saved": "Perfil gardado",
   "profile.save_btn": "Gardar perfil",
+  "profile.clear_btn": "Borrar os meus datos deste navegador",
+  "profile.clear_confirm": "Borrar deste navegador o teu perfil fiscal, os informes gardados e os valores introducidos a man?",
   "profile.incomplete_banner": "Completa o teu perfil fiscal para xerar os modelos 720 e D-6.",
   "profile.go_to_profile": "Ir ao perfil",
 

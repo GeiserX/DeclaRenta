@@ -190,7 +190,7 @@ const es = {
 
   // Fiscal profile
   "profile.title": "Perfil fiscal",
-  "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.",
+  "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6. Se guardan solo en este navegador, nunca en un servidor.",
   "profile.section_personal": "Datos personales",
   "profile.section_declaration": "Configuración de la declaración",
   "profile.nif_label": "NIF/NIE:",
@@ -215,6 +215,8 @@ const es = {
     "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
   "profile.saved": "Perfil guardado",
   "profile.save_btn": "Guardar perfil",
+  "profile.clear_btn": "Borrar mis datos de este navegador",
+  "profile.clear_confirm": "¿Borrar de este navegador tu perfil fiscal, los informes guardados y los valores introducidos a mano?",
   "profile.incomplete_banner": "Completa tu perfil fiscal para generar los modelos 720 y D-6.",
   "profile.go_to_profile": "Ir al perfil",
 

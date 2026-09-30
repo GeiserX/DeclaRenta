@@ -118,6 +118,27 @@ export function clearAllReports(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+/**
+ * Every localStorage key that holds the user's data: the fiscal profile (NIF,
+ * name, phone), the saved reports, the manual crypto rates and the manual
+ * opening lots. Display preferences (theme, locale) are not listed.
+ */
+export const LOCAL_DATA_KEYS = [
+  "declarenta_profile",
+  STORAGE_KEY,
+  "declarenta_manual_rates",
+  "declarenta_manual_opening_lots",
+] as const;
+
+/** Delete everything the app stored about the user in this browser */
+export function clearLocalData(): void {
+  for (const key of LOCAL_DATA_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch { /* localStorage unavailable */ }
+  }
+}
+
 /** Get years that have stored reports */
 export function getStoredYears(): number[] {
   return loadAllReports().map((r) => r.year);
