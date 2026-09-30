@@ -78,7 +78,7 @@ Antes de los resultados, el paso [Revisar datos](getting-started.md#tu-primera-d
 - Las casillas 0328, 0331, 1633, 1637, 0029, 0027 y 0588 del [Modelo 100](casillas.md), con FIFO estricto y el tipo del BCE de la fecha de cada operación.
 - El fichero del [Modelo 720](modelos-informativos.md#modelo-720) en el formato de la AEAT, validado contra la especificación del BOE. Con la CLI (`--previous-720`) distingue además los tipos A, M y C a partir de la declaración del año anterior.
 - La revisión del [Modelo 721](modelos-informativos.md#modelo-721) para criptomonedas y la guía del [Modelo D-6](modelos-informativos.md#modelo-d-6).
-- La [regla anti-churning](casillas.md#regla-anti-churning-art-335fg-lirpf) de forma proporcional, la [doble imposición](modelos-fiscales.md#doble-imposicion-internacional) por país y la [compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas) de cuatro años.
+- La [regla anti-churning](casillas.md#regla-anti-churning-art-335fg-lirpf) de forma proporcional, la [doble imposición](modelos-fiscales.md#doble-imposicion-internacional) por país y la [compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas) de cuatro años (solo en la CLI, con `--prior-losses`).
 - Splits, fusiones, spin-offs y scrip dividends; acciones, ETFs, opciones, futuros, forex, bonos, CFDs y cripto. Ver [Modelos fiscales y motor fiscal](modelos-fiscales.md).
 - Los 13 brokers de [Brokers soportados](brokers.md), en un solo FIFO cuando subes varios ficheros.
 
