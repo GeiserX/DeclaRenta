@@ -117,6 +117,9 @@ const gl: TranslationKeys = {
   "a11y.theme_toggle": "Cambiar tema",
   "a11y.drop_zone": "Zona de carga de ficheiros",
   "a11y.file_input": "Seleccionar ficheiros",
+  "a11y.ops_search": "Buscar operacións por ISIN ou símbolo",
+  "a11y.ops_filter": "Filtrar operacións por resultado",
+  "a11y.remove_file": "Quitar {{name}}",
 
   "theme.toggle": "Cambiar tema",
 

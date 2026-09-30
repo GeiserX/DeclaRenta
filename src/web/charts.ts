@@ -81,9 +81,11 @@ export function renderDonutChart(title: string, items: { label: string; value: D
     </g>`
   ).join("");
 
+  const summary = data.map((d) => `${d.label} ${((d.value / total) * 100).toFixed(1)}%`);
+
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 400 ${Math.max(200, 20 + data.length * 22)}" class="chart-svg">
+    <svg viewBox="0 0 400 ${Math.max(200, 20 + data.length * 22)}" class="chart-svg" ${chartA11y(title, summary)}>
       ${paths.join("")}
       <circle cx="${cx}" cy="${cy}" r="${inner}" fill="var(--surface)"/>
       <text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="var(--text)" font-size="13" font-weight="600">${formatCompact(total)}</text>
@@ -110,24 +112,36 @@ export function renderMonthlyGainLossChart(title: string, monthly: MonthlyBar[])
   const scale = (baseY - 10) / maxAbs;
   const offsetX = (chartW - monthly.length * (barW + gap)) / 2;
 
+  const amounts = monthly.map(monthAmounts);
+
   const bars = monthly.map((m, i) => {
     const x = offsetX + i * (barW + gap);
     const gainH = m.gain * scale;
     const lossH = Math.abs(m.loss) * scale;
+    const barsSvg =
+      (gainH > 0 ? `<rect x="${x}" y="${baseY - gainH}" width="${barW}" height="${gainH}" rx="3" fill="var(--success)" opacity="0.8"/>` : "") +
+      (lossH > 0 ? `<rect x="${x}" y="${baseY}" width="${barW}" height="${lossH}" rx="3" fill="var(--danger)" opacity="0.8"/>` : "");
     return `
-      ${gainH > 0 ? `<rect x="${x}" y="${baseY - gainH}" width="${barW}" height="${gainH}" rx="3" fill="var(--success)" opacity="0.8"/>` : ""}
-      ${lossH > 0 ? `<rect x="${x}" y="${baseY}" width="${barW}" height="${lossH}" rx="3" fill="var(--danger)" opacity="0.8"/>` : ""}
+      ${barsSvg ? `<g><title>${escSvg(amounts[i]!)}</title>${barsSvg}</g>` : ""}
       <text x="${x + barW / 2}" y="${chartH + 14}" text-anchor="middle" fill="var(--muted)" font-size="9">${escSvg(m.month)}</text>
     `;
   }).join("");
 
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 ${chartW} ${chartH + 20}" class="chart-svg">
+    <svg viewBox="0 0 ${chartW} ${chartH + 20}" class="chart-svg" ${chartA11y(title, amounts.filter((a) => a !== ""))}>
       <line x1="25" y1="${baseY}" x2="${chartW}" y2="${baseY}" stroke="var(--border)" stroke-width="1"/>
       ${bars}
     </svg>
   </div>`;
+}
+
+/** "Mar: +300,00 € / -200,00 €" for a month with disposals, "" otherwise. */
+function monthAmounts(m: MonthlyBar): string {
+  const parts: string[] = [];
+  if (m.gain > 0) parts.push(`+${fmtEur(m.gain)} €`);
+  if (m.loss < 0) parts.push(`${fmtEur(m.loss)} €`);
+  return parts.length > 0 ? `${m.month}: ${parts.join(" / ")}` : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +174,7 @@ export function renderHorizontalBarChart(title: string, items: { label: string; 
 
   return `<div class="chart-card">
     <h4 class="chart-title">${escSvg(title)}</h4>
-    <svg viewBox="0 0 ${chartW} ${totalH}" class="chart-svg">${bars}</svg>
+    <svg viewBox="0 0 ${chartW} ${totalH}" class="chart-svg" ${chartA11y(title, data.map((d) => `${d.label} ${fmtEur(d.value)} EUR`))}>${bars}</svg>
   </div>`;
 }
 
@@ -385,6 +399,15 @@ function renderBreakdown(b: TaxBaseBreakdown): string {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * role="img" hides the chart's inner text from screen readers, so the name
+ * carries the title and every value the chart draws.
+ */
+function chartA11y(title: string, values: string[]): string {
+  const label = values.length > 0 ? `${title}. ${values.join("; ")}` : title;
+  return `role="img" aria-label="${escSvg(label)}"`;
+}
 
 function escSvg(s: string): string {
   // Escapes all five chars (incl. the single quote), matching the canonical

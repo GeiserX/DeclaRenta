@@ -160,6 +160,7 @@ langSelect.addEventListener("change", () => {
 
 document.addEventListener("localechange", () => {
   updateStaticText();
+  renderFileList();
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
@@ -415,7 +416,7 @@ function renderFileList() {
   fileListDiv.innerHTML = pendingFiles
     .map(
       (f, i) =>
-        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file">&times;</button></span>`,
+        `<span class="file-tag">${esc(f.name)} <button data-idx="${i}" class="remove-file" aria-label="${esc(t("a11y.remove_file", { name: f.name }))}">&times;</button></span>`,
     )
     .join(" ");
 
@@ -947,6 +948,11 @@ function nextDir(current: SortDir): SortDir {
   return null;
 }
 
+/** Re-rendering replaces the header, so put keyboard focus back on its button. */
+function refocusSortButton(table: HTMLElement, col: string): void {
+  table.querySelector<HTMLButtonElement>(`th[data-col="${col}"] .sort-btn`)?.focus();
+}
+
 // Event delegation: attach once on stable parent, works across re-renders
 opsTable.addEventListener("click", (e) => {
   const th = (e.target as HTMLElement).closest<HTMLElement>("th.sortable");
@@ -954,7 +960,9 @@ opsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = opsSort.col === col ? nextDir(opsSort.dir) : "asc";
   opsSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   renderOperationsTable();
+  if (hadFocus) refocusSortButton(opsTable, col);
 });
 
 divsTable.addEventListener("click", (e) => {
@@ -963,7 +971,9 @@ divsTable.addEventListener("click", (e) => {
   const col = th.dataset.col!;
   const dir = divSort.col === col ? nextDir(divSort.dir) : "asc";
   divSort = { col: dir ? col : "", dir };
+  const hadFocus = th.contains(document.activeElement);
   if (currentReport) renderDividendsTable(currentReport);
+  if (hadFocus) refocusSortButton(divsTable, col);
 });
 
 // ---------------------------------------------------------------------------
@@ -1002,7 +1012,7 @@ function renderResults(report: TaxSummary) {
 
     let hdrHtml = `<div class="section-header-bar">
       <span class="section-year">${t("section.year_label")}
-        <select id="results-year-select" class="year-select">${yearOptions}</select>
+        <select id="results-year-select" class="year-select" aria-label="${esc(t("section.year_label"))}">${yearOptions}</select>
       </span>
     </div>`;
 
@@ -1114,6 +1124,14 @@ function sortIndicator(col: string, state: SortState): string {
   return state.col === col ? ` ${state.dir}` : "";
 }
 
+/** A sortable header: a button for keyboard users, aria-sort on the sorted column. */
+function sortableTh(label: string, col: string, state: SortState): string {
+  const ariaSort = state.col === col && state.dir
+    ? ` aria-sort="${state.dir === "asc" ? "ascending" : "descending"}"`
+    : "";
+  return `<th class="sortable${sortIndicator(col, state)}" data-col="${col}"${ariaSort}><button type="button" class="sort-btn">${label}</button></th>`;
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
@@ -1151,8 +1169,7 @@ function renderOperationsTable() {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, opsSort);
 
   opsTable.innerHTML = `
     <table>
@@ -1216,8 +1233,7 @@ function renderDividendsTable(report: TaxSummary) {
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, divSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string) => sortableTh(label, col, divSort);
 
   divsTable.innerHTML = `
     <table>
