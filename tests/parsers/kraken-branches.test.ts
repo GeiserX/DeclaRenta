@@ -97,9 +97,11 @@ describe("krakenParser - Trades CSV", () => {
       '"T001","O001","ABCDEF","2025-01-15 10:00:00","buy","limit","100","100","0","1","0","","","T001"',
     ].join("\n");
     const result = krakenParser.parse(input);
-    // 6-char pair, last 3 = DEF, first 3 = ABC
+    // 6-char pair, last 3 = DEF, first 3 = ABC. DEF is not a known quote, so
+    // the split is a guess and the user is warned to review it.
     expect(result.trades[0].symbol).toBe("ABC");
     expect(result.trades[0].currency).toBe("DEF");
+    expect(result.parserMessages?.map((m) => m.id)).toEqual(["kraken.unrecognized_pair"]);
   });
 
   it("should handle very short pair", () => {

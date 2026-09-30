@@ -46,7 +46,7 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
 - **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto) — solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se reintegra al transmitir los valores recomprados. Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
-- **Stock splits**: forward y reverse, con liquidación de fracciones (cash-in-lieu)
+- **Stock splits**: forward y reverse (tipos FS y RS de IBKR); las fracciones de acción conservan su coste y, si el split cambia el ISIN, los lotes pasan al nuevo
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
 - **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%
 - **Validador Modelo 720**: verificación contra la especificación BOE del formato de registro
@@ -157,7 +157,7 @@ La regla anti-churning sí se aplica a bonos (son valores homogéneos).
 
 ### CFDs (Contratos por Diferencia)
 
-Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo `leverage > 1`, el tipo `"CFD"`, o el tipo `"Commodity"` (las materias primas en eToro son siempre CFDs). Se soportan acciones, índices y materias primas como CFDs.
+Los CFDs tributan como ganancias y pérdidas patrimoniales, no como rendimientos del capital mobiliario. DeclaRenta detecta CFDs en eToro por el campo `leverage > 1`, el tipo `"CFD"`, o un tipo de materias primas (`"Commodity"`, `"Materias primas"`) o de divisas (`"Currencies"`, `"Divisas"`), que en eToro son siempre CFDs. Se soportan acciones, índices, materias primas y divisas como CFDs. Las posiciones de criptomonedas no se importan y se avisa de ellas.
 
 Las posiciones cortas en CFDs se soportan: si vendes primero sin lotes previos, DeclaRenta registra un coste base de 0 EUR y emite un aviso.
 

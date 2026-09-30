@@ -236,7 +236,7 @@ const gl: TranslationKeys = {
   "guide.flatex.step3":
     "Selecciona <strong>todo o hist\u00f3rico</strong> (necesario para o c\u00e1lculo FIFO) e exporta o ficheiro CSV",
   "guide.flatex.step4":
-    "Para dividendos: vai a <strong>Kontoums\u00e4tze</strong> (movementos da conta), mesmo rango de datas, e exporta o CSV",
+    "Para dividendos: vai a <strong>Kontoums\u00e4tze</strong> (movementos da conta), mesmo rango de datas, e exporta o CSV. Ollo: aí os dividendos aparecen polo importe neto, xa descontada a retención; toma o importe íntegro e a retención do xustificante en PDF de cada dividendo",
   "guide.flatex.step5":
     "Sube <strong>ambos ficheiros</strong> CSV (Depotums\u00e4tze para operaci\u00f3ns e Kontoums\u00e4tze para dividendos)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -594,6 +594,8 @@ const gl: TranslationKeys = {
   "opening_lots.save_btn": "Gardar lotes e recalcular",
   "opening_lots.clear_btn": "Borrar lotes gardados",
   "opening_lots.saved": "Gardado",
+  "opening_lots.row_invalid":
+    "Revisa as filas marcadas: indica a data de compra e unha cantidade e un prezo maiores ca cero (p. ex. 1.234,56). Non se gardou nada.",
   "opening_lots.recalculate_hint": "Os lotes manuais gárdanse no teu navegador e o informe recalcúlase.",
 
   // Mensaxes do motor e dos analizadores (TaxMessage id → texto localizado)
@@ -614,15 +616,25 @@ const gl: TranslationKeys = {
   "fifo.roll_operation": "⚠ Operación C;O (roll): {{symbol}} o {{date}}. Procésase como peche + apertura.",
   "fifo.roll_operation.hint":
     "Operación roll procesada correctamente como peche da posición anterior e apertura da nova.",
+  "fifo.unknown_direction": '⚠ Operación con dirección descoñecida ("{{buySell}}"): {{symbol}} o {{date}}. Non se procesou.',
+  "fifo.unknown_direction.hint": "Só se procesan compras (BUY) e vendas (SELL). Revisa esta fila no ficheiro do broker e, se é unha operación real, corrixe a súa dirección.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint": "Split aplicado a todos os lotes. O custo total mantense — só cambia o número de accións.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
     "Fusión fiscalmente neutra: os lotes transfírense ao novo ISIN conservando o custo base orixinal.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectivo: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Declárase como unha venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Unha fusión ou adquisición pagada en efectivo é unha transmisión: a ganancia ou perda calcúlase como nunha venda, co efectivo recibido como valor de transmisión.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, custo {{costPercent}}% ao spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "O custo repártese proporcionalmente entre a matriz e a empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acción corporativa {{type}} de {{symbol}} ({{isin}}) o {{date}}: non se aplica ao cálculo FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Se cambiou o número de accións ou o ISIN da posición, revisa o custo das vendas posteriores deste valor.",
   "fifo.sell_without_lots":
     "⚠ Venda sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0 (posible posición curta ou datos previos incompletos).",
   "fifo.sell_without_lots.hint":
@@ -689,17 +701,44 @@ const gl: TranslationKeys = {
     "Non se puideron emparellar todas as comisións de Flatex: faltan os apuntamentos de caixa correspondentes.",
   "flatex.commission.unmatched_trades.hint":
     "Sobe tamén o CSV de Kontoumsätze (movementos de conta) xunto co de Depotumsätze para que a comisión de cada operación se teña en conta (sumándose ao custo de adquisición nas compras e restándose do valor de transmisión nas vendas).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota os dividendos polo importe neto cobrado, xa descontada a retención, e o CSV de Kontoumsätze non inclúe a retención.",
+  "flatex.dividends.net_amounts.hint":
+    "Toma o importe íntegro e a retención de cada cobro do xustificante en PDF que Flatex deixa na túa caixa de documentos, e corrixe a man as casillas 0029 (importe íntegro), 0588 (retención estranxeira) e 0597 (retención española).",
   "degiro.rows_skipped": "Omitíronse {{count}} filas sen ISIN/sen importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tiñan cantidade ou prezo pero faltáballes o ISIN ou o importe, polo que non se puideron incluír como operacións. Adoita indicar que as columnas do CSV non se recoñeceron ben: volve exportar o CSV de Transaccións de Degiro sen modificar as cabeceiras.",
+  "degiro.transaction_tax": "Imposto sobre as transaccións financeiras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro cobra este imposto ao comprar accións españolas, francesas ou italianas e só o mostra no CSV de Conta. Forma parte do valor de adquisición (art. 35.1.b LIRPF): súmao ao custo das compras dese valor, porque DeclaRenta non o engade automaticamente.",
   "binance.unparseable_timestamp":
     "Omitíronse {{count}} fila(s) do CSV de Binance por ter unha data/hora (UTC_Time) non recoñecible.",
   "binance.unparseable_timestamp.hint":
     "Adoita deberse a un ficheiro modificado manualmente ou exportado de forma incompleta. Volve descargar o informe orixinal desde Binance sen editalo para que esas operacións se inclúan.",
+  "binance.unhandled_operation":
+    "Omitíronse {{count}} movemento(s) do CSV de Binance con operacións non recoñecidas: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "Estes movementos non se incluíron no cálculo. Se son compras, vendas ou ingresos (p. ex. futuros, pagamentos con Binance Card, Auto-Invest ou cashback), engádeos á man na túa declaración e comunica o nome da operación para que se poida incorporar.",
+  "etoro.closed_types_skipped":
+    "Omitíronse {{count}} posición(s) pechada(s) de eToro dun tipo non admitido: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta aínda non importa estes tipos de posición de eToro (p. ex. criptomoedas). A súa ganancia ou perda non está incluída no cálculo: engádea á man na túa declaración co importe investido e o beneficio que mostra eToro.",
+  "lightyear.unknown_types":
+    "Omitíronse {{count}} fila(s) do CSV de Lightyear cun tipo de movemento non recoñecido: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "Estes movementos non se incluíron no cálculo. Se son desdobramentos (splits), traspasos de accións ou outras operacións societarias, revísaos á man: poden cambiar o número de accións ou o custo de adquisición de vendas posteriores.",
   "coinbase.rewards_income_classification":
     'Clasificáronse {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendementos do capital mobiliario (base do aforro).',
   "coinbase.rewards_income_classification.hint":
     "Se parte deses importes son recompensas promocionais ou cashback de tarxeta (non rendementos por manter ou ceder cripto), o seu tratamento correcto sería ganancia patrimonial non derivada de transmisión (base xeral). Revisa a súa natureza se a cantidade é significativa.",
+  "coinbase.unknown_types_skipped":
+    "Omitíronse {{count}} fila(s) de Coinbase cun tipo de operación non recoñecido: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Estas filas non se tiveron en conta no cálculo. Se algunha é unha venda, unha compra, un pagamento con cripto ou unha recompensa, engádea manualmente para que a súa ganancia, o seu custo de adquisición ou o seu rendemento conten.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} operación(s) de Advanced Trade de Coinbase pagáronse ou cobráronse nunha moeda distinta da de valoración ({{pairs}}); só se rexistrou a criptomoeda comprada ou vendida, non a moeda de contrapartida.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "Nestes pares tamén transmites (ao comprar) ou adquires (ao vender) a moeda de cotización, sexa outra criptomoeda ou unha divisa, e esa operación tamén tributa. Engade manualmente a venda ou a compra desa moeda polo mesmo valor en euros da operación para que a súa ganancia e o seu custo de adquisición cadren.",
   "trade_republic.trade_skipped_no_amount":
     "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
@@ -717,6 +756,10 @@ const gl: TranslationKeys = {
   "parser.order_level_duplicates": "Omitíronse {{skipped}} filas agregadas de tipo ORDER duplicadas nas operacións.",
   "parser.order_level_duplicates.hint":
     'O teu Flex Query ten activado o nivel de detalle "Orders" ademais de "Executions" na sección Trades, o que duplica cada operación. Podes desactivar "Orders" na configuración do Flex Query, pero non é necesario: estas filas ignoráronse automaticamente para evitar duplicar cantidades, importes e comisións.',
+  "parser.cancelled_trades": "Omitíronse {{count}} operacións canceladas por IBKR xunto coa súa anulación.",
+  "parser.cancelled_trades.hint": 'IBKR marca unha execución cancelada cunha fila de anulación ("(Ca.)"). A operación orixinal e a súa anulación descartáronse: nunca chegaron a ser unha compra ou venda real.',
+  "parser.cancelled_trades_unmatched": "Omitíronse {{count}} anulacións de IBKR sen a operación orixinal neste ficheiro.",
+  "parser.cancelled_trades_unmatched.hint": "A operación cancelada queda fóra do período deste Flex Query. Se a cargas desde outro ficheiro, seguirá contando como real: exporta un período que inclúa a operación e a súa anulación no mesmo ficheiro.",
 };
 
 export default gl;

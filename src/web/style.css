@@ -2925,6 +2925,22 @@ footer a:hover {
   color: var(--success);
 }
 
+.manual-opening-lots-error-msg {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.manual-opening-lots-error-msg[hidden] {
+  display: none;
+}
+
+.manual-opening-lot-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .crypto-rates-recalculate-hint {
   font-size: 0.8rem;
   color: var(--muted);

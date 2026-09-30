@@ -236,7 +236,7 @@ const ca: TranslationKeys = {
   "guide.flatex.step3":
     "Selecciona <strong>tot l'hist\u00f2ric</strong> (necessari per al c\u00e0lcul FIFO) i exporta el fitxer CSV",
   "guide.flatex.step4":
-    "Per a dividends: ves a <strong>Kontoums\u00e4tze</strong> (moviments del compte), mateix rang de dates, i exporta el CSV",
+    "Per a dividends: ves a <strong>Kontoums\u00e4tze</strong> (moviments del compte), mateix rang de dates, i exporta el CSV. Compte: allà els dividends apareixen per l'import net, ja descomptada la retenció; pren l'import íntegre i la retenció del justificant en PDF de cada dividend",
   "guide.flatex.step5":
     "Puja <strong>els dos fitxers</strong> CSV (Depotums\u00e4tze per a operacions i Kontoums\u00e4tze per a dividends)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -594,6 +594,8 @@ const ca: TranslationKeys = {
   "opening_lots.save_btn": "Desa els lots i recalcula",
   "opening_lots.clear_btn": "Esborra els lots desats",
   "opening_lots.saved": "Desat",
+  "opening_lots.row_invalid":
+    "Revisa les files marcades: indica la data de compra i una quantitat i un preu més grans que zero (p. ex. 1.234,56). No s'ha desat res.",
   "opening_lots.recalculate_hint": "Els lots manuals es desen al teu navegador i l'informe es recalcula.",
 
   // Missatges del motor i els analitzadors (TaxMessage id → text localitzat)
@@ -614,6 +616,8 @@ const ca: TranslationKeys = {
   "fifo.roll_operation": "⚠ Operació C;O (roll): {{symbol}} el {{date}}. Es processa com a tancament + obertura.",
   "fifo.roll_operation.hint":
     "Operació roll processada correctament com a tancament de la posició anterior i obertura de la nova.",
+  "fifo.unknown_direction": "⚠ Operació amb direcció desconeguda (\"{{buySell}}\"): {{symbol}} el {{date}}. No s'ha processat.",
+  "fifo.unknown_direction.hint": "Només es processen compres (BUY) i vendes (SELL). Revisa aquesta fila al fitxer del broker i, si és una operació real, corregeix-ne la direcció.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",
@@ -621,9 +625,17 @@ const ca: TranslationKeys = {
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
     "Fusió fiscalment neutra: els lots es transfereixen al nou ISIN conservant el cost base original.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectiu: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Es declara com una venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Una fusió o adquisició pagada en efectiu és una transmissió: el guany o la pèrdua es calcula com en una venda, amb l'efectiu rebut com a valor de transmissió.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ràtio {{ratio}}, cost {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El cost es reparteix proporcionalment entre la matriu i l'empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acció corporativa {{type}} de {{symbol}} ({{isin}}) el {{date}}: no s'aplica al càlcul FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Si va canviar el nombre d'accions o l'ISIN de la posició, revisa el cost de les vendes posteriors d'aquest valor.",
   "fifo.sell_without_lots":
     "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
@@ -689,17 +701,44 @@ const ca: TranslationKeys = {
     "No s'han pogut emparellar totes les comissions de Flatex: falten els apunts de caixa corresponents.",
   "flatex.commission.unmatched_trades.hint":
     "Puja també el CSV de Kontoumsätze (moviments de compte) juntament amb el de Depotumsätze perquè la comissió de cada operació es tingui en compte (sumant-se al cost d'adquisició en les compres i restant-se del valor de transmissió en les vendes).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota els dividends per l'import net cobrat, ja descomptada la retenció, i el CSV de Kontoumsätze no inclou la retenció.",
+  "flatex.dividends.net_amounts.hint":
+    "Pren l'import íntegre i la retenció de cada cobrament del justificant en PDF que Flatex deixa a la teva bústia de documents, i corregeix a mà les caselles 0029 (import íntegre), 0588 (retenció estrangera) i 0597 (retenció espanyola).",
   "degiro.rows_skipped": "S'han omès {{count}} files sense ISIN/sense import.",
   "degiro.rows_skipped.hint":
     "Aquestes files tenien quantitat o preu però els faltava l'ISIN o l'import, per la qual cosa no s'han pogut incloure com a operacions. Sol indicar que les columnes del CSV no s'han reconegut bé: torna a exportar el CSV de Transaccions de Degiro sense modificar les capçaleres.",
+  "degiro.transaction_tax": "Impost sobre les transaccions financeres pagat en {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro cobra aquest impost en comprar accions espanyoles, franceses o italianes i només el mostra al CSV de Compte. Forma part del valor d'adquisició (art. 35.1.b LIRPF): suma'l al cost de les compres d'aquest valor, perquè DeclaRenta no l'afegeix automàticament.",
   "binance.unparseable_timestamp":
     "S'han omès {{count}} fila(es) del CSV de Binance per tenir una data/hora (UTC_Time) no reconeixible.",
   "binance.unparseable_timestamp.hint":
     "Sol deure's a un fitxer modificat manualment o exportat de forma incompleta. Torna a descarregar l'informe original des de Binance sense editar-lo perquè aquestes operacions s'incloguin.",
+  "binance.unhandled_operation":
+    "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "Aquests moviments no s'han inclòs en el càlcul. Si són compres, vendes o ingressos (p. ex. futurs, pagaments amb Binance Card, Auto-Invest o cashback), afegeix-los a mà a la teva declaració i comunica el nom de l'operació perquè es pugui incorporar.",
+  "etoro.closed_types_skipped":
+    "S'han omès {{count}} posició(ns) tancada(es) d'eToro d'un tipus no admès: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta encara no importa aquests tipus de posició d'eToro (p. ex. criptomonedes). El seu guany o pèrdua no està inclòs en el càlcul: afegeix-lo a mà a la teva declaració amb l'import invertit i el benefici que mostra eToro.",
+  "lightyear.unknown_types":
+    "S'han omès {{count}} fila(es) del CSV de Lightyear amb un tipus de moviment no reconegut: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "Aquests moviments no s'han inclòs en el càlcul. Si són desdoblaments (splits), traspassos d'accions o altres operacions societàries, revisa'ls a mà: poden canviar el nombre d'accions o el cost d'adquisició de vendes posteriors.",
   "coinbase.rewards_income_classification":
     "S'han classificat {{count}} ingrés(os) de tipus \"Rewards Income\" de Coinbase com a rendiments del capital mobiliari (base de l'estalvi).",
   "coinbase.rewards_income_classification.hint":
     "Si part d'aquests imports són recompenses promocionals o cashback de targeta (no rendiments per mantenir o cedir cripto), el seu tractament correcte seria guany patrimonial no derivat de transmissió (base general). Revisa'n la naturalesa si la quantitat és significativa.",
+  "coinbase.unknown_types_skipped":
+    "S'han omès {{count}} fila(es) de Coinbase amb un tipus d'operació no reconegut: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Aquestes files no s'han tingut en compte en el càlcul. Si alguna és una venda, una compra, un pagament amb cripto o una recompensa, afegeix-la manualment perquè el seu guany, el seu cost d'adquisició o el seu rendiment comptin.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} operació(ns) d'Advanced Trade de Coinbase es van pagar o cobrar en una moneda diferent de la de valoració ({{pairs}}); només s'ha registrat la criptomoneda comprada o venuda, no la moneda de contrapartida.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "En aquests parells també transmets (en comprar) o adquireixes (en vendre) la moneda de cotització, sigui una altra criptomoneda o una divisa, i aquesta operació també tributa. Afegeix manualment la venda o la compra d'aquesta moneda pel mateix valor en euros de l'operació perquè el seu guany i el seu cost d'adquisició quadrin.",
   "trade_republic.trade_skipped_no_amount":
     "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
   "trade_republic.trade_skipped_no_amount.hint":
@@ -717,6 +756,10 @@ const ca: TranslationKeys = {
   "parser.order_level_duplicates": "S'han omès {{skipped}} files agregades de tipus ORDER duplicades a les operacions.",
   "parser.order_level_duplicates.hint":
     'El teu Flex Query té activat el nivell de detall "Orders" a més d\'"Executions" a la secció Trades, la qual cosa duplica cada operació. Pots desactivar "Orders" a la configuració del Flex Query, però no és necessari: aquestes files s\'han ignorat automàticament per evitar duplicar quantitats, imports i comissions.',
+  "parser.cancelled_trades": "S'han omès {{count}} operacions cancel·lades per IBKR juntament amb la seva anul·lació.",
+  "parser.cancelled_trades.hint": "IBKR marca una execució cancel·lada amb una fila d'anul·lació (\"(Ca.)\"). L'operació original i la seva anul·lació s'han descartat: mai no van ser una compra o venda real.",
+  "parser.cancelled_trades_unmatched": "S'han omès {{count}} anul·lacions d'IBKR sense l'operació original en aquest fitxer.",
+  "parser.cancelled_trades_unmatched.hint": "L'operació cancel·lada queda fora del període d'aquest Flex Query. Si la carregues des d'un altre fitxer, es continuarà comptant com a real: exporta un període que inclogui l'operació i la seva anul·lació en el mateix fitxer.",
 };
 
 export default ca;
