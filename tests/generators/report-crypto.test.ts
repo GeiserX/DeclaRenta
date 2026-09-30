@@ -309,4 +309,26 @@ describe("Trade History crypto↔crypto pairs → permuta end-to-end (Binance an
     expect(btc.costBasisEur.toFixed(2)).toBe("30000.00");
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("10000.00");
   });
+
+  it("Kraken: BTC bought with USDT (XBTUSDT) has a lot, so its later EUR sale is not 'sin lotes'", () => {
+    // USDT resolves through the USD rate (1 USD = 1 EUR here), so no manual rate is needed.
+    const usdRates = makeRateMap({
+      "2024-01-15": { EUR: "1", USD: "1" },
+      "2024-06-03": { EUR: "1", USD: "1" },
+      "2024-09-10": { EUR: "1", USD: "1" },
+    });
+    const csv = [
+      KRAKEN,
+      '"K1","O1","USDTEUR","2024-01-15 10:00:00","buy","limit","1","20000","0","20000","0","",""',
+      '"K2","O2","XBTUSDT","2024-06-03 10:00:00","buy","limit","20000","20000","0","1","0","",""',
+      '"K3","O3","XXBTZEUR","2024-09-10 10:00:00","sell","limit","30000","30000","0","1","0","",""',
+    ].join("\n");
+    const report = generateTaxReport(toStatement(krakenParser.parse(csv)), usdRates, 2024);
+
+    expect(report.messages.some((m) => m.id === "fifo.sell_without_lots")).toBe(false);
+    const btc = report.capitalGains.disposals.find((d) => d.symbol === "BTC")!;
+    expect(btc.costBasisEur.toFixed(2)).toBe("20000.00");
+    expect(btc.proceedsEur.toFixed(2)).toBe("30000.00");
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("10000.00");
+  });
 });
