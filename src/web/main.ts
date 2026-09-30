@@ -49,7 +49,7 @@ import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -893,11 +893,6 @@ opsFilter.addEventListener("change", () => renderOperationsTable());
 // Render results (Step 3)
 // ---------------------------------------------------------------------------
 
-function formatDate(d: string): string {
-  if (d.length === 8) return `${d.slice(6, 8)}/${d.slice(4, 6)}/${d.slice(0, 4)}`;
-  return d;
-}
-
 function renderResults(report: TaxSummary) {
   // Year header bar with selector + mismatch warning
   const yearHeader = document.getElementById("results-year-header");
@@ -1054,8 +1049,8 @@ function renderOperationsTable() {
       let cmp = 0;
       if (col === "isin") cmp = a.isin.localeCompare(b.isin);
       else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
-      else if (col === "buyDate") cmp = a.acquireDate.localeCompare(b.acquireDate);
-      else if (col === "sellDate") cmp = a.sellDate.localeCompare(b.sellDate);
+      else if (col === "buyDate") cmp = normalizeDate(a.acquireDate).localeCompare(normalizeDate(b.acquireDate));
+      else if (col === "sellDate") cmp = normalizeDate(a.sellDate).localeCompare(normalizeDate(b.sellDate));
       else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
       else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
       else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
@@ -1092,7 +1087,7 @@ function renderOperationsTable() {
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
             <td>${esc(formatDate(d.sellDate))}</td>
-            <td>${d.quantity.toString()}</td>
+            <td>${fmtQty(d.quantity)}</td>
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
@@ -1122,7 +1117,7 @@ function renderDividendsTable(report: TaxSummary) {
       let cmp = 0;
       if (col === "isin") cmp = a.isin.localeCompare(b.isin);
       else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
-      else if (col === "date") cmp = a.payDate.localeCompare(b.payDate);
+      else if (col === "date") cmp = normalizeDate(a.payDate).localeCompare(normalizeDate(b.payDate));
       else if (col === "gross") cmp = a.grossAmountEur.minus(b.grossAmountEur).toNumber();
       else if (col === "wht") cmp = a.withholdingTaxEur.minus(b.withholdingTaxEur).toNumber();
       else if (col === "country") cmp = a.withholdingCountry.localeCompare(b.withholdingCountry);

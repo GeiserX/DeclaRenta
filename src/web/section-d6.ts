@@ -12,7 +12,7 @@ import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import Decimal from "decimal.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
@@ -137,7 +137,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
-        <td>${esc(p.isin.slice(0, 2))}</td><td>${new Decimal(p.quantity).toString()}</td><td>${val}</td>
+        <td>${esc(p.isin.slice(0, 2))}</td><td>${fmtQty(p.quantity)}</td><td>${val}</td>
       </tr>`;
       })
       .join("")}</tbody>
@@ -150,7 +150,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
       <h4>${t("d6.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
         const rate = lookupPositionRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
   }
@@ -233,7 +233,7 @@ function renderAforixGuide(
     html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
-    html += aforixField("Nº títulos", new Decimal(p.quantity).toString());
+    html += aforixField("Nº títulos", fmtQty(p.quantity));
     html += aforixField("Valor EUR", val);
     html += aforixField(t("table.currency"), p.currency);
   }

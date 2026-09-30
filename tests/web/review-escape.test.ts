@@ -120,7 +120,7 @@ describe("review step escapes broker-supplied currency and trade dates", () => {
     );
     const values = [...review.querySelectorAll(".review-value")].map((el) => el.textContent);
     expect(values).toContain("USD");
-    expect(values).toContain("2025-01-10 — 2025-01-10");
+    expect(values).toContain("10/01/2025 — 10/01/2025");
     expect(review.querySelector(INJECTED)).toBeNull();
   });
 

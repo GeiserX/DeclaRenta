@@ -186,7 +186,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         <h4>${t("m720.rates_title")}</h4>
         <div class="rates-grid">${uniqueCurrencies.map((cur) => {
           const rate = lookupPositionRate(rateMap, `${year}-12-31`, cur);
-          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
         }).join("")}</div>
       </div>`;
     }
