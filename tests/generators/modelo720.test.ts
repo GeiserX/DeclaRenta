@@ -4,6 +4,8 @@ import { generateModelo720, checkModelo720Thresholds } from "../../src/generator
 import type { OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
+import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
+import { BOE_720, boeField } from "./modelo720-boe-layout.js";
 
 const rateMap: EcbRateMap = new Map([
   ["2025-12-31", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.15")]])],
@@ -416,8 +418,8 @@ describe("Modelo 720 Generator", () => {
   });
 
   describe("numPad rounding (via record numeric fields)", () => {
-    // Valuation value lives at 449-463 (13 int + 2 dec). We assert the last 5
-    // chars (3 int + 2 dec) to verify rounding behaviour of numPad.
+    // Valoración 1 (the 31-Dec value) lives at 433-446 (12 int + 2 dec). We
+    // assert the last 5 chars (3 int + 2 dec) to verify rounding behaviour of numPad.
     function valuationField(positionValueEur: string): string {
       const positions = [makePosition({
         currency: "EUR",
@@ -426,8 +428,8 @@ describe("Modelo 720 Generator", () => {
         assetCategory: "STK",
       })];
       const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
-      // 449-463 → 0-indexed 448..461 (15 chars). Tail 5 = last 3 int + 2 dec.
-      return detail.slice(448, 463).slice(-5);
+      // 433-446 → 0-indexed 432..445 (14 chars). Tail 5 = last 3 int + 2 dec.
+      return detail.slice(432, 446).slice(-5);
     }
 
     it("should round half-up (1.005 → ...01)", () => {
@@ -440,8 +442,8 @@ describe("Modelo 720 Generator", () => {
         assetCategory: "STK",
       })];
       const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
-      // Valuation 449-463: int=60000, frac=01
-      expect(detail.slice(448, 463)).toBe("000000006000001");
+      // Valoración 1 433-446: int=60000, frac=01
+      expect(detail.slice(432, 446)).toBe("00000006000001");
     });
 
     it("should bump integer when rounding (60001.999 → int 60002, frac 00)", () => {
@@ -453,7 +455,7 @@ describe("Modelo 720 Generator", () => {
       })];
       const detail = generateModelo720(positions, rateMap, baseConfig).split("\n")[1]!;
       // 60001.999 → 60002.00
-      expect(detail.slice(448, 463)).toBe("000000006000200");
+      expect(detail.slice(432, 446)).toBe("00000006000200");
     });
 
     it("should render 0.1 as frac '10'", () => {
@@ -462,7 +464,7 @@ describe("Modelo 720 Generator", () => {
     });
 
     it("should throw rather than silently widen the record when the integer part overflows its field", () => {
-      // Valuation int field is 13 digits. A 14-digit integer part cannot fit and
+      // Valoración int field is 12 digits. A 14-digit integer part cannot fit and
       // must fail fast instead of shifting every following byte in the 500-byte record.
       const positions = [makePosition({
         currency: "EUR",
@@ -471,6 +473,95 @@ describe("Modelo 720 Generator", () => {
         assetCategory: "STK",
       })];
       expect(() => generateModelo720(positions, rateMap, baseConfig)).toThrow(/excede el campo/);
+    });
+  });
+
+  describe("BOE record layout (positions from Orden HAP/72/2013, not from the generator)", () => {
+    const d = BOE_720.detail;
+    const sm = BOE_720.summary;
+
+    it("writes a V holding with its 31-Dec value in valoración 1 and every tail field at its BOE column", () => {
+      // SPY: cost 40,000 USD, worth 60,000 USD on 31 Dec, rate 0.92 → 55,200.00 EUR.
+      const result = generateModelo720([makePosition()], rateMap, baseConfig);
+      const detail = result.split("\n")[1]!;
+      expect(detail).toHaveLength(500);
+      expect(boeField(detail, d.valoracion1Sign)).toBe(" ");
+      expect(boeField(detail, d.valoracion1)).toBe("00000005520000");
+      expect(boeField(detail, d.valoracion2Sign)).toBe(" ");
+      // Valoración 2 is only informed for accounts (C) or sold real estate (B).
+      expect(boeField(detail, d.valoracion2)).toBe("00000000000000");
+      expect(boeField(detail, d.claveRepresentacion)).toBe("A");
+      expect(boeField(detail, d.numeroValores)).toBe("000000010000");
+      expect(boeField(detail, d.claveInmueble)).toBe(" ");
+      expect(boeField(detail, d.porcentaje)).toBe("10000");
+      expect(boeField(detail, d.blancos)).toBe(" ".repeat(20));
+      // The acquisition cost (40,000 × 0.92 = 36,800.00) has no field for clave V.
+      expect(detail).not.toContain("3680000");
+    });
+
+    it("writes fractional quantities with the BOE's two decimals", () => {
+      const detail = generateModelo720([makePosition({ quantity: "300.5" })], rateMap, baseConfig).split("\n")[1]!;
+      expect(boeField(detail, d.numeroValores)).toBe("000000030050");
+    });
+
+    it("writes a cash account with the 31-Dec balance in valoración 1 and the Q4 average in valoración 2", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+      ];
+      const detail = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n")[1]!;
+      expect(detail).toHaveLength(500);
+      expect(boeField(detail, d.claveBien)).toBe("C");
+      expect(boeField(detail, d.valoracion1)).toBe("00000006000000");
+      expect(boeField(detail, d.valoracion2Sign)).toBe(" ");
+      expect(boeField(detail, d.valoracion2)).toBe("00000004000000");
+      // Representación and número de valores are only for V/I: blank and zeros.
+      expect(boeField(detail, d.claveRepresentacion)).toBe(" ");
+      expect(boeField(detail, d.numeroValores)).toBe("000000000000");
+      expect(boeField(detail, d.porcentaje)).toBe("10000");
+      expect(boeField(detail, d.blancos)).toBe(" ".repeat(20));
+    });
+
+    it("writes a cancelled V record with zero valuations at the BOE columns", () => {
+      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const cancelled = generateModelo720([makePosition()], rateMap, config)
+        .split("\n").find((l) => l[0] === "2" && boeField(l, d.origen) === "C")!;
+      expect(cancelled).toHaveLength(500);
+      expect(boeField(cancelled, d.valoracion1)).toBe("00000000000000");
+      expect(boeField(cancelled, d.valoracion2Sign)).toBe(" ");
+      expect(boeField(cancelled, d.valoracion2)).toBe("00000000000000");
+      expect(boeField(cancelled, d.claveRepresentacion)).toBe("A");
+      expect(boeField(cancelled, d.numeroValores)).toBe("000000000000");
+      expect(boeField(cancelled, d.porcentaje)).toBe("10000");
+      expect(boeField(cancelled, d.blancos)).toBe(" ".repeat(20));
+    });
+
+    it("type-1 sumas equal the sum of the valoración 1 and valoración 2 written in the details", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+      ];
+      const lines = generateModelo720([makePosition()], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      const summary = lines[0]!;
+      const details = lines.slice(1);
+      expect(details).toHaveLength(2);
+      const sum = (range: readonly [number, number]) =>
+        details.reduce((s, l) => s.plus(new Decimal(boeField(l, range)).div(100)), new Decimal(0));
+      // V 55,200.00 + cash 60,000.00; valoración 2 = cash Q4 average 40,000.00 only.
+      expect(sum(d.valoracion1).toString()).toBe("115200");
+      expect(sum(d.valoracion2).toString()).toBe("40000");
+      expect(boeField(summary, sm.suma1Sign)).toBe(" ");
+      expect(boeField(summary, sm.suma1)).toBe("00000000011520000");
+      expect(boeField(summary, sm.suma2Sign)).toBe(" ");
+      expect(boeField(summary, sm.suma2)).toBe("00000000004000000");
+    });
+
+    it("passes the format validator record by record", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000", countryCode: "IE" },
+      ];
+      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const records = generateModelo720([makePosition()], rateMap, config, undefined, cashBalances).split("\n");
+      expect(records).toHaveLength(4);
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], [], [], []]);
     });
   });
 
@@ -556,11 +647,11 @@ describe("Modelo 720 Generator", () => {
       const dirty = generateModelo720([makePosition({ description: "ACME\r\nCORP\tX\x7FY" })], rateMap, baseConfig).split("\n")[1]!;
       expect(dirty.length).toBe(500);
       expect(dirty.length).toBe(clean.length);
-      // ISIN (132-143), declType (423), valuation (449-463), quantity (465-476).
+      // ISIN (132-143), declType (423), valoración 1 (433-446), número de valores (463-474).
       expect(dirty.slice(131, 143)).toBe(clean.slice(131, 143));
       expect(dirty[422]).toBe(clean[422]);
-      expect(dirty.slice(448, 463)).toBe(clean.slice(448, 463));
-      expect(dirty.slice(464, 476)).toBe(clean.slice(464, 476));
+      expect(dirty.slice(432, 446)).toBe(clean.slice(432, 446));
+      expect(dirty.slice(462, 474)).toBe(clean.slice(462, 474));
       // With the control chars replaced by spaces, the two records are byte-identical.
       expect(dirty).toBe(clean);
     });

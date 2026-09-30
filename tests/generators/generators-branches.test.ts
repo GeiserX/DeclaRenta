@@ -58,12 +58,13 @@ describe("modelo720-validator - additional branches", () => {
     "US0378331005".split("").forEach((c, i) => arr[131 + i] = c);
     // Declaration type at position 423 (index 422)
     arr[422] = "A";
-    // Acquisition value at positions 433-447 (indices 432-446): 15 digits
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    // Valuation at positions 449-463 (indices 448-462): 15 digits
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    // Quantity at positions 465-476 (indices 464-475): 12 digits
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    // Valoración 1 at positions 433-446 (indices 432-445): 14 digits
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    // Valoración 2 at positions 448-461 (indices 447-460): 14 digits
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    // Número de valores at positions 463-474 (indices 462-473): 12 digits
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
 
     const validRecord = arr.join("");
     const results = validateModelo720Records([validRecord]);
@@ -82,9 +83,10 @@ describe("modelo720-validator - additional branches", () => {
     arr[128] = "Z"; arr[129] = "Z";
     arr[130] = "0"; // non-ISIN id type
     arr[422] = "A";
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
     expect(results[0].errors.some((e) => e.includes("Código de país ISO inválido"))).toBe(true);
   });
@@ -99,12 +101,13 @@ describe("modelo720-validator - additional branches", () => {
     arr[128] = "U"; arr[129] = "S";
     arr[130] = "0";
     arr[422] = "A";
-    // Non-numeric acquisition value
-    "ABCDEFGHIJKLMNO".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    // Non-numeric valoración 1
+    "ABCDEFGHIJKLMN".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Valor de adquisición no numérico"))).toBe(true);
+    expect(results[0].errors.some((e) => e.includes("Valoración 1 no numérica"))).toBe(true);
   });
 
   it("should detect non-numeric valuation value", () => {
@@ -117,11 +120,12 @@ describe("modelo720-validator - additional branches", () => {
     arr[128] = "U"; arr[129] = "S";
     arr[130] = "0";
     arr[422] = "A";
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "ABCDEFGHIJKLMNO".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "ABCDEFGHIJKLMN".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Valor de valoración no numérico"))).toBe(true);
+    expect(results[0].errors.some((e) => e.includes("Valoración 2 no numérica"))).toBe(true);
   });
 
   it("should detect non-numeric quantity", () => {
@@ -134,11 +138,12 @@ describe("modelo720-validator - additional branches", () => {
     arr[128] = "U"; arr[129] = "S";
     arr[130] = "0";
     arr[422] = "A";
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "ABCDEFGHIJKL".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "ABCDEFGHIJKL".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Cantidad no numérica"))).toBe(true);
+    expect(results[0].errors.some((e) => e.includes("Número de valores no numérico"))).toBe(true);
   });
 
   it("should detect invalid declaration type in detail record", () => {
@@ -151,9 +156,10 @@ describe("modelo720-validator - additional branches", () => {
     arr[128] = "U"; arr[129] = "S";
     arr[130] = "0";
     arr[422] = "X"; // invalid
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
     expect(results[0].errors.some((e) => e.includes("Tipo de declaración inválido"))).toBe(true);
   });
@@ -167,14 +173,14 @@ describe("modelo720-validator - additional branches", () => {
     "12345678A".split("").forEach((c, i) => arr[8 + i] = c);
     // Detail count at positions 136-144 (indices 135-143): non-numeric
     "ABCDEFGHI".split("").forEach((c, i) => arr[135 + i] = c);
-    // Total acquisition at positions 146-162 (indices 145-161): non-numeric
+    // Suma de valoración 1 at positions 146-162 (indices 145-161): non-numeric
     "ABCDEFGHIJKLMNOPQ".split("").forEach((c, i) => arr[145 + i] = c);
-    // Total valuation at positions 164-180 (indices 163-179): non-numeric
+    // Suma de valoración 2 at positions 164-180 (indices 163-179): non-numeric
     "ABCDEFGHIJKLMNOPQ".split("").forEach((c, i) => arr[163 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
     expect(results[0].errors.some((e) => e.includes("Número de registros no numérico"))).toBe(true);
-    expect(results[0].errors.some((e) => e.includes("Total adquisición no numérico"))).toBe(true);
-    expect(results[0].errors.some((e) => e.includes("Total valoración no numérico"))).toBe(true);
+    expect(results[0].errors.some((e) => e.includes("Suma de valoración 1 no numérica"))).toBe(true);
+    expect(results[0].errors.some((e) => e.includes("Suma de valoración 2 no numérica"))).toBe(true);
   });
 
   it("should validate ISIN checksum (Luhn) on detail record with id type 1", () => {
@@ -189,9 +195,10 @@ describe("modelo720-validator - additional branches", () => {
     // Invalid ISIN checksum
     "US0378331009".split("").forEach((c, i) => arr[131 + i] = c);
     arr[422] = "A";
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
     expect(results[0].errors.some((e) => e.includes("ISIN con dígito de control inválido"))).toBe(true);
   });
@@ -207,9 +214,10 @@ describe("modelo720-validator - additional branches", () => {
     arr[130] = "1"; // ISIN type
     "US0378331005".split("").forEach((c, i) => arr[131 + i] = c);
     arr[422] = "A";
-    "000000000175500".split("").forEach((c, i) => arr[432 + i] = c);
-    "000000000195000".split("").forEach((c, i) => arr[448 + i] = c);
-    "000000000010".split("").forEach((c, i) => arr[464 + i] = c);
+    "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
+    "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
+    "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
     expect(results[0].errors.filter((e) => e.includes("ISIN"))).toHaveLength(0);
   });

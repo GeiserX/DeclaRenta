@@ -151,7 +151,6 @@ export function generateModelo720(
       // warning so the user values and declares it manually.
       if (ecbRate === null) return [];
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
-      const costEur = new Decimal(p.costBasisMoney).abs().mul(ecbRate);
 
       // First acquisition date from FIFO lots (earliest lot for this ISIN)
       let firstAcquisitionDate = "";
@@ -167,7 +166,7 @@ export function generateModelo720(
       // Declaration type: A (new), M (existing), C (cancelled/sold)
       const declType: "A" | "M" | "C" = previousIsins.has(p.isin) ? "M" : "A";
 
-      return [{ position: p, valueEur, costEur, firstAcquisitionDate, declType }];
+      return [{ position: p, valueEur, firstAcquisitionDate, declType }];
     });
 
   // Build "C" (cancelled) records for ISINs in previous year but no longer HELD.
@@ -210,7 +209,7 @@ export function generateModelo720(
   // Category V records (securities)
   if (hasValuesRecords) {
     for (const e of entries) {
-      detailRecords.push(buildDetailRecord(e.position, e.valueEur, e.costEur, config, e.firstAcquisitionDate, e.declType));
+      detailRecords.push(buildDetailRecord(e.position, e.valueEur, config, e.firstAcquisitionDate, e.declType));
     }
     for (const c of cancelledEntries) {
       detailRecords.push(buildCancelledRecord(c.isin, config));
@@ -224,9 +223,12 @@ export function generateModelo720(
     }
   }
 
+  // Valoración 1 / Valoración 2 exactly as written in each type-2 record: the
+  // type-1 sumas are the totals of those two fields (cancelled records add 0).
+  // V: 31-Dec value / nothing. C: 31-Dec balance / Q4 average balance.
   const allEntries = [
-    ...(hasValuesRecords ? entries : []),
-    ...(hasCashRecords ? cashEntries.map((e) => ({ valueEur: e.valueEur, costEur: e.valueEur })) : []),
+    ...(hasValuesRecords ? entries.map((e) => ({ v1: e.valueEur, v2: new Decimal(0) })) : []),
+    ...(hasCashRecords ? cashEntries.map((e) => ({ v1: e.valueEur, v2: e.averageQ4Eur })) : []),
   ];
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
@@ -281,10 +283,10 @@ function numPad(value: string, intLen: number, decLen: number): string {
 function buildSummaryRecord(
   config: Modelo720Config,
   detailCount: number,
-  entries: { valueEur: Decimal; costEur: Decimal }[],
+  entries: { v1: Decimal; v2: Decimal }[],
 ): string {
-  const totalAcq = entries.reduce((s, e) => s.plus(e.costEur), new Decimal(0));
-  const totalVal = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
+  const totalV1 = entries.reduce((s, e) => s.plus(e.v1), new Decimal(0));
+  const totalV2 = entries.reduce((s, e) => s.plus(e.v2), new Decimal(0));
 
   let record = "";
   record += "1";                                              // 1: Register type
@@ -300,10 +302,10 @@ function buildSummaryRecord(
   record += config.isReplacement ? "S" : " ";                 // 122: Replacement
   record += pad(config.previousDeclarationId ?? "", 13, "0", true); // 123-135: Previous ID
   record += detailCount.toString().padStart(9, "0");          // 136-144: Detail count
-  record += totalAcq.isNegative() ? "N" : " ";               // 145: Acquisition sign
-  record += numPad(totalAcq.toString(), 15, 2);               // 146-162: Acquisition value
-  record += totalVal.isNegative() ? "N" : " ";               // 163: Valuation sign
-  record += numPad(totalVal.toString(), 15, 2);               // 164-180: Valuation value
+  record += totalV1.isNegative() ? "N" : " ";                // 145: Suma valoración 1 sign
+  record += numPad(totalV1.toString(), 15, 2);                // 146-162: Suma valoración 1
+  record += totalV2.isNegative() ? "N" : " ";                // 163: Suma valoración 2 sign
+  record += numPad(totalV2.toString(), 15, 2);                // 164-180: Suma valoración 2
   record += pad("", 320);                                     // 181-500: Blank
 
   return record;
@@ -312,7 +314,6 @@ function buildSummaryRecord(
 function buildDetailRecord(
   pos: OpenPosition,
   valueEur: Decimal,
-  costEur: Decimal,
   config: Modelo720Config,
   firstAcquisitionDate?: string,
   declType: "A" | "M" | "C" = "M",
@@ -341,15 +342,15 @@ function buildDetailRecord(
   record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
   record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
   record += pad("", 8);                                       // 424-431: Sell date
-  record += (costEur.isNegative() ? "N" : " ");               // 432: Acquisition sign
-  record += numPad(costEur.toString(), 13, 2);                // 433-447: Acquisition value
-  record += (valueEur.isNegative() ? "N" : " ");              // 448: Valuation sign
-  record += numPad(valueEur.toString(), 13, 2);               // 449-463: Valuation value
-  record += "A";                                              // 464: Stock representation
-  record += numPad(new Decimal(pos.quantity).abs().toString(), 9, 3); // 465-476: Quantity
-  record += pad("", 1);                                       // 477: Reserved
-  record += numPad("100", 3, 2);                              // 478-482: Ownership %
-  record += pad("", 18);                                      // 483-500: Blank
+  record += (valueEur.isNegative() ? "N" : " ");              // 432: Valoración 1 sign
+  record += numPad(valueEur.toString(), 12, 2);               // 433-446: Valoración 1 (value at Dec 31)
+  record += " ";                                              // 447: Valoración 2 sign
+  record += numPad("0", 12, 2);                               // 448-461: Valoración 2 (not informed for V)
+  record += "A";                                              // 462: Clave de representación (book entry)
+  record += numPad(new Decimal(pos.quantity).abs().toString(), 10, 2); // 463-474: Número de valores
+  record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
+  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += pad("", 20);                                      // 481-500: Blank
 
   return record;
 }
@@ -383,15 +384,15 @@ function buildCancelledRecord(isin: string, config: Modelo720Config): string {
   record += pad("", 8);                                       // 415-422: First acquisition date
   record += "C";                                              // 423: Type (C=cancelled)
   record += pad(yearEnd, 8);                                  // 424-431: Sell/cancellation date
-  record += " ";                                              // 432: Acquisition sign
-  record += numPad("0", 13, 2);                               // 433-447: Acquisition value (0)
-  record += " ";                                              // 448: Valuation sign
-  record += numPad("0", 13, 2);                               // 449-463: Valuation value (0)
-  record += "A";                                              // 464: Stock representation
-  record += numPad("0", 9, 3);                                // 465-476: Quantity (0)
-  record += pad("", 1);                                       // 477: Reserved
-  record += numPad("100", 3, 2);                              // 478-482: Ownership %
-  record += pad("", 18);                                      // 483-500: Blank
+  record += " ";                                              // 432: Valoración 1 sign
+  record += numPad("0", 12, 2);                               // 433-446: Valoración 1 (0)
+  record += " ";                                              // 447: Valoración 2 sign
+  record += numPad("0", 12, 2);                               // 448-461: Valoración 2 (0)
+  record += "A";                                              // 462: Clave de representación (book entry)
+  record += numPad("0", 10, 2);                               // 463-474: Número de valores (0)
+  record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
+  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += pad("", 20);                                      // 481-500: Blank
 
   return record;
 }
@@ -430,15 +431,15 @@ function buildCashAccountRecord(
   record += pad((cb.openedDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: Opening date
   record += "A";                                              // 423: Type (A=new)
   record += pad("", 8);                                       // 424-431: Close date
-  record += " ";                                              // 432: Balance 1 sign
-  record += numPad(valueEur.toString(), 13, 2);               // 433-447: Balance at Dec 31
-  record += " ";                                              // 448: Balance 2 sign
-  record += numPad(averageQ4Eur.toString(), 13, 2);           // 449-463: Average balance Q4
-  record += pad("", 1);                                       // 464: Reserved
-  record += pad("", 12);                                      // 465-476: Reserved
-  record += pad("", 1);                                       // 477: Reserved
-  record += numPad("100", 3, 2);                              // 478-482: Ownership %
-  record += pad("", 18);                                      // 483-500: Blank
+  record += " ";                                              // 432: Valoración 1 sign
+  record += numPad(valueEur.toString(), 12, 2);               // 433-446: Valoración 1 (balance at Dec 31)
+  record += " ";                                              // 447: Valoración 2 sign
+  record += numPad(averageQ4Eur.toString(), 12, 2);           // 448-461: Valoración 2 (average balance Q4)
+  record += pad("", 1);                                       // 462: Clave de representación (V/I only)
+  record += numPad("0", 10, 2);                               // 463-474: Número de valores (V/I only, zeros)
+  record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
+  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += pad("", 20);                                      // 481-500: Blank
 
   return record;
 }
