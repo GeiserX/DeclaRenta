@@ -17,7 +17,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -45,6 +45,8 @@ export interface D6Report {
   cancelled: D6Cancellation[];
   totalPositions: number;
   totalValueEur: string;
+  /** Held foreign positions left out because they have no year-end rate or no market value: declare them by hand. */
+  unvaluedCount: number;
   guide: string[];
 }
 
@@ -92,6 +94,7 @@ export function generateD6Report(
 ): D6Report {
   const yearEnd = `${year}-12-31`;
 
+  let unvaluedCount = 0;
   const d6Positions: D6Position[] = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
@@ -102,8 +105,12 @@ export function generateD6Report(
     .filter((p) => new Decimal(p.quantity).greaterThan(0)) // Exclude short positions
     .flatMap((p) => {
       const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
-      // No resolvable year-end rate → can't value in EUR; skip rather than crash.
-      if (ecbRate === null) return [];
+      // No resolvable year-end rate, or no market value in the export → can't
+      // value in EUR; skip it (never as 0 €) and count it for the caller.
+      if (ecbRate === null || hasNoMarketValue(p)) {
+        unvaluedCount++;
+        return [];
+      }
       const valueEur = new Decimal(p.positionValue).mul(ecbRate);
 
       return [{
@@ -204,6 +211,7 @@ export function generateD6Report(
     cancelled,
     totalPositions: d6Positions.length,
     totalValueEur: totalValue.toFixed(2),
+    unvaluedCount,
     guide,
   };
 }
