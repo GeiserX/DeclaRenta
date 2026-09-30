@@ -324,10 +324,11 @@ const en: TranslationKeys = {
   "m720.category_c": "Accounts (cash balances)",
   "m720.category_exceeded": "Exceeds 50,000 EUR — filing required",
   "m720.category_not_exceeded": "Below threshold",
+  "m720.category_undetermined": "Cannot be determined: {{count}} position(s) not valued",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "m720.cash_title": "Cash balances (Accounts)",
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
@@ -363,7 +364,7 @@ const en: TranslationKeys = {
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
   "d6.deadline": "Deadline: January 1 – 31 of the following year",
@@ -382,6 +383,8 @@ const en: TranslationKeys = {
   "m721.threshold_exceeded": "Based on your positions ({{amount}} EUR), you are required to file Modelo 721.",
   "m721.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
+  "m721.threshold_undetermined":
+    "Cannot tell whether you exceed the 50,000 EUR threshold: the total ({{amount}} EUR) leaves out {{count}} position(s) that could not be valued. Value them before concluding that you do not need to file.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
@@ -399,7 +402,7 @@ const en: TranslationKeys = {
   "m721.format_notice":
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",

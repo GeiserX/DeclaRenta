@@ -325,10 +325,11 @@ const gl: TranslationKeys = {
   "m720.category_c": "Contas (saldos en efectivo)",
   "m720.category_exceeded": "Supera 50.000 € — obrigatorio declarar",
   "m720.category_not_exceeded": "Por debaixo do limiar",
+  "m720.category_undetermined": "Non se pode determinar: {{count}} posición(s) sen valorar",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "m720.cash_title": "Saldos en efectivo (Contas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
@@ -363,7 +364,7 @@ const gl: TranslationKeys = {
   "d6.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o D-6.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "d6.cancellations_title": "Cancelacións",
   "d6.generate_btn": "Xerar guía D-6",
   "d6.deadline": "Prazo: 1 – 31 xaneiro do ano seguinte",
@@ -382,6 +383,8 @@ const gl: TranslationKeys = {
   "m721.threshold_exceeded": "Segundo as túas posicións ({{amount}} €), estás obrigado a presentar o Modelo 721.",
   "m721.threshold_not_exceeded":
     "Non superas o limiar de 50.000 € (total: {{amount}} €). Non estás obrigado a presentar.",
+  "m721.threshold_undetermined":
+    "Non se pode determinar se superas o limiar de 50.000 €: o total ({{amount}} €) non inclúe {{count}} posición(s) sen valorar. Valóraas antes de concluír que non debes presentar.",
   "m721.no_positions": "Sube un informe con posicións de criptomoedas no Modelo 100 para analizar o Modelo 721.",
   "m721.positions_title": "Posicións declarables",
   "m721.generate_btn": "Xerar ficheiro Modelo 721",
@@ -398,7 +401,7 @@ const gl: TranslationKeys = {
   "m721.format_notice":
     "O formato oficial da AEAT é XML (Orde HFP/886/2023). DeclaRenta só mostra unha revisión orientativa: a xeración oficial está desactivada ata implementar XML validado.",
   "m721.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "m721.empty_title": "Non hai posicións de criptomoedas",
   "m721.empty_description":
     "O Modelo 721 é unha declaración informativa obrigatoria se posúes criptomoedas en exchanges estranxeiros valoradas en máis de 50.000 €. Sube o teu informe do broker na sección Modelo 100 para que DeclaRenta calcule automaticamente se superas o limiar. Prazo: 1 de xaneiro – 31 de marzo.",
