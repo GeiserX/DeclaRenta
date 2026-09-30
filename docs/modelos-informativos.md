@@ -31,7 +31,16 @@ Un fichero de texto de **ancho fijo** (500 bytes por registro) codificado en **I
 - Un **registro resumen** (tipo 1) con datos del declarante y totales.
 - Un **registro detalle** (tipo 2) por cada posición: clave V para acciones (subclave 1) y bonos (subclave 2), clave I para fondos extranjeros; el país donde está depositada (el del bróker) o, en un fondo, el país del fondo; ISIN, valoración a 31/dic, cantidad y porcentaje de titularidad (100 entre el número de titulares del perfil, con el valor completo sin prorratear).
 - Un registro de **cuenta** (clave C) por cada saldo en efectivo con media del cuarto trimestre, con el número de cuenta en el campo de código de cuenta.
-- Registros de tipo **A** (alta), **M** (modificación) o **C** (cancelación) según si la posición es nueva, ya existía o se ha vendido. Una cancelación repite la clave y el país con que el fichero del año anterior declaró ese valor. Si ese fichero usó un código que el BOE no admite (las versiones anteriores de DeclaRenta dejaban la subclave en blanco), la venta no entra en el fichero y DeclaRenta la lista para que la declares a mano. Lo que el fichero anterior ya dio de baja no se vuelve a cancelar.
+- Registros de tipo **A** (alta), **M** (modificación) o **C** (cancelación) según si la posición es nueva, ya existía o se ha vendido. Para distinguirlos hace falta el fichero del 720 del año anterior, y eso de momento solo lo lee la [CLI](usage.md#cli) con `--previous-720`. Una cancelación repite la clave y el país con que el fichero del año anterior declaró ese valor. Si ese fichero usó un código que el BOE no admite (las versiones anteriores de DeclaRenta dejaban la subclave en blanco), la venta no entra en el fichero y DeclaRenta la lista para que la declares a mano. Lo que el fichero anterior ya dio de baja no se vuelve a cancelar.
+
+!!! warning "En la web, todo sale como alta"
+    La web todavía no tiene dónde cargar el 720 del año anterior. Por eso marca cada valor y cada cuenta como **A** (alta), aunque ya lo declararas el año pasado, y no escribe ningún registro **C** por lo que vendiste. Si ya presentaste el 720 otro año, genera el fichero con la CLI y el del año anterior:
+
+    ```bash
+    node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE" --previous-720 720_2024.txt
+    ```
+
+    Con él, lo que ya declaraste sale como **M** y lo que vendiste como **C**.
 
 Las posiciones sin ISIN y los bienes o cuentas sin país conocido no caben en el fichero: si su categoría supera los 50.000 €, DeclaRenta los lista para que los declares a mano en el formulario.
 
@@ -95,7 +104,7 @@ Una **guía orientativa de cumplimentación** con los datos que necesitarías in
 - Número de títulos a 31 de diciembre.
 - Valor de mercado en EUR al tipo ECB de 31 de diciembre.
 
-Si proporcionas el D-6 del año anterior (vía `--previous-d6`), DeclaRenta genera también las **cancelaciones** para posiciones que ya no mantienes.
+Si proporcionas el D-6 del año anterior (vía `--previous-d6`), DeclaRenta genera también las **cancelaciones** para posiciones que ya no mantienes. Esa opción solo existe en la [CLI](usage.md#cli): la guía que descarga la web no incluye cancelaciones.
 
 ### Cómo acceder a AFORIX
 
