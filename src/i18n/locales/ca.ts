@@ -343,6 +343,8 @@ const ca: TranslationKeys = {
     "falta el número de compte",
   "m720.omitted_invalid_code":
     "venut aquest any; el Model 720 anterior el va declarar amb una clau o un país que el fitxer no admet",
+  "m720.not_generated_left_out":
+    "No s'ha generat cap fitxer. Superes el llindar de 50.000 €, però cap d'aquests béns no es pot escriure al fitxer: declara'ls a mà al formulari del Model 720, seguint els avisos de dalt.",
   "m720.successive_years_note":
     "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
   "m720.generate_btn": "Generar fitxer Model 720",

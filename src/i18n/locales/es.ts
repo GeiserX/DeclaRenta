@@ -373,6 +373,8 @@ const es = {
     "falta el número de cuenta",
   "m720.omitted_invalid_code":
     "vendido este año; el Modelo 720 anterior lo declaró con una clave o un país que el fichero no admite",
+  "m720.not_generated_left_out":
+    "No se ha generado ningún fichero. Superas el umbral de 50.000 €, pero ninguno de esos bienes puede escribirse en el fichero: decláralos a mano en el formulario del Modelo 720, siguiendo los avisos de arriba.",
   "m720.successive_years_note":
     "Si ya presentaste el Modelo 720 en un año anterior, solo es obligatorio volver a presentarlo cuando el valor conjunto de una categoría ha aumentado más de 20.000 € respecto de la última declaración, o cuando has vendido o cancelado un bien que declaraste (arts. 42 bis.5 y 42 ter.5 del RD 1065/2007). Si no, presentarlo es opcional.",
   "m720.generate_btn": "Generar fichero Modelo 720",
