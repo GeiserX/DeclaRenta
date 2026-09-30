@@ -15,6 +15,8 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
   for (let i = 0; i < nif.length; i++) chars[8 + i] = nif[i]!;
 
   if (type === "2") {
+    // Clave V, subclave 1 (shares) at 102-103
+    chars[101] = "V"; chars[102] = "1";
     // Country code at 129-130
     chars[128] = "U"; chars[129] = "S";
     // ID type = 1 (ISIN)
@@ -31,6 +33,7 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
     for (let i = 0; i < v1.length; i++) chars[432 + i] = v1[i]!;
     const v2 = "00000000000000";
     for (let i = 0; i < v2.length; i++) chars[447 + i] = v2[i]!;
+    chars[461] = "A";
     const qty = "000000000100";
     for (let i = 0; i < qty.length; i++) chars[462 + i] = qty[i]!;
     const pct = "10000";
@@ -194,6 +197,17 @@ describe("validateModelo720Records", () => {
     it("flags a V record whose clave de representación (462) is not A or B", () => {
       const record = withField(boeGoldenValuesRecord(), d.claveRepresentacion, "0");
       expect(validateModelo720Records([record])[0]!.errors).toContainEqual(expect.stringContaining("representación"));
+    });
+
+    it("flags a clave and subclave (102-103) the BOE does not list", () => {
+      // 103 is numeric: V takes 1-3, I takes 0, C 1-5, S 1-2, B 1-5.
+      for (const code of ["V ", "V0", "V4", "I1", "I ", "C6", "S3", "B0", "X1", "  "]) {
+        const record = withField(boeGoldenValuesRecord(), d.claveSubclave, code);
+        expect(validateModelo720Records([record])[0]!.errors).toContainEqual(expect.stringContaining("Clave y subclave"));
+      }
+      for (const code of ["V1", "V2", "V3", "I0"]) {
+        expect(validateModelo720Records([withField(boeGoldenValuesRecord(), d.claveSubclave, code)])[0]!.errors).toEqual([]);
+      }
     });
 
     it("flags a letter inside número de valores (463-474)", () => {

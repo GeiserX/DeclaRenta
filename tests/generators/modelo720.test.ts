@@ -979,17 +979,62 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
       expect(findModelo720Omissions([held()], rateMap, config)).toEqual([]);
     });
 
-    it("leaves out and reports a sale whose country in last year's file is not a valid code", () => {
-      // An older version wrote the ISIN prefix as the country, so an XS bond reads "XS".
-      const oldBond = { isin: "XS2314659447", claveSubclave: "V1", country: "XS" };
-      const config = { ...baseConfig, previousYearSecurities: [...lastYear("US78462F1030"), oldBond] };
+    it("leaves out and reports a sale whose clave or country in last year's file is not a valid code", () => {
+      // Older versions wrote 102-103 as "V " (blank subclave) and the ISIN
+      // prefix as the country, so an XS bond reads "V " / "XS" and a US share
+      // "V " / "US": the country is valid there, the subclave is not.
+      const oldBond = { isin: "XS2314659447", claveSubclave: "V ", country: "XS" };
+      const oldShare = { isin: "US0378331005", claveSubclave: "V ", country: "US" };
+      const config = { ...baseConfig, previousYearSecurities: [...lastYear("US78462F1030"), oldBond, oldShare] };
       const records = generateModelo720([held()], rateMap, config).split("\n");
       expect(records).toHaveLength(2);
       expect(cancelledRecords(records)).toHaveLength(0);
       expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], []]);
       expect(findModelo720Omissions([held()], rateMap, config)).toEqual([
-        { kind: "cancelled", reason: "no_country", security: oldBond },
+        { kind: "cancelled", reason: "invalid_code", security: oldBond },
+        { kind: "cancelled", reason: "invalid_code", security: oldShare },
       ]);
+    });
+
+    it("never repeats the blank subclave of a file written by an older version", () => {
+      // Last year's file as released versions wrote it: 103 blank on every V record.
+      const previousFile = generateModelo720([held(), held({ isin: "US0378331005" })], rateMap, baseConfig)
+        .split("\n")
+        .map((line) => (line[0] === "2" ? line.slice(0, 102) + " " + line.slice(103) : line))
+        .join("\n");
+      const config = { ...baseConfig, previousYearSecurities: readPrevious720(previousFile).securities };
+      const records = generateModelo720([held()], rateMap, config).split("\n");
+      expect(cancelledRecords(records)).toHaveLength(0);
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], []]);
+      expect(findModelo720Omissions([held()], rateMap, config)).toEqual([
+        { kind: "cancelled", reason: "invalid_code", security: { isin: "US0378331005", claveSubclave: "V ", country: "IE" } },
+      ]);
+    });
+
+    it("does not read what last year's file already declared sold (origin C) as still held", () => {
+      // Last year's file: the S&P ETF held, US0378331005 sold that year (a C record).
+      const previousFile = generateModelo720(
+        [held()],
+        rateMap,
+        { ...baseConfig, previousYearSecurities: lastYear("US0378331005") },
+        undefined,
+        [{ accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" }],
+      );
+      expect(cancelledRecords(previousFile.split("\n")).map((l) => boeField(l, d.isin))).toEqual(["US0378331005"]);
+      // An account closed last year, written as a C-origin cash record.
+      const closedAccount = previousFile.split("\n").find((l) => boeField(l, d.claveBien) === "C")!;
+      const withClosedAccount = previousFile + "\n" + closedAccount.slice(0, 155) + "U7654321".padEnd(34) + closedAccount.slice(189, 422) + "C" + closedAccount.slice(423);
+      const previous = readPrevious720(withClosedAccount);
+      expect(previous.securities.map((s) => s.isin)).toEqual(["US78462F1030"]);
+      expect(previous.accounts).toEqual(["U1234567"]);
+
+      const config = { ...baseConfig, previousYearSecurities: previous.securities };
+      // Not sold a second time...
+      expect(cancelledRecords(generateModelo720([held()], rateMap, config).split("\n"))).toHaveLength(0);
+      // ...and bought back, it is new (A), not already declared (M).
+      const rebought = generateModelo720([held(), held({ isin: "US0378331005" })], rateMap, config)
+        .split("\n").find((l) => l[0] === "2" && boeField(l, d.isin) === "US0378331005")!;
+      expect(boeField(rebought, d.origen)).toBe("A");
     });
   });
 

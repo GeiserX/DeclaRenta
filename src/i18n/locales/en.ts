@@ -340,6 +340,8 @@ const en: TranslationKeys = {
     "the country where it is deposited or located is missing",
   "m720.omitted_no_account":
     "the account number is missing",
+  "m720.omitted_invalid_code":
+    "sold this year; last year's Modelo 720 declared it with a code or country the file does not accept",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",

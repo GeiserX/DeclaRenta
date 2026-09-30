@@ -511,11 +511,12 @@ program
             ? `Posición ${o.position.symbol || o.position.description}`
             : o.kind === "cash"
               ? `Cuenta ${o.cashBalance.accountId || "(sin número)"} en ${o.cashBalance.currency}`
-              : `Baja de ${o.security.isin} (declarado en el Modelo 720 anterior con país «${o.security.country}»)`;
+              : `Baja de ${o.security.isin} (declarado en el Modelo 720 anterior con clave «${o.security.claveSubclave}» y país «${o.security.country}»)`;
           const why = {
             no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
             no_country: "no tiene un código de país válido",
             no_account: "no tiene número de cuenta",
+            invalid_code: "tiene una clave, subclave o país que el fichero no admite",
           }[o.reason];
           console.error(`⚠ ${what} ${why}: no se incluye en el fichero. Decláralo a mano en el formulario del Modelo 720.`);
         }

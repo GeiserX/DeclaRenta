@@ -371,6 +371,8 @@ const es = {
     "falta el país donde está depositado o situado",
   "m720.omitted_no_account":
     "falta el número de cuenta",
+  "m720.omitted_invalid_code":
+    "vendido este año; el Modelo 720 anterior lo declaró con una clave o un país que el fichero no admite",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",

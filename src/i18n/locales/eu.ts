@@ -341,6 +341,8 @@ const eu: TranslationKeys = {
     "gordailuan edo kokatuta dagoen herrialdea falta da",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
+  "m720.omitted_invalid_code":
+    "aurten saldua; aurreko 720 Ereduak fitxategiak onartzen ez duen gako edo herrialde batekin aitortu zuen",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",

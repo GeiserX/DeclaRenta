@@ -69,7 +69,7 @@ export function boeGoldenValuesRecord(): string {
   put(chars, [9, 17], "12345678A");
   put(chars, [18, 26], "12345678A");
   put(chars, [76, 76], "1");
-  put(chars, BOE_720.detail.claveBien, "V");
+  put(chars, BOE_720.detail.claveSubclave, "V1");
   put(chars, [129, 130], "US");
   put(chars, [131, 131], "1");
   put(chars, [132, 143], "US0378331005");

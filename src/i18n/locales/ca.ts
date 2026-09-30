@@ -341,6 +341,8 @@ const ca: TranslationKeys = {
     "falta el país on està dipositat o situat",
   "m720.omitted_no_account":
     "falta el número de compte",
+  "m720.omitted_invalid_code":
+    "venut aquest any; el Model 720 anterior el va declarar amb una clau o un país que el fitxer no admet",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",

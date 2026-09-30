@@ -341,6 +341,8 @@ const gl: TranslationKeys = {
     "falta o país onde está depositado ou situado",
   "m720.omitted_no_account":
     "falta o número de conta",
+  "m720.omitted_invalid_code":
+    "vendido este ano; o Modelo 720 anterior declarouno cunha clave ou un país que o ficheiro non admite",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",

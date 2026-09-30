@@ -50,6 +50,8 @@ describe("modelo720-validator - additional branches", () => {
     arr[4] = "2"; arr[5] = "0"; arr[6] = "2"; arr[7] = "5"; // year
     // NIF positions 9-17 (indices 8-16)
     "12345678A".split("").forEach((c, i) => arr[8 + i] = c);
+    // Clave V, subclave 1 at positions 102-103 (indices 101-102)
+    arr[101] = "V"; arr[102] = "1";
     // Country code at positions 129-130 (indices 128-129)
     arr[128] = "U"; arr[129] = "S";
     // ID type at position 131 (index 130)
@@ -62,6 +64,8 @@ describe("modelo720-validator - additional branches", () => {
     "00000000175500".split("").forEach((c, i) => arr[432 + i] = c);
     // Valoración 2 at positions 448-461 (indices 447-460): 14 digits
     "00000000195000".split("").forEach((c, i) => arr[447 + i] = c);
+    // Clave de representación at position 462 (index 461)
+    arr[461] = "A";
     // Número de valores at positions 463-474 (indices 462-473): 12 digits
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);

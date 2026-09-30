@@ -10,7 +10,7 @@ import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
-import { isIsoCountryCode } from "./modelo720-validator.js";
+import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
 /**
  * Get the valuation rate for a position: Q4 average for STK, year-end spot for
@@ -131,13 +131,14 @@ export interface Previous720Security {
  * Something the 720 file cannot carry, so the user must declare it by hand:
  * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
  * no broker export gives us), a security or account whose country is unknown,
- * an account with no account code, or a sale of a security whose country in
- * last year's file is not a valid code (a file written by an older version).
+ * an account with no account code, or a sale of a security whose clave,
+ * subclave or country in last year's file is not a valid code (a file written
+ * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130).
  */
 export type Modelo720Omission =
   | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
   | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
-  | { kind: "cancelled"; reason: "no_country"; security: Previous720Security };
+  | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
 
 function positionOmission(p: OpenPosition): "no_isin" | "no_country" | null {
   if (p.isin.trim() === "") return "no_isin";
@@ -190,10 +191,11 @@ export function modelo720DeclarationId(now: Date = new Date()): string {
 /**
  * Read last year's 720 file: its V/I records (ISIN, clave + subclave, country)
  * and the account codes of its C records, which decide the A/M/C origin (423)
- * this year.
+ * this year. Records whose origin is C were sold or closed last year, so they
+ * are not held any more and are skipped.
  */
 export function readPrevious720(content: string): { securities: Previous720Security[]; accounts: string[] } {
-  const details = content.split(/\r?\n/).filter((line) => line.startsWith("2"));
+  const details = content.split(/\r?\n/).filter((line) => line.startsWith("2") && line[422] !== "C");
   return {
     securities: details
       .filter((line) => line[101] === "V" || line[101] === "I")
@@ -308,15 +310,18 @@ function plan720(
   const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelled.length > 0;
   const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
 
+  // Last year's file wrote an invalid code (older versions left the subclave
+  // blank and wrote the ISIN prefix, e.g. XS, as the country): repeating it
+  // would make AEAT reject the file.
+  const repeatable = (s: Previous720Security) => isClaveSubclave(s.claveSubclave) && isIsoCountryCode(s.country);
+
   const omissions: Modelo720Omission[] = [];
   if (hasValuesRecords) {
     for (const e of entries) {
       if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
     }
-    // Last year's file wrote an invalid country (an older version wrote the
-    // ISIN prefix, e.g. XS): repeating it would make AEAT reject the file.
     for (const security of cancelled) {
-      if (!isIsoCountryCode(security.country)) omissions.push({ kind: "cancelled", reason: "no_country", security });
+      if (!repeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
     }
   }
   if (hasCashRecords) {
@@ -327,7 +332,7 @@ function plan720(
 
   return {
     entries: hasValuesRecords ? entries.filter((e) => e.omission === null) : [],
-    cancelled: hasValuesRecords ? cancelled.filter((s) => isIsoCountryCode(s.country)) : [],
+    cancelled: hasValuesRecords ? cancelled.filter(repeatable) : [],
     cashEntries: hasCashRecords ? cashEntries.filter((e) => e.omission === null) : [],
     omissions,
   };

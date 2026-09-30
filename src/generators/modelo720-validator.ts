@@ -85,6 +85,14 @@ export function isIsoCountryCode(code: string): boolean {
   return ISO_COUNTRY_CODES.has(code);
 }
 
+/** Subclaves (103) the BOE lists for each clave (102): C cuentas, V valores, I IIC (a cero), S seguros y rentas, B inmuebles. */
+const SUBCLAVES: Record<string, string> = { C: "12345", V: "123", I: "0", S: "12", B: "12345" };
+
+/** True when `code` is a clave + subclave pair (positions 102-103) the BOE lists. */
+export function isClaveSubclave(code: string): boolean {
+  return code.length === 2 && (SUBCLAVES[code[0]!] ?? "").includes(code[1]!);
+}
+
 /**
  * Validate the ISIN check digit using the Luhn algorithm.
  *
@@ -137,6 +145,7 @@ function isNumeric(s: string): boolean {
  * - NIF format (8 digits + letter, or letter + 7 digits + letter)
  * - Numeric fields contain only digits, at the BOE positions of the type-2
  *   tail (432-500: valoraciones, representación, número de valores, porcentaje)
+ * - Clave and subclave (102-103) are a pair the BOE lists
  * - Country codes are valid ISO 3166-1 alpha-2
  * - The declaration number (type 1, 108-120) is 13 digits starting with 720
  * - ISIN check digit passes Luhn algorithm
@@ -202,6 +211,14 @@ export function validateModelo720Records(records: string[]): ValidationResult[] 
 
     // For detail records (type "2"), validate additional fields
     if (len >= 1 && record[0] === "2") {
+      // Clave (102) and subclave (103): V 1-3, I 0, C 1-5, S 1-2, B 1-5
+      if (len >= 103) {
+        const code = record.slice(101, 103);
+        if (!isClaveSubclave(code)) {
+          errors.push(`Clave y subclave de bien o derecho inválidas: "${code}"`);
+        }
+      }
+
       // Country code (positions 129-130)
       if (len >= 130) {
         const country = record.slice(128, 130);
