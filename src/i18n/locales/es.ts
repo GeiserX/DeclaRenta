@@ -171,7 +171,10 @@ const es = {
   "compare.net_gain_loss": "Ganancia/Pérdida neta (transmisiones, sin divisas)",
 
   // Errors
-  "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
+  "error.no_broker_detected":
+    'No se pudo detectar el broker de "{{filename}}". Si es un informe de broker, selecciona el broker manualmente; si no lo es, quítalo de la lista.',
+  "error.empty_file":
+    'El fichero "{{filename}}" está vacío. Quítalo de la lista o vuelve a exportarlo desde tu broker.',
   "error.file_too_large":
     'El fichero "{{filename}}" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.',
   "error.prefix": "Error: ",

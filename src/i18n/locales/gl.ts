@@ -162,7 +162,10 @@ const gl: TranslationKeys = {
   "compare.acquisition_value": "Valor de adquisición (transmisións, sen divisas)",
   "compare.net_gain_loss": "Ganancia/Perda neta (transmisións, sen divisas)",
 
-  "error.no_broker_detected": 'Non se puido detectar o broker de "{{filename}}". Selecciona o broker manualmente.',
+  "error.no_broker_detected":
+    'Non se puido detectar o broker de "{{filename}}". Se é un informe de broker, selecciona o broker manualmente; se non o é, quítao da lista.',
+  "error.empty_file":
+    'O ficheiro "{{filename}}" está baleiro. Quítao da lista ou volve exportalo desde o teu broker.',
   "error.file_too_large":
     'O ficheiro "{{filename}}" supera o límite de {{limit}} MB e descartouse. Exporta un período máis curto ou divide o ficheiro.',
   "error.prefix": "Erro: ",

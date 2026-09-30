@@ -163,7 +163,10 @@ const eu: TranslationKeys = {
   "compare.acquisition_value": "Eskuratze-balioa (transmisioak, dibisarik gabe)",
   "compare.net_gain_loss": "Irabazi/Galera garbia (transmisioak, dibisarik gabe)",
 
-  "error.no_broker_detected": 'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.',
+  "error.no_broker_detected":
+    'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Broker baten txostena bada, hautatu brokerra eskuz; bestela, kendu zerrendatik.',
+  "error.empty_file":
+    '"{{filename}}" fitxategia hutsik dago. Kendu zerrendatik edo esportatu berriro zure brokerretik.',
   "error.file_too_large":
     '"{{filename}}" fitxategiak {{limit}} MB-ko muga gainditzen du eta baztertu egin da. Esportatu epe laburragoa edo zatitu fitxategia.',
   "error.prefix": "Errorea: ",
