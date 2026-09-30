@@ -29,7 +29,15 @@ import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
-import { initProfile, getProfile, saveProfile } from "./profile.js";
+import {
+  initProfile,
+  getProfile,
+  saveProfile,
+  PROFILE_CHANGE_EVENT,
+  reportSettingsOf,
+  reportSettingsChanged,
+  type ReportSettings,
+} from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
@@ -213,6 +221,10 @@ const reviewContent = document.getElementById("review-content")!;
 const yearCompareDiv = document.getElementById("year-compare")!;
 
 let currentReport: TaxSummary | null = null;
+/** Profile settings `currentReport` was computed with. */
+let currentReportSettings: ReportSettings | null = null;
+/** True when the latest run was triggered by a profile change; shows the notice on Results. */
+let showRecalcNotice = false;
 let currentBrokers: string[] = [];
 const pendingFiles: File[] = [];
 
@@ -678,8 +690,9 @@ function renderSectionSafely(containerId: string, render: () => void): void {
 }
 
 /**
- * Monotonic run token. `processFiles` is triggered from four places (wizard
- * Next, year-select change, manual-rate apply, monodivisa toggle) and is async
+ * Monotonic run token. `processFiles` is triggered from several places (wizard
+ * Next, year-select change, manual-rate and opening-lot apply, and a profile
+ * change to monodivisa, titulares or auto-convert) and is async
  * (it awaits the ECB fetch and a paint yield), so two runs can overlap — e.g.
  * the user changes the year and immediately edits a manual rate. Without a guard
  * the slower run would resolve last and clobber `currentReport`/the rendered
@@ -689,7 +702,7 @@ function renderSectionSafely(containerId: string, render: () => void): void {
  */
 let processRunToken = 0;
 
-async function processFiles(): Promise<void> {
+async function processFiles(opts: { fromProfileChange?: boolean } = {}): Promise<void> {
   if (!mergedStatement) {
     await parseFiles();
   }
@@ -748,6 +761,8 @@ async function processFiles(): Promise<void> {
       manualOpeningLots,
     });
     currentReport = report;
+    currentReportSettings = reportSettingsOf(profileForReport);
+    showRecalcNotice = opts.fromProfileChange === true;
     currentBrokers = detectedBrokers;
 
     // Persist for year comparison
@@ -769,6 +784,15 @@ async function processFiles(): Promise<void> {
     currentReport = null;
   }
 }
+
+// Monodivisa, titulares and auto-convert feed the engine, so a report on screen
+// is stale once any of them changes: recalculate it. Other profile fields (NIF,
+// name, year) never re-run the engine from here.
+document.addEventListener(PROFILE_CHANGE_EVENT, () => {
+  if (!currentReport || !currentReportSettings) return;
+  if (!reportSettingsChanged(currentReportSettings, reportSettingsOf(getProfile()))) return;
+  void processFiles({ fromProfileChange: true });
+});
 
 // ---------------------------------------------------------------------------
 // Export & generate buttons
@@ -925,6 +949,9 @@ function renderResults(report: TaxSummary) {
       hdrHtml += `<div class="banner banner-warning">
         <span>${t("results.year_mismatch", { year: String(year), available: detectedYears.join(", ") })}</span>
       </div>`;
+    }
+    if (showRecalcNotice) {
+      hdrHtml += `<div class="banner banner-info results-recalc-notice" role="status">${t("results.recalculated")}</div>`;
     }
     yearHeader.innerHTML = hdrHtml;
 

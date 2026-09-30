@@ -69,11 +69,33 @@ export function getProfile(): FiscalProfile {
   return { ...DEFAULT_PROFILE };
 }
 
+/** Fired on `document` after every saveProfile(); main.ts recalculates on it. */
+export const PROFILE_CHANGE_EVENT = "profilechange";
+
+/** The profile fields that change the computed report (they feed ReportOptions). */
+export type ReportSettings = Pick<FiscalProfile, "monodivisa" | "trackAutoConvert" | "titulares">;
+
+export function reportSettingsOf(profile: FiscalProfile): ReportSettings {
+  return {
+    monodivisa: profile.monodivisa,
+    trackAutoConvert: profile.trackAutoConvert,
+    titulares: profile.titulares,
+  };
+}
+
+/** True when a report computed with `a` would differ from one computed with `b`. */
+export function reportSettingsChanged(a: ReportSettings, b: ReportSettings): boolean {
+  return a.monodivisa !== b.monodivisa || a.trackAutoConvert !== b.trackAutoConvert || a.titulares !== b.titulares;
+}
+
 /** Save the fiscal profile to localStorage */
 export function saveProfile(profile: FiscalProfile): void {
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch { /* localStorage full */ }
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent(PROFILE_CHANGE_EVENT));
+  }
 }
 
 /** Validate a Spanish NIF/NIE */

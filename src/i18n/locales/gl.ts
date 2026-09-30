@@ -45,6 +45,7 @@ const gl: TranslationKeys = {
   "results.dividends_count": "{{count}} dividendo(s)",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
+  "results.recalculated": "Resultados recalculados cos cambios do teu perfil fiscal.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",

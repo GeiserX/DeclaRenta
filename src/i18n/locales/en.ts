@@ -44,6 +44,7 @@ const en: TranslationKeys = {
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
+  "results.recalculated": "Results recalculated with your tax profile changes.",
 
   "table.isin": "ISIN",
   "table.symbol": "Symbol",

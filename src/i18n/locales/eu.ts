@@ -45,6 +45,7 @@ const eu: TranslationKeys = {
   "results.dividends_count": "{{count}} dibidendu",
   "results.year_mismatch":
     "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
+  "results.recalculated": "Emaitzak berriro kalkulatu dira zure profil fiskaleko aldaketekin.",
 
   "table.isin": "ISIN",
   "table.symbol": "Sinboloa",

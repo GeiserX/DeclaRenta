@@ -45,6 +45,7 @@ const ca: TranslationKeys = {
   "results.dividends_count": "{{count}} dividend(s)",
   "results.year_mismatch":
     "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
+  "results.recalculated": "Resultats recalculats amb els canvis del teu perfil fiscal.",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbol",
