@@ -174,7 +174,7 @@ export function renderSection721(
       let rateCell = "";
       if (anyDerived) {
         if (p.manualPriced) {
-          rateCell = `<td><input type="text" inputmode="decimal" class="crypto-rate-input m721-rate-input"
+          rateCell = `<td><input type="text" inputmode="decimal" class="m721-rate-input"
             data-coin="${esc(p.entry.assetId)}" aria-label="${esc(t("m721.col_eur_per_unit", { date: yearEndDmy }))} ${esc(p.entry.assetId)}"
             placeholder="${esc(t("crypto_rates.placeholder"))}" value="${p.eurPerUnit === null ? "" : esc(p.eurPerUnit.toString())}" /></td>`;
         } else {

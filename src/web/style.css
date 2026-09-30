@@ -2901,7 +2901,8 @@ footer a:hover {
   color: var(--muted);
 }
 
-.crypto-rate-input {
+.crypto-rate-input,
+.m721-rate-input {
   width: 11rem;
   max-width: 100%;
   font-family: "SF Mono", "Fira Code", monospace;
@@ -3031,7 +3032,8 @@ footer a:hover {
 }
 
 @media (max-width: 768px) {
-  .crypto-rate-input {
+  .crypto-rate-input,
+  .m721-rate-input {
     width: 100%;
   }
 

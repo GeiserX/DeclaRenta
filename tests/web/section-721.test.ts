@@ -9,7 +9,7 @@
  * stores as a manual quote (no price API).
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { binanceParser } from "../../src/parsers/binance.js";
@@ -31,6 +31,19 @@ function usdRates(): EcbRateMap {
   return map;
 }
 
+/** In-memory localStorage (newer Node versions shadow jsdom's with their own). */
+function memoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, val: string) => { store.set(key, val); },
+    removeItem: (key: string) => { store.delete(key); },
+    clear: () => { store.clear(); },
+    get length() { return store.size; },
+    key: (i: number) => [...store.keys()][i] ?? null,
+  };
+}
+
 function container(): HTMLElement {
   return document.getElementById("m721-content")!;
 }
@@ -45,10 +58,14 @@ function renderBinance(onSaved?: () => void): { statement: Statement; rates: Ecb
 
 describe("Modelo 721 section with an exchange export (no open positions)", () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.stubGlobal("localStorage", memoryStorage());
     localStorage.setItem("declarenta_profile", JSON.stringify({ year: YEAR }));
     setLocale("es");
     document.body.innerHTML = `<div id="m721-content"></div>`;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("shows the coins still held at 31 December instead of asking for an upload", () => {
