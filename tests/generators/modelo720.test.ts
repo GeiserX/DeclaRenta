@@ -1148,6 +1148,24 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
       ]);
     });
 
+    it("writes no file when the securities are below 50,000 € and the only sale cannot be written", () => {
+      // 30,000 USD x 0.92 = 27,600 € of securities: below the threshold. The
+      // sale's record from an older version has a blank subclave, so it is
+      // left out; it must not pull the below-threshold holding into a file.
+      const oldShare = { isin: "US0378331005", claveSubclave: "V ", country: "US" };
+      const config = { ...baseConfig, previousYearSecurities: [oldShare] };
+      const below = held({ positionValue: "30000" });
+      expect(generateModelo720([below], rateMap, config)).toBe("");
+      // The sale is still reported, so the user declares it by hand.
+      expect(findModelo720Omissions([below], rateMap, config)).toEqual([
+        { kind: "cancelled", reason: "invalid_code", security: oldShare },
+      ]);
+      // Control: above the threshold the holding is written.
+      const records = generateModelo720([held()], rateMap, config).split("\n");
+      expect(records).toHaveLength(2);
+      expect(boeField(records[1]!, d.isin)).toBe("US78462F1030");
+    });
+
     it("never repeats the blank subclave of a file written by an older version", () => {
       // Last year's file as released versions wrote it: 103 blank on every V record.
       const previousFile = generateModelo720([held(), held({ isin: "US0378331005" })], rateMap, baseConfig)

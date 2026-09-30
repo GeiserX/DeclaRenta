@@ -345,9 +345,11 @@ function plan720(
         : [];
     });
 
-  // Check 50,000 EUR threshold per category independently
+  // Check 50,000 EUR threshold per category independently. A sale the file
+  // writes also opens the category; one left out (invalid code) does not, as
+  // it would put below-threshold holdings in a file with nothing else in it.
   const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelled.length > 0;
+  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelledEntries.length > 0;
   const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds;
 
   const omissions: Modelo720Omission[] = [];
@@ -355,9 +357,10 @@ function plan720(
     for (const e of entries) {
       if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
     }
-    for (const security of cancelled) {
-      if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
-    }
+  }
+  // A sale of a declared security is reported whatever the threshold says.
+  for (const security of cancelled) {
+    if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
   }
   if (hasCashRecords) {
     for (const e of cashEntries) {
