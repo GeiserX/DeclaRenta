@@ -68,8 +68,6 @@ const gl: TranslationKeys = {
   "table.amount_eur": "Importe (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmisión (total transmisións)",
-  "casilla.acquisition_value": "Valor de adquisición (total transmisións)",
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",
   "casilla.acquisition_sale_rate_note":
@@ -160,6 +158,9 @@ const gl: TranslationKeys = {
   "compare.saved_reports": "Informes gardados",
   "compare.clear_history": "Borrar historial",
   "compare.clear_confirm": "Borrar todos os informes gardados?",
+  "compare.transmission_value": "Valor de transmisión (transmisións, sen divisas)",
+  "compare.acquisition_value": "Valor de adquisición (transmisións, sen divisas)",
+  "compare.net_gain_loss": "Ganancia/Perda neta (transmisións, sen divisas)",
 
   "error.no_broker_detected": 'Non se puido detectar o broker de "{{filename}}". Selecciona o broker manualmente.',
   "error.file_too_large":

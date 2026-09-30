@@ -67,8 +67,6 @@ const en: TranslationKeys = {
   "table.amount_eur": "Amount (EUR)",
   "table.currency": "Currency",
 
-  "casilla.transmission_value": "Transmission value (all disposals)",
-  "casilla.acquisition_value": "Acquisition value (all disposals)",
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
   "casilla.acquisition_sale_rate_note":
@@ -158,6 +156,9 @@ const en: TranslationKeys = {
   "compare.saved_reports": "Saved reports",
   "compare.clear_history": "Clear history",
   "compare.clear_confirm": "Delete all saved reports?",
+  "compare.transmission_value": "Transmission value (disposals, excl. FX)",
+  "compare.acquisition_value": "Acquisition value (disposals, excl. FX)",
+  "compare.net_gain_loss": "Net gain/loss (disposals, excl. FX)",
 
   "error.no_broker_detected": 'Could not detect broker for "{{filename}}". Select the broker manually.',
   "error.file_too_large":
