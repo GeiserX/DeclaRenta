@@ -38,6 +38,7 @@ const eu: TranslationKeys = {
   "results.filter_all": "Denak",
   "results.filter_gains": "Irabaziak",
   "results.filter_losses": "Galerak",
+  "results.filter_blocked": "Blokeatuak soilik",
   "results.export_json": "Esportatu JSON",
   "results.export_csv": "Esportatu CSV",
   "results.export_pdf": "Esportatu PDF",
@@ -55,6 +56,9 @@ const eu: TranslationKeys = {
   "table.proceeds_eur": "Salmenta EUR",
   "table.gain_loss_eur": "I/G EUR",
   "table.days": "Egunak",
+  "table.blocked_loss_eur": "Galera blokeatua EUR",
+  "table.blocked_loss_hint":
+    "Aurten egotzi ezin duzun galera, balio bera epearen barruan berriro erosi duzulako (PFEZ 33.5.f art.). Renta Web-en, markatu eskualdaketa hau «Pérdidas patrimoniales no imputables» gisa.",
   "table.date": "Data",
   "table.gross_eur": "Gordina EUR",
   "table.withholding_eur": "Atxikipena EUR",

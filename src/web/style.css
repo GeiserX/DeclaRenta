@@ -906,6 +906,18 @@ tbody tr:hover {
   color: var(--danger);
 }
 
+/* Anti-churning (art. 33.5.f LIRPF): sales whose loss is deferred. The row gets
+   a warning tint and the "Pérdida bloqueada" column holds the amount. */
+tr.wash-sale-blocked > td {
+  background: var(--warning-bg);
+}
+
+.blocked-loss {
+  color: var(--warning);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .warning {
   margin-top: 1rem;
   padding: 0.75rem 1rem;

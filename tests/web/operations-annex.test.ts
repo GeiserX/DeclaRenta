@@ -34,6 +34,7 @@ function makeDisposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
     acquireEcbRate: new Decimal(0.92),
     assetCategory: "STK",
     washSaleBlocked: false,
+    blockedLossEur: new Decimal(0),
     ...overrides,
   };
 }
@@ -100,5 +101,48 @@ describe("renderOperationsAnnex — shared asset labels", () => {
       makeDisposal({ assetCategory: "WIDGET", isin: "", symbol: "X", description: "X" }),
     ]));
     expect(html).toContain("WIDGET");
+  });
+});
+
+describe("renderOperationsAnnex — blocked-loss column (art. 33.5.f)", () => {
+  const blockedSale = () =>
+    makeDisposal({
+      symbol: "TSLA",
+      isin: "US88160R1014",
+      proceedsEur: new Decimal(600),
+      costBasisEur: new Decimal(1000),
+      gainLossEur: new Decimal(-400),
+      washSaleBlocked: true,
+      blockedLossEur: new Decimal(400),
+    });
+
+  it("adds no column when no sale has a blocked loss", () => {
+    const html = renderOperationsAnnex(makeSummary([makeDisposal()]));
+    expect(html).not.toContain("Pérdida bloqueada");
+    expect(html).not.toContain("blocked-loss");
+  });
+
+  it("shows the column, the amount and the legal hint when a sale is blocked", () => {
+    const html = renderOperationsAnnex(makeSummary([makeDisposal(), blockedSale()]));
+    expect(html).toContain("Pérdida bloqueada EUR");
+    expect(html).toContain("33.5.f");
+    expect(html).toContain('<td class="num blocked-loss">400,00</td>');
+    // The blocked row is marked, the other one is not.
+    expect(html.match(/class="wash-sale-blocked"/g)).toHaveLength(1);
+  });
+
+  it("leaves the cell blank for sales without a blocked loss", () => {
+    const html = renderOperationsAnnex(makeSummary([makeDisposal(), blockedSale()]));
+    // One blank row cell (AAPL); the TSLA row and the subtotal carry 400,00.
+    expect(html.match(/<td class="num blocked-loss"><\/td>/g)).toHaveLength(1);
+    expect(html.match(/<td class="num blocked-loss">400,00<\/td>/g)).toHaveLength(2);
+  });
+
+  it("keeps the column in every group so the tables line up", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      blockedSale(),
+      makeDisposal({ assetCategory: "FUND", symbol: "VWCE" }),
+    ]));
+    expect(html.match(/Pérdida bloqueada EUR/g)).toHaveLength(2);
   });
 });

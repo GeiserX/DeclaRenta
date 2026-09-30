@@ -37,6 +37,7 @@ const en: TranslationKeys = {
   "results.filter_all": "All",
   "results.filter_gains": "Gains",
   "results.filter_losses": "Losses",
+  "results.filter_blocked": "Blocked only",
   "results.export_json": "Export JSON",
   "results.export_csv": "Export CSV",
   "results.export_pdf": "Export PDF",
@@ -54,6 +55,9 @@ const en: TranslationKeys = {
   "table.proceeds_eur": "Proceeds EUR",
   "table.gain_loss_eur": "G/L EUR",
   "table.days": "Days",
+  "table.blocked_loss_eur": "Blocked loss EUR",
+  "table.blocked_loss_hint":
+    "Loss you cannot claim this year because you bought the same security back within the window (art. 33.5.f LIRPF). In Renta Web, mark this sale as «Pérdidas patrimoniales no imputables».",
   "table.date": "Date",
   "table.gross_eur": "Gross EUR",
   "table.withholding_eur": "WHT EUR",

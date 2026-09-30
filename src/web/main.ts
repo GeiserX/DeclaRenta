@@ -48,6 +48,7 @@ import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { blockedLossCell, blockedLossHeader, filterByKind, showBlockedLossColumn } from "./blocked-loss.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import { fmtEur } from "./format.js";
 import Decimal from "decimal.js";
@@ -1040,11 +1041,11 @@ function renderOperationsTable() {
       (d) => d.isin.toLowerCase().includes(search) || d.symbol.toLowerCase().includes(search),
     );
   }
-  if (filter === "gain") {
-    disposals = disposals.filter((d) => d.gainLossEur.greaterThanOrEqualTo(0));
-  } else if (filter === "loss") {
-    disposals = disposals.filter((d) => d.gainLossEur.lessThan(0));
-  }
+  disposals = filterByKind(disposals, filter);
+  // Decided on the whole report, not the filtered rows, so the column does not
+  // come and go while the user types in the search box.
+  const showBlocked = showBlockedLossColumn(currentReport.capitalGains.disposals);
+  const blockedHead = blockedLossHeader();
 
   // Apply sort
   if (opsSort.dir && opsSort.col) {
@@ -1060,13 +1061,14 @@ function renderOperationsTable() {
       else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
       else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
       else if (col === "gl") cmp = a.gainLossEur.minus(b.gainLossEur).toNumber();
+      else if (col === "blocked") cmp = a.blockedLossEur.minus(b.blockedLossEur).toNumber();
       else if (col === "days") cmp = a.holdingPeriodDays - b.holdingPeriodDays;
       return cmp * dir;
     });
   }
 
-  const th = (label: string, col: string) =>
-    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}">${label}</th>`;
+  const th = (label: string, col: string, title = "") =>
+    `<th class="sortable${sortIndicator(col, opsSort)}" data-col="${col}"${title ? ` title="${title}"` : ""}>${label}</th>`;
 
   opsTable.innerHTML = `
     <table>
@@ -1080,6 +1082,7 @@ function renderOperationsTable() {
           ${th(t("table.cost_eur"), "cost")}
           ${th(t("table.proceeds_eur"), "proceeds")}
           ${th(t("table.gain_loss_eur"), "gl")}
+          ${showBlocked ? th(blockedHead.label, "blocked", blockedHead.title) : ""}
           ${th(t("table.days"), "days")}
         </tr>
       </thead>
@@ -1087,7 +1090,7 @@ function renderOperationsTable() {
         ${disposals
           .map(
             (d) => `
-          <tr>
+          <tr${d.washSaleBlocked ? ' class="wash-sale-blocked"' : ""}>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
@@ -1096,6 +1099,7 @@ function renderOperationsTable() {
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
+            ${showBlocked ? blockedLossCell(d) : ""}
             <td>${d.holdingPeriodDays}</td>
           </tr>
         `,

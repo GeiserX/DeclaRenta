@@ -38,6 +38,7 @@ const gl: TranslationKeys = {
   "results.filter_all": "Todas",
   "results.filter_gains": "Ganancias",
   "results.filter_losses": "Perdas",
+  "results.filter_blocked": "Só bloqueadas",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
   "results.export_pdf": "Exportar PDF",
@@ -55,6 +56,9 @@ const gl: TranslationKeys = {
   "table.proceeds_eur": "Venda EUR",
   "table.gain_loss_eur": "G/P EUR",
   "table.days": "Días",
+  "table.blocked_loss_eur": "Perda bloqueada EUR",
+  "table.blocked_loss_hint":
+    "Perda que non podes imputar este ano porque volviches mercar o mesmo valor dentro do prazo (art. 33.5.f LIRPF). En Renta Web, marca esta transmisión como «Perdas patrimoniais non imputables».",
   "table.date": "Data",
   "table.gross_eur": "Bruto EUR",
   "table.withholding_eur": "Retención EUR",

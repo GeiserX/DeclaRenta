@@ -38,6 +38,7 @@ const ca: TranslationKeys = {
   "results.filter_all": "Totes",
   "results.filter_gains": "Guanys",
   "results.filter_losses": "Pèrdues",
+  "results.filter_blocked": "Només bloquejades",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
   "results.export_pdf": "Exportar PDF",
@@ -55,6 +56,9 @@ const ca: TranslationKeys = {
   "table.proceeds_eur": "Venda EUR",
   "table.gain_loss_eur": "G/P EUR",
   "table.days": "Dies",
+  "table.blocked_loss_eur": "Pèrdua bloquejada EUR",
+  "table.blocked_loss_hint":
+    "Pèrdua que no pots imputar aquest any perquè vas recomprar el mateix valor dins del termini (art. 33.5.f LIRPF). A Renta Web, marca aquesta transmissió com a «Pèrdues patrimonials no imputables».",
   "table.date": "Data",
   "table.gross_eur": "Brut EUR",
   "table.withholding_eur": "Retenció EUR",

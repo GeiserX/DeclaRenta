@@ -36,6 +36,7 @@ export default defineConfig({
         "src/web/format.ts", // Spanish number formatting (fmtEur) — tests/web/format.test.ts
         "src/web/charts.ts", // pure SVG/data extraction (extractChartData) — tests/web/charts.test.ts
         "src/web/operations-annex.ts", // operations annex data builder (pure)
+        "src/web/blocked-loss.ts", // "Pérdida bloqueada" column + ops filter (pure) — tests/web/blocked-loss.test.ts
         "src/web/detection-cache.ts", // broker-detection cache resolution (pure) — tests/web/detection-cache.test.ts
       ],
       // Deliberately EXCLUDED — DOM/browser-bound entry points and renderers that

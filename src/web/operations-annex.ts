@@ -9,6 +9,7 @@ import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
+import { blockedLossCell, blockedLossHeader, showBlockedLossColumn } from "./blocked-loss.js";
 
 // TODO(i18n): needs keys "option.expiration" / "option.close" / "option.exercise"
 // in all 5 locales — kept as Spanish literals for now so the 4 non-Spanish
@@ -39,6 +40,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     groups.get(cat)!.push(d);
   }
 
+  const showBlocked = showBlockedLossColumn(disposals);
+  const blockedHead = blockedLossHeader();
+
   let html = `<div class="annex-container">
     <h3 class="annex-title">${esc(t("annex.title"))}</h3>
     <p class="annex-subtitle">${esc(t("annex.subtitle"))}</p>`;
@@ -48,6 +52,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
     const subtotalProceeds = ops.reduce((s, d) => s.plus(d.proceedsEur), new Decimal(0));
     const subtotalCost = ops.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
     const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    const subtotalBlocked = ops.reduce((s, d) => s.plus(d.blockedLossEur), new Decimal(0));
     const glClass = subtotalGL.greaterThanOrEqualTo(0) ? "gain" : "loss";
 
     // Collapsed by default: the per-operation tables can be hundreds of rows
@@ -72,7 +77,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <th>${t("table.units")}</th>
               <th>${t("table.cost_eur")}</th>
               <th>${t("table.proceeds_eur")}</th>
-              <th>${t("table.gain_loss_eur")}</th>
+              <th>${t("table.gain_loss_eur")}</th>${showBlocked ? `
+              <th title="${blockedHead.title}">${blockedHead.label}</th>` : ""}
             </tr>
           </thead>
           <tbody>`;
@@ -93,7 +99,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${d.quantity.toFixed(d.quantity.mod(1).isZero() ? 0 : 4)}</td>
               <td class="num">${fmtEur(d.costBasisEur)}</td>
               <td class="num">${fmtEur(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
+              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>${showBlocked ? `
+              ${blockedLossCell(d)}` : ""}
             </tr>`;
     });
 
@@ -104,7 +111,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td colspan="6">${esc(label)}</td>
               <td class="num">${fmtEur(subtotalCost)}</td>
               <td class="num">${fmtEur(subtotalProceeds)}</td>
-              <td class="num ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</td>
+              <td class="num ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</td>${showBlocked ? `
+              <td class="num blocked-loss">${subtotalBlocked.greaterThan(0) ? fmtEur(subtotalBlocked) : ""}</td>` : ""}
             </tr>
           </tfoot>
         </table>
