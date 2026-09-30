@@ -26,6 +26,7 @@
 import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 import {
   parseCsvLine,
   parseNumber,
@@ -176,6 +177,9 @@ function parseLightyearCsv(lines: string[]): Statement {
     }
   }
 
+  // Rows of a type no branch handles (e.g. a split or transfer), per raw type.
+  const unknownTypes = new Map<string, number>();
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
     if (!line) continue;
@@ -325,7 +329,11 @@ function parseLightyearCsv(lines: string[]): Statement {
     // Buy / Sell trades
     const isSell = txType === "sell";
     const isBuy = txType === "buy";
-    if (!isSell && !isBuy) continue;
+    if (!isSell && !isBuy) {
+      const rawType = (fields[cols.type] ?? "").trim();
+      if (rawType) unknownTypes.set(rawType, (unknownTypes.get(rawType) ?? 0) + 1);
+      continue;
+    }
     if (!ticker) continue;
 
     const qtyDec = new Decimal(quantityStr).abs();
@@ -363,6 +371,19 @@ function parseLightyearCsv(lines: string[]): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = [];
+  if (unknownTypes.size > 0) {
+    const unknownCount = [...unknownTypes.values()].reduce((a, b) => a + b, 0);
+    const types = [...unknownTypes].map(([type, n]) => `${type} (${n})`).join(", ");
+    parserMessages.push({
+      id: "lightyear.unknown_types",
+      severity: "warning",
+      message: `Se ha(n) omitido ${unknownCount} fila(s) del CSV de Lightyear con un tipo de movimiento no reconocido: ${types}.`,
+      hint: "Estos movimientos no se han incluido en el cálculo. Si son desdoblamientos (splits), traspasos de acciones u otras operaciones societarias, revísalos a mano: pueden cambiar el número de acciones o el coste de adquisición de ventas posteriores.",
+      context: { count: String(unknownCount), types },
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -373,6 +394,7 @@ function parseLightyearCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

@@ -120,11 +120,14 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   if (exceeds) {
     const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
+    html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
   }
 
-  // Positions table
+  // Positions table (long holdings only: a short is owed, not owned, and the
+  // threshold above leaves it out too)
   const positions = statement.openPositions.filter(
-    (p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND",
+    (p) => (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+      && !new Decimal(p.positionValue).isNegative(),
   );
 
   if (positions.length > 0) {

@@ -253,7 +253,7 @@ const es = {
   "guide.flatex.step3":
     "Selecciona <strong>todo el histórico</strong> (necesario para el cálculo FIFO) y exporta el fichero CSV",
   "guide.flatex.step4":
-    "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV",
+    "Para dividendos: ve a <strong>Kontoumsätze</strong> (movimientos de la cuenta), mismo rango de fechas, y exporta el CSV. Ojo: ahí los dividendos aparecen por el importe neto, ya descontada la retención; toma el importe íntegro y la retención del justificante en PDF de cada dividendo",
   "guide.flatex.step5":
     "Sube <strong>ambos ficheros</strong> CSV (Depotumsätze para operaciones y Kontoumsätze para dividendos)",
 
@@ -362,7 +362,9 @@ const es = {
   "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
-    "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Esos saldos se muestran para revisión, pero no se incluyen en el fichero generado.",
+    "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Su saldo a 31 de diciembre sí cuenta para el umbral de 50.000 €, pero esas cuentas no se incluyen en el fichero generado: añádelas a mano, con su saldo medio del cuarto trimestre, antes de presentar.",
+  "m720.successive_years_note":
+    "Si ya presentaste el Modelo 720 en un año anterior, solo es obligatorio volver a presentarlo cuando el valor conjunto de una categoría ha aumentado más de 20.000 € respecto de la última declaración, o cuando has vendido o cancelado un bien que declaraste (arts. 42 bis.5 y 42 ter.5 del RD 1065/2007). Si no, presentarlo es opcional.",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -631,6 +633,8 @@ const es = {
   "opening_lots.save_btn": "Guardar lotes y recalcular",
   "opening_lots.clear_btn": "Borrar lotes guardados",
   "opening_lots.saved": "Guardado",
+  "opening_lots.row_invalid":
+    "Revisa las filas marcadas: indica la fecha de compra y una cantidad y un precio mayores que cero (p. ej. 1.234,56). No se ha guardado nada.",
   "opening_lots.recalculate_hint": "Los lotes manuales se guardan en tu navegador y el informe se recalcula.",
 
   // Engine & parser messages (TaxMessage id → localized text). The engine still
@@ -740,17 +744,44 @@ const es = {
     "No se pudieron emparejar todas las comisiones de Flatex: faltan los apuntes de caja correspondientes.",
   "flatex.commission.unmatched_trades.hint":
     "Sube también el CSV de Kontoumsätze (movimientos de cuenta) junto con el de Depotumsätze para que la comisión de cada operación se tenga en cuenta (sumándose al coste de adquisición en las compras y restándose del valor de transmisión en las ventas).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota los dividendos por el importe neto cobrado, ya descontada la retención, y el CSV de Kontoumsätze no incluye la retención.",
+  "flatex.dividends.net_amounts.hint":
+    "Toma el importe íntegro y la retención de cada cobro del justificante en PDF que Flatex deja en tu buzón de documentos, y corrige a mano las casillas 0029 (importe íntegro), 0588 (retención extranjera) y 0597 (retención española).",
   "degiro.rows_skipped": "Se omitieron {{count}} filas sin ISIN/sin importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
+  "degiro.transaction_tax": "Impuesto sobre transacciones financieras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro cobra este impuesto al comprar acciones españolas, francesas o italianas y solo lo muestra en el CSV de Cuenta. Forma parte del valor de adquisición (art. 35.1.b LIRPF): súmalo al coste de las compras de ese valor, porque DeclaRenta no lo añade automáticamente.",
   "binance.unparseable_timestamp":
     "Se han omitido {{count}} fila(s) del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.",
   "binance.unparseable_timestamp.hint":
     "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
+  "binance.unhandled_operation":
+    "Se han omitido {{count}} movimiento(s) del CSV de Binance con operaciones no reconocidas: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "Estos movimientos no se han incluido en el cálculo. Si son compras, ventas o ingresos (p. ej. futuros, pagos con Binance Card, Auto-Invest o cashback), añádelos a mano en tu declaración y comunica el nombre de la operación para que se pueda incorporar.",
+  "etoro.closed_types_skipped":
+    "Se ha(n) omitido {{count}} posición(es) cerrada(s) de eToro de un tipo no soportado: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta todavía no importa estos tipos de posición de eToro (p. ej. criptomonedas). Su ganancia o pérdida no está incluida en el cálculo: añádela a mano en tu declaración con el importe invertido y el beneficio que muestra eToro.",
+  "lightyear.unknown_types":
+    "Se ha(n) omitido {{count}} fila(s) del CSV de Lightyear con un tipo de movimiento no reconocido: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "Estos movimientos no se han incluido en el cálculo. Si son desdoblamientos (splits), traspasos de acciones u otras operaciones societarias, revísalos a mano: pueden cambiar el número de acciones o el coste de adquisición de ventas posteriores.",
   "coinbase.rewards_income_classification":
     'Se han clasificado {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendimientos del capital mobiliario (base del ahorro).',
   "coinbase.rewards_income_classification.hint":
     "Si parte de esos importes son recompensas promocionales o cashback de tarjeta (no rendimientos por mantener o ceder cripto), su tratamiento correcto sería ganancia patrimonial no derivada de transmisión (base general). Revisa su naturaleza si la cantidad es significativa.",
+  "coinbase.unknown_types_skipped":
+    "Se han omitido {{count}} fila(s) de Coinbase con un tipo de operación no reconocido: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Estas filas no se han tenido en cuenta en el cálculo. Si alguna es una venta, una compra, un pago con cripto o una recompensa, añádela manualmente para que su ganancia, su coste de adquisición o su rendimiento cuenten.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} operación(es) de Advanced Trade de Coinbase se pagaron o cobraron en una moneda distinta de la de valoración ({{pairs}}); solo se ha registrado la criptomoneda comprada o vendida, no la moneda de contrapartida.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "En estos pares también transmites (al comprar) o adquieres (al vender) la moneda de cotización, sea otra criptomoneda o una divisa, y esa operación también tributa. Añade manualmente la venta o la compra de esa moneda por el mismo valor en euros de la operación para que su ganancia y su coste de adquisición cuadren.",
   "trade_republic.trade_skipped_no_amount":
     "Se ha(n) omitido {{count}} operación(es) de compraventa de Trade Republic sin importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":

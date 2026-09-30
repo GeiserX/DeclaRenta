@@ -234,7 +234,7 @@ const en: TranslationKeys = {
   "guide.flatex.step2": "Go to <strong>Transactions</strong> → <strong>Depotumsätze</strong> (portfolio movements)",
   "guide.flatex.step3": "Select <strong>the full history</strong> (needed for FIFO) and export the CSV file",
   "guide.flatex.step4":
-    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV",
+    "For dividends: go to <strong>Kontoumsätze</strong> (account movements), same date range, and export the CSV. Note: dividends there show the net amount, after withholding; take the gross amount and the withholding from each dividend's PDF statement",
   "guide.flatex.step5":
     "Upload <strong>both CSV files</strong> (Depotumsätze for trades and Kontoumsätze for dividends)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -331,7 +331,9 @@ const en: TranslationKeys = {
   "m720.cash_title": "Cash balances (Accounts)",
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
-    "Some balances do not include the Q4 average required for Modelo 720 account records. They are shown for review but excluded from the generated file.",
+    "Some balances do not include the Q4 average required for Modelo 720 account records. Their 31 December balance does count toward the 50,000 EUR threshold, but those accounts are left out of the generated file: add them by hand, with their Q4 average balance, before filing.",
+  "m720.successive_years_note":
+    "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
@@ -596,6 +598,8 @@ const en: TranslationKeys = {
   "opening_lots.save_btn": "Save lots and recalculate",
   "opening_lots.clear_btn": "Clear saved lots",
   "opening_lots.saved": "Saved",
+  "opening_lots.row_invalid":
+    "Check the highlighted rows: enter the purchase date and a quantity and price above zero (e.g. 1,234.56). Nothing was saved.",
   "opening_lots.recalculate_hint": "Manual lots are saved in your browser and the report is recalculated.",
 
   // Engine & parser messages (TaxMessage id → localized text)
@@ -701,17 +705,44 @@ const en: TranslationKeys = {
     "Not all Flatex commissions could be matched: the corresponding cash entries are missing.",
   "flatex.commission.unmatched_trades.hint":
     "Also upload the Kontoumsätze (account movements) CSV together with the Depotumsätze one so that each operation's commission is taken into account (added to the acquisition cost on purchases and subtracted from the transfer value on sales).",
+  "flatex.dividends.net_amounts":
+    "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
+  "flatex.dividends.net_amounts.hint":
+    "Take the gross amount and the withholding of each payment from the PDF statement Flatex puts in your document inbox, and correct boxes 0029 (gross amount), 0588 (foreign withholding) and 0597 (Spanish withholding) by hand.",
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",
+  "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
   "binance.unparseable_timestamp":
     "{{count}} row(s) of the Binance CSV were skipped because they had an unrecognizable date/time (UTC_Time).",
   "binance.unparseable_timestamp.hint":
     "This is usually caused by a manually edited or incompletely exported file. Re-download the original report from Binance without editing it so those operations are included.",
+  "binance.unhandled_operation":
+    "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "etoro.closed_types_skipped":
+    "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRenta does not import these eToro position types yet (e.g. crypto). Their gain or loss is not included in the calculation: add it to your return by hand using the invested amount and the profit eToro shows.",
+  "lightyear.unknown_types":
+    "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "These movements are not included in the calculation. If they are stock splits, share transfers or other corporate actions, check them by hand: they can change the share count or the acquisition cost of later sales.",
   "coinbase.rewards_income_classification":
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":
     "If some of those amounts are promotional rewards or card cashback (not income from holding or lending crypto), their correct treatment would be a capital gain not arising from a transfer (general tax base). Review their nature if the amount is significant.",
+  "coinbase.unknown_types_skipped":
+    "{{count}} Coinbase row(s) with an unrecognised transaction type were skipped: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "These rows were left out of the calculation. If any of them is a sale, a purchase, a payment made with crypto or a reward, add it manually so its gain, acquisition cost or income is counted.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
   "trade_republic.trade_skipped_no_amount":
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":

@@ -198,7 +198,7 @@ describe("Modelo 720 Generator", () => {
       expect(result.values.total.toFixed(2)).toBe("49999.99");
     });
 
-    it("should report values at exactly 50,000.00 as exceeding threshold", () => {
+    it("should NOT report values at exactly 50,000.00 as exceeding (the rule is \"no superen\")", () => {
       const positions = [makePosition({
         currency: "EUR",
         positionValue: "50000.00",
@@ -206,8 +206,23 @@ describe("Modelo 720 Generator", () => {
       })];
       const result = checkModelo720Thresholds(positions, rateMap, 2025);
 
-      expect(result.values.exceeds).toBe(true);
+      expect(result.values.exceeds).toBe(false);
       expect(result.values.total.toFixed(2)).toBe("50000.00");
+      expect(generateModelo720(positions, rateMap, baseConfig)).toBe("");
+    });
+
+    it("should report values at 50,000.01 as exceeding", () => {
+      const positions = [makePosition({ currency: "EUR", positionValue: "50000.01", assetCategory: "STK" })];
+      expect(checkModelo720Thresholds(positions, rateMap, 2025).values.exceeds).toBe(true);
+      expect(generateModelo720(positions, rateMap, baseConfig)).not.toBe("");
+    });
+
+    it("should NOT report cash at exactly 50,000.00 as exceeding, in the check and in the file", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "50000.00", endingSettledCash: "50000.00", averageQ4Cash: "50000.00" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(false);
+      expect(generateModelo720([], rateMap, baseConfig, undefined, cashBalances)).toBe("");
     });
 
     it("should sum across multiple STK/FUND/BOND positions", () => {
@@ -304,6 +319,63 @@ describe("Modelo 720 Generator", () => {
       expect(result.accounts.total.toFixed(2)).toBe("55200.00");
     });
 
+    it("tests the 31-Dec balances and the Q4 averages as two joint sums, not a per-account maximum", () => {
+      // Σ 31-Dec = 30k + 10k = 40k and Σ Q4 average = 10k + 30k = 40k: neither
+      // joint sum passes 50k, so there is no obligation (art. 42 bis.4.e RD
+      // 1065/2007). Summing each account's max(ending, average) gives 60k.
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "30000", endingSettledCash: "30000", averageQ4Cash: "10000" },
+        { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "30000" },
+      ];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(false);
+      expect(result.accounts.total.toFixed(2)).toBe("40000.00");
+      expect(generateModelo720([], rateMap, baseConfig, undefined, cashBalances)).toBe("");
+    });
+
+    it("reports the larger joint sum when the Q4 average is below the 31-Dec balance", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+      ];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("60000.00");
+    });
+
+    it("counts the 31-Dec balance when the statement has no Q4 average (IBKR cash report)", () => {
+      const cashBalances = [{ accountId: "U1", currency: "EUR", endingCash: "80000", endingSettledCash: "80000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("80000.00");
+    });
+
+    it("converts a foreign 31-Dec balance with no Q4 average at the 31-Dec rate", () => {
+      const cashBalances = [{ accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      // 60000 × 0.92 = 55200
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("55200.00");
+    });
+
+    it("does not flag a 31-Dec balance under 50k that has no Q4 average", () => {
+      const cashBalances = [{ accountId: "U1", currency: "EUR", endingCash: "40000", endingSettledCash: "40000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(false);
+      expect(result.accounts.total.toFixed(2)).toBe("40000.00");
+    });
+
+    it("leaves short positions out of the valores total", () => {
+      // A short is borrowed stock the taxpayer owes, not an asset they hold.
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "25000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "0", positionValue: "-30000" }),
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+      expect(result.values.exceeds).toBe(false);
+      expect(result.values.total.toFixed(2)).toBe("25000.00");
+      expect(generateModelo720(positions, rateMap, baseConfig)).toBe("");
+    });
+
     it("should use rate 1.0 for EUR cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
@@ -357,6 +429,58 @@ describe("Modelo 720 Generator", () => {
       expect(lines[1]![101]).toBe("V");
       // Second detail should be C (accounts)
       expect(lines[2]![101]).toBe("C");
+    });
+
+    it("writes the accounts when the Q4 average passes 50k and the 31-Dec balance does not", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(true);
+      const lines = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(boeField(lines[1]!, BOE_720.detail.claveBien)).toBe("C");
+      expect(boeField(lines[1]!, BOE_720.detail.valoracion1)).toBe("00000002000000");
+      expect(boeField(lines[1]!, BOE_720.detail.valoracion2)).toBe("00000007000000");
+    });
+
+    it("writes both V and C when the securities pass 50k and only the cash Q4 average does", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000" },
+      ];
+      const lines = generateModelo720([makePosition()], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines.slice(1).map((l) => boeField(l, BOE_720.detail.claveBien))).toEqual(["V", "C"]);
+    });
+
+    it("agrees with the threshold check on whether the accounts are declared", () => {
+      const fixtures = [
+        [{ accountId: "U1", currency: "EUR", endingCash: "30000", endingSettledCash: "30000", averageQ4Cash: "10000" },
+         { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "30000" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "70000", endingSettledCash: "70000", averageQ4Cash: "20000" }],
+        [{ accountId: "U1", currency: "USD", endingCash: "50000", endingSettledCash: "50000", averageQ4Cash: "50000" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "50000", endingSettledCash: "50000", averageQ4Cash: "50000" }],
+      ];
+      for (const cashBalances of fixtures) {
+        const exceeds = checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds;
+        const file = generateModelo720([], rateMap, baseConfig, undefined, cashBalances);
+        const hasC = file.split("\n").slice(1).some((l) => boeField(l, BOE_720.detail.claveBien) === "C");
+        expect(hasC).toBe(exceeds);
+      }
+    });
+
+    it("does not write a balance with no Q4 average, but still writes the accounts that have one", () => {
+      // The record needs the Q4 average (valoración 2); the tool never invents
+      // it. The 31-Dec balance still counts toward the obligation, and the web
+      // section tells the user to enter that account by hand.
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "45000", endingSettledCash: "45000" },
+        { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "10000" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(true);
+      const lines = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(boeField(lines[1]!, BOE_720.detail.claveBien)).toBe("C");
+      expect(lines[1]!.slice(131, 143).trim()).toBe("U2");
     });
 
     it("should only generate C records when V is below threshold but C exceeds", () => {
@@ -662,11 +786,34 @@ describe("Modelo 720 Generator", () => {
       expect(fundResult).not.toBe("");
 
       // STK uses Q4 average (0.93), FUND uses Dec 31 (0.96)
-      // The exact values will differ between them
-      const stkLines = stkResult.split("\n");
-      const fundLines = fundResult.split("\n");
-      expect(stkLines.length).toBeGreaterThanOrEqual(2);
-      expect(fundLines.length).toBeGreaterThanOrEqual(2);
+      const stkValue = boeField(stkResult.split("\n")[1]!, BOE_720.detail.valoracion1);
+      const fundValue = boeField(fundResult.split("\n")[1]!, BOE_720.detail.valoracion1);
+      expect(stkValue).toBe("00000009300000"); // 100000 × 0.93 = 93,000.00
+      expect(fundValue).toBe("00000009600000"); // 100000 × 0.96 = 96,000.00
+    });
+  });
+
+  describe("Short positions", () => {
+    it("writes only the long holdings, never a short as an owned asset", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "60000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "-100", positionValue: "-30000" }),
+      ];
+      const lines = generateModelo720(positions, rateMap, baseConfig).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(lines[1]!.slice(131, 143).trim()).toBe("US78462F1030");
+    });
+
+    it("declares a holding sold last year as cancelled even if the same ISIN is now held short", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "60000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "-100", positionValue: "-30000" }),
+      ];
+      const config = { ...baseConfig, previousYearIsins: ["US0000000002"] };
+      const details = generateModelo720(positions, rateMap, config).split("\n").slice(1);
+      const shortIsin = details.filter((l) => l.slice(131, 143).trim() === "US0000000002");
+      expect(shortIsin).toHaveLength(1);
+      expect(boeField(shortIsin[0]!, BOE_720.detail.origen)).toBe("C");
     });
   });
 

@@ -236,7 +236,7 @@ const eu: TranslationKeys = {
     "Joan <strong>Mugimenduak</strong> \u2192 <strong>Depotums\u00e4tze</strong> (zorroaren mugimenduak) atalera",
   "guide.flatex.step3": "Hautatu <strong>historia osoa</strong> (FIFOrako beharrezkoa) eta esportatu CSV fitxategia",
   "guide.flatex.step4":
-    "Dibidenduetarako: joan <strong>Kontoums\u00e4tze</strong> (kontuaren mugimenduak) atalera, data-tarte bera, eta esportatu CSVa",
+    "Dibidenduetarako: joan <strong>Kontoums\u00e4tze</strong> (kontuaren mugimenduak) atalera, data-tarte bera, eta esportatu CSVa. Kontuz: han dibidenduak zenbateko garbiarekin agertzen dira, atxikipena kenduta; hartu zenbateko osoa eta atxikipena dibidendu bakoitzaren PDF egiaztagiritik",
   "guide.flatex.step5":
     "Igo <strong>bi CSV fitxategiak</strong> (Depotums\u00e4tze eragiketetarako eta Kontoums\u00e4tze dibidenduetarako)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -332,7 +332,9 @@ const eu: TranslationKeys = {
   "m720.cash_title": "Eskudiruzko saldoak (Kontuak)",
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
-    "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Berrikusteko erakusten dira, baina ez dira sortutako fitxategian sartzen.",
+    "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Abenduaren 31ko saldoa 50.000 €-ko atalaserako kontatzen da, baina kontu horiek ez dira sortutako fitxategian sartzen: gehitu itzazu eskuz, laugarren hiruhilekoko batez besteko saldoarekin, aurkeztu aurretik.",
+  "m720.successive_years_note":
+    "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
@@ -598,6 +600,8 @@ const eu: TranslationKeys = {
   "opening_lots.save_btn": "Gorde loteak eta birkalkulatu",
   "opening_lots.clear_btn": "Ezabatu gordetako loteak",
   "opening_lots.saved": "Gordeta",
+  "opening_lots.row_invalid":
+    "Berrikusi markatutako errenkadak: adierazi erosketa-data eta zero baino handiagoak diren kantitatea eta prezioa (adib. 1.234,56). Ez da ezer gorde.",
   "opening_lots.recalculate_hint": "Eskuzko loteak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
 
   // Motorraren eta analizatzaileen mezuak (TaxMessage id → testu lokalizatua)
@@ -705,17 +709,44 @@ const eu: TranslationKeys = {
     "Ezin izan dira Flatex-en komisio guztiak parekatu: dagozkien kutxa-idazpenak falta dira.",
   "flatex.commission.unmatched_trades.hint":
     "Igo ezazu Kontoumsätze (kontu-mugimenduak) CSVa ere Depotumsätze-rekin batera, eragiketa bakoitzaren komisioa kontuan har dadin (erosketetan eskuratze-kostuari gehituz eta salmentetan transmisio-baliotik kenduz).",
+  "flatex.dividends.net_amounts":
+    "Flatex-ek dibidenduak jasotako zenbateko garbiarekin erregistratzen ditu, atxikipena kenduta, eta Kontoumsätze CSVak ez du atxikipena jasotzen.",
+  "flatex.dividends.net_amounts.hint":
+    "Hartu kobrantza bakoitzaren zenbateko osoa eta atxikipena Flatex-ek zure dokumentu-postontzian uzten duen PDF egiaztagiritik, eta zuzendu eskuz 0029 laukia (zenbateko osoa), 0588 laukia (atzerriko atxikipena) eta 0597 laukia (atxikipen espainiarra).",
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",
+  "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",
   "binance.unparseable_timestamp":
     "Binance-ren CSVaren {{count}} errenkada baztertu dira data/ordu (UTC_Time) ezezagun bat izateagatik.",
   "binance.unparseable_timestamp.hint":
     "Normalean eskuz aldatutako edo modu osatugabean esportatutako fitxategi bati zor zaio. Deskargatu berriro jatorrizko txostena Binance-tik editatu gabe eragiketa horiek sar daitezen.",
+  "binance.unhandled_operation":
+    "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
+  "binance.unhandled_operation.hint":
+    "Mugimendu horiek ez dira kalkuluan sartu. Erosketak, salmentak edo diru-sarrerak badira (adib. futuroak, Binance Card bidezko ordainketak, Auto-Invest edo cashback), gehitu eskuz zure aitorpenean eta jakinarazi eragiketaren izena, sar dadin.",
+  "etoro.closed_types_skipped":
+    "eToro-ren {{count}} posizio itxi baztertu dira, onartzen ez den mota batekoak direlako: {{types}}.",
+  "etoro.closed_types_skipped.hint":
+    "DeclaRentak oraindik ez ditu eToro-ren posizio mota horiek inportatzen (adib. kriptomonetak). Haien irabazia edo galera ez dago kalkuluan sartuta: gehitu eskuz zure aitorpenean, eToro-k erakusten dituen inbertitutako zenbatekoarekin eta irabaziarekin.",
+  "lightyear.unknown_types":
+    "Lightyear-en CSVko {{count}} errenkada baztertu dira, mugimendu mota ezezaguna dutelako: {{types}}.",
+  "lightyear.unknown_types.hint":
+    "Mugimendu horiek ez dira kalkuluan sartu. Akzio-zatiketak (splits), akzio-transferentziak edo beste eragiketa korporatibo batzuk badira, berrikusi eskuz: geroko salmenten akzio kopurua edo eskuratze-kostua alda dezakete.",
   "coinbase.rewards_income_classification":
     'Coinbase-ren "Rewards Income" motako {{count}} diru-sarrera kapital higigarriaren etekin gisa sailkatu dira (aurrezki-oinarria).',
   "coinbase.rewards_income_classification.hint":
     "Zenbateko horietako batzuk sari promozionalak edo txartelaren cashback-a badira (ez kripto mantentzeagatiko edo lagatzeagatiko etekinak), tratamendu zuzena transmisiotik ez datorren ondare-irabazia litzateke (oinarri orokorra). Berrikusi haien izaera kopurua esanguratsua bada.",
+  "coinbase.unknown_types_skipped":
+    "Coinbase-ren {{count}} errenkada baztertu d(ir)a, eragiketa-mota ezezaguna dutelako: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Errenkada horiek ez dira kalkuluan kontuan hartu. Horietako bat salmenta, erosketa, kriptoz egindako ordainketa edo sari bat bada, gehitu eskuz, haren irabazia, eskuratze-kostua edo etekina kontuan har daitezen.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "Coinbase-ren Advanced Trade-ko {{count}} eragiketa balorazio-monetaz bestelako moneta batean ordaindu edo kobratu d(ir)a ({{pairs}}); erositako edo saldutako kriptomoneta soilik erregistratu da, ez kontrapartidako moneta.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "Bikote horietan kotizazio-moneta ere eskualdatzen duzu (erostean) edo eskuratzen duzu (saltzean), beste kriptomoneta bat edo dibisa bat izan, eta eragiketa horrek ere tributatzen du. Gehitu eskuz moneta horren salmenta edo erosketa, eragiketaren euro-balio berberarekin, haren irabazia eta eskuratze-kostua bat etor daitezen.",
   "trade_republic.trade_skipped_no_amount":
     "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
   "trade_republic.trade_skipped_no_amount.hint":
