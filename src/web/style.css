@@ -893,6 +893,38 @@ tbody tr:hover {
   background: var(--row-hover);
 }
 
+/* Anti-churning: a sale whose loss is blocked by a repurchase (Art. 33.5 LIRPF).
+   The row is highlighted and followed by an expandable line with the purchases
+   that blocked it. Placed after the zebra/hover rules so it wins over both. */
+tbody tr.wash-sale-blocked,
+tbody tr.wash-sale-detail {
+  background: var(--warning-bg);
+}
+
+tbody tr.wash-sale-blocked td {
+  border-bottom: none;
+}
+
+tbody tr.wash-sale-blocked td:first-child,
+tbody tr.wash-sale-detail td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+tbody tr.wash-sale-detail td {
+  padding-top: 0;
+  font-size: 0.8rem;
+}
+
+tbody tr.wash-sale-detail summary {
+  cursor: pointer;
+  color: var(--warning);
+  font-weight: 600;
+}
+
+tbody tr.wash-sale-detail details p {
+  margin: 0.25rem 0 0 1rem;
+}
+
 .mono {
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 0.8rem;

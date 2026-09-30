@@ -48,6 +48,7 @@ import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import { fmtEur } from "./format.js";
 import Decimal from "decimal.js";
@@ -1087,7 +1088,7 @@ function renderOperationsTable() {
         ${disposals
           .map(
             (d) => `
-          <tr>
+          <tr${washSaleRowAttr(d)}>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
@@ -1097,7 +1098,7 @@ function renderOperationsTable() {
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
-          </tr>
+          </tr>${renderWashSaleDetailRow(d, 9)}
         `,
           )
           .join("")}
