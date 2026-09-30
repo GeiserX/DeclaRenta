@@ -69,7 +69,15 @@ interface PositionEvent {
 /** Corporate split ratio that changes share quantities without changing cost basis. */
 interface SplitEvent {
   time: number;
-  ratio: Decimal;
+  /** `num` new shares for every `den` old ones */
+  num: Decimal;
+  den: Decimal;
+}
+
+/** Exact quantity conversion between two dates: multiply by `num`, then divide by `den`. */
+interface SplitConversion {
+  num: Decimal;
+  den: Decimal;
 }
 
 /** A deferred loss attached to a repurchased lot, released as that lot is later sold. */
@@ -184,7 +192,8 @@ export function detectWashSales(
     let position = new Decimal(0);
     for (const ev of positionEventsByAsset.get(key) ?? []) {
       if (ev.time > sellTime) break;
-      position = position.plus(ev.qty.mul(splitFactorBetween(splitsByAsset, key, ev.time, sellTime)));
+      const conversion = splitFactorBetween(splitsByAsset, key, ev.time, sellTime);
+      position = position.plus(ev.qty.mul(conversion.num).div(conversion.den));
     }
     const remaining = Decimal.max(position, 0);
     perTime.set(sellTime, remaining);
@@ -236,10 +245,10 @@ export function detectWashSales(
           if (disposalSellTime <= lot.availableAfterTime) continue;
           if (lot.qty.lessThanOrEqualTo(0)) continue;
           const releaseConversion = splitFactorBetween(splitsByAsset, key, lot.availableAfterTime, disposalSellTime);
-          const lotQtyAtRelease = lot.qty.mul(releaseConversion);
+          const lotQtyAtRelease = lot.qty.mul(releaseConversion.num).div(releaseConversion.den);
           if (lotQtyAtRelease.lessThanOrEqualTo(0)) continue;
           const releasedQty = Decimal.min(remainingReleaseQty, lotQtyAtRelease);
-          const releasedOriginalQty = releasedQty.div(releaseConversion);
+          const releasedOriginalQty = releasedQty.mul(releaseConversion.den).div(releaseConversion.num);
           const releasedEur = lot.qty.isZero()
             ? new Decimal(0)
             : lot.deferredEur.mul(releasedOriginalQty).div(lot.qty);
@@ -292,10 +301,10 @@ export function detectWashSales(
         if (!predicate(ev.time)) continue;
         if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
         const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
-        const availableAtSell = ev.remainingQty.mul(conversion);
+        const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
         if (availableAtSell.lessThanOrEqualTo(0)) continue;
         const take = Decimal.min(availableAtSell, remainingToAbsorb, remainingBudget);
-        ev.remainingQty = ev.remainingQty.minus(take.div(conversion));
+        ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
         remainingToAbsorb = remainingToAbsorb.minus(take);
         remainingBudget = remainingBudget.minus(take);
         consumed.push({ date: ev.date, qty: take });
@@ -361,7 +370,7 @@ function buildSplitEvents(corporateActions: CorporateAction[]): Map<string, Spli
   const seen = new Set<string>();
 
   for (const action of corporateActions) {
-    if (action.type !== "FS") continue;
+    if (action.type !== "FS" && action.type !== "RS") continue;
     const ratioMatch = action.description.match(/SPLIT\s+(\d+)\s+FOR\s+(\d+)/i);
     if (!ratioMatch) continue;
     const numerator = new Decimal(ratioMatch[1]!);
@@ -380,7 +389,7 @@ function buildSplitEvents(corporateActions: CorporateAction[]): Map<string, Spli
       splits = [];
       splitsByAsset.set(key, splits);
     }
-    splits.push({ time: parseDate(date).getTime(), ratio: numerator.div(denominator) });
+    splits.push({ time: parseDate(date).getTime(), num: numerator, den: denominator });
   }
 
   for (const splits of splitsByAsset.values()) {
@@ -400,16 +409,18 @@ function splitFactorBetween(
   key: string,
   fromTime: number,
   toTime: number,
-): Decimal {
-  if (fromTime >= toTime) return new Decimal(1);
+): SplitConversion {
+  let num = new Decimal(1);
+  let den = new Decimal(1);
+  if (fromTime >= toTime) return { num, den };
 
-  let factor = new Decimal(1);
   for (const split of splitsByAsset.get(key) ?? []) {
     if (split.time <= fromTime) continue;
     if (split.time > toTime) break;
-    factor = factor.mul(split.ratio);
+    num = num.mul(split.num);
+    den = den.mul(split.den);
   }
-  return factor;
+  return { num, den };
 }
 
 function buyQtyConversionToSellUnits(
@@ -417,14 +428,15 @@ function buyQtyConversionToSellUnits(
   key: string,
   buyTime: number,
   sellTime: number,
-): Decimal {
+): SplitConversion {
   if (buyTime < sellTime) {
     return splitFactorBetween(splitsByAsset, key, buyTime, sellTime);
   }
   if (buyTime > sellTime) {
-    return new Decimal(1).div(splitFactorBetween(splitsByAsset, key, sellTime, buyTime));
+    const inverse = splitFactorBetween(splitsByAsset, key, sellTime, buyTime);
+    return { num: inverse.den, den: inverse.num };
   }
-  return new Decimal(1);
+  return { num: new Decimal(1), den: new Decimal(1) };
 }
 
 /**
