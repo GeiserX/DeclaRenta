@@ -192,6 +192,78 @@ describe("resolveCryptoTradeValues", () => {
     });
   });
 
+  describe("a coin price is never reused on a later day", () => {
+    // 2025-03-03: BUY 2000 USDT paying ETH at 0.0005 ETH/USDT. USDT resolves via
+    // USD (1 EUR), so (D) infers ETH = 1 / 0.0005 = 2000 EUR on 03-03 only.
+    // 2025-03-06: SELL 1 BTC for 30 ETH. BTC has no rate, so ETH must come from
+    // a quote for 03-06 itself, never from the 03-03 inference three days back.
+    const rateMap = makeRateMap({
+      "2025-03-03": { USD: "1.0000000000" },
+      "2025-03-06": { USD: "1.0000000000" },
+    });
+    const inferEth = makeCryptoTrade({
+      tradeID: "buy-usdt",
+      tradeDate: "2025-03-03",
+      symbol: "USDT",
+      currency: "ETH",
+      tradePrice: "0.0005",
+      quantity: "2000",
+      commissionCurrency: "ETH",
+    });
+    const laterSwap = makeCryptoTrade({
+      tradeID: "sell-btc",
+      tradeDate: "2025-03-06",
+      symbol: "BTC",
+      currency: "ETH",
+      tradePrice: "30",
+      quantity: "-1",
+      buySell: "SELL",
+      openCloseIndicator: "C",
+      commissionCurrency: "ETH",
+    });
+
+    it("values the later swap at the user's manual quote for that day, not the earlier inferred price", () => {
+      const manualRates = makeRateMap({ "2025-03-06": { ETH: "3000" } });
+
+      const result = resolveCryptoTradeValues([inferEth, laterSwap], rateMap, manualRates);
+
+      expect(result.trades).toHaveLength(2);
+      expect(result.unresolved).toHaveLength(0);
+      expect(lookupRateInMap(result.rateMap, "2025-03-03", "ETH")!.toFixed(2)).toBe("2000.00");
+      expect(lookupRateInMap(result.rateMap, "2025-03-06", "ETH")!.toFixed(2)).toBe("3000.00");
+    });
+
+    it("skips and warns on the later swap when no quote exists for its own day", () => {
+      const result = resolveCryptoTradeValues([inferEth, laterSwap], rateMap);
+
+      expect(result.trades.map((t) => t.tradeID)).toEqual(["buy-usdt"]);
+      expect(result.unresolved).toHaveLength(1);
+      expect(result.unresolved[0]).toMatchObject({ currency: "ETH", date: "2025-03-06", reason: "no-cross-leg" });
+      expect(result.messages.some((m) => m.id === "report.crypto_valuation_unresolved")).toBe(true);
+    });
+
+    it("still reuses an inferred price for another swap on the SAME day", () => {
+      const sameDaySwap = { ...laterSwap, tradeID: "sell-btc-same-day", tradeDate: "2025-03-03", settlementDate: "2025-03-03" };
+
+      const result = resolveCryptoTradeValues([inferEth, sameDaySwap], rateMap);
+
+      expect(result.trades).toHaveLength(2);
+      expect(result.unresolved).toHaveLength(0);
+    });
+
+    it("keeps the weekend walk-back for ECB fiat and stablecoins", () => {
+      // Sunday 2025-03-09, last ECB fix on Friday 2025-03-07.
+      const fridayOnly = makeRateMap({ "2025-03-07": { USD: "0.9200000000" } });
+      const sundayBuy = makeCryptoTrade({ tradeDate: "2025-03-09", symbol: "BTC", currency: "USDT", tradePrice: "80000", quantity: "0.01" });
+
+      const result = resolveCryptoTradeValues([sundayBuy], fridayOnly);
+
+      expect(result.trades).toHaveLength(1);
+      expect(result.unresolved).toHaveLength(0);
+      expect(lookupRateInMap(result.rateMap, "2025-03-09", "USDT")!.toFixed(2)).toBe("0.92");
+    });
+  });
+
   describe("pass-through", () => {
     it("returns a plain USD stock trade unchanged", () => {
       const rateMap = makeRateMap({ "2025-03-15": { USD: "0.92" } });

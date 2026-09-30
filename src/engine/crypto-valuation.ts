@@ -66,15 +66,27 @@ function setRate(map: EcbRateMap, date: string, currency: string, rate: Decimal)
   map.get(key)!.set(resolved, rate.toFixed(10));
 }
 
-/** Try ECB/synthetic map first (authoritative), then the user's manual quotes. */
+/**
+ * Look up a rate the way the valuation pass may use it. ECB fiat and stablecoins
+ * keep the weekend/holiday walk-back. Any other coin matches its exact date only:
+ * crypto trades every day, so a coin price from an earlier day (an inferred (D)
+ * rate or a quote for another date) must never be reused for a later one.
+ */
+export function lookupValuationRate(map: EcbRateMap, date: string, currency: string): Decimal | null {
+  if (isEcbResolvable(currency)) return lookupRateInMap(map, date, currency);
+  const rate = map.get(normalizeDate(date))?.get(normalizeCurrency(currency));
+  return rate ? new Decimal(rate) : null;
+}
+
+/**
+ * ECB fiat/stablecoin: the ECB map first (authoritative), then manual quotes.
+ * Any other coin: the user's manual (B) quote first, then a (D) rate this pass
+ * already inferred for the same date.
+ */
 function tryResolve(map: EcbRateMap, manual: EcbRateMap | undefined, date: string, currency: string): Decimal | null {
-  const fromMap = lookupRateInMap(map, date, currency);
-  if (fromMap !== null) return fromMap;
-  if (manual) {
-    const fromManual = lookupRateInMap(manual, date, currency);
-    if (fromManual !== null) return fromManual;
-  }
-  return null;
+  const fromMap = lookupValuationRate(map, date, currency);
+  const fromManual = manual ? lookupValuationRate(manual, date, currency) : null;
+  return isEcbResolvable(currency) ? (fromMap ?? fromManual) : (fromManual ?? fromMap);
 }
 
 /**
@@ -135,7 +147,7 @@ export function resolveCryptoTradeValues(
     }
 
     // Inject the resolved rate so the FIFO engine finds it via getEcbRate.
-    if (lookupRateInMap(cloned, date, trade.currency) === null) {
+    if (lookupValuationRate(cloned, date, trade.currency) === null) {
       setRate(cloned, date, trade.currency, currencyRate);
     }
 
@@ -155,7 +167,7 @@ export function resolveCryptoTradeValues(
         outTrades.push({ ...trade, commission: "0", commissionCurrency: trade.currency });
         continue;
       }
-      if (lookupRateInMap(cloned, date, commCur) === null) {
+      if (lookupValuationRate(cloned, date, commCur) === null) {
         setRate(cloned, date, commCur, commRate);
       }
     }
