@@ -612,6 +612,8 @@ const en: TranslationKeys = {
   "fifo.roll_operation": "⚠ C;O (roll) operation: {{symbol}} on {{date}}. Processed as close + open.",
   "fifo.roll_operation.hint":
     "Roll operation processed correctly as a close of the previous position and an open of the new one.",
+  "fifo.unknown_direction": '⚠ Trade with unknown direction ("{{buySell}}"): {{symbol}} on {{date}}. It was not processed.',
+  "fifo.unknown_direction.hint": "Only purchases (BUY) and sales (SELL) are processed. Check this row in the broker file and, if it is a real trade, correct its direction.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) applied ({{date}})",
   "fifo.split_applied.hint":
     "Split applied to all lots. The total cost is unchanged — only the number of shares changes.",
@@ -715,6 +717,10 @@ const en: TranslationKeys = {
   "parser.order_level_duplicates": "{{skipped}} duplicate aggregated ORDER-type rows were skipped in the operations.",
   "parser.order_level_duplicates.hint":
     'Your Flex Query has the "Orders" detail level enabled in addition to "Executions" in the Trades section, which duplicates every operation. You can disable "Orders" in the Flex Query configuration, but it is not necessary: these rows were ignored automatically to avoid duplicating quantities, amounts and commissions.',
+  "parser.cancelled_trades": "{{count}} trades cancelled by IBKR were skipped together with their cancellation rows.",
+  "parser.cancelled_trades.hint": 'IBKR marks a cancelled execution with a reversing row ("(Ca.)"). The original trade and its cancellation were discarded: they never became a real purchase or sale.',
+  "parser.cancelled_trades_unmatched": "{{count}} IBKR cancellation rows were skipped because the original trade is not in this file.",
+  "parser.cancelled_trades_unmatched.hint": "The cancelled trade falls outside this Flex Query's period. If you load it from another file, it will still count as real: export a period that includes both the trade and its cancellation in the same file.",
 };
 
 export default en;

@@ -99,12 +99,17 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let executionsMergedGroups = 0;
   let executionsMergedSources = 0;
   let orderLevelDetailDuplicatesSkipped = 0;
+  let cancelledPairsDropped = 0;
+  let cancelledUnmatchedDropped = 0;
 
   for (const stmt of statements) {
     const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
-    const stmtTrades = filteredRawTrades.map(mapTrade);
+    const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
+    cancelledPairsDropped += pairedCount;
+    cancelledUnmatchedDropped += unmatchedCount;
+    const stmtTrades = kept.map(mapTrade);
     const { merged, mergedGroupCount, sourceFillCount } = mergeExecutionsByOrder(stmtTrades);
     trades.push(...merged);
     executionsMergedGroups += mergedGroupCount;
@@ -174,6 +179,26 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
+  if (cancelledPairsDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades",
+      severity: "info",
+      message: `Se omitieron ${cancelledPairsDropped} operaciones canceladas por IBKR junto con su anulación.`,
+      hint: 'IBKR marca una ejecución cancelada con una fila de anulación ("(Ca.)"). La operación original y su anulación se han descartado: nunca llegaron a ser una compra o venta real.',
+      context: { count: String(cancelledPairsDropped) },
+    });
+  }
+
+  if (cancelledUnmatchedDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades_unmatched",
+      severity: "warning",
+      message: `Se omitieron ${cancelledUnmatchedDropped} anulaciones de IBKR sin la operación original en este archivo.`,
+      hint: "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
+      context: { count: String(cancelledUnmatchedDropped) },
+    });
+  }
+
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
   const accountId = statements.length === 1
@@ -216,7 +241,10 @@ function mapTrade(raw: Record<string, string>): Trade {
     cost: raw.cost ?? "0",
     fifoPnlRealized: raw.fifoPnlRealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
-    buySell: (raw.buySell ?? "BUY") as Trade["buySell"],
+    // Canonical "BUY"/"SELL" after trimming and upper-casing. Cancel rows
+    // ("SELL (Ca.)") never get here; any other value passes through and
+    // FifoEngine skips it with a warning instead of treating it as a sale.
+    buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
     commissionCurrency: raw.ibCommissionCurrency ?? "",
@@ -231,6 +259,74 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingIsin: raw.underlyingIsin || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
+}
+
+/** IBKR notes code for a cancelled execution. */
+const NOTE_CANCELLED = "Ca";
+/** Suffix IBKR appends to buySell on the row that cancels an execution ("SELL (Ca.)"). */
+const CANCEL_SUFFIX = /\s*\(Ca\.\)\s*$/i;
+
+function isCancelRow(raw: Record<string, string>): boolean {
+  if (CANCEL_SUFFIX.test(raw.buySell ?? "")) return true;
+  return (raw.notes ?? "").split(";").some((n) => n.trim() === NOTE_CANCELLED);
+}
+
+/**
+ * Remove cancelled executions. IBKR keeps the original fill in the Flex file
+ * and adds a reversing row (buySell "SELL (Ca.)"/"BUY (Ca.)", notes "Ca",
+ * opposite quantity). Neither row is a real transmission or acquisition, so
+ * each cancel row is paired with the fill it cancels (same instrument,
+ * currency, price and direction, exactly opposite quantity; a matching
+ * ibExecID, ibOrderID or tradeDate breaks ties) and both are dropped.
+ *
+ * A cancel row with no original in this statement (the fill is outside the
+ * export's period) is dropped alone and counted separately so the user is
+ * warned. It is never flipped into an opposite-direction trade: that would
+ * create a lot or a disposal that never happened.
+ */
+function dropCancelledExecutions(
+  rows: Record<string, string>[],
+): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number } {
+  const cancelIdx: number[] = [];
+  rows.forEach((raw, i) => {
+    if (isCancelRow(raw)) cancelIdx.push(i);
+  });
+  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0 };
+
+  const dropped = new Set<number>(cancelIdx);
+  let pairedCount = 0;
+  let unmatchedCount = 0;
+  for (const ci of cancelIdx) {
+    const cancel = rows[ci]!;
+    const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
+    const originalQty = new Decimal(cancel.quantity || "0").neg();
+    const price = new Decimal(cancel.tradePrice || "0");
+    let best = -1;
+    let bestScore = -1;
+    rows.forEach((o, oi) => {
+      if (dropped.has(oi)) return;
+      const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
+      if (!sameInstrument || (o.currency ?? "") !== (cancel.currency ?? "")) return;
+      if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
+      if (!new Decimal(o.quantity || "0").eq(originalQty)) return;
+      if (!new Decimal(o.tradePrice || "0").eq(price)) return;
+      const score =
+        (o.ibExecID && o.ibExecID === cancel.ibExecID ? 4 : 0) +
+        (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
+        (o.tradeDate === cancel.tradeDate ? 1 : 0);
+      if (score > bestScore) {
+        best = oi;
+        bestScore = score;
+      }
+    });
+    if (best >= 0) {
+      dropped.add(best);
+      pairedCount++;
+    } else {
+      unmatchedCount++;
+    }
+  }
+  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount };
 }
 
 /**

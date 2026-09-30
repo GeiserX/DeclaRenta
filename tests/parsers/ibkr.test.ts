@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
+import { generateTaxReport } from "../../src/generators/report.js";
+import { computeCasillaBlocks } from "../../src/generators/casillas.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -1285,5 +1288,104 @@ describe("parseIbkrFlexXml — XML entity hardening (XXE / billion-laughs)", () 
 </FlexQueryResponse>`;
     const result = parseIbkrFlexXml(xml);
     expect(result.trades[0]!.description).toBe("E-MINI S&P 500 <CME>");
+  });
+});
+
+describe("parseIbkrFlexXml — cancelled executions (buySell \"(Ca.)\")", () => {
+  // IBKR writes a cancelled execution as a reversing row: the original fill
+  // stays in the file and a second row with buySell "SELL (Ca.)"/"BUY (Ca.)",
+  // opposite quantity and notes "Ca" undoes it. Neither row is a real trade.
+  function wrap(trades: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+    <FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U9999999" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>${trades}</Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  function row(attrs: {
+    id: string;
+    date: string;
+    qty: string;
+    price: string;
+    buySell: string;
+    oci: "O" | "C";
+    order: string;
+    notes?: string;
+  }): string {
+    const money = (Number(attrs.qty) * Number(attrs.price)).toString();
+    return `<Trade tradeID="${attrs.id}" accountId="U9999999" conid="265598" symbol="ACME" description="ACME"
+             isin="US0000000001" assetCategory="STK" currency="USD" tradeDate="${attrs.date}"
+             settlementDate="${attrs.date}" quantity="${attrs.qty}" tradePrice="${attrs.price}"
+             tradeMoney="${money}" proceeds="${-Number(money)}" cost="0" fifoPnlRealized="0"
+             fxRateToBase="0.9" buySell="${attrs.buySell}" openCloseIndicator="${attrs.oci}"
+             exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="0" taxes="0"
+             multiplier="1" ibOrderID="${attrs.order}"${attrs.notes ? ` notes="${attrs.notes}"` : ""} />`;
+  }
+
+  const BUY = row({ id: "T1", date: "20250310", qty: "100", price: "10", buySell: "BUY", oci: "O", order: "O1" });
+  const SELL = row({ id: "T2", date: "20250610", qty: "-100", price: "15", buySell: "SELL", oci: "C", order: "O2" });
+  const SELL_CANCEL = row({
+    id: "T3", date: "20250611", qty: "100", price: "15", buySell: "SELL (Ca.)", oci: "C", order: "O2", notes: "Ca",
+  });
+
+  it("drops a cancelled SELL together with the sale it cancels", () => {
+    const result = parseIbkrFlexXml(wrap(BUY + SELL + SELL_CANCEL));
+    expect(result.trades.map((t) => `${t.tradeID}:${t.buySell}:${t.quantity}`)).toEqual(["T1:BUY:100"]);
+    const msg = result.parserMessages?.find((m) => m.id === "parser.cancelled_trades");
+    expect(msg?.severity).toBe("info");
+    expect(msg?.context).toEqual({ count: "1" });
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades_unmatched")).toBeUndefined();
+  });
+
+  it("drops a cancelled BUY together with the purchase it cancels", () => {
+    const buyCancel = row({
+      id: "T4", date: "20250310", qty: "-100", price: "10", buySell: "BUY (Ca.)", oci: "O", order: "O1", notes: "Ca",
+    });
+    const result = parseIbkrFlexXml(wrap(BUY + buyCancel));
+    expect(result.trades).toHaveLength(0);
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades")?.context).toEqual({ count: "1" });
+  });
+
+  it("recognises a cancellation flagged only by the Ca notes code", () => {
+    const notesOnly = row({
+      id: "T3", date: "20250611", qty: "100", price: "15", buySell: "SELL", oci: "C", order: "O2", notes: "Ca",
+    });
+    const result = parseIbkrFlexXml(wrap(BUY + SELL + notesOnly));
+    expect(result.trades.map((t) => t.tradeID)).toEqual(["T1"]);
+  });
+
+  it("drops an orphan cancellation alone and warns, never turning it into a trade", () => {
+    // The cancelled sale was executed outside this export's date range.
+    const result = parseIbkrFlexXml(wrap(BUY + SELL_CANCEL));
+    expect(result.trades.map((t) => t.tradeID)).toEqual(["T1"]);
+    const msg = result.parserMessages?.find((m) => m.id === "parser.cancelled_trades_unmatched");
+    expect(msg?.severity).toBe("warning");
+    expect(msg?.context).toEqual({ count: "1" });
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades")).toBeUndefined();
+  });
+
+  it("does not pair a cancellation with a fill at a different price", () => {
+    const otherSell = row({ id: "T5", date: "20250610", qty: "-100", price: "16", buySell: "SELL", oci: "C", order: "O3" });
+    const result = parseIbkrFlexXml(wrap(BUY + otherSell + SELL_CANCEL));
+    expect(result.trades.map((t) => t.tradeID)).toEqual(["T1", "T5"]);
+    expect(result.parserMessages?.find((m) => m.id === "parser.cancelled_trades_unmatched")?.context).toEqual({
+      count: "1",
+    });
+  });
+
+  it("end to end: a cancelled sale adds nothing to casilla 0328", () => {
+    const rates: EcbRateMap = new Map([
+      ["2025-03-10", new Map([["USD", "0.9"]])],
+      ["2025-06-10", new Map([["USD", "0.9"]])],
+      ["2025-06-11", new Map([["USD", "0.9"]])],
+    ]);
+    const report = generateTaxReport(parseIbkrFlexXml(wrap(BUY + SELL + SELL_CANCEL)), rates, 2025);
+    expect(report.capitalGains.disposals).toHaveLength(0);
+    expect(computeCasillaBlocks(report.capitalGains.disposals).listedShares.transmissionValue.toFixed(2)).toBe("0.00");
   });
 });

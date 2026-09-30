@@ -1249,3 +1249,25 @@ describe("FCY-denominated stock gain (DGT V2422-20 / V0152-26, issue #219)", () 
     expect(d.gainLossEur.toFixed(2)).toBe("-330.00");
   });
 });
+
+describe("FifoEngine — unknown trade direction", () => {
+  it("skips a trade whose buySell is neither BUY nor SELL and warns, instead of selling", () => {
+    const rates = makeRateMap({ "2025-03-15": "0.9", "2025-06-11": "0.9" });
+    const trades: Trade[] = [
+      makeTrade({ tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+      makeTrade({
+        tradeID: "2",
+        tradeDate: "2025-06-11",
+        quantity: "10",
+        tradePrice: "150",
+        buySell: "SELL (Ca.)" as Trade["buySell"],
+        openCloseIndicator: "C",
+      }),
+    ];
+    const engine = new FifoEngine();
+    expect(engine.processTrades(trades, rates)).toHaveLength(0);
+    const msg = engine.messages.find((m) => m.id === "fifo.unknown_direction");
+    expect(msg?.severity).toBe("warning");
+    expect(msg?.context).toEqual({ symbol: "AAPL", date: "2025-06-11", buySell: "SELL (Ca.)" });
+  });
+});

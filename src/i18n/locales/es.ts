@@ -650,6 +650,8 @@ const es = {
   "fifo.roll_operation": "⚠ Operación C;O (roll): {{symbol}} el {{date}}. Se procesa como cierre + apertura.",
   "fifo.roll_operation.hint":
     "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.",
+  "fifo.unknown_direction": '⚠ Operación con dirección desconocida ("{{buySell}}"): {{symbol}} el {{date}}. No se ha procesado.',
+  "fifo.unknown_direction.hint": "Solo se procesan compras (BUY) y ventas (SELL). Revisa esta fila en el archivo del broker y, si es una operación real, corrige su dirección.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
@@ -756,6 +758,10 @@ const es = {
     "Se omitieron {{skipped}} filas agregadas de tipo ORDER duplicadas en las operaciones.",
   "parser.order_level_duplicates.hint":
     'Tu Flex Query tiene activado el nivel de detalle "Orders" además de "Executions" en la sección Trades, lo que duplica cada operación. Puedes desactivar "Orders" en la configuración del Flex Query, pero no es necesario: estas filas se han ignorado automáticamente para evitar duplicar cantidades, importes y comisiones.',
+  "parser.cancelled_trades": "Se omitieron {{count}} operaciones canceladas por IBKR junto con su anulación.",
+  "parser.cancelled_trades.hint": 'IBKR marca una ejecución cancelada con una fila de anulación ("(Ca.)"). La operación original y su anulación se han descartado: nunca llegaron a ser una compra o venta real.',
+  "parser.cancelled_trades_unmatched": "Se omitieron {{count}} anulaciones de IBKR sin la operación original en este archivo.",
+  "parser.cancelled_trades_unmatched.hint": "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;
