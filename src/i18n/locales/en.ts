@@ -584,6 +584,12 @@ const en: TranslationKeys = {
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
+  "crypto_rates.saved_title": "Saved manual crypto prices",
+  "crypto_rates.saved_description": "These are the EUR prices you typed to value crypto-to-crypto swaps. They are applied every time the report is calculated. If one is wrong, delete it: when the report is recalculated, the trade will ask for its price again.",
+  "crypto_rates.col_actions": "Actions",
+  "crypto_rates.delete_row": "Delete",
+  "crypto_rates.delete_row_aria": "Delete the {{currency}} price for {{date}}",
+  "crypto_rates.clear_all_btn": "Delete all",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Manual lots for transferred positions",

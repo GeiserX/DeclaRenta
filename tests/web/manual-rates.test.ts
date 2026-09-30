@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   clearManualOpeningLots,
+  clearManualRates,
   getManualRates,
+  removeManualRate,
+  renderSavedManualRates,
   setManualRate,
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
@@ -299,5 +302,66 @@ describe("setManualOpeningLots / getManualOpeningLots", () => {
     ]);
 
     expect(html).toContain(`type="date" max="${today}"`);
+  });
+});
+
+describe("clearManualRates / removeManualRate", () => {
+  it("clearManualRates empties getManualRates", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    setManualRate("BNB", "2025-05-01", "500");
+    clearManualRates();
+    expect(getManualRates().size).toBe(0);
+    expect(store[KEY]).toBeUndefined();
+  });
+
+  it("removeManualRate deletes only the matching currency+date", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    setManualRate("SOL", "2025-04-11", "41");
+    expect(removeManualRate("SOL", "2025-04-10")).toBe(true);
+    expect(lookupRateInMap(getManualRates(), "2025-04-10", "SOL")?.toFixed(0)).not.toBe("40");
+    expect(JSON.parse(store[KEY]!)).toEqual([{ currency: "SOL", date: "2025-04-11", eurPerUnit: "41" }]);
+  });
+
+  it("removeManualRate drops the storage key when the last price goes", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    expect(removeManualRate("SOL", "2025-04-10")).toBe(true);
+    expect(store[KEY]).toBeUndefined();
+  });
+
+  it("removeManualRate returns false when nothing matches", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    expect(removeManualRate("BTC", "2025-04-10")).toBe(false);
+    expect(getManualRates().size).toBe(1);
+  });
+});
+
+describe("renderSavedManualRates", () => {
+  it("returns an empty string when nothing is saved", () => {
+    expect(renderSavedManualRates()).toBe("");
+  });
+
+  it("lists every stored price with a delete button per row and a clear-all button", () => {
+    setManualRate("SOL", "2025-04-10", "30000");
+    setManualRate("PEPE", "2025-03-01", "0,00001234");
+    const html = renderSavedManualRates();
+    expect(html).toContain("SOL");
+    expect(html).toContain("2025-04-10");
+    // Shown the Spanish way, so a slipped decimal mark is easy to spot.
+    expect(html).toContain("30.000,00");
+    // Small quotes keep every digit the user typed.
+    expect(html).toContain("0,00001234");
+    expect(html.match(/saved-manual-rate-delete/g)).toHaveLength(2);
+    expect(html).toContain('data-currency="SOL" data-date="2025-04-10"');
+    expect(html).toContain('id="saved-manual-rates-clear-btn"');
+    // Sorted by date: PEPE (March) before SOL (April).
+    expect(html.indexOf("PEPE")).toBeLessThan(html.indexOf("SOL"));
+  });
+
+  it("still lists (and escapes) a stored entry it cannot parse, so it can be deleted", () => {
+    store[KEY] = JSON.stringify([{ currency: "<b>X</b>", date: "2025-01-01", eurPerUnit: "abc" }]);
+    const html = renderSavedManualRates();
+    expect(html).toContain("&lt;b&gt;X&lt;/b&gt;");
+    expect(html).not.toContain("<b>X</b>");
+    expect(html).toContain(">abc<");
   });
 });

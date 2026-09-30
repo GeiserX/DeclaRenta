@@ -198,3 +198,48 @@ describe("opening-lot inputs", () => {
     expect(document.querySelector("[aria-invalid='true']")).toBeNull();
   });
 });
+
+describe("saved crypto prices in the Perfil section", () => {
+  async function saveRate(value: string): Promise<void> {
+    type(document.querySelector<HTMLInputElement>(".crypto-rate-input"), value);
+    document.getElementById("crypto-rates-save-btn")!.click();
+    await waitFor(() => document.querySelector(".crypto-rate-input") === null || null, "crypto panel gone");
+  }
+
+  it("lists nothing before a price is saved", () => {
+    expect(document.getElementById("saved-manual-rates-container")!.innerHTML).toBe("");
+  });
+
+  it("shows a saved price after it has left the results panel", async () => {
+    await saveRate("30000");
+    const list = document.querySelector("#saved-manual-rates-container .saved-manual-rates");
+    expect(list).not.toBeNull();
+    expect(list!.textContent).toContain("SOL");
+    expect(list!.textContent).toContain(`${YEAR}-04-01`);
+    expect(list!.textContent).toContain("30.000,00");
+  });
+
+  it("deleting a price forgets it and the results panel asks for it again", async () => {
+    await saveRate("30000");
+    document.querySelector<HTMLButtonElement>(".saved-manual-rate-delete")!.click();
+
+    expect(localStorage.getItem(RATES_KEY)).toBeNull();
+    expect(document.getElementById("saved-manual-rates-container")!.innerHTML).toBe("");
+    await waitFor(() => document.querySelector(".crypto-rate-input"), "crypto panel back");
+  });
+
+  it("Borrar todos clears every saved price", async () => {
+    localStorage.setItem(
+      RATES_KEY,
+      JSON.stringify([{ currency: "BNB", date: `${YEAR}-05-01`, eurPerUnit: "500" }]),
+    );
+    await saveRate("30000");
+    expect(document.querySelectorAll(".saved-manual-rate-delete")).toHaveLength(2);
+
+    document.getElementById("saved-manual-rates-clear-btn")!.click();
+
+    expect(localStorage.getItem(RATES_KEY)).toBeNull();
+    expect(document.getElementById("saved-manual-rates-container")!.innerHTML).toBe("");
+    await waitFor(() => document.querySelector(".crypto-rate-input"), "crypto panel back");
+  });
+});

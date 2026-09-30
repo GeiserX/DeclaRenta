@@ -1878,6 +1878,15 @@ footer a:hover {
   gap: 1rem;
 }
 
+.saved-manual-rates {
+  max-width: 720px;
+  margin-top: 1.75rem;
+}
+
+.saved-manual-rates .table-wrapper {
+  margin-bottom: 1rem;
+}
+
 .profile-saved-msg {
   color: var(--success);
   font-size: 0.85rem;

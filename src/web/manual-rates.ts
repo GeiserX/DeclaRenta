@@ -24,7 +24,9 @@ import {
   manualOpeningLotKey,
   normalizeManualOpeningLot,
 } from "../engine/manual-opening-lots.js";
+import Decimal from "decimal.js";
 import { esc } from "./esc.js";
+import { fmtEur } from "./format.js";
 
 const STORAGE_KEY = "declarenta_manual_rates";
 const OPENING_LOTS_STORAGE_KEY = "declarenta_manual_opening_lots";
@@ -109,6 +111,27 @@ export function clearManualOpeningLots(): void {
   } catch {
     /* storage unavailable — nothing to clear */
   }
+}
+
+export function clearManualRates(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
+}
+
+/**
+ * Delete the stored quote(s) for one currency+date pair, matched exactly as
+ * stored. Returns true if anything was removed.
+ */
+export function removeManualRate(currency: string, date: string): boolean {
+  const entries = readStored();
+  const kept = entries.filter((e) => !(e.currency === currency && e.date === date));
+  if (kept.length === entries.length) return false;
+  if (kept.length === 0) clearManualRates();
+  else writeStored(kept);
+  return true;
 }
 
 /**
@@ -279,6 +302,83 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
     <span class="crypto-rates-saved-msg" hidden>${esc(tr("crypto_rates.saved"))}</span>
     <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
   </div>`;
+}
+
+/** Show a stored dot-decimal quote the Spanish way, keeping every digit typed. */
+function formatStoredRate(eurPerUnit: string): string {
+  try {
+    const d = new Decimal(eurPerUnit);
+    if (!d.isFinite()) return eurPerUnit;
+    return fmtEur(d, Math.max(2, d.decimalPlaces()));
+  } catch {
+    return eurPerUnit;
+  }
+}
+
+/**
+ * Read-only list of every saved manual crypto price, for the Perfil section.
+ * The results panel only lists prices a report still needs, so once a price
+ * values its trade it disappears from there; this list is where the user can
+ * still see it and delete it. Returns "" when nothing is saved.
+ */
+export function renderSavedManualRates(): string {
+  const entries = [...readStored()].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.currency.localeCompare(b.currency),
+  );
+  if (entries.length === 0) return "";
+
+  const rows = entries
+    .map((e) => {
+      const label = tr("crypto_rates.delete_row_aria", { currency: e.currency, date: e.date });
+      return `<tr class="saved-manual-rate-row">
+        <td class="mono">${esc(e.currency)}</td>
+        <td>${esc(e.date)}</td>
+        <td class="mono">${esc(formatStoredRate(e.eurPerUnit))}</td>
+        <td>
+          <button type="button" class="btn-secondary btn-small saved-manual-rate-delete"
+            data-currency="${esc(e.currency)}" data-date="${esc(e.date)}"
+            aria-label="${esc(label)}">${esc(tr("crypto_rates.delete_row"))}</button>
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  return `<fieldset class="profile-group saved-manual-rates">
+    <legend class="profile-group-title">${esc(tr("crypto_rates.saved_title"))}</legend>
+    <p class="field-detail">${esc(tr("crypto_rates.saved_description"))}</p>
+    <div class="table-wrapper"><table>
+      <thead><tr>
+        <th>${esc(tr("crypto_rates.col_currency"))}</th>
+        <th>${esc(tr("crypto_rates.col_date"))}</th>
+        <th>${esc(tr("crypto_rates.col_eur_per_unit"))}</th>
+        <th>${esc(tr("crypto_rates.col_actions"))}</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <div class="profile-actions">
+      <button type="button" id="saved-manual-rates-clear-btn" class="btn-secondary">${esc(tr("crypto_rates.clear_all_btn"))}</button>
+    </div>
+  </fieldset>`;
+}
+
+/**
+ * Wire the saved-prices list once, on the container that stays in the page;
+ * the list inside it is replaced on every render. `onChange` runs after a
+ * price is deleted so the caller can redraw the list and recalculate.
+ */
+export function bindSavedManualRates(container: HTMLElement, onChange: () => void): void {
+  container.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    const del = target.closest<HTMLButtonElement>(".saved-manual-rate-delete");
+    if (del) {
+      if (removeManualRate(del.dataset.currency ?? "", del.dataset.date ?? "")) onChange();
+      return;
+    }
+    if (target.closest("#saved-manual-rates-clear-btn")) {
+      clearManualRates();
+      onChange();
+    }
+  });
 }
 
 function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {

@@ -619,6 +619,12 @@ const es = {
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
+  "crypto_rates.saved_title": "Precios manuales de criptomonedas guardados",
+  "crypto_rates.saved_description": "Son los precios en EUR que escribiste para valorar permutas entre criptomonedas. Se aplican cada vez que calculas el informe. Si alguno está mal, bórralo: al recalcular, la operación volverá a pedirte el precio.",
+  "crypto_rates.col_actions": "Acciones",
+  "crypto_rates.delete_row": "Borrar",
+  "crypto_rates.delete_row_aria": "Borrar el precio de {{currency}} del {{date}}",
+  "crypto_rates.clear_all_btn": "Borrar todos",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuales para posiciones transferidas",

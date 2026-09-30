@@ -586,6 +586,12 @@ const ca: TranslationKeys = {
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
+  "crypto_rates.saved_title": "Preus manuals de criptomonedes desats",
+  "crypto_rates.saved_description": "Són els preus en EUR que vas escriure per valorar permutes entre criptomonedes. S'apliquen cada vegada que es calcula l'informe. Si algun és incorrecte, esborra'l: en recalcular, l'operació et tornarà a demanar el preu.",
+  "crypto_rates.col_actions": "Accions",
+  "crypto_rates.delete_row": "Esborra",
+  "crypto_rates.delete_row_aria": "Esborra el preu de {{currency}} del {{date}}",
+  "crypto_rates.clear_all_btn": "Esborra-ho tot",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lots manuals per a posicions transferides",

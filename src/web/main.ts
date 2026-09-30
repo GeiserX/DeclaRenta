@@ -40,6 +40,8 @@ import {
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   bindManualOpeningLotsPanel,
+  renderSavedManualRates,
+  bindSavedManualRates,
 } from "./manual-rates.js";
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
@@ -104,6 +106,7 @@ document.addEventListener("localechange", () => {
   rerenderSectionD6();
   rerenderSectionGuide();
   initProfile();
+  renderSavedManualRatesList();
   renderDetectionStatus();
 });
 
@@ -231,11 +234,30 @@ let activeYear: number | null = null;
 initWizard();
 initSidebar();
 initProfile();
+initSavedManualRatesList();
 initBrokerGuides();
 initSection720();
 initSection721();
 initSectionD6();
 initSectionGuide();
+
+// Saved manual crypto prices, listed in the Perfil section under the profile
+// form. Deleting one recalculates an open report, so the trade it valued goes
+// back to asking for a price in the results panel.
+function renderSavedManualRatesList(): void {
+  const container = document.getElementById("saved-manual-rates-container");
+  if (container) container.innerHTML = renderSavedManualRates();
+}
+
+function initSavedManualRatesList(): void {
+  const container = document.getElementById("saved-manual-rates-container");
+  if (!container) return;
+  bindSavedManualRates(container, () => {
+    renderSavedManualRatesList();
+    if (currentReport) void processFiles();
+  });
+  renderSavedManualRatesList();
+}
 
 /** Control wizard "Next" behavior per step */
 onStepChange((_from: WizardStep, to: WizardStep) => {
@@ -971,6 +993,7 @@ function renderResults(report: TaxSummary) {
       bindManualRatesPanel(panel, () => {
         // Re-run the full pipeline so the newly-entered manual rates take
         // effect — no re-upload needed (statement is cached in mergedStatement).
+        renderSavedManualRatesList();
         void processFiles();
       });
     }
