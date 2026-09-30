@@ -579,12 +579,20 @@ program
           );
         }
 
+        const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
+        if (thresholds.values.unvalued > 0) {
+          console.error(
+            `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
+
         if (!output720) {
-          const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
           if (omissions.length > 0) {
             console.error("No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
           } else if (thresholds.accounts.exceeds) {
             console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
+          } else if (thresholds.values.unvalued > 0) {
+            console.error("No se ha generado ningún registro. Valora las posiciones del aviso anterior antes de concluir que no debes presentar el Modelo 720.");
           } else {
             console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
           }
@@ -682,8 +690,13 @@ program
           previousYearIsins,
         );
 
+        if (report.unvaluedCount > 0) {
+          console.error(
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
         if (report.positions.length === 0) {
-          console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
+          if (report.unvaluedCount === 0) console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
           return;
         }
 
