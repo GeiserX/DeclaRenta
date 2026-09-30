@@ -47,6 +47,11 @@ describe("normalizeManualQuote", () => {
     const spaced = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "1 234,56" });
     expect(spaced!.eurPerUnit).toBe("1234.56");
   });
+
+  it("reads a dot after a comma as the decimal mark (1,234.56)", () => {
+    const norm = normalizeManualQuote({ currency: "SOL", date: "2025-04-10", eurPerUnit: "1,234.56" });
+    expect(norm!.eurPerUnit).toBe("1234.56");
+  });
 });
 
 describe("buildManualRateMap", () => {

@@ -594,6 +594,8 @@ const ca: TranslationKeys = {
   "opening_lots.save_btn": "Desa els lots i recalcula",
   "opening_lots.clear_btn": "Esborra els lots desats",
   "opening_lots.saved": "Desat",
+  "opening_lots.row_invalid":
+    "Revisa les files marcades: indica la data de compra i una quantitat i un preu més grans que zero (p. ex. 1.234,56). No s'ha desat res.",
   "opening_lots.recalculate_hint": "Els lots manuals es desen al teu navegador i l'informe es recalcula.",
 
   // Missatges del motor i els analitzadors (TaxMessage id → text localitzat)
