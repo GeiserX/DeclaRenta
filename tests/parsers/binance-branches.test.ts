@@ -136,7 +136,8 @@ describe("binanceParser - Trade History format", () => {
       "2025-01-15 10:30:00,BTCUSDT,BUY,40000,0.01,400,0.001BTC",
     ].join("\n");
     const result = binanceParser.parse(input);
-    expect(result.trades[0].currency).toBe("USDT");
+    // A stablecoin quote is crypto, so the row is a two-leg permuta; check the base leg.
+    expect(result.trades.find((t) => t.symbol === "BTC")!.currency).toBe("USDT");
   });
 
   it("should parse FDUSD pair", () => {
@@ -145,7 +146,8 @@ describe("binanceParser - Trade History format", () => {
       "2025-01-15 10:30:00,BTCFDUSD,BUY,40000,0.01,400,0",
     ].join("\n");
     const result = binanceParser.parse(input);
-    expect(result.trades[0].currency).toBe("FDUSD");
+    // A stablecoin quote is crypto, so the row is a two-leg permuta; check the base leg.
+    expect(result.trades.find((t) => t.symbol === "BTC")!.currency).toBe("FDUSD");
   });
 
   it("should throw on unsupported pair", () => {

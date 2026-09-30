@@ -237,3 +237,56 @@ describe("krakenParser", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Trades CSV: a crypto-quoted pair is a permuta (Art. 37.1.h LIRPF)
+// ---------------------------------------------------------------------------
+
+describe("krakenParser — crypto↔crypto trades emit both legs", () => {
+  const HEADER = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
+
+  it("an XETHXXBT buy disposes of the BTC paid and acquires the ETH received", () => {
+    const csv = [HEADER, '"TXP1","ORDP1","XETHXXBT","2024-06-03 10:00:00","buy","limit","0.05","1","0.001","20","0","",""'].join("\n");
+    const { trades } = krakenParser.parse(csv);
+    expect(trades).toHaveLength(2);
+
+    const ethBuy = trades.find((t) => t.symbol === "ETH")!;
+    expect(ethBuy.tradeID).toBe("TXP1");
+    expect(ethBuy.buySell).toBe("BUY");
+    expect(ethBuy.quantity).toBe("20");
+    expect(ethBuy.currency).toBe("BTC");
+    expect(ethBuy.commission).toBe("-0.001");
+
+    const btcSell = trades.find((t) => t.symbol === "BTC")!;
+    expect(btcSell.buySell).toBe("SELL");
+    expect(btcSell.quantity).toBe("-1");
+    expect(btcSell.currency).toBe("ETH");
+    expect(btcSell.proceeds).toBe("20");
+    expect(btcSell.tradeDate).toBe("20240603");
+  });
+
+  it("an XETHXXBT sell disposes of the ETH and gives the received BTC a lot", () => {
+    const csv = [HEADER, '"TXP2","ORDP2","XETHXXBT","2024-06-03 10:00:00","sell","limit","0.05","0.5","0.0005","10","0","",""'].join("\n");
+    const { trades } = krakenParser.parse(csv);
+    expect(trades).toHaveLength(2);
+
+    const ethSell = trades.find((t) => t.symbol === "ETH")!;
+    expect(ethSell.buySell).toBe("SELL");
+    expect(ethSell.quantity).toBe("-10");
+    expect(ethSell.currency).toBe("BTC");
+
+    const btcBuy = trades.find((t) => t.symbol === "BTC")!;
+    expect(btcBuy.buySell).toBe("BUY");
+    expect(btcBuy.quantity).toBe("0.5");
+    expect(btcBuy.currency).toBe("ETH");
+    expect(btcBuy.cost).toBe("10");
+  });
+
+  it("a fiat-quoted XXBTZEUR trade still emits exactly one trade", () => {
+    const csv = [HEADER, '"TXP3","ORDP3","XXBTZEUR","2024-01-15 10:00:00","buy","limit","20000","20000","5","1","0","",""'].join("\n");
+    const { trades } = krakenParser.parse(csv);
+    expect(trades).toHaveLength(1);
+    expect(trades[0]!.symbol).toBe("BTC");
+    expect(trades[0]!.currency).toBe("EUR");
+  });
+});
