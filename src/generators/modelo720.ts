@@ -164,13 +164,15 @@ export function modelo720PositionCountry(p: OpenPosition): string | null {
 
 /**
  * A security last year's file declared (a V or I record): the ISIN, the clave
- * and subclave (102-103) and the country (129-130) it was written with. A
- * cancelled record (origin C) this year repeats them.
+ * and subclave (102-103), the country (129-130) and the acquisition date
+ * (415-422) it was written with. A cancelled record (origin C) this year
+ * repeats the codes of the record with its own acquisition date.
  */
 export interface Previous720Security {
   isin: string;
   claveSubclave: string;
   country: string;
+  acquireDate?: string;
 }
 
 /**
@@ -241,11 +243,17 @@ export function readPrevious720(content: string): { securities: Previous720Secur
   return {
     securities: details
       .filter((line) => line[101] === "V" || line[101] === "I")
-      .map((line) => ({ isin: line.slice(131, 143).trim(), claveSubclave: line.slice(101, 103), country: line.slice(128, 130) }))
+      .map((line) => ({
+        isin: line.slice(131, 143).trim(),
+        claveSubclave: line.slice(101, 103),
+        country: line.slice(128, 130),
+        acquireDate: line.slice(414, 422).trim() || undefined,
+      }))
       .filter((security) => security.isin.length > 0),
     accounts: details
       .filter((line) => line[101] === "C")
-      .map((line) => line.slice(155, 189).trim())
+      // Versions before 0.59.0 wrote the account in 132-143 and left 156-189 blank.
+      .map((line) => line.slice(155, 189).trim() || line.slice(131, 143).trim())
       .filter((account) => account.length > 0),
   };
 }
@@ -321,7 +329,7 @@ function plan720(
   const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
     const tranches = extinctionTranches(security.isin, config.year, disposals);
     return tranches.length > 0
-      ? tranches.map((t) => ({ security, ...t }))
+      ? tranches.map((t) => ({ security: recordOfTranche(security, t.acquireDate, config.previousYearSecurities), ...t }))
       : [{ security, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
   });
 
@@ -345,9 +353,11 @@ function plan720(
         : [];
     });
 
-  // Check 50,000 EUR threshold per category independently
+  // Check 50,000 EUR threshold per category independently. A sale the file
+  // writes also opens the category; one left out (invalid code) does not, as
+  // it would put below-threshold holdings in a file with nothing else in it.
   const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelled.length > 0;
+  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelledEntries.length > 0;
   const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds;
 
   const omissions: Modelo720Omission[] = [];
@@ -355,9 +365,10 @@ function plan720(
     for (const e of entries) {
       if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
     }
-    for (const security of cancelled) {
-      if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
-    }
+  }
+  // A sale of a declared security is reported whatever the threshold says.
+  for (const security of cancelled) {
+    if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
   }
   if (hasCashRecords) {
     for (const e of cashEntries) {
@@ -481,6 +492,16 @@ function findCancelledSecurities(positions: OpenPosition[], previous: Previous72
     if (!heldIsins.has(s.isin) && !cancelled.has(s.isin)) cancelled.set(s.isin, s);
   }
   return [...cancelled.values()];
+}
+
+/**
+ * The record of last year's file an extinction tranche cancels: the one with
+ * the tranche's acquisition date (415-422). One ISIN can sit at custodians in
+ * two countries, one record each, so the ISIN's first record (`first`) is only
+ * the fallback when no record has that date.
+ */
+function recordOfTranche(first: Previous720Security, acquireDate: string, previous: Previous720Security[] | undefined): Previous720Security {
+  return (previous ?? []).find((s) => s.isin === first.isin && s.acquireDate === acquireDate && isRepeatable(s)) ?? first;
 }
 
 /**

@@ -85,6 +85,7 @@ const en: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Spanish IRPF withholding applied at source on dividends or interest from Spanish issuers (e.g. IBEX shares), even when held at a foreign broker. It is a prepayment deductible from the tax due; it is NOT the double-taxation deduction (box 0588), which applies only to foreign tax.",
   "casilla.double_taxation": "Double taxation deduction",
+  "casilla.dt_foreign_income_total": "Total foreign income",
   "casilla.reintegrated_losses":
     "Deferred losses from prior years now deductible (the repurchased securities were sold): {{amount}} EUR",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
@@ -160,7 +161,10 @@ const en: TranslationKeys = {
   "compare.acquisition_value": "Acquisition value (disposals, excl. FX)",
   "compare.net_gain_loss": "Net gain/loss (disposals, excl. FX)",
 
-  "error.no_broker_detected": 'Could not detect broker for "{{filename}}". Select the broker manually.',
+  "error.no_broker_detected":
+    'Could not detect the broker for "{{filename}}". If it is a broker report, select the broker manually; if not, remove it from the list.',
+  "error.empty_file":
+    'The file "{{filename}}" is empty. Remove it from the list or export it again from your broker.',
   "error.file_too_large":
     'File "{{filename}}" exceeds the {{limit}} MB limit and was discarded. Export a shorter period or split the file.',
   "error.prefix": "Error: ",
@@ -178,7 +182,7 @@ const en: TranslationKeys = {
 
   // Fiscal profile
   "profile.title": "Tax profile",
-  "profile.description": "This data is used to generate the Modelo 720 and D-6 files.",
+  "profile.description": "This data is used to generate the Modelo 720 and D-6 files. It is stored only in this browser, never on a server.",
   "profile.section_personal": "Personal details",
   "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
@@ -204,6 +208,8 @@ const en: TranslationKeys = {
     "If the account has several holders (e.g. a joint or community-property account), DeclaRenta divides every amount equally to show each taxpayer's share (Art. 11.3 LIRPF). Each holder files their own individual return for their share.",
   "profile.saved": "Profile saved",
   "profile.save_btn": "Save profile",
+  "profile.clear_btn": "Delete my data from this browser",
+  "profile.clear_confirm": "Delete your fiscal profile, saved reports and manually entered values from this browser?",
   "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",
   "profile.go_to_profile": "Go to profile",
 
@@ -220,7 +226,7 @@ const en: TranslationKeys = {
     "In the configuration, enable:<ul><li>Trades (required)</li><li>Cash Transactions — dividends and withholdings (required)</li><li>Open Positions — for Modelo 720/D-6 (recommended)</li><li>Financial Instrument Information / Securities Info (recommended)</li></ul>",
   "guide.ibkr.step5":
     "In each section, <strong>select all available fields</strong> (check every box). The more data you include, the more accurate the calculation. At minimum, ensure the <strong>Notes</strong> field is included in Trades — it's needed to detect automatic currency conversions.",
-  "guide.ibkr.step6": "Output format: <strong>XML</strong>",
+  "guide.ibkr.step6": "Output format: <strong>XML</strong>. Under <em>Date Format</em>, keep <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Include <strong>all available years</strong> for correct FIFO calculation",
   "guide.ibkr.step8": "Save the query, run it and download the <code>.xml</code> file",
   "guide.degiro.title": "Degiro (CSV)",
@@ -502,7 +508,7 @@ const en: TranslationKeys = {
   "guide_rw.double_taxation_title": "International double taxation deduction",
   "guide_rw.entidad_emisora_label": "Issuing entity",
   "guide_rw.entidad_emisora_value":
-    "Broker name (e.g. Interactive Brokers, Degiro, eToro…). If consolidating multiple operations in one line, use the main broker.",
+    "Name of the company or security you sold (e.g. Apple Inc.), not the broker's. For currencies, the currency (e.g. USD). If consolidating several operations in one line, use the main security.",
   "guide_rw.tipo_elemento_label": "Asset type",
   "guide_rw.tipo_elemento_value_capital":
     'Select <strong>"Listed shares"</strong> for quoted stocks. For funds: "Collective investment shares". For derivatives/options: "Other assets".',
@@ -542,7 +548,7 @@ const en: TranslationKeys = {
     "The amount from DeclaRenta's box <strong>0588</strong>. This is the lesser of the foreign tax paid and the corresponding Spanish tax (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "Which field in the dialog?",
   "guide_rw.dt_campo_hint":
-    'In the double taxation dialog, fill TWO rows:<br>• <strong>"Other net reduced income obtained abroad"</strong> (2nd row) → gross dividend amount from abroad (same value as box 0029).<br>• <strong>"Tax paid abroad"</strong> (last row) → the amount from DeclaRenta\'s box 0588.<br>If you leave the 2nd row empty, Renta Web shows a warning about missing income. Rows 1 and 3 stay at 0.',
+    'In the double taxation dialog, fill TWO rows for each country:<br>• <strong>"Other net reduced income obtained abroad"</strong> (2nd row) → that country\'s "Gross EUR" in the box 0588 detail in DeclaRenta. With a single country, it is the "Total foreign income" row of that detail. It leaves out Spanish dividends and countries with no tax withheld.<br>• <strong>"Tax paid abroad"</strong> (last row) → that country\'s deduction in the same detail (with a single country, the amount of box 0588).<br>If you leave the 2nd row empty, Renta Web shows a warning about missing income. Rows 1 and 3 stay at 0.',
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
@@ -644,6 +650,9 @@ const en: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) applied ({{date}})",
   "fifo.split_applied.hint":
     "Split applied to all lots. The total cost is unchanged — only the number of shares changes.",
+  "fifo.split_unresolved": "⚠ Split of {{symbol}} on {{date}} not applied: no earlier shares to size the ratio from.",
+  "fifo.split_unresolved.hint":
+    "Also upload the statements for earlier years, back to when the account was opened. Otherwise the share count and the cost of later sales of this security will be wrong.",
   "fifo.merger_applied":
     "🔄 Merger: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lots transferred, {{date}})",
   "fifo.merger_applied.hint":
@@ -740,6 +749,10 @@ const en: TranslationKeys = {
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
+  "flatex.depot.repeated_fills":
+    "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
+  "flatex.depot.repeated_fills.hint":
+    "This usually happens when the same Depotumsätze CSV is uploaded twice, or two exports with overlapping dates. If they really are different trades, check the file: Flatex gives each execution its own TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex books dividends at the net amount received, after withholding, and the Kontoumsätze CSV does not include the withholding.",
   "flatex.dividends.net_amounts.hint":

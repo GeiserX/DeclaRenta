@@ -9,16 +9,16 @@ import {
 import es from "../../src/i18n/locales/es.js";
 
 describe("localizeMessage / localizeHint", () => {
-  beforeEach(() => {
-    setLocale("es");
+  beforeEach(async () => {
+    await setLocale("es");
   });
-  afterEach(() => {
-    setLocale("es");
+  afterEach(async () => {
+    await setLocale("es");
   });
 
   describe("known id → localizes via the locale key", () => {
-    it("renders the active locale's text for a known id (English)", () => {
-      setLocale("en");
+    it("renders the active locale's text for a known id (English)", async () => {
+      await setLocale("en");
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         // The engine's Spanish fallback — must be IGNORED because the id is a known key.
@@ -33,8 +33,8 @@ describe("localizeMessage / localizeHint", () => {
       expect(out).not.toBe(m.message);
     });
 
-    it("renders the active locale's text for fx conservation mismatch (English)", () => {
-      setLocale("en");
+    it("renders the active locale's text for fx conservation mismatch (English)", async () => {
+      await setLocale("en");
       const m: LocalizableMessage = {
         id: "fx.conservation_mismatch",
         message:
@@ -62,8 +62,8 @@ describe("localizeMessage / localizeHint", () => {
       expect(localizeMessage(m)).toBe(m.message);
     });
 
-    it("localizes the hint via the ${id}.hint key (English)", () => {
-      setLocale("en");
+    it("localizes the hint via the ${id}.hint key (English)", async () => {
+      await setLocale("en");
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         message: "irrelevant",
@@ -76,8 +76,8 @@ describe("localizeMessage / localizeHint", () => {
   });
 
   describe("unknown id → falls back to the engine's message/hint verbatim", () => {
-    it("returns m.message unchanged for an id with no locale key", () => {
-      setLocale("en");
+    it("returns m.message unchanged for an id with no locale key", async () => {
+      await setLocale("en");
       const m: LocalizableMessage = {
         id: "parser.unparsed_section",
         message: "Missing ISIN for ABC — sección no reconocida",
@@ -95,8 +95,8 @@ describe("localizeMessage / localizeHint", () => {
   });
 
   describe("interpolation fills {{placeholders}} from context", () => {
-    it("interpolates a single {{count}} placeholder (English)", () => {
-      setLocale("en");
+    it("interpolates a single {{count}} placeholder (English)", async () => {
+      await setLocale("en");
       const m: LocalizableMessage = {
         id: "report.crypto_income_unvalued",
         message: "Hay 3 ingreso(s) en criptomoneda ...", // engine fallback, ignored

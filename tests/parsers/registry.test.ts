@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 import { describe, it, expect } from "vitest";
 import { detectBroker, getBroker, brokerParsers } from "../../src/parsers/index.js";
 
@@ -51,5 +53,30 @@ describe("broker registry", () => {
     const parser = detectBroker(lightyearCsv);
     expect(parser).toBeDefined();
     expect(parser!.name).toBe("Lightyear");
+  });
+});
+
+describe("getBroker with the documented --broker names", () => {
+  it("resolves the short names to the right parser", () => {
+    expect(getBroker("ibkr")?.name).toBe("Interactive Brokers");
+    expect(getBroker("IBKR")?.name).toBe("Interactive Brokers");
+    expect(getBroker("traderepublic")?.name).toBe("Trade Republic");
+    expect(getBroker("trading212")?.name).toBe("Trading 212");
+    expect(getBroker("Trading 212")?.name).toBe("Trading 212");
+  });
+
+  it("resolves every name listed in docs/usage.md", () => {
+    const usage = readFileSync(fileURLToPath(new URL("../../docs/usage.md", import.meta.url)), "utf-8");
+    const line = usage.match(/`--broker ([a-z0-9|]+)`/);
+    expect(line).not.toBeNull();
+    const names = line![1]!.split("|");
+    expect(names.length).toBe(brokerParsers.length);
+    const resolved = names.map((n) => getBroker(n)?.name);
+    expect(resolved).not.toContain(undefined);
+    expect(new Set(resolved).size).toBe(brokerParsers.length);
+  });
+
+  it("does not match a blank name", () => {
+    expect(getBroker("  ")).toBeUndefined();
   });
 });
