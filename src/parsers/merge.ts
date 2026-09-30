@@ -130,11 +130,11 @@ function reconcileOrderLegs(statement: Statement): void {
   }
 
   const tradesByKey = new Map<string, Trade[]>();
-  // A Depot export uploaded twice repeats each fill with the same booking
-  // number (TA-Nr.): leave the repeat out of the pairing and give it the
-  // original's fee below.
-  const firstFill = new Map<string, Trade>();
-  const repeatedFills: [Trade, Trade][] = [];
+  // A Depot export uploaded twice (or two exports with overlapping dates)
+  // repeats each fill with the same booking number (TA-Nr.). Keep one fill per
+  // booking number, or FIFO would count every buy and sell twice.
+  const seenFills = new Set<string>();
+  const repeatedFills = new Set<Trade>();
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
@@ -144,12 +144,11 @@ function reconcileOrderLegs(statement: Statement): void {
     const orderKey = key.slice(FLATEX_ORDER_PREFIX.length);
     if (trade.tradeID) {
       const fill = `${orderKey}:${trade.tradeID}`;
-      const original = firstFill.get(fill);
-      if (original) {
-        repeatedFills.push([trade, original]);
+      if (seenFills.has(fill)) {
+        repeatedFills.add(trade);
         continue;
       }
-      firstFill.set(fill, trade);
+      seenFills.add(fill);
     }
     const trades = tradesByKey.get(orderKey);
     if (trades) trades.push(trade);
@@ -209,9 +208,15 @@ function reconcileOrderLegs(statement: Statement): void {
     proratedOrders++;
   }
 
-  for (const [repeat, original] of repeatedFills) {
-    repeat.commission = original.commission;
-    repeat.commissionCurrency = original.commissionCurrency;
+  if (repeatedFills.size > 0) {
+    statement.trades = statement.trades.filter((trade) => !repeatedFills.has(trade));
+    addInfoMessage(statement, {
+      id: "flatex.depot.repeated_fills",
+      severity: "info",
+      message: `Operaciones de Flatex repetidas y contadas una sola vez: ${repeatedFills.size}. Tenían el mismo número de orden y de apunte (TA-Nr.) que otra ya cargada.`,
+      hint: "Suele pasar al subir el mismo CSV de Depotumsätze dos veces, o dos exportaciones con fechas que se solapan. Si de verdad son operaciones distintas, revisa el archivo: Flatex da a cada ejecución su propio TA-Nr.",
+      context: { fills: String(repeatedFills.size) },
+    });
   }
 
   // Trades present but their settlement legs are not (user uploaded only the
