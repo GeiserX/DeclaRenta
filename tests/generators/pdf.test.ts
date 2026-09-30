@@ -14,6 +14,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
       acquisitionValue: new Decimal("8000"),
       netGainLoss: new Decimal("2000"),
       blockedLosses: new Decimal("0"),
+      reintegratedLosses: new Decimal(0),
       disposals: [
         {
           isin: "US78462F1030",
@@ -106,6 +107,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
     }));
@@ -135,6 +137,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal(0),
         netGainLoss: new Decimal(0),
         blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
         disposals: [],
       },
     });
@@ -194,6 +197,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal("240000"),
         netGainLoss: new Decimal("60000"),
         blockedLosses: new Decimal("0"),
+        reintegratedLosses: new Decimal(0),
         disposals: manyDisposals,
       },
     });
@@ -232,6 +236,7 @@ describe("PDF Report Generator", () => {
       capitalGains: {
         ...makeReport().capitalGains,
         blockedLosses: new Decimal("500"),
+        reintegratedLosses: new Decimal(0),
       },
     });
     const buffer = await generatePdfReport(report);
@@ -266,6 +271,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal("4000"),
         netGainLoss: new Decimal("1000"),
         blockedLosses: new Decimal("0"),
+        reintegratedLosses: new Decimal(0),
         disposals: [
           {
             isin: "US0378331005",
@@ -304,6 +310,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal("600"),
         netGainLoss: new Decimal("200"),
         blockedLosses: new Decimal("0"),
+        reintegratedLosses: new Decimal(0),
         disposals: [
           {
             isin: "IE00BK5BQT80",
@@ -362,6 +369,7 @@ describe("PDF Report Generator", () => {
         acquisitionValue: new Decimal("4700"),
         netGainLoss: new Decimal("1600"),
         blockedLosses: new Decimal("0"),
+        reintegratedLosses: new Decimal(0),
         disposals: [
           // Listed share — routes to 0328/0331
           {
@@ -457,7 +465,7 @@ describe("PDF Report Generator", () => {
   it("renders neither block's casilla codes when there are no disposals (count > 0 guards)", async () => {
     const spy = vi.spyOn(PDFDocument.prototype, "text");
     const report = makeReport({
-      capitalGains: { transmissionValue: new Decimal(0), acquisitionValue: new Decimal(0), netGainLoss: new Decimal(0), blockedLosses: new Decimal(0), disposals: [] },
+      capitalGains: { transmissionValue: new Decimal(0), acquisitionValue: new Decimal(0), netGainLoss: new Decimal(0), blockedLosses: new Decimal(0), reintegratedLosses: new Decimal(0), disposals: [] },
       fxGains: { transmissionValue: new Decimal(0), acquisitionValue: new Decimal(0), netGainLoss: new Decimal(0), disposals: [] },
     });
     await generatePdfReport(report);
@@ -467,5 +475,65 @@ describe("PDF Report Generator", () => {
     expect(rendered.some((s) => s.includes("1633"))).toBe(false);
     expect(rendered.some((s) => s.includes("1637"))).toBe(false);
     expect(rendered.some((s) => s.includes("0327"))).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Parity with the web PDF: anti-churning totals and the full message list
+  // ---------------------------------------------------------------------------
+
+  it("renders the blocked and reintegrated anti-churning rows when they are > 0", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    const report = makeReport({
+      capitalGains: {
+        ...makeReport().capitalGains,
+        blockedLosses: new Decimal("400"),
+        reintegratedLosses: new Decimal("250"),
+      },
+    });
+    await generatePdfReport(report);
+    const rendered = captureRenderedText(spy);
+    expect(rendered).toContain("Pérdidas bloqueadas anti-churning");
+    expect(rendered).toContain("400.00 EUR");
+    expect(rendered).toContain("Pérdidas reintegradas (anti-churning)");
+    expect(rendered).toContain("250.00 EUR");
+  });
+
+  it("omits the anti-churning rows when both totals are 0", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport());
+    const rendered = captureRenderedText(spy);
+    expect(rendered.some((s) => /bloquead|reintegr/i.test(s))).toBe(false);
+  });
+
+  it("never drops an error behind a long list of warnings, and prints its hint", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    const warnings = Array.from({ length: 21 }, (_, i) => ({
+      id: "test.unkeyed_warning", severity: "warning" as const, message: `WARN-${i}`,
+    }));
+    const report = makeReport({
+      messages: [
+        ...warnings,
+        { id: "test.unkeyed_error", severity: "error", message: "ERRLAST", hint: "HINTX" },
+      ],
+    });
+    await generatePdfReport(report);
+    const rendered = captureRenderedText(spy);
+    const errIdx = rendered.findIndex((s) => s.includes("ERRLAST"));
+    expect(errIdx).toBeGreaterThan(-1);
+    expect(rendered[errIdx]).toContain("HINTX");
+    // Errors come first, and every warning still renders.
+    expect(errIdx).toBeLessThan(rendered.findIndex((s) => s.includes("WARN-0")));
+    expect(rendered.filter((s) => s.includes("WARN-")).length).toBe(21);
+  });
+
+  it("caps only the informative notes and says how many were left out", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    const infos = Array.from({ length: 25 }, (_, i) => ({
+      id: "test.unkeyed_info", severity: "info" as const, message: `INFO-${i}`,
+    }));
+    await generatePdfReport(makeReport({ messages: infos }));
+    const rendered = captureRenderedText(spy);
+    expect(rendered.filter((s) => s.includes("INFO-")).length).toBe(20);
+    expect(rendered.some((s) => s.includes("... y 5 mensajes informativos más"))).toBe(true);
   });
 });

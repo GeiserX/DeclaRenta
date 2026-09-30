@@ -7,7 +7,7 @@
  *   declarenta convert --input flex.xml --year 2025 --output report.json
  *   declarenta convert --input flex.xml --year 2025 --format pdf --output report.pdf
  *   declarenta modelo720 --input flex.xml --year 2025 --nif 12345678A
- *   declarenta modelo721 --input positions.json --year 2025 --nif 12345678A
+ *   declarenta modelo720 --input ibkr_cuenta1.xml --input ibkr_cuenta2.xml --year 2025 --nif 12345678A
  *   declarenta d6 --input flex.xml --year 2025 --nif 12345678A --name "Apellidos, Nombre"
  */
 
@@ -19,7 +19,6 @@ import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { fetchEcbRates } from "../engine/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
@@ -39,6 +38,7 @@ import { formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
+import { savingsBalances } from "../engine/taxable-base.js";
 import type { LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 
@@ -334,8 +334,7 @@ program
             priorLosses.push({ year, amount, remaining, category: l.category });
           }
 
-          const netGains = report.capitalGains.netGainLoss;
-          const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
+          const { gains: netGains, income: netIncome } = savingsBalances(report);
           const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
 
           // Log carryforward details
@@ -452,47 +451,40 @@ program
 program
   .command("modelo720")
   .description("Generate Modelo 720 fixed-width file from broker positions")
-  .requiredOption("-i, --input <file>", "Broker report file")
+  .requiredOption("-i, --input <files...>", "Broker report file(s). Pass one per broker: the 50,000 EUR threshold applies to the total")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
+  .option(
+    "-b, --broker <name>",
+    `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`,
+  )
   .option("--phone <phone>", "Teléfono de contacto", "")
   .option("--previous-720 <file>", "Previous year 720 output file (to determine A/M/C types)")
   .option("--titulares <n>", "Number of holders sharing every asset: each declares 100/n % with the full value", parseInt)
   .option("--declaration-id <id>", "Número identificativo (13 digits starting with 720). Defaults to a new one")
   .action(
     async (opts: {
-      input: string;
+      input: string[];
       year: number;
       nif: string;
       name: string;
       output?: string;
+      broker?: string;
       phone: string;
       previous720?: string;
       titulares?: number;
       declarationId?: string;
     }) => {
       try {
-        const content = readFileSync(opts.input, "utf-8");
-        const parser = detectBroker(content);
-        if (!parser) {
-          throw new Error(
-            `No se pudo detectar el broker del fichero ${opts.input}. Formatos soportados: ${brokerParsers.map((p) => `${p.name} (${p.formats.join(", ")})`).join("; ")}`,
-          );
-        }
-        const statement = parser.parse(content);
+        const { merged: statement } = await parseAndMerge(opts.input, opts.broker);
         assertYearEndPositions(statement, opts.year);
 
         // Rates for every year with a trade: the FIFO run dates the lots held at
         // 31 December and the sales that ended a previously declared holding.
-        const needs = deriveEcbNeeds(statement, opts.year);
-        const currencies = new Set(needs.currencies);
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        for (const cb of statement.cashBalances ?? []) currencies.add(cb.currency);
-        currencies.delete("EUR");
-
-        const rateMap = await buildEcbRateMap({ currencies: [...currencies], years: needs.years });
+        // The needs include the currencies of positions and cash balances.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateTaxReport(statement, rateMap, opts.year);
 
         const nameParts = opts.name.split(",").map((s) => s.trim());
@@ -579,12 +571,20 @@ program
           );
         }
 
+        const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
+        if (thresholds.values.unvalued > 0) {
+          console.error(
+            `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
+
         if (!output720) {
-          const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
           if (omissions.length > 0) {
             console.error("No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
           } else if (thresholds.accounts.exceeds) {
             console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
+          } else if (thresholds.values.unvalued > 0) {
+            console.error("No se ha generado ningún registro. Valora las posiciones del aviso anterior antes de concluir que no debes presentar el Modelo 720.");
           } else {
             console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
           }
@@ -627,37 +627,31 @@ program
 program
   .command("d6")
   .description("Generate Modelo D-6 AFORIX guide from broker positions")
-  .requiredOption("-i, --input <file>", "Broker report file")
+  .requiredOption("-i, --input <files...>", "Broker report file(s)")
   .requiredOption("-y, --year <year>", "Tax year", parseInt)
   .requiredOption("--nif <nif>", "NIF del declarante")
   .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("-f, --format <format>", "Output format: json or text", "text")
+  .option(
+    "-b, --broker <name>",
+    `Broker name. Auto-detected if omitted. Available: ${brokerParsers.map((p) => p.name).join(", ")}`,
+  )
   .option("--previous-d6 <file>", "Previous year D-6 JSON output file (to generate cancellations)")
   .action(
     async (opts: {
-      input: string;
+      input: string[];
       year: number;
       nif: string;
       name: string;
       output?: string;
       format: string;
+      broker?: string;
       previousD6?: string;
     }) => {
       try {
-        const content = readFileSync(opts.input, "utf-8");
-        const parser = detectBroker(content);
-        if (!parser) {
-          throw new Error(
-            `No se pudo detectar el broker del fichero ${opts.input}. Formatos soportados: ${brokerParsers.map((p) => `${p.name} (${p.formats.join(", ")})`).join("; ")}`,
-          );
-        }
-        const statement = parser.parse(content);
+        const { merged: statement } = await parseAndMerge(opts.input, opts.broker);
         assertYearEndPositions(statement, opts.year);
-
-        const currencies = new Set<string>();
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        currencies.delete("EUR");
 
         // Extract ISINs from previous year's D-6 JSON output
         let previousYearIsins: string[] | undefined;
@@ -672,7 +666,8 @@ program
           previousYearIsins = (prevJson.positions ?? []).map((p) => p.isin);
         }
 
-        const rateMap = await fetchEcbRates(opts.year, [...currencies]);
+        // Same rate set as the web D-6 (shared orchestrator), positions included.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateD6Report(
           statement.openPositions,
           rateMap,
@@ -682,8 +677,14 @@ program
           previousYearIsins,
         );
 
-        if (report.positions.length === 0) {
-          console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
+        if (report.unvaluedCount > 0) {
+          console.error(
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
+        // Positions declared last year and sold since must still be cancelled.
+        if (report.positions.length === 0 && report.cancelled.length === 0) {
+          if (report.unvaluedCount === 0) console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
           return;
         }
 
@@ -715,26 +716,20 @@ program
 // Command: modelo721
 // ---------------------------------------------------------------------------
 
+// The official Modelo 721 is an XML file (Orden HFP/886/2023) that the CLI does
+// not generate, so the command fails instead of exiting 0 with no output. Any
+// options are accepted so an existing script reaches this message.
 program
   .command("modelo721")
-  .description("Generate Modelo 721 file for crypto assets (stub — real format is XML per Orden HFP/886/2023)")
-  .requiredOption("-i, --input <file>", "JSON file with crypto positions")
-  .requiredOption("-y, --year <year>", "Tax year", parseInt)
-  .requiredOption("--nif <nif>", "NIF del declarante")
-  .requiredOption("--name <name>", "Nombre completo (Apellidos, Nombre)")
-  .option("-o, --output <file>", "Output file. Defaults to stdout")
-  .option("--phone <phone>", "Teléfono de contacto", "")
+  .description("Not available in the CLI: review Modelo 721 in the web app")
+  .allowUnknownOption()
+  .allowExcessArguments()
   .action(() => {
-    try {
-      console.error("⚠ Modelo 721 es un stub: no hay parsers de crypto todavía.");
-      console.error("  El fichero de entrada debe ser un JSON con las posiciones manualmente.");
-      console.error(
-        "  Formato esperado: [{ assetId, description, exchangeName, countryCode, quantity, valuationEur, acquisitionCostEur }]",
-      );
-    } catch (err) {
-      console.error(`Error: ${err instanceof Error ? err.message : err}`);
-      process.exit(1);
-    }
+    console.error("Error: el Modelo 721 no está disponible en la CLI y no se ha generado ningún fichero.");
+    console.error(
+      "  El formato oficial es XML (Orden HFP/886/2023). Revisa tus criptomonedas en la sección Modelo 721 de https://declarenta.com.",
+    );
+    process.exit(1);
   });
 
 // ---------------------------------------------------------------------------

@@ -996,15 +996,43 @@ describe("FifoEngine", () => {
       expect(disposals[1]!.proceedsEur.toFixed(2)).toBe("500.50"); // 5*110*0.91
     });
 
-    it("should fall back to addLot when BUY+C has no short lots", () => {
-      const rates = makeRateMap({ "2025-03-15": "0.9200", "2025-06-15": "0.9100" });
+    it("reports a BUY+C with no open short lots and does not turn it into a long lot", () => {
+      // The short was opened before the export window: only the cover is in the file.
+      const rates = makeRateMap({ "2025-03-15": "0.9200" });
       const trades: Trade[] = [
         makeTrade({
-          tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100",
+          tradeID: "1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "90",
+          buySell: "BUY", openCloseIndicator: "C",
+        }),
+      ];
+
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates);
+
+      expect(disposals).toHaveLength(0);
+      expect(engine.getRemainingLots().get("US0378331005")).toBeUndefined();
+      expect(engine.messages).toHaveLength(1);
+      const msg = engine.messages[0]!;
+      expect(msg.id).toBe("fifo.cover_without_lots");
+      expect(msg.severity).toBe("error");
+      expect(msg.context).toMatchObject({ symbol: "AAPL", isin: "US0378331005", date: "2025-03-15", quantity: "10" });
+    });
+
+    it("does not let a later sale consume a cover that had no open short", () => {
+      // Cover 10@90 (no short in the file), buy 10@100, sell 10@120. The sale must
+      // consume the real 2025-02-10 lot (cost 1000, gain 200), not the cover.
+      const rates = makeRateMap({ "2025-01-10": "1", "2025-02-10": "1", "2025-03-10": "1" });
+      const trades: Trade[] = [
+        makeTrade({
+          tradeID: "1", tradeDate: "2025-01-10", quantity: "10", tradePrice: "90",
           buySell: "BUY", openCloseIndicator: "C",
         }),
         makeTrade({
-          tradeID: "2", tradeDate: "2025-06-15", quantity: "-10", tradePrice: "120",
+          tradeID: "2", tradeDate: "2025-02-10", quantity: "10", tradePrice: "100",
+          buySell: "BUY", openCloseIndicator: "O",
+        }),
+        makeTrade({
+          tradeID: "3", tradeDate: "2025-03-10", quantity: "-10", tradePrice: "120",
           buySell: "SELL", openCloseIndicator: "C",
         }),
       ];
@@ -1013,7 +1041,12 @@ describe("FifoEngine", () => {
       const disposals = engine.processTrades(trades, rates);
 
       expect(disposals).toHaveLength(1);
-      expect(disposals[0]!.isShort).toBeUndefined();
+      const d = disposals[0]!;
+      expect(d.isShort).toBeUndefined();
+      expect(d.acquireDate).toBe("2025-02-10");
+      expect(d.costBasisEur.toFixed(2)).toBe("1000.00");
+      expect(d.gainLossEur.toFixed(2)).toBe("200.00");
+      expect(engine.messages.map((m) => m.id)).toEqual(["fifo.cover_without_lots"]);
     });
 
     it("should handle partial close of short position", () => {

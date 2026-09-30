@@ -7,7 +7,7 @@
 
 import { t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -22,6 +22,14 @@ function effectiveYearEnd(year: number): string {
   const today = new Date().toISOString().slice(0, 10);
   const yearEnd = `${year}-12-31`;
   return yearEnd <= today ? yearEnd : today;
+}
+
+/**
+ * Year-end rate for a position, or null when it cannot be valued: no rate for
+ * its currency, or no market value in the export (unknown, never 0 €).
+ */
+function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
 }
 
 let cachedStatement: Statement | null = null;
@@ -110,7 +118,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // surfaced via the warning banner below).
   let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     if (rate === null) { unvaluedCount++; return sum; }
     return sum.plus(new Decimal(p.positionValue).mul(rate));
   }, new Decimal(0));
@@ -128,7 +136,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+        const rate = positionRate(rateMap, yearEnd, p);
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
@@ -222,7 +230,7 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = lookupPositionRate(rateMap, yearEnd, p.currency);
+    const rate = positionRate(rateMap, yearEnd, p);
     const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField(t("table.isin"), p.isin);

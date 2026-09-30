@@ -10,6 +10,8 @@ import {
   type Previous720Security,
 } from "../../src/generators/modelo720.js";
 import { generateTaxReport } from "../../src/generators/report.js";
+import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
+import * as XLSX from "xlsx";
 import type { CashBalance, FlexStatement, OpenPosition, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
@@ -1416,5 +1418,47 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     ]);
     expect(records).toEqual([["        ", "        ", "00000000000000"]]);
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
+  });
+});
+
+describe("Modelo 720 — a holding with no market value is unvalued, not 0 €", () => {
+  /** A Revolut transaction-log export: it lists trades but no year-end prices. */
+  function revolutTxnLog(rows: string[][]): Uint8Array {
+    const wb = XLSX.utils.book_new();
+    const header = ["Date", "Ticker", "Type", "Quantity", "Price per share", "Total Amount", "Currency", "FX Rate"];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([header, ...rows]), "Sheet1");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+
+  it("reports a Revolut buy of $80k as unvalued instead of a 0 € total", async () => {
+    const statement = await parseRevolutXlsx(revolutTxnLog([
+      ["2025-06-02T10:00:00.000Z", "AAPL", "BUY - MARKET", "400", "USD 200", "USD 80000", "USD", "1.08"],
+    ]));
+    expect(statement.openPositions).toHaveLength(1);
+
+    const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, 2025);
+    expect(thresholds.values.unvalued).toBe(1);
+    expect(thresholds.values.total.toString()).toBe("0");
+  });
+
+  it("leaves it out of the total and the file, next to a valued holding", () => {
+    const valued = makePosition({ positionValue: "60000" }); // 60000 USD * 0.92 = 55200 EUR
+    const unpriced = makePosition({
+      isin: "US0378331005", symbol: "AAPL", description: "APPLE INC", quantity: "400", markPrice: "0", positionValue: "0",
+    });
+
+    const thresholds = checkModelo720Thresholds([valued, unpriced], rateMap, 2025);
+    expect(thresholds.values.total.toFixed(2)).toBe("55200.00");
+    expect(thresholds.values.unvalued).toBe(1);
+
+    const details = generateModelo720([valued, unpriced], rateMap, baseConfig).split("\n").filter((l) => l.startsWith("2"));
+    expect(details).toHaveLength(1);
+    expect(details.some((l) => l.includes("US0378331005"))).toBe(false);
+  });
+
+  it("does not count a sold-out position (no units) as unvalued", () => {
+    const soldOut = makePosition({ quantity: "0", markPrice: "0", positionValue: "0" });
+    expect(checkModelo720Thresholds([soldOut], rateMap, 2025).values.unvalued).toBe(0);
   });
 });
