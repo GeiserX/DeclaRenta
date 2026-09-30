@@ -91,6 +91,25 @@ class Cdp {
   }
 }
 
+/** Resolves true once `proc` has exited, or false after `ms`. */
+function exited(proc: ChildProcess, ms: number): Promise<boolean> {
+  if (proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve(true);
+  return new Promise((res) => {
+    const timer = setTimeout(() => { res(false); }, ms);
+    proc.once("exit", () => { clearTimeout(timer); res(true); });
+  });
+}
+
+/** Sends `signal` to every process in group `pgid` (0 only probes); false once the group is empty. */
+function killGroup(pgid: number, signal: NodeJS.Signals | 0 = "SIGKILL"): boolean {
+  try {
+    process.kill(-pgid, signal);
+    return true;
+  } catch {
+    return false; // ESRCH: the group is empty
+  }
+}
+
 /** A flat-rate ECB csvdata response covering every day of the requested year. */
 function fakeEcbCsv(url: string): string {
   const year = Number(/startPeriod=(\d{4})/.exec(url)?.[1] ?? "2024");
@@ -115,6 +134,7 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
   let server: PreviewServer | undefined;
   let chrome: ChildProcess | undefined;
   let cdp: Cdp | undefined;
+  let watchdog: ChildProcess | undefined;
   let baseUrl = "";
 
   beforeAll(async () => {
@@ -141,8 +161,17 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
       ...(process.platform === "linux" ? ["--no-sandbox"] : []),
       "about:blank",
     ];
-    const proc = spawn(CHROME!, args, { stdio: ["ignore", "ignore", "pipe"] });
+    // Its own process group, so teardown can kill every Chrome helper at once.
+    const proc = spawn(CHROME!, args, { stdio: ["ignore", "ignore", "pipe"], detached: true });
     chrome = proc;
+    // Vitest can end its worker without an "exit" event, so a separate process
+    // kills the group if this one goes away before afterAll has.
+    watchdog = spawn(
+      "sh",
+      ["-c", `while kill -0 ${process.pid} 2>/dev/null; do sleep 1; done; kill -KILL -${proc.pid!} 2>/dev/null`],
+      { detached: true, stdio: "ignore" },
+    );
+    watchdog.unref();
     const wsUrl = await new Promise<string>((res, rej) => {
       let buf = "";
       const timer = setTimeout(() => { rej(new Error(`Chrome did not start: ${buf}`)); }, 30_000);
@@ -160,13 +189,35 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
   }, 180_000);
 
   afterAll(async () => {
+    // Chrome's helpers keep writing into the profile after the browser process
+    // is killed, and removing the profile under them fails with ENOTEMPTY. Ask
+    // Chrome to shut down, then kill its whole group and wait until it is empty.
+    let leaked = false;
+    if (chrome?.pid !== undefined) {
+      const pgid = chrome.pid;
+      if (cdp) {
+        try {
+          void cdp.send("Browser.close").catch(() => undefined);
+          await exited(chrome, 5_000);
+        } catch {
+          // The socket is already closed; the group kill below still runs.
+        }
+      }
+      killGroup(pgid);
+      await exited(chrome, 5_000);
+      const deadline = Date.now() + 5_000;
+      while (killGroup(pgid, 0) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+      leaked = killGroup(pgid, 0);
+      // Keep the watchdog if anything survived, so it still dies with the worker.
+      if (!leaked) watchdog?.kill("SIGKILL");
+    }
     cdp?.close();
-    chrome?.kill("SIGKILL");
     await server?.close();
     for (const dir of [outDir, profileDir]) {
-      if (dir) rmSync(dir, { recursive: true, force: true });
+      if (dir) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
-  });
+    if (leaked) throw new Error("mobile-width e2e: Chrome processes still alive 5 s after SIGKILL");
+  }, 30_000);
 
   async function resultsLayouts(width: number): Promise<Layout[]> {
     const c = cdp!;
