@@ -622,6 +622,10 @@ const en: TranslationKeys = {
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, {{costPercent}}% of cost to the spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "The cost is split proportionally between the parent and the spun-off company.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Corporate action {{type}} for {{symbol}} ({{isin}}) on {{date}}: not applied to the FIFO calculation.",
+  "fifo.corporate_action_unhandled.hint":
+    "If it changed the number of shares or the ISIN of the position, check the cost of later sales of this security.",
   "fifo.sell_without_lots":
     "⚠ Sale without lots: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Cost basis = 0 (possible short position or incomplete prior data).",
   "fifo.sell_without_lots.hint":

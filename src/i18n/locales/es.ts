@@ -660,6 +660,10 @@ const es = {
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, coste {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.",
+  "fifo.corporate_action_unhandled":
+    "ℹ Acción corporativa {{type}} de {{symbol}} ({{isin}}) el {{date}}: no se aplica al cálculo FIFO.",
+  "fifo.corporate_action_unhandled.hint":
+    "Si cambió el número de acciones o el ISIN de la posición, revisa el coste de las ventas posteriores de este valor.",
   "fifo.sell_without_lots":
     "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
   "fifo.sell_without_lots.hint":

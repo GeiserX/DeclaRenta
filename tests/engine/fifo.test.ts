@@ -312,9 +312,11 @@ describe("FifoEngine", () => {
     // Proceeds: 5 × $200 × 0.91 = 910
     expect(disposals[0]!.proceedsEur.toFixed(2)).toBe("910.00");
 
-    // All remaining lots should have quantity >= 1 (no fractional leftovers)
+    // The other 5 post-split shares stay in the queue with the other half of the cost
     const remaining = engine.getRemainingLots().get("US1234567890") ?? [];
-    expect(remaining.every((l) => l.quantity.toNumber() >= 1)).toBe(true);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.quantity.toString()).toBe("5");
+    expect(remaining[0]!.costInFcy.toFixed(2)).toBe("500.00");
   });
 
   it("should handle scrip dividends (stock dividend lots)", () => {
@@ -401,7 +403,7 @@ describe("FifoEngine", () => {
     expect(remaining[0]!.quantity.toString()).toBe("2");
   });
 
-  it("should drop sub-share lots after reverse split (cash-in-lieu)", () => {
+  it("keeps a sub-share lot and its full cost after a reverse split", () => {
     const rates = makeRateMap({ "2024-06-01": "0.92" });
 
     const trades: Trade[] = [
@@ -418,9 +420,12 @@ describe("FifoEngine", () => {
     const engine = new FifoEngine();
     engine.processTrades(trades, rates, corporateActions);
 
-    // 5 shares / 10 = 0.5 shares — should be dropped (cash-in-lieu)
+    // 5 shares / 10 = 0.5 shares. A split is not a disposal (Art. 37.1.a LIRPF): the
+    // fraction keeps the whole cost until it is sold (a cash-in-lieu sale consumes it).
     const remaining = engine.getRemainingLots().get("US1234567890") ?? [];
-    expect(remaining).toHaveLength(0);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.quantity.toString()).toBe("0.5");
+    expect(remaining[0]!.costInFcy.toFixed(2)).toBe("50.00");
   });
 
   it("should include taxes in short-sale proceeds (no lots)", () => {
@@ -1152,11 +1157,152 @@ describe("FifoEngine", () => {
 
       // Original total cost in USD (FCY): 25 × 10 = 250.00 USD
       const remaining = engine.getRemainingLots().get("US1234567890") ?? [];
-      // 2.5 shares → 2 whole shares survive, 0.5 becomes cash-in-lieu
+      // 2.5 shares survive in one lot; a later cash-in-lieu sale of the 0.5 consumes it
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.quantity.toString()).toBe("2.5");
       // Total cost basis (in FCY/USD) must be fully conserved on the surviving lot
       expect(remaining[0]!.costInFcy.toFixed(2)).toBe("250.00");
+    });
+  });
+
+  describe("Splits keep fractional lots, exact ratios and IBKR reverse splits", () => {
+    const ISIN = "US1234567890";
+    const NEW_ISIN = "US9876543210";
+    const rates = makeRateMap({ "2024-06-01": "1", "2024-06-02": "1", "2024-09-15": "1" });
+
+    function splitAction(overrides: Partial<CorporateAction>): CorporateAction {
+      return {
+        transactionID: "CA1", accountId: "U1", symbol: "TEST", isin: ISIN,
+        description: "TEST(US1234567890) SPLIT 1 FOR 10", currency: "USD",
+        reportDate: "20240807", dateTime: "20240807", quantity: "0", amount: "0",
+        type: "FS", actionDescription: "",
+        ...overrides,
+      };
+    }
+
+    const ids = (engine: FifoEngine): string[] => engine.messages.map((m) => m.id);
+
+    it("keeps a fractional lot's cost through a forward split (0.4 → 0.8 shares)", () => {
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "0.4", tradePrice: "100", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: ISIN, tradeDate: "20240915", quantity: "-0.8", tradePrice: "60", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, [
+        splitAction({ description: "TEST(US1234567890) SPLIT 2 FOR 1" }),
+      ]);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.quantity.toString()).toBe("0.8");
+      expect(disposals[0]!.costBasisFcy.toFixed(2)).toBe("40.00");
+      expect(disposals[0]!.gainLossFcy.toFixed(2)).toBe("8.00");
+      expect(ids(engine)).not.toContain("fifo.sell_without_lots");
+    });
+
+    it("keeps whole-share lots that each fall below 1 share after a reverse split (7 + 8 → 1.5)", () => {
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "7", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: ISIN, tradeDate: "20240602", quantity: "8", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "3", isin: ISIN, tradeDate: "20240915", quantity: "-1", tradePrice: "200", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, [splitAction({})]);
+
+      // FIFO: 0.7 from the first lot + 0.3 from the second = 1 share costing 100
+      const cost = disposals.reduce((sum, d) => sum.plus(d.costBasisFcy), new Decimal(0));
+      const gain = disposals.reduce((sum, d) => sum.plus(d.gainLossFcy), new Decimal(0));
+      expect(cost.toFixed(2)).toBe("100.00");
+      expect(gain.toFixed(2)).toBe("100.00");
+      expect(ids(engine)).not.toContain("fifo.sell_without_lots");
+
+      // The other 0.5 share keeps the remaining 50 of the original 150
+      const remaining = engine.getRemainingLots().get(ISIN) ?? [];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.quantity.toString()).toBe("0.5");
+      expect(remaining[0]!.costInFcy.toFixed(2)).toBe("50.00");
+    });
+
+    it("applies a 1-for-3 reverse split exactly, so selling everything leaves no dust", () => {
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "300", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: ISIN, tradeDate: "20240915", quantity: "-100", tradePrice: "40", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, [
+        splitAction({ description: "TEST(US1234567890) SPLIT 1 FOR 3" }),
+      ]);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.quantity.toString()).toBe("100");
+      expect(disposals[0]!.costBasisFcy.toFixed(2)).toBe("3000.00");
+      expect(ids(engine)).not.toContain("fifo.insufficient_lots");
+      expect(engine.getRemainingLots().get(ISIN) ?? []).toHaveLength(0);
+    });
+
+    it("leaves an exact remainder after a partial sale that follows a 1-for-3 reverse split", () => {
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "300", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: ISIN, tradeDate: "20240915", quantity: "-50", tradePrice: "40", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      engine.processTrades(trades, rates, [splitAction({ description: "TEST(US1234567890) SPLIT 1 FOR 3" })]);
+
+      const remaining = engine.getRemainingLots().get(ISIN) ?? [];
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.quantity.toString()).toBe("50");
+    });
+
+    it("applies an IBKR reverse split reported as type RS", () => {
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "100", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: ISIN, tradeDate: "20240915", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, [
+        splitAction({
+          type: "RS",
+          description: "TEST(US1234567890) SPLIT 1 FOR 10 (TEST, TEST INC, US1234567890)",
+          quantity: "-90",
+        }),
+      ]);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.costBasisFcy.toFixed(2)).toBe("1000.00");
+      expect(disposals[0]!.gainLossFcy.toFixed(2)).toBe("200.00");
+      expect(ids(engine)).toContain("fifo.split_applied");
+    });
+
+    it("moves the lots to the new ISIN when an IBKR reverse split changes it (two RS rows)", () => {
+      const description = "TEST(US1234567890) SPLIT 1 FOR 10 (TEST, TEST INC, US9876543210)";
+      const trades: Trade[] = [
+        makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "100", tradePrice: "10", buySell: "BUY" }),
+        makeTrade({ tradeID: "2", isin: NEW_ISIN, tradeDate: "20240915", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+      ];
+      const engine = new FifoEngine();
+      const disposals = engine.processTrades(trades, rates, [
+        splitAction({ transactionID: "CA1", type: "RS", isin: ISIN, description, quantity: "-100" }),
+        splitAction({ transactionID: "CA2", type: "RS", isin: NEW_ISIN, description, quantity: "10" }),
+      ]);
+
+      expect(disposals).toHaveLength(1);
+      expect(disposals[0]!.costBasisFcy.toFixed(2)).toBe("1000.00");
+      expect(disposals[0]!.gainLossFcy.toFixed(2)).toBe("200.00");
+      expect(ids(engine)).not.toContain("fifo.sell_without_lots");
+      expect(engine.getRemainingLots().get(ISIN) ?? []).toHaveLength(0);
+      expect(engine.getRemainingLots().get(NEW_ISIN) ?? []).toHaveLength(0);
+    });
+
+    it("reports a corporate action type it does not apply", () => {
+      const engine = new FifoEngine();
+      engine.processTrades(
+        [makeTrade({ tradeID: "1", isin: ISIN, tradeDate: "20240601", quantity: "100", tradePrice: "10", buySell: "BUY" })],
+        rates,
+        [splitAction({ type: "IC", description: "TEST(US1234567890) CUSIP/ISIN CHANGE TO (US9876543210)" })],
+      );
+
+      const msg = engine.messages.find((m) => m.id === "fifo.corporate_action_unhandled");
+      expect(msg?.severity).toBe("info");
+      expect(msg?.context?.type).toBe("IC");
     });
   });
 });
