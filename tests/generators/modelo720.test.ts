@@ -1392,6 +1392,45 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     ]);
   });
 
+  it("repeats each sold record's own country when last year's file held the ISIN at custodians in two countries", () => {
+    // Last year's file: VWCE bought 2022-03-01 at an Irish custodian and
+    // 2023-06-01 at a German one, one V record each.
+    const vwceLot = (acquireDate: string): Lot => ({
+      id: acquireDate, isin: "IE00BK5BQT80", symbol: "VWCE", description: "", acquireDate,
+      quantity: new Decimal(50), pricePerShare: new Decimal(50), costInFcy: new Decimal(2500),
+      currency: "EUR", ecbRate: new Decimal(1),
+    });
+    const lastYearRecord = (custodianCountry: string, acquireDate: string) => generateModelo720(
+      [makePosition({ isin: "IE00BK5BQT80", symbol: "VWCE", currency: "EUR", quantity: "50", positionValue: "60000", custodianCountry })],
+      new Map(),
+      { ...baseConfig, year: 2024 },
+      new Map([["IE00BK5BQT80", [vwceLot(acquireDate)]]]),
+    ).split("\n").find((l) => l[0] === "2")!;
+    const previous = readPrevious720([lastYearRecord("IE", "20220301"), lastYearRecord("DE", "20230601")].join("\n")).securities;
+
+    // Both holdings sold in 2025.
+    const s: FlexStatement = {
+      ...statement, toDate: "20251231",
+      trades: [
+        vwce({ tradeDate: "2022-03-01", quantity: "50", tradePrice: "50" }),
+        vwce({ tradeDate: "2023-06-01", quantity: "50", tradePrice: "50" }),
+        sell("2025-03-03", "100", "60"),
+      ],
+    };
+    const disposals = generateTaxReport(s, new Map(), 2025).capitalGains.disposals;
+    const lines = generateModelo720(s.openPositions, rateMap, { ...baseConfig, previousYearSecurities: previous }, undefined, undefined, disposals)
+      .split("\n");
+    const cancelled = lines
+      .filter((l) => l[0] === "2" && l[422] === "C")
+      .map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.pais), boeField(l, BOE_720.detail.valoracion1)]);
+    expect(cancelled).toEqual([
+      ["20220301", "IE", "00000000300000"], // 50 x 60 EUR
+      ["20230601", "DE", "00000000300000"],
+    ]);
+    expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
+    expect(previous.map((s) => [s.country, s.acquireDate])).toEqual([["IE", "20220301"], ["DE", "20230601"]]);
+  });
+
   it("asks for no extinction date on a sale the file leaves out for an old code", () => {
     // No sale in the year: a written C record would need its date completed by hand.
     const valid: Previous720Security = { isin: "IE00BK5BQT80", claveSubclave: "V1", country: "IE" };
