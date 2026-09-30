@@ -70,7 +70,8 @@ describe("binanceParser", () => {
     it("should parse sell orders", () => {
       const result = binanceParser.parse(BINANCE_CSV);
       const sells = result.trades.filter((t) => t.buySell === "SELL");
-      expect(sells).toHaveLength(1);
+      // ETHEUR SELL, plus the USDT given up in the SOLUSDT BUY (a permuta).
+      expect(sells.map((t) => t.symbol)).toEqual(["ETH", "USDT"]);
 
       const sell = sells[0]!;
       expect(sell.symbol).toBe("ETH");
@@ -405,9 +406,10 @@ describe("binanceParser", () => {
 
     it("should parse 2-digit year dates correctly", () => {
       const result = binanceParser.parse(ES_SPOT_CSV);
-      expect(result.trades[0]!.tradeDate).toBe("20251231");
-      expect(result.trades[1]!.tradeDate).toBe("20250315");
-      expect(result.trades[2]!.tradeDate).toBe("20250620");
+      // Each BTC-quoted row emits two legs (a permuta), so check one per row.
+      expect(result.trades.find((t) => t.symbol === "CTK")!.tradeDate).toBe("20251231");
+      expect(result.trades.find((t) => t.symbol === "AAVE")!.tradeDate).toBe("20250315");
+      expect(result.trades.find((t) => t.symbol === "LINK")!.tradeDate).toBe("20250620");
     });
 
     it("should parse Ejecutado column with asset suffix", () => {
@@ -440,7 +442,8 @@ describe("binanceParser", () => {
 
     it("should parse correct trade count", () => {
       const result = binanceParser.parse(ES_SPOT_CSV);
-      expect(result.trades).toHaveLength(3);
+      // 3 BTC-quoted rows × 2 legs (the alt and the BTC paid or received).
+      expect(result.trades).toHaveLength(6);
     });
 
     it("should parse real fixture file", () => {
@@ -450,7 +453,8 @@ describe("binanceParser", () => {
       );
       expect(binanceParser.detect(fixture)).toBe(true);
       const result = binanceParser.parse(fixture);
-      expect(result.trades).toHaveLength(5);
+      // 5 BTC-quoted rows × 2 legs.
+      expect(result.trades).toHaveLength(10);
     });
   });
 
@@ -1026,5 +1030,64 @@ describe("binanceParser", () => {
       expect(r.trades.some((t) => t.symbol === "XRP" && t.buySell === "BUY")).toBe(true);
       expect(r.trades.some((t) => t.symbol === "ETH" && t.buySell === "SELL")).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Trade History: a crypto-quoted pair is a permuta (Art. 37.1.h LIRPF)
+// ---------------------------------------------------------------------------
+
+describe("binanceParser — Trade History crypto↔crypto pairs emit both legs", () => {
+  const HEADER = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+
+  it("an ETHBTC BUY disposes of the BTC paid and acquires the ETH received", () => {
+    const csv = [HEADER, "2024-06-03 10:00:00,ETHBTC,BUY,0.05,20ETH,1BTC,0.02ETH"].join("\n");
+    const { trades } = binanceParser.parse(csv);
+    expect(trades).toHaveLength(2);
+
+    const btcSell = trades.find((t) => t.symbol === "BTC")!;
+    expect(btcSell.buySell).toBe("SELL");
+    expect(btcSell.quantity).toBe("-1");
+    expect(btcSell.currency).toBe("ETH");
+    expect(btcSell.proceeds).toBe("20");
+    expect(btcSell.tradeDate).toBe("20240603");
+
+    const ethBuy = trades.find((t) => t.symbol === "ETH")!;
+    expect(ethBuy.buySell).toBe("BUY");
+    expect(ethBuy.quantity).toBe("20");
+    expect(ethBuy.currency).toBe("BTC");
+    expect(ethBuy.cost).toBe("1");
+    // The row's fee stays on the base-coin trade, as before.
+    expect(ethBuy.commission).toBe("-0.02");
+    expect(ethBuy.commissionCurrency).toBe("ETH");
+  });
+
+  it("an ETHBTC SELL disposes of the ETH and gives the received BTC a lot", () => {
+    const csv = [HEADER, "2024-06-03 10:00:00,ETHBTC,SELL,0.05,10ETH,0.5BTC,0.0005BTC"].join("\n");
+    const { trades } = binanceParser.parse(csv);
+    expect(trades).toHaveLength(2);
+
+    const ethSell = trades.find((t) => t.symbol === "ETH")!;
+    expect(ethSell.buySell).toBe("SELL");
+    expect(ethSell.quantity).toBe("-10");
+    expect(ethSell.currency).toBe("BTC");
+    expect(ethSell.proceeds).toBe("0.5");
+    expect(ethSell.commission).toBe("-0.0005");
+    expect(ethSell.commissionCurrency).toBe("BTC");
+
+    const btcBuy = trades.find((t) => t.symbol === "BTC")!;
+    expect(btcBuy.buySell).toBe("BUY");
+    expect(btcBuy.quantity).toBe("0.5");
+    expect(btcBuy.currency).toBe("ETH");
+    expect(btcBuy.cost).toBe("10");
+  });
+
+  it("a fiat-quoted BTCEUR row still emits exactly one trade", () => {
+    const csv = [HEADER, "2024-01-15 10:00:00,BTCEUR,BUY,20000,1BTC,20000EUR,0.001BTC"].join("\n");
+    const { trades } = binanceParser.parse(csv);
+    expect(trades).toHaveLength(1);
+    expect(trades[0]!.symbol).toBe("BTC");
+    expect(trades[0]!.currency).toBe("EUR");
+    expect(trades[0]!.buySell).toBe("BUY");
   });
 });
