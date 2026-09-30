@@ -2871,7 +2871,8 @@ footer a:hover {
   color: var(--warning);
 }
 
-.crypto-rates-panel > p {
+.crypto-rates-panel > p,
+.crypto-rates-stored-body > p {
   font-size: 0.875rem;
   color: var(--text);
   margin: 0 0 0.5rem;
@@ -2976,7 +2977,8 @@ footer a:hover {
   margin: 1.5rem 0;
 }
 
-.manual-opening-lots-summary {
+.manual-opening-lots-summary,
+.crypto-rates-stored-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2984,11 +2986,13 @@ footer a:hover {
   font-weight: 700;
 }
 
-.manual-opening-lots-summary-text {
+.manual-opening-lots-summary-text,
+.crypto-rates-stored-summary-text {
   min-width: 0;
 }
 
-.manual-opening-lots-summary-count {
+.manual-opening-lots-summary-count,
+.crypto-rates-stored-summary-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3003,11 +3007,13 @@ footer a:hover {
   font-weight: 700;
 }
 
-.manual-opening-lots-body {
+.manual-opening-lots-body,
+.crypto-rates-stored-body {
   margin-top: 0.85rem;
 }
 
-.manual-opening-lots-actions {
+.manual-opening-lots-actions,
+.crypto-rates-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -3036,7 +3042,8 @@ footer a:hover {
 
   #crypto-rates-save-btn,
   #manual-opening-lots-save-btn,
-  #manual-opening-lots-clear-btn {
+  #manual-opening-lots-clear-btn,
+  #crypto-rates-clear-btn {
     width: 100%;
   }
 

@@ -943,7 +943,8 @@ function renderResults(report: TaxSummary) {
   }
 
   // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
-  // could not be valued automatically (no ECB rate / no cross-leg). Re-rendered
+  // could not be valued automatically (no ECB rate / no cross-leg), and as a
+  // collapsed list of saved prices once every swap is valued. Re-rendered
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
@@ -960,10 +961,9 @@ function renderResults(report: TaxSummary) {
     }
   }
 
-  const unresolved = report.unresolvedCryptoValuations;
-  if (unresolved && unresolved.length > 0) {
-    const panelHtml = renderManualRatesPanel(unresolved);
-    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
+  if (cryptoPanelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
     const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");

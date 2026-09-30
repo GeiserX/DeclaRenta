@@ -586,6 +586,10 @@ const gl: TranslationKeys = {
   "crypto_rates.save_btn": "Gardar e recalcular",
   "crypto_rates.saved": "Gardado",
   "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
+  "crypto_rates.stored_title": "Prezos manuais gardados",
+  "crypto_rates.stored_description":
+    "Estes prezos en euros están gardados no teu navegador e aplícanse cada vez que procesas un ficheiro. Corrixe un valor e garda, ou bórraos todos se algún é erróneo.",
+  "crypto_rates.clear_btn": "Borrar prezos gardados",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuais para posicións transferidas",
