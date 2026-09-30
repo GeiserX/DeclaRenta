@@ -1616,6 +1616,7 @@ describe("IBKR Flex date format (Date Format setting)", () => {
   it.each([
     ["yyyyMMdd", ["20240110", "20240603"], "20240615;093000"],
     ["yyyy-MM-dd", ["2024-01-10", "2024-06-03"], "2024-06-15;093000"],
+    ["yyyyMMdd, no date/time separator", ["20240110", "20240603"], "20240615093000"],
   ] as const)("accepts %s dates and reports the gain and dividend", (_label, tradeDates, cashDateTime) => {
     const report = generateTaxReport(parseIbkrFlexXml(flexXml([...tradeDates], cashDateTime)), new Map(), 2024);
     expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("500.00");

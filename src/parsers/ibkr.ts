@@ -226,9 +226,10 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
 /**
  * A Flex date starts with yyyyMMdd or yyyy-MM-dd (plausible year, month, day).
- * dateTime values carry a time after it; the separator is not checked here.
+ * dateTime values carry a time after it, with or without a separator
+ * ("20240615;093000", "20240615093000"); the time is not checked here.
  */
-const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|3[01])(?!\d)/;
+const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|3[01])/;
 
 /**
  * The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
