@@ -366,6 +366,9 @@ describe("krakenParser — Ledgers CSV staking assets and Earn rewards", () => {
     ["ADA.S", "ADA"],
     ["ETH2.S", "ETH"],
     ["ETH2", "ETH"],
+    ["DOT28.S", "DOT"],
+    ["KSM07.S", "KSM"],
+    ["ATOM21.S", "ATOM"],
     ["XBT.M", "BTC"],
     ["SOL.F", "SOL"],
   ])("staking reward in %s is booked as %s", (asset, symbol) => {

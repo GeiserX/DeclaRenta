@@ -58,9 +58,11 @@ const KRAKEN_ASSET_MAP: Record<string, string> = {
 
 /** Strip Kraken's X/Z prefix and return a clean symbol */
 function cleanSymbol(raw: string): string {
-  // Staked/earning balances carry a suffix (DOT.S, XBT.M, SOL.F, ...). Drop it
-  // first so the reward lands on the real coin and XTZ.S does not lose its X.
-  const trimmed = raw.trim().toUpperCase().replace(/\.(S|M|F|B|P)$/, "");
+  // Staked/earning balances carry a suffix (DOT.S, XBT.M, SOL.F, ...), and
+  // bonded staking puts the unbonding days before it (DOT28.S, ATOM21.S). Drop
+  // both first so the reward lands on the real coin and XTZ.S keeps its X.
+  // Digits go only when a suffix is present, so API3 or C98 stay intact.
+  const trimmed = raw.trim().toUpperCase().replace(/\d*\.(S|M|F|B|P)$/, "");
   if (KRAKEN_ASSET_MAP[trimmed]) return KRAKEN_ASSET_MAP[trimmed];
 
   // For 4+ char symbols starting with X or Z that aren't in the map,
@@ -301,7 +303,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     ? [{
         id: "kraken.unrecognized_pair",
         severity: "warning" as const,
-        message: `No se ha reconocido la divisa de cotización de ${unrecognizedPairs.size === 1 ? "el par" : "los pares"} ${[...unrecognizedPairs].map(([pair, split]) => `${pair} (interpretado como ${split})`).join(", ")} de Kraken, por lo que esa(s) operación(es) podría(n) estar mal valorada(s).`,
+        message: `No se ha reconocido la divisa de cotización ${unrecognizedPairs.size === 1 ? "del par" : "de los pares"} ${[...unrecognizedPairs].map(([pair, split]) => `${pair} (interpretado como ${split})`).join(", ")} de Kraken, por lo que esa(s) operación(es) podría(n) estar mal valorada(s).`,
         hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la moneda o la divisa de cotización no son las indicadas, corrige su valor manualmente.",
         context: { count: String(unrecognizedPairs.size) },
       }]
