@@ -656,6 +656,10 @@ const ca: TranslationKeys = {
     "⚠ Venda sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0 (possible posició curta o dades prèvies incompletes).",
   "fifo.sell_without_lots.hint":
     "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la primera compra d'aquest valor.",
+  "fifo.cover_without_lots":
+    "⚠ Tancament de curt sense lots: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Guany no calculat (posició curta oberta fora del període o dades prèvies incompletes).",
+  "fifo.cover_without_lots.hint":
+    "Has inclòs els anys anteriors al teu Flex Query? Selecciona un període que cobreixi des de la venda que va obrir aquesta posició curta.",
   "fifo.insufficient_lots": "⚠ Lots insuficients: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Cost base = 0.",
   "fifo.insufficient_lots.hint":
     "El Flex Query no cobreix totes les compres prèvies d'aquest valor. Amplia el període de consulta.",

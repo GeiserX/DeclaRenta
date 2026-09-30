@@ -31,6 +31,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The main ruleset only accepts changes through a PR. This deploy key is its
+          # one bypass, so the version bump commit below can land on main.
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v7

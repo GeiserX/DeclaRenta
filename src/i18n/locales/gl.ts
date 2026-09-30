@@ -655,6 +655,10 @@ const gl: TranslationKeys = {
     "⚠ Venda sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0 (posible posición curta ou datos previos incompletos).",
   "fifo.sell_without_lots.hint":
     "Incluíches os anos anteriores no teu Flex Query? Selecciona un período que cubra desde a primeira compra deste valor.",
+  "fifo.cover_without_lots":
+    "⚠ Peche de curto sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Ganancia non calculada (posición curta aberta fóra do período ou datos previos incompletos).",
+  "fifo.cover_without_lots.hint":
+    "Incluíches os anos anteriores no teu Flex Query? Selecciona un período que cubra desde a venda que abriu esta posición curta.",
   "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0.",
   "fifo.insufficient_lots.hint":
     "O Flex Query non cobre todas as compras previas deste valor. Amplía o período de consulta.",

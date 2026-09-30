@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FifoEngine } from "../../src/engine/fifo.js";
-import type { Trade } from "../../src/types/ibkr.js";
+import type { OptionExercise, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // Regression for the €35M phantom cost-basis bug (post v0.48.5). When a coin is
@@ -239,5 +239,103 @@ describe("FIFO — monodivisa traditionalCostBasis (Art. 35.1)", () => {
     expect(trad.costBasisEur.toFixed(2)).toBe(def.costBasisEur.toFixed(2));
     expect(trad.gainLossEur.toFixed(2)).toBe(def.gainLossEur.toFixed(2));
     expect(trad.costBasisEur.toFixed(2)).toBe("277.50");
+  });
+});
+
+// Monodivisa on the two paths that do not go through disposalEur(): a short
+// close and an option expiration. The open leg (short sale proceeds, or the
+// premium paid or received) converts at its own date's rate, like a long
+// position's cost, so the FX drift stays in the security line. The default
+// mode keeps both legs at the close-date rate.
+describe("FIFO — monodivisa traditionalCostBasis on shorts and expirations", () => {
+  // USD/EUR: 0.90 on the open date, 0.95 on the close/expiry date.
+  const rateMap = makeRateMap({
+    "2025-01-10": { USD: "0.90" },
+    "2025-06-01": { USD: "0.95" },
+  });
+  const stk = (o: Partial<Trade>): Trade =>
+    trade({
+      symbol: "XYZ", isin: "US0000000001", assetCategory: "STK", currency: "USD",
+      commissionCurrency: "USD", exchange: "NASDAQ", ...o,
+    });
+  const opt = (o: Partial<Trade>): Trade =>
+    trade({
+      symbol: "XYZ 250601C00100000", isin: "", conid: "900001", assetCategory: "OPT",
+      currency: "USD", commissionCurrency: "USD", exchange: "CBOE", multiplier: "100",
+      tradeDate: "2025-01-10", settlementDate: "2025-01-10", tradePrice: "1", ...o,
+    });
+  const expiration: OptionExercise = {
+    transactionID: "e1", accountId: "ACC", conid: "900001", assetCategory: "OPT",
+    symbol: "XYZ 250601C00100000", description: "XYZ 01JUN25 100 C", isin: "",
+    currency: "USD", date: "2025-06-01", action: "Expiration", putCall: "C",
+    strike: "100", expiry: "2025-06-01", quantity: "1", proceeds: "0",
+    underlyingSymbol: "XYZ", underlyingIsin: "US0000000001", multiplier: "100",
+  };
+
+  it("values a short's open proceeds at the OPEN-date rate", () => {
+    // Short 10 @ 100 (1000 USD) on 2025-01-10, cover 10 @ 90 (900 USD) on 2025-06-01.
+    const trades = [
+      stk({
+        buySell: "SELL", openCloseIndicator: "O", tradeDate: "2025-01-10", settlementDate: "2025-01-10",
+        quantity: "-10", tradePrice: "100", proceeds: "1000", cost: "0",
+      }),
+      stk({
+        buySell: "BUY", openCloseIndicator: "C", tradeDate: "2025-06-01", settlementDate: "2025-06-01",
+        quantity: "10", tradePrice: "90", cost: "900",
+      }),
+    ];
+
+    // Default: both legs at the close rate → 1000×0.95 − 900×0.95 = 95.
+    const def = new FifoEngine().processTrades(trades, rateMap)[0]!;
+    expect(def.isShort).toBe(true);
+    expect(def.proceedsEur.toFixed(2)).toBe("950.00");
+    expect(def.costBasisEur.toFixed(2)).toBe("855.00");
+    expect(def.gainLossEur.toFixed(2)).toBe("95.00");
+
+    // Monodivisa: open proceeds at the open rate → 1000×0.90 − 900×0.95 = 45.
+    const trad = new FifoEngine({ traditionalCostBasis: true }).processTrades(trades, rateMap)[0]!;
+    expect(trad.isShort).toBe(true);
+    expect(trad.proceedsEur.toFixed(2)).toBe("900.00");
+    expect(trad.costBasisEur.toFixed(2)).toBe("855.00");
+    expect(trad.gainLossEur.toFixed(2)).toBe("45.00");
+    expect(trad.gainLossFcy.toFixed(2)).toBe("100.00");
+  });
+
+  it("values an expired long option's premium at the PURCHASE-date rate", () => {
+    const buy = opt({ buySell: "BUY", openCloseIndicator: "O", quantity: "1", cost: "100" });
+
+    const defEngine = new FifoEngine();
+    defEngine.processTrades([buy], rateMap);
+    defEngine.processOptionExercises([expiration], rateMap);
+    const def = defEngine.getDisposals()[0]!;
+    expect(def.costBasisEur.toFixed(2)).toBe("95.00");
+    expect(def.gainLossEur.toFixed(2)).toBe("-95.00");
+
+    const tradEngine = new FifoEngine({ traditionalCostBasis: true });
+    tradEngine.processTrades([buy], rateMap);
+    tradEngine.processOptionExercises([expiration], rateMap);
+    const trad = tradEngine.getDisposals()[0]!;
+    expect(trad.costBasisEur.toFixed(2)).toBe("90.00");
+    expect(trad.gainLossEur.toFixed(2)).toBe("-90.00");
+  });
+
+  it("values an expired written option's premium at the SALE-date rate", () => {
+    const write = opt({ buySell: "SELL", openCloseIndicator: "O", quantity: "-1", proceeds: "100", cost: "0" });
+
+    const defEngine = new FifoEngine();
+    defEngine.processTrades([write], rateMap);
+    defEngine.processOptionExercises([expiration], rateMap);
+    const def = defEngine.getDisposals()[0]!;
+    expect(def.isShort).toBe(true);
+    expect(def.proceedsEur.toFixed(2)).toBe("95.00");
+    expect(def.gainLossEur.toFixed(2)).toBe("95.00");
+
+    const tradEngine = new FifoEngine({ traditionalCostBasis: true });
+    tradEngine.processTrades([write], rateMap);
+    tradEngine.processOptionExercises([expiration], rateMap);
+    const trad = tradEngine.getDisposals()[0]!;
+    expect(trad.isShort).toBe(true);
+    expect(trad.proceedsEur.toFixed(2)).toBe("90.00");
+    expect(trad.gainLossEur.toFixed(2)).toBe("90.00");
   });
 });
