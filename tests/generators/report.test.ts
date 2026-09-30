@@ -1456,5 +1456,32 @@ describe("dividend country, valuation and year boundary", () => {
       expect(y2026.dividends.grossIncome.toFixed(2)).toBe("90.00");
       expect(y2026.doubleTaxation.deduction.toFixed(2)).toBe("13.50");
     });
+
+    it("keeps a weekly payer's late-December withholding on its own December dividend", () => {
+      const weeklyRates = makeRateMap({
+        "2024-12-19": "1.0000",
+        "2024-12-26": "1.0000",
+        "2025-01-02": "1.0000",
+      });
+      const statement = makeStatement({
+        fromDate: "20240101",
+        toDate: "20250131",
+        cashTransactions: [
+          makeCashTx({ transactionID: "d-1219", dateTime: "20241219", amount: "20", type: "Dividends" }),
+          makeCashTx({ transactionID: "w-1226", dateTime: "20241226", amount: "-3", type: "Withholding Tax" }),
+          makeCashTx({ transactionID: "d-0102", dateTime: "20250102", amount: "10", type: "Dividends" }),
+          makeCashTx({ transactionID: "w-0102", dateTime: "20250102", amount: "-1.50", type: "Withholding Tax" }),
+        ],
+      });
+
+      const y2025 = generateTaxReport(statement, weeklyRates, 2025);
+      expect(y2025.dividends.entries).toHaveLength(1);
+      expect(y2025.dividends.entries[0]!.grossAmountEur.toFixed(2)).toBe("10.00");
+      expect(y2025.dividends.entries[0]!.withholdingTaxEur.toFixed(2)).toBe("1.50");
+
+      const y2024 = generateTaxReport(statement, weeklyRates, 2024);
+      expect(y2024.dividends.entries).toHaveLength(1);
+      expect(y2024.dividends.entries[0]!.withholdingTaxEur.toFixed(2)).toBe("3.00");
+    });
   });
 });

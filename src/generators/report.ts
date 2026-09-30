@@ -479,24 +479,19 @@ export function generateTaxReport(
   // withholding — instead of the reversal being .abs()'d into an addition
   // (dividends.ts) that triples the retención. Only exact opposite-sign pairs
   // cancel; a file with no reversals is unchanged.
-  // A withholding can be booked up to 7 days away from its dividend, so a
-  // late-December dividend may have its withholding in January (and the other
-  // way round). Match over the year plus 7 days on each side, then keep the
-  // dividends paid in the year. collapseCorrections pairs rows by exact date,
-  // so running it on the wider window leaves the in-year rows unchanged.
-  const windowStart = `${year - 1}-12-25`;
-  const windowEnd = `${year + 1}-01-07`;
-  const windowCashTransactions = collapseCorrections(
-    statement.cashTransactions.filter((t) => {
-      const date = normalizeDate(t.dateTime).slice(0, 10);
-      return t.dateTime.startsWith(yearStr) || (date >= windowStart && date <= windowEnd);
-    }),
-  );
-  const yearCashTransactions = windowCashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
+  // A withholding can be booked days away from its dividend, so a late-December
+  // dividend may have its withholding in January (and the other way round).
+  // Match over every cash row in the statement, then keep the dividends paid in
+  // the year. A fixed window around the year would cut some dividends off from
+  // their own withholding and hand it to an in-year dividend of the same ISIN.
+  // collapseCorrections pairs rows by exact date, so running it on every row
+  // leaves the in-year rows unchanged.
+  const allCashTransactions = collapseCorrections(statement.cashTransactions);
+  const yearCashTransactions = allCashTransactions.filter((t) => t.dateTime.startsWith(yearStr));
   // Dividends are valued like interest: a currency with no ECB or manual rate
   // (e.g. IBKR's CNH) is skipped with a warning instead of aborting the report.
   const unvaluedDividendCurrencies = new Map<string, number>();
-  let dividendEntries = calculateDividends(windowCashTransactions, resolvedRateMap, {
+  let dividendEntries = calculateDividends(allCashTransactions, resolvedRateMap, {
     lookupRate: (date, currency) => lookupIncomeRate(date, currency, resolvedRateMap, manualRates),
     onUnvalued: (div) => {
       if (!div.dateTime.startsWith(yearStr)) return;
