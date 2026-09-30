@@ -79,8 +79,9 @@ export function finalizeMergedStatement(statement: Statement): Statement {
  * the two files), emit an info message — commission can't be recovered then.
  *
  * One order filled in parts has several trades (and usually several legs) with
- * the same order number. Equal counts → pair them 1:1 in date order. Different
- * counts → recover the order's total fee and split it pro rata by trade value.
+ * the same order number. Equal counts → pair them 1:1 by date, then by amount
+ * within a day. Different counts → recover the order's total fee and split it
+ * pro rata by trade value.
  * The fee is only derived when leg and trade share a currency: a USD-priced
  * trade settled in EUR would otherwise book the whole FX difference as a fee.
  */
@@ -89,8 +90,21 @@ const FLATEX_ORDER_PREFIX = "flatex-order:";
 type Trade = Statement["trades"][number];
 type OrderLeg = NonNullable<Statement["pendingOrderLegs"]>[number];
 
-function byTradeDate(a: { tradeDate: string }, b: { tradeDate: string }): number {
-  return normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+// Pair fills with cash legs by date, and same-day fills by size: sorting both
+// sides by amount minimises the total |net − gross| and the largest single
+// gap, so no same-day fill is booked more than the order's largest real fee.
+// File order is not used: the Depot and Konto exports need not list same-day
+// fills in the same order.
+function tradeOrder(a: Trade, b: Trade): number {
+  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+  if (dateCmp !== 0) return dateCmp;
+  return new Decimal(a.tradeMoney).abs().cmp(new Decimal(b.tradeMoney).abs());
+}
+
+function legOrder(a: OrderLeg, b: OrderLeg): number {
+  const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+  if (dateCmp !== 0) return dateCmp;
+  return new Decimal(a.netAmount).abs().cmp(new Decimal(b.netAmount).abs());
 }
 
 function reconcileOrderLegs(statement: Statement): void {
@@ -138,10 +152,9 @@ function reconcileOrderLegs(statement: Statement): void {
     }
 
     if (legs.length === trades.length) {
-      // One cash leg per fill: pair in date order. The sort is stable, so
-      // same-day fills keep the order both files list them in.
-      const sortedTrades = [...trades].sort(byTradeDate);
-      const sortedLegs = [...legs].sort(byTradeDate);
+      // One cash leg per fill: pair by date, then by amount within a day.
+      const sortedTrades = [...trades].sort(tradeOrder);
+      const sortedLegs = [...legs].sort(legOrder);
       sortedTrades.forEach((trade, i) => {
         const leg = sortedLegs[i]!;
         if (leg.currency !== trade.currency) {

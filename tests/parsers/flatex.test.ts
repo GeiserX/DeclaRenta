@@ -270,6 +270,27 @@ describe("flatexParser — multi-fill and foreign-venue commission", () => {
     expect(total.toFixed(2)).toBe("-15.80");
   });
 
+  it("same-day fills listed in opposite order in the two files still get their own fee", () => {
+    const depot = [
+      depotHeader,
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000001 329000004;4000000021;100,00;EUR;***xxx Depot",
+      "1;10.03.2025;12.03.2025;US0000000001;TEST CORP.;30;Stk.;Ausführung ORDER Kauf US0000000001 329000004;4000000022;100,00;EUR;***xxx Depot",
+    ].join("\n");
+    const konto = [
+      kontoHeader,
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000004;4000000031;-3007,9;EUR;1234567890;***xxx Cashkonto",
+      "10.03.2025;12.03.2025;;;Ausführung ORDER Kauf US0000000001 329000004;4000000032;-1007,9;EUR;1234567890;***xxx Cashkonto",
+    ].join("\n");
+
+    const stmt = parsePair(depot, konto);
+    const byQuantity = [...stmt.trades].sort((a, b) => Number(a.quantity) - Number(b.quantity));
+    expect(byQuantity.map((t) => [t.quantity, t.commission])).toEqual([
+      ["10", "7.9"],
+      ["30", "7.9"],
+    ]);
+    expect(stmt.parserMessages ?? []).toEqual([]);
+  });
+
   it("a USD-priced trade settled in EUR keeps commission 0 instead of the FX difference", () => {
     const depot = [
       depotHeader,
