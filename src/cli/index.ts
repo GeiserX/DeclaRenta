@@ -38,6 +38,7 @@ import { formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
+import { savingsBalances } from "../engine/taxable-base.js";
 import type { LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 
@@ -333,8 +334,7 @@ program
             priorLosses.push({ year, amount, remaining, category: l.category });
           }
 
-          const netGains = report.capitalGains.netGainLoss;
-          const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
+          const { gains: netGains, income: netIncome } = savingsBalances(report);
           const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
 
           // Log carryforward details

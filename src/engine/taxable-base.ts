@@ -11,14 +11,17 @@
  * This is the PRESENTATION figure for the chart. It applies the SAME
  * anti-churning adjustment the engine uses for `totalSavingsBase`: the
  * proportionally-blocked loss is added back (deferred, not deductible now) and
- * the reintegrated prior deferred loss is subtracted (now deductible). The chart
- * clamps the WHOLE sum at zero, while the engine clamps each savings bucket
- * separately — so the two can still differ for a taxpayer with a net loss in one
- * bucket, but they now agree on the anti-churning treatment (no more silent
- * blocked-loss divergence).
+ * the reintegrated prior deferred loss is subtracted (now deductible).
+ *
+ * The savings base has two Art. 49 LIRPF buckets: gains/losses (capital gains
+ * + FX) and capital income (dividends + interest). A negative balance in one
+ * bucket offsets at most 25% of the other's positive balance in the same year,
+ * then each bucket is clamped at zero. The CLI's `--prior-losses` step reads the
+ * same two balances through {@link savingsBalances}.
  */
 
 import Decimal from "decimal.js";
+import { offsetCurrentYearLosses } from "./loss-carryforward.js";
 
 /**
  * The five components feeding the displayed taxable base, as plain numbers
@@ -52,16 +55,31 @@ export interface TaxableBaseReport {
 }
 
 /**
+ * The two Art. 49 LIRPF savings balances of a report, before any compensation:
+ * - `gains`: capital gains + blocked losses − reintegrated losses + FX
+ *   (the fiscal figure, not the raw `netGainLoss`: a blocked loss is deferred).
+ * - `income`: gross dividends + interest earned.
+ */
+export function savingsBalances(report: TaxableBaseReport): { gains: Decimal; income: Decimal } {
+  return {
+    gains: report.capitalGains.netGainLoss
+      .plus(report.capitalGains.blockedLosses)
+      .minus(report.capitalGains.reintegratedLosses)
+      .plus(report.fxGains.netGainLoss),
+    income: report.dividends.grossIncome.plus(report.interest.earned),
+  };
+}
+
+/**
  * Compute the displayed taxable-base breakdown and clamped total for the tax
  * estimate chart.
  *
- * Arithmetic (verbatim move of the previous inline web math, now in Decimal):
+ * Arithmetic (in Decimal):
  * - `breakdown` carries each component (capital gains, FX gains, gross
  *   dividends, interest earned, and wash-sale `blockedLosses` added back so
  *   deferred losses don't reduce the base).
- * - `taxableBase` = max(0, capitalGains + blockedLosses + fxGains + dividends
- *   + interest) — the whole sum clamped at zero, matching the chart's prior
- *   behavior.
+ * - `taxableBase` = the two {@link savingsBalances} after the same-year 25%
+ *   cross-offset, each clamped at zero, summed.
  */
 export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableBaseResult {
   const capitalGains = report.capitalGains.netGainLoss;
@@ -69,15 +87,10 @@ export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableB
   const dividends = report.dividends.grossIncome;
   const interest = report.interest.earned;
   const blockedLosses = report.capitalGains.blockedLosses;
-  const reintegratedLosses = report.capitalGains.reintegratedLosses;
 
-  const sum = capitalGains
-    .plus(blockedLosses)
-    .minus(reintegratedLosses)
-    .plus(fxGains)
-    .plus(dividends)
-    .plus(interest);
-  const clamped = Decimal.max(0, sum);
+  const { gains, income } = savingsBalances(report);
+  const offset = offsetCurrentYearLosses(gains, income);
+  const clamped = Decimal.max(0, offset.gains).plus(Decimal.max(0, offset.income));
 
   return {
     breakdown: {
