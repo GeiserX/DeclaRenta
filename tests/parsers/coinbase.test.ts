@@ -379,7 +379,7 @@ describe("coinbaseParser", () => {
       expect(msg.context).toEqual({ count: "3", types: "Card Spend (2), Interest payout (1)" });
     });
 
-    it("localizes both new warnings, and the es text matches the parser's Spanish", () => {
+    it("localizes both new warnings, and the es text matches the parser's Spanish", async () => {
       const csv = [
         V2_HEADER,
         'u1,2025-02-01 10:00:00 UTC,Card Spend,BTC,-0.001,EUR,€40000,€40.00,€40.00,€0.00,Card purchase',
@@ -391,18 +391,18 @@ describe("coinbaseParser", () => {
         "coinbase.advanced_trade_quote_leg_missing",
       ]);
       try {
-        setLocale("es");
+        await setLocale("es");
         for (const m of msgs) {
           expect(localizeMessage(m)).toBe(m.message);
           expect(localizeHint(m)).toBe(m.hint);
         }
-        setLocale("en");
+        await setLocale("en");
         for (const m of msgs) {
           expect(localizeMessage(m)).not.toBe(m.message);
           expect(localizeMessage(m)).not.toContain("{{");
         }
       } finally {
-        setLocale("es");
+        await setLocale("es");
       }
     });
 

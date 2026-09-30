@@ -210,21 +210,34 @@ function renderSpanishWithholdingDetail(report: TaxSummary): string {
     </table>`;
 }
 
-/** Render a detail table of double taxation deductions by country. */
-function renderDoubleTaxDetail(report: TaxSummary): string {
+/**
+ * Render a detail table of double taxation deductions by country. The gross
+ * column and its total are the foreign income Renta Web's dialog asks for:
+ * byCountry never holds ES, so the total excludes Spanish dividends (which
+ * casilla 0029 includes).
+ */
+export function renderDoubleTaxDetail(report: TaxSummary): string {
   const countries = Object.entries(report.doubleTaxation.byCountry);
   if (countries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  const foreignGross = countries.reduce((sum, [, data]) => sum.plus(data.grossIncome), new Decimal(0));
   return `
     <p class="detail-label">${t("casilla.double_taxation")} (${countries.length} ${t("table.country").toLowerCase()})</p>
     <table class="detail-table">
-      <thead><tr><th>${t("table.country")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
+      <thead><tr><th>${t("table.country")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
       <tbody>${countries.map(([country, data]) => `
         <tr>
           <td>${esc(country)}</td>
+          <td>${fmtEur(data.grossIncome)}</td>
           <td>${fmtEur(data.taxPaid)}</td>
           <td>${fmtEur(data.deductionAllowed)}</td>
         </tr>`).join("")}
       </tbody>
+      <tfoot><tr>
+        <td>${t("casilla.dt_foreign_income_total")}</td>
+        <td>${fmtEur(foreignGross)}</td>
+        <td></td>
+        <td>${fmtEur(report.doubleTaxation.deduction)}</td>
+      </tr></tfoot>
     </table>`;
 }
 
@@ -371,7 +384,8 @@ const CASILLAS: CasillaConfig[] = [
  */
 export function renderCasillaCards(container: HTMLElement, report: TaxSummary): void {
   const blocks = computeCasillaBlocksWithFx(report);
-  const cards = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks)).map((c, idx) => {
+  const visible = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks));
+  const cards = visible.map((c, idx) => {
     const value = c.getValue(report, blocks);
     const cls = c.getClass(report, blocks);
     const hasDetail = c.getDetail !== undefined;
@@ -397,7 +411,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
             : `<div class="casilla-trigger casilla-trigger-static">${inner}</div>`}
           ${copyBtn}
         </div>
-        ${c.getDetail ? `<div class="casilla-detail" hidden>${c.getDetail(report)}</div>` : ""}
+        ${hasDetail ? `<div class="casilla-detail" hidden></div>` : ""}
       </div>`;
   }).join("");
 
@@ -450,6 +464,13 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
       const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
+        // The drill-down lists every contributing operation, so it is built on
+        // the first expand rather than for every card up front.
+        if (!detail.dataset.built) {
+          const casilla = visible[Number(card.dataset.casillaIdx)];
+          if (casilla?.getDetail) detail.innerHTML = casilla.getDetail(report);
+          detail.dataset.built = "1";
+        }
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);

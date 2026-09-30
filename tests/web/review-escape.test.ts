@@ -146,6 +146,9 @@ function expectNoInjectedResults(): { casillas: HTMLElement; annex: HTMLElement 
   const casillas = document.getElementById("casillas")!;
   const annex = document.querySelector<HTMLElement>(".annex-container")!;
   expect(casillas.querySelector(".casilla-detail")).not.toBeNull();
+  // Drill-downs are built on first expand; open them all so their dates are checked.
+  casillas.querySelectorAll<HTMLButtonElement>(".casilla-card.expandable .casilla-trigger").forEach((b) => { b.click(); });
+  expect(casillas.querySelector(".casilla-detail .detail-table")).not.toBeNull();
   expect(annex).not.toBeNull();
   for (const id of ["operations-table", "dividends-table"]) {
     expect(document.getElementById(id)!.querySelector(INJECTED)).toBeNull();

@@ -19,7 +19,7 @@ import {
   computeCasillaBlocksWithFx,
   combinedNetGainLoss,
 } from "../../src/generators/casillas.js";
-import { renderDividendsDetail, renderCasillaCards } from "../../src/web/casilla-detail.js";
+import { renderDividendsDetail, renderDoubleTaxDetail, renderCasillaCards } from "../../src/web/casilla-detail.js";
 import { t } from "../../src/i18n/index.js";
 import Decimal from "decimal.js";
 import type { TaxSummary, FifoDisposal, DividendEntry } from "../../src/types/tax.js";
@@ -385,9 +385,35 @@ describe("renderCasillaCards", () => {
     expect(paid.classList.contains("casilla-net")).toBe(false);
     expect(paid.querySelector(".casilla-copy")).toBeNull();
     expect(paid.classList.contains("expandable")).toBe(true);
+    // The drill-down is built on the first expand.
+    paid.querySelector<HTMLElement>(".casilla-trigger")!.click();
     expect(paid.querySelector(".casilla-detail")?.textContent).toContain("USD DEBIT INT FOR JAN-2025");
 
     // The net total stays the bold net row.
     expect(cardFor(container, "casilla.net_gain_loss").classList.contains("casilla-net")).toBe(true);
+  });
+});
+
+describe("renderDoubleTaxDetail (Casilla 0588 card)", () => {
+  it("shows each country's gross income and the foreign-only total the Renta Web dialog asks for", () => {
+    // Renta Web asks, per country, for the income obtained abroad. Casilla 0029
+    // also counts Spanish dividends, so the card must show the foreign figures.
+    const report = makeSummaryWithDisposals([]);
+    report.doubleTaxation = {
+      deduction: new Decimal(180),
+      byCountry: {
+        US: { grossIncome: new Decimal(1000), taxPaid: new Decimal(150), deductionAllowed: new Decimal(150) },
+        DE: { grossIncome: new Decimal(200), taxPaid: new Decimal("52.75"), deductionAllowed: new Decimal(30) },
+      },
+    };
+
+    const html = renderDoubleTaxDetail(report);
+
+    const headerRow = html.slice(html.indexOf("<thead>"), html.indexOf("</thead>"));
+    expect(headerRow).toContain("Bruto EUR");
+    expect(html).toContain("1.000,00");
+    expect(html).toContain("200,00");
+    const footer = html.slice(html.indexOf("<tfoot>"), html.indexOf("</tfoot>"));
+    expect(footer).toContain("1.200,00");
   });
 });
