@@ -29,6 +29,9 @@ const KNOWN_CATEGORIES: ReadonlySet<string> = new Set([
   "CMDTY",
 ]);
 
+/** IBKR wording of a buyout paid only in cash: "... FOR USD 54.20 PER SHARE ..." */
+const PURE_CASH_BUYOUT = /\bFOR\s+[A-Z]{3}\s+\d+(?:\.\d+)?\s+PER\s+SHARE\b/i;
+
 /** Lot grouping key: ISIN when available; conid for IBKR instruments without ISIN (survives ticker renames); otherwise asset category + symbol */
 function lotKey(trade: { isin: string; symbol: string; assetCategory: string; conid?: string }): string {
   if (trade.assetCategory === "CRYPTO") return `CRYPTO:${trade.symbol.toUpperCase()}`;
@@ -69,6 +72,8 @@ export class FifoEngine {
   /** FIFO queue per security — short positions (opened via SELL+O) */
   private shortLots: Map<string, Lot[]> = new Map();
   private disposals: FifoDisposal[] = [];
+  /** Synthetic SELLs booked for cash buyouts (TC rows), for callers that also need them as trades */
+  private cashBuyoutSales: Trade[] = [];
   private nextLotId = 1;
   /**
    * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
@@ -232,6 +237,8 @@ export class FifoEngine {
       num: Decimal;
       den: Decimal;
     }[] = [];
+    // Cash buyouts (TC row that removes shares and pays cash) become synthetic SELLs
+    const cashMergers: Trade[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "TC")) {
       // IBKR description: "TENDER OFFER OLD_SYM(OLD_ISIN) MERGED(Acquisition) FOR RATIO NEW_SYM(NEW_ISIN)"
       // Also handle: "OLD_SYM(OLD_ISIN) MERGED(Acquisition) WITH NEW_SYM(NEW_ISIN) RATIO FOR 1"
@@ -251,6 +258,44 @@ export class FifoEngine {
       // Simpler format: just transfer all lots from old ISIN to new ISIN
       if (ca.isin && ca.quantity) {
         const qty = new Decimal(ca.quantity);
+        const amount = new Decimal(ca.amount || "0");
+        // Cash buyout ("... MERGED(Acquisition) FOR USD 54.20 PER SHARE ..."): shares
+        // leave (quantity < 0) and cash arrives (amount ≠ 0). That is a transmisión
+        // onerosa (Art. 33.1 / 35 LIRPF), not a tax-neutral canje de valores, so the
+        // lots are consumed like a SELL whose proceeds are the cash received.
+        // Only the pure-cash wording qualifies: a cash-and-stock merger ("... CASH and
+        // STOCK MERGER ... 592 FOR 1000 AND USD 4.24 ...") also has a negative quantity
+        // and a cash amount, but its amount is only the cash leg; booking it as a sale
+        // would invent a loss for the part paid in new shares.
+        if (qty.isNegative() && !amount.isZero() && PURE_CASH_BUYOUT.test(ca.description)) {
+          const tradeDate = ca.dateTime.slice(0, 8);
+          cashMergers.push({
+            tradeID: ca.transactionID,
+            accountId: ca.accountId,
+            symbol: ca.symbol,
+            description: ca.description,
+            isin: ca.isin,
+            assetCategory: "STK",
+            currency: ca.currency,
+            tradeDate,
+            settlementDate: tradeDate,
+            quantity: ca.quantity,
+            tradePrice: amount.abs().dividedBy(qty.abs()).toString(),
+            tradeMoney: amount.abs().toString(),
+            proceeds: amount.abs().toString(),
+            cost: "0",
+            fifoPnlRealized: "0",
+            fxRateToBase: "1",
+            buySell: "SELL",
+            openCloseIndicator: "C",
+            exchange: "",
+            commissionCurrency: ca.currency,
+            commission: "0",
+            taxes: "0",
+            multiplier: "1",
+          });
+          continue;
+        }
         if (!qty.isZero()) {
           const date = normalizeDate(ca.dateTime.slice(0, 8));
           mergers.push({
@@ -266,6 +311,9 @@ export class FifoEngine {
       }
     }
     const sortedMergers = mergers.sort((a, b) => a.date.localeCompare(b.date));
+    const sortedCashMergers = cashMergers.sort((a, b) =>
+      normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate)),
+    );
 
     // Parse spin-offs (SO) from corporate actions
     const spinOffs: {
@@ -361,6 +409,7 @@ export class FifoEngine {
     let splitIdx = 0;
     let sdIdx = 0;
     let mergerIdx = 0;
+    let cashMergerIdx = 0;
     let spinOffIdx = 0;
     let optionIdx = 0;
 
@@ -380,6 +429,14 @@ export class FifoEngine {
       while (mergerIdx < sortedMergers.length && sortedMergers[mergerIdx]!.date <= tradeDate) {
         this.applyMerger(sortedMergers[mergerIdx]!);
         mergerIdx++;
+      }
+      // Apply any cash buyouts that occur before this trade
+      while (
+        cashMergerIdx < sortedCashMergers.length &&
+        normalizeDate(sortedCashMergers[cashMergerIdx]!.tradeDate) <= tradeDate
+      ) {
+        this.applyCashMerger(sortedCashMergers[cashMergerIdx]!, rateMap);
+        cashMergerIdx++;
       }
       // Apply any spin-offs that occur before this trade
       while (spinOffIdx < sortedSpinOffs.length && sortedSpinOffs[spinOffIdx]!.date <= tradeDate) {
@@ -433,6 +490,10 @@ export class FifoEngine {
     while (mergerIdx < sortedMergers.length) {
       this.applyMerger(sortedMergers[mergerIdx]!);
       mergerIdx++;
+    }
+    while (cashMergerIdx < sortedCashMergers.length) {
+      this.applyCashMerger(sortedCashMergers[cashMergerIdx]!, rateMap);
+      cashMergerIdx++;
     }
     while (spinOffIdx < sortedSpinOffs.length) {
       this.applySpinOff(sortedSpinOffs[spinOffIdx]!);
@@ -567,6 +628,21 @@ export class FifoEngine {
         lotsTransferred: String(oldLots.length),
       },
     });
+  }
+
+  /** Cash buyout: dispose of the lots through FIFO at the cash received (Art. 33.1 / 35 LIRPF). */
+  private applyCashMerger(sell: Trade, rateMap: EcbRateMap): void {
+    const date = normalizeDate(sell.tradeDate);
+    const quantity = new Decimal(sell.quantity).abs().toString();
+    this.emit({
+      id: "fifo.cash_merger_disposal",
+      severity: "info",
+      message: `💶 Compra en efectivo: ${sell.symbol} (${sell.isin}) × ${quantity} el ${date}. Se declara como una venta.`,
+      hint: "Una fusión o adquisición pagada en efectivo es una transmisión: la ganancia o pérdida se calcula como en una venta, con el efectivo recibido como valor de transmisión.",
+      context: { symbol: sell.symbol, isin: sell.isin, date, quantity },
+    });
+    this.cashBuyoutSales.push(sell);
+    this.consumeLots(sell, rateMap);
   }
 
   private applySpinOff(spinOff: {
@@ -1593,6 +1669,11 @@ export class FifoEngine {
 
   getDisposals(): FifoDisposal[] {
     return this.disposals;
+  }
+
+  /** The synthetic SELL trades booked for cash buyouts, so the anti-churning check sees the exit. */
+  getCashBuyoutSales(): Trade[] {
+    return this.cashBuyoutSales;
   }
 
   getRemainingLots(): Map<string, Lot[]> {

@@ -621,6 +621,10 @@ const en: TranslationKeys = {
     "🔄 Merger: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lots transferred, {{date}})",
   "fifo.merger_applied.hint":
     "Tax-neutral merger: the lots are transferred to the new ISIN keeping the original cost basis.",
+  "fifo.cash_merger_disposal":
+    "💶 Cash buyout: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Declared as a sale.",
+  "fifo.cash_merger_disposal.hint":
+    "A merger or acquisition paid in cash is a disposal: the gain or loss is computed as for a sale, with the cash received as the transfer value.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, {{costPercent}}% of cost to the spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "The cost is split proportionally between the parent and the spun-off company.",

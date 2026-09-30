@@ -622,6 +622,10 @@ const gl: TranslationKeys = {
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
     "Fusión fiscalmente neutra: os lotes transfírense ao novo ISIN conservando o custo base orixinal.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectivo: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Declárase como unha venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Unha fusión ou adquisición pagada en efectivo é unha transmisión: a ganancia ou perda calcúlase como nunha venda, co efectivo recibido como valor de transmisión.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, custo {{costPercent}}% ao spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "O custo repártese proporcionalmente entre a matriz e a empresa escindida.",

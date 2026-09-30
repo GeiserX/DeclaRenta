@@ -623,6 +623,10 @@ const ca: TranslationKeys = {
     "🔄 Fusió: {{oldIsin}} → {{newIsin}} (ràtio {{ratio}}, {{lotsTransferred}} lots transferits, {{date}})",
   "fifo.merger_applied.hint":
     "Fusió fiscalment neutra: els lots es transfereixen al nou ISIN conservant el cost base original.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectiu: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Es declara com una venda.",
+  "fifo.cash_merger_disposal.hint":
+    "Una fusió o adquisició pagada en efectiu és una transmissió: el guany o la pèrdua es calcula com en una venda, amb l'efectiu rebut com a valor de transmissió.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ràtio {{ratio}}, cost {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El cost es reparteix proporcionalment entre la matriu i l'empresa escindida.",
