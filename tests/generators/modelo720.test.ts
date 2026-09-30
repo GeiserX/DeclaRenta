@@ -554,6 +554,53 @@ describe("Modelo 720 Generator", () => {
       expect(boeField(summary, sm.suma2)).toBe("00000000004000000");
     });
 
+    /** Signed total of a detail valoración: the amount at `value`, negative when `sign` holds "N". */
+    const signedSum = (details: string[], sign: readonly [number, number], value: readonly [number, number]) =>
+      details.reduce((s, l) => {
+        const amount = new Decimal(boeField(l, value)).div(100);
+        return s.plus(boeField(l, sign) === "N" ? amount.neg() : amount);
+      }, new Decimal(0));
+
+    it("type-1 sumas add the cent-rounded amounts the details carry, not the unrounded ones", () => {
+      // Each 30,000.005 is written as 30,000.01, so the sumas must say 60,000.02
+      // (V) and 40,000.02 (Q4 averages of 20,000.005), not 60,000.01 / 40,000.01.
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "30000.005" }),
+        makePosition({ currency: "EUR", positionValue: "30000.005", isin: "IE00BK5BQT80" }),
+      ];
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "30000.005", endingSettledCash: "30000.005", averageQ4Cash: "20000.005", countryCode: "IE" },
+        { accountId: "U2", currency: "EUR", endingCash: "30000.005", endingSettledCash: "30000.005", averageQ4Cash: "20000.005", countryCode: "IE" },
+      ];
+      const lines = generateModelo720(positions, rateMap, baseConfig, undefined, cashBalances).split("\n");
+      const summary = lines[0]!;
+      const details = lines.slice(1);
+      expect(details).toHaveLength(4);
+      for (const l of details) expect(boeField(l, d.valoracion1)).toBe("00000003000001");
+      expect(signedSum(details, d.valoracion1Sign, d.valoracion1).toString()).toBe("120000.04");
+      expect(signedSum(details, d.valoracion2Sign, d.valoracion2).toString()).toBe("40000.02");
+      expect(boeField(summary, sm.suma1)).toBe("00000000012000004");
+      expect(boeField(summary, sm.suma2)).toBe("00000000004000002");
+    });
+
+    it("marks a negative Q4 average balance with N so the detail and suma 2 agree", () => {
+      // Positive on 31 Dec, but a margin balance earlier in the quarter left
+      // the Q4 average at -1,000.50.
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "-1000.50", countryCode: "IE" },
+      ];
+      const records = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      const [summary, detail] = records as [string, string];
+      expect(boeField(detail, d.valoracion1Sign)).toBe(" ");
+      expect(boeField(detail, d.valoracion1)).toBe("00000006000000");
+      expect(boeField(detail, d.valoracion2Sign)).toBe("N");
+      expect(boeField(detail, d.valoracion2)).toBe("00000000100050");
+      expect(signedSum([detail], d.valoracion2Sign, d.valoracion2).toString()).toBe("-1000.5");
+      expect(boeField(summary, sm.suma2Sign)).toBe("N");
+      expect(boeField(summary, sm.suma2)).toBe("00000000000100050");
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], []]);
+    });
+
     it("passes the format validator record by record", () => {
       const cashBalances = [
         { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000", countryCode: "IE" },

@@ -223,12 +223,15 @@ export function generateModelo720(
     }
   }
 
-  // Valoración 1 / Valoración 2 exactly as written in each type-2 record: the
-  // type-1 sumas are the totals of those two fields (cancelled records add 0).
-  // V: 31-Dec value / nothing. C: 31-Dec balance / Q4 average balance.
+  // Valoración 1 / Valoración 2 exactly as written in each type-2 record
+  // (rounded to cents, signed): the type-1 sumas are the totals of those two
+  // fields (cancelled records add 0). V: 31-Dec value / nothing. C: 31-Dec
+  // balance / Q4 average balance.
   const allEntries = [
-    ...(hasValuesRecords ? entries.map((e) => ({ v1: e.valueEur, v2: new Decimal(0) })) : []),
-    ...(hasCashRecords ? cashEntries.map((e) => ({ v1: e.valueEur, v2: e.averageQ4Eur })) : []),
+    ...(hasValuesRecords ? entries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })) : []),
+    ...(hasCashRecords
+      ? cashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) }))
+      : []),
   ];
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
@@ -278,6 +281,24 @@ function numPad(value: string, intLen: number, decLen: number): string {
   const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).round().toString().padStart(decLen, "0");
   return intPart + fracPart;
+}
+
+/**
+ * An amount as a type-2 valoración carries it: rounded half-up to cents, with
+ * its sign. The type-1 sumas add up these values, not the unrounded ones, so
+ * the totals match the details to the cent.
+ */
+function writtenAmount(value: Decimal): Decimal {
+  return value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
+/**
+ * Sign column plus 14-digit importe (12 integer + 2 decimals) of a type-2
+ * valoración: "N" when the written amount is negative, a space otherwise.
+ */
+function valoracionField(value: Decimal): string {
+  const written = writtenAmount(value);
+  return (written.lessThan(0) ? "N" : " ") + numPad(written.toString(), 12, 2);
 }
 
 function buildSummaryRecord(
@@ -342,8 +363,7 @@ function buildDetailRecord(
   record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
   record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
   record += pad("", 8);                                       // 424-431: Sell date
-  record += (valueEur.isNegative() ? "N" : " ");              // 432: Valoración 1 sign
-  record += numPad(valueEur.toString(), 12, 2);               // 433-446: Valoración 1 (value at Dec 31)
+  record += valoracionField(valueEur);                        // 432-446: Valoración 1 sign + value at Dec 31
   record += " ";                                              // 447: Valoración 2 sign
   record += numPad("0", 12, 2);                               // 448-461: Valoración 2 (not informed for V)
   record += "A";                                              // 462: Clave de representación (book entry)
@@ -431,10 +451,8 @@ function buildCashAccountRecord(
   record += pad((cb.openedDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: Opening date
   record += "A";                                              // 423: Type (A=new)
   record += pad("", 8);                                       // 424-431: Close date
-  record += " ";                                              // 432: Valoración 1 sign
-  record += numPad(valueEur.toString(), 12, 2);               // 433-446: Valoración 1 (balance at Dec 31)
-  record += " ";                                              // 447: Valoración 2 sign
-  record += numPad(averageQ4Eur.toString(), 12, 2);           // 448-461: Valoración 2 (average balance Q4)
+  record += valoracionField(valueEur);                        // 432-446: Valoración 1 sign + balance at Dec 31
+  record += valoracionField(averageQ4Eur);                    // 447-461: Valoración 2 sign + Q4 average balance
   record += pad("", 1);                                       // 462: Clave de representación (V/I only)
   record += numPad("0", 10, 2);                               // 463-474: Número de valores (V/I only, zeros)
   record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
