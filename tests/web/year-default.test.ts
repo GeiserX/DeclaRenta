@@ -49,20 +49,20 @@ describe("newerYears", () => {
 });
 
 describe("renderNewerYearsNotice", () => {
-  afterEach(() => {
-    setLocale("es");
+  afterEach(async () => {
+    await setLocale("es");
   });
 
-  it("says which later years the data covers", () => {
-    setLocale("es");
+  it("says which later years the data covers", async () => {
+    await setLocale("es");
     const html = renderNewerYearsNotice([2026, 2025, 2024], 2025);
     expect(html).toContain("Mostrando 2025; tus datos también cubren 2026.");
     expect(html).toContain("banner-info");
     expect(html).not.toContain("2024");
   });
 
-  it("lists several later years", () => {
-    setLocale("es");
+  it("lists several later years", async () => {
+    await setLocale("es");
     expect(renderNewerYearsNotice([2024, 2025, 2026], 2024)).toContain("también cubren 2025, 2026.");
   });
 
@@ -71,8 +71,8 @@ describe("renderNewerYearsNotice", () => {
     expect(renderNewerYearsNotice([], 2025)).toBe("");
   });
 
-  it("is translated", () => {
-    setLocale("en");
+  it("is translated", async () => {
+    await setLocale("en");
     expect(renderNewerYearsNotice([2026, 2025], 2025)).toContain("Showing 2025; your data also covers 2026.");
   });
 });
