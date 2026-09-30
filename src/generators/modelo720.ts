@@ -179,7 +179,8 @@ export interface Previous720Security {
  * no broker export gives us), a security or account whose country is unknown,
  * an account with no account code, or a sale of a security whose clave,
  * subclave or country in last year's file is not a valid code (a file written
- * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130).
+ * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130)
+ * and that this year's sale trade cannot correct.
  */
 export type Modelo720Omission =
   | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
@@ -217,8 +218,10 @@ export function findModelo720Omissions(
   rateMap: EcbRateMap,
   config: Modelo720PlanConfig,
   cashBalances?: CashBalance[],
+  /** The year's FIFO disposals, as passed to generateModelo720 */
+  disposals?: FifoDisposal[],
 ): Modelo720Omission[] {
-  return plan720(positions, rateMap, config, undefined, cashBalances).omissions;
+  return plan720(positions, rateMap, config, undefined, cashBalances, disposals).omissions;
 }
 
 /**
@@ -317,7 +320,7 @@ function plan720(
   // "C" (cancelled) records for last year's securities no longer held, dated
   // and valued by the last sale of declared shares. Without such a sale the
   // record keeps a blank date and a zero value (see findUndatedExtinctions).
-  const cancelled = findCancelledSecurities(positions, config.previousYearSecurities);
+  const cancelled = findCancelledSecurities(positions, config.previousYearSecurities, config.year, disposals);
   const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
     const tranches = extinctionTranches(security.isin, config.year, disposals);
     return tranches.length > 0
@@ -473,21 +476,46 @@ function acquisitionTranches(
  * liquidated an asset they still hold). A short position is not held: a
  * declared holding now shorted was sold, so it is cancelled.
  */
-function findCancelledSecurities(positions: OpenPosition[], previous: Previous720Security[] | undefined): Previous720Security[] {
+function findCancelledSecurities(
+  positions: OpenPosition[],
+  previous: Previous720Security[] | undefined,
+  year: number,
+  disposals: FifoDisposal[] | undefined,
+): Previous720Security[] {
   const heldIsins = new Set(positions.filter(isHeldSecurity).map((p) => p.isin));
   // Last year's file holds one record per acquisition date: one sale per ISIN.
   const cancelled = new Map<string, Previous720Security>();
   for (const s of previous ?? []) {
-    if (!heldIsins.has(s.isin) && !cancelled.has(s.isin)) cancelled.set(s.isin, s);
+    if (!heldIsins.has(s.isin) && !cancelled.has(s.isin)) cancelled.set(s.isin, withSaleCodes(s, year, disposals));
   }
   return [...cancelled.values()];
+}
+
+/**
+ * Released versions wrote every security as "V " (subclave blank). This year's
+ * sale of that ISIN names its asset category, which gives the subclave: shares
+ * V1, bonds V2, foreign funds I0. Only when every sale in the year agrees on one
+ * of those categories and last year's country is valid; otherwise the record
+ * keeps what last year's file wrote and the sale is reported (isRepeatable).
+ */
+function withSaleCodes(s: Previous720Security, year: number, disposals: FifoDisposal[] | undefined): Previous720Security {
+  if (s.claveSubclave !== "V " || !isIsoCountryCode(s.country)) return s;
+  const categories = new Set(
+    (disposals ?? [])
+      .filter((d) => d.isin === s.isin && !d.isShort && recordDate(d.sellDate).startsWith(String(year)))
+      .map((d) => d.assetCategory),
+  );
+  const [category] = categories;
+  if (categories.size !== 1 || !["STK", "BOND", "FUND"].includes(category!)) return s;
+  return { ...s, claveSubclave: claveSubclave(category!) };
 }
 
 /**
  * A sale is repeated with the clave, subclave and country last year's file
  * wrote. Older versions left the subclave blank and wrote the ISIN prefix
  * (e.g. XS) as the country: repeating either would make AEAT reject the file,
- * so such a sale is left out and reported instead.
+ * so such a sale is left out and reported instead, unless this year's sale
+ * trade gives the subclave (withSaleCodes) and the country is valid.
  */
 function isRepeatable(s: Previous720Security): boolean {
   return isClaveSubclave(s.claveSubclave) && isIsoCountryCode(s.country);
@@ -561,7 +589,7 @@ export function findUndatedExtinctions(
   disposals?: FifoDisposal[],
 ): UndatedExtinction[] {
   // A sale left out for an invalid code has no record to complete; findModelo720Omissions reports it.
-  const written = findCancelledSecurities(positions, config.previousYearSecurities).filter(isRepeatable);
+  const written = findCancelledSecurities(positions, config.previousYearSecurities, config.year, disposals).filter(isRepeatable);
   return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];

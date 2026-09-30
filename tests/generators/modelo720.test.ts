@@ -1387,7 +1387,7 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     expect(findUndatedExtinctions([makePosition()], cfg, [])).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
   });
 
-  it("repeats last year's codes on a dated extinction, and never writes one whose old record has a blank subclave", () => {
+  it("repeats last year's codes on a dated extinction, and takes a blank subclave from the sale trade", () => {
     const s: FlexStatement = {
       ...statement, toDate: "20251231",
       trades: [vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }), sell("2025-03-03", "100", "60")],
@@ -1401,12 +1401,16 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     expect([boeField(cancelled, d.claveSubclave), boeField(cancelled, d.pais), boeField(cancelled, d.fechaExtincion)]).toEqual(["I0", "IE", "20250303"]);
     expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
 
-    // The same sale read from a file an older version wrote: 103 blank.
+    // The same sale read from a file an older version wrote: 103 blank. The
+    // sale trade is STK (how IBKR files an ETF), so the record is V1.
     const old = { ...fund, claveSubclave: "V " };
     const cfg = { ...baseConfig, previousYearSecurities: [old] };
     const oldLines = generateModelo720(s.openPositions, rateMap, cfg, undefined, undefined, disposals).split("\n");
-    expect(oldLines.filter((l) => l[0] === "2" && l[422] === "C")).toHaveLength(0);
+    const oldCancelled = oldLines.find((l) => l[0] === "2" && l[422] === "C")!;
+    expect([boeField(oldCancelled, d.claveSubclave), boeField(oldCancelled, d.pais), boeField(oldCancelled, d.fechaExtincion)]).toEqual(["V1", "IE", "20250303"]);
     expect(validateModelo720Records(oldLines).filter((r) => !r.valid)).toEqual([]);
+    expect(findModelo720Omissions(s.openPositions, rateMap, cfg, undefined, disposals)).toEqual([]);
+    // Without this year's sale nothing gives the subclave: still left out.
     expect(findModelo720Omissions(s.openPositions, rateMap, cfg)).toEqual([{ kind: "cancelled", reason: "invalid_code", security: old }]);
     expect(findUndatedExtinctions(s.openPositions, cfg, disposals)).toEqual([]);
   });
@@ -1418,6 +1422,63 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     ]);
     expect(records).toEqual([["        ", "        ", "00000000000000"]]);
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
+  });
+
+  describe("a sale read from last year's file as an older version wrote it (103 blank)", () => {
+    // Released versions wrote 102-103 as "V " and the ISIN prefix at 129-130.
+    // This year's sale trade gives the asset category, and so the subclave.
+    function saleOf(security: Previous720Security, assetCategory: string | null) {
+      const trade = (overrides: Partial<Trade>) =>
+        eurTrade({ symbol: "OLD", description: "SOLD SINCE LAST YEAR", isin: security.isin, ...(assetCategory ? { assetCategory } : {}), ...overrides });
+      const s: FlexStatement = {
+        ...statement, toDate: "20251231",
+        trades: assetCategory === null
+          ? []
+          : [trade({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }), trade({ tradeDate: "2025-03-03", quantity: "-100", tradePrice: "60", buySell: "SELL" })],
+      };
+      const disposals = generateTaxReport(s, new Map(), 2025).capitalGains.disposals;
+      const cfg = { ...baseConfig, previousYearSecurities: [security] };
+      const lines = generateModelo720(s.openPositions, rateMap, cfg, undefined, undefined, disposals).split("\n");
+      const d = BOE_720.detail;
+      return {
+        cancelled: lines
+          .filter((l) => l[0] === "2" && l[422] === "C")
+          .map((l) => [boeField(l, d.claveSubclave), boeField(l, d.pais), l.slice(131, 143), boeField(l, d.fechaExtincion)]),
+        invalid: validateModelo720Records(lines).filter((r) => !r.valid),
+        omissions: findModelo720Omissions(s.openPositions, rateMap, cfg, undefined, disposals),
+        undated: findUndatedExtinctions(s.openPositions, cfg, disposals),
+      };
+    }
+
+    it("writes the sale of a share as V1, with last year's country", () => {
+      const r = saleOf({ isin: "US0378331005", claveSubclave: "V ", country: "US" }, "STK");
+      expect(r.cancelled).toEqual([["V1", "US", "US0378331005", "20250303"]]);
+      expect(r.invalid).toEqual([]);
+      expect(r.omissions).toEqual([]);
+      expect(r.undated).toEqual([]);
+    });
+
+    it("writes the sale of a foreign fund as I0", () => {
+      const r = saleOf({ isin: "LU0274208692", claveSubclave: "V ", country: "LU" }, "FUND");
+      expect(r.cancelled).toEqual([["I0", "LU", "LU0274208692", "20250303"]]);
+      expect(r.invalid).toEqual([]);
+      expect(r.omissions).toEqual([]);
+    });
+
+    it("keeps leaving the sale out when no sale trade gives its category", () => {
+      const old: Previous720Security = { isin: "US0378331005", claveSubclave: "V ", country: "US" };
+      const r = saleOf(old, null);
+      expect(r.cancelled).toEqual([]);
+      expect(r.omissions).toEqual([{ kind: "cancelled", reason: "invalid_code", security: old }]);
+      expect(r.undated).toEqual([]);
+    });
+
+    it("keeps leaving the sale out when last year's country is not a valid code", () => {
+      const old: Previous720Security = { isin: "XS2314659447", claveSubclave: "V ", country: "XS" };
+      const r = saleOf(old, "BOND");
+      expect(r.cancelled).toEqual([]);
+      expect(r.omissions).toEqual([{ kind: "cancelled", reason: "invalid_code", security: old }]);
+    });
   });
 });
 
