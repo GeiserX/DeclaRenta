@@ -703,18 +703,17 @@ async function processFiles(): Promise<void> {
     const year = activeYear ?? getProfile().year;
     const manualOpeningLots = getManualOpeningLots();
     // Build the ECB rate map via the shared orchestrator. `deriveEcbNeeds`
-    // (inside buildEcbRateMap) replicates exactly the (currency, year) set this
-    // block used to build by hand: trade + cashTransaction currencies (minus
-    // EUR); every year with a trade OR a cash transaction (cash income can fall
-    // in a year with no trades); the declaration year; and `minYear - 1` for the
-    // 10-day late-December lookback on early-January transactions. The fetched
-    // pair-set is therefore identical to the old inline loop.
+    // (inside buildEcbRateMap) collects trade, cashTransaction, open-position and
+    // cash-balance currencies (minus EUR); every year with a trade OR a cash
+    // transaction (cash income can fall in a year with no trades); the
+    // declaration year; and the year before each of them for the 10-day
+    // late-December lookback on early-January transactions.
     //
-    // We deliberately do NOT pass `noCache` — ECB rates are immutable historical
-    // data, so the orchestrator's per-(currency, year) memoization makes the
+    // We deliberately do NOT pass `noCache` — past years' ECB rates never
+    // change, so the orchestrator's per-(currency, year) memoization makes the
     // repeated processFiles() runs (year-select change, manual-rate entry,
     // monodivisa toggle) reuse already-fetched rates instead of refetching
-    // everything each time.
+    // everything each time. The current year is always refetched.
     const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year, manualOpeningLots });
     if (isStale()) return; // a newer run started while fetching — let it win
 
@@ -988,8 +987,9 @@ function renderResults(report: TaxSummary) {
   const chartData = extractChartData(report);
   // Taxable-base breakdown + clamped total for the estimate chart. The math
   // (netGainLoss includes wash-sale-blocked losses, so they're added back —
-  // they're deferred, not deductible now — and the whole sum is clamped at 0)
-  // lives in the shared decimal.js helper so the money math never round-trips
+  // they're deferred, not deductible now — and a loss in one savings bucket
+  // offsets at most 25% of the other, Art. 49 LIRPF) lives in the shared
+  // decimal.js helper so the money math never round-trips
   // through a lossy Number mid-calculation.
   const { breakdown: taxBaseBreakdown, taxableBase } = computeTaxableBaseBreakdown(report);
   const dtDeduction = report.doubleTaxation.deduction.toNumber();

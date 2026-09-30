@@ -101,9 +101,12 @@ Si después de la compensación en la misma categoría quedan pérdidas pendient
 Mediante la opción `--prior-losses` del CLI, puedes proporcionar un fichero JSON con las pérdidas de ejercicios anteriores. DeclaRenta:
 
 1. Descarta las pérdidas con más de 4 años de antigüedad (expiradas).
-2. Aplica compensación en la misma categoría (las más antiguas primero).
-3. Aplica compensación cruzada con el límite del 25%.
-4. Añade las pérdidas del ejercicio actual al arrastre si el resultado neto es negativo.
+2. Compensa el saldo negativo del ejercicio con el saldo positivo de la otra categoría del mismo año, hasta el 25% de ese saldo positivo.
+3. Aplica compensación en la misma categoría de las pérdidas anteriores (las más antiguas primero).
+4. Aplica compensación cruzada de las pérdidas anteriores. El límite del 25% se calcula sobre el saldo positivo del año antes de compensar y es uno solo, compartido con el paso 2.
+5. Añade al arrastre lo que quede del saldo negativo del ejercicio.
+
+Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f) no cuentan como pérdida del año: se integran cuando se venden los valores recomprados.
 
 El formato del fichero JSON es:
 
