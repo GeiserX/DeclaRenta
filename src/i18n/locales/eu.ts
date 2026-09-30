@@ -641,6 +641,9 @@ const eu: TranslationKeys = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",
+  "fifo.split_unresolved": "⚠ {{symbol}}-ren split-a ({{date}}) ez da aplikatu: ez dago aurreko akziorik proportzioa kalkulatzeko.",
+  "fifo.split_unresolved.hint":
+    "Igo aurreko urteetako laburpenak ere, kontua ireki zenetik. Bestela, akzio kopurua eta balio honen ondorengo salmenten kostua ez dira zuzenak izango.",
   "fifo.merger_applied":
     "🔄 Bat-egitea: {{oldIsin}} → {{newIsin}} (ratioa {{ratio}}, {{lotsTransferred}} lote transferituak, {{date}})",
   "fifo.merger_applied.hint":

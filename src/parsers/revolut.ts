@@ -70,6 +70,9 @@ const TXN_TYPE_CASH_IN = /^CASH\s*TOP[- ]?UP$/i;
 const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 const TXN_TYPE_DIVIDEND = /^DIVIDEND$/i;
 const TXN_TYPE_SPLIT = /^STOCK\s*SPLIT$/i;
+// One row per ticker when Revolut moved accounts between its own entities
+// (e.g. to Revolut Securities Europe UAB): same holding, nothing to apply.
+const TXN_TYPE_ENTITY_TRANSFER = /^TRANSFER\s+FROM\s+REVOLUT\b.*\bTO\s+REVOLUT\b/i;
 
 // ---------------------------------------------------------------------------
 // Crypto detection — Revolut mixes stocks and crypto in the same sheet.
@@ -309,7 +312,7 @@ function parseTransactionLog(
   let skippedUnknownType = 0;
   // DIVIDEND rows imported at the net amount Revolut reports.
   let netDividends = 0;
-  // STOCK SPLIT rows whose ratio cannot be sized: no earlier holding in this file.
+  // STOCK SPLIT rows with no usable Quantity (shares added).
   let unresolvedSplits = 0;
 
   // Track net positions per symbol for open-position inference
@@ -404,21 +407,12 @@ function parseTransactionLog(
     }
 
     // STOCK SPLIT: Quantity is the number of shares added (negative for a
-    // reverse split) and the amount is zero. The ratio comes from the holding
-    // built up so far in this file; the FIFO engine then rescales every lot
-    // while keeping its cost (Art. 37.1.a LIRPF: a split is not a disposal).
+    // reverse split) and the amount is zero. The ratio depends on the whole
+    // holding, which can span several yearly files, so the parser does not size
+    // it: the FIFO engine does, from the lots it holds at the split date, and
+    // rescales them keeping their cost (Art. 37.1.a LIRPF: not a disposal).
     if (TXN_TYPE_SPLIT.test(type)) {
-      const pos = positions.get(ticker);
-      const before = pos?.netQty ?? new Decimal(0);
-      const after = before.plus(signedQtyDec);
-      if (!pos || before.lessThanOrEqualTo(0) || after.lessThanOrEqualTo(0)) {
-        unresolvedSplits++;
-        continue;
-      }
-      const ratio = after.div(before).toFraction(1000);
-      const num = ratio[0]!;
-      const den = ratio[1]!;
-      if (num.equals(den)) {
+      if (signedQtyDec.isZero()) {
         unresolvedSplits++;
         continue;
       }
@@ -426,19 +420,22 @@ function parseTransactionLog(
         transactionID: `revolut-split-${tradeDate}-${ticker}-${i}`,
         accountId: "",
         symbol: ticker,
-        description: `${ticker} SPLIT ${num.toString()} FOR ${den.toString()}`,
+        description: `${ticker} STOCK SPLIT ${signedQtyDec.toString()} SHARES`,
         isin: "",
         currency: currencyRaw,
         reportDate: tradeDate,
         dateTime: tradeDate,
         quantity: signedQtyDec.toString(),
         amount: "0",
-        type: num.greaterThan(den) ? "FS" : "RS",
+        type: signedQtyDec.greaterThan(0) ? "FS" : "RS",
         actionDescription: type,
       });
-      pos.netQty = after;
+      const pos = positions.get(ticker);
+      if (pos) pos.netQty = Decimal.max(0, pos.netQty.plus(signedQtyDec));
       continue;
     }
+
+    if (TXN_TYPE_ENTITY_TRANSFER.test(type)) continue;
 
     if (!TXN_TYPE_BUY.test(type) && !TXN_TYPE_SELL.test(type)) {
       // Any other ticker row (spin-off, stock merger, ...) is not applied.
@@ -574,8 +571,8 @@ function parseTransactionLog(
     parserMessages.push({
       id: "revolut.split_unresolved",
       severity: "warning" as const,
-      message: `Se ${unresolvedSplits === 1 ? "ha omitido 1 desdoblamiento (STOCK SPLIT)" : `han omitido ${unresolvedSplits} desdoblamientos (STOCK SPLIT)`} del extracto de Revolut porque el fichero no tiene compras anteriores del valor con las que calcular la proporción.`,
-      hint: "Descarga el Trading Account Statement desde la apertura de la cuenta para que el desdoblamiento se aplique. Si no, el número de acciones y el coste de las ventas posteriores de ese valor no serán correctos.",
+      message: `Se ${unresolvedSplits === 1 ? "ha omitido 1 desdoblamiento (STOCK SPLIT)" : `han omitido ${unresolvedSplits} desdoblamientos (STOCK SPLIT)`} del extracto de Revolut porque la fila no indica cuántas acciones se añadieron.`,
+      hint: "Vuelve a descargar el Trading Account Statement desde la app de Revolut. Si la fila sigue sin cantidad, el número de acciones y el coste de las ventas posteriores de ese valor no serán correctos.",
       context: { count: String(unresolvedSplits) },
     });
   }

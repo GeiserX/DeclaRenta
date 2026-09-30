@@ -5,6 +5,7 @@ import { revolutParser } from "../../src/parsers/revolut.js";
 import { parseRevolutXlsx, detectRevolutXlsx, parseRevolutDate } from "../../src/parsers/revolut.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { computeCasillaBlocks } from "../../src/generators/casillas.js";
+import { createEmptyStatement, mergeStatement, finalizeMergedStatement } from "../../src/parsers/merge.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { FlexStatement } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -944,7 +945,9 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     const parsed = await parseRevolutXlsx(buildTxnLogWorkbook(SPLIT_LOG));
     expect(parsed.corporateActions).toHaveLength(1);
     expect(parsed.corporateActions[0]!.type).toBe("FS");
-    expect(parsed.corporateActions[0]!.description).toMatch(/SPLIT 10 FOR 1/);
+    // The parser carries the shares added; the engine sizes the ratio from its lots
+    expect(parsed.corporateActions[0]!.quantity).toBe("9");
+    expect(parsed.corporateActions[0]!.description).not.toMatch(/SPLIT\s+\d+\s+FOR\s+\d+/);
     expect(parsed.openPositions).toHaveLength(0);
     expect(parsed.parserMessages?.some((m) => m.id === "revolut.unknown_type")).toBeFalsy();
 
@@ -953,6 +956,7 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     const ids = report.messages.map((m) => m.id);
     expect(ids).not.toContain("fifo.insufficient_lots");
     expect(ids).not.toContain("fifo.sell_without_lots");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
     expect(report.capitalGains.disposals).toHaveLength(1);
     // Full 500 USD cost against the 10 post-split shares (Art. 37.1.a: a split is not a disposal)
     expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("450.00");
@@ -968,7 +972,7 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     ]));
     expect(parsed.corporateActions).toHaveLength(1);
     expect(parsed.corporateActions[0]!.type).toBe("RS");
-    expect(parsed.corporateActions[0]!.description).toMatch(/SPLIT 1 FOR 10/);
+    expect(parsed.corporateActions[0]!.quantity).toBe("-18");
     const report = generateTaxReport(
       toFlex(parsed), usdRates(["2024-06-03", "2024-06-10", "2024-08-01"]), 2024,
     );
@@ -977,14 +981,101 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("90.00");
   });
 
-  it("warns when a split has no earlier purchase in the file to size it from", async () => {
-    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+  it("sizes a split from every merged file, not only the file that has the split row", async () => {
+    // Yearly exports parsed one by one: the 2024 file alone holds 1 share, the
+    // merged holding is 6, so +54 is a 10-for-1 split, not 55-for-1.
+    const file2023 = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2023-03-01T14:00:00Z", "NVDA", "BUY - MARKET", "5", "USD 400", "USD 2000", "USD", "1"],
+    ]));
+    const file2024 = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-02-01T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 700", "USD 700", "USD", "1"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "54", "", "USD 0", "USD", "1"],
+      ["2024-08-01T15:00:00Z", "NVDA", "SELL - MARKET", "60", "USD 120", "USD 7200", "USD", "1"],
+    ]));
+    const merged = createEmptyStatement();
+    mergeStatement(merged, file2023);
+    mergeStatement(merged, file2024);
+    finalizeMergedStatement(merged);
+
+    const rates = usdRates(["2023-03-01", "2024-02-01", "2024-06-10", "2024-08-01"], "1");
+    const report = generateTaxReport(toFlex(merged), rates, 2024);
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(ids).not.toContain("fifo.split_unresolved");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("2700.00");
+    expect(report.capitalGains.transmissionValue.toFixed(2)).toBe("7200.00");
+  });
+
+  it("applies a split before a buy on the split date, which is already in post-split shares", async () => {
+    // Trading on the split date is post-split, so the 2 shares bought that day
+    // are not part of the holding the split multiplies, whatever the row order.
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 1000", "USD 1000", "USD", "1"],
+      ["2024-06-10T07:00:00Z", "NVDA", "BUY - MARKET", "2", "USD 100", "USD 200", "USD", "1"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "9", "", "USD 0", "USD", "1"],
+      ["2024-08-01T15:00:00Z", "NVDA", "SELL - MARKET", "12", "USD 120", "USD 1440", "USD", "1"],
+    ]));
+    const report = generateTaxReport(
+      toFlex(parsed), usdRates(["2024-06-03", "2024-06-10", "2024-08-01"], "1"), 2024,
+    );
+    const ids = report.messages.map((m) => m.id);
+    expect(ids).not.toContain("fifo.insufficient_lots");
+    expect(report.messages.find((m) => m.id === "fifo.split_applied")?.context?.ratio).toBe("10:1");
+    expect(report.capitalGains.acquisitionValue.toFixed(2)).toBe("1200.00");
+  });
+
+  it("measures the anti-churning cap in post-split shares with the ratio FIFO applied", async () => {
+    // 10 bought in January, 1 more in February (inside the two months before the
+    // sale), a 10-for-1 split, then a loss sale of the 100 January shares. The
+    // 10 February shares are still held, so 10 of 100 shares' loss is deferred.
+    // Without the split ratio the position looks closed (10 + 1 - 100) and
+    // nothing is deferred.
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-01-02T14:00:00Z", "NVDA", "BUY - MARKET", "10", "USD 100", "USD 1000", "USD", "1"],
+      ["2024-02-20T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 90", "USD 90", "USD", "1"],
+      ["2024-03-01T08:00:00Z", "NVDA", "STOCK SPLIT", "99", "", "USD 0", "USD", "1"],
+      ["2024-03-15T15:00:00Z", "NVDA", "SELL - MARKET", "100", "USD 5", "USD 500", "USD", "1"],
+    ]));
+    const report = generateTaxReport(
+      toFlex(parsed), usdRates(["2024-01-02", "2024-02-20", "2024-03-01", "2024-03-15"], "1"), 2024,
+    );
+    const disposals = report.capitalGains.disposals;
+    expect(disposals).toHaveLength(1);
+    expect(disposals[0]!.gainLossEur.toFixed(2)).toBe("-500.00");
+    expect(disposals[0]!.blockedLossEur.toFixed(2)).toBe("50.00");
+  });
+
+  it("warns when the engine holds no shares to size a split from", async () => {
+    const parsed = await parseRevolutXlsx(buildTxnLogWorkbook([
       ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "9", "", "USD 0", "USD", "1.08"],
+    ]));
+    expect(parsed.corporateActions).toHaveLength(1);
+    const report = generateTaxReport(toFlex(parsed), usdRates(["2024-06-10"]), 2024);
+    const warning = report.messages.find((m) => m.id === "fifo.split_unresolved");
+    expect(warning?.severity).toBe("warning");
+    expect(warning?.context?.symbol).toBe("NVDA");
+    expect(report.messages.some((m) => m.id === "fifo.split_applied")).toBe(false);
+  });
+
+  it("warns when a STOCK SPLIT row has no quantity", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
+      ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "", "", "USD 0", "USD", "1.08"],
     ]));
     expect(stmt.corporateActions).toHaveLength(0);
     const warning = stmt.parserMessages?.find((m) => m.id === "revolut.split_unresolved");
     expect(warning?.severity).toBe("warning");
     expect(warning?.context?.count).toBe("1");
+  });
+
+  it("skips Revolut's own entity-transfer rows quietly", async () => {
+    const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
+      ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
+      ["2024-06-10T08:00:00Z", "NVDA", "TRANSFER FROM REVOLUT TRADING LTD TO REVOLUT SECURITIES EUROPE UAB", "1", "", "USD 0", "USD", "1.08"],
+    ]));
+    expect(stmt.parserMessages?.some((m) => m.id === "revolut.unknown_type")).toBeFalsy();
+    expect(stmt.openPositions[0]!.quantity).toBe("1");
   });
 
   it("counts any other ticker row it cannot handle, even with a zero amount", async () => {
