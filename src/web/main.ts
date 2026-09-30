@@ -57,9 +57,9 @@ Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 // ---------------------------------------------------------------------------
 // Splash screen
 // ---------------------------------------------------------------------------
-// Wired before the locale table is awaited below: the button needs no
-// translation, and a click that lands while the table is still loading must
-// not be lost.
+// Wired before the locale table is awaited below. A top-level await does not
+// hold back the page's load event, so a start click can land while the table
+// is still loading; the button needs no translation, so it is wired first.
 
 const splash = document.getElementById("splash");
 const splashCta = document.getElementById("splash-cta");
@@ -70,15 +70,24 @@ function dismissSplash() {
   // The exit animation (style.css .splash-exit) lasts 0.45 s. A browser that
   // does not run it (reduced motion, a hidden tab, headless under load) never
   // fires animationend, so a timer finishes the dismissal in either case.
+  // A splash reopened from the logo meanwhile has lost .splash-exit: leave it.
   let done = false;
+  // The logo and content run their own animations, whose end events bubble up
+  // here, so the listeners stay until the splash's own event or the timer.
+  const onSplashAnimation = (e: AnimationEvent) => {
+    if (e.target === splash) finish();
+  };
   const finish = () => {
     if (done) return;
     done = true;
+    splash.removeEventListener("animationend", onSplashAnimation);
+    splash.removeEventListener("animationcancel", onSplashAnimation);
+    if (!splash.classList.contains("splash-exit")) return;
     splash.style.display = "none";
     document.body.classList.remove("splash-visible");
   };
-  splash.addEventListener("animationend", finish, { once: true });
-  splash.addEventListener("animationcancel", finish, { once: true });
+  splash.addEventListener("animationend", onSplashAnimation);
+  splash.addEventListener("animationcancel", onSplashAnimation);
   setTimeout(finish, 600);
 }
 
