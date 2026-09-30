@@ -20,7 +20,7 @@ DeclaRenta automatiza todo esto.
 | **Modelo 100** (IRPF) | Casillas 0328, 0331, 1633, 1637, 0029, 0027, 0588 (pérdidas bloqueadas: informativo) | JSON, CSV, PDF (con tipos ECB) |
 | **Modelo 720** | Declaración de bienes en el extranjero (>50.000 EUR), tipos A/M/C | Fixed-width AEAT (validado contra spec BOE) |
 | **Modelo 721** | Revisión orientativa de criptomonedas en el extranjero (>50.000 EUR) | Generación oficial pendiente: AEAT exige XML |
-| **Modelo D-6** | Guía orientativa para participaciones significativas (Banco de España / AFORIX) | JSON o guía paso a paso |
+| **Modelo D-6** | Guía orientativa para participaciones significativas (programa AFORIX y eAFORIX, Secretaría de Estado de Comercio) | JSON o guía paso a paso |
 
 ## Casillas del Modelo 100
 
@@ -48,7 +48,7 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse (tipos FS y RS de IBKR); las fracciones de acción conservan su coste y, si el split cambia el ISIN, los lotes pasan al nuevo
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
-- **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%
+- **Compensación de pérdidas** (Art. 49 LIRPF): ventana de 4 años con compensación cruzada del 25%; solo en la CLI, con `--prior-losses`
 - **Validador Modelo 720**: verificación contra la especificación BOE del formato de registro
 
 Diseño del bloqueo proporcional anti-churning: [antichurning-proportional.md](https://github.com/GeiserX/DeclaRenta/blob/main/docs/design/antichurning-proportional.md).
@@ -63,14 +63,14 @@ Cuando recibes dividendos de una empresa extranjera, el país de origen suele re
 
 Para cada país, la deducción es el **menor** de:
 
-- **Impuesto efectivamente pagado** en el país de origen (la retención).
-- **Cuota que correspondería en España** sobre esa misma renta, calculada aplicando los tramos del ahorro.
+- **Impuesto efectivamente pagado** en el país de origen (la retención), hasta el 15% del bruto, el límite de la mayoría de los convenios. Lo retenido de más se reclama en el país de origen.
+- **Cuota que correspondería en España** sobre esa misma renta, que es el bruto de ese país por tu tipo medio del ahorro. Ese tipo medio es la cuota de los tramos sobre toda tu base del ahorro, dividida entre esa base.
 
 Los tramos del ahorro que usa el cálculo están en [Casillas del Modelo 100](casillas.md#tramos-del-ahorro-ejercicio-2025).
 
 ### Desglose por país
 
-DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En los resultados verás una tabla con el impuesto pagado y la deducción máxima por país.
+DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En el detalle de la casilla 0588 verás, por país, el rendimiento bruto, el impuesto pagado y la deducción máxima, y debajo el total de rendimientos extranjeros. Ese bruto por país es lo que pide Renta Web como rendimiento obtenido en el extranjero; no uses la casilla 0029, que también incluye los dividendos españoles y los de países sin retención.
 
 ### W-8BEN y convenios de doble imposición
 
@@ -144,9 +144,9 @@ Las operaciones de compraventa de divisas tributan como ganancias y pérdidas pa
 1. **Ganancia/pérdida del valor** (acciones cotizadas → casillas 0328/0331; resto de elementos → 1633/1637): calculada sobre el precio del activo × tipo ECB en cada fecha.
 2. **Ganancia/pérdida FX** (casillas 1633/1637): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.
 
-Cada adquisición de divisa extranjera (depósito EUR→USD, venta de acciones que genera USD) crea un lote en la cola FIFO de esa divisa. Cada disposición (conversión USD→EUR, compra de acciones en USD) consume lotes por orden cronológico.
+Cada adquisición de divisa extranjera (conversión EUR→USD, dividendo o interés cobrado en USD) crea un lote en la cola FIFO de esa divisa. Cada conversión de esa divisa (por ejemplo, USD→EUR) consume lotes por orden cronológico y realiza una ganancia o pérdida de divisa, igual que los intereses y comisiones que pagas en USD. Comprar acciones en USD no realiza nada. Los dólares gastados quedan apartados con su coste de origen y vuelven a la cola cuando vendes las acciones, junto con el beneficio de la venta al tipo de ese día.
 
-Las conversiones automáticas del broker para liquidación (FXCONV) se excluyen automáticamente — solo las operaciones de forex deliberadas generan eventos fiscales.
+Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker» en el perfil fiscal, o con `--skip-auto-convert` en la CLI.
 
 La regla anti-churning no se aplica a operaciones forex.
 

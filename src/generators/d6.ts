@@ -1,9 +1,11 @@
 /**
  * Modelo D-6 guide generator.
  *
- * D-6 (Declaración de inversiones en el exterior) is filed via the AFORIX
- * web form on Banco de España. There is no file upload — the user must
- * manually enter each position.
+ * D-6 (Declaración de inversiones en el exterior) is filed with the
+ * Registro de Inversiones Exteriores (Secretaría de Estado de Comercio): the
+ * user prepares and signs the declaration in the AFORIX program, entering each
+ * position by hand, then uploads the signed file at eAFORIX
+ * (https://oficinavirtual.comercio.gob.es/eAFORIX/).
  *
  * This generator creates a structured cheat sheet showing exactly what to
  * type into each AFORIX form field, plus a step-by-step guide.
@@ -154,10 +156,9 @@ export function generateD6Report(
     `  Ejercicio: ${year}  |  Plazo: hasta 31 de enero de ${year + 1}`,
     `═══════════════════════════════════════════════════════════════`,
     ``,
-    `PASO 1: Acceder a AFORIX`,
-    `  → https://sefreca.bde.es/sefreca/`,
-    `  → Seleccionar "Modelo D-6 (Inversiones en el exterior)"`,
-    `  → Identificarse con certificado digital o Cl@ve`,
+    `PASO 1: Abrir el programa AFORIX`,
+    `  → Programa de la Secretaría de Estado de Comercio (comercio.gob.es)`,
+    `  → Crear una declaración del modelo D-6 (inversiones en el exterior)`,
     ``,
     `PASO 2: Datos del declarante`,
     `  NIF: ${declarantNif}`,
@@ -194,10 +195,13 @@ export function generateD6Report(
     }
   }
 
-  guide.push(`PASO 4: Revisar y enviar`);
+  guide.push(`PASO 4: Revisar, firmar y presentar`);
   guide.push(`  Total posiciones activas:  ${d6Positions.length}`);
   guide.push(`  Total cancelaciones:       ${cancelled.length}`);
   guide.push(`  Valor total:               ${totalValue.toFixed(2)} EUR`);
+  guide.push(`  → Firmar electrónicamente la declaración en AFORIX`);
+  guide.push(`  → Subir el fichero firmado (.aforixd) en eAFORIX:`);
+  guide.push(`    https://oficinavirtual.comercio.gob.es/eAFORIX/`);
   guide.push(``);
   guide.push(`NOTA: desde la Orden ICT/1408/2021, el D-6 suele limitarse`);
   guide.push(`a participaciones del 10% o más en sociedades cotizadas extranjeras.`);
