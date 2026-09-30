@@ -7,9 +7,10 @@
 
 import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
-import type { Lot } from "../types/tax.js";
+import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
+import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
 /**
@@ -42,8 +43,24 @@ export interface Modelo720ThresholdResult {
   realEstate: { exceeds: boolean; total: Decimal };
 }
 
-function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal } | undefined {
-  if (!cb.averageQ4Cash) return undefined;
+/** 720 threshold: a category is declared only when its joint value is MORE than 50,000 € ("no superen"). */
+const THRESHOLD = new Decimal(50000);
+
+/**
+ * A V-category holding: a long stock, fund or bond. A short position
+ * (negative value) is stock the taxpayer owes, not an asset they own.
+ */
+function isHeldSecurity(p: OpenPosition): boolean {
+  return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    && !new Decimal(p.positionValue).isNegative();
+}
+
+/**
+ * A cash balance in EUR. The Q4 average is null when the statement does not
+ * carry it (IBKR's cash report has no such field): the 31-Dec balance still
+ * counts toward the obligation, but the record cannot be written without it.
+ */
+function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal | null } | undefined {
   const yearEnd = `${year}-12-31`;
   const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
   // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
@@ -51,7 +68,33 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
   if (ecbRate === null) return undefined;
   return {
     ending: new Decimal(cb.endingCash).mul(ecbRate),
-    averageQ4: new Decimal(cb.averageQ4Cash).mul(ecbRate),
+    averageQ4: cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate) : null,
+  };
+}
+
+/**
+ * The two joint sums art. 42 bis.4.e RD 1065/2007 tests for accounts: the
+ * 31-Dec balances and the Q4 average balances, each summed over every
+ * account. The category must be declared when EITHER passes 50,000 €.
+ */
+function cashCategoryTotals(
+  cashBalances: CashBalance[] | undefined,
+  rateMap: EcbRateMap,
+  year: number,
+): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean } {
+  let endingTotal = new Decimal(0);
+  let averageTotal = new Decimal(0);
+  for (const cb of cashBalances ?? []) {
+    if (!new Decimal(cb.endingCash).greaterThan(0)) continue;
+    const values = cashValuesEur(cb, rateMap, year);
+    if (!values) continue;
+    endingTotal = endingTotal.plus(values.ending);
+    if (values.averageQ4) averageTotal = averageTotal.plus(values.averageQ4);
+  }
+  return {
+    endingTotal,
+    averageTotal,
+    exceeds: endingTotal.greaterThan(THRESHOLD) || averageTotal.greaterThan(THRESHOLD),
   };
 }
 
@@ -64,7 +107,8 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
  *  - Bienes inmuebles (real estate) — "B" (not implemented in broker positions)
  *
  * Each category is evaluated independently against the 50K threshold.
- * Only categories exceeding 50K must be declared.
+ * Only categories exceeding 50K must be declared. For accounts the total is
+ * the larger of the two joint sums (31-Dec balances, Q4 averages).
  *
  * @param positions - Open positions at year end
  * @param rateMap - ECB exchange rates
@@ -77,11 +121,9 @@ export function checkModelo720Thresholds(
   year: number,
   cashBalances?: CashBalance[],
 ): Modelo720ThresholdResult {
-  const THRESHOLD = new Decimal(50000);
-
-  // Calculate total value for securities (V category: STK, FUND, BOND)
+  // Calculate total value for securities (V category: long STK, FUND, BOND)
   const valuesTotal = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    .filter(isHeldSecurity)
     .reduce((sum, p) => {
       const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
       // Unvaluable position (no resolvable rate) — excluded from the EUR total.
@@ -89,19 +131,14 @@ export function checkModelo720Thresholds(
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
-  const accountsTotal = (cashBalances ?? [])
-    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
-    .reduce((sum, cb) => {
-      const values = cashValuesEur(cb, rateMap, year);
-      return values ? sum.plus(Decimal.max(values.ending, values.averageQ4)) : sum;
-    }, new Decimal(0));
+  const cash = cashCategoryTotals(cashBalances, rateMap, year);
 
   const realEstateTotal = new Decimal(0);
 
   return {
-    values: { exceeds: valuesTotal.greaterThanOrEqualTo(THRESHOLD), total: valuesTotal },
-    accounts: { exceeds: accountsTotal.greaterThanOrEqualTo(THRESHOLD), total: accountsTotal },
-    realEstate: { exceeds: realEstateTotal.greaterThanOrEqualTo(THRESHOLD), total: realEstateTotal },
+    values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal },
+    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal) },
+    realEstate: { exceeds: realEstateTotal.greaterThan(THRESHOLD), total: realEstateTotal },
   };
 }
 
@@ -158,10 +195,6 @@ function cashOmission(cb: CashBalance): "no_country" | "no_account" | null {
   if (cb.accountId.trim() === "") return "no_account";
   if (!isIsoCountryCode((cb.countryCode ?? "").toUpperCase())) return "no_country";
   return null;
-}
-
-function isValuesCategory(p: OpenPosition): boolean {
-  return p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND";
 }
 
 /**
@@ -244,15 +277,15 @@ function plan720(
   config: Modelo720PlanConfig,
   remainingLots?: Map<string, Lot[]>,
   cashBalances?: CashBalance[],
+  disposals?: FifoDisposal[],
 ) {
-  const previousSecurities = config.previousYearSecurities ?? [];
-  const previousIsins = new Set(previousSecurities.map((s) => s.isin));
+  const previousIsins = new Set((config.previousYearSecurities ?? []).map((s) => s.isin));
 
-  // Filter to stocks/funds/bonds and calculate EUR values
+  // Filter to long stocks/funds/bonds and calculate EUR values
   // STK positions use Q4 average FX rate (media del cuarto trimestre);
   // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
   const entries = positions
-    .filter(isValuesCategory)
+    .filter(isHeldSecurity)
     .flatMap((p) => {
       const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
       // Unvaluable position (no resolvable rate): cannot be written to the
@@ -261,39 +294,37 @@ function plan720(
       if (ecbRate === null) return [];
       const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
 
-      // First acquisition date from FIFO lots (earliest lot for this ISIN)
-      let firstAcquisitionDate = "";
-      if (remainingLots) {
-        const lots = remainingLots.get(p.isin);
-        if (lots && lots.length > 0) {
-          const earliest = lots.reduce((min, lot) =>
-            lot.acquireDate < min ? lot.acquireDate : min, lots[0]!.acquireDate);
-          firstAcquisitionDate = earliest;
-        }
-      }
+      // One record per acquisition date of the lots held at year end
+      const tranches = acquisitionTranches(new Decimal(p.quantity).abs(), valueEur, remainingLots?.get(p.isin));
 
       // Declaration type: A (new), M (existing), C (cancelled/sold)
       const declType: "A" | "M" = previousIsins.has(p.isin) ? "M" : "A";
 
       // Counts toward the 50,000 EUR threshold even when the file cannot carry it.
-      return [{ position: p, valueEur, firstAcquisitionDate, declType, omission: positionOmission(p) }];
+      return [{ position: p, valueEur, tranches, declType, omission: positionOmission(p) }];
     });
 
-  // "C" (cancelled) records for last year's securities no longer HELD. Use the
-  // held set (all V-category positions), NOT `entries` — a position that is
-  // still held but couldn't be valued (no year-end rate) is skipped from
-  // `entries`, yet it must NOT be reported as cancelled/sold (that would tell
-  // AEAT the user liquidated an asset they still hold).
-  const heldIsins = new Set(positions.filter(isValuesCategory).map((p) => p.isin));
-  const cancelled = previousSecurities.filter((s) => !heldIsins.has(s.isin));
+  // "C" (cancelled) records for last year's securities no longer held, dated
+  // and valued by the last sale of declared shares. Without such a sale the
+  // record keeps a blank date and a zero value (see findUndatedExtinctions).
+  const cancelled = findCancelledSecurities(positions, config.previousYearSecurities);
+  const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
+    const tranches = extinctionTranches(security.isin, config.year, disposals);
+    return tranches.length > 0
+      ? tranches.map((t) => ({ security, ...t }))
+      : [{ security, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
+  });
 
-  // Category C: cash balances at foreign brokers
+  // Category C: cash balances at foreign brokers. A balance with no Q4 average
+  // counts toward the threshold but is not written: the record needs that
+  // average and the tool never invents it (the web section asks the user to
+  // add that account by hand).
   const previousAccounts = new Set(config.previousYearAccounts ?? []);
   const cashEntries = (cashBalances ?? [])
     .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
-      return values
+      return values?.averageQ4
         ? [{
           cashBalance: cb,
           valueEur: values.ending,
@@ -306,14 +337,8 @@ function plan720(
 
   // Check 50,000 EUR threshold per category independently
   const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const totalValueC = cashEntries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelled.length > 0;
-  const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
-
-  // Last year's file wrote an invalid code (older versions left the subclave
-  // blank and wrote the ISIN prefix, e.g. XS, as the country): repeating it
-  // would make AEAT reject the file.
-  const repeatable = (s: Previous720Security) => isClaveSubclave(s.claveSubclave) && isIsoCountryCode(s.country);
+  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelled.length > 0;
+  const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds;
 
   const omissions: Modelo720Omission[] = [];
   if (hasValuesRecords) {
@@ -321,7 +346,7 @@ function plan720(
       if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
     }
     for (const security of cancelled) {
-      if (!repeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
+      if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
     }
   }
   if (hasCashRecords) {
@@ -332,7 +357,7 @@ function plan720(
 
   return {
     entries: hasValuesRecords ? entries.filter((e) => e.omission === null) : [],
-    cancelled: hasValuesRecords ? cancelled.filter(repeatable) : [],
+    cancelledEntries: hasValuesRecords ? cancelledEntries : [],
     cashEntries: hasCashRecords ? cashEntries.filter((e) => e.omission === null) : [],
     omissions,
   };
@@ -353,15 +378,17 @@ export function generateModelo720(
   positions: OpenPosition[],
   rateMap: EcbRateMap,
   config: Modelo720Config,
-  /** Optional: remaining lots from FIFO engine, used to extract first acquisition date */
+  /** Optional: lots held at 31 December (TaxSummary.yearEndLots), one record per acquisition date */
   remainingLots?: Map<string, Lot[]>,
   cashBalances?: CashBalance[],
+  /** Optional: the year's FIFO disposals, used to date and value the extinction ("C") records */
+  disposals?: FifoDisposal[],
 ): string {
-  const { entries, cancelled, cashEntries } = plan720(positions, rateMap, config, remainingLots, cashBalances);
+  const { entries, cancelledEntries, cashEntries } = plan720(positions, rateMap, config, remainingLots, cashBalances, disposals);
 
   const detailRecords = [
-    ...entries.map((e) => buildDetailRecord(e.position, e.valueEur, config, e.firstAcquisitionDate, e.declType)),
-    ...cancelled.map((s) => buildCancelledRecord(s, config)),
+    ...entries.flatMap((e) => e.tranches.map((t) => buildDetailRecord(e.position, t.valueEur, t.quantity, config, t.date, e.declType))),
+    ...cancelledEntries.map((c) => buildCancelledRecord(c, config)),
     ...cashEntries.map((e) => buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config, e.declType)),
   ];
 
@@ -372,15 +399,164 @@ export function generateModelo720(
 
   // Valoración 1 / Valoración 2 exactly as written in each type-2 record
   // (rounded to cents, signed): the type-1 sumas are the totals of those two
-  // fields (cancelled records add 0). V: 31-Dec value / nothing. C: 31-Dec
-  // balance / Q4 average balance.
+  // fields. V: 31-Dec value (a cancelled record: value at the extinction date) /
+  // nothing. C: 31-Dec balance / Q4 average balance.
   const allEntries = [
-    ...entries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })),
+    ...[...entries.flatMap((e) => e.tranches), ...cancelledEntries].map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })),
     ...cashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) })),
   ];
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
   return [summaryRecord, ...detailRecords].join("\n");
+}
+
+/** A date as the 8-digit YYYYMMDD the record fields carry. */
+function recordDate(date: string): string {
+  return normalizeDate(date).replace(/-/g, "").slice(0, 8);
+}
+
+/**
+ * Split a held position into one tranche per acquisition date. The BOE asks for
+ * "tantos registros como fechas de adquisición diferentes existan" (claves V and
+ * I, field 415-422). The shares held at 31 December are the newest lots (FIFO,
+ * Art. 37.2 LIRPF), so lots are taken newest first up to the position quantity;
+ * a quantity the lots do not cover keeps a blank date. The value is prorated by
+ * quantity, and the last tranche takes the remainder so the written amounts add
+ * up to the position's written value.
+ */
+function acquisitionTranches(
+  quantity: Decimal,
+  valueEur: Decimal,
+  lots: Lot[] | undefined,
+): { date: string; quantity: Decimal; valueEur: Decimal }[] {
+  const byDate = new Map<string, Decimal>();
+  let left = quantity;
+  const newestFirst = (lots ?? [])
+    .filter((lot) => lot.quantity.greaterThan(0))
+    .sort((a, b) => recordDate(b.acquireDate).localeCompare(recordDate(a.acquireDate)));
+  for (const lot of newestFirst) {
+    if (!left.greaterThan(0)) break;
+    const taken = Decimal.min(lot.quantity, left);
+    const date = recordDate(lot.acquireDate);
+    byDate.set(date, (byDate.get(date) ?? new Decimal(0)).plus(taken));
+    left = left.minus(taken);
+  }
+  if (left.greaterThan(0) || byDate.size === 0) byDate.set("", (byDate.get("") ?? new Decimal(0)).plus(left));
+
+  const dates = [...byDate.keys()].sort();
+  let written = new Decimal(0);
+  return dates.map((date, i) => {
+    const trancheQuantity = byDate.get(date)!;
+    const trancheValue = i === dates.length - 1
+      ? writtenAmount(valueEur).minus(written)
+      : writtenAmount(valueEur.mul(trancheQuantity).div(quantity));
+    written = written.plus(trancheValue);
+    return { date, quantity: trancheQuantity, valueEur: trancheValue };
+  });
+}
+
+/**
+ * Securities declared last year that are no longer held. Uses the held set (all
+ * V-category positions), not the valued entries: a position that is still held
+ * but couldn't be valued (no year-end rate) is skipped from the records, yet it
+ * must NOT be reported as cancelled/sold (that would tell AEAT the user
+ * liquidated an asset they still hold). A short position is not held: a
+ * declared holding now shorted was sold, so it is cancelled.
+ */
+function findCancelledSecurities(positions: OpenPosition[], previous: Previous720Security[] | undefined): Previous720Security[] {
+  const heldIsins = new Set(positions.filter(isHeldSecurity).map((p) => p.isin));
+  // Last year's file holds one record per acquisition date: one sale per ISIN.
+  const cancelled = new Map<string, Previous720Security>();
+  for (const s of previous ?? []) {
+    if (!heldIsins.has(s.isin) && !cancelled.has(s.isin)) cancelled.set(s.isin, s);
+  }
+  return [...cancelled.values()];
+}
+
+/**
+ * A sale is repeated with the clave, subclave and country last year's file
+ * wrote. Older versions left the subclave blank and wrote the ISIN prefix
+ * (e.g. XS) as the country: repeating either would make AEAT reject the file,
+ * so such a sale is left out and reported instead.
+ */
+function isRepeatable(s: Previous720Security): boolean {
+  return isClaveSubclave(s.claveSubclave) && isIsoCountryCode(s.country);
+}
+
+/**
+ * A FIFO disposal of shares the upload holds no lot for (a sale with no history
+ * behind it): the engine records it with the sale date as acquisition date and
+ * a zero cost ("Venta sin lotes" / "Lotes insuficientes").
+ */
+function isSaleWithoutLots(d: FifoDisposal): boolean {
+  return recordDate(d.acquireDate) === recordDate(d.sellDate) && d.costBasisFcy.isZero() && d.holdingPeriodDays === 0;
+}
+
+/**
+ * The sale that ended the holding of a previously declared ISIN. Only lots
+ * bought before the declaration year were declared, so the extinction is the
+ * last sale in the year that consumed such a lot: its date is the extinction
+ * date (424-431) and the proceeds of those lots the value at that date
+ * (valoración 1, "saldo ... en la fecha de extinción"), one tranche per
+ * acquisition date. Shares bought and sold within the year were never declared,
+ * so their sales neither date the extinction nor add a tranche. A sale with no
+ * lot in the upload (no history) also sold declared shares; it keeps a blank
+ * acquisition date, which findUndatedExtinctions reports.
+ */
+function extinctionTranches(
+  isin: string,
+  year: number,
+  disposals: FifoDisposal[] | undefined,
+): { acquireDate: string; sellDate: string; valueEur: Decimal }[] {
+  const yearStart = `${year}0101`;
+  const declared = (disposals ?? []).flatMap((d) => {
+    if (d.isin !== isin || d.isShort || !recordDate(d.sellDate).startsWith(String(year))) return [];
+    const acquired = recordDate(d.acquireDate);
+    if (/^\d{8}$/.test(acquired) && acquired < yearStart) return [{ d, acquireDate: acquired }];
+    return isSaleWithoutLots(d) ? [{ d, acquireDate: "" }] : [];
+  });
+  if (declared.length === 0) return [];
+  const sellDate = declared.map(({ d }) => recordDate(d.sellDate)).sort().at(-1)!;
+  const byAcquireDate = new Map<string, Decimal>();
+  for (const { d, acquireDate } of declared) {
+    if (recordDate(d.sellDate) !== sellDate) continue;
+    byAcquireDate.set(acquireDate, (byAcquireDate.get(acquireDate) ?? new Decimal(0)).plus(d.proceedsEur));
+  }
+  return [...byAcquireDate.keys()].sort().map((acquireDate) => ({
+    acquireDate,
+    sellDate,
+    valueEur: byAcquireDate.get(acquireDate)!,
+  }));
+}
+
+/** An extinction record with a field the file leaves blank (see findUndatedExtinctions). */
+export interface UndatedExtinction {
+  isin: string;
+  missing: "extinctionDate" | "acquisitionDate";
+}
+
+/**
+ * Extinction ("C") records the file cannot fill on its own, so the caller must
+ * warn the user to complete them before filing:
+ * - `extinctionDate`: an ISIN declared last year, no longer held, with no sale
+ *   of declared shares in the year (a transfer out, or a sale outside the
+ *   uploaded data). Its record has a blank extinction date and a zero value,
+ *   never an invented 31 December.
+ * - `acquisitionDate`: the extinction is dated by a sale the upload holds no
+ *   lot for (no history), so its acquisition date (415-422) is blank.
+ */
+export function findUndatedExtinctions(
+  positions: OpenPosition[],
+  config: Pick<Modelo720Config, "year" | "previousYearSecurities">,
+  disposals?: FifoDisposal[],
+): UndatedExtinction[] {
+  // A sale left out for an invalid code has no record to complete; findModelo720Omissions reports it.
+  const written = findCancelledSecurities(positions, config.previousYearSecurities).filter(isRepeatable);
+  return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
+    const tranches = extinctionTranches(isin, config.year, disposals);
+    if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
+    return tranches.some((t) => t.acquireDate === "") ? [{ isin, missing: "acquisitionDate" }] : [];
+  });
 }
 
 function pad(value: string, length: number, char = " ", alignRight = false): string {
@@ -522,9 +698,10 @@ function buildSummaryRecord(
 function buildDetailRecord(
   pos: OpenPosition,
   valueEur: Decimal,
+  quantity: Decimal,
   config: Modelo720Config,
-  firstAcquisitionDate?: string,
-  declType: "A" | "M" | "C" = "M",
+  acquisitionDate: string,
+  declType: "A" | "M",
 ): string {
   const countryCode = modelo720PositionCountry(pos) ?? "  ";
 
@@ -546,14 +723,14 @@ function buildDetailRecord(
   record += pad("", 46);                                      // 144-189: Reserved
   record += fixedWidthText(pos.description, 41);              // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
-  record += pad((firstAcquisitionDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: First acquisition date (YYYYMMDD)
-  record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
+  record += pad(acquisitionDate, 8);                          // 415-422: Acquisition date (YYYYMMDD)
+  record += declType;                                         // 423: Type (A=new, M=existing)
   record += pad("", 8);                                       // 424-431: Sell date
   record += valoracionField(valueEur);                        // 432-446: Valoración 1 sign + value at Dec 31
   record += " ";                                              // 447: Valoración 2 sign
   record += numPad("0", 12, 2);                               // 448-461: Valoración 2 (not informed for V)
   record += "A";                                              // 462: Clave de representación (book entry)
-  record += numPad(new Decimal(pos.quantity).abs().toString(), 10, 2); // 463-474: Número de valores
+  record += numPad(quantity.toString(), 10, 2);               // 463-474: Número de valores
   record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
   record += ownershipField(config);                           // 476-480: Ownership %
   record += pad("", 20);                                      // 481-500: Blank
@@ -564,10 +741,14 @@ function buildDetailRecord(
 /**
  * Build a "C" (cancelled) detail record for a security declared in the
  * previous year but no longer held. It repeats last year's clave, subclave and
- * country so AEAT matches it to the record it cancels.
+ * country so AEAT matches it to the record it cancels; callers only pass a
+ * security whose codes are valid (isRepeatable).
  */
-function buildCancelledRecord(security: Previous720Security, config: Modelo720Config): string {
-  const yearEnd = `${config.year}1231`;
+function buildCancelledRecord(
+  entry: { security: Previous720Security; acquireDate: string; sellDate: string; valueEur: Decimal },
+  config: Modelo720Config,
+): string {
+  const { security } = entry;
 
   let record = "";
   record += "2";                                              // 1: Register type
@@ -587,11 +768,10 @@ function buildCancelledRecord(security: Previous720Security, config: Modelo720Co
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad("", 41);                                      // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
-  record += pad("", 8);                                       // 415-422: First acquisition date
+  record += pad(entry.acquireDate, 8);                        // 415-422: Acquisition date of the lot sold
   record += "C";                                              // 423: Type (C=cancelled)
-  record += pad(yearEnd, 8);                                  // 424-431: Sell/cancellation date
-  record += " ";                                              // 432: Valoración 1 sign
-  record += numPad("0", 12, 2);                               // 433-446: Valoración 1 (0)
+  record += pad(entry.sellDate, 8);                           // 424-431: Extinction date (the last sale)
+  record += valoracionField(entry.valueEur);                  // 432-446: Valoración 1 sign + value at the extinction date
   record += " ";                                              // 447: Valoración 2 sign
   record += numPad("0", 12, 2);                               // 448-461: Valoración 2 (0)
   record += "A";                                              // 462: Clave de representación (book entry)

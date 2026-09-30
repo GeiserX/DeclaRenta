@@ -18,9 +18,11 @@ import {
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
+import type { Lot } from "../types/tax.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
+import { renderPositionsDateBanner } from "./positions-date.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -31,6 +33,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedYearEndLots: Map<string, Lot[]> | undefined;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
@@ -48,9 +51,10 @@ export function initSection720(): void {
 }
 
 /** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap): void {
+export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedYearEndLots = yearEndLots;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -91,6 +95,10 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
     </div>`;
   }
 
+  // Positions must be the holdings at 31 December of the selected year
+  const positionsDate = renderPositionsDateBanner(statement, year);
+  html += positionsDate.html;
+
   // Per-category threshold checks (720 has independent 50K thresholds)
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
@@ -121,11 +129,14 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   if (exceeds) {
     const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
+    html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
   }
 
-  // Positions table
+  // Positions table (long holdings only: a short is owed, not owned, and the
+  // threshold above leaves it out too)
   const positions = statement.openPositions.filter(
-    (p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND",
+    (p) => (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+      && !new Decimal(p.positionValue).isNegative(),
   );
 
   if (positions.length > 0) {
@@ -202,7 +213,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
 
   // Generate button
   if (exceeds || positions.length > 0) {
-    html += `<button id="m720-generate-btn">${t("m720.generate_btn")}</button>`;
+    html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
   }
 
   // Filing guide
@@ -302,7 +313,7 @@ function generate720File(): void {
     }
   }
 
-  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, undefined, cachedStatement.cashBalances);
+  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances);
   if (!result) return; // Below threshold
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
@@ -317,6 +328,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
   }
 }

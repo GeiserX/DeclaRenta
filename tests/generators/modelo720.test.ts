@@ -4,11 +4,13 @@ import {
   generateModelo720,
   checkModelo720Thresholds,
   findModelo720Omissions,
+  findUndatedExtinctions,
   modelo720DeclarationId,
   readPrevious720,
   type Previous720Security,
 } from "../../src/generators/modelo720.js";
-import type { CashBalance, OpenPosition } from "../../src/types/ibkr.js";
+import { generateTaxReport } from "../../src/generators/report.js";
+import type { CashBalance, FlexStatement, OpenPosition, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
 import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
@@ -182,7 +184,7 @@ describe("Modelo 720 Generator", () => {
       expect(cancelled!.slice(131, 143).trim()).toBe("IE00BK5BQT80");
     });
 
-    it("should set cancellation date to year-end in C records", () => {
+    it("leaves the extinction date blank, and flags the ISIN, when no sale in the year explains the extinction", () => {
       const positions = [makePosition()];
       const config = {
         ...baseConfig,
@@ -190,8 +192,9 @@ describe("Modelo 720 Generator", () => {
       };
       const result = generateModelo720(positions, rateMap, config);
       const cancelled = result.split("\n").find((l) => l[0] === "2" && l[422] === "C")!;
-      // Cancellation date at positions 424-431 (0-indexed: 423-430)
-      expect(cancelled.slice(423, 431)).toBe("20251231");
+      // Extinction date at positions 424-431 (0-indexed: 423-430): never an invented 31-Dec
+      expect(cancelled.slice(423, 431)).toBe("        ");
+      expect(findUndatedExtinctions(positions, config, [])).toEqual([{ isin: "DE000A0F5UF5", missing: "extinctionDate" }]);
     });
   });
 
@@ -211,7 +214,7 @@ describe("Modelo 720 Generator", () => {
       expect(result.values.total.toFixed(2)).toBe("49999.99");
     });
 
-    it("should report values at exactly 50,000.00 as exceeding threshold", () => {
+    it("should NOT report values at exactly 50,000.00 as exceeding (the rule is \"no superen\")", () => {
       const positions = [makePosition({
         currency: "EUR",
         positionValue: "50000.00",
@@ -219,8 +222,23 @@ describe("Modelo 720 Generator", () => {
       })];
       const result = checkModelo720Thresholds(positions, rateMap, 2025);
 
-      expect(result.values.exceeds).toBe(true);
+      expect(result.values.exceeds).toBe(false);
       expect(result.values.total.toFixed(2)).toBe("50000.00");
+      expect(generateModelo720(positions, rateMap, baseConfig)).toBe("");
+    });
+
+    it("should report values at 50,000.01 as exceeding", () => {
+      const positions = [makePosition({ currency: "EUR", positionValue: "50000.01", assetCategory: "STK" })];
+      expect(checkModelo720Thresholds(positions, rateMap, 2025).values.exceeds).toBe(true);
+      expect(generateModelo720(positions, rateMap, baseConfig)).not.toBe("");
+    });
+
+    it("should NOT report cash at exactly 50,000.00 as exceeding, in the check and in the file", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "50000.00", endingSettledCash: "50000.00", averageQ4Cash: "50000.00" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(false);
+      expect(generateModelo720([], rateMap, baseConfig, undefined, cashBalances)).toBe("");
     });
 
     it("should sum across multiple STK/FUND/BOND positions", () => {
@@ -317,6 +335,63 @@ describe("Modelo 720 Generator", () => {
       expect(result.accounts.total.toFixed(2)).toBe("55200.00");
     });
 
+    it("tests the 31-Dec balances and the Q4 averages as two joint sums, not a per-account maximum", () => {
+      // Σ 31-Dec = 30k + 10k = 40k and Σ Q4 average = 10k + 30k = 40k: neither
+      // joint sum passes 50k, so there is no obligation (art. 42 bis.4.e RD
+      // 1065/2007). Summing each account's max(ending, average) gives 60k.
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "30000", endingSettledCash: "30000", averageQ4Cash: "10000" },
+        { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "30000" },
+      ];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(false);
+      expect(result.accounts.total.toFixed(2)).toBe("40000.00");
+      expect(generateModelo720([], rateMap, baseConfig, undefined, cashBalances)).toBe("");
+    });
+
+    it("reports the larger joint sum when the Q4 average is below the 31-Dec balance", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000" },
+      ];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("60000.00");
+    });
+
+    it("counts the 31-Dec balance when the statement has no Q4 average (IBKR cash report)", () => {
+      const cashBalances = [{ accountId: "U1", currency: "EUR", endingCash: "80000", endingSettledCash: "80000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("80000.00");
+    });
+
+    it("converts a foreign 31-Dec balance with no Q4 average at the 31-Dec rate", () => {
+      const cashBalances = [{ accountId: "U1", currency: "USD", endingCash: "60000", endingSettledCash: "60000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      // 60000 × 0.92 = 55200
+      expect(result.accounts.exceeds).toBe(true);
+      expect(result.accounts.total.toFixed(2)).toBe("55200.00");
+    });
+
+    it("does not flag a 31-Dec balance under 50k that has no Q4 average", () => {
+      const cashBalances = [{ accountId: "U1", currency: "EUR", endingCash: "40000", endingSettledCash: "40000" }];
+      const result = checkModelo720Thresholds([], rateMap, 2025, cashBalances);
+      expect(result.accounts.exceeds).toBe(false);
+      expect(result.accounts.total.toFixed(2)).toBe("40000.00");
+    });
+
+    it("leaves short positions out of the valores total", () => {
+      // A short is borrowed stock the taxpayer owes, not an asset they hold.
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "25000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "0", positionValue: "-30000" }),
+      ];
+      const result = checkModelo720Thresholds(positions, rateMap, 2025);
+      expect(result.values.exceeds).toBe(false);
+      expect(result.values.total.toFixed(2)).toBe("25000.00");
+      expect(generateModelo720(positions, rateMap, baseConfig)).toBe("");
+    });
+
     it("should use rate 1.0 for EUR cash balances", () => {
       const positions: OpenPosition[] = [];
       const cashBalances = [
@@ -370,6 +445,58 @@ describe("Modelo 720 Generator", () => {
       expect(lines[1]![101]).toBe("V");
       // Second detail should be C (accounts)
       expect(lines[2]![101]).toBe("C");
+    });
+
+    it("writes the accounts when the Q4 average passes 50k and the 31-Dec balance does not", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000", countryCode: "IE" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(true);
+      const lines = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(boeField(lines[1]!, BOE_720.detail.claveBien)).toBe("C");
+      expect(boeField(lines[1]!, BOE_720.detail.valoracion1)).toBe("00000002000000");
+      expect(boeField(lines[1]!, BOE_720.detail.valoracion2)).toBe("00000007000000");
+    });
+
+    it("writes both V and C when the securities pass 50k and only the cash Q4 average does", () => {
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000", countryCode: "IE" },
+      ];
+      const lines = generateModelo720([makePosition()], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines.slice(1).map((l) => boeField(l, BOE_720.detail.claveBien))).toEqual(["V", "C"]);
+    });
+
+    it("agrees with the threshold check on whether the accounts are declared", () => {
+      const fixtures = [
+        [{ accountId: "U1", currency: "EUR", endingCash: "30000", endingSettledCash: "30000", averageQ4Cash: "10000", countryCode: "IE" },
+         { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "30000", countryCode: "IE" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "20000", endingSettledCash: "20000", averageQ4Cash: "70000", countryCode: "IE" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "70000", endingSettledCash: "70000", averageQ4Cash: "20000", countryCode: "IE" }],
+        [{ accountId: "U1", currency: "USD", endingCash: "50000", endingSettledCash: "50000", averageQ4Cash: "50000", countryCode: "IE" }],
+        [{ accountId: "U1", currency: "EUR", endingCash: "50000", endingSettledCash: "50000", averageQ4Cash: "50000", countryCode: "IE" }],
+      ];
+      for (const cashBalances of fixtures) {
+        const exceeds = checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds;
+        const file = generateModelo720([], rateMap, baseConfig, undefined, cashBalances);
+        const hasC = file.split("\n").slice(1).some((l) => boeField(l, BOE_720.detail.claveBien) === "C");
+        expect(hasC).toBe(exceeds);
+      }
+    });
+
+    it("does not write a balance with no Q4 average, but still writes the accounts that have one", () => {
+      // The record needs the Q4 average (valoración 2); the tool never invents
+      // it. The 31-Dec balance still counts toward the obligation, and the web
+      // section tells the user to enter that account by hand.
+      const cashBalances = [
+        { accountId: "U1", currency: "EUR", endingCash: "45000", endingSettledCash: "45000", countryCode: "IE" },
+        { accountId: "U2", currency: "EUR", endingCash: "10000", endingSettledCash: "10000", averageQ4Cash: "10000", countryCode: "IE" },
+      ];
+      expect(checkModelo720Thresholds([], rateMap, 2025, cashBalances).accounts.exceeds).toBe(true);
+      const lines = generateModelo720([], rateMap, baseConfig, undefined, cashBalances).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(boeField(lines[1]!, BOE_720.detail.claveBien)).toBe("C");
+      expect(boeField(lines[1]!, BOE_720.detail.codigoCuenta).trim()).toBe("U2");
     });
 
     it("should only generate C records when V is below threshold but C exceeds", () => {
@@ -675,11 +802,34 @@ describe("Modelo 720 Generator", () => {
       expect(fundResult).not.toBe("");
 
       // STK uses Q4 average (0.93), FUND uses Dec 31 (0.96)
-      // The exact values will differ between them
-      const stkLines = stkResult.split("\n");
-      const fundLines = fundResult.split("\n");
-      expect(stkLines.length).toBeGreaterThanOrEqual(2);
-      expect(fundLines.length).toBeGreaterThanOrEqual(2);
+      const stkValue = boeField(stkResult.split("\n")[1]!, BOE_720.detail.valoracion1);
+      const fundValue = boeField(fundResult.split("\n")[1]!, BOE_720.detail.valoracion1);
+      expect(stkValue).toBe("00000009300000"); // 100000 × 0.93 = 93,000.00
+      expect(fundValue).toBe("00000009600000"); // 100000 × 0.96 = 96,000.00
+    });
+  });
+
+  describe("Short positions", () => {
+    it("writes only the long holdings, never a short as an owned asset", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "60000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "-100", positionValue: "-30000" }),
+      ];
+      const lines = generateModelo720(positions, rateMap, baseConfig).split("\n");
+      expect(lines).toHaveLength(2);
+      expect(lines[1]!.slice(131, 143).trim()).toBe("US78462F1030");
+    });
+
+    it("declares a holding sold last year as cancelled even if the same ISIN is now held short", () => {
+      const positions = [
+        makePosition({ currency: "EUR", positionValue: "60000" }),
+        makePosition({ currency: "EUR", isin: "US0000000002", quantity: "-100", positionValue: "-30000" }),
+      ];
+      const config = { ...baseConfig, previousYearSecurities: lastYear("US0000000002") };
+      const details = generateModelo720(positions, rateMap, config).split("\n").slice(1);
+      const shortIsin = details.filter((l) => l.slice(131, 143).trim() === "US0000000002");
+      expect(shortIsin).toHaveLength(1);
+      expect(boeField(shortIsin[0]!, BOE_720.detail.origen)).toBe("C");
     });
   });
 
@@ -1053,5 +1203,172 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
         { kind: "position", reason: "no_isin", position: noIsin },
       ]);
     });
+  });
+});
+
+describe("Acquisition dates and extinctions from the FIFO run", () => {
+  const lot = (acquireDate: string, quantity: number): Lot => ({
+    id: acquireDate, isin: "US78462F1030", symbol: "SPY", description: "", acquireDate,
+    quantity: new Decimal(quantity), pricePerShare: new Decimal(400), costInFcy: new Decimal(400 * quantity),
+    currency: "USD", ecbRate: new Decimal("0.92"),
+  });
+
+  it("writes one V record per acquisition date, with its own quantity and its share of the value", () => {
+    const lots = new Map([["US78462F1030", [lot("20230115", 30), lot("20240601", 30), lot("20250310", 40)]]]);
+    const lines = generateModelo720([makePosition()], rateMap, baseConfig, lots).split("\n");
+    const details = lines.filter((l) => l[0] === "2");
+    const d = BOE_720.detail;
+    expect(details.map((l) => l.slice(414, 422))).toEqual(["20230115", "20240601", "20250310"]);
+    expect(details.map((l) => boeField(l, d.numeroValores))).toEqual(["000000003000", "000000003000", "000000004000"]);
+    // 55,200.00 EUR split 30/30/40
+    expect(details.map((l) => boeField(l, d.valoracion1))).toEqual(["00000001656000", "00000001656000", "00000002208000"]);
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000005520000");
+    expect(boeField(lines[0]!, [136, 144])).toBe("000000003");
+  });
+
+  it("dates the shares still held with the newest lots when the lots hold more than the position (FIFO)", () => {
+    const lots = new Map([["US78462F1030", [lot("20230115", 50), lot("20240601", 50)]]]);
+    const details = generateModelo720([makePosition({ quantity: "60" })], rateMap, baseConfig, lots)
+      .split("\n").filter((l) => l[0] === "2");
+    expect(details.map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.numeroValores)])).toEqual([
+      ["20230115", "000000001000"],
+      ["20240601", "000000005000"],
+    ]);
+  });
+
+  function eurTrade(overrides: Partial<Trade>): Trade {
+    const tradeDate = overrides.tradeDate ?? "2025-03-15";
+    return {
+      tradeID: tradeDate, accountId: "U1", symbol: "SPY", description: "SPDR S&P 500 ETF", isin: "US78462F1030",
+      assetCategory: "STK", currency: "EUR", tradeDate, settlementDate: tradeDate, quantity: "10", tradePrice: "100",
+      tradeMoney: "1000", proceeds: "1000", cost: "1000", fifoPnlRealized: "0", fxRateToBase: "1", buySell: "BUY",
+      openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O", exchange: "XETRA", commissionCurrency: "EUR",
+      commission: "0", taxes: "0", multiplier: "1", ...overrides,
+    };
+  }
+
+  // Held SPY bought in two tranches, 40 of it sold AFTER the year end (the
+  // upload runs into 2026); VWCE declared last year and sold on 2025-03-15.
+  const statement: FlexStatement = {
+    accountId: "U1", fromDate: "20230101", toDate: "20260228", period: "Custom",
+    trades: [
+      eurTrade({ tradeDate: "2023-01-16", quantity: "40", tradePrice: "400" }),
+      eurTrade({ tradeDate: "2025-03-10", quantity: "60", tradePrice: "500" }),
+      eurTrade({ tradeDate: "2026-02-02", quantity: "-40", tradePrice: "650", buySell: "SELL" }),
+      eurTrade({ tradeDate: "2024-02-12", symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", quantity: "100", tradePrice: "50" }),
+      eurTrade({ tradeDate: "2025-03-15", symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", quantity: "-100", tradePrice: "60", buySell: "SELL" }),
+    ],
+    cashTransactions: [], corporateActions: [], securitiesInfo: [],
+    openPositions: [makePosition({ currency: "EUR", quantity: "100", positionValue: "60000" })],
+  };
+  const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80") };
+
+  it("dates held securities with the lots held on 31 December, not after later sales in the upload", () => {
+    const report = generateTaxReport(statement, new Map(), 2025);
+    const out = generateModelo720(statement.openPositions, rateMap, config, report.yearEndLots, undefined, report.capitalGains.disposals);
+    const held = out.split("\n").filter((l) => l[0] === "2" && l.slice(131, 143) === "US78462F1030");
+    expect(held.map((l) => [l.slice(414, 422), l[422], boeField(l, BOE_720.detail.numeroValores)])).toEqual([
+      ["20230116", "M", "000000004000"],
+      ["20250310", "M", "000000006000"],
+    ]);
+  });
+
+  it("writes the extinction record with the declarant's name, the sale date, the sale value and the lot's acquisition date", () => {
+    const report = generateTaxReport(statement, new Map(), 2025);
+    const lines = generateModelo720(statement.openPositions, rateMap, config, report.yearEndLots, undefined, report.capitalGains.disposals)
+      .split("\n");
+    const cancelled = lines.find((l) => l[0] === "2" && l[422] === "C")!;
+    const d = BOE_720.detail;
+    expect(cancelled.slice(131, 143)).toBe("IE00BK5BQT80");
+    expect(cancelled.slice(35, 75).trim()).toBe("GARCIA LOPEZ JUAN");
+    expect(boeField(cancelled, d.fechaExtincion)).toBe("20250315");
+    expect(boeField(cancelled, d.valoracion1)).toBe("00000000600000"); // 100 x 60 EUR
+    expect(cancelled.slice(414, 422)).toBe("20240212");
+    // The type-1 suma 1 includes the extinction value: 60,000 + 6,000
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000006600000");
+    expect(findUndatedExtinctions(statement.openPositions, config, report.capitalGains.disposals)).toEqual([]);
+    expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
+  });
+
+  // VWCE declared last year (100 shares bought 2023-05-02 unless the upload
+  // has no history), no longer held at 31 December 2025.
+  const vwce = (overrides: Partial<Trade>) =>
+    eurTrade({ symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", ...overrides });
+  const sell = (tradeDate: string, quantity: string, tradePrice: string) =>
+    vwce({ tradeDate, quantity: `-${quantity}`, tradePrice, buySell: "SELL" });
+  function extinctions(trades: Trade[]) {
+    const s: FlexStatement = { ...statement, fromDate: "20230101", toDate: "20251231", trades };
+    const report = generateTaxReport(s, new Map(), 2025);
+    const cfg = { ...baseConfig, previousYearSecurities: lastYear("IE00BK5BQT80") };
+    const lines = generateModelo720(s.openPositions, rateMap, cfg, undefined, undefined, report.capitalGains.disposals).split("\n");
+    const records = lines
+      .filter((l) => l[0] === "2" && l[422] === "C")
+      .map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.fechaExtincion), boeField(l, BOE_720.detail.valoracion1)]);
+    return { records, undated: findUndatedExtinctions(s.openPositions, cfg, report.capitalGains.disposals), lines };
+  }
+
+  it("dates the extinction by the sale of the declared shares, not a later sale of shares bought and sold within the year", () => {
+    const { records, undated, lines } = extinctions([
+      vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }),
+      sell("2025-03-03", "100", "60"),
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["20230502", "20250303", "00000000600000"]]); // 100 x 60 EUR
+    expect(undated).toEqual([]);
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000006600000"); // 60,000 held + 6,000, not the 700 sale
+  });
+
+  it("writes one extinction record for the declared lots when the last sale also sells shares bought within the year", () => {
+    const { records, undated } = extinctions([
+      vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }),
+      vwce({ tradeDate: "2025-02-03", quantity: "20", tradePrice: "55" }),
+      sell("2025-06-10", "120", "70"),
+    ]);
+    expect(records).toEqual([["20230502", "20250610", "00000000700000"]]); // the 100 declared x 70 EUR
+    expect(undated).toEqual([]);
+  });
+
+  it("dates the extinction by a sale with no history behind it, leaves its acquisition date blank and flags it", () => {
+    const { records, undated } = extinctions([
+      sell("2025-03-03", "100", "60"),
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["        ", "20250303", "00000000600000"]]);
+    expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "acquisitionDate" }]);
+  });
+
+  it("repeats last year's codes on a dated extinction, and never writes one whose old record has a blank subclave", () => {
+    const s: FlexStatement = {
+      ...statement, toDate: "20251231",
+      trades: [vwce({ tradeDate: "2023-05-02", quantity: "100", tradePrice: "50" }), sell("2025-03-03", "100", "60")],
+    };
+    const disposals = generateTaxReport(s, new Map(), 2025).capitalGains.disposals;
+    const d = BOE_720.detail;
+    const fund: Previous720Security = { isin: "IE00BK5BQT80", claveSubclave: "I0", country: "IE" };
+    const lines = generateModelo720(s.openPositions, rateMap, { ...baseConfig, previousYearSecurities: [fund] }, undefined, undefined, disposals)
+      .split("\n");
+    const cancelled = lines.find((l) => l[0] === "2" && l[422] === "C")!;
+    expect([boeField(cancelled, d.claveSubclave), boeField(cancelled, d.pais), boeField(cancelled, d.fechaExtincion)]).toEqual(["I0", "IE", "20250303"]);
+    expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
+
+    // The same sale read from a file an older version wrote: 103 blank.
+    const old = { ...fund, claveSubclave: "V " };
+    const cfg = { ...baseConfig, previousYearSecurities: [old] };
+    const oldLines = generateModelo720(s.openPositions, rateMap, cfg, undefined, undefined, disposals).split("\n");
+    expect(oldLines.filter((l) => l[0] === "2" && l[422] === "C")).toHaveLength(0);
+    expect(validateModelo720Records(oldLines).filter((r) => !r.valid)).toEqual([]);
+    expect(findModelo720Omissions(s.openPositions, rateMap, cfg)).toEqual([{ kind: "cancelled", reason: "invalid_code", security: old }]);
+    expect(findUndatedExtinctions(s.openPositions, cfg, disposals)).toEqual([]);
+  });
+
+  it("leaves the extinction undated when the only sales in the year are of shares bought within the year", () => {
+    const { records, undated } = extinctions([
+      vwce({ tradeDate: "2025-05-05", quantity: "10", tradePrice: "65" }),
+      sell("2025-06-10", "10", "70"),
+    ]);
+    expect(records).toEqual([["        ", "        ", "00000000000000"]]);
+    expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "extinctionDate" }]);
   });
 });

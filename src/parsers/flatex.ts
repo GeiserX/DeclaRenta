@@ -28,6 +28,7 @@ import {
   findColumn,
   stripBom,
 } from "./csv-utils.js";
+import { daysBetween } from "../engine/dates.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -261,7 +262,15 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     if (ORDER_RE.test(info)) {
       const orderKey = extractOrderKey(info);
       if (orderKey) {
-        pendingOrderLegs.push({ orderKey, netAmount: amount, isin, currency: currency || "EUR" });
+        const bookingId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
+        pendingOrderLegs.push({
+          orderKey,
+          netAmount: amount,
+          isin,
+          currency: currency || "EUR",
+          tradeDate,
+          ...(bookingId ? { bookingId } : {}),
+        });
       }
       continue;
     }
@@ -294,6 +303,34 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     });
   }
 
+  // Flatex credits a dividend as ONE net booking (after the foreign or Spanish
+  // withholding) and usually writes no Quellensteuer row. The engine reads a
+  // "Dividends" amount as gross, so without a withholding row within the same
+  // 7-day ISIN+currency window it would understate 0029 and find nothing for
+  // 0588/0597. We cannot know the rate that was withheld (a missing W-8BEN means
+  // 30% instead of 15%), so warn and point the user to the per-payment PDF.
+  const withholdings = cashTransactions.filter((c) => c.type === "Withholding Tax");
+  const hasNetDividends = cashTransactions.some(
+    (c) =>
+      c.type === "Dividends" &&
+      !withholdings.some(
+        (w) =>
+          w.isin === c.isin &&
+          w.currency === c.currency &&
+          Math.abs(daysBetween(w.dateTime, c.dateTime)) <= 7,
+      ),
+  );
+  const parserMessages: TaxMessage[] = [];
+  if (hasNetDividends) {
+    parserMessages.push({
+      id: "flatex.dividends.net_amounts",
+      severity: "warning",
+      message:
+        "Flatex anota los dividendos por el importe neto cobrado, ya descontada la retención, y el CSV de Kontoumsätze no incluye la retención.",
+      hint: "Toma el importe íntegro y la retención de cada cobro del justificante en PDF que Flatex deja en tu buzón de documentos, y corrige a mano las casillas 0029 (importe íntegro), 0588 (retención extranjera) y 0597 (retención española).",
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -305,6 +342,9 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(pendingOrderLegs.length > 0 ? { pendingOrderLegs } : {}),
+    ...(parserMessages.length > 0
+      ? { parserMessages, parserWarnings: parserMessages.map((m) => m.message) }
+      : {}),
   };
 }
 

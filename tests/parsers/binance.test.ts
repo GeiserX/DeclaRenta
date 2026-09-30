@@ -795,6 +795,44 @@ describe("binanceParser", () => {
     });
   });
 
+  describe("transaction history — unhandled operations are reported, never dropped silently", () => {
+    const TX_HEADER = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+
+    it("emits one warning naming every unrecognised operation with its row count", () => {
+      const csv = [
+        TX_HEADER,
+        "1,2025-02-01 09:00:00,USDT-Futures,Realized Profit and Loss,USDT,5000,",
+        "1,2025-02-01 10:00:00,USDT-Futures,Funding Fee,USDT,-12.5,",
+        "1,2025-03-01 12:00:00,Spot,Binance Card Spending,BTC,-0.1,",
+        "1,2025-04-01 08:00:00,Spot,Auto-Invest Transaction,BTC,0.01,",
+        "1,2025-04-01 08:00:00,Spot,Auto-Invest Transaction,USDT,-800,",
+        "1,2025-05-01 07:00:00,Spot,Card Cashback,BNB,0.5,",
+      ].join("\n");
+      const result = binanceParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+      const msgs = (result.parserMessages ?? []).filter((m) => m.id === "binance.unhandled_operation");
+      expect(msgs).toHaveLength(1);
+      const msg = msgs[0]!;
+      expect(msg.severity).toBe("warning");
+      expect(msg.context?.count).toBe("6");
+      const ops = msg.context?.operations ?? "";
+      expect(ops).toContain("realized profit and loss (1)");
+      expect(ops).toContain("funding fee (1)");
+      expect(ops).toContain("binance card spending (1)");
+      expect(ops).toContain("auto-invest transaction (2)");
+      expect(ops).toContain("card cashback (1)");
+      expect(msg.message).toContain("auto-invest transaction (2)");
+    });
+
+    it("emits no such warning for a file whose operations are all handled or skipped", () => {
+      const fixture = readFileSync(new URL("../fixtures/binance-tx-sample.csv", import.meta.url), "utf-8");
+      const result = binanceParser.parse(fixture);
+      expect(result.trades.length).toBeGreaterThan(0);
+      expect((result.parserMessages ?? []).some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+    });
+  });
+
   describe("transaction history — plain SPOT trades (Buy/Sell/Fee, Sell Crypto to Fiat)", () => {
     const TX_HEADER = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
 

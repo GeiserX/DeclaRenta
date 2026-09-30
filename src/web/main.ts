@@ -759,7 +759,7 @@ async function processFiles(): Promise<void> {
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
-    renderSectionSafely("m720-content", () => renderSection720(merged, allRates));
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots));
     renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");
@@ -965,7 +965,9 @@ function renderResults(report: TaxSummary) {
   if (unresolved && unresolved.length > 0) {
     const panelHtml = renderManualRatesPanel(unresolved);
     casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel");
+    // The opening-lots panel also carries .crypto-rates-panel (shared styling)
+    // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");
     if (panel) {
       bindManualRatesPanel(panel, () => {
         // Re-run the full pipeline so the newly-entered manual rates take

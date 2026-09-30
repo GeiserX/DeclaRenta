@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { normalizeDate } from "./dates.js";
+import { normalizeDecimalString } from "./manual-rates.js";
 import type { Trade } from "../types/ibkr.js";
 import type { ManualOpeningLot } from "../types/tax.js";
 
@@ -36,8 +37,8 @@ export function normalizeManualOpeningLot(lot: ManualOpeningLot): ManualOpeningL
   const assetCategory = asString(lot.assetCategory).trim().toUpperCase();
   const currency = asString(lot.currency).trim().toUpperCase();
   const acquireDate = normalizeDate(asString(lot.acquireDate).trim());
-  const quantityRaw = asString(lot.quantity).trim().replace(/,/g, ".");
-  const priceRaw = asString(lot.pricePerShare).trim().replace(/,/g, ".");
+  const quantityRaw = normalizeDecimalString(asString(lot.quantity));
+  const priceRaw = normalizeDecimalString(asString(lot.pricePerShare));
 
   if (!assetCategory || !currency || !acquireDate) return null;
   if (!symbol && !isin && !conid) return null;
