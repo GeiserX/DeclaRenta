@@ -150,10 +150,17 @@ describe("statement merge utilities", () => {
   it("reconciles Flatex commission, clears the scratch note, and drops pendingOrderLegs", () => {
     const statement = makeStatement({
       trades: [
-        makeTrade({ isin: "US94106L1098", buySell: "BUY", tradeMoney: "3762.4", notes: "flatex-order:329432092" }),
+        makeTrade({
+          isin: "US94106L1098",
+          buySell: "BUY",
+          currency: "EUR",
+          commissionCurrency: "EUR",
+          tradeMoney: "3762.4",
+          notes: "flatex-order:329432092",
+        }),
       ],
       pendingOrderLegs: [
-        { orderKey: "329432092", netAmount: "-3770.3", isin: "US94106L1098", currency: "EUR" },
+        { orderKey: "329432092", netAmount: "-3770.3", isin: "US94106L1098", currency: "EUR", tradeDate: "20250101" },
       ],
     });
 
@@ -164,6 +171,68 @@ describe("statement merge utilities", () => {
     expect(trade.cost).toBe("10"); // gross, unchanged by reconciliation
     expect(trade.notes).toBeUndefined();
     expect(statement.pendingOrderLegs).toBeUndefined();
+  });
+
+  it("gives each partial fill of one Flatex order its own commission", () => {
+    // One order filled on two days: one Depot row and one cash leg per fill,
+    // all sharing the order number. Legs listed newest first, as Flatex does.
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250310", quantity: "10", tradeMoney: "1000", notes: "flatex-order:329000001" }),
+        makeTrade({ tradeID: "F2", currency: "EUR", tradeDate: "20250311", quantity: "30", tradeMoney: "3000", notes: "flatex-order:329000001" }),
+      ],
+      pendingOrderLegs: [
+        { orderKey: "329000001", netAmount: "-3007.9", isin: "US0000000001", currency: "EUR", tradeDate: "20250311" },
+        { orderKey: "329000001", netAmount: "-1007.9", isin: "US0000000001", currency: "EUR", tradeDate: "20250310" },
+      ],
+    });
+
+    finalizeMergedStatement(statement);
+
+    expect(statement.trades.map((t) => [t.tradeID, t.commission])).toEqual([
+      ["F1", "7.9"],
+      ["F2", "7.9"],
+    ]);
+    expect(statement.parserMessages ?? []).toEqual([]);
+  });
+
+  it("splits one combined cash leg across the fills pro rata and says so", () => {
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ tradeID: "F1", currency: "EUR", tradeDate: "20250310", tradeMoney: "1000", notes: "flatex-order:329000001" }),
+        makeTrade({ tradeID: "F2", currency: "EUR", tradeDate: "20250311", tradeMoney: "3000", notes: "flatex-order:329000001" }),
+      ],
+      pendingOrderLegs: [
+        { orderKey: "329000001", netAmount: "-4015.8", isin: "US0000000001", currency: "EUR", tradeDate: "20250311" },
+      ],
+    });
+
+    finalizeMergedStatement(statement);
+
+    expect(statement.trades.map((t) => t.commission)).toEqual(["3.95", "11.85"]);
+    const msg = statement.parserMessages!.find((m) => m.id === "flatex.commission.multi_fill_prorated");
+    expect(msg?.context).toEqual({ orders: "1" });
+  });
+
+  it("does not derive a commission when the cash leg is in another currency", () => {
+    // USD venue price, EUR cash account: |net| − gross would be the FX
+    // difference (142.1), not the fee.
+    const statement = makeStatement({
+      trades: [
+        makeTrade({ currency: "USD", commissionCurrency: "USD", tradeMoney: "1000", notes: "flatex-order:329000002" }),
+      ],
+      pendingOrderLegs: [
+        { orderKey: "329000002", netAmount: "-857.9", isin: "US0000000001", currency: "EUR", tradeDate: "20250101" },
+      ],
+    });
+
+    finalizeMergedStatement(statement);
+
+    expect(statement.trades[0]!.commission).toBe("0");
+    expect(statement.trades[0]!.commissionCurrency).toBe("USD");
+    const msg = statement.parserMessages!.find((m) => m.id === "flatex.commission.cross_currency");
+    expect(msg?.context).toEqual({ trades: "1" });
+    expect(statement.parserMessages!.some((m) => m.id === "flatex.commission.unmatched_trades")).toBe(false);
   });
 
   it("sorts merged chronological collections deterministically", () => {
