@@ -627,6 +627,8 @@ const es = {
   "opening_lots.save_btn": "Guardar lotes y recalcular",
   "opening_lots.clear_btn": "Borrar lotes guardados",
   "opening_lots.saved": "Guardado",
+  "opening_lots.row_invalid":
+    "Revisa las filas marcadas: indica la fecha de compra y una cantidad y un precio mayores que cero (p. ej. 1.234,56). No se ha guardado nada.",
   "opening_lots.recalculate_hint": "Los lotes manuales se guardan en tu navegador y el informe se recalcula.",
 
   // Engine & parser messages (TaxMessage id → localized text). The engine still

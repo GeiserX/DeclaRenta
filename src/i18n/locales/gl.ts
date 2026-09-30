@@ -594,6 +594,8 @@ const gl: TranslationKeys = {
   "opening_lots.save_btn": "Gardar lotes e recalcular",
   "opening_lots.clear_btn": "Borrar lotes gardados",
   "opening_lots.saved": "Gardado",
+  "opening_lots.row_invalid":
+    "Revisa as filas marcadas: indica a data de compra e unha cantidade e un prezo maiores ca cero (p. ex. 1.234,56). Non se gardou nada.",
   "opening_lots.recalculate_hint": "Os lotes manuais gárdanse no teu navegador e o informe recalcúlase.",
 
   // Mensaxes do motor e dos analizadores (TaxMessage id → texto localizado)

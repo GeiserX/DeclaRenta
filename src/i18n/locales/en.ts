@@ -592,6 +592,8 @@ const en: TranslationKeys = {
   "opening_lots.save_btn": "Save lots and recalculate",
   "opening_lots.clear_btn": "Clear saved lots",
   "opening_lots.saved": "Saved",
+  "opening_lots.row_invalid":
+    "Check the highlighted rows: enter the purchase date and a quantity and price above zero (e.g. 1,234.56). Nothing was saved.",
   "opening_lots.recalculate_hint": "Manual lots are saved in your browser and the report is recalculated.",
 
   // Engine & parser messages (TaxMessage id → localized text)
