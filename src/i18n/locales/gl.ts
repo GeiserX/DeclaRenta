@@ -332,7 +332,9 @@ const gl: TranslationKeys = {
   "m720.cash_title": "Saldos en efectivo (Contas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
-    "Algúns saldos non inclúen a media do cuarto trimestre obrigatoria para as contas do Modelo 720. Móstranse para revisión, pero non se inclúen no ficheiro xerado.",
+    "Algúns saldos non inclúen a media do cuarto trimestre obrigatoria para as contas do Modelo 720. O seu saldo a 31 de decembro si conta para o limiar de 50.000 €, pero esas contas non se inclúen no ficheiro xerado: engádeas a man, co seu saldo medio do cuarto trimestre, antes de presentar.",
+  "m720.successive_years_note":
+    "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",

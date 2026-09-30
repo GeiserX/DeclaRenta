@@ -41,8 +41,24 @@ export interface Modelo720ThresholdResult {
   realEstate: { exceeds: boolean; total: Decimal };
 }
 
-function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal } | undefined {
-  if (!cb.averageQ4Cash) return undefined;
+/** 720 threshold: a category is declared only when its joint value is MORE than 50,000 € ("no superen"). */
+const THRESHOLD = new Decimal(50000);
+
+/**
+ * A V-category holding: a long stock, fund or bond. A short position
+ * (negative value) is stock the taxpayer owes, not an asset they own.
+ */
+function isHeldSecurity(p: OpenPosition): boolean {
+  return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    && !new Decimal(p.positionValue).isNegative();
+}
+
+/**
+ * A cash balance in EUR. The Q4 average is null when the statement does not
+ * carry it (IBKR's cash report has no such field): the 31-Dec balance still
+ * counts toward the obligation, but the record cannot be written without it.
+ */
+function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal | null } | undefined {
   const yearEnd = `${year}-12-31`;
   const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
   // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
@@ -50,7 +66,33 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
   if (ecbRate === null) return undefined;
   return {
     ending: new Decimal(cb.endingCash).mul(ecbRate),
-    averageQ4: new Decimal(cb.averageQ4Cash).mul(ecbRate),
+    averageQ4: cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate) : null,
+  };
+}
+
+/**
+ * The two joint sums art. 42 bis.4.e RD 1065/2007 tests for accounts: the
+ * 31-Dec balances and the Q4 average balances, each summed over every
+ * account. The category must be declared when EITHER passes 50,000 €.
+ */
+function cashCategoryTotals(
+  cashBalances: CashBalance[] | undefined,
+  rateMap: EcbRateMap,
+  year: number,
+): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean } {
+  let endingTotal = new Decimal(0);
+  let averageTotal = new Decimal(0);
+  for (const cb of cashBalances ?? []) {
+    if (!new Decimal(cb.endingCash).greaterThan(0)) continue;
+    const values = cashValuesEur(cb, rateMap, year);
+    if (!values) continue;
+    endingTotal = endingTotal.plus(values.ending);
+    if (values.averageQ4) averageTotal = averageTotal.plus(values.averageQ4);
+  }
+  return {
+    endingTotal,
+    averageTotal,
+    exceeds: endingTotal.greaterThan(THRESHOLD) || averageTotal.greaterThan(THRESHOLD),
   };
 }
 
@@ -63,7 +105,8 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
  *  - Bienes inmuebles (real estate) — "I" (not implemented in broker positions)
  *
  * Each category is evaluated independently against the 50K threshold.
- * Only categories exceeding 50K must be declared.
+ * Only categories exceeding 50K must be declared. For accounts the total is
+ * the larger of the two joint sums (31-Dec balances, Q4 averages).
  *
  * @param positions - Open positions at year end
  * @param rateMap - ECB exchange rates
@@ -76,11 +119,9 @@ export function checkModelo720Thresholds(
   year: number,
   cashBalances?: CashBalance[],
 ): Modelo720ThresholdResult {
-  const THRESHOLD = new Decimal(50000);
-
-  // Calculate total value for securities (V category: STK, FUND, BOND)
+  // Calculate total value for securities (V category: long STK, FUND, BOND)
   const valuesTotal = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    .filter(isHeldSecurity)
     .reduce((sum, p) => {
       const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
       // Unvaluable position (no resolvable rate) — excluded from the EUR total.
@@ -88,19 +129,14 @@ export function checkModelo720Thresholds(
       return sum.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
     }, new Decimal(0));
 
-  const accountsTotal = (cashBalances ?? [])
-    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
-    .reduce((sum, cb) => {
-      const values = cashValuesEur(cb, rateMap, year);
-      return values ? sum.plus(Decimal.max(values.ending, values.averageQ4)) : sum;
-    }, new Decimal(0));
+  const cash = cashCategoryTotals(cashBalances, rateMap, year);
 
   const realEstateTotal = new Decimal(0);
 
   return {
-    values: { exceeds: valuesTotal.greaterThanOrEqualTo(THRESHOLD), total: valuesTotal },
-    accounts: { exceeds: accountsTotal.greaterThanOrEqualTo(THRESHOLD), total: accountsTotal },
-    realEstate: { exceeds: realEstateTotal.greaterThanOrEqualTo(THRESHOLD), total: realEstateTotal },
+    values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal },
+    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal) },
+    realEstate: { exceeds: realEstateTotal.greaterThan(THRESHOLD), total: realEstateTotal },
   };
 }
 
@@ -139,11 +175,11 @@ export function generateModelo720(
 ): string {
   const previousIsins = new Set(config.previousYearIsins ?? []);
 
-  // Filter to stocks/funds/bonds and calculate EUR values
+  // Filter to long stocks/funds/bonds and calculate EUR values
   // STK positions use Q4 average FX rate (media del cuarto trimestre);
   // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
   const entries = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
+    .filter(isHeldSecurity)
     .flatMap((p) => {
       const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
       // Unvaluable position (no resolvable rate): cannot be written to the
@@ -173,31 +209,30 @@ export function generateModelo720(
   // Use the held set (all V-category positions), NOT `entries` — a position that
   // is still held but couldn't be valued (no year-end rate) is skipped from
   // `entries`, yet it must NOT be reported as cancelled/sold (that would tell
-  // AEAT the user liquidated an asset they still hold).
-  const heldIsins = new Set(
-    positions
-      .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-      .map((p) => p.isin),
-  );
+  // AEAT the user liquidated an asset they still hold). A short position is
+  // not held: a declared holding now shorted was sold, so it is cancelled.
+  const heldIsins = new Set(positions.filter(isHeldSecurity).map((p) => p.isin));
   const cancelledIsins = [...previousIsins].filter((isin) => !heldIsins.has(isin));
   const cancelledEntries = cancelledIsins.map((isin) => ({
     isin,
     declType: "C" as const,
   }));
 
-  // Category C: cash balances at foreign brokers
+  // Category C: cash balances at foreign brokers. A balance with no Q4 average
+  // counts toward the threshold but is not written: the record needs that
+  // average and the tool never invents it (the web section asks the user to
+  // add that account by hand).
   const cashEntries = (cashBalances ?? [])
     .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
-      return values ? [{ cashBalance: cb, valueEur: values.ending, averageQ4Eur: values.averageQ4 }] : [];
+      return values?.averageQ4 ? [{ cashBalance: cb, valueEur: values.ending, averageQ4Eur: values.averageQ4 }] : [];
     });
 
   // Check 50,000 EUR threshold per category independently
   const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const totalValueC = cashEntries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelledEntries.length > 0;
-  const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
+  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelledEntries.length > 0;
+  const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds && cashEntries.length > 0;
 
   if (!hasValuesRecords && !hasCashRecords) {
     return "";
