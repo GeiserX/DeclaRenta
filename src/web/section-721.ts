@@ -14,6 +14,7 @@ import { buildModelo721Entries } from "../generators/modelo721.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
+import { renderPositionsDateBanner } from "./positions-date.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -86,6 +87,9 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <a href="#perfil">${t("profile.go_to_profile")}</a>
     </div>`;
   }
+
+  // Positions must be the holdings at 31 December of the selected year
+  html += renderPositionsDateBanner(statement, year).html;
 
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
   // coin itself) has no resolvable year-end rate are excluded from the EUR total

@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths-ignore: ['**.md', 'docs/**', 'LICENSE', '.gitignore']
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump. auto reads the commit prefixes since the last tag; patch, minor or major force that bump."
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: write
@@ -46,6 +52,9 @@ jobs:
 
       - name: Determine version bump
         id: version
+        env:
+          # Empty on push; set on a manual run. Read from env, never interpolated into the script.
+          BUMP: ${{ inputs.bump }}
         run: |
           LATEST=$(git tag -l "v*" --sort=-version:refname | head -1)
           if [ -z "$LATEST" ]; then
@@ -88,6 +97,13 @@ jobs:
             NEW_PATCH=$((PATCH + 1))
             NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
           fi
+
+          # A manual run can force the bump, e.g. to ship a batch of fixes as one minor release.
+          case "$BUMP" in
+            major) NEW_TAG="v$((MAJOR + 1)).0.0" ;;
+            minor) NEW_TAG="v${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+          esac
 
           echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
           echo "Bumping $LATEST -> $NEW_TAG"
