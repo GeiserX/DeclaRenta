@@ -26,7 +26,7 @@
 **Notas:**
 - La divisa es un elemento patrimonial: la ganancia/pérdida es valor de transmisión − valor de adquisición (Art. **33.1** LIRPF), imputada en la conversión efectiva a euros (Art. 14.2.e). La divisa comparte el bloque «otros elementos patrimoniales» (casillas 1633/1637) con opciones, cripto y fondos no cotizados. La casilla 1626 es «Tipo de elemento patrimonial. Clave», y 1631 es la «Fecha de transmisión» — no son importes.
 - Cada conversión EUR→FCY crea un lote en la cola FIFO de esa divisa (DGT V2324-10).
-- Cada conversión de la divisa (por ejemplo, USD→EUR) consume lotes por FIFO y es lo único que realiza una ganancia o pérdida de divisa.
+- Cada conversión de la divisa (por ejemplo, USD→EUR) consume lotes por FIFO y realiza una ganancia o pérdida de divisa. Lo mismo ocurre con los intereses y comisiones que pagas en esa divisa.
 - Comprar valores en divisa no realiza nada. La divisa gastada queda apartada con su coste de origen y vuelve a la cola cuando vendes los valores.
 - Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker» en el perfil fiscal, o con `--skip-auto-convert` en la CLI.
 - No existe umbral mínimo (de minimis) — toda conversión es declarable.
