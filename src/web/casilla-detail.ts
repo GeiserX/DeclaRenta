@@ -384,7 +384,8 @@ const CASILLAS: CasillaConfig[] = [
  */
 export function renderCasillaCards(container: HTMLElement, report: TaxSummary): void {
   const blocks = computeCasillaBlocksWithFx(report);
-  const cards = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks)).map((c, idx) => {
+  const visible = CASILLAS.filter((c) => c.visible === undefined || c.visible(report, blocks));
+  const cards = visible.map((c, idx) => {
     const value = c.getValue(report, blocks);
     const cls = c.getClass(report, blocks);
     const hasDetail = c.code !== "";
@@ -410,7 +411,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
             : `<div class="casilla-trigger casilla-trigger-static">${inner}</div>`}
           ${copyBtn}
         </div>
-        ${hasDetail ? `<div class="casilla-detail" hidden>${c.getDetail(report)}</div>` : ""}
+        ${hasDetail ? `<div class="casilla-detail" hidden></div>` : ""}
       </div>`;
   }).join("");
 
@@ -463,6 +464,13 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
       const detail = card.querySelector<HTMLElement>(".casilla-detail");
       const arrow = card.querySelector<HTMLElement>(".casilla-toggle");
       if (detail) {
+        // The drill-down lists every contributing operation, so it is built on
+        // the first expand rather than for every card up front.
+        if (!detail.dataset.built) {
+          const casilla = visible[Number(card.dataset.casillaIdx)];
+          if (casilla) detail.innerHTML = casilla.getDetail(report);
+          detail.dataset.built = "1";
+        }
         const isOpen = !detail.hidden;
         detail.hidden = isOpen;
         card.classList.toggle("expanded", !isOpen);
