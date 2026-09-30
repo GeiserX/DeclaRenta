@@ -694,6 +694,9 @@ const eu: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} errenkada baztertu dira ISINik/zenbatekorik gabe.",
   "degiro.rows_skipped.hint":
     "Errenkada hauek kopurua edo prezioa zuten baina ISINa edo zenbatekoa falta zuten, eta, beraz, ezin izan dira eragiketa gisa sartu. Normalean CSVaren zutabeak ondo ez direla ezagutu adierazten du: esportatu berriro Degiro-ren Transakzioen CSVa goiburuak aldatu gabe.",
+  "degiro.transaction_tax": "Finantza-transakzioen gaineko zerga ordaindua {{product}} baloreagatik ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degirok zerga hau kobratzen du Espainiako, Frantziako edo Italiako akzioak erostean, eta Kontuaren CSVan bakarrik erakusten du. Eskuratze-balioaren parte da (PFEZL 35.1.b art.): gehitu balore horren erosketen kostuari, DeclaRentak ez baitu automatikoki gehitzen.",
   "binance.unparseable_timestamp":
     "Binance-ren CSVaren {{count}} errenkada baztertu dira data/ordu (UTC_Time) ezezagun bat izateagatik.",
   "binance.unparseable_timestamp.hint":

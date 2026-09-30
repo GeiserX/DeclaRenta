@@ -690,6 +690,9 @@ const en: TranslationKeys = {
   "degiro.rows_skipped": "{{count}} rows without ISIN/without amount were skipped.",
   "degiro.rows_skipped.hint":
     "These rows had a quantity or price but were missing the ISIN or the amount, so they could not be included as operations. This usually means the CSV columns were not recognized correctly: re-export the Degiro Transactions CSV without modifying the headers.",
+  "degiro.transaction_tax": "Financial transaction tax paid on {{product}} ({{isin}}): {{amount}} {{currency}}.",
+  "degiro.transaction_tax.hint":
+    "Degiro charges this tax when you buy Spanish, French or Italian shares and only shows it in the Account CSV. It is part of the acquisition value (art. 35.1.b LIRPF): add it to the cost of your purchases of that security, because DeclaRenta does not add it automatically.",
   "binance.unparseable_timestamp":
     "{{count}} row(s) of the Binance CSV were skipped because they had an unrecognizable date/time (UTC_Time).",
   "binance.unparseable_timestamp.hint":
