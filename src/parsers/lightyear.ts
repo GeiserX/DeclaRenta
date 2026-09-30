@@ -34,6 +34,7 @@ import {
   toFiniteDecimalString,
   findColumn,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 
@@ -205,6 +206,7 @@ function parseLightyearCsv(lines: string[]): Statement {
 
     if (!dateRaw) continue;
     const tradeDate = convertLightyearDate(dateRaw);
+    const tradeTime = timeOfDay(dateRaw);
 
     // Skip non-taxable transactions
     if (SKIP_TYPES.has(txType)) continue;
@@ -306,6 +308,7 @@ function parseLightyearCsv(lines: string[]): Statement {
         assetCategory: "CASH",
         currency,
         tradeDate,
+        tradeTime,
         settlementDate: tradeDate,
         quantity: isFxBuy ? absDec.toString() : absDec.neg().toString(),
         tradePrice: "1",
@@ -353,6 +356,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       assetCategory: "STK",
       currency,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: price,

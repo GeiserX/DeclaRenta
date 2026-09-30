@@ -80,7 +80,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
     doubleTaxation: {
       deduction: new Decimal("75"),
       byCountry: {
-        US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
+        US: { grossIncome: new Decimal("500"), taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
       },
     },
     fxGains: {

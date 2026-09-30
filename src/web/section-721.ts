@@ -28,6 +28,10 @@ let cachedRateMap: EcbRateMap | null = null;
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("m721-content");
   if (!container) return;
   container.innerHTML = `

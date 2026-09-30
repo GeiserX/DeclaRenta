@@ -35,6 +35,7 @@ import {
   findColumn,
   normalizeFractionalCurrency,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,7 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     if (!timeRaw) continue;
     const tradeDate = convertTrading212Date(timeRaw);
+    const tradeTime = timeOfDay(timeRaw);
 
     if (isSkippedAction(action)) continue;
 
@@ -307,6 +309,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       assetCategory: "STK",
       currency,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: sell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: priceDec.toString(),
