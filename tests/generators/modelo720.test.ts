@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { generateModelo720, checkModelo720Thresholds } from "../../src/generators/modelo720.js";
-import type { OpenPosition } from "../../src/types/ibkr.js";
+import { generateModelo720, checkModelo720Thresholds, findUndatedExtinctions } from "../../src/generators/modelo720.js";
+import { generateTaxReport } from "../../src/generators/report.js";
+import type { FlexStatement, OpenPosition, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
 import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
@@ -169,7 +170,7 @@ describe("Modelo 720 Generator", () => {
       expect(cancelled!.slice(131, 143).trim()).toBe("IE00BK5BQT80");
     });
 
-    it("should set cancellation date to year-end in C records", () => {
+    it("leaves the extinction date blank, and flags the ISIN, when no sale in the year explains the extinction", () => {
       const positions = [makePosition()];
       const config = {
         ...baseConfig,
@@ -177,8 +178,9 @@ describe("Modelo 720 Generator", () => {
       };
       const result = generateModelo720(positions, rateMap, config);
       const cancelled = result.split("\n").find((l) => l[0] === "2" && l[422] === "C")!;
-      // Cancellation date at positions 424-431 (0-indexed: 423-430)
-      expect(cancelled.slice(423, 431)).toBe("20251231");
+      // Extinction date at positions 424-431 (0-indexed: 423-430): never an invented 31-Dec
+      expect(cancelled.slice(423, 431)).toBe("        ");
+      expect(findUndatedExtinctions(positions, config, [])).toEqual(["DE000A0F5UF5"]);
     });
   });
 
@@ -776,5 +778,90 @@ describe("Modelo 720 — unvaluable position (missing year-end rate) degrades, d
     expect(heldIsinRecords).toHaveLength(0);
     // Sanity: the valued GBP position IS declared.
     expect(detailLines.some((l) => l.slice(131, 143).trim() === "GB0000000001")).toBe(true);
+  });
+});
+
+describe("Acquisition dates and extinctions from the FIFO run", () => {
+  const lot = (acquireDate: string, quantity: number): Lot => ({
+    id: acquireDate, isin: "US78462F1030", symbol: "SPY", description: "", acquireDate,
+    quantity: new Decimal(quantity), pricePerShare: new Decimal(400), costInFcy: new Decimal(400 * quantity),
+    currency: "USD", ecbRate: new Decimal("0.92"),
+  });
+
+  it("writes one V record per acquisition date, with its own quantity and its share of the value", () => {
+    const lots = new Map([["US78462F1030", [lot("20230115", 30), lot("20240601", 30), lot("20250310", 40)]]]);
+    const lines = generateModelo720([makePosition()], rateMap, baseConfig, lots).split("\n");
+    const details = lines.filter((l) => l[0] === "2");
+    const d = BOE_720.detail;
+    expect(details.map((l) => l.slice(414, 422))).toEqual(["20230115", "20240601", "20250310"]);
+    expect(details.map((l) => boeField(l, d.numeroValores))).toEqual(["000000003000", "000000003000", "000000004000"]);
+    // 55,200.00 EUR split 30/30/40
+    expect(details.map((l) => boeField(l, d.valoracion1))).toEqual(["00000001656000", "00000001656000", "00000002208000"]);
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000005520000");
+    expect(boeField(lines[0]!, [136, 144])).toBe("000000003");
+  });
+
+  it("dates the shares still held with the newest lots when the lots hold more than the position (FIFO)", () => {
+    const lots = new Map([["US78462F1030", [lot("20230115", 50), lot("20240601", 50)]]]);
+    const details = generateModelo720([makePosition({ quantity: "60" })], rateMap, baseConfig, lots)
+      .split("\n").filter((l) => l[0] === "2");
+    expect(details.map((l) => [l.slice(414, 422), boeField(l, BOE_720.detail.numeroValores)])).toEqual([
+      ["20230115", "000000001000"],
+      ["20240601", "000000005000"],
+    ]);
+  });
+
+  function eurTrade(overrides: Partial<Trade>): Trade {
+    const tradeDate = overrides.tradeDate ?? "2025-03-15";
+    return {
+      tradeID: tradeDate, accountId: "U1", symbol: "SPY", description: "SPDR S&P 500 ETF", isin: "US78462F1030",
+      assetCategory: "STK", currency: "EUR", tradeDate, settlementDate: tradeDate, quantity: "10", tradePrice: "100",
+      tradeMoney: "1000", proceeds: "1000", cost: "1000", fifoPnlRealized: "0", fxRateToBase: "1", buySell: "BUY",
+      openCloseIndicator: overrides.buySell === "SELL" ? "C" : "O", exchange: "XETRA", commissionCurrency: "EUR",
+      commission: "0", taxes: "0", multiplier: "1", ...overrides,
+    };
+  }
+
+  // Held SPY bought in two tranches, 40 of it sold AFTER the year end (the
+  // upload runs into 2026); VWCE declared last year and sold on 2025-03-15.
+  const statement: FlexStatement = {
+    accountId: "U1", fromDate: "20230101", toDate: "20260228", period: "Custom",
+    trades: [
+      eurTrade({ tradeDate: "2023-01-16", quantity: "40", tradePrice: "400" }),
+      eurTrade({ tradeDate: "2025-03-10", quantity: "60", tradePrice: "500" }),
+      eurTrade({ tradeDate: "2026-02-02", quantity: "-40", tradePrice: "650", buySell: "SELL" }),
+      eurTrade({ tradeDate: "2024-02-12", symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", quantity: "100", tradePrice: "50" }),
+      eurTrade({ tradeDate: "2025-03-15", symbol: "VWCE", description: "VANGUARD FTSE ALL-WORLD", isin: "IE00BK5BQT80", quantity: "-100", tradePrice: "60", buySell: "SELL" }),
+    ],
+    cashTransactions: [], corporateActions: [], securitiesInfo: [],
+    openPositions: [makePosition({ currency: "EUR", quantity: "100", positionValue: "60000" })],
+  };
+  const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+
+  it("dates held securities with the lots held on 31 December, not after later sales in the upload", () => {
+    const report = generateTaxReport(statement, new Map(), 2025);
+    const out = generateModelo720(statement.openPositions, rateMap, config, report.yearEndLots, undefined, report.capitalGains.disposals);
+    const held = out.split("\n").filter((l) => l[0] === "2" && l.slice(131, 143) === "US78462F1030");
+    expect(held.map((l) => [l.slice(414, 422), l[422], boeField(l, BOE_720.detail.numeroValores)])).toEqual([
+      ["20230116", "M", "000000004000"],
+      ["20250310", "M", "000000006000"],
+    ]);
+  });
+
+  it("writes the extinction record with the declarant's name, the sale date, the sale value and the lot's acquisition date", () => {
+    const report = generateTaxReport(statement, new Map(), 2025);
+    const lines = generateModelo720(statement.openPositions, rateMap, config, report.yearEndLots, undefined, report.capitalGains.disposals)
+      .split("\n");
+    const cancelled = lines.find((l) => l[0] === "2" && l[422] === "C")!;
+    const d = BOE_720.detail;
+    expect(cancelled.slice(131, 143)).toBe("IE00BK5BQT80");
+    expect(cancelled.slice(35, 75).trim()).toBe("GARCIA LOPEZ JUAN");
+    expect(boeField(cancelled, d.fechaExtincion)).toBe("20250315");
+    expect(boeField(cancelled, d.valoracion1)).toBe("00000000600000"); // 100 x 60 EUR
+    expect(cancelled.slice(414, 422)).toBe("20240212");
+    // The type-1 suma 1 includes the extinction value: 60,000 + 6,000
+    expect(boeField(lines[0]!, BOE_720.summary.suma1)).toBe("00000000006600000");
+    expect(findUndatedExtinctions(statement.openPositions, config, report.capitalGains.disposals)).toEqual([]);
+    expect(validateModelo720Records(lines).filter((r) => !r.valid)).toEqual([]);
   });
 });

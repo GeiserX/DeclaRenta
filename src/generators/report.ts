@@ -408,6 +408,24 @@ export function generateTaxReport(
   const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
 
+  // Lots still held at 31 December, for the Modelo 720 acquisition dates. When
+  // the upload runs past the year end, the main pass has already consumed lots
+  // with later sales, so replay only the inputs dated up to 31 December.
+  const yearEnd = `${year}-12-31`;
+  const tradesToYearEnd = resolvedTrades.filter((t) => normalizeDate(t.tradeDate) <= yearEnd);
+  const actionsToYearEnd = statement.corporateActions.filter((ca) => normalizeDate(ca.dateTime.slice(0, 8)) <= yearEnd);
+  const exercisesToYearEnd = statement.optionExercises?.filter((ex) => normalizeDate(ex.date) <= yearEnd);
+  let yearEndLots = fifoEngine.getRemainingLots();
+  if (
+    tradesToYearEnd.length < resolvedTrades.length ||
+    actionsToYearEnd.length < statement.corporateActions.length ||
+    (exercisesToYearEnd?.length ?? 0) < (statement.optionExercises?.length ?? 0)
+  ) {
+    const yearEndEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
+    yearEndEngine.processTrades(tradesToYearEnd, resolvedRateMap, actionsToYearEnd, exercisesToYearEnd);
+    yearEndLots = yearEndEngine.getRemainingLots();
+  }
+
   // Number of account holders. >1 splits every reported amount equally per
   // contribuyente (Art. 11.3 LIRPF). Sanitized to an integer >= 1.
   // Math.max(1, NaN) is NaN, so guard finiteness explicitly (CLI --titulares abc → NaN).
@@ -795,5 +813,6 @@ export function generateTaxReport(
       disposals: fxDisposals,
     },
     ...(fxTrace ? { fxTrace } : {}),
+    yearEndLots,
   };
 }

@@ -759,7 +759,7 @@ async function processFiles(): Promise<void> {
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
-    renderSectionSafely("m720-content", () => renderSection720(merged, allRates));
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots));
     renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
     updateBadge("renta", t("badge.complete"), "success");

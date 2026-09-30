@@ -23,7 +23,7 @@ import { fetchEcbRates } from "../engine/ecb.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { generateTaxReport } from "../generators/report.js";
-import { generateModelo720 } from "../generators/modelo720.js";
+import { findUndatedExtinctions, generateModelo720, parsePrevious720Isins } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
 import { generatePdfReport } from "../generators/pdf.js";
@@ -449,17 +449,21 @@ program
         }
         const statement = parser.parse(content);
 
-        const currencies = new Set<string>();
+        // Rates for every year with a trade: the FIFO run dates the lots held at
+        // 31 December and the sales that ended a previously declared holding.
+        const needs = deriveEcbNeeds(statement, opts.year);
+        const currencies = new Set(needs.currencies);
         for (const p of statement.openPositions) currencies.add(p.currency);
         currencies.delete("EUR");
 
-        const rateMap = await fetchEcbRates(opts.year, [...currencies]);
+        const rateMap = await buildEcbRateMap({ currencies: [...currencies], years: needs.years });
+        const report = generateTaxReport(statement, rateMap, opts.year);
 
         const nameParts = opts.name.split(",").map((s) => s.trim());
         const surname = nameParts[0] ?? "";
         const firstName = nameParts[1] ?? "";
 
-        // Extract ISINs from previous year's 720 file (detail records start with "2", ISIN at positions 131-142)
+        // ISINs the previous year's 720 file declared as still held
         let previousYearIsins: string[] | undefined;
         if (opts.previous720) {
           let prev: string;
@@ -469,31 +473,37 @@ program
             console.error(`Error: No se pudo leer el archivo ${opts.previous720}.`);
             process.exit(1);
           }
-          previousYearIsins = prev
-            .split("\n")
-            .filter((line) => line.startsWith("2"))
-            .map((line) => line.slice(131, 143).trim())
-            .filter((isin) => isin.length > 0);
+          previousYearIsins = parsePrevious720Isins(prev);
         }
 
+        const config720 = {
+          nif: opts.nif,
+          surname,
+          name: firstName,
+          year: opts.year,
+          phone: opts.phone,
+          contactName: opts.name,
+          declarationId: "0000000000001",
+          isComplementary: false,
+          isReplacement: false,
+          previousYearIsins,
+        };
+        const disposals = report.capitalGains.disposals;
         const output720 = generateModelo720(
           statement.openPositions,
           rateMap,
-          {
-            nif: opts.nif,
-            surname,
-            name: firstName,
-            year: opts.year,
-            phone: opts.phone,
-            contactName: opts.name,
-            declarationId: "0000000000001",
-            isComplementary: false,
-            isReplacement: false,
-            previousYearIsins,
-          },
-          undefined,
+          config720,
+          report.yearEndLots,
           statement.cashBalances,
+          disposals,
         );
+
+        for (const isin of findUndatedExtinctions(statement.openPositions, config720, disposals)) {
+          console.error(
+            `⚠ ${isin} figuraba en el 720 anterior y ya no está en cartera, pero no hay ninguna venta suya en ${opts.year}. ` +
+              "Su registro de extinción (C) sale sin fecha de extinción y con valoración 0: complétalos antes de presentar.",
+          );
+        }
 
         if (!output720) {
           console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
