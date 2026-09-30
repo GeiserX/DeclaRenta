@@ -95,10 +95,10 @@ export function validateNif(value: string): boolean {
   return false;
 }
 
-/** Check if profile has enough data for 720/D-6 generation */
+/** Check if profile has enough data for 720/D-6 generation. The NIF must be valid, not just filled in. */
 export function isProfileComplete(): boolean {
   const p = getProfile();
-  return p.nif.trim().length > 0 && p.apellidos.trim().length > 0 && p.nombre.trim().length > 0;
+  return validateNif(p.nif) && p.apellidos.trim().length > 0 && p.nombre.trim().length > 0;
 }
 
 /** Initialize the profile form */
@@ -111,8 +111,13 @@ export function initProfile(): void {
     (c) => `<option value="${esc(c)}"${c === profile.ccaa ? " selected" : ""}>${esc(c)}</option>`,
   ).join("");
 
+  // A year set from the data (e.g. the results year selector) can fall outside
+  // the default choices. Include it so re-saving the form doesn't silently
+  // replace it with the first option.
   const currentYear = new Date().getFullYear();
-  const yearOptions = [currentYear - 1, currentYear, currentYear - 2].map(
+  const yearChoices = [currentYear - 1, currentYear, currentYear - 2];
+  if (!yearChoices.includes(profile.year)) yearChoices.push(profile.year);
+  const yearOptions = yearChoices.map(
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");
 
@@ -132,7 +137,8 @@ export function initProfile(): void {
         <div class="profile-grid">
           <label>
             <span>${t("profile.nif_label")}</span>
-            <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="${t("profile.nif_placeholder")}" maxlength="9" autocomplete="off" />
+            <input type="text" id="profile-nif" value="${esc(profile.nif)}" placeholder="${t("profile.nif_placeholder")}" maxlength="9" autocomplete="off" aria-describedby="profile-nif-error" />
+            <small class="profile-field-error" id="profile-nif-error" role="alert" hidden>${t("profile.nif_invalid")}</small>
           </label>
           <label>
             <span>${t("profile.surname_label")}</span>
@@ -211,6 +217,24 @@ export function initProfile(): void {
     };
   }
 
+  // Flag a NIF/NIE with a wrong control letter. Checked when the field is left,
+  // not on every keystroke, so a half-typed NIF isn't flagged; typing it right
+  // clears the flag at once.
+  const nifInput = document.getElementById("profile-nif") as HTMLInputElement;
+  const nifError = document.getElementById("profile-nif-error") as HTMLElement;
+  function checkNif(): void {
+    const value = nifInput.value.trim();
+    const invalid = value !== "" && !validateNif(value);
+    nifError.hidden = !invalid;
+    if (invalid) nifInput.setAttribute("aria-invalid", "true");
+    else nifInput.removeAttribute("aria-invalid");
+  }
+  checkNif();
+  nifInput.addEventListener("change", checkNif);
+  nifInput.addEventListener("input", () => {
+    if (validateNif(nifInput.value)) checkNif();
+  });
+
   // Toggle warning visibility when monodivisa checkbox changes
   document.getElementById("profile-monodivisa")!.addEventListener("change", () => {
     const checked = (document.getElementById("profile-monodivisa") as HTMLInputElement).checked;
@@ -226,6 +250,7 @@ export function initProfile(): void {
   document.getElementById("profile-form")!.addEventListener("submit", (e) => {
     e.preventDefault();
     saveProfile(collectProfile());
+    checkNif();
     showSavedMessage();
   });
 }

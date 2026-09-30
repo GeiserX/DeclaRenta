@@ -198,6 +198,31 @@ describe("isProfileComplete", () => {
     expect(isProfileComplete()).toBe(true);
   });
 
+  it("should return false when the NIF has the wrong control letter", () => {
+    // 12345678 mod 23 = 14 -> "Z"; "A" is a typo the AEAT would reject.
+    saveProfile({
+      nif: "12345678A",
+      apellidos: "Garcia",
+      nombre: "Juan",
+      ccaa: "",
+      telefono: "",
+      year: 2025,
+    });
+    expect(isProfileComplete()).toBe(false);
+  });
+
+  it("should return true for a valid NIE", () => {
+    saveProfile({
+      nif: "X1234567L",
+      apellidos: "Garcia",
+      nombre: "Juan",
+      ccaa: "",
+      telefono: "",
+      year: 2025,
+    });
+    expect(isProfileComplete()).toBe(true);
+  });
+
   it("should return false when nif is empty", () => {
     saveProfile({
       nif: "",
