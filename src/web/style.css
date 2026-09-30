@@ -1919,7 +1919,7 @@ footer a:hover {
 .profile-field-error {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .profile-field-error[hidden] {
