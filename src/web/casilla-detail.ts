@@ -74,7 +74,7 @@ function renderDisposalsDetail(
         <tr>
           <td class="mono">${esc(d.isin)}</td>
           <td>${esc(d.symbol)}</td>
-          <td>${formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate)}</td>
+          <td>${esc(formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate))}</td>
           <td>${d.quantity.toString()}</td>
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
         </tr>`).join("")}
@@ -130,7 +130,7 @@ export function renderDividendsDetail(entries: DividendEntry[]): string {
                 </tr></thead>
                 <tbody>${g.payments.map((d) => `
                   <tr>
-                    <td>${formatDate(d.payDate)}</td>
+                    <td>${esc(formatDate(d.payDate))}</td>
                     <td>${fmtEur(d.grossAmountEur)}</td>
                   </tr>`).join("")}
                 </tbody>
@@ -155,7 +155,7 @@ function renderInterestDetail(entries: InterestEntry[], filterType: "earned" | "
       </tr></thead>
       <tbody>${filtered.map((e) => `
         <tr>
-          <td>${formatDate(e.date)}</td>
+          <td>${esc(formatDate(e.date))}</td>
           <td>${esc(e.description)}</td>
           <td>${fmtEur(e.amountEur)}</td>
         </tr>`).join("")}
@@ -174,7 +174,7 @@ function renderGeneralGainsDetail(entries: GeneralGainEntry[]): string {
       </tr></thead>
       <tbody>${entries.map((e) => `
         <tr>
-          <td>${formatDate(e.date)}</td>
+          <td>${esc(formatDate(e.date))}</td>
           <td>${esc(e.description)}</td>
           <td>${fmtEur(e.amountEur)}</td>
         </tr>`).join("")}
@@ -204,7 +204,7 @@ function renderSpanishWithholdingDetail(report: TaxSummary): string {
         <tr>
           <td class="mono">${esc(e.isin)}</td>
           <td>${esc(e.symbol)}</td>
-          <td>${formatDate(e.payDate)}</td>
+          <td>${esc(formatDate(e.payDate))}</td>
           <td>${fmtEur(e.grossAmountEur)}</td>
           <td>${fmtEur(e.withholdingTaxEur)}</td>
         </tr>`).join("")}
@@ -251,8 +251,8 @@ function renderFxDisposalsDetail(
       <tbody>${disposals.map((d) => `
         <tr>
           <td>${esc(d.currency)}</td>
-          <td>${formatDate(d.disposeDate)}</td>
-          <td>${formatDate(d.acquireDate)}</td>
+          <td>${esc(formatDate(d.disposeDate))}</td>
+          <td>${esc(formatDate(d.acquireDate))}</td>
           <td>${fmtEur(d.quantity)}</td>
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
           <td>${esc(d.trigger)}</td>
