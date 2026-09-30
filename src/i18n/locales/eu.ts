@@ -395,6 +395,10 @@ const eu: TranslationKeys = {
 
   "section.year_label": "Ekitaldia",
   "section.profile_source": '<a href="#perfil">Profil fiskaleko</a> datuak',
+  "section.positions_date_mismatch":
+    "Zure fitxategiko posizioak {{date}} datakoak dira, ez 31/12/{{year}} datakoak. Eredu hauek abenduaren 31n zenuena aitortzen dute, beraz, ez da fitxategirik sortzen haiekin. Deskargatu 31/12/{{year}} egunean amaitzen den txosten bat (IBKRn, amaiera-data 31/12/{{year}} duen Flex Query bat) eta igo berriro.",
+  "section.positions_date_unknown":
+    "Zure brokerrak ez du adierazten posizioak zein datatakoak diren. Egiaztatu txostenak 31/12/{{year}} egunean zenuena islatzen duela: geroago deskargatu bazenuen, posizioak eta haien balioak ez dira bat etorriko agian.",
 
   "badge.complete": "Osatuta",
   "badge.pending": "Zain",

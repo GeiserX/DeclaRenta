@@ -395,6 +395,10 @@ const gl: TranslationKeys = {
 
   "section.year_label": "Exercicio",
   "section.profile_source": 'Datos do <a href="#perfil">Perfil fiscal</a>',
+  "section.positions_date_mismatch":
+    "As posicións do teu ficheiro son a data {{date}}, non a 31/12/{{year}}. Estes modelos declaran o que tiñas a 31 de decembro, así que non se xera ningún ficheiro con elas. Descarga un informe que remate o 31/12/{{year}} (en IBKR, un Flex Query con data final 31/12/{{year}}) e súbeo de novo.",
+  "section.positions_date_unknown":
+    "O teu broker non indica a que data corresponden as posicións. Comproba que o informe reflicta o que tiñas a 31/12/{{year}}: se o descargaches máis tarde, as posicións e os seus valores poden non coincidir.",
 
   "badge.complete": "Completo",
   "badge.pending": "Pendente",

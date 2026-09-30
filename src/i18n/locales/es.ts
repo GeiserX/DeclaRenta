@@ -427,6 +427,10 @@ const es = {
   // Section headers
   "section.year_label": "Ejercicio",
   "section.profile_source": 'Datos del <a href="#perfil">Perfil fiscal</a>',
+  "section.positions_date_mismatch":
+    "Las posiciones de tu fichero son a fecha {{date}}, no a 31/12/{{year}}. Estos modelos declaran lo que tenías a 31 de diciembre, así que no se genera ningún fichero con ellas. Descarga un informe que termine el 31/12/{{year}} (en IBKR, un Flex Query con fecha final 31/12/{{year}}) y súbelo de nuevo.",
+  "section.positions_date_unknown":
+    "Tu broker no indica a qué fecha corresponden las posiciones. Comprueba que el informe refleje lo que tenías a 31/12/{{year}}: si lo descargaste más tarde, las posiciones y sus valores pueden no coincidir.",
 
   // Badge statuses
   "badge.complete": "Completo",
