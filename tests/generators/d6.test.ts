@@ -241,3 +241,15 @@ describe("D-6 — unvaluable position (missing year-end rate) degrades, does not
     expect(report.positions.some((p) => p.currency === "USD")).toBe(true);
   });
 });
+
+describe("D-6 — a holding with no market value", () => {
+  it("is counted as unvalued and never written with a 0 € value", () => {
+    const valued = makePosition();
+    const unpriced = makePosition({
+      isin: "US0378331005", symbol: "AAPL", description: "APPLE INC", quantity: "400", markPrice: "0", positionValue: "0",
+    });
+    const report = generateD6Report([valued, unpriced], rateMap, 2025, "Test", "12345678A");
+    expect(report.positions.map((p) => p.isin)).toEqual(["US78462F1030"]);
+    expect(report.unvaluedCount).toBe(1);
+  });
+});

@@ -38,17 +38,20 @@ const LISTED_CATEGORIES: ReadonlySet<string> = new Set(["STK", "FUND", "BOND"]);
  * no 31st). For a tax window that silently shifts the boundary by a couple of days.
  * We clamp the day to the last valid day of the target month instead
  * (Jan 31 + 1mo → Feb 28/29; Mar 31 − 1mo → Feb 28/29; Dec 31 + 2mo → Feb 28/29).
+ *
+ * All arithmetic is in UTC because `parseDate` returns UTC midnight. Local-time
+ * setters keep the local hour across a daylight-saving change, which moves the
+ * window edge an hour off midnight in Spain and drops a repurchase made exactly
+ * on the boundary day.
  */
 export function addMonths(date: Date, months: number): Date {
-  const day = date.getDate();
-  // Move to the 1st to avoid overflow while shifting the month, then clamp the day.
-  const result = new Date(date);
-  result.setDate(1);
-  result.setMonth(result.getMonth() + months);
-  // Last day of the (now correct) target month.
-  const lastDayOfMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
-  result.setDate(Math.min(day, lastDayOfMonth));
-  return result;
+  const day = date.getUTCDate();
+  const year = date.getUTCFullYear();
+  // Date.UTC normalises month overflow in both directions (e.g. month 13 → next January).
+  const month = date.getUTCMonth() + months;
+  // Last day of the target month.
+  const lastDayOfMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, lastDayOfMonth)));
 }
 
 /** A homogeneous repurchase available to absorb a loss, with a consumable quantity. */

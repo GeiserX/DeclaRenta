@@ -328,11 +328,21 @@ describe("buildModelo721Entries — 721 valuation source of truth", () => {
     expect(positions[0]!.entry.assetId).toBe("BTC");
   });
 
-  it("excludes positions with non-positive value", () => {
-    const zero = makePosition({ positionValue: "0" });
+  it("excludes positions with non-positive value and no units held", () => {
+    const zero = makePosition({ quantity: "0", positionValue: "0" });
     const negative = makePosition({ positionValue: "-100" });
     const { positions } = buildModelo721Entries([zero, negative], rateMap, yearEnd);
     expect(positions).toHaveLength(0);
+  });
+
+  it("counts a held coin with no market value as unvalued, not as 0 €", () => {
+    // Revolut's transaction log gives units but no year-end price (value "0").
+    const unpriced = makePosition({ quantity: "2", markPrice: "0", positionValue: "0" });
+    const { positions, unvaluedCount, totalValueEur } = buildModelo721Entries([unpriced], rateMap, yearEnd);
+    expect(positions).toHaveLength(1);
+    expect(positions[0]!.valuationEur).toBeNull();
+    expect(unvaluedCount).toBe(1);
+    expect(totalValueEur.toString()).toBe("0");
   });
 
   it("counts positions whose currency has no resolvable rate as unvalued (null valuation)", () => {

@@ -68,8 +68,6 @@ const gl: TranslationKeys = {
   "table.amount_eur": "Importe (EUR)",
   "table.currency": "Divisa",
 
-  "casilla.transmission_value": "Valor de transmisión (total transmisións)",
-  "casilla.acquisition_value": "Valor de adquisición (total transmisións)",
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",
   "casilla.acquisition_sale_rate_note":
@@ -160,6 +158,9 @@ const gl: TranslationKeys = {
   "compare.saved_reports": "Informes gardados",
   "compare.clear_history": "Borrar historial",
   "compare.clear_confirm": "Borrar todos os informes gardados?",
+  "compare.transmission_value": "Valor de transmisión (transmisións, sen divisas)",
+  "compare.acquisition_value": "Valor de adquisición (transmisións, sen divisas)",
+  "compare.net_gain_loss": "Ganancia/Perda neta (transmisións, sen divisas)",
 
   "error.no_broker_detected": 'Non se puido detectar o broker de "{{filename}}". Selecciona o broker manualmente.',
   "error.file_too_large":
@@ -325,10 +326,11 @@ const gl: TranslationKeys = {
   "m720.category_c": "Contas (saldos en efectivo)",
   "m720.category_exceeded": "Supera 50.000 € — obrigatorio declarar",
   "m720.category_not_exceeded": "Por debaixo do limiar",
+  "m720.category_undetermined": "Non se pode determinar: {{count}} posición(s) sen valorar",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "m720.cash_title": "Saldos en efectivo (Contas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
@@ -363,7 +365,7 @@ const gl: TranslationKeys = {
   "d6.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o D-6.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "d6.cancellations_title": "Cancelacións",
   "d6.generate_btn": "Xerar guía D-6",
   "d6.deadline": "Prazo: 1 – 31 xaneiro do ano seguinte",
@@ -382,6 +384,8 @@ const gl: TranslationKeys = {
   "m721.threshold_exceeded": "Segundo as túas posicións ({{amount}} €), estás obrigado a presentar o Modelo 721.",
   "m721.threshold_not_exceeded":
     "Non superas o limiar de 50.000 € (total: {{amount}} €). Non estás obrigado a presentar.",
+  "m721.threshold_undetermined":
+    "Non se pode determinar se superas o limiar de 50.000 €: o total ({{amount}} €) non inclúe {{count}} posición(s) sen valorar. Valóraas antes de concluír que non debes presentar.",
   "m721.no_positions": "Sube un informe con posicións de criptomoedas no Modelo 100 para analizar o Modelo 721.",
   "m721.positions_title": "Posicións declarables",
   "m721.generate_btn": "Xerar ficheiro Modelo 721",
@@ -398,7 +402,7 @@ const gl: TranslationKeys = {
   "m721.format_notice":
     "O formato oficial da AEAT é XML (Orde HFP/886/2023). DeclaRenta só mostra unha revisión orientativa: a xeración oficial está desactivada ata implementar XML validado.",
   "m721.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen tipo de cambio dispoñible para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
   "m721.empty_title": "Non hai posicións de criptomoedas",
   "m721.empty_description":
     "O Modelo 721 é unha declaración informativa obrigatoria se posúes criptomoedas en exchanges estranxeiros valoradas en máis de 50.000 €. Sube o teu informe do broker na sección Modelo 100 para que DeclaRenta calcule automaticamente se superas o limiar. Prazo: 1 de xaneiro – 31 de marzo.",
@@ -655,6 +659,10 @@ const gl: TranslationKeys = {
     "⚠ Venda sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0 (posible posición curta ou datos previos incompletos).",
   "fifo.sell_without_lots.hint":
     "Incluíches os anos anteriores no teu Flex Query? Selecciona un período que cubra desde a primeira compra deste valor.",
+  "fifo.cover_without_lots":
+    "⚠ Peche de curto sen lotes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Ganancia non calculada (posición curta aberta fóra do período ou datos previos incompletos).",
+  "fifo.cover_without_lots.hint":
+    "Incluíches os anos anteriores no teu Flex Query? Selecciona un período que cubra desde a venda que abriu esta posición curta.",
   "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} o {{date}}. Custo base = 0.",
   "fifo.insufficient_lots.hint":
     "O Flex Query non cobre todas as compras previas deste valor. Amplía o período de consulta.",
@@ -693,6 +701,10 @@ const gl: TranslationKeys = {
     "Hai {{count}} ingreso(s) en criptomoeda (p. ex. recompensas de staking) que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.crypto_income_unvalued.hint":
     "Estes ingresos páganse na propia cripto e non teñen tipo de cambio oficial do BCE. Calcula o seu valor en euros na data de cobramento e decláraos manualmente como rendementos do capital mobiliario (Casa 0027).",
+  "report.dividend_unvalued":
+    "Hai {{count}} dividendo(s) en {{currencies}} que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
+  "report.dividend_unvalued.hint":
+    "O BCE non publica un tipo de cambio oficial para esa divisa na data de cobramento. Calcula o importe en euros nesa data, súmao a man á casilla 0029 e ten en conta a súa retención na dedución por dobre imposición internacional (casilla 0588).",
   "report.crypto_general_gain_unvalued":
     "Hai {{count}} ganancia(s) patrimonial(is) en criptomoeda (p. ex. airdrops ou comisións de referidos) que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.crypto_general_gain_unvalued.hint":
@@ -767,6 +779,14 @@ const gl: TranslationKeys = {
     "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Adoita deberse a filas incompletas na exportación (columna "amount" baleira ou non numérica). Se faltan operacións, volve descargar o CSV de transaccións completo desde Trade Republic.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: non se aplicaron {{count}} movemento(s) de acción corporativa (fusión, canxe, split) de {{isins}}.",
+  "trade_republic.corporate_action_not_applied.hint":
+    "O custo dos títulos antigos non pasa aos novos, así que unha venda posterior do novo valor pode saír sen lotes e con custo 0. Se foi unha fusión ou un canxe, engade o custo de adquisición orixinal en «Lotes manuais para posicións transferidas».",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: non se importaron {{count}} entrega(s) de títulos sen compravenda (accións gratuítas, traspasos) de {{isins}}.",
+  "trade_republic.delivery_not_applied.hint":
+    "As accións gratuítas dunha promoción son unha ganancia patrimonial da base xeral polo seu valor de mercado o día da entrega: declaraas á parte e engade ese valor como custo en «Lotes manuais para posicións transferidas». Se é un traspaso desde outro bróker, engade alí o custo de compra orixinal.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

@@ -68,8 +68,6 @@ const eu: TranslationKeys = {
   "table.amount_eur": "Zenbatekoa (EUR)",
   "table.currency": "Moneta",
 
-  "casilla.transmission_value": "Transmisio-balioa (transmisio guztiak)",
-  "casilla.acquisition_value": "Eskuratze-balioa (transmisio guztiak)",
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
   "casilla.acquisition_sale_rate_note":
@@ -161,6 +159,9 @@ const eu: TranslationKeys = {
   "compare.saved_reports": "Gordetako txostenak",
   "compare.clear_history": "Historiala ezabatu",
   "compare.clear_confirm": "Gordetako txosten guztiak ezabatu?",
+  "compare.transmission_value": "Transmisio-balioa (transmisioak, dibisarik gabe)",
+  "compare.acquisition_value": "Eskuratze-balioa (transmisioak, dibisarik gabe)",
+  "compare.net_gain_loss": "Irabazi/Galera garbia (transmisioak, dibisarik gabe)",
 
   "error.no_broker_detected": 'Ezin izan da "{{filename}}" fitxategiaren brokerra detektatu. Hautatu brokerra eskuz.',
   "error.file_too_large":
@@ -325,10 +326,11 @@ const eu: TranslationKeys = {
   "m720.category_c": "Kontuak (eskudiruzko saldoak)",
   "m720.category_exceeded": "50.000 € gainditzen du — aitorpena derrigorrezkoa",
   "m720.category_not_exceeded": "Atalasearen azpitik",
+  "m720.category_undetermined": "Ezin da zehaztu: {{count}} posizio baloratu gabe",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago kanbio-tasarik eskuragarri haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
   "m720.cash_title": "Eskudiruzko saldoak (Kontuak)",
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
@@ -363,7 +365,7 @@ const eu: TranslationKeys = {
   "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago kanbio-tasarik eskuragarri haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
   "d6.deadline": "Epea: urtarrilaren 1etik 31ra hurrengo urtean",
@@ -382,6 +384,8 @@ const eu: TranslationKeys = {
   "m721.threshold_exceeded": "Zure posizioen arabera ({{amount}} €), 721 Eredua aurkeztera behartuta zaude.",
   "m721.threshold_not_exceeded":
     "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
+  "m721.threshold_undetermined":
+    "Ezin da zehaztu 50.000 €-ko atalasea gainditzen duzun: guztirakoak ({{amount}} €) ez ditu barne hartzen baloratu gabeko {{count}} posizio. Baloratu itzazu aurkeztu behar ez duzula ondorioztatu aurretik.",
   "m721.no_positions": "Igo kriptomoneda posizioak dituen txostena 100 Ereduan 721 Eredua aztertzeko.",
   "m721.positions_title": "Aitortu beharreko posizioak",
   "m721.generate_btn": "721 Ereduaren fitxategia sortu",
@@ -398,7 +402,7 @@ const eu: TranslationKeys = {
   "m721.format_notice":
     "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). DeclaRentak berrikuspen orientagarria bakarrik erakusten du: sorrera ofiziala desgaituta dago balioztatutako XMLa inplementatu arte.",
   "m721.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago kanbio-tasarik eskuragarri haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
   "m721.empty_title": "Ez dago kriptomoneda posiziorik kargatuta",
   "m721.empty_description":
     "721 Eredua aitorpen informatibo nahitaezkoa da atzerriko exchange-etan 50.000 € baino gehiagoko kriptomonedak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun. Epea: urtarrilaren 1etik martxoaren 31ra.",
@@ -656,6 +660,10 @@ const eu: TranslationKeys = {
     "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":
     "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu balio honen lehen erosketatik estaltzen duen epe bat.",
+  "fifo.cover_without_lots":
+    "⚠ Posizio laburraren itxiera loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Irabazia ez da kalkulatu (posizio laburra epetik kanpo irekia edo aurreko datu osatugabeak).",
+  "fifo.cover_without_lots.hint":
+    "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu posizio labur hau ireki zuen salmentatik estaltzen duen epe bat.",
   "fifo.insufficient_lots":
     "⚠ Lote nahikorik ez: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0.",
   "fifo.insufficient_lots.hint":
@@ -695,6 +703,10 @@ const eu: TranslationKeys = {
     "{{count}} kriptomonetako diru-sarrera daude (adib. staking sariak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_income_unvalued.hint":
     "Diru-sarrera hauek kripto berean ordaintzen dira eta ez dute BCEren kanbio-tasa ofizialik. Kalkulatu eurotako balioa kobratze-datan eta deklaratu eskuz kapital higigarriaren etekin gisa (0027 kasila).",
+  "report.dividend_unvalued":
+    "{{currencies}} dibisako {{count}} dibidendu daude automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
+  "report.dividend_unvalued.hint":
+    "BCEk ez du dibisa horren kanbio-tasa ofizialik argitaratzen kobratze-datan. Kalkulatu zenbatekoa eurotan data horretan, gehitu eskuz 0029 laukian eta kontuan hartu haren atxikipena nazioarteko zergapetze bikoitzaren kenkarian (0588 laukia).",
   "report.crypto_general_gain_unvalued":
     "{{count}} kriptomonetako ondare-irabazi daude (adib. airdropak edo gomendio-komisioak) automatikoki baloratu ezin izan direnak eta kalkulatutako zenbatekoetan sartzen ez direnak.",
   "report.crypto_general_gain_unvalued.hint":
@@ -769,6 +781,14 @@ const eu: TranslationKeys = {
     "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
   "trade_republic.trade_skipped_no_amount.hint":
     'Normalean esportazioan errenkada osatugabeei zor zaie ("amount" zutabea hutsik edo zenbakizkoa ez dena). Eragiketak falta badira, deskargatu berriro transakzioen CSV osoa Trade Republic-etik.',
+  "trade_republic.corporate_action_not_applied":
+    "Trade Republic: ez dira aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
+  "trade_republic.corporate_action_not_applied.hint":
+    "Titulu zaharren kostua ez da berrietara pasatzen, beraz balore berriaren ondorengo salmenta batek loterik gabe eta 0 kostuarekin atera daiteke. Fusioa edo trukea izan bazen, gehitu jatorrizko eskuratze-kostua «Eskuzko loteak transferitutako posizioentzat» atalean.",
+  "trade_republic.delivery_not_applied":
+    "Trade Republic: ez dira inportatu {{isins}} baloreen salerosketarik gabeko {{count}} titulu-entrega (doako akzioak, lekualdaketak).",
+  "trade_republic.delivery_not_applied.hint":
+    "Promozio bateko doako akzioak zerga-oinarri orokorreko ondare-irabazia dira, entrega-eguneko merkatu-balioaren arabera: aitortu itzazu bereiz eta gehitu balio hori kostu gisa «Eskuzko loteak transferitutako posizioentzat» atalean. Beste broker batetik egindako lekualdaketa bada, gehitu bertan jatorrizko erosketa-kostua.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

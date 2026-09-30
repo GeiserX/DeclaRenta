@@ -6,6 +6,14 @@
  * - Net capital gains losses can offset up to 25% of positive capital income (dividends + interest)
  * - Net capital income losses can offset up to 25% of capital gains
  * - Uncompensated losses carry to next year (up to 4 years total)
+ *
+ * Order (Art. 49.1-2 LIRPF, AEAT Manual práctico IRPF, cap. 12):
+ * 1. The current year's negative balance offsets the other bucket's positive
+ *    balance, up to 25% of it. Only the remainder carries forward.
+ * 2. Prior-year losses offset their own bucket, oldest first.
+ * 3. Prior-year losses offset the other bucket, oldest first. The 25% cap is
+ *    one cap per direction, computed on the year's positive balance before any
+ *    compensation and shared with step 1.
  */
 
 import Decimal from "decimal.js";
@@ -27,6 +35,44 @@ export interface LossCarryforwardResult {
   details: string[];
 }
 
+/** Result of {@link offsetCurrentYearLosses}. */
+export interface CurrentYearOffset {
+  /** Gains balance after the same-year offset (negative = loss still pending). */
+  gains: Decimal;
+  /** Income balance after the same-year offset (negative = loss still pending). */
+  income: Decimal;
+  /** Gains loss offset against this year's income. */
+  gainsLossOffset: Decimal;
+  /** Income loss offset against this year's gains. */
+  incomeLossOffset: Decimal;
+}
+
+/**
+ * Same-year cross-compensation (Art. 49.1.a/b LIRPF): a negative balance in one
+ * savings bucket offsets the other bucket's positive balance of the SAME year,
+ * up to 25% of that positive balance. Only one bucket can be negative while the
+ * other is positive, so at most one direction applies.
+ *
+ * @param netGains - Gains/losses balance (capital gains + FX)
+ * @param netIncome - Capital income balance (dividends + interest)
+ */
+export function offsetCurrentYearLosses(netGains: Decimal, netIncome: Decimal): CurrentYearOffset {
+  let gains = new Decimal(netGains);
+  let income = new Decimal(netIncome);
+  let gainsLossOffset = new Decimal(0);
+  let incomeLossOffset = new Decimal(0);
+  if (gains.lessThan(0) && income.greaterThan(0)) {
+    gainsLossOffset = Decimal.min(gains.abs(), income.mul(new Decimal("0.25")));
+    gains = gains.plus(gainsLossOffset);
+    income = income.minus(gainsLossOffset);
+  } else if (income.lessThan(0) && gains.greaterThan(0)) {
+    incomeLossOffset = Decimal.min(income.abs(), gains.mul(new Decimal("0.25")));
+    income = income.plus(incomeLossOffset);
+    gains = gains.minus(incomeLossOffset);
+  }
+  return { gains, income, gainsLossOffset, incomeLossOffset };
+}
+
 /**
  * Apply loss carryforward from prior years to the current year's tax results.
  *
@@ -43,10 +89,27 @@ export function applyLossCarryforward(
   priorLosses: LossCarryforward[],
 ): LossCarryforwardResult {
   const details: string[] = [];
-  let adjustedGains = new Decimal(netGains);
-  let adjustedIncome = new Decimal(netIncome);
   let totalCompensated = new Decimal(0);
   let expiredLosses = new Decimal(0);
+
+  // One 25% cap per direction, on the year's positive balance before any
+  // compensation (AEAT Manual práctico IRPF, cap. 12, caso práctico).
+  const quarter = new Decimal("0.25");
+  const maxCrossToIncome = Decimal.max(netIncome, 0).mul(quarter);
+  const maxCrossToGains = Decimal.max(netGains, 0).mul(quarter);
+
+  // Step 0: the current year's negative balance offsets the other bucket first.
+  const current = offsetCurrentYearLosses(netGains, netIncome);
+  let adjustedGains = current.gains;
+  let adjustedIncome = current.income;
+  if (current.gainsLossOffset.greaterThan(0)) {
+    totalCompensated = totalCompensated.plus(current.gainsLossOffset);
+    details.push(`🔄 Compensación cruzada ${currentYear} (pérdidas ganancias → rentas): ${current.gainsLossOffset.toFixed(2)} EUR (máx. 25%)`);
+  }
+  if (current.incomeLossOffset.greaterThan(0)) {
+    totalCompensated = totalCompensated.plus(current.incomeLossOffset);
+    details.push(`🔄 Compensación cruzada ${currentYear} (pérdidas rentas → ganancias): ${current.incomeLossOffset.toFixed(2)} EUR (máx. 25%)`);
+  }
 
   // Filter out expired losses (older than 4 years) and separate by category
   const validLosses: LossCarryforward[] = [];
@@ -92,16 +155,16 @@ export function applyLossCarryforward(
     }
   }
 
-  // Step 2: Cross-category compensation (25% limit)
+  // Step 2: Cross-category compensation (25% limit, shared with Step 0)
   // Remaining gains losses can offset up to 25% of positive capital income
   if (adjustedIncome.greaterThan(0)) {
-    const maxCross = adjustedIncome.mul(new Decimal("0.25"));
+    const maxCross = Decimal.max(0, maxCrossToIncome.minus(current.gainsLossOffset));
     let crossUsed = new Decimal(0);
     for (const loss of gainsLosses) {
-      if (crossUsed.greaterThanOrEqualTo(maxCross)) break;
+      if (crossUsed.greaterThanOrEqualTo(maxCross) || adjustedIncome.lessThanOrEqualTo(0)) break;
       const available = loss.remaining.abs();
       if (available.isZero()) continue;
-      const compensate = Decimal.min(available, maxCross.minus(crossUsed));
+      const compensate = Decimal.min(available, maxCross.minus(crossUsed), adjustedIncome);
       adjustedIncome = adjustedIncome.minus(compensate);
       loss.remaining = loss.remaining.plus(compensate);
       crossUsed = crossUsed.plus(compensate);
@@ -114,13 +177,13 @@ export function applyLossCarryforward(
 
   // Remaining income losses can offset up to 25% of positive capital gains
   if (adjustedGains.greaterThan(0)) {
-    const maxCross = adjustedGains.mul(new Decimal("0.25"));
+    const maxCross = Decimal.max(0, maxCrossToGains.minus(current.incomeLossOffset));
     let crossUsed = new Decimal(0);
     for (const loss of incomeLosses) {
-      if (crossUsed.greaterThanOrEqualTo(maxCross)) break;
+      if (crossUsed.greaterThanOrEqualTo(maxCross) || adjustedGains.lessThanOrEqualTo(0)) break;
       const available = loss.remaining.abs();
       if (available.isZero()) continue;
-      const compensate = Decimal.min(available, maxCross.minus(crossUsed));
+      const compensate = Decimal.min(available, maxCross.minus(crossUsed), adjustedGains);
       adjustedGains = adjustedGains.minus(compensate);
       loss.remaining = loss.remaining.plus(compensate);
       crossUsed = crossUsed.plus(compensate);
@@ -141,24 +204,24 @@ export function applyLossCarryforward(
     }
   }
 
-  // Add current year losses
-  if (netGains.lessThan(0)) {
+  // Add what is left of the current year's losses after the Step 0 offset
+  if (current.gains.lessThan(0)) {
     updatedCarryforward.push({
       year: currentYear,
-      amount: netGains,
-      remaining: netGains,
+      amount: current.gains,
+      remaining: current.gains,
       category: "gains",
     });
-    details.push(`📝 Nueva pérdida ganancias ${currentYear}: ${netGains.abs().toFixed(2)} EUR (se arrastra)`);
+    details.push(`📝 Nueva pérdida ganancias ${currentYear}: ${current.gains.abs().toFixed(2)} EUR (se arrastra)`);
   }
-  if (netIncome.lessThan(0)) {
+  if (current.income.lessThan(0)) {
     updatedCarryforward.push({
       year: currentYear,
-      amount: netIncome,
-      remaining: netIncome,
+      amount: current.income,
+      remaining: current.income,
       category: "income",
     });
-    details.push(`📝 Nueva pérdida rentas ${currentYear}: ${netIncome.abs().toFixed(2)} EUR (se arrastra)`);
+    details.push(`📝 Nueva pérdida rentas ${currentYear}: ${current.income.abs().toFixed(2)} EUR (se arrastra)`);
   }
 
   return {

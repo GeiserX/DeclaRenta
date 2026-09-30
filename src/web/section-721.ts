@@ -92,13 +92,20 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   html += renderPositionsDateBanner(statement, year).html;
 
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
-  // coin itself) has no resolvable year-end rate are excluded from the EUR total
-  // and surfaced below for manual valuation, instead of crashing the section.
+  // coin itself) has no resolvable year-end rate, or with no market value, are
+  // excluded from the EUR total and surfaced for manual valuation, instead of
+  // crashing the section. The warning goes before the verdict, and while any
+  // are unvalued the verdict cannot be "not obliged".
   const unvaluedCount = valuation.unvaluedCount;
   const totalValue = valuation.totalValueEur;
 
   const exceeds = totalValue.greaterThanOrEqualTo(50000);
+  const undetermined = !exceeds && unvaluedCount > 0;
   const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
+
+  if (unvaluedCount > 0) {
+    html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
+  }
 
   html += `<div class="threshold-bar">
     <div class="threshold-track">
@@ -109,10 +116,12 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
       <span>50.000 €</span>
     </div>
   </div>
-  <p class="${exceeds ? "warning" : "muted"}">
+  <p class="${exceeds || undetermined ? "warning" : "muted"}">
     ${exceeds
       ? t("m721.threshold_exceeded", { amount: fmtEur(totalValue) })
-      : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
+      : undetermined
+        ? esc(t("m721.threshold_undetermined", { amount: fmtEur(totalValue), count: String(unvaluedCount) }))
+        : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
   </p>`;
 
   // Positions table
@@ -151,10 +160,6 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
         return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
-  }
-
-  if (unvaluedCount > 0) {
-    html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
 
   html += `<div class="banner banner-warning">${t("m721.format_notice")}</div>`;

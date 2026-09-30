@@ -1537,3 +1537,52 @@ describe("IBKR option underlying ISIN and category", () => {
     expect(cusip.trades[0]!.underlyingIsin).toBeUndefined();
   });
 });
+
+describe("IBKR settlement date (settleDateTarget)", () => {
+  it("reads settleDateTarget from a real Flex export, so trades carry their settlement date", () => {
+    const r = parseIbkrFlexXml(fixture("ibkr-autoconvert.xml"));
+    expect(r.trades.length).toBeGreaterThan(0);
+    expect(r.trades.every((t) => t.settlementDate !== "")).toBe(true);
+    // PYPL bought 2025-04-10, settles T+1.
+    const pypl = r.trades.find((t) => t.tradeID === "TXN-0003")!;
+    expect(pypl.tradeDate).toBe("20250410");
+    expect(pypl.settlementDate).toBe("20250411");
+  });
+
+  it("dates a USD→EUR conversion traded 31 Dec and settling 2 Jan in the next year, at the settlement rate", () => {
+    const xml = `<FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1" fromDate="20250101" toDate="20260131" period="Custom">
+          <Trades>
+            <Trade tradeID="F1" accountId="U1" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+                   tradeDate="20251103" settleDateTarget="20251105" quantity="-800" tradePrice="1.25" tradeMoney="-1000"
+                   proceeds="1000" cost="0" buySell="SELL" openCloseIndicator="" exchange="IDEALFX"
+                   ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+            <Trade tradeID="C1" accountId="U1" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+                   tradeDate="20251231" settleDateTarget="20260102" quantity="900" tradePrice="1.1111" tradeMoney="1000"
+                   proceeds="-1000" cost="0" buySell="BUY" openCloseIndicator="" exchange="IDEALFX"
+                   ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+    const rates: EcbRateMap = new Map([
+      ["2025-11-03", new Map([["USD", "0.80"]])],
+      ["2025-11-05", new Map([["USD", "0.80"]])],
+      ["2025-12-31", new Map([["USD", "0.90"]])],
+      ["2026-01-02", new Map([["USD", "0.95"]])],
+    ]);
+    const statement = parseIbkrFlexXml(xml);
+
+    const y2025 = generateTaxReport(statement, rates, 2025);
+    expect(y2025.fxGains.disposals).toHaveLength(0);
+    expect(y2025.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+
+    const y2026 = generateTaxReport(statement, rates, 2026);
+    expect(y2026.fxGains.disposals).toHaveLength(1);
+    expect(y2026.fxGains.disposals[0]!.disposeDate).toBe("2026-01-02");
+    // $1000 × (0.95 − 0.80) at the settlement-date rate, not 0.90 on the trade date.
+    expect(y2026.fxGains.netGainLoss.toFixed(2)).toBe("150.00");
+  });
+});
