@@ -260,5 +260,30 @@ describe("fetchEcbRates", () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining("D.CHF.EUR"),
     );
+    // Data-only response: the parser needs just TIME_PERIOD and OBS_VALUE.
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("detail=dataonly"),
+    );
+  });
+
+  it("requests every currency at once instead of waiting for each response", async () => {
+    const pending: Array<(r: Response) => void> = [];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>((resolve) => pending.push(resolve)),
+    );
+
+    const promise = fetchEcbRates(2025, ["USD", "GBP"]);
+
+    // Both requests are out before the first response has arrived.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]![0]).toContain("D.USD.EUR");
+    expect(fetchSpy.mock.calls[1]![0]).toContain("D.GBP.EUR");
+
+    // Answer out of order: the merged map must not depend on arrival order.
+    pending[1]!(mockFetchOk("TIME_PERIOD,OBS_VALUE\n2025-01-02,0.8600\n"));
+    pending[0]!(mockFetchOk("TIME_PERIOD,OBS_VALUE\n2025-01-02,1.0350\n"));
+    const rates = await promise;
+    expect(rates.get("2025-01-02")!.has("USD")).toBe(true);
+    expect(rates.get("2025-01-02")!.has("GBP")).toBe(true);
   });
 });

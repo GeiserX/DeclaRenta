@@ -46,6 +46,13 @@ jobs:
       - name: Test with coverage
         run: npm run test:coverage
 
+      # The browser runs in the user's timezone, not UTC. Date-window code must
+      # give the same result in Spain as on this UTC runner.
+      - name: Test anti-churning windows in Madrid time
+        run: npx vitest run tests/engine/wash-sale.test.ts
+        env:
+          TZ: Europe/Madrid
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
