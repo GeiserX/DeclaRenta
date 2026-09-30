@@ -747,6 +747,10 @@ const gl: TranslationKeys = {
     "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total de comisións de cada orde é exacto; só o reparto entre execucións é aproximado.",
+  "flatex.depot.repeated_fills":
+    "Operacións de Flatex repetidas e contadas unha soa vez: {{fills}}. Tiñan o mesmo número de orde e de apuntamento (TA-Nr.) que outra xa cargada.",
+  "flatex.depot.repeated_fills.hint":
+    "Adoita pasar ao subir o mesmo CSV de Depotumsätze dúas veces, ou dúas exportacións con datas que se solapan. Se de verdade son operacións distintas, revisa o ficheiro: Flatex dá a cada execución o seu propio TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota os dividendos polo importe neto cobrado, xa descontada a retención, e o CSV de Kontoumsätze non inclúe a retención.",
   "flatex.dividends.net_amounts.hint":

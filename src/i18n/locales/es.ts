@@ -784,6 +784,10 @@ const es = {
     "Órdenes de Flatex ejecutadas en varias partes: {{orders}}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total de comisiones de cada orden es exacto; solo el reparto entre ejecuciones es aproximado.",
+  "flatex.depot.repeated_fills":
+    "Operaciones de Flatex repetidas y contadas una sola vez: {{fills}}. Tenían el mismo número de orden y de apunte (TA-Nr.) que otra ya cargada.",
+  "flatex.depot.repeated_fills.hint":
+    "Suele pasar al subir el mismo CSV de Depotumsätze dos veces, o dos exportaciones con fechas que se solapan. Si de verdad son operaciones distintas, revisa el archivo: Flatex da a cada ejecución su propio TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota los dividendos por el importe neto cobrado, ya descontada la retención, y el CSV de Kontoumsätze no incluye la retención.",
   "flatex.dividends.net_amounts.hint":
