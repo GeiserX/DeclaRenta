@@ -70,7 +70,7 @@ Los tramos del ahorro que usa el cálculo están en [Casillas del Modelo 100](ca
 
 ### Desglose por país
 
-DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En los resultados verás una tabla con el impuesto pagado y la deducción máxima por país.
+DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En el detalle de la casilla 0588 verás, por país, el rendimiento bruto, el impuesto pagado y la deducción máxima, y debajo el total de rendimientos extranjeros. Ese bruto por país es lo que pide Renta Web como rendimiento obtenido en el extranjero; no uses la casilla 0029, que también incluye los dividendos españoles y los de países sin retención.
 
 ### W-8BEN y convenios de doble imposición
 

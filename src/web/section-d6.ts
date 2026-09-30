@@ -34,9 +34,15 @@ function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): De
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("d6-content");
   if (!container) return;
   container.innerHTML = `
@@ -60,6 +66,7 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
   const yearEnd = effectiveYearEnd(year);
 
   const positions = statement.openPositions.filter(
@@ -251,7 +258,7 @@ function aforixField(label: string, value: string): string {
 }
 
 async function generateD6File(): Promise<void> {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("d6-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -270,7 +277,7 @@ async function generateD6File(): Promise<void> {
   const report = generateD6Report(
     cachedStatement.openPositions,
     cachedRateMap,
-    profile.year,
+    cachedYear,
     fullName || "CONTRIBUYENTE",
     profile.nif || "00000000T",
   );
@@ -279,7 +286,7 @@ async function generateD6File(): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `d6_guia_${profile.year}.json`;
+  a.download = `d6_guia_${cachedYear}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
