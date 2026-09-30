@@ -17,6 +17,7 @@ import {
   toFiniteDecimal,
   findColumn,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -184,6 +185,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     if (!asset || !timestamp) continue;
 
     const tradeDate = convertTimestamp(timestamp);
+    const tradeTime = timeOfDay(timestamp);
 
     // Skip non-taxable transfers
     if (SKIP_TYPES.includes(txType)) continue;
@@ -236,6 +238,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         assetCategory: "CRYPTO",
         currency: spotCurrency || "EUR",
         tradeDate,
+        tradeTime,
         settlementDate: tradeDate,
         quantity: quantityDec.neg().toString(),
         tradePrice: spotPrice,
@@ -270,6 +273,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
           assetCategory: "CRYPTO",
           currency: spotCurrency || "EUR",
           tradeDate,
+          tradeTime,
           settlementDate: tradeDate,
           quantity: destQuantityDec.toString(),
           tradePrice: destPrice,
@@ -327,6 +331,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       assetCategory: "CRYPTO",
       currency: spotCurrency || "EUR",
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
       tradePrice: spotPrice,

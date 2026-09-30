@@ -20,6 +20,7 @@ import {
   convertDateISO,
   findColumn,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -113,6 +114,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
     const dateStr = (fields[cols.date] ?? "").trim();
     const tradeDate = convertDateISO(dateStr); // YYYY-MM-DD → YYYYMMDD
+    const tradeTime = cols.time >= 0 ? timeOfDay(fields[cols.time] ?? "") : undefined;
     const type = (fields[cols.type] ?? "").trim().toLowerCase();
     const assetType = cols.assetType >= 0 ? (fields[cols.assetType] ?? "").trim().toLowerCase() : "";
     const isin = (fields[cols.isin] ?? "").trim();
@@ -224,6 +226,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       assetCategory,
       currency: currency || "EUR",
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? `-${absShares}` : `${absShares}`,
       tradePrice: price,
