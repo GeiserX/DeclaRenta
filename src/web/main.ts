@@ -47,6 +47,7 @@ import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
+import { pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import { fmtEur } from "./format.js";
@@ -221,7 +222,7 @@ let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
 /** Years detected from uploaded data (sorted descending, latest first) */
 let detectedYears: number[] = [];
-/** The active year for processing (auto-detected from data, changeable via dropdown) */
+/** The active year for processing (last closed year in the data by default, changeable via dropdown) */
 let activeYear: number | null = null;
 
 // ---------------------------------------------------------------------------
@@ -569,10 +570,11 @@ async function parseFiles(): Promise<void> {
     for (const ct of merged.cashTransactions) addYear(ct.dateTime);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
     if (!activeYear) {
-      // detectedYears[0] is undefined when no valid year was found (all dates
-      // corrupt / empty file) — fall back to the current calendar year so we
+      // Open on the last closed year (the one a Renta is filed for), not the
+      // newest year in the data and not the year saved in the profile. With no
+      // valid year at all it falls back to the current calendar year, so we
       // never persist NaN as the active year.
-      activeYear = detectedYears[0] ?? new Date().getFullYear();
+      activeYear = pickDefaultYear(detectedYears);
       // Sync profile so 720/721/D-6 use the same year
       const profile = getProfile();
       profile.year = activeYear;
@@ -920,6 +922,8 @@ function renderResults(report: TaxSummary) {
         <select id="results-year-select" class="year-select">${yearOptions}</select>
       </span>
     </div>`;
+
+    hdrHtml += renderNewerYearsNotice(detectedYears, year);
 
     if (!hasData && detectedYears.length > 0 && !detectedYears.includes(year)) {
       hdrHtml += `<div class="banner banner-warning">

@@ -14,7 +14,7 @@ Si las acciones vienen de otro broker, introduce los lotes de compra originales 
 
 ### El ejercicio no coincide con los ficheros
 
-Los resultados muestran el ejercicio más reciente que aparece en los ficheros. Si esperabas otro, elige el año en el selector «Ejercicio» de la barra superior de los resultados. Si el año no aparece, el fichero no contiene operaciones de ese ejercicio: exporta el rango de fechas completo.
+Los resultados se abren en el último ejercicio cerrado (el año pasado) si los ficheros lo contienen; si no, en el ejercicio más reciente anterior a ese, o en el año en curso si es el único. Cuando los ficheros cubren también años posteriores, un aviso lo indica («Mostrando 2025; tus datos también cubren 2026»). Si esperabas otro, elige el año en el selector «Ejercicio» de la barra superior de los resultados. Si el año no aparece, el fichero no contiene operaciones de ese ejercicio: exporta el rango de fechas completo.
 
 ### Faltan tipos de cambio
 

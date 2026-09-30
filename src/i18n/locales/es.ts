@@ -44,6 +44,7 @@ const es = {
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(es)",
   "results.dividends_count": "{{count}} dividendo(s)",
+  "results.newer_years_notice": "Mostrando {{year}}; tus datos también cubren {{years}}.",
   "results.year_mismatch":
     "El fichero contiene datos de los ejercicios {{available}}, pero el ejercicio seleccionado es {{year}}. Selecciona otro año en el desplegable superior.",
 
