@@ -211,9 +211,15 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     }).join("")}</ul></div>`;
   }
 
-  // Generate button
-  if (exceeds || positions.length > 0) {
+  // Generate button, only when a category must be filed. Below both thresholds
+  // the generator writes no file, so say why instead of offering a dead button.
+  if (exceeds) {
     html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
+  } else {
+    // Each category is compared with 50.000 € on its own, so name the largest one
+    // (a sum of two categories could pass 50.000 € and contradict the message).
+    const largest = Decimal.max(thresholds.values.total, thresholds.accounts.total);
+    html += `<div class="banner banner-info" id="m720-no-obligation">${esc(t("m720.threshold_not_exceeded", { amount: fmtEur(largest) }))}</div>`;
   }
 
   // Filing guide
