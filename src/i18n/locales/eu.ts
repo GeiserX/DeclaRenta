@@ -621,6 +621,10 @@ const eu: TranslationKeys = {
     "🔄 Bat-egitea: {{oldIsin}} → {{newIsin}} (ratioa {{ratio}}, {{lotsTransferred}} lote transferituak, {{date}})",
   "fifo.merger_applied.hint":
     "Zerga-neutroa den bat-egitea: loteak ISIN berrira transferitzen dira jatorrizko kostu-oinarria mantenduz.",
+  "fifo.cash_merger_disposal":
+    "💶 Eskudiruzko erosketa: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Salmenta gisa aitortzen da.",
+  "fifo.cash_merger_disposal.hint":
+    "Eskudirutan ordaindutako bat-egitea edo erosketa eskualdaketa bat da: irabazia edo galera salmenta batean bezala kalkulatzen da, jasotako eskudirua eskualdaketa-balio gisa hartuta.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratioa {{ratio}}, kostuaren {{costPercent}}% spin-off-era, {{date}})",
   "fifo.spinoff_applied.hint": "Kostua proportzionalki banatzen da matrizearen eta enpresa eskindituaren artean.",

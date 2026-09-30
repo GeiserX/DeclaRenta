@@ -657,6 +657,10 @@ const es = {
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
     "Fusión fiscal neutra: los lotes se transfieren al nuevo ISIN conservando el coste base original.",
+  "fifo.cash_merger_disposal":
+    "💶 Compra en efectivo: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Se declara como una venta.",
+  "fifo.cash_merger_disposal.hint":
+    "Una fusión o adquisición pagada en efectivo es una transmisión: la ganancia o pérdida se calcula como en una venta, con el efectivo recibido como valor de transmisión.",
   "fifo.spinoff_applied":
     "🔀 Spin-off: {{parentIsin}} → {{newIsin}} (ratio {{ratio}}, coste {{costPercent}}% al spin-off, {{date}})",
   "fifo.spinoff_applied.hint": "El coste se reparte proporcionalmente entre la matriz y la empresa escindida.",
