@@ -76,7 +76,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
     doubleTaxation: {
       deduction: new Decimal("75"),
       byCountry: {
-        US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
+        US: { grossIncome: new Decimal("500"), taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
       },
     },
     fxGains: {
@@ -213,8 +213,8 @@ describe("PDF Report Generator", () => {
       doubleTaxation: {
         deduction: new Decimal("150"),
         byCountry: {
-          US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
-          DE: { taxPaid: new Decimal("100"), deductionAllowed: new Decimal("75") },
+          US: { grossIncome: new Decimal("500"), taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
+          DE: { grossIncome: new Decimal("500"), taxPaid: new Decimal("100"), deductionAllowed: new Decimal("75") },
         },
       },
     });

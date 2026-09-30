@@ -212,21 +212,34 @@ function renderSpanishWithholdingDetail(report: TaxSummary): string {
     </table>`;
 }
 
-/** Render a detail table of double taxation deductions by country. */
-function renderDoubleTaxDetail(report: TaxSummary): string {
+/**
+ * Render a detail table of double taxation deductions by country. The gross
+ * column and its total are the foreign income Renta Web's dialog asks for:
+ * byCountry never holds ES, so the total excludes Spanish dividends (which
+ * casilla 0029 includes).
+ */
+export function renderDoubleTaxDetail(report: TaxSummary): string {
   const countries = Object.entries(report.doubleTaxation.byCountry);
   if (countries.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  const foreignGross = countries.reduce((sum, [, data]) => sum.plus(data.grossIncome), new Decimal(0));
   return `
     <p class="detail-label">${t("casilla.double_taxation")} (${countries.length} ${t("table.country").toLowerCase()})</p>
     <table class="detail-table">
-      <thead><tr><th>${t("table.country")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
+      <thead><tr><th>${t("table.country")}</th><th>${t("table.gross_eur")}</th><th>${t("table.withholding_eur")}</th><th>${t("casilla.double_taxation")}</th></tr></thead>
       <tbody>${countries.map(([country, data]) => `
         <tr>
           <td>${esc(country)}</td>
+          <td>${fmtEur(data.grossIncome)}</td>
           <td>${fmtEur(data.taxPaid)}</td>
           <td>${fmtEur(data.deductionAllowed)}</td>
         </tr>`).join("")}
       </tbody>
+      <tfoot><tr>
+        <td>${t("casilla.dt_foreign_income_total")}</td>
+        <td>${fmtEur(foreignGross)}</td>
+        <td></td>
+        <td>${fmtEur(report.doubleTaxation.deduction)}</td>
+      </tr></tfoot>
     </table>`;
 }
 
