@@ -10,6 +10,7 @@ import { t } from "../i18n/index.js";
 import { getSavingsBands } from "../engine/tax-brackets.js";
 import { fmtEur } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
+import { readableTextOn } from "./contrast.js";
 
 // ---------------------------------------------------------------------------
 // Shared
@@ -238,7 +239,10 @@ export function extractChartData(report: {
 
 // Color palette for the savings bands, mapped by band index. Extra colors are
 // ignored if a year has fewer bands; the engine table is the source of truth.
-const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#ef4444"];
+// Segments are drawn opaque so the colour, and therefore the contrast of the
+// rate label on it, is the same in both themes. The last band is #dc2626 (not
+// #ef4444) because neither dark nor white text reaches 4.5:1 on #ef4444.
+export const BRACKET_COLORS = ["#22c55e", "#84cc16", "#f59e0b", "#f97316", "#dc2626"];
 
 /** Format a band threshold with Spanish thousands separators (no decimals). */
 function fmtThreshold(n: number): string {
@@ -312,9 +316,9 @@ export function renderTaxBracketCard(
   let offsetX = barX;
   const segments = rows.map((r) => {
     const w = totalAmount > 0 ? (r.amount / totalAmount) * barW : 0;
-    const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}" opacity="0.85"/>`;
+    const seg = `<rect x="${offsetX}" y="${barY}" width="${w}" height="${barH}" fill="${r.color}"/>`;
     const labelSeg = w > 30
-      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="#fff" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
+      ? `<text x="${offsetX + w / 2}" y="${barY + barH / 2 + 4}" text-anchor="middle" fill="${readableTextOn(r.color)}" font-size="10" font-weight="600">${(r.rate * 100).toFixed(0)}%</text>`
       : "";
     offsetX += w;
     return seg + labelSeg;

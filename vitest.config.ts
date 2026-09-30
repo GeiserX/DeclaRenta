@@ -37,6 +37,7 @@ export default defineConfig({
         "src/web/charts.ts", // pure SVG/data extraction (extractChartData) — tests/web/charts.test.ts
         "src/web/operations-annex.ts", // operations annex data builder (pure)
         "src/web/detection-cache.ts", // broker-detection cache resolution (pure) — tests/web/detection-cache.test.ts
+        "src/web/contrast.ts", // WCAG contrast helpers (pure) — tests/web/contrast.test.ts
       ],
       // Deliberately EXCLUDED — DOM/browser-bound entry points and renderers that
       // read/write document, window, localStorage, or attach event listeners.
