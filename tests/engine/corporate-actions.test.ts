@@ -216,7 +216,7 @@ describe("Corporate Actions in FIFO Engine", () => {
           reportDate: "20221028",
           dateTime: "20221028;202500",
           quantity: "-100",
-          amount: "5420",
+          amount: "-5420", // real Flex files carry the cash leg as a negative amount
           type: "TC",
           actionDescription: "Acquisition",
         },
@@ -238,6 +238,65 @@ describe("Corporate Actions in FIFO Engine", () => {
       const ids = engine.messages.map((m) => m.id);
       expect(ids).toContain("fifo.cash_merger_disposal");
       expect(ids).not.toContain("fifo.merger_applied");
+    });
+
+    it("does not book a cash-and-stock merger as a sale of the whole position", () => {
+      // Real IBKR rows (Livongo -> Teladoc, 2020): the old shares leave with only the
+      // cash leg in `amount`; the new shares arrive on a second row with amount 0.
+      // Booking the first row as a sale would invent a loss for the stock leg.
+      const mergerRates: EcbRateMap = new Map([
+        ["2020-06-01", new Map([["USD", new Decimal("1")]])],
+        ["2020-10-30", new Map([["USD", new Decimal("1")]])],
+      ]);
+      const engine = new FifoEngine();
+      const trades: Trade[] = [
+        makeTrade({
+          tradeDate: "20200601",
+          symbol: "LVGO",
+          description: "LIVONGO HEALTH INC",
+          isin: "US5391831030",
+          quantity: "2.5052",
+          tradePrice: "120",
+          commission: "0",
+        }),
+      ];
+      const corporateActions: CorporateAction[] = [
+        {
+          transactionID: "CA1",
+          accountId: "",
+          symbol: "LVGO",
+          description:
+            "LVGO(US5391831030) CASH and STOCK MERGER (Acquisition) US87918A1051 592 FOR 1000 AND USD 4.24 (LVGO, LIVONGO HEALTH INC, US5391831030)",
+          isin: "US5391831030",
+          currency: "USD",
+          reportDate: "20201030",
+          dateTime: "20201030;202500",
+          quantity: "-2.5052",
+          amount: "-10.622048",
+          type: "TC",
+          actionDescription: "Acquisition",
+        },
+        {
+          transactionID: "CA2",
+          accountId: "",
+          symbol: "TDOC",
+          description:
+            "LVGO(US5391831030) CASH and STOCK MERGER (Acquisition) US87918A1051 592 FOR 1000 AND USD 4.24 (TDOC, TELADOC HEALTH INC, US87918A1051)",
+          isin: "US87918A1051",
+          currency: "USD",
+          reportDate: "20201030",
+          dateTime: "20201030;202500",
+          quantity: "1.4831",
+          amount: "0",
+          type: "TC",
+          actionDescription: "Acquisition",
+        },
+      ];
+
+      const disposals = engine.processTrades(trades, mergerRates, corporateActions);
+
+      expect(disposals).toHaveLength(0);
+      expect(engine.messages.map((m) => m.id)).not.toContain("fifo.cash_merger_disposal");
     });
   });
 

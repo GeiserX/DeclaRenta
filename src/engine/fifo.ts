@@ -29,6 +29,9 @@ const KNOWN_CATEGORIES: ReadonlySet<string> = new Set([
   "CMDTY",
 ]);
 
+/** IBKR wording of a buyout paid only in cash: "... FOR USD 54.20 PER SHARE ..." */
+const PURE_CASH_BUYOUT = /\bFOR\s+[A-Z]{3}\s+\d+(?:\.\d+)?\s+PER\s+SHARE\b/i;
+
 /** Lot grouping key: ISIN when available; conid for IBKR instruments without ISIN (survives ticker renames); otherwise asset category + symbol */
 function lotKey(trade: { isin: string; symbol: string; assetCategory: string; conid?: string }): string {
   if (trade.assetCategory === "CRYPTO") return `CRYPTO:${trade.symbol.toUpperCase()}`;
@@ -169,7 +172,11 @@ export class FifoEngine {
         // leave (quantity < 0) and cash arrives (amount ≠ 0). That is a transmisión
         // onerosa (Art. 33.1 / 35 LIRPF), not a tax-neutral canje de valores, so the
         // lots are consumed like a SELL whose proceeds are the cash received.
-        if (qty.isNegative() && !amount.isZero()) {
+        // Only the pure-cash wording qualifies: a cash-and-stock merger ("... CASH and
+        // STOCK MERGER ... 592 FOR 1000 AND USD 4.24 ...") also has a negative quantity
+        // and a cash amount, but its amount is only the cash leg; booking it as a sale
+        // would invent a loss for the part paid in new shares.
+        if (qty.isNegative() && !amount.isZero() && PURE_CASH_BUYOUT.test(ca.description)) {
           const tradeDate = ca.dateTime.slice(0, 8);
           cashMergers.push({
             tradeID: ca.transactionID,
