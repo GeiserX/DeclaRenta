@@ -9,12 +9,13 @@ import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
-import type { TaxSummary } from "../types/tax.js";
+import type { ReportSettings, TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
 import { formatCsv } from "../generators/csv.js";
+import { formatReportSettings, reportSettingsDiffer } from "../generators/report-settings.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -29,7 +30,7 @@ import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
-import { initProfile, getProfile, saveProfile } from "./profile.js";
+import { initProfile, getProfile, saveProfile, type FiscalProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
@@ -94,6 +95,16 @@ for (const [code, name] of Object.entries(localeNames)) {
 
 langSelect.addEventListener("change", () => {
   setLocale(langSelect.value as Locale);
+});
+
+// Recalculate when a profile setting that changes the figures is edited
+// (monodivisa, titulares, auto-conversions) while results are on screen. The
+// other fields (NIF, name, phone...) do not change the Modelo 100 figures, so
+// typing them never re-runs the engine.
+document.addEventListener("profilechange", (e) => {
+  if (!currentReport || !mergedStatement || !lastRunSettings) return;
+  const next = settingsFromProfile((e as CustomEvent<FiscalProfile>).detail);
+  if (reportSettingsDiffer(lastRunSettings, next)) void processFiles();
 });
 
 document.addEventListener("localechange", () => {
@@ -223,6 +234,12 @@ let detectedBrokers: string[] = [];
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
 let activeYear: number | null = null;
+/** Profile settings the latest processFiles run computed with. */
+let lastRunSettings: ReportSettings | null = null;
+
+function settingsFromProfile(p: FiscalProfile): ReportSettings {
+  return { monodivisa: p.monodivisa, trackAutoConvert: p.trackAutoConvert, titulares: p.titulares };
+}
 
 // ---------------------------------------------------------------------------
 // Wizard initialization
@@ -678,8 +695,9 @@ function renderSectionSafely(containerId: string, render: () => void): void {
 }
 
 /**
- * Monotonic run token. `processFiles` is triggered from four places (wizard
- * Next, year-select change, manual-rate apply, monodivisa toggle) and is async
+ * Monotonic run token. `processFiles` is triggered from several places (wizard
+ * Next, year-select change, manual-rate or opening-lot apply, and a profile
+ * change to monodivisa, titulares or auto-conversions) and is async
  * (it awaits the ECB fetch and a paint yield), so two runs can overlap — e.g.
  * the user changes the year and immediately edits a manual rate. Without a guard
  * the slower run would resolve last and clobber `currentReport`/the rendered
@@ -697,6 +715,10 @@ async function processFiles(): Promise<void> {
 
   const runToken = ++processRunToken;
   const isStale = () => runToken !== processRunToken;
+  // Read the settings when the run starts, so a change made while it awaits the
+  // ECB fetch is seen as a change and starts a newer run.
+  const profileForReport = getProfile();
+  lastRunSettings = settingsFromProfile(profileForReport);
 
   try {
     const merged = mergedStatement;
@@ -713,7 +735,7 @@ async function processFiles(): Promise<void> {
     // We deliberately do NOT pass `noCache` — ECB rates are immutable historical
     // data, so the orchestrator's per-(currency, year) memoization makes the
     // repeated processFiles() runs (year-select change, manual-rate entry,
-    // monodivisa toggle) reuse already-fetched rates instead of refetching
+    // profile setting change) reuse already-fetched rates instead of refetching
     // everything each time.
     const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year, manualOpeningLots });
     if (isStale()) return; // a newer run started while fetching — let it win
@@ -736,7 +758,6 @@ async function processFiles(): Promise<void> {
     await new Promise<void>((r) => setTimeout(r, 0));
     if (isStale()) return; // superseded during the paint yield — discard this run
 
-    const profileForReport = getProfile();
     const report = generateTaxReport(merged, allRates, year, {
       skipFx: profileForReport.monodivisa,
       trackAutoConvert: profileForReport.trackAutoConvert,
@@ -792,7 +813,7 @@ exportPdfBtn.addEventListener("click", () => {
   exportPdfBtn.disabled = true;
   const report = currentReport;
   void import("../generators/pdf-web.js")
-    .then(({ generatePdfWebReport }) => generatePdfWebReport(report, t as (key: string) => string, getCurrentLocale()))
+    .then(({ generatePdfWebReport }) => generatePdfWebReport(report, t, getCurrentLocale()))
     .then((blob) => {
       downloadBlob(blob, `declarenta_${report.year}.pdf`);
     })
@@ -919,6 +940,7 @@ function renderResults(report: TaxSummary) {
       <span class="section-year">${t("section.year_label")}
         <select id="results-year-select" class="year-select">${yearOptions}</select>
       </span>
+      ${report.settings ? `<span class="section-settings" id="results-settings">${esc(formatReportSettings(report.settings, t))}</span>` : ""}
     </div>`;
 
     if (!hasData && detectedYears.length > 0 && !detectedYears.includes(year)) {

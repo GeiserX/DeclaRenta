@@ -22,6 +22,17 @@ export function escapeCsv(val: string): string {
 export function formatCsv(report: TaxSummary): string {
   const lines: string[] = [];
 
+  // Settings the figures were computed with (monodivisa and titulares change
+  // every amount below), so an exported file says which options produced it.
+  if (report.settings) {
+    lines.push("# AJUSTES DEL CALCULO");
+    lines.push("Ajuste,Valor");
+    lines.push(`Monodivisa,${report.settings.monodivisa ? "SI" : "NO"}`);
+    lines.push(`Titulares,${report.settings.titulares}`);
+    lines.push(`Procesar_Autoconversiones,${report.settings.trackAutoConvert ? "SI" : "NO"}`);
+    lines.push("");
+  }
+
   // Capital gains section
   lines.push("# GANANCIAS PATRIMONIALES");
   lines.push("ISIN,Simbolo,Descripcion,Categoria,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning,Opcion_Escenario,Put_Call,Strike,Vencimiento,Subyacente");

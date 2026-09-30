@@ -778,6 +778,11 @@ export function generateTaxReport(
 
   return {
     year,
+    settings: {
+      monodivisa: options?.skipFx === true,
+      trackAutoConvert: options?.trackAutoConvert !== false,
+      titulares,
+    },
     warnings: allWarnings,
     messages: allMessages,
     unresolvedCryptoValuations: yearUnresolvedCrypto.length > 0 ? yearUnresolvedCrypto : undefined,

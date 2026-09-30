@@ -469,3 +469,24 @@ describe("PDF Report Generator", () => {
     expect(rendered.some((s) => s.includes("0327"))).toBe(false);
   });
 });
+
+describe("PDF Report Generator settings line", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  function rendered(spy: MockInstance<typeof PDFDocument.prototype.text>): string[] {
+    return spy.mock.calls.map((args) => String(args[0]));
+  }
+
+  it("prints the settings the figures were computed with", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }));
+    expect(rendered(spy)).toContain("Ajustes del cálculo: monodivisa sí, titulares 2, autoconversiones no");
+  });
+
+  it("prints no settings line for a report without settings", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport());
+    expect(rendered(spy).some((s) => s.startsWith("Ajustes del cálculo"))).toBe(false);
+  });
+});
+

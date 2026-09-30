@@ -302,3 +302,25 @@ describe("formatCsv", () => {
     expect(lines).toHaveLength(0);
   });
 });
+
+describe("formatCsv settings section", () => {
+  it("opens with the settings the figures were computed with", () => {
+    const csv = formatCsv(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }));
+    const lines = csv.split("\n");
+    expect(lines.slice(0, 6)).toEqual([
+      "# AJUSTES DEL CALCULO",
+      "Ajuste,Valor",
+      "Monodivisa,SI",
+      "Titulares,2",
+      "Procesar_Autoconversiones,NO",
+      "",
+    ]);
+    expect(lines[6]).toBe("# GANANCIAS PATRIMONIALES");
+  });
+
+  it("omits the section for a report without settings", () => {
+    const csv = formatCsv(makeReport());
+    expect(csv).not.toContain("# AJUSTES DEL CALCULO");
+    expect(csv.split("\n")[0]).toBe("# GANANCIAS PATRIMONIALES");
+  });
+});

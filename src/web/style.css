@@ -2132,6 +2132,13 @@ footer a:hover {
   opacity: 0.9;
 }
 
+.section-header-bar .section-settings {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-left: 1rem;
+  text-align: right;
+}
+
 .year-select {
   background: rgba(255, 255, 255, 0.2);
   color: inherit;

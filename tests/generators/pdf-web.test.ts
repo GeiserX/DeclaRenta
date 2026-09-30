@@ -332,3 +332,27 @@ describe("generatePdfWebReport", () => {
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 });
+
+describe("generatePdfWebReport settings line", () => {
+  // jsPDF writes uncompressed content streams, so the header text is readable.
+  const tp = (key: string, params?: Record<string, string>) =>
+    params ? `${key}[${Object.entries(params).map(([k, v]) => `${k}=${v}`).join(";")}]` : key;
+
+  it("prints the settings the figures were computed with", async () => {
+    const blob = await generatePdfWebReport(
+      makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 3 } }),
+      tp,
+    );
+    const text = new TextDecoder().decode(await blob.arrayBuffer());
+    expect(text).toContain(
+      "results.settings_used[monodivisa=results.setting_yes;titulares=3;autoconvert=results.setting_no]",
+    );
+  });
+
+  it("prints no settings line for a report without settings", async () => {
+    const blob = await generatePdfWebReport(makeReport(), tp);
+    const text = new TextDecoder().decode(await blob.arrayBuffer());
+    expect(text).not.toContain("results.settings_used");
+  });
+});
+
