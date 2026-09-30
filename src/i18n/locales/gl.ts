@@ -236,7 +236,7 @@ const gl: TranslationKeys = {
   "guide.flatex.step3":
     "Selecciona <strong>todo o hist\u00f3rico</strong> (necesario para o c\u00e1lculo FIFO) e exporta o ficheiro CSV",
   "guide.flatex.step4":
-    "Para dividendos: vai a <strong>Kontoums\u00e4tze</strong> (movementos da conta), mesmo rango de datas, e exporta o CSV",
+    "Para dividendos: vai a <strong>Kontoums\u00e4tze</strong> (movementos da conta), mesmo rango de datas, e exporta o CSV. Ollo: aí os dividendos aparecen polo importe neto, xa descontada a retención; toma o importe íntegro e a retención do xustificante en PDF de cada dividendo",
   "guide.flatex.step5":
     "Sube <strong>ambos ficheiros</strong> CSV (Depotums\u00e4tze para operaci\u00f3ns e Kontoums\u00e4tze para dividendos)",
   "guide.etoro.title": "eToro (XLSX)",
@@ -699,6 +699,10 @@ const gl: TranslationKeys = {
     "Non se puideron emparellar todas as comisións de Flatex: faltan os apuntamentos de caixa correspondentes.",
   "flatex.commission.unmatched_trades.hint":
     "Sobe tamén o CSV de Kontoumsätze (movementos de conta) xunto co de Depotumsätze para que a comisión de cada operación se teña en conta (sumándose ao custo de adquisición nas compras e restándose do valor de transmisión nas vendas).",
+  "flatex.dividends.net_amounts":
+    "Flatex anota os dividendos polo importe neto cobrado, xa descontada a retención, e o CSV de Kontoumsätze non inclúe a retención.",
+  "flatex.dividends.net_amounts.hint":
+    "Toma o importe íntegro e a retención de cada cobro do xustificante en PDF que Flatex deixa na túa caixa de documentos, e corrixe a man as casillas 0029 (importe íntegro), 0588 (retención estranxeira) e 0597 (retención española).",
   "degiro.rows_skipped": "Omitíronse {{count}} filas sen ISIN/sen importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tiñan cantidade ou prezo pero faltáballes o ISIN ou o importe, polo que non se puideron incluír como operacións. Adoita indicar que as columnas do CSV non se recoñeceron ben: volve exportar o CSV de Transaccións de Degiro sen modificar as cabeceiras.",
