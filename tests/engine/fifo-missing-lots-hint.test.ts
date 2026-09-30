@@ -43,12 +43,12 @@ function cryptoTrade(overrides: Partial<Trade>): Trade {
 
 const LOCALES: Locale[] = ["es", "en", "ca", "eu", "gl"];
 
-afterEach(() => {
-  setLocale("es");
+afterEach(async () => {
+  await setLocale("es");
 });
 
 describe("missing-lot messages for a broker without Flex Query and an asset without ISIN", () => {
-  it("a sale with no lots: no Flex Query advice and no empty () in any locale or the engine fallback", () => {
+  it("a sale with no lots: no Flex Query advice and no empty () in any locale or the engine fallback", async () => {
     const engine = new FifoEngine();
     engine.processTrades([cryptoTrade({})], rateMap);
     const m = engine.messages.find((x) => x.id === "fifo.sell_without_lots");
@@ -56,14 +56,14 @@ describe("missing-lot messages for a broker without Flex Query and an asset with
     expect(m!.message).not.toContain("()");
     expect(m!.hint).not.toContain("Flex Query");
     for (const locale of LOCALES) {
-      setLocale(locale);
+      await setLocale(locale);
       expect(localizeMessage(m!), locale).not.toContain("()");
       expect(localizeMessage(m!), locale).toContain("SOL × 200");
       expect(localizeHint(m!), locale).not.toContain("Flex Query");
     }
   });
 
-  it("a sale larger than its lots: no Flex Query advice and no empty () in any locale or the engine fallback", () => {
+  it("a sale larger than its lots: no Flex Query advice and no empty () in any locale or the engine fallback", async () => {
     const engine = new FifoEngine();
     engine.processTrades(
       [
@@ -77,13 +77,13 @@ describe("missing-lot messages for a broker without Flex Query and an asset with
     expect(m!.message).not.toContain("()");
     expect(m!.hint).not.toContain("Flex Query");
     for (const locale of LOCALES) {
-      setLocale(locale);
+      await setLocale(locale);
       expect(localizeMessage(m!), locale).not.toContain("()");
       expect(localizeHint(m!), locale).not.toContain("Flex Query");
     }
   });
 
-  it("control: a security with an ISIN still shows it in brackets", () => {
+  it("control: a security with an ISIN still shows it in brackets", async () => {
     const engine = new FifoEngine();
     engine.processTrades(
       [cryptoTrade({ symbol: "ACME", description: "ACME", isin: "XX0000000001", assetCategory: "STK" })],
@@ -91,7 +91,7 @@ describe("missing-lot messages for a broker without Flex Query and an asset with
     );
     const m = engine.messages.find((x) => x.id === "fifo.sell_without_lots")!;
     expect(m.message).toContain("ACME (XX0000000001)");
-    setLocale("en");
+    await setLocale("en");
     expect(localizeMessage(m)).toContain("ACME (XX0000000001)");
   });
 });

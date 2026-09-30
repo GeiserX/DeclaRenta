@@ -361,7 +361,7 @@ describe("generatePdfWebReport", () => {
     // Helvetica here is WinAnsi only. A string holding ⛔ ⚠ ℹ → or an emoji makes
     // jsPDF write that whole string as 2-byte text, which shows as garbage.
     for (const locale of ["es", "en"] as const) {
-      setLocale(locale);
+      await setLocale(locale);
       const report = makeReport({
         messages: [
           {
@@ -383,6 +383,6 @@ describe("generatePdfWebReport", () => {
       expect(text, locale).not.toContain("\u0000");
       expect(text, locale).not.toContain("&\u00d4");
     }
-    setLocale("es");
+    await setLocale("es");
   });
 });
