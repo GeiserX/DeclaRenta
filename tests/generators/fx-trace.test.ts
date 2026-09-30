@@ -196,4 +196,26 @@ describe("serializeFxTrace — CSV format", () => {
   it("returns just the header row for an undefined trace", () => {
     expect(serializeFxTrace(undefined, "csv")).toBe(CSV_HEADER);
   });
+
+  it("writes a negative amount as a number, not as apostrophe-prefixed text", () => {
+    const ev: FxTraceEvent = { ...disposeEvent(), gainLossEur: "-5.00", proceedsEur: "895" };
+    const cells = serializeFxTrace([ev], "csv").split("\n")[1]!.split(",");
+    // gainLossEur is column index 9. A leading apostrophe would turn it into
+    // text and a spreadsheet SUM over the dispose rows would skip the loss.
+    expect(cells[9]).toBe("-5.00");
+  });
+
+  it("writes an exponent-form decimal raw as well", () => {
+    // decimal.js prints tiny values in exponent form (e.g. crypto dust).
+    const ev: FxTraceEvent = { ...disposeEvent(), gainLossEur: "-1e-8" };
+    const cells = serializeFxTrace([ev], "csv").split("\n")[1]!.split(",");
+    expect(cells[9]).toBe("-1e-8");
+  });
+
+  it("still neutralizes a formula in a text column", () => {
+    const ev: FxTraceEvent = { ...disposeEvent(), positionKey: "-1+1", note: "=HYPERLINK(1)" };
+    const cells = serializeFxTrace([ev], "csv").split("\n")[1]!.split(",");
+    expect(cells[12]).toBe("'-1+1");
+    expect(cells[15]).toBe("'=HYPERLINK(1)");
+  });
 });

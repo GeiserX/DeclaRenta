@@ -19,7 +19,6 @@ import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { fetchEcbRates } from "../engine/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
@@ -39,6 +38,7 @@ import { formatCsv } from "../generators/csv.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
+import { savingsBalances } from "../engine/taxable-base.js";
 import type { LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 
@@ -334,8 +334,7 @@ program
             priorLosses.push({ year, amount, remaining, category: l.category });
           }
 
-          const netGains = report.capitalGains.netGainLoss;
-          const netIncome = report.dividends.grossIncome.plus(report.interest.earned);
+          const { gains: netGains, income: netIncome } = savingsBalances(report);
           const carryResult = applyLossCarryforward(opts.year, netGains, netIncome, priorLosses);
 
           // Log carryforward details
@@ -486,13 +485,8 @@ program
 
         // Rates for every year with a trade: the FIFO run dates the lots held at
         // 31 December and the sales that ended a previously declared holding.
-        const needs = deriveEcbNeeds(statement, opts.year);
-        const currencies = new Set(needs.currencies);
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        for (const cb of statement.cashBalances ?? []) currencies.add(cb.currency);
-        currencies.delete("EUR");
-
-        const rateMap = await buildEcbRateMap({ currencies: [...currencies], years: needs.years });
+        // The needs include the currencies of positions and cash balances.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateTaxReport(statement, rateMap, opts.year);
 
         const nameParts = opts.name.split(",").map((s) => s.trim());
@@ -579,12 +573,20 @@ program
           );
         }
 
+        const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
+        if (thresholds.values.unvalued > 0) {
+          console.error(
+            `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
+
         if (!output720) {
-          const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
           if (omissions.length > 0) {
             console.error("No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
           } else if (thresholds.accounts.exceeds) {
             console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
+          } else if (thresholds.values.unvalued > 0) {
+            console.error("No se ha generado ningún registro. Valora las posiciones del aviso anterior antes de concluir que no debes presentar el Modelo 720.");
           } else {
             console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
           }
@@ -655,10 +657,6 @@ program
         const statement = parser.parse(content);
         assertYearEndPositions(statement, opts.year);
 
-        const currencies = new Set<string>();
-        for (const p of statement.openPositions) currencies.add(p.currency);
-        currencies.delete("EUR");
-
         // Extract ISINs from previous year's D-6 JSON output
         let previousYearIsins: string[] | undefined;
         if (opts.previousD6) {
@@ -672,7 +670,8 @@ program
           previousYearIsins = (prevJson.positions ?? []).map((p) => p.isin);
         }
 
-        const rateMap = await fetchEcbRates(opts.year, [...currencies]);
+        // Same rate set as the web D-6 (shared orchestrator), positions included.
+        const rateMap = await buildEcbRateMap({ statement, year: opts.year });
         const report = generateD6Report(
           statement.openPositions,
           rateMap,
@@ -682,8 +681,13 @@ program
           previousYearIsins,
         );
 
+        if (report.unvaluedCount > 0) {
+          console.error(
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: calcula su valor en euros y decláralas a mano.`,
+          );
+        }
         if (report.positions.length === 0) {
-          console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
+          if (report.unvaluedCount === 0) console.error("No se encontraron posiciones extranjeras. No es necesario presentar D-6.");
           return;
         }
 

@@ -73,7 +73,12 @@ export function loadAllReports(): StoredReport[] {
   }
 }
 
-function migrateReport(r: Record<string, unknown>): StoredReport {
+/**
+ * Rebuild a stored record in the current schema. saveReport writes every stored
+ * year back through here, so a casillas field missing below is erased from all
+ * earlier years on the next save: add every new field.
+ */
+export function migrateReport(r: Record<string, unknown>): StoredReport {
   const c = (r.casillas ?? {}) as Record<string, unknown>;
   const s = (r.stats ?? {}) as Record<string, unknown>;
   return {
@@ -90,6 +95,7 @@ function migrateReport(r: Record<string, unknown>): StoredReport {
       grossDividends: Number(c.grossDividends ?? 0),
       interestEarned: Number(c.interestEarned ?? 0),
       interestPaid: Number(c.interestPaid ?? 0),
+      ...(c.generalGains !== undefined ? { generalGains: Number(c.generalGains) } : {}),
       doubleTaxation: Number(c.doubleTaxation ?? 0),
     },
     stats: {
