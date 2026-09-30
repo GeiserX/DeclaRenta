@@ -310,7 +310,10 @@ interface TxRow {
   /** EUR value of this row from an optional broker/user EUR column (null if absent). */
   eurValue: Decimal | null;
   remark: string;
+  /** Line number in the file: only a tiebreak for sorting, never part of an ID. */
   index: number;
+  /** Position-independent row key (see occurrenceKey), used in the emitted IDs. */
+  key: string;
   /** Set once a row has been consumed by a trade/income so it's never reused. */
   parsed: boolean;
 }
@@ -356,6 +359,19 @@ interface NetLeg {
   eur: Decimal | null; // summed EUR value (signed), null if any leg lacked it
   date: string;
   index: number;
+  key: string;
+}
+
+/**
+ * Position-independent key for a CSV row: its own cells plus how many identical
+ * rows came before it in the same file. The same row in two overlapping exports
+ * gets the same key, so the duplicate-trades check sees it; two identical fills
+ * in one file still get distinct keys. A line number would differ between files.
+ */
+function occurrenceKey(seen: Map<string, number>, content: string): string {
+  const n = (seen.get(content) ?? 0) + 1;
+  seen.set(content, n);
+  return `${content}#${n}`;
 }
 
 /**
@@ -415,6 +431,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
 
   // 1. Collect rows, skipping non-taxable internal movements and zero changes.
   function collectRows(): void {
+    const seenKeys = new Map<string, number>();
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i]!.trim();
       if (!line) continue;
@@ -479,6 +496,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
         eurValue,
         remark,
         index: i,
+        key: occurrenceKey(seenKeys, [utcTime, account, operation, coin, changeStr, remark].join("|")),
         parsed: false,
       });
     }
@@ -504,7 +522,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       r.parsed = true;
       addHint(r.coin, r.tradeDate, r.change, r.eurValue);
       cashTransactions.push({
-        transactionID: `binance-income-${r.tradeDate}-${r.coin}-${r.index}`,
+        transactionID: `binance-income-${r.tradeDate}-${r.coin}-${r.key}`,
         accountId: "",
         symbol: r.coin,
         description: `${r.operation} - ${r.coin}`,
@@ -544,8 +562,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
         if (bnb) {
           bnb.parsed = true;
           addHint("BNB", bnb.tradeDate, bnb.change, bnb.eurValue);
-          emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index },
-            { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index }, "Dust");
+          emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index, key: dust.key },
+            { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index, key: bnb.key }, "Dust");
         }
       }
       // Any leftover BNB rows (rounding remainders) are immaterial — drop.
@@ -694,7 +712,7 @@ function netLegs(window: TxRow[]): NetLeg[] {
       existing.qty = existing.qty.plus(r.change);
       existing.eur = existing.eur === null || r.eurValue === null ? null : existing.eur.plus(r.eurValue);
     } else {
-      byCoin.set(r.coin, { coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index });
+      byCoin.set(r.coin, { coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index, key: r.key });
     }
   }
   // Drop coins whose net is zero (intra-account split rows that cancel out).
@@ -766,7 +784,7 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
     // Spent fiat to acquire crypto → single BUY priced in fiat.
     trades.push({
       ...CRYPTO_TRADE_BASE,
-      tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.index}`,
+      tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.key}`,
       symbol: buy.coin,
       description: `${label} ${sell.coin} to ${buy.coin}`,
       currency: sell.coin,
@@ -789,7 +807,7 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
     // Sold crypto for fiat → single SELL priced in fiat.
     trades.push({
       ...CRYPTO_TRADE_BASE,
-      tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.index}`,
+      tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.key}`,
       symbol: sell.coin,
       description: `${label} ${sell.coin} to ${buy.coin}`,
       currency: buy.coin,
@@ -811,7 +829,7 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
   // Both crypto → permuta: SELL the given-up coin, BUY the received coin.
   trades.push({
     ...CRYPTO_TRADE_BASE,
-    tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.index}`,
+    tradeID: `binance-tx-sell-${sell.date}-${sell.coin}-${sell.key}`,
     symbol: sell.coin,
     description: `${label} ${sell.coin} to ${buy.coin}`,
     currency: buy.coin,
@@ -829,7 +847,7 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
   });
   trades.push({
     ...CRYPTO_TRADE_BASE,
-    tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.index}`,
+    tradeID: `binance-tx-buy-${buy.date}-${buy.coin}-${buy.key}`,
     symbol: buy.coin,
     description: `${label} ${sell.coin} to ${buy.coin}`,
     currency: sell.coin,
@@ -870,8 +888,8 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
     addHint(revenueRow.coin, revenueRow.tradeDate, revenueRow.change, revenueRow.eurValue);
     emitCryptoSwap(
       trades,
-      { coin: soldRow.coin, qty: soldRow.change, eur: soldRow.eurValue, date: soldRow.tradeDate, index: soldRow.index },
-      { coin: revenueRow.coin, qty: revenueRow.change, eur: revenueRow.eurValue, date: revenueRow.tradeDate, index: revenueRow.index },
+      { coin: soldRow.coin, qty: soldRow.change, eur: soldRow.eurValue, date: soldRow.tradeDate, index: soldRow.index, key: soldRow.key },
+      { coin: revenueRow.coin, qty: revenueRow.change, eur: revenueRow.eurValue, date: revenueRow.tradeDate, index: revenueRow.index, key: revenueRow.key },
       "Sell",
     );
     applyFee(trades, feeAmount, revenueRow.coin);
@@ -887,8 +905,8 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
     addHint(spendRow.coin, spendRow.tradeDate, spendRow.change, spendRow.eurValue);
     emitCryptoSwap(
       trades,
-      { coin: spendRow.coin, qty: spendRow.change, eur: spendRow.eurValue, date: spendRow.tradeDate, index: spendRow.index },
-      { coin: buyRow.coin, qty: buyRow.change, eur: buyRow.eurValue, date: buyRow.tradeDate, index: buyRow.index },
+      { coin: spendRow.coin, qty: spendRow.change, eur: spendRow.eurValue, date: spendRow.tradeDate, index: spendRow.index, key: spendRow.key },
+      { coin: buyRow.coin, qty: buyRow.change, eur: buyRow.eurValue, date: buyRow.tradeDate, index: buyRow.index, key: buyRow.key },
       "Buy",
     );
     applyFee(trades, feeAmount, buyRow.coin);
@@ -995,7 +1013,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): vo
     for (let k = 0; k < recv.length; k++) {
       const r = recv[k]!;
       const g = fiatRows[k]!;
-      const sell: NetLeg = { coin: g.coin, qty: g.change, eur: g.eurValue, date: g.tradeDate, index: g.index };
+      const sell: NetLeg = { coin: g.coin, qty: g.change, eur: g.eurValue, date: g.tradeDate, index: g.index, key: g.key };
       addHint(sell.coin, sell.date, sell.qty, sell.eur);
       addHint(r.coin, r.date, r.qty, r.eur);
       emitCryptoSwap(trades, sell, r, "Spot");
@@ -1006,7 +1024,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): vo
   const totalFiat = give[0]!.qty; // negative
   const share = totalFiat.div(recv.length);
   for (const r of recv) {
-    const sell: NetLeg = { coin: give[0]!.coin, qty: share, eur: null, date: give[0]!.date, index: give[0]!.index };
+    const sell: NetLeg = { coin: give[0]!.coin, qty: share, eur: null, date: give[0]!.date, index: give[0]!.index, key: give[0]!.key };
     addHint(r.coin, r.date, r.qty, r.eur);
     emitCryptoSwap(trades, sell, r, "Spot");
   }
@@ -1025,6 +1043,7 @@ function parseBinanceCsv(lines: string[]): Statement {
   }
 
   const trades: Trade[] = [];
+  const seenKeys = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -1053,13 +1072,15 @@ function parseBinanceCsv(lines: string[]): Statement {
     const fee = parseFee((fields[cols.fee] ?? "").trim());
     const feeAmount = toFiniteDecimal(fee.amount || "0", "0", false);
 
+    const key = occurrenceKey(seenKeys, [dateStr, pairStr, sideLower, ...[cols.price, cols.executed, cols.amount, cols.fee].map((c) => (fields[c] ?? "").trim())].join("|"));
+
     // A crypto-quoted pair (ETHBTC, CTKBTC, SOLUSDT) is a permuta (Art. 37.1.h
     // LIRPF): the coin given up is disposed of and the coin received gets a lot.
     // Route it through the same two-leg emitter as the Transaction History path;
     // the row's fee stays on the base-coin trade. Fiat-quoted rows are unchanged.
     if (!isFiat(currency)) {
-      const baseLeg: NetLeg = { coin: symbol, qty: isBuy ? executed : executed.neg(), eur: null, date: tradeDate, index: i };
-      const quoteLeg: NetLeg = { coin: currency, qty: isBuy ? amount.neg() : amount, eur: null, date: tradeDate, index: i };
+      const baseLeg: NetLeg = { coin: symbol, qty: isBuy ? executed : executed.neg(), eur: null, date: tradeDate, index: i, key };
+      const quoteLeg: NetLeg = { coin: currency, qty: isBuy ? amount.neg() : amount, eur: null, date: tradeDate, index: i, key };
       const before = trades.length;
       if (isBuy) emitCryptoSwap(trades, quoteLeg, baseLeg, "Spot");
       else emitCryptoSwap(trades, baseLeg, quoteLeg, "Spot");
@@ -1073,7 +1094,7 @@ function parseBinanceCsv(lines: string[]): Statement {
     }
 
     trades.push({
-      tradeID: `binance-${tradeDate}-${symbol}-${i}`,
+      tradeID: `binance-${tradeDate}-${symbol}-${key}`,
       accountId: "",
       symbol,
       description: `${symbol}/${currency} ${sideLower.toUpperCase()}`,
