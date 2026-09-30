@@ -76,7 +76,7 @@ export function saveProfile(profile: FiscalProfile): void {
   } catch { /* localStorage full */ }
 }
 
-/** Validate a Spanish NIF/NIE */
+/** Validate a Spanish personal NIF: DNI, NIE (X/Y/Z) or K/L/M */
 export function validateNif(value: string): boolean {
   const trimmed = value.trim().toUpperCase();
   if (!trimmed) return false;
@@ -92,7 +92,12 @@ export function validateNif(value: string): boolean {
     const prefix = { X: "0", Y: "1", Z: "2" }[nieMatch[1]!]!;
     return nieMatch[3] === NIF_LETTERS[parseInt(prefix + nieMatch[2]!) % 23];
   }
-  return false;
+  // K/L/M: personal NIFs the AEAT issues to people without a DNI or NIE
+  // (K: Spaniards under 14, L: Spaniards living abroad, M: foreigners without
+  // a NIE). Letter + 7 digits + control character. Sources disagree on how
+  // that control character is computed, so accept on format only rather than
+  // lock out a valid NIF.
+  return /^[KLM]\d{7}[A-Z0-9]$/.test(trimmed);
 }
 
 /** Check if profile has enough data for 720/D-6 generation. The NIF must be valid, not just filled in. */
@@ -117,6 +122,7 @@ export function initProfile(): void {
   const currentYear = new Date().getFullYear();
   const yearChoices = [currentYear - 1, currentYear, currentYear - 2];
   if (!yearChoices.includes(profile.year)) yearChoices.push(profile.year);
+  yearChoices.sort((a, b) => b - a);
   const yearOptions = yearChoices.map(
     (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
   ).join("");

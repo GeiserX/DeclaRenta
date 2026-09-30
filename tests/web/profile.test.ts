@@ -47,6 +47,19 @@ describe("validateNif", () => {
     expect(validateNif("X1234567A")).toBe(false);
   });
 
+  it("should accept K, L and M NIFs (people without a DNI or NIE)", () => {
+    expect(validateNif("K1234567A")).toBe(true);
+    expect(validateNif("L1234567B")).toBe(true);
+    expect(validateNif("m1234567c")).toBe(true);
+    expect(validateNif("M12345670")).toBe(true);
+  });
+
+  it("should reject K/L/M NIFs with the wrong shape", () => {
+    expect(validateNif("K123456A")).toBe(false);
+    expect(validateNif("L12345678A")).toBe(false);
+    expect(validateNif("N1234567A")).toBe(false);
+  });
+
   it("should reject empty string", () => {
     expect(validateNif("")).toBe(false);
   });
@@ -221,6 +234,20 @@ describe("isProfileComplete", () => {
       year: 2025,
     });
     expect(isProfileComplete()).toBe(true);
+  });
+
+  it("should return true for a K/L/M NIF", () => {
+    for (const nif of ["K1234567A", "L1234567B", "M1234567C"]) {
+      saveProfile({
+        nif,
+        apellidos: "Garcia",
+        nombre: "Juan",
+        ccaa: "",
+        telefono: "",
+        year: 2025,
+      });
+      expect(isProfileComplete()).toBe(true);
+    }
   });
 
   it("should return false when nif is empty", () => {
