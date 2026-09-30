@@ -162,10 +162,10 @@ DeclaRenta utiliza la librería **Decimal.js** con precisión de 20 dígitos sig
 
 | Tipo IBKR | Acción | Tratamiento DeclaRenta |
 |-----------|--------|----------------------|
-| **FS** | Stock split / reverse split | Ajusta cantidad × ratio, precio ÷ ratio, coste total sin cambio |
+| **FS** / **RS** | Stock split / reverse split | Ajusta cantidad × ratio, precio ÷ ratio, coste total sin cambio |
 | **SD** | Scrip dividend (dividendo en acciones) | Añade lotes nuevos con coste = importe IBKR × tipo_ECB |
 
-Las acciones corporativas modifican los lotes FIFO sin generar hechos imponibles (salvo excepciones). DeclaRenta las procesa cronológicamente junto con las operaciones de compraventa.
+Las acciones corporativas modifican los lotes FIFO sin generar hechos imponibles (salvo excepciones). DeclaRenta las procesa cronológicamente junto con las operaciones de compraventa. Los tipos que no aplica (por ejemplo, **IC**, cambio de ISIN) aparecen como aviso informativo para que revises el coste de las ventas posteriores de ese valor.
 
 ### Stock splits y reverse splits
 
@@ -174,7 +174,8 @@ Un *split* multiplica el número de acciones por un ratio y divide el precio pro
 - La **cantidad** de cada lote se multiplica (o divide) por el ratio.
 - El **precio por acción** se ajusta inversamente.
 - El **coste total en euros** del lote no cambia — es una operación fiscalmente neutra.
-- Las fracciones residuales (sub-acciones) se eliminan automáticamente.
+- Las fracciones de acción (por ejemplo, 0,5 acciones tras un reverse split de 1 por 10) conservan su parte del coste. Si el bróker las vende y paga la fracción en efectivo (*cash-in-lieu*) con una operación de venta, esa venta consume la fracción con su coste proporcional.
+- Si el reverse split cambia el ISIN (IBKR lo informa con una fila RS para el ISIN antiguo y otra para el nuevo), los lotes pasan al ISIN nuevo con su coste y su fecha de adquisición.
 
 ### Fusiones (mergers / acquisitions)
 
