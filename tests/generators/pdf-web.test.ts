@@ -93,6 +93,11 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
   };
 }
 
+async function pdfText(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  return new TextDecoder("latin1").decode(new Uint8Array(buf));
+}
+
 describe("generatePdfWebReport", () => {
   it("returns a Blob with application/pdf type", async () => {
     const blob = await generatePdfWebReport(makeReport(), t);
@@ -145,18 +150,37 @@ describe("generatePdfWebReport", () => {
     await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
   });
 
-  it("includes blocked losses row when blockedLosses > 0", async () => {
-    const report = makeReport({
+  function lossesReport(blocked: string, reintegrated: string): TaxSummary {
+    return makeReport({
       capitalGains: {
         transmissionValue: new Decimal("10000"),
         acquisitionValue: new Decimal("8000"),
         netGainLoss: new Decimal("2000"),
-        blockedLosses: new Decimal("300"),
-        reintegratedLosses: new Decimal(0),
+        blockedLosses: new Decimal(blocked),
+        reintegratedLosses: new Decimal(reintegrated),
         disposals: [],
       },
     });
-    await expect(generatePdfWebReport(report, t)).resolves.toBeInstanceOf(Blob);
+  }
+
+  it("includes blocked losses row when blockedLosses > 0", async () => {
+    const text = await pdfText(await generatePdfWebReport(lossesReport("300", "0"), t));
+    expect(text).toContain("pdf.blocked_losses");
+    expect(text).toContain("300.00 EUR");
+    expect(text).not.toContain("pdf.reintegrated_losses");
+  });
+
+  it("omits the blocked losses row when blockedLosses is 0", async () => {
+    const text = await pdfText(await generatePdfWebReport(lossesReport("0", "0"), t));
+    expect(text).not.toContain("pdf.blocked_losses");
+    expect(text).not.toContain("pdf.reintegrated_losses");
+  });
+
+  it("includes reintegrated losses row when reintegratedLosses > 0", async () => {
+    const text = await pdfText(await generatePdfWebReport(lossesReport("0", "240"), t));
+    expect(text).toContain("pdf.reintegrated_losses");
+    expect(text).toContain("240.00 EUR");
+    expect(text).not.toContain("pdf.blocked_losses");
   });
 
   it("generates a larger PDF with operations than without", async () => {
