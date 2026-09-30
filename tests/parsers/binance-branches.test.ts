@@ -150,12 +150,15 @@ describe("binanceParser - Trade History format", () => {
     expect(result.trades.find((t) => t.symbol === "BTC")!.currency).toBe("FDUSD");
   });
 
-  it("should throw on unsupported pair", () => {
+  it("should skip an unsupported pair with a warning instead of throwing", () => {
     const input = [
       "Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
       "2025-01-15 10:30:00,X,BUY,40000,0.01,400,0",
     ].join("\n");
-    expect(() => binanceParser.parse(input)).toThrow("par no soportado");
+    const result = binanceParser.parse(input);
+    expect(result.trades).toHaveLength(0);
+    expect(result.parserMessages?.find((m) => m.id === "binance.unsupported_pair")?.context)
+      .toMatchObject({ count: "1", pairs: "X" });
   });
 
   it("should skip rows with non buy/sell side", () => {

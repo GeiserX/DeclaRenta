@@ -16,6 +16,7 @@ import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
 import { parseCsvLine, stripBom, toFiniteDecimal } from "./csv-utils.js";
+import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -86,23 +87,26 @@ function resolveColumns(headers: string[]): BinanceColumns {
 // Pair parsing: "BTCEUR" -> { symbol: "BTC", currency: "EUR" }
 // ---------------------------------------------------------------------------
 
-const KNOWN_QUOTES = ["FDUSD", "USDT", "USDC", "BUSD", "EUR", "USD", "BTC", "ETH", "BNB", "GBP", "TRY", "BRL", "ARS"];
+const KNOWN_QUOTES = [
+  "FDUSD", "USDT", "USDC", "BUSD", "TUSD", "USDP", "PYUSD", "USD1", "DAI", "AEUR", "EURI",
+  "EUR", "USD", "GBP", "TRY", "BRL", "ARS", "AUD", "JPY", "MXN", "PLN", "RON", "ZAR", "RUB",
+  "BTC", "ETH", "BNB", "XRP", "TRX", "DOGE",
+];
+const QUOTES_LONGEST_FIRST = [...KNOWN_QUOTES].sort((a, b) => b.length - a.length);
 
-function parsePair(pair: string): { symbol: string; currency: string } {
+/**
+ * Split a pair on its quote asset. Some quotes end in another quote (TUSD/USD,
+ * AEUR/EUR), so a pair can match twice: BTCTUSD is BTC/TUSD but DOTUSD is DOT/USD,
+ * ETHAEUR is ETH/AEUR but ADAEUR is ADA/EUR. When it does, the split whose base is
+ * a known coin wins; otherwise the longest quote does. Returns null when no quote
+ * matches.
+ */
+function parsePair(pair: string): { symbol: string; currency: string } | null {
   const upper = pair.trim().toUpperCase();
-
-  // Try known quote currencies from longest to shortest for correct matching
-  const sorted = [...KNOWN_QUOTES].sort((a, b) => b.length - a.length);
-  for (const quote of sorted) {
-    if (upper.endsWith(quote) && upper.length > quote.length) {
-      return {
-        symbol: upper.slice(0, -quote.length),
-        currency: quote,
-      };
-    }
-  }
-
-  throw new Error(`Binance CSV: par no soportado o ambiguo: ${pair}`);
+  const candidates = QUOTES_LONGEST_FIRST
+    .filter((quote) => upper.endsWith(quote) && upper.length > quote.length)
+    .map((quote) => ({ symbol: upper.slice(0, -quote.length), currency: quote }));
+  return candidates.find((c) => KNOWN_CRYPTO_SYMBOLS.has(c.symbol)) ?? candidates[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -384,6 +388,34 @@ function collectWindow(rows: TxRow[], startIdx: number, predicate: (r: TxRow) =>
   return window;
 }
 
+/**
+ * Straddle guard for the netted Convert path. collectWindow measures ±1s from
+ * the window's first row, so when the next conversion starts in this window's
+ * last second (its given-up leg at +1s, its received leg at +2s), that given-up
+ * leg is netted into THIS conversion and the received leg is left with no
+ * counterpart (wrong cost here, no lot there). Hand the last-second given-up
+ * legs to the next window only when all three hold: they follow a received leg
+ * in this window, what stays behind is still a complete conversion, and the
+ * unparsed rows at +2s have received legs but no given-up leg of their own.
+ * Otherwise the window is returned unchanged, so a single conversion whose
+ * given-up coin is split across two rows one second apart still nets as one.
+ */
+function trimStraddle(rows: TxRow[], startIdx: number, window: TxRow[], predicate: (r: TxRow) => boolean): TxRow[] {
+  const edge = rows[startIdx]!.epoch + 1;
+  const cut = window.findIndex(
+    (r, k) => r.epoch === edge && r.change.isNegative() && window.slice(0, k).some((p) => p.change.isPositive()),
+  );
+  if (cut < 0) return window;
+  const head = window.slice(0, cut);
+  const tail = window.slice(cut);
+  const next = rows.filter((r) => !r.parsed && r.epoch === edge + 1 && predicate(r));
+  const complete = (legs: NetLeg[]): boolean => legs.some((l) => l.qty.isNegative()) && legs.some((l) => l.qty.isPositive());
+  const nextLegs = netLegs(next);
+  const nextNeedsTail = nextLegs.some((l) => l.qty.isPositive()) && !nextLegs.some((l) => l.qty.isNegative());
+  if (!nextNeedsTail || !complete(netLegs(head)) || !complete(netLegs([...tail, ...next]))) return window;
+  return head;
+}
+
 /** Strategy-vocabulary ops (Transaction Sold/Revenue/Buy/Spend/Fee). */
 const STRATEGY_OPS = ["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"];
 
@@ -564,7 +596,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
       // Window keys on the SAME operation so a Convert and a fiat-buy in one
       // second never cross-mix.
-      const window = collectWindow(rows, i, (r) => r.operation === start.operation);
+      const sameOp = (r: TxRow): boolean => r.operation === start.operation;
+      const window = trimStraddle(rows, i, collectWindow(rows, i, sameOp), sameOp);
       window.forEach((r) => (r.parsed = true));
       if (start.operation === "buy crypto with fiat") {
         // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
@@ -850,7 +883,11 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
 /**
  * Emit Strategy trades from a window: pair each Transaction Sold with a Revenue,
  * and each Buy with a Spend (by order, all of them — not just the first). Fees in
- * the acquired/received coin reduce cost / proceeds.
+ * the acquired/received coin reduce cost / proceeds. A Sold/Revenue/Buy/Spend
+ * leg left without a counterpart is handed back (parsed = false): when the next
+ * trade starts in this window's last second, its first leg lands here but its
+ * counterpart sits one second later, so a later window must be able to take it.
+ * A leg no window pairs stays unparsed and is reported as an unhandled movement.
  */
 function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint): void {
   const sold = window.filter((r) => r.operation === "transaction sold");
@@ -892,6 +929,10 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
       "Buy",
     );
     applyFee(trades, feeAmount, buyRow.coin);
+  }
+
+  for (const r of [...sold.slice(nSell), ...revenue.slice(nSell), ...bought.slice(nBuy), ...spend.slice(nBuy)]) {
+    r.parsed = false;
   }
 }
 
@@ -1025,6 +1066,7 @@ function parseBinanceCsv(lines: string[]): Statement {
   }
 
   const trades: Trade[] = [];
+  const unsupportedPairs = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -1036,7 +1078,14 @@ function parseBinanceCsv(lines: string[]): Statement {
     const tradeDate = convertBinanceDate(dateStr);
 
     const pairStr = (fields[cols.pair] ?? "").trim();
-    const { symbol, currency } = parsePair(pairStr);
+    const pair = parsePair(pairStr);
+    if (!pair) {
+      // One pair we cannot split must not abort the whole export: skip the row
+      // and name it in a warning so the user can add it by hand.
+      unsupportedPairs.set(pairStr, (unsupportedPairs.get(pairStr) ?? 0) + 1);
+      continue;
+    }
+    const { symbol, currency } = pair;
 
     const sideLower = (fields[cols.side] ?? "").trim().toLowerCase();
     if (sideLower !== "buy" && sideLower !== "sell") continue;
@@ -1102,6 +1151,19 @@ function parseBinanceCsv(lines: string[]): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = [];
+  if (unsupportedPairs.size > 0) {
+    const count = [...unsupportedPairs.values()].reduce((a, b) => a + b, 0);
+    const pairs = [...unsupportedPairs.keys()].join(", ");
+    parserMessages.push({
+      id: "binance.unsupported_pair",
+      severity: "warning",
+      message: `Se ${count === 1 ? "ha omitido 1 operación" : `han omitido ${count} operaciones`} del CSV de Binance con un par no reconocido: ${pairs}.`,
+      hint: "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
+      context: { count: String(count), pairs },
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -1112,6 +1174,7 @@ function parseBinanceCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 
