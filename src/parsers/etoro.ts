@@ -38,6 +38,8 @@ const OPEN_RATE_HEADERS = ["open rate", "tipo de apertura", "open price", "tasa 
 const CLOSE_RATE_HEADERS = ["close rate", "tipo de cierre", "close price", "tasa de cierre"];
 const PROFIT_HEADERS = ["profit", "profit(usd)", "ganancia", "ganancias (usd)", "p/l"];
 const PROFIT_EUR_HEADERS = ["profit(eur)", "ganancias (eur)"];
+// Instrument currency → USD rate at open (1 for USD-quoted instruments)
+const FX_OPEN_HEADERS = ["tipo de cambio de apertura (usd)"];
 const OPEN_DATE_HEADERS = ["open date", "fecha de apertura"];
 const CLOSE_DATE_HEADERS = ["close date", "fecha de cierre"];
 const TYPE_HEADERS = ["type", "tipo"];
@@ -123,6 +125,7 @@ function parseClosedPositions(
   const closeRateCol = findColumn(headers, CLOSE_RATE_HEADERS);
   const profitCol = findColumn(headers, PROFIT_HEADERS);
   const profitEurCol = findColumn(headers, PROFIT_EUR_HEADERS);
+  const fxOpenCol = findColumn(headers, FX_OPEN_HEADERS);
   const openDateCol = findColumn(headers, OPEN_DATE_HEADERS);
   const closeDateCol = findColumn(headers, CLOSE_DATE_HEADERS);
   const typeCol = findColumn(headers, TYPE_HEADERS);
@@ -214,12 +217,19 @@ function parseClosedPositions(
     const openRate = openRateCol >= 0 ? (row[openRateCol] ?? "0").trim() : "0";
     const closeRate = closeRateCol >= 0 ? (row[closeRateCol] ?? "0").trim() : "0";
     const amount = amountCol >= 0 ? (row[amountCol] ?? "0").trim() : "0";
-    // Prefer EUR profit if available (Spanish export has both USD and EUR)
-    const profitRaw = profitEurCol >= 0
+    // Open/close rates are quoted in the instrument's currency. eToro's FX rate
+    // column (instrument → USD) is 1 for a USD-quoted instrument, so only a rate
+    // other than 1 marks a non-USD one, which the Spanish export values in EUR.
+    // Without that column the legs stay USD, as in the English export; a EUR
+    // profit column alone never makes USD prices EUR (FIFO would skip the ECB rate).
+    const fxOpen = fxOpenCol >= 0 ? toFiniteDecimal(row[fxOpenCol] ?? "") : new Decimal(0);
+    const currency = fxOpen.greaterThan(0) && !fxOpen.eq(1) && profitEurCol >= 0 ? "EUR" : "USD";
+    // Take the profit in the legs' currency (Spanish export has both USD and EUR)
+    const profitRaw = currency === "EUR"
       ? (row[profitEurCol] ?? "0").trim()
-      : profitCol >= 0 ? (row[profitCol] ?? "0").trim() : "0";
+      : profitCol >= 0 ? (row[profitCol] ?? "0").trim()
+      : profitEurCol >= 0 ? (row[profitEurCol] ?? "0").trim() : "0";
     const profit = parseNumber(profitRaw);
-    const currency = profitEurCol >= 0 && (row[profitEurCol] ?? "").trim() ? "EUR" : "USD";
     const openDate = openDateCol >= 0 ? parseEtoroDate(row[openDateCol] ?? "") : "";
     const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
 
