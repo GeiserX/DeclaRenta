@@ -771,6 +771,10 @@ const en: TranslationKeys = {
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":
     "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "binance.unsupported_pair":
+    "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "These trades are not included in the calculation. Add them to your return by hand and report the pair so it can be supported.",
   "etoro.closed_types_skipped":
     "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
   "etoro.closed_types_skipped.hint":
