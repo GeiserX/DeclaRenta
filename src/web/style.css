@@ -1592,6 +1592,46 @@ footer a:hover {
   color: var(--accent);
 }
 
+/* Year about to be calculated: full-width first card on the Review step */
+.review-card.review-year {
+  grid-column: 1 / -1;
+  border-color: var(--accent);
+}
+
+.review-card.review-year .review-value {
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.review-year-select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+
+.review-year-tag {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.review-year-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}
+
 .review-files {
   margin-top: 1rem;
 }

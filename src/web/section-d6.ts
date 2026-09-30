@@ -16,6 +16,7 @@ import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { renderOpenYearBanner } from "./open-year.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -74,6 +75,9 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
     <span class="section-year">${t("section.year_label")} ${year}</span>
     <span class="section-deadline">${t("d6.deadline_short")}</span>
   </div>`;
+
+  // The year has not ended yet: say so before any figure is read as final
+  html += renderOpenYearBanner(year, { withLink: true });
 
   // Profile data source
   // TODO(i18n): "NIF:" / "Tel:" prefixes need keys "d6.profile_nif_prefix" /

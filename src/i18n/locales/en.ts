@@ -135,6 +135,12 @@ const en: TranslationKeys = {
   "review.currencies": "Currencies",
   "review.no_data": "No transactions detected in the uploaded files.",
   "review.file": "File",
+  "review.tax_year": "Tax year to calculate",
+  "review.tax_year_hint": "Modelo 100, 720, 721 and D-6 use this tax year.",
+  "review.tax_year_hint_choose": "Your files cover several years. The newest one is picked by default; change it here if you are filing another. Modelo 100, 720, 721 and D-6 use this tax year.",
+  "year.in_progress": "Tax year in progress: {{year}} has not ended yet, so these figures are provisional and cannot be used to file.",
+  "year.in_progress_change": "Choose another tax year",
+  "year.in_progress_tag": "in progress",
 
   // Config step
   "config.nif_label": "NIF (for Modelo 720/D-6):",

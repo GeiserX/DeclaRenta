@@ -137,6 +137,12 @@ const ca: TranslationKeys = {
   "review.currencies": "Divises",
   "review.no_data": "No s'han detectat operacions als fitxers pujats.",
   "review.file": "Fitxer",
+  "review.tax_year": "Exercici que es calcularà",
+  "review.tax_year_hint": "Els models 100, 720, 721 i D-6 fan servir aquest exercici.",
+  "review.tax_year_hint_choose": "Els teus fitxers cobreixen diversos anys. Per defecte es tria el més recent; canvia'l aquí si declares un altre. Els models 100, 720, 721 i D-6 fan servir aquest exercici.",
+  "year.in_progress": "Exercici en curs: {{year}} encara no ha acabat, així que aquestes xifres són provisionals i no serveixen per presentar la declaració.",
+  "year.in_progress_change": "Triar un altre exercici",
+  "year.in_progress_tag": "en curs",
 
   // Config step
   "config.nif_label": "NIF (per al Model 720/D-6):",

@@ -48,6 +48,7 @@ import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { renderOpenYearBanner, renderReviewYearCard } from "./open-year.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../parsers/merge.js";
 import { fmtEur } from "./format.js";
 import Decimal from "decimal.js";
@@ -98,6 +99,7 @@ langSelect.addEventListener("change", () => {
 
 document.addEventListener("localechange", () => {
   updateStaticText();
+  if (mergedStatement) renderReview(mergedStatement, detectedBrokers, perFileBrokerNames);
   if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
@@ -219,6 +221,8 @@ const pendingFiles: File[] = [];
 /** Parsed statement data (available after step 2) */
 let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
+/** Broker name per uploaded file, kept so the Review step can re-render on locale change */
+let perFileBrokerNames: string[] = [];
 /** Years detected from uploaded data (sorted descending, latest first) */
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
@@ -555,6 +559,7 @@ async function parseFiles(): Promise<void> {
 
     mergedStatement = finalizeMergedStatement(merged);
     detectedBrokers = [...new Set(brokerNames)];
+    perFileBrokerNames = brokerNames;
 
     // Detect years from trades + cash transactions. A corrupt date would make
     // parseInt() return NaN (or an absurd year), which then poisons activeYear
@@ -602,6 +607,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
 
   reviewContent.innerHTML = `
     <div class="review-grid">
+      ${renderReviewYearCard(activeYear ?? getProfile().year, detectedYears)}
       <div class="review-card">
         <div class="review-label">${t("review.broker")}</div>
         <div class="review-value accent">${esc(brokers.join(", "))}</div>
@@ -646,6 +652,25 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   if (validationIssues.length > 0) {
     reviewContent.insertAdjacentHTML("beforeend", renderValidationIssues(validationIssues));
   }
+
+  // Year chosen before processing: re-render the review (validation depends on
+  // the year) and drop any report built for the previous year.
+  document.getElementById("review-year-select")?.addEventListener("change", (e) => {
+    if (!setActiveYear(parseInt((e.target as HTMLSelectElement).value))) return;
+    currentReport = null;
+    renderReview(merged, brokers, perFileBrokers);
+  });
+}
+
+/** Switch the declaration year and sync the profile so 720/721/D-6 follow. Returns false for a non-year value. */
+function setActiveYear(newYear: number): boolean {
+  if (isNaN(newYear)) return false;
+  activeYear = newYear;
+  const profile = getProfile();
+  profile.year = newYear;
+  saveProfile(profile);
+  initProfile();
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -926,20 +951,12 @@ function renderResults(report: TaxSummary) {
         <span>${t("results.year_mismatch", { year: String(year), available: detectedYears.join(", ") })}</span>
       </div>`;
     }
+    hdrHtml += renderOpenYearBanner(year);
     yearHeader.innerHTML = hdrHtml;
 
     // Bind year selector — change active year and re-process
     document.getElementById("results-year-select")?.addEventListener("change", (e) => {
-      const newYear = parseInt((e.target as HTMLSelectElement).value);
-      if (!isNaN(newYear)) {
-        activeYear = newYear;
-        // Sync profile so 720/721/D-6 use the same year
-        const profile = getProfile();
-        profile.year = newYear;
-        saveProfile(profile);
-        initProfile();
-        void processFiles();
-      }
+      if (setActiveYear(parseInt((e.target as HTMLSelectElement).value))) void processFiles();
     });
   }
 

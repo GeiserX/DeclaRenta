@@ -137,6 +137,12 @@ const gl: TranslationKeys = {
   "review.currencies": "Divisas",
   "review.no_data": "Non se detectaron operacións nos ficheiros subidos.",
   "review.file": "Ficheiro",
+  "review.tax_year": "Exercicio que se vai calcular",
+  "review.tax_year_hint": "Os modelos 100, 720, 721 e D-6 usan este exercicio.",
+  "review.tax_year_hint_choose": "Os teus ficheiros cobren varios anos. Por defecto escóllese o máis recente; cámbiao aquí se declaras outro. Os modelos 100, 720, 721 e D-6 usan este exercicio.",
+  "year.in_progress": "Exercicio en curso: {{year}} aínda non rematou, así que estas cifras son provisionais e non serven para presentar a declaración.",
+  "year.in_progress_change": "Escoller outro exercicio",
+  "year.in_progress_tag": "en curso",
 
   // Config step
   "config.nif_label": "NIF (para Modelo 720/D-6):",

@@ -145,6 +145,12 @@ const es = {
   "review.currencies": "Divisas",
   "review.no_data": "No se han detectado operaciones en los ficheros subidos.",
   "review.file": "Fichero",
+  "review.tax_year": "Ejercicio que se va a calcular",
+  "review.tax_year_hint": "Los modelos 100, 720, 721 y D-6 usan este ejercicio.",
+  "review.tax_year_hint_choose": "Tus ficheros cubren varios años. Por defecto se elige el más reciente; cámbialo aquí si declaras otro. Los modelos 100, 720, 721 y D-6 usan este ejercicio.",
+  "year.in_progress": "Ejercicio en curso: {{year}} aún no ha terminado, así que estas cifras son provisionales y no sirven para presentar la declaración.",
+  "year.in_progress_change": "Elegir otro ejercicio",
+  "year.in_progress_tag": "en curso",
 
   // Config step
   "config.nif_label": "NIF (para Modelo 720/D-6):",

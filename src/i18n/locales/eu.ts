@@ -138,6 +138,12 @@ const eu: TranslationKeys = {
   "review.currencies": "Dibisak",
   "review.no_data": "Ez da eragiketarik detektatu igotako fitxategietan.",
   "review.file": "Fitxategia",
+  "review.tax_year": "Kalkulatuko den ekitaldia",
+  "review.tax_year_hint": "100, 720, 721 eta D-6 ereduek ekitaldi hau erabiltzen dute.",
+  "review.tax_year_hint_choose": "Zure fitxategiek hainbat urte hartzen dituzte. Lehenespenez berriena aukeratzen da; aldatu hemen beste bat aitortzen baduzu. 100, 720, 721 eta D-6 ereduek ekitaldi hau erabiltzen dute.",
+  "year.in_progress": "Ekitaldia martxan: {{year}} ez da oraindik amaitu, beraz zifra hauek behin-behinekoak dira eta ezin dira aitorpena aurkezteko erabili.",
+  "year.in_progress_change": "Beste ekitaldi bat aukeratu",
+  "year.in_progress_tag": "martxan",
 
   // Config step
   "config.nif_label": "NIF (720 Eredu/D-6-rako):",
