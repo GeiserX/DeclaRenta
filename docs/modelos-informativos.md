@@ -20,6 +20,8 @@ Cualquier residente fiscal en España que a 31 de diciembre posea bienes en el e
 
 Cada categoría se evalúa de forma independiente. Solo se declaran las categorías que superan el umbral.
 
+Si ya lo presentaste, en los años siguientes solo es obligatorio volver a declarar una categoría cuando su valor ha aumentado más de **20.000 EUR** respecto de la última declaración, o cuando has vendido algo que declaraste (arts. 42 bis.5 y 42 ter.5 del RD 1065/2007). Con el fichero de tu último Modelo 720 cargado, la sección te dice para cada categoría si es tu caso.
+
 ### Plazo de presentación
 
 Del **1 de enero al 31 de marzo** del ejercicio siguiente.
@@ -31,7 +33,7 @@ Un fichero de texto de **ancho fijo** (500 bytes por registro) codificado en **I
 - Un **registro resumen** (tipo 1) con datos del declarante y totales.
 - Un **registro detalle** (tipo 2) por cada posición: clave V para acciones (subclave 1) y bonos (subclave 2), clave I para fondos extranjeros; el país donde está depositada (el del bróker) o, en un fondo, el país del fondo; ISIN, valoración a 31/dic, cantidad y porcentaje de titularidad (100 entre el número de titulares del perfil, con el valor completo sin prorratear).
 - Un registro de **cuenta** (clave C) por cada saldo en efectivo con media del cuarto trimestre, con el número de cuenta en el campo de código de cuenta.
-- Registros de tipo **A** (alta), **M** (modificación) o **C** (cancelación) según si la posición es nueva, ya existía o se ha vendido. Una cancelación repite la clave y el país con que el fichero del año anterior declaró ese valor. Si ese fichero usó un código que el BOE no admite (las versiones anteriores de DeclaRenta dejaban la subclave en blanco), la venta no entra en el fichero y DeclaRenta la lista para que la declares a mano. Lo que el fichero anterior ya dio de baja no se vuelve a cancelar.
+- Registros de tipo **A** (alta), **M** (modificación) o **C** (cancelación) según si la posición es nueva, ya existía o se ha vendido. Para distinguirlos necesita el fichero .txt de tu último Modelo 720: súbelo en el recuadro «Tu último Modelo 720» de la sección (se lee en el navegador y no se guarda) o pásalo con `--previous-720` en la CLI. Sin ese fichero, todo sale como A. Una cancelación repite la clave y el país con que el fichero del año anterior declaró ese valor. Si ese fichero usó un código que el BOE no admite (las versiones anteriores de DeclaRenta dejaban la subclave en blanco), la venta no entra en el fichero y DeclaRenta la lista para que la declares a mano. Lo que el fichero anterior ya dio de baja no se vuelve a cancelar.
 
 Las posiciones sin ISIN y los bienes o cuentas sin país conocido no caben en el fichero: si su categoría supera los 50.000 €, DeclaRenta los lista para que los declares a mano en el formulario.
 

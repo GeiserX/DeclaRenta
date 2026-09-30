@@ -241,6 +241,114 @@ export function readPrevious720(content: string): { securities: Previous720Secur
   };
 }
 
+/**
+ * The joint values last year's 720 file declared, from its A and M detail
+ * records: valoración 1 (432-446) of the V and I records, and valoración 1
+ * (31-Dec balance) and 2 (447-461, Q4 average) of the C records. The year is
+ * the ejercicio of its summary record (5-8), or null when it has none.
+ */
+export interface Previous720Totals {
+  year: number | null;
+  values: Decimal;
+  accountsEnding: Decimal;
+  accountsAverage: Decimal;
+}
+
+/** A signed valoración of a type-2 record: "N" or a space, then 12 integer and 2 decimal digits. */
+function readValoracion(line: string, start: number): Decimal {
+  const field = line.slice(start, start + 15);
+  if (!/^[ N]\d{14}$/.test(field)) return new Decimal(0);
+  const amount = new Decimal(field.slice(1)).div(100);
+  return field[0] === "N" ? amount.neg() : amount;
+}
+
+/** Read the per-category totals of last year's 720 file (see Previous720Totals). */
+export function readPrevious720Totals(content: string): Previous720Totals {
+  const lines = content.split(/\r?\n/);
+  const summary = lines.find((line) => line.startsWith("1720"));
+  const year = summary && /^\d{4}$/.test(summary.slice(4, 8)) ? Number(summary.slice(4, 8)) : null;
+  const totals: Previous720Totals = { year, values: new Decimal(0), accountsEnding: new Decimal(0), accountsAverage: new Decimal(0) };
+  for (const line of lines) {
+    if (!line.startsWith("2") || line[422] === "C") continue;
+    if (line[101] === "V" || line[101] === "I") {
+      totals.values = totals.values.plus(readValoracion(line, 431));
+    } else if (line[101] === "C") {
+      totals.accountsEnding = totals.accountsEnding.plus(readValoracion(line, 431));
+      totals.accountsAverage = totals.accountsAverage.plus(readValoracion(line, 446));
+    }
+  }
+  return totals;
+}
+
+/**
+ * Increase over the last declaration that makes filing a declared category
+ * mandatory again (arts. 42 bis.5 and 42 ter.5 RD 1065/2007).
+ */
+const SUCCESSIVE_INCREASE = new Decimal(20000);
+
+/** One category measured against the last declaration. */
+export interface Modelo720SuccessiveCategory {
+  /** Last year's file declared this category. */
+  declaredBefore: boolean;
+  /** Last year's joint value (the larger of both sums for accounts). */
+  previousTotal: Decimal;
+  /** Increase over last year's joint value (the larger of both increases for accounts). */
+  increase: Decimal;
+  /** The increase is more than 20,000 €. */
+  increaseExceeded: boolean;
+  /** Filing is mandatory: above 50,000 € and up more than 20,000 €, or (values) a declared security sold. */
+  mandatory: boolean;
+}
+
+export interface Modelo720SuccessiveResult {
+  values: Modelo720SuccessiveCategory & { sold: Previous720Security[] };
+  accounts: Modelo720SuccessiveCategory;
+}
+
+/**
+ * Whether a category declared in last year's 720 must be declared again: its
+ * joint value is still above 50,000 € and has grown more than 20,000 € since
+ * that declaration, or (values) a security it declared is no longer held, so
+ * its extinction (origin C) has to be filed. For accounts either joint sum
+ * (31-Dec balances, Q4 averages) counts. A category last year's file did not
+ * declare follows the 50,000 € threshold alone (checkModelo720Thresholds).
+ */
+export function checkModelo720SuccessiveYear(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  year: number,
+  cashBalances: CashBalance[] | undefined,
+  previous: { securities: Previous720Security[]; accounts: string[] },
+  previousTotals: Previous720Totals,
+): Modelo720SuccessiveResult {
+  const current = checkModelo720Thresholds(positions, rateMap, year, cashBalances);
+  const cash = cashCategoryTotals(cashBalances, rateMap, year);
+  const sold = findCancelledSecurities(positions, previous.securities);
+
+  const valuesIncrease = current.values.total.minus(previousTotals.values);
+  const accountsIncrease = Decimal.max(
+    cash.endingTotal.minus(previousTotals.accountsEnding),
+    cash.averageTotal.minus(previousTotals.accountsAverage),
+  );
+  return {
+    values: {
+      declaredBefore: previous.securities.length > 0,
+      previousTotal: previousTotals.values,
+      increase: valuesIncrease,
+      increaseExceeded: valuesIncrease.greaterThan(SUCCESSIVE_INCREASE),
+      mandatory: (current.values.exceeds && valuesIncrease.greaterThan(SUCCESSIVE_INCREASE)) || sold.length > 0,
+      sold,
+    },
+    accounts: {
+      declaredBefore: previous.accounts.length > 0,
+      previousTotal: Decimal.max(previousTotals.accountsEnding, previousTotals.accountsAverage),
+      increase: accountsIncrease,
+      increaseExceeded: accountsIncrease.greaterThan(SUCCESSIVE_INCREASE),
+      mandatory: current.accounts.exceeds && accountsIncrease.greaterThan(SUCCESSIVE_INCREASE),
+    },
+  };
+}
+
 interface Modelo720Config {
   nif: string;
   surname: string;
