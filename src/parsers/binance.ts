@@ -1034,6 +1034,25 @@ function parseBinanceCsv(lines: string[]): Statement {
     const fee = parseFee((fields[cols.fee] ?? "").trim());
     const feeAmount = toFiniteDecimal(fee.amount || "0", "0", false);
 
+    // A crypto-quoted pair (ETHBTC, CTKBTC, SOLUSDT) is a permuta (Art. 37.1.h
+    // LIRPF): the coin given up is disposed of and the coin received gets a lot.
+    // Route it through the same two-leg emitter as the Transaction History path;
+    // the row's fee stays on the base-coin trade. Fiat-quoted rows are unchanged.
+    if (!isFiat(currency)) {
+      const baseLeg: NetLeg = { coin: symbol, qty: isBuy ? executed : executed.neg(), eur: null, date: tradeDate, index: i };
+      const quoteLeg: NetLeg = { coin: currency, qty: isBuy ? amount.neg() : amount, eur: null, date: tradeDate, index: i };
+      const before = trades.length;
+      if (isBuy) emitCryptoSwap(trades, quoteLeg, baseLeg, "Spot");
+      else emitCryptoSwap(trades, baseLeg, quoteLeg, "Spot");
+      const emitted = trades.slice(before);
+      const target = emitted.find((t) => t.symbol === symbol) ?? emitted[0];
+      if (target) {
+        target.commissionCurrency = fee.asset || currency;
+        target.commission = feeAmount.isZero() ? "0" : feeAmount.neg().toString();
+      }
+      continue;
+    }
+
     trades.push({
       tradeID: `binance-${tradeDate}-${symbol}-${i}`,
       accountId: "",

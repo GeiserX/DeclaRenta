@@ -598,7 +598,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
   currencies.delete("EUR");
 
   const dates = merged.trades.map((tr) => normalizeDate(tr.tradeDate)).sort();
-  const dateRange = dates.length > 0 ? `${formatDate(dates[0]!)} — ${formatDate(dates[dates.length - 1]!)}` : "—";
+  const dateRange = dates.length > 0 ? `${esc(formatDate(dates[0]!))} — ${esc(formatDate(dates[dates.length - 1]!))}` : "—";
 
   reviewContent.innerHTML = `
     <div class="review-grid">
@@ -620,7 +620,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
       </div>
       <div class="review-card">
         <div class="review-label">${t("review.currencies")}</div>
-        <div class="review-value" style="font-size:1rem">${currencies.size > 0 ? [...currencies].join(", ") : "EUR"}</div>
+        <div class="review-value" style="font-size:1rem">${currencies.size > 0 ? esc([...currencies].join(", ")) : "EUR"}</div>
       </div>
     </div>
     <div class="review-files">
@@ -1088,8 +1088,8 @@ function renderOperationsTable() {
           <tr>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
-            <td>${formatDate(d.acquireDate)}</td>
-            <td>${formatDate(d.sellDate)}</td>
+            <td>${esc(formatDate(d.acquireDate))}</td>
+            <td>${esc(formatDate(d.sellDate))}</td>
             <td>${d.quantity.toString()}</td>
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
@@ -1150,7 +1150,7 @@ function renderDividendsTable(report: TaxSummary) {
           <tr>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
-            <td>${formatDate(d.payDate)}</td>
+            <td>${esc(formatDate(d.payDate))}</td>
             <td>${fmtEur(d.grossAmountEur)}</td>
             <td>${fmtEur(d.withholdingTaxEur)}</td>
             <td>${esc(d.withholdingCountry)}</td>

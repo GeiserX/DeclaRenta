@@ -1287,3 +1287,80 @@ describe("parseIbkrFlexXml — XML entity hardening (XXE / billion-laughs)", () 
     expect(result.trades[0]!.description).toBe("E-MINI S&P 500 <CME>");
   });
 });
+
+describe("IBKR option underlying ISIN and category", () => {
+  function eaeXml(optionAttrs: string, deliveryAttrs: string): string {
+    return `<FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades /><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+          <OptionEAE>
+            <OptionEAE accountId="U1" currency="USD" symbol="HUT   250117C00020000" description="HUT 17JAN25 20 C"
+                       conid="669970792" isin="" underlyingSymbol="HUT" multiplier="100" strike="20"
+                       expiry="20250117" putCall="C" date="20250117" quantity="-6" tradePrice="0" ${optionAttrs} />
+            <OptionEAE accountId="U1" currency="USD" assetCategory="STK" symbol="HUT" description="HUT 8 CORP"
+                       conid="669228291" underlyingSymbol="HUT" multiplier="1" strike="" putCall=""
+                       date="20250117" quantity="600" tradePrice="20" ${deliveryAttrs} />
+          </OptionEAE>
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  it("reads the underlying ISIN of an OptionEAE row from underlyingSecurityID", () => {
+    const r = parseIbkrFlexXml(fixture("ibkr-options.xml"));
+    const hut = r.optionExercises!.find((e) => e.underlyingSymbol === "HUT")!;
+    expect(hut.underlyingIsin).toBe("US44812J1043");
+    expect(hut.assetCategory).toBe("OPT");
+  });
+
+  it("falls back to the paired delivery row's ISIN when underlyingSecurityID is not an ISIN", () => {
+    const r = parseIbkrFlexXml(eaeXml(`assetCategory="OPT" underlyingSecurityID="44812J104"`, `isin="US44812J1043"`));
+    expect(r.optionExercises![0]!.underlyingIsin).toBe("US44812J1043");
+  });
+
+  it("keeps an explicit underlyingIsin over the other sources", () => {
+    const r = parseIbkrFlexXml(
+      eaeXml(`assetCategory="OPT" underlyingIsin="US0000000001" underlyingSecurityID="US44812J1043"`, `isin="US44812J1043"`),
+    );
+    expect(r.optionExercises![0]!.underlyingIsin).toBe("US0000000001");
+  });
+
+  it("reads the event type from IBKR's transactionType attribute", () => {
+    const r = parseIbkrFlexXml(fixture("ibkr-options.xml"));
+    const action = (sym: string) => r.optionExercises!.find((e) => e.underlyingSymbol === sym)!.action;
+    expect(action("HUT")).toBe("Exercise");
+    expect(action("TDW")).toBe("Expiration");
+    expect(action("EC")).toBe("Expiration");
+
+    const assigned = parseIbkrFlexXml(eaeXml(`assetCategory="OPT" transactionType="Assignment"`, `isin="US44812J1043"`));
+    expect(assigned.optionExercises![0]!.action).toBe("Assignment");
+  });
+
+  it("carries the FOP/FSFOP category of an OptionEAE row", () => {
+    const fop = parseIbkrFlexXml(eaeXml(`assetCategory="FOP"`, ``));
+    expect(fop.optionExercises![0]!.assetCategory).toBe("FOP");
+    const fsfop = parseIbkrFlexXml(eaeXml(`assetCategory="FSFOP"`, ``));
+    expect(fsfop.optionExercises![0]!.assetCategory).toBe("FSFOP");
+  });
+
+  it("reads a trade's underlying ISIN from underlyingSecurityID, never from a CUSIP", () => {
+    const r = parseIbkrFlexXml(fixture("ibkr-options.xml"));
+    const abtc = r.trades.find((t) => t.underlyingSymbol === "ABTC")!;
+    expect(abtc.underlyingIsin).toBe("US02462A1043");
+
+    const cusip = parseIbkrFlexXml(`<FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="LastYear">
+          <Trades>
+            <Trade tradeID="T1" accountId="U1" symbol="XYZ 250620C00010000" isin="" assetCategory="OPT" currency="USD"
+                   tradeDate="20250315" quantity="1" tradePrice="1" buySell="BUY" multiplier="100"
+                   putCall="C" strike="10" expiry="20250620" underlyingSymbol="XYZ" underlyingSecurityID="98765X104" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`);
+    expect(cusip.trades[0]!.underlyingIsin).toBeUndefined();
+  });
+});

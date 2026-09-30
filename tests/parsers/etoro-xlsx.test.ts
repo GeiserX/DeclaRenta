@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../../src/parsers/etoro.js";
 import * as XLSX from "xlsx";
+import { FifoEngine } from "../../src/engine/fifo.js";
+import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -474,7 +476,7 @@ describe("eToro XLSX parsing", () => {
           // ComDif(USD), DifMercado(USD), Ganancias(USD), Ganancias(EUR), TipoCambioAp, TipoCambioCi,
           // TasaApertura, TasaCierre, TP, SL, Comisiones, Copiado, Tipo, ISIN, Notas
           ["123", "Apple Inc (AAPL)", "Long", "1000", "5.5", "15/03/2024 09:30:00", "20/09/2025 14:00:00",
-           "1", "0", "-0.5", "100", "91.50", "1.08", "1.10", "180", "200", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
+           "1", "0", "-0.5", "100", "91.50", "1", "1", "180", "200", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
         ],
       });
 
@@ -485,7 +487,7 @@ describe("eToro XLSX parsing", () => {
       expect(buy.buySell).toBe("BUY");
       expect(buy.symbol).toBe("Apple Inc (AAPL)");
       expect(buy.isin).toBe("US0378331005");
-      expect(buy.currency).toBe("EUR");
+      expect(buy.currency).toBe("USD");
       expect(buy.quantity).toBe("5.5");
       expect(buy.tradePrice).toBe("180");
       expect(buy.tradeDate).toBe("20240315");
@@ -494,8 +496,8 @@ describe("eToro XLSX parsing", () => {
       expect(sell.buySell).toBe("SELL");
       expect(sell.tradeDate).toBe("20250920");
       expect(sell.tradePrice).toBe("200");
-      expect(sell.fifoPnlRealized).toBe("91.50");
-      expect(sell.currency).toBe("EUR");
+      expect(sell.fifoPnlRealized).toBe("100");
+      expect(sell.currency).toBe("USD");
     });
 
     it("should parse Short positions with inverted buy/sell legs", async () => {
@@ -583,6 +585,44 @@ describe("eToro XLSX parsing", () => {
       // Proceeds = amount + profit = 83.11 + (-14.29) = 68.82
       expect(parseFloat(sell.proceeds)).toBeCloseTo(68.82, 2);
       expect(sell.fifoPnlRealized).toBe("-14.29");
+      // FX rate 1.07 (not 1): a EUR-quoted Xetra stock, so the legs stay EUR
+      expect(sell.currency).toBe("EUR");
+    });
+
+    it("should convert a Spanish-layout trade from USD at the ECB rate, like the English layout", async () => {
+      // Same trade in both layouts: 10 AAPL, open 100 USD, close 120 USD.
+      // Tipo de cambio (USD) = 1 marks a USD-quoted instrument; the Ganancias (EUR)
+      // column must not turn its legs into EUR, or FIFO skips the ECB conversion.
+      const es = await parseEtoroXlsx(buildSpanishWorkbook({
+        closedPositions: [
+          SPANISH_CLOSED_HEADER,
+          ["321", "Apple Inc (AAPL)", "Long", "1000", "10", "15/03/2025 09:30:00", "20/09/2025 14:00:00",
+           "1", "0", "0", "200", "180", "1", "1", "100", "120", "0", "0", "0", "-", "Acciones", "US0378331005", ""],
+        ],
+      }));
+      const en = await parseEtoroXlsx(buildEtoroWorkbook({
+        closedPositions: [
+          CLOSED_POSITIONS_HEADER,
+          ["Buy AAPL", "1000", "10", "100", "120", "200", "15/03/2025 09:30:00", "20/09/2025 14:00:00", "Stocks", "1", "US0378331005"],
+        ],
+      }));
+
+      const rates: EcbRateMap = new Map([
+        ["2025-03-15", new Map([["USD", "0.9"]])],
+        ["2025-09-20", new Map([["USD", "0.9"]])],
+      ]);
+      const disposalOf = (trades: typeof es.trades) => {
+        const disposals = new FifoEngine().processTrades(trades, rates);
+        expect(disposals).toHaveLength(1);
+        const d = disposals[0]!;
+        return { gain: d.gainLossEur.toFixed(2), proceeds: d.proceedsEur.toFixed(2), cost: d.costBasisEur.toFixed(2) };
+      };
+
+      expect(es.trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+      expect(en.trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+      const expected = { gain: "180.00", proceeds: "1080.00", cost: "900.00" };
+      expect(disposalOf(es.trades)).toEqual(expected);
+      expect(disposalOf(en.trades)).toEqual(expected);
     });
 
     it("should use EUR dividend columns when available", async () => {
