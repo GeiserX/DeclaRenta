@@ -657,6 +657,10 @@ const en: TranslationKeys = {
     "⚠ Sale without lots: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Cost basis = 0 (possible short position or incomplete prior data).",
   "fifo.sell_without_lots.hint":
     "Did you include earlier years in your Flex Query? Select a period covering from the first purchase of this security.",
+  "fifo.cover_without_lots":
+    "⚠ Short cover without lots: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Gain not calculated (short position opened outside the period or incomplete prior data).",
+  "fifo.cover_without_lots.hint":
+    "Did you include earlier years in your Flex Query? Select a period covering from the sale that opened this short position.",
   "fifo.insufficient_lots": "⚠ Insufficient lots: {{symbol}} ({{isin}}) × {{quantity}} on {{date}}. Cost basis = 0.",
   "fifo.insufficient_lots.hint":
     "The Flex Query does not cover all prior purchases of this security. Extend the query period.",

@@ -113,6 +113,11 @@ export interface FifoDisposal {
   symbol: string;
   description: string;
   sellDate: string;
+  /**
+   * Cash settlement date of the sale, when the trade carries one. The FX engine
+   * dates the sale's unpark here, on the same axis as the buy's park.
+   */
+  settlementDate?: string;
   acquireDate: string;
   quantity: Decimal;
   /**

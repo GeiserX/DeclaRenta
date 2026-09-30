@@ -608,6 +608,49 @@ describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is
 });
 
 // ===========================================================================
+// 6. SAME-DAY ROUND TRIP WITH T+1 SETTLEMENT — the buy's park and the sale's
+//    unpark must sit on the SAME date axis (settlement), or the sale unparks on
+//    its trade date before the buy has parked on its settlement date.
+// ===========================================================================
+//
+// Fund $1000 @0.80 (2025-06-02). Buy and sell AAPL for $1000 on 2025-06-10 @0.90,
+// both settling 2025-06-11. Convert $1000 @1.00 on 2025-07-01.
+// Correct (park before unpark): the sale re-adds the $1000 at its carried 0.80
+//   → conversion 1000 × (1.00 − 0.80) = €200.
+// Mixed axes (unpark on 06-10, park on 06-11): the unpark finds nothing parked
+//   and re-adds at the sale rate 0.90; the park then consumes that re-add and is
+//   never released → conversion 1000 × (1.00 − 0.90) = €100.
+// The control uses settlement = trade date and must give the same €200.
+describe("carry-basis e2e #6: same-day buy+sell settling T+1 parks before it unparks (€200, not €100)", () => {
+  const rates = makeRateMap({
+    "2025-06-02": { USD: "0.80" }, // funding (tracked lot)
+    "2025-06-10": { USD: "0.90" }, // buy + sell trade date
+    "2025-06-11": { USD: "0.90" }, // buy + sell settlement date
+    "2025-07-01": { USD: "1.00" }, // conversion
+  });
+  function roundTrip(settle: string): FlexStatement {
+    return makeStatement([
+      fundUsd("fund", "2025-06-02", "1000"),
+      makeTrade({ ...stockBuy("buy", ISIN_AAPL, "AAPL", "2025-06-10", "10", "100"), settlementDate: settle }),
+      makeTrade({ ...stockSell("sell", ISIN_AAPL, "AAPL", "2025-06-10", "10", "100"), settlementDate: settle }),
+      convUsd("conv", "2025-07-01", "1000"),
+    ]);
+  }
+
+  it("control: settlement = trade date → €200.00", () => {
+    const report = generateTaxReport(roundTrip("2025-06-10"), rates, 2025);
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("200.00");
+  });
+
+  it("settlement one day after the trade date gives the same €200.00, not €100.00", () => {
+    const report = generateTaxReport(roundTrip("2025-06-11"), rates, 2025, { fxTrace: true });
+    expect(report.fxGains.netGainLoss.toFixed(2)).toBe("200.00");
+    const kinds = (report.fxTrace ?? []).filter((e) => e.kind === "park" || e.kind === "unpark").map((e) => e.kind);
+    expect(kinds).toEqual(["park", "unpark"]);
+  });
+});
+
+// ===========================================================================
 // Issue #230 (elmasvital): a foreign-currency stock sold at a LOSS, where the
 // resulting dollars are NEVER converted to EUR, generates ZERO divisa gain/loss
 // ("como si te hubieras comprado una hamburguesa en dólares"). Casillas

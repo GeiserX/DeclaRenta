@@ -659,6 +659,10 @@ const eu: TranslationKeys = {
     "⚠ Saltzea loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0 (litekeena da posizio laburra edo aurreko datu osatugabeak).",
   "fifo.sell_without_lots.hint":
     "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu balio honen lehen erosketatik estaltzen duen epe bat.",
+  "fifo.cover_without_lots":
+    "⚠ Posizio laburraren itxiera loterik gabe: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Irabazia ez da kalkulatu (posizio laburra epetik kanpo irekia edo aurreko datu osatugabeak).",
+  "fifo.cover_without_lots.hint":
+    "Aurreko urteak sartu dituzu zure Flex Query-an? Hautatu posizio labur hau ireki zuen salmentatik estaltzen duen epe bat.",
   "fifo.insufficient_lots":
     "⚠ Lote nahikorik ez: {{symbol}} ({{isin}}) × {{quantity}} {{date}} egunean. Kostu-oinarria = 0.",
   "fifo.insufficient_lots.hint":
