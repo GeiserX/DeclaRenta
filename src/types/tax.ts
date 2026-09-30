@@ -400,6 +400,13 @@ export interface TaxSummary {
    * `dispose` then realizes.)
    */
   fxTrace?: FxTraceEvent[];
+
+  /**
+   * Long lots still held at 31 December of the declaration year, keyed like the
+   * FIFO queues (ISIN, else symbol). Modelo 720 writes one record per
+   * acquisition date from them (fecha de incorporación, 415-422).
+   */
+  yearEndLots?: Map<string, Lot[]>;
 }
 
 /** A single lot in the FX FIFO queue (Art. 33.1 LIRPF) */
