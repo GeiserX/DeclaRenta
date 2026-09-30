@@ -254,6 +254,31 @@ describe("detectWashSales", () => {
     expect(result[0]!.washSaleBlocked).toBe(false); // Options excluded
   });
 
+  // MEFF futures options often have no ISIN, so they key by category + symbol and a
+  // same-symbol rebuy WOULD match; only the derivative exemption keeps the loss.
+  // STK is the control: same shape, not exempt, so it must be blocked.
+  it.each([
+    ["FOP", false],
+    ["FSFOP", false],
+    ["STK", true],
+  ] as const)("empty-ISIN %s loss with a same-symbol rebuy: blocked=%s", (cat, blocked) => {
+    const symbol = "MEFF IBEX C 12000";
+    const disposals = [makeDisposal({
+      isin: "",
+      symbol,
+      assetCategory: cat,
+      sellDate: "2025-06-15",
+      gainLossEur: new Decimal(-100),
+    })];
+    const trades = [
+      { ...makeTrade("", "2025-06-15", "SELL"), symbol, assetCategory: cat },
+      { ...makeTrade("", "2025-06-20", "BUY"), symbol, assetCategory: cat },
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(blocked);
+  });
+
   it("should skip a disposal with a blank security key (no ISIN, no symbol) without blocking or crashing", () => {
     // homogeneousKey("", "", "STK") === "" → the empty-key guard must return the
     // disposal unchanged, never matching it against unrelated buys.

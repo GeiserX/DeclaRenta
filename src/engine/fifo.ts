@@ -83,6 +83,17 @@ export class FifoEngine {
     // Excluded: WAR (warrants — insufficient data), CASH (FX conversions —
     // gain/loss already embedded in securities trades via ECB rate conversion)
     const optionEaeKeys = new Set((optionExercises ?? []).map((ex) => (ex.conid ? `conid:${ex.conid}` : ex.symbol)));
+    // Underlyings delivered by an exercise/assignment event, keyed by date + ISIN and date + symbol
+    const deliveryKeys = new Set(
+      (optionExercises ?? [])
+        .filter((ex) => ex.action !== "Expiration")
+        .flatMap((ex) => {
+          const date = normalizeDate(ex.date);
+          const keys = [`${date}|${ex.underlyingSymbol}`];
+          if (ex.underlyingIsin) keys.push(`${date}|${ex.underlyingIsin}`);
+          return keys;
+        }),
+    );
     const sorted = [...trades]
       .filter((t) => {
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
@@ -94,16 +105,23 @@ export class FifoEngine {
             context: { symbol: t.symbol, assetCategory: t.assetCategory },
           });
         }
-        // Skip option BookTrades for exercises/expirations only when a matching OptionEAE exists
-        // (IBKR generates both a BookTrade with notes="Ep"/"Ex" and an OptionEAE event)
-        if (
-          optionEaeKeys.size > 0 &&
-          (t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP")
-        ) {
+        // Skip option BookTrades for exercises/assignments/expirations only when a matching OptionEAE exists
+        // (IBKR generates both a BookTrade with notes="Ep"/"Ex"/"A" and an OptionEAE event)
+        const isOption = t.assetCategory === "OPT" || t.assetCategory === "FOP" || t.assetCategory === "FSFOP";
+        if (optionEaeKeys.size > 0 && isOption) {
           const notes = (t.notes || "").split(";");
-          if (notes.includes("Ep") || notes.includes("Ex")) {
+          if (notes.includes("Ep") || notes.includes("Ex") || notes.includes("A")) {
             const tradeKey = t.conid ? `conid:${t.conid}` : t.symbol;
             if (optionEaeKeys.has(tradeKey)) return false;
+          }
+        }
+        // Skip the underlying's delivery BookTrade (notes "Ex"/"A") when the OptionEAE event already
+        // delivers it (processOptionExercise), or the shares would be acquired or disposed twice
+        if (deliveryKeys.size > 0 && !isOption) {
+          const notes = (t.notes || "").split(";");
+          if (notes.includes("Ex") || notes.includes("A")) {
+            const date = normalizeDate(t.tradeDate);
+            if ((t.isin && deliveryKeys.has(`${date}|${t.isin}`)) || deliveryKeys.has(`${date}|${t.symbol}`)) return false;
           }
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
@@ -1014,11 +1032,9 @@ export class FifoEngine {
     }
   }
 
-  /** Resolve option lot key using same logic as lotKey() to avoid mismatches */
+  /** Resolve option lot key with lotKey() itself, so FOP/FSFOP lots match too */
   private optionLotKey(ex: OptionExercise): string {
-    if (ex.isin) return ex.isin;
-    if (ex.conid) return `OPT:conid:${ex.conid}`;
-    return `OPT:${ex.symbol}`;
+    return lotKey({ isin: ex.isin, symbol: ex.symbol, assetCategory: ex.assetCategory ?? "OPT", conid: ex.conid });
   }
 
   /** Resolve underlying key: find existing lots by symbol when ISIN is unknown */
@@ -1026,7 +1042,7 @@ export class FifoEngine {
     if (ex.underlyingIsin) return ex.underlyingIsin;
     // Scan existing lots for a matching symbol (trades processed first, so ISIN-keyed lots exist)
     for (const [key, lots] of this.lots) {
-      if (lots.length > 0 && lots[0]!.symbol === ex.underlyingSymbol && key !== `OPT:${ex.symbol}`) {
+      if (lots.length > 0 && lots[0]!.symbol === ex.underlyingSymbol && key !== this.optionLotKey(ex)) {
         return key;
       }
     }
