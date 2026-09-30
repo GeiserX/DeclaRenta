@@ -712,6 +712,14 @@ const eu: TranslationKeys = {
     'Coinbase-ren "Rewards Income" motako {{count}} diru-sarrera kapital higigarriaren etekin gisa sailkatu dira (aurrezki-oinarria).',
   "coinbase.rewards_income_classification.hint":
     "Zenbateko horietako batzuk sari promozionalak edo txartelaren cashback-a badira (ez kripto mantentzeagatiko edo lagatzeagatiko etekinak), tratamendu zuzena transmisiotik ez datorren ondare-irabazia litzateke (oinarri orokorra). Berrikusi haien izaera kopurua esanguratsua bada.",
+  "coinbase.unknown_types_skipped":
+    "Coinbase-ren {{count}} errenkada baztertu d(ir)a, eragiketa-mota ezezaguna dutelako: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Errenkada horiek ez dira kalkuluan kontuan hartu. Horietako bat salmenta, erosketa, kriptoz egindako ordainketa edo sari bat bada, gehitu eskuz, haren irabazia, eskuratze-kostua edo etekina kontuan har daitezen.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "Coinbase-ren Advanced Trade-ko {{count}} eragiketa balorazio-monetaz bestelako moneta batean ordaindu edo kobratu d(ir)a ({{pairs}}); erositako edo saldutako kriptomoneta soilik erregistratu da, ez kontrapartidako moneta.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "Bikote horietan kotizazio-moneta ere eskualdatzen duzu (erostean) edo eskuratzen duzu (saltzean), beste kriptomoneta bat edo dibisa bat izan, eta eragiketa horrek ere tributatzen du. Gehitu eskuz moneta horren salmenta edo erosketa, eragiketaren euro-balio berberarekin, haren irabazia eta eskuratze-kostua bat etor daitezen.",
   "trade_republic.trade_skipped_no_amount":
     "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
   "trade_republic.trade_skipped_no_amount.hint":

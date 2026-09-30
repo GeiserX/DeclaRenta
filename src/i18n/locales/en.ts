@@ -708,6 +708,14 @@ const en: TranslationKeys = {
     '{{count}} "Rewards Income" item(s) from Coinbase were classified as investment income (savings tax base).',
   "coinbase.rewards_income_classification.hint":
     "If some of those amounts are promotional rewards or card cashback (not income from holding or lending crypto), their correct treatment would be a capital gain not arising from a transfer (general tax base). Review their nature if the amount is significant.",
+  "coinbase.unknown_types_skipped":
+    "{{count}} Coinbase row(s) with an unrecognised transaction type were skipped: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "These rows were left out of the calculation. If any of them is a sale, a purchase, a payment made with crypto or a reward, add it manually so its gain, acquisition cost or income is counted.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
   "trade_republic.trade_skipped_no_amount":
     "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
   "trade_republic.trade_skipped_no_amount.hint":

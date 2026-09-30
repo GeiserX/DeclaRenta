@@ -710,6 +710,14 @@ const gl: TranslationKeys = {
     'Clasificáronse {{count}} ingreso(s) de tipo "Rewards Income" de Coinbase como rendementos do capital mobiliario (base do aforro).',
   "coinbase.rewards_income_classification.hint":
     "Se parte deses importes son recompensas promocionais ou cashback de tarxeta (non rendementos por manter ou ceder cripto), o seu tratamento correcto sería ganancia patrimonial non derivada de transmisión (base xeral). Revisa a súa natureza se a cantidade é significativa.",
+  "coinbase.unknown_types_skipped":
+    "Omitíronse {{count}} fila(s) de Coinbase cun tipo de operación non recoñecido: {{types}}.",
+  "coinbase.unknown_types_skipped.hint":
+    "Estas filas non se tiveron en conta no cálculo. Se algunha é unha venda, unha compra, un pagamento con cripto ou unha recompensa, engádea manualmente para que a súa ganancia, o seu custo de adquisición ou o seu rendemento conten.",
+  "coinbase.advanced_trade_quote_leg_missing":
+    "{{count}} operación(s) de Advanced Trade de Coinbase pagáronse ou cobráronse nunha moeda distinta da de valoración ({{pairs}}); só se rexistrou a criptomoeda comprada ou vendida, non a moeda de contrapartida.",
+  "coinbase.advanced_trade_quote_leg_missing.hint":
+    "Nestes pares tamén transmites (ao comprar) ou adquires (ao vender) a moeda de cotización, sexa outra criptomoeda ou unha divisa, e esa operación tamén tributa. Engade manualmente a venda ou a compra desa moeda polo mesmo valor en euros da operación para que a súa ganancia e o seu custo de adquisición cadren.",
   "trade_republic.trade_skipped_no_amount":
     "Omitiuse(ronse) {{count}} operación(s) de compravenda de Trade Republic sen importe utilizable.",
   "trade_republic.trade_skipped_no_amount.hint":
