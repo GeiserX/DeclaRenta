@@ -39,6 +39,8 @@ function isCoinbaseCsv(headerLine: string): boolean {
 // ---------------------------------------------------------------------------
 
 interface CoinbaseColumns {
+  /** Coinbase's own transaction ID (V2/V3 exports only; -1 in V1). */
+  id: number;
   timestamp: number;
   transactionType: number;
   asset: number;
@@ -53,6 +55,7 @@ interface CoinbaseColumns {
 
 function resolveColumns(headers: string[]): CoinbaseColumns {
   return {
+    id: findColumn(headers, ["id"]),
     timestamp: findColumn(headers, ["timestamp"]),
     transactionType: findColumn(headers, ["transaction type"]),
     asset: findColumn(headers, ["asset"]),
@@ -180,6 +183,10 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const total = parseNumber(fields[cols.total] ?? "0");
     const fees = parseNumber(fields[cols.fees] ?? "0");
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
+    // The same row in two overlapping exports must get the same ID, or the
+    // duplicate-trades check cannot see it: use Coinbase's own transaction ID,
+    // and the line number only for V1 exports, which have no ID column.
+    const rowId = (cols.id >= 0 ? (fields[cols.id] ?? "").trim() : "") || String(i);
 
     if (!asset || !timestamp) continue;
 
@@ -200,7 +207,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       if (txType === "rewards income") rewardsIncomeCount++;
       const eurAmount = total || subtotal;
       cashTransactions.push({
-        transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
+        transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
         symbol: asset,
         description: `${txType} - ${asset}${notes ? ` (${notes})` : ""}`,
@@ -228,7 +235,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
 
       // Close (sell) the source asset
       trades.push({
-        tradeID: `coinbase-convert-sell-${tradeDate}-${asset}-${i}`,
+        tradeID: `coinbase-convert-sell-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
         symbol: asset,
         description: `Convert ${asset}${convertMatch ? ` to ${convertMatch[2]}` : ""}`,
@@ -262,7 +269,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
 
         trades.push({
-          tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${i}`,
+          tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${rowId}`,
           accountId: "",
           symbol: destAsset,
           description: `Convert ${asset} to ${destAsset}`,
@@ -319,7 +326,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const feeDec2 = toFiniteDecimal(fees);
 
     trades.push({
-      tradeID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${i}`,
+      tradeID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
       accountId: "",
       symbol: asset,
       description: `${txType.charAt(0).toUpperCase() + txType.slice(1)} ${asset}`,
