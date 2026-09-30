@@ -580,6 +580,8 @@ async function parseFiles(): Promise<void> {
       const profile = getProfile();
       profile.year = activeYear;
       saveProfile(profile);
+      // Redraw the form, or its stale year select is saved back on the next edit.
+      initProfile();
     }
 
     renderReview(merged, detectedBrokers, brokerNames);
