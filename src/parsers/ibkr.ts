@@ -246,7 +246,9 @@ function mapTrade(raw: Record<string, string>): Trade {
     assetCategory: (raw.assetCategory ?? "STK") as Trade["assetCategory"],
     currency: raw.currency ?? "",
     tradeDate: raw.tradeDate ?? "",
-    settlementDate: raw.settlementDate ?? "",
+    // Flex exports name the attribute settleDateTarget; settlementDate is kept
+    // for hand-written and older XML.
+    settlementDate: raw.settlementDate || raw.settleDateTarget || "",
     quantity: raw.quantity ?? "0",
     tradePrice: raw.tradePrice ?? "0",
     tradeMoney: raw.tradeMoney ?? "0",

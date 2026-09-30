@@ -1,7 +1,6 @@
 ---
 hide:
   - navigation
-  - toc
 ---
 
 # DeclaRenta { .dr-visually-hidden }
