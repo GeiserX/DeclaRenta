@@ -114,3 +114,25 @@ export function formatCsv(report: TaxSummary): string {
 
   return lines.join("\n") + "\n";
 }
+
+/**
+ * Wrap `formatCsv` output for the web download so it opens cleanly when a user
+ * double-clicks it in Excel, whatever the system locale.
+ *
+ * - UTF-8 BOM: without it Excel decodes the file as cp1252, so accents and the
+ *   "—" in the summary rows come out garbled ("SociÃ©tÃ©").
+ * - `sep=,` line: Excel es-ES uses ";" as its list separator and would put every
+ *   row in column A. This Excel-only directive tells it the file is
+ *   comma-separated. Other tools (LibreOffice, pandas, Numbers) may show it as
+ *   an ordinary first line.
+ *
+ * The CLI keeps printing the plain RFC 4180 CSV from `formatCsv`.
+ */
+export function toExcelCsv(csv: string): string {
+  return "\uFEFFsep=,\n" + csv;
+}
+
+/** The Blob the web "Exportar CSV" button downloads. */
+export function csvDownloadBlob(report: TaxSummary): Blob {
+  return new Blob([toExcelCsv(formatCsv(report))], { type: "text/csv;charset=utf-8" });
+}
