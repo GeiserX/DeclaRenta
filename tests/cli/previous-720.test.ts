@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateModelo720, parsePrevious720Isins } from "../../src/generators/modelo720.js";
+import { generateModelo720, readPrevious720, type Previous720Security } from "../../src/generators/modelo720.js";
 import type { CashBalance, OpenPosition } from "../../src/types/ibkr.js";
 
 // `modelo720 --previous-720` reads last year's file to decide A/M/C. Round-trip
@@ -10,34 +10,34 @@ function position(overrides: Partial<OpenPosition> = {}): OpenPosition {
   return {
     accountId: "U7654321", symbol: "IWDA", description: "ISHARES CORE MSCI WORLD", isin: "IE00B4L5Y983",
     currency: "EUR", assetCategory: "STK", quantity: "600", costBasisMoney: "40000", costBasisPrice: "66",
-    markPrice: "92", positionValue: "55200", fifoPnlUnrealized: "15200", fxRateToBase: "1", ...overrides,
+    markPrice: "92", positionValue: "55200", fifoPnlUnrealized: "15200", fxRateToBase: "1", custodianCountry: "IE", ...overrides,
   };
 }
 
 function cash(endingCash: string): CashBalance {
-  return { accountId: "U7654321", currency: "EUR", endingCash, endingSettledCash: endingCash, averageQ4Cash: endingCash };
+  return { accountId: "U7654321", currency: "EUR", endingCash, endingSettledCash: endingCash, averageQ4Cash: endingCash, countryCode: "IE" };
 }
 
-function config(year: number, previousYearIsins?: string[]) {
+function config(year: number, previousYearSecurities?: Previous720Security[]) {
   return {
     nif: "12345678A", surname: "GARCIA LOPEZ", name: "JUAN", year, phone: "600123456",
     contactName: "GARCIA LOPEZ, JUAN", declarationId: "0000000000001", isComplementary: false,
-    isReplacement: false, previousYearIsins,
+    isReplacement: false, previousYearSecurities,
   };
 }
 
 describe("--previous-720 round trip", () => {
   // Year N: IWDA held, Apple declared the year before and gone (C record), and a
   // cash account over 50k (a Category C record with the account id at 132-143).
-  const yearN = generateModelo720([position()], new Map(), config(2024, ["US0378331005"]), undefined, [cash("55200")]);
+  const yearN = generateModelo720([position()], new Map(), config(2024, [{ isin: "US0378331005", claveSubclave: "V1", country: "IE" }]), undefined, [cash("55200")]);
 
   it("reads back only the securities held at the end of year N", () => {
     expect(yearN.split("\n").filter((l) => l[0] === "2")).toHaveLength(3);
-    expect(parsePrevious720Isins(yearN)).toEqual(["IE00B4L5Y983"]);
+    expect(readPrevious720(yearN).securities.map((s) => s.isin)).toEqual(["IE00B4L5Y983"]);
   });
 
   it("does not force a year N+1 filing below the threshold", () => {
-    const previous = parsePrevious720Isins(yearN);
+    const previous = readPrevious720(yearN).securities;
     const yearN1 = generateModelo720(
       [position({ positionValue: "9200" })], new Map(), config(2025, previous), undefined, [cash("920")],
     );
@@ -45,7 +45,7 @@ describe("--previous-720 round trip", () => {
   });
 
   it("does not cancel last year's extinctions or the cash account again in year N+1", () => {
-    const yearN1 = generateModelo720([position()], new Map(), config(2025, parsePrevious720Isins(yearN)));
+    const yearN1 = generateModelo720([position()], new Map(), config(2025, readPrevious720(yearN).securities));
     const details = yearN1.split("\n").filter((l) => l[0] === "2");
     expect(details.map((l) => `${l[101]}/${l[422]}/${l.slice(131, 143).trim()}`)).toEqual(["V/M/IE00B4L5Y983"]);
   });

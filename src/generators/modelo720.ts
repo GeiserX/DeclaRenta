@@ -11,6 +11,7 @@ import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
+import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
 /**
  * Get the valuation rate for a position: Q4 average for STK, year-end spot for
@@ -101,9 +102,9 @@ function cashCategoryTotals(
  * Check per-category 50,000 EUR thresholds for Modelo 720.
  *
  * Modelo 720 has three independent categories:
- *  - Valores (stocks, funds, bonds) — "V"
- *  - Cuentas (bank accounts) — "C" (not implemented in broker positions)
- *  - Bienes inmuebles (real estate) — "I" (not implemented in broker positions)
+ *  - Valores (stocks, bonds) — "V", and foreign funds (IIC) — "I", measured together
+ *  - Cuentas (bank accounts) — "C"
+ *  - Bienes inmuebles (real estate) — "B" (not implemented in broker positions)
  *
  * Each category is evaluated independently against the 50K threshold.
  * Only categories exceeding 50K must be declared. For accounts the total is
@@ -141,6 +142,105 @@ export function checkModelo720Thresholds(
   };
 }
 
+/**
+ * Country written in positions 129-130 of a security record, or null when it is
+ * unknown. Clave V: where the securities are deposited (the broker's country).
+ * Clave I (foreign funds): where the fund is situated, which the ISIN's country
+ * prefix gives.
+ */
+export function modelo720PositionCountry(p: OpenPosition): string | null {
+  const code = (p.assetCategory === "FUND" ? p.isin.slice(0, 2) : p.custodianCountry ?? "").toUpperCase();
+  return isIsoCountryCode(code) ? code : null;
+}
+
+/**
+ * A security last year's file declared (a V or I record): the ISIN, the clave
+ * and subclave (102-103) and the country (129-130) it was written with. A
+ * cancelled record (origin C) this year repeats them.
+ */
+export interface Previous720Security {
+  isin: string;
+  claveSubclave: string;
+  country: string;
+}
+
+/**
+ * Something the 720 file cannot carry, so the user must declare it by hand:
+ * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
+ * no broker export gives us), a security or account whose country is unknown,
+ * an account with no account code, or a sale of a security whose clave,
+ * subclave or country in last year's file is not a valid code (a file written
+ * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130).
+ */
+export type Modelo720Omission =
+  | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
+  | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
+  | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
+
+function positionOmission(p: OpenPosition): "no_isin" | "no_country" | null {
+  if (p.isin.trim() === "") return "no_isin";
+  if (modelo720PositionCountry(p) === null) return "no_country";
+  return null;
+}
+
+/** 144 + 156-189: "I" and the compact IBAN, or "O" and the broker's own account number. */
+function accountCode(cb: CashBalance): { key: "I" | "O"; code: string } {
+  const compact = cb.accountId.replace(/\s/g, "").toUpperCase();
+  return /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(compact)
+    ? { key: "I", code: compact }
+    : { key: "O", code: fixedWidthText(cb.accountId, 34).trim() };
+}
+
+function cashOmission(cb: CashBalance): "no_country" | "no_account" | null {
+  if (cb.accountId.trim() === "") return "no_account";
+  if (!isIsoCountryCode((cb.countryCode ?? "").toUpperCase())) return "no_country";
+  return null;
+}
+
+/**
+ * The securities, sales and cash accounts that `generateModelo720` leaves out
+ * of the file. Only categories the file has to carry count: an asset below the
+ * 50,000 EUR threshold is not declared at all, so it is never an omission.
+ * Callers show them so the user declares them by hand.
+ */
+export function findModelo720Omissions(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  config: Modelo720PlanConfig,
+  cashBalances?: CashBalance[],
+): Modelo720Omission[] {
+  return plan720(positions, rateMap, config, undefined, cashBalances).omissions;
+}
+
+/**
+ * Número identificativo de la declaración (type 1, 108-120): 13 digits whose
+ * first three are 720 (Orden HAP/72/2013, art. 1). The other ten are the Unix
+ * time in seconds, so two files generated apart never share a number.
+ */
+export function modelo720DeclarationId(now: Date = new Date()): string {
+  return "720" + String(Math.floor(now.getTime() / 1000) % 10_000_000_000).padStart(10, "0");
+}
+
+/**
+ * Read last year's 720 file: its V/I records (ISIN, clave + subclave, country)
+ * and the account codes of its C records, which decide the A/M/C origin (423)
+ * this year. Records whose origin is C were sold or closed last year, so they
+ * are not held any more and are skipped.
+ */
+export function readPrevious720(content: string): { securities: Previous720Security[]; accounts: string[] } {
+  const details = content.split(/\r?\n/).filter((line) => line.startsWith("2") && line[422] !== "C");
+  return {
+    securities: details
+      .filter((line) => line[101] === "V" || line[101] === "I")
+      .map((line) => ({ isin: line.slice(131, 143).trim(), claveSubclave: line.slice(101, 103), country: line.slice(128, 130) }))
+      .filter((security) => security.isin.length > 0),
+    accounts: details
+      .filter((line) => line[101] === "C")
+      .map((line) => line.slice(155, 189).trim())
+      .filter((account) => account.length > 0),
+  };
+}
+
 interface Modelo720Config {
   nif: string;
   surname: string;
@@ -152,31 +252,34 @@ interface Modelo720Config {
   isComplementary: boolean;
   isReplacement: boolean;
   previousDeclarationId?: string;
-  /** ISINs declared in the previous year's 720 — used to determine A/M/C declaration types */
-  previousYearIsins?: string[];
+  /** V/I records of the previous year's 720 (readPrevious720): A/M origin, and the C records of what was sold */
+  previousYearSecurities?: Previous720Security[];
+  /** Account codes (156-189) declared in the previous year's 720 — A or M for cash accounts */
+  previousYearAccounts?: string[];
+  /**
+   * Number of holders sharing every asset (profile titulares). Each declares
+   * 100 / titulares % in 476-480 and the full, unprorated value. Default 1.
+   */
+  titulares?: number;
 }
 
+/** The parts of the config that decide which records the file carries. */
+type Modelo720PlanConfig = Pick<Modelo720Config, "year" | "previousYearSecurities" | "previousYearAccounts">;
+
 /**
- * Generate a Modelo 720 fixed-width text file from open positions.
- *
- * Only includes positions where total value per category exceeds 50,000 EUR.
- *
- * @param positions - Open positions at year end (Dec 31)
- * @param rateMap - ECB exchange rates
- * @param config - Taxpayer information
- * @returns Fixed-width text content ready for AEAT submission
+ * What the 720 file carries and what it leaves out. The 50,000 EUR threshold
+ * applies per category (V/I securities, C accounts); a category below it is not
+ * declared, so nothing in it is written or reported as omitted.
  */
-export function generateModelo720(
+function plan720(
   positions: OpenPosition[],
   rateMap: EcbRateMap,
-  config: Modelo720Config,
-  /** Optional: lots held at 31 December (TaxSummary.yearEndLots), one record per acquisition date */
+  config: Modelo720PlanConfig,
   remainingLots?: Map<string, Lot[]>,
   cashBalances?: CashBalance[],
-  /** Optional: the year's FIFO disposals, used to date and value the extinction ("C") records */
   disposals?: FifoDisposal[],
-): string {
-  const previousIsins = new Set(config.previousYearIsins ?? []);
+) {
+  const previousIsins = new Set((config.previousYearSecurities ?? []).map((s) => s.isin));
 
   // Filter to long stocks/funds/bonds and calculate EUR values
   // STK positions use Q4 average FX rate (media del cuarto trimestre);
@@ -195,61 +298,103 @@ export function generateModelo720(
       const tranches = acquisitionTranches(new Decimal(p.quantity).abs(), valueEur, remainingLots?.get(p.isin));
 
       // Declaration type: A (new), M (existing), C (cancelled/sold)
-      const declType: "A" | "M" | "C" = previousIsins.has(p.isin) ? "M" : "A";
+      const declType: "A" | "M" = previousIsins.has(p.isin) ? "M" : "A";
 
-      return [{ position: p, valueEur, tranches, declType }];
+      // Counts toward the 50,000 EUR threshold even when the file cannot carry it.
+      return [{ position: p, valueEur, tranches, declType, omission: positionOmission(p) }];
     });
 
-  // "C" (cancelled) records for ISINs in previous year but no longer HELD, dated
+  // "C" (cancelled) records for last year's securities no longer held, dated
   // and valued by the last sale of declared shares. Without such a sale the
   // record keeps a blank date and a zero value (see findUndatedExtinctions).
-  const cancelledEntries = findCancelledIsins(positions, config.previousYearIsins).flatMap((isin) => {
-    const tranches = extinctionTranches(isin, config.year, disposals);
+  const cancelled = findCancelledSecurities(positions, config.previousYearSecurities);
+  const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
+    const tranches = extinctionTranches(security.isin, config.year, disposals);
     return tranches.length > 0
-      ? tranches.map((t) => ({ isin, ...t }))
-      : [{ isin, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
+      ? tranches.map((t) => ({ security, ...t }))
+      : [{ security, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
   });
 
   // Category C: cash balances at foreign brokers. A balance with no Q4 average
   // counts toward the threshold but is not written: the record needs that
   // average and the tool never invents it (the web section asks the user to
   // add that account by hand).
+  const previousAccounts = new Set(config.previousYearAccounts ?? []);
   const cashEntries = (cashBalances ?? [])
     .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
-      return values?.averageQ4 ? [{ cashBalance: cb, valueEur: values.ending, averageQ4Eur: values.averageQ4 }] : [];
+      return values?.averageQ4
+        ? [{
+          cashBalance: cb,
+          valueEur: values.ending,
+          averageQ4Eur: values.averageQ4,
+          declType: previousAccounts.has(accountCode(cb).code) ? "M" as const : "A" as const,
+          omission: cashOmission(cb),
+        }]
+        : [];
     });
 
   // Check 50,000 EUR threshold per category independently
   const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelledEntries.length > 0;
-  const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds && cashEntries.length > 0;
+  const hasValuesRecords = totalValueV.greaterThan(THRESHOLD) || cancelled.length > 0;
+  const hasCashRecords = cashCategoryTotals(cashBalances, rateMap, config.year).exceeds;
 
-  if (!hasValuesRecords && !hasCashRecords) {
-    return "";
-  }
-
-  // Build records
-  const detailRecords: string[] = [];
-
-  // Category V records (securities)
+  const omissions: Modelo720Omission[] = [];
   if (hasValuesRecords) {
     for (const e of entries) {
-      for (const t of e.tranches) {
-        detailRecords.push(buildDetailRecord(e.position, t.valueEur, t.quantity, config, t.date, e.declType));
-      }
+      if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
     }
-    for (const c of cancelledEntries) {
-      detailRecords.push(buildCancelledRecord(c, config));
+    for (const security of cancelled) {
+      if (!isRepeatable(security)) omissions.push({ kind: "cancelled", reason: "invalid_code", security });
+    }
+  }
+  if (hasCashRecords) {
+    for (const e of cashEntries) {
+      if (e.omission) omissions.push({ kind: "cash", reason: e.omission, cashBalance: e.cashBalance });
     }
   }
 
-  // Category C records (cash accounts)
-  if (hasCashRecords) {
-    for (const e of cashEntries) {
-      detailRecords.push(buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config));
-    }
+  return {
+    entries: hasValuesRecords ? entries.filter((e) => e.omission === null) : [],
+    cancelledEntries: hasValuesRecords ? cancelledEntries : [],
+    cashEntries: hasCashRecords ? cashEntries.filter((e) => e.omission === null) : [],
+    omissions,
+  };
+}
+
+/**
+ * Generate a Modelo 720 fixed-width text file from open positions.
+ *
+ * Only includes positions where total value per category exceeds 50,000 EUR.
+ * `findModelo720Omissions` lists what the file had to leave out.
+ *
+ * @param positions - Open positions at year end (Dec 31)
+ * @param rateMap - ECB exchange rates
+ * @param config - Taxpayer information
+ * @returns Fixed-width text content ready for AEAT submission
+ */
+export function generateModelo720(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  config: Modelo720Config,
+  /** Optional: lots held at 31 December (TaxSummary.yearEndLots), one record per acquisition date */
+  remainingLots?: Map<string, Lot[]>,
+  cashBalances?: CashBalance[],
+  /** Optional: the year's FIFO disposals, used to date and value the extinction ("C") records */
+  disposals?: FifoDisposal[],
+): string {
+  const { entries, cancelledEntries, cashEntries } = plan720(positions, rateMap, config, remainingLots, cashBalances, disposals);
+
+  const detailRecords = [
+    ...entries.flatMap((e) => e.tranches.map((t) => buildDetailRecord(e.position, t.valueEur, t.quantity, config, t.date, e.declType))),
+    ...cancelledEntries.map((c) => buildCancelledRecord(c, config)),
+    ...cashEntries.map((e) => buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config, e.declType)),
+  ];
+
+  // Below both thresholds, or everything above them had to be left out: no file.
+  if (detailRecords.length === 0) {
+    return "";
   }
 
   // Valoración 1 / Valoración 2 exactly as written in each type-2 record
@@ -257,12 +402,8 @@ export function generateModelo720(
   // fields. V: 31-Dec value (a cancelled record: value at the extinction date) /
   // nothing. C: 31-Dec balance / Q4 average balance.
   const allEntries = [
-    ...(hasValuesRecords
-      ? [...entries.flatMap((e) => e.tranches), ...cancelledEntries].map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) }))
-      : []),
-    ...(hasCashRecords
-      ? cashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) }))
-      : []),
+    ...[...entries.flatMap((e) => e.tranches), ...cancelledEntries].map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })),
+    ...cashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) })),
   ];
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
@@ -315,16 +456,31 @@ function acquisitionTranches(
 }
 
 /**
- * ISINs declared last year that are no longer held. Uses the held set (all
+ * Securities declared last year that are no longer held. Uses the held set (all
  * V-category positions), not the valued entries: a position that is still held
  * but couldn't be valued (no year-end rate) is skipped from the records, yet it
  * must NOT be reported as cancelled/sold (that would tell AEAT the user
  * liquidated an asset they still hold). A short position is not held: a
  * declared holding now shorted was sold, so it is cancelled.
  */
-function findCancelledIsins(positions: OpenPosition[], previousYearIsins: string[] | undefined): string[] {
+function findCancelledSecurities(positions: OpenPosition[], previous: Previous720Security[] | undefined): Previous720Security[] {
   const heldIsins = new Set(positions.filter(isHeldSecurity).map((p) => p.isin));
-  return [...new Set(previousYearIsins ?? [])].filter((isin) => !heldIsins.has(isin));
+  // Last year's file holds one record per acquisition date: one sale per ISIN.
+  const cancelled = new Map<string, Previous720Security>();
+  for (const s of previous ?? []) {
+    if (!heldIsins.has(s.isin) && !cancelled.has(s.isin)) cancelled.set(s.isin, s);
+  }
+  return [...cancelled.values()];
+}
+
+/**
+ * A sale is repeated with the clave, subclave and country last year's file
+ * wrote. Older versions left the subclave blank and wrote the ISIN prefix
+ * (e.g. XS) as the country: repeating either would make AEAT reject the file,
+ * so such a sale is left out and reported instead.
+ */
+function isRepeatable(s: Previous720Security): boolean {
+  return isClaveSubclave(s.claveSubclave) && isIsoCountryCode(s.country);
 }
 
 /**
@@ -391,29 +547,16 @@ export interface UndatedExtinction {
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
-  config: Pick<Modelo720Config, "year" | "previousYearIsins">,
+  config: Pick<Modelo720Config, "year" | "previousYearSecurities">,
   disposals?: FifoDisposal[],
 ): UndatedExtinction[] {
-  return findCancelledIsins(positions, config.previousYearIsins).flatMap((isin): UndatedExtinction[] => {
+  // A sale left out for an invalid code has no record to complete; findModelo720Omissions reports it.
+  const written = findCancelledSecurities(positions, config.previousYearSecurities).filter(isRepeatable);
+  return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
     return tranches.some((t) => t.acquireDate === "") ? [{ isin, missing: "acquisitionDate" }] : [];
   });
-}
-
-/**
- * The ISINs a previous year's Modelo 720 file declared as still held, for
- * `modelo720 --previous-720`: securities records (clave 102 = "V") whose origin
- * (423) is not "C". An extinction was already declared gone, and an account
- * record ("C" at 102) carries an account id at 132-143, not an ISIN.
- */
-export function parsePrevious720Isins(content: string): string[] {
-  const isins = content
-    .split("\n")
-    .filter((line) => line[0] === "2" && line[101] === "V" && line[422] !== "C")
-    .map((line) => line.slice(131, 143).trim())
-    .filter((isin) => isin.length > 0);
-  return [...new Set(isins)];
 }
 
 function pad(value: string, length: number, char = " ", alignRight = false): string {
@@ -440,8 +583,50 @@ function pad(value: string, length: number, char = " ", alignRight = false): str
  * @param alignRight - Right-align (pad on the left) instead of left-align
  */
 function fixedWidthText(value: string, length: number, alignRight = false): string {
-  const sanitized = value.replace(/[\x00-\x1F\x7F-\x9F]/g, " ");
+  const sanitized = value
+    // The BOE wants every text field "en mayúsculas sin caracteres especiales,
+    // y sin vocales acentuadas", with Ñ and Ç kept: split each letter from its
+    // accent, drop every accent except the tilde on N and the cedilla on C.
+    .normalize("NFD")
+    .replace(/(?<![Nn])\u0303|(?<![Cc])\u0327|[\u0300-\u0302\u0304-\u0326\u0328-\u036f]/g, "")
+    .normalize("NFC")
+    .toUpperCase()
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    // Anything left outside Latin-1 has no byte in the file.
+    .replace(/[^\x00-\xFF]/g, " ");
   return pad(sanitized, length, " ", alignRight);
+}
+
+/** Declarant's name as positions 18-57 (type 1) and 36-75 (type 2) carry it. */
+function declarantName(config: Modelo720Config): string {
+  return fixedWidthText(config.surname + " " + config.name, 40);
+}
+
+/**
+ * Teléfono (type 1, 59-67): nine digits. Drops spaces, signs and the +34 / 0034
+ * prefix, keeping the last nine digits.
+ */
+function phoneField(phone: string): string {
+  let digits = phone.replace(/\D/g, "");
+  if (digits.length > 9 && digits.startsWith("0034")) digits = digits.slice(4);
+  else if (digits.length > 9 && digits.startsWith("34")) digits = digits.slice(2);
+  return digits.slice(-9).padStart(9, "0");
+}
+
+/** Porcentaje de participación (476-480): each holder's equal share. */
+function ownershipField(config: Modelo720Config): string {
+  const titulares = config.titulares ?? 1;
+  if (!Number.isInteger(titulares) || titulares < 1) {
+    throw new Error(`Modelo 720: número de titulares inválido: ${titulares}`);
+  }
+  return numPad(new Decimal(100).div(titulares).toString(), 3, 2);
+}
+
+/** Clave (102) and subclave (103) of a security record. */
+function claveSubclave(assetCategory: string): string {
+  if (assetCategory === "FUND") return "I0"; // IIC situated abroad; subclave "a cero"
+  if (assetCategory === "BOND") return "V2"; // cesión de capitales propios a terceros
+  return "V1"; // participación en entidades jurídicas
 }
 
 function numPad(value: string, intLen: number, decLen: number): string {
@@ -492,9 +677,9 @@ function buildSummaryRecord(
   record += "720";                                            // 2-4: Model
   record += config.year.toString();                           // 5-8: Year
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
-  record += fixedWidthText(config.surname + " " + config.name, 40); // 18-57: Name
+  record += declarantName(config);                            // 18-57: Name
   record += "T";                                              // 58: Transmission type
-  record += pad(config.phone, 9, "0", true);                  // 59-67: Phone
+  record += phoneField(config.phone);                         // 59-67: Phone
   record += fixedWidthText(config.contactName, 40);           // 68-107: Contact
   record += pad(config.declarationId, 13, "0", true);         // 108-120: Declaration ID
   record += config.isComplementary ? "C" : " ";               // 121: Complementary
@@ -516,10 +701,9 @@ function buildDetailRecord(
   quantity: Decimal,
   config: Modelo720Config,
   acquisitionDate: string,
-  declType: "A" | "M" | "C",
+  declType: "A" | "M",
 ): string {
-  // Extract country code from ISIN prefix (first 2 characters)
-  const countryCode = pos.isin.length >= 2 ? pos.isin.slice(0, 2).toUpperCase() : "  ";
+  const countryCode = modelo720PositionCountry(pos) ?? "  ";
 
   let record = "";
   record += "2";                                              // 1: Register type
@@ -528,19 +712,19 @@ function buildDetailRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += fixedWidthText(config.surname + " " + config.name, 40); // 36-75: Name (declarant/holder)
+  record += declarantName(config);                            // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
-  record += "V";                                              // 102: Asset type (stocks)
-  record += pad("", 26);                                      // 103-128: Reserved
-  record += pad(countryCode, 2);                              // 129-130: Country code (from ISIN)
+  record += claveSubclave(pos.assetCategory);                 // 102-103: Clave (V/I) + subclave
+  record += pad("", 25);                                      // 104-128: Tipo de derecho real (B only)
+  record += pad(countryCode, 2);                              // 129-130: Custodian (V) or fund (I) country
   record += "1";                                              // 131: ID type (ISIN)
   record += pad(pos.isin, 12);                                // 132-143: ISIN
   record += pad("", 46);                                      // 144-189: Reserved
   record += fixedWidthText(pos.description, 41);              // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad(acquisitionDate, 8);                          // 415-422: Acquisition date (YYYYMMDD)
-  record += declType;                                         // 423: Type (A=new, M=existing, C=cancelled)
+  record += declType;                                         // 423: Type (A=new, M=existing)
   record += pad("", 8);                                       // 424-431: Sell date
   record += valoracionField(valueEur);                        // 432-446: Valoración 1 sign + value at Dec 31
   record += " ";                                              // 447: Valoración 2 sign
@@ -548,22 +732,23 @@ function buildDetailRecord(
   record += "A";                                              // 462: Clave de representación (book entry)
   record += numPad(quantity.toString(), 10, 2);               // 463-474: Número de valores
   record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
-  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += ownershipField(config);                           // 476-480: Ownership %
   record += pad("", 20);                                      // 481-500: Blank
 
   return record;
 }
 
 /**
- * Build a "C" (cancelled) detail record for an ISIN that was declared
- * in the previous year but no longer held.
+ * Build a "C" (cancelled) detail record for a security declared in the
+ * previous year but no longer held. It repeats last year's clave, subclave and
+ * country so AEAT matches it to the record it cancels; callers only pass a
+ * security whose codes are valid (isRepeatable).
  */
 function buildCancelledRecord(
-  entry: { isin: string; acquireDate: string; sellDate: string; valueEur: Decimal },
+  entry: { security: Previous720Security; acquireDate: string; sellDate: string; valueEur: Decimal },
   config: Modelo720Config,
 ): string {
-  const { isin } = entry;
-  const countryCode = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "  ";
+  const { security } = entry;
 
   let record = "";
   record += "2";                                              // 1: Register type
@@ -572,14 +757,14 @@ function buildCancelledRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += fixedWidthText(config.surname + " " + config.name, 40); // 36-75: Name (declarant/holder)
+  record += declarantName(config);                            // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
-  record += "V";                                              // 102: Asset type (stocks)
-  record += pad("", 26);                                      // 103-128: Reserved
-  record += pad(countryCode, 2);                              // 129-130: Country code
+  record += pad(security.claveSubclave, 2);                   // 102-103: Clave + subclave, as last year
+  record += pad("", 25);                                      // 104-128: Tipo de derecho real (B only)
+  record += pad(security.country, 2);                         // 129-130: Country code, as last year
   record += "1";                                              // 131: ID type (ISIN)
-  record += pad(isin, 12);                                    // 132-143: ISIN
+  record += pad(security.isin, 12);                           // 132-143: ISIN
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad("", 41);                                      // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
@@ -592,7 +777,7 @@ function buildCancelledRecord(
   record += "A";                                              // 462: Clave de representación (book entry)
   record += numPad("0", 10, 2);                               // 463-474: Número de valores (0)
   record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
-  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += ownershipField(config);                           // 476-480: Ownership %
   record += pad("", 20);                                      // 481-500: Blank
 
   return record;
@@ -607,9 +792,12 @@ function buildCashAccountRecord(
   valueEur: Decimal,
   averageQ4Eur: Decimal,
   config: Modelo720Config,
+  declType: "A" | "M",
 ): string {
   const brokerName = cb.institutionName ?? "FOREIGN BROKER";
-  const countryCode = cb.countryCode ?? "XX";
+  // Callers skip accounts without a valid country (cashOmission).
+  const countryCode = (cb.countryCode ?? "").toUpperCase();
+  const account = accountCode(cb);
 
   let record = "";
   record += "2";                                              // 1: Register type
@@ -618,26 +806,28 @@ function buildCashAccountRecord(
   record += pad(config.nif, 9, " ", true);                    // 9-17: NIF
   record += pad(config.nif, 9, " ", true);                    // 18-26: Declared NIF
   record += pad("", 9);                                       // 27-35: Proxy NIF
-  record += fixedWidthText(brokerName, 40);                   // 36-75: Entity name
+  record += declarantName(config);                            // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
-  record += "C";                                              // 102: Asset type (accounts)
-  record += pad("", 26);                                      // 103-128: Reserved
+  record += "C5";                                             // 102-103: Clave C + subclave 5 (otras cuentas)
+  record += pad("", 25);                                      // 104-128: Tipo de derecho real (B only)
   record += pad(countryCode, 2);                              // 129-130: Country code
-  record += "5";                                              // 131: ID type (other)
-  record += pad(cb.accountId || config.nif, 12);              // 132-143: Account identifier
-  record += pad("", 46);                                      // 144-189: Reserved
+  record += "0";                                              // 131: Clave de identificación (V/I only, a cero)
+  record += pad("", 12);                                      // 132-143: Identificación de valores (V/I only)
+  record += account.key;                                      // 144: Clave identificación de cuenta (I=IBAN, O=other)
+  record += pad("", 11);                                      // 145-155: BIC (not in broker exports)
+  record += pad(account.code, 34);                            // 156-189: Código de cuenta
   record += fixedWidthText(brokerName, 41);                   // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved
   record += pad((cb.openedDate ?? "").replace(/-/g, "").slice(0, 8), 8); // 415-422: Opening date
-  record += "A";                                              // 423: Type (A=new)
+  record += declType;                                         // 423: Type (A=new, M=declared before)
   record += pad("", 8);                                       // 424-431: Close date
   record += valoracionField(valueEur);                        // 432-446: Valoración 1 sign + balance at Dec 31
   record += valoracionField(averageQ4Eur);                    // 447-461: Valoración 2 sign + Q4 average balance
   record += pad("", 1);                                       // 462: Clave de representación (V/I only)
   record += numPad("0", 10, 2);                               // 463-474: Número de valores (V/I only, zeros)
   record += pad("", 1);                                       // 475: Clave tipo inmueble (B only)
-  record += numPad("100", 3, 2);                              // 476-480: Ownership %
+  record += ownershipField(config);                           // 476-480: Ownership %
   record += pad("", 20);                                      // 481-500: Blank
 
   return record;

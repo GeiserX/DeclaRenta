@@ -333,6 +333,16 @@ const eu: TranslationKeys = {
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
     "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Abenduaren 31ko saldoa 50.000 €-ko atalaserako kontatzen da, baina kontu horiek ez dira sortutako fitxategian sartzen: gehitu itzazu eskuz, laugarren hiruhilekoko batez besteko saldoarekin, aurkeztu aurretik.",
+  "m720.omitted_title":
+    "Ondasun hauek ez dira fitxategian sartzen, eta eskuz aitortu behar dituzu 720 Ereduaren inprimakian:",
+  "m720.omitted_no_isin":
+    "ez du ISINik; inprimakian «Z» eta jaulkitzailearen herrialde-kodea erabiliz identifikatzen da",
+  "m720.omitted_no_country":
+    "gordailuan edo kokatuta dagoen herrialdea falta da",
+  "m720.omitted_no_account":
+    "kontu-zenbakia falta da",
+  "m720.omitted_invalid_code":
+    "aurten saldua; aurreko 720 Ereduak fitxategiak onartzen ez duen gako edo herrialde batekin aitortu zuen",
   "m720.successive_years_note":
     "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",

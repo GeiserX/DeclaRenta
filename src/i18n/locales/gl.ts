@@ -333,6 +333,16 @@ const gl: TranslationKeys = {
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
     "Algúns saldos non inclúen a media do cuarto trimestre obrigatoria para as contas do Modelo 720. O seu saldo a 31 de decembro si conta para o limiar de 50.000 €, pero esas contas non se inclúen no ficheiro xerado: engádeas a man, co seu saldo medio do cuarto trimestre, antes de presentar.",
+  "m720.omitted_title":
+    "Estes bens non caben no ficheiro e debes declaralos a man no formulario do Modelo 720:",
+  "m720.omitted_no_isin":
+    "non ten ISIN; no formulario identifícase con «Z» máis o código do país do emisor",
+  "m720.omitted_no_country":
+    "falta o país onde está depositado ou situado",
+  "m720.omitted_no_account":
+    "falta o número de conta",
+  "m720.omitted_invalid_code":
+    "vendido este ano; o Modelo 720 anterior declarouno cunha clave ou un país que o ficheiro non admite",
   "m720.successive_years_note":
     "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",

@@ -15,6 +15,8 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
   for (let i = 0; i < nif.length; i++) chars[8 + i] = nif[i]!;
 
   if (type === "2") {
+    // Clave V, subclave 1 (shares) at 102-103
+    chars[101] = "V"; chars[102] = "1";
     // Country code at 129-130
     chars[128] = "U"; chars[129] = "S";
     // ID type = 1 (ISIN)
@@ -31,6 +33,7 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
     for (let i = 0; i < v1.length; i++) chars[432 + i] = v1[i]!;
     const v2 = "00000000000000";
     for (let i = 0; i < v2.length; i++) chars[447 + i] = v2[i]!;
+    chars[461] = "A";
     const qty = "000000000100";
     for (let i = 0; i < qty.length; i++) chars[462 + i] = qty[i]!;
     const pct = "10000";
@@ -38,6 +41,9 @@ function buildRecord(type: "1" | "2", overrides: Record<number, string> = {}): s
   }
 
   if (type === "1") {
+    // Número identificativo (positions 108-120): 13 digits starting with 720
+    const id = "7200000000001";
+    for (let i = 0; i < id.length; i++) chars[107 + i] = id[i]!;
     // Detail count (positions 136-144): 9 digits
     const cnt = "000000001";
     for (let i = 0; i < cnt.length; i++) chars[135 + i] = cnt[i]!;
@@ -193,6 +199,17 @@ describe("validateModelo720Records", () => {
       expect(validateModelo720Records([record])[0]!.errors).toContainEqual(expect.stringContaining("representación"));
     });
 
+    it("flags a clave and subclave (102-103) the BOE does not list", () => {
+      // 103 is numeric: V takes 1-3, I takes 0, C 1-5, S 1-2, B 1-5.
+      for (const code of ["V ", "V0", "V4", "I1", "I ", "C6", "S3", "B0", "X1", "  "]) {
+        const record = withField(boeGoldenValuesRecord(), d.claveSubclave, code);
+        expect(validateModelo720Records([record])[0]!.errors).toContainEqual(expect.stringContaining("Clave y subclave"));
+      }
+      for (const code of ["V1", "V2", "V3", "I0"]) {
+        expect(validateModelo720Records([withField(boeGoldenValuesRecord(), d.claveSubclave, code)])[0]!.errors).toEqual([]);
+      }
+    });
+
     it("flags a letter inside número de valores (463-474)", () => {
       const record = withField(boeGoldenValuesRecord(), d.numeroValores, "0A0000001000");
       expect(validateModelo720Records([record])[0]!.errors).toContainEqual(expect.stringContaining("Número de valores"));
@@ -225,6 +242,15 @@ describe("validateModelo720Records", () => {
   });
 
   describe("Summary record numeric field validation", () => {
+    it("should reject a declaration number that does not start with 720", () => {
+      for (const id of ["0000000000000", "0000000000001", "720000000000A"]) {
+        const results = validateModelo720Records([buildRecord("1", { 107: id })]);
+        expect(results[0]!.valid).toBe(false);
+        expect(results[0]!.errors).toContainEqual(expect.stringContaining("Número identificativo de la declaración"));
+      }
+    });
+
+
     it("should detect non-numeric suma de valoración 1 in summary record", () => {
       const record = buildRecord("1", { 145: "ABCDEFGHIJKLMNOPQ" });
       const results = validateModelo720Records([record]);

@@ -332,6 +332,16 @@ const en: TranslationKeys = {
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
     "Some balances do not include the Q4 average required for Modelo 720 account records. Their 31 December balance does count toward the 50,000 EUR threshold, but those accounts are left out of the generated file: add them by hand, with their Q4 average balance, before filing.",
+  "m720.omitted_title":
+    "These assets do not fit in the file, so declare them by hand in the Modelo 720 form:",
+  "m720.omitted_no_isin":
+    "it has no ISIN; the form identifies it with “Z” plus the issuer's country code",
+  "m720.omitted_no_country":
+    "the country where it is deposited or located is missing",
+  "m720.omitted_no_account":
+    "the account number is missing",
+  "m720.omitted_invalid_code":
+    "sold this year; last year's Modelo 720 declared it with a code or country the file does not accept",
   "m720.successive_years_note":
     "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
   "m720.generate_btn": "Generate Modelo 720 file",

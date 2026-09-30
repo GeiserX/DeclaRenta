@@ -26,9 +26,11 @@ import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.j
 import { generateTaxReport } from "../generators/report.js";
 import {
   checkModelo720Thresholds,
+  findModelo720Omissions,
   findUndatedExtinctions,
   generateModelo720,
-  parsePrevious720Isins,
+  modelo720DeclarationId,
+  readPrevious720,
 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
@@ -457,6 +459,8 @@ program
   .option("-o, --output <file>", "Output file. Defaults to stdout")
   .option("--phone <phone>", "Teléfono de contacto", "")
   .option("--previous-720 <file>", "Previous year 720 output file (to determine A/M/C types)")
+  .option("--titulares <n>", "Number of holders sharing every asset: each declares 100/n % with the full value", parseInt)
+  .option("--declaration-id <id>", "Número identificativo (13 digits starting with 720). Defaults to a new one")
   .action(
     async (opts: {
       input: string;
@@ -466,6 +470,8 @@ program
       output?: string;
       phone: string;
       previous720?: string;
+      titulares?: number;
+      declarationId?: string;
     }) => {
       try {
         const content = readFileSync(opts.input, "utf-8");
@@ -493,8 +499,15 @@ program
         const surname = nameParts[0] ?? "";
         const firstName = nameParts[1] ?? "";
 
-        // ISINs the previous year's 720 file declared as still held
-        let previousYearIsins: string[] | undefined;
+        if (opts.declarationId !== undefined && !/^720\d{10}$/.test(opts.declarationId)) {
+          throw new Error(`--declaration-id debe tener 13 dígitos y empezar por 720: "${opts.declarationId}"`);
+        }
+        if (opts.titulares !== undefined && !(Number.isInteger(opts.titulares) && opts.titulares >= 1)) {
+          throw new Error("--titulares debe ser un número entero mayor o igual que 1");
+        }
+
+        // Securities (V/I records) and account codes (C records) from last year's 720 file
+        let previous: ReturnType<typeof readPrevious720> | undefined;
         if (opts.previous720) {
           let prev: string;
           try {
@@ -503,7 +516,7 @@ program
             console.error(`Error: No se pudo leer el archivo ${opts.previous720}.`);
             process.exit(1);
           }
-          previousYearIsins = parsePrevious720Isins(prev);
+          previous = readPrevious720(prev);
         }
 
         const config720 = {
@@ -513,10 +526,12 @@ program
           year: opts.year,
           phone: opts.phone,
           contactName: opts.name,
-          declarationId: "0000000000001",
+          declarationId: opts.declarationId ?? modelo720DeclarationId(),
           isComplementary: false,
           isReplacement: false,
-          previousYearIsins,
+          previousYearSecurities: previous?.securities,
+          previousYearAccounts: previous?.accounts,
+          titulares: opts.titulares,
         };
         const disposals = report.capitalGains.disposals;
         const output720 = generateModelo720(
@@ -527,6 +542,23 @@ program
           statement.cashBalances,
           disposals,
         );
+
+        // Assets the file cannot carry: the user declares them by hand.
+        const omissions = findModelo720Omissions(statement.openPositions, rateMap, config720, statement.cashBalances);
+        for (const o of omissions) {
+          const what = o.kind === "position"
+            ? `Posición ${o.position.symbol || o.position.description}`
+            : o.kind === "cash"
+              ? `Cuenta ${o.cashBalance.accountId || "(sin número)"} en ${o.cashBalance.currency}`
+              : `Baja de ${o.security.isin} (declarado en el Modelo 720 anterior con clave «${o.security.claveSubclave}» y país «${o.security.country}»)`;
+          const why = {
+            no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
+            no_country: "no tiene un código de país válido",
+            no_account: "no tiene número de cuenta",
+            invalid_code: "tiene una clave, subclave o país que el fichero no admite",
+          }[o.reason];
+          console.error(`⚠ ${what} ${why}: no se incluye en el fichero. Decláralo a mano en el formulario del Modelo 720.`);
+        }
 
         for (const { isin, missing } of findUndatedExtinctions(statement.openPositions, config720, disposals)) {
           console.error(
@@ -549,7 +581,9 @@ program
 
         if (!output720) {
           const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
-          if (thresholds.accounts.exceeds) {
+          if (omissions.length > 0) {
+            console.error("No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
+          } else if (thresholds.accounts.exceeds) {
             console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
           } else {
             console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");

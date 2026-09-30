@@ -592,6 +592,13 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
   };
 }
 
+/**
+ * Interactive Brokers Ireland Limited holds the accounts of clients resident in
+ * the EEA, Spain included, so that is where their securities are deposited
+ * (Modelo 720, positions 129-130 of a clave V record).
+ */
+const IBKR_CUSTODIAN_COUNTRY = "IE";
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   return {
     accountId: raw.accountId ?? "",
@@ -607,6 +614,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     positionValue: raw.positionValue ?? "0",
     fifoPnlUnrealized: raw.fifoPnlUnrealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
+    custodianCountry: IBKR_CUSTODIAN_COUNTRY,
   };
 }
 

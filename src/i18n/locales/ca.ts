@@ -333,6 +333,16 @@ const ca: TranslationKeys = {
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
     "Alguns saldos no inclouen la mitjana del quart trimestre obligatòria per als comptes del Model 720. El seu saldo a 31 de desembre sí que compta per al llindar de 50.000 €, però aquests comptes no s'inclouen al fitxer generat: afegeix-los a mà, amb el seu saldo mitjà del quart trimestre, abans de presentar.",
+  "m720.omitted_title":
+    "Aquests béns no caben al fitxer i els has de declarar a mà al formulari del Model 720:",
+  "m720.omitted_no_isin":
+    "no té ISIN; al formulari s'identifica amb «Z» més el codi del país de l'emissor",
+  "m720.omitted_no_country":
+    "falta el país on està dipositat o situat",
+  "m720.omitted_no_account":
+    "falta el número de compte",
+  "m720.omitted_invalid_code":
+    "venut aquest any; el Model 720 anterior el va declarar amb una clau o un país que el fitxer no admet",
   "m720.successive_years_note":
     "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
   "m720.generate_btn": "Generar fitxer Model 720",
