@@ -188,12 +188,14 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap): voi
   }
 
   // Assets the file leaves out: the user declares them by hand.
-  const omissions = findModelo720Omissions(statement.openPositions, statement.cashBalances);
+  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year }, statement.cashBalances);
   if (omissions.length > 0) {
     html += `<div class="banner banner-warning">${esc(t("m720.omitted_title"))}<ul>${omissions.map((o) => {
       const label = o.kind === "position"
         ? o.position.symbol || o.position.description || o.position.isin
-        : `${o.cashBalance.accountId} (${o.cashBalance.currency})`;
+        : o.kind === "cash"
+          ? `${o.cashBalance.accountId} (${o.cashBalance.currency})`
+          : o.security.isin;
       return `<li>${esc(label)}: ${esc(t(`m720.omitted_${o.reason}`))}</li>`;
     }).join("")}</ul></div>`;
   }

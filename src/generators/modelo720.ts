@@ -117,14 +117,27 @@ export function modelo720PositionCountry(p: OpenPosition): string | null {
 }
 
 /**
+ * A security last year's file declared (a V or I record): the ISIN, the clave
+ * and subclave (102-103) and the country (129-130) it was written with. A
+ * cancelled record (origin C) this year repeats them.
+ */
+export interface Previous720Security {
+  isin: string;
+  claveSubclave: string;
+  country: string;
+}
+
+/**
  * Something the 720 file cannot carry, so the user must declare it by hand:
  * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
  * no broker export gives us), a security or account whose country is unknown,
- * or an account with no account code.
+ * an account with no account code, or a sale of a security whose country in
+ * last year's file is not a valid code (a file written by an older version).
  */
 export type Modelo720Omission =
   | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
-  | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance };
+  | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
+  | { kind: "cancelled"; reason: "no_country"; security: Previous720Security };
 
 function positionOmission(p: OpenPosition): "no_isin" | "no_country" | null {
   if (p.isin.trim() === "") return "no_isin";
@@ -151,20 +164,18 @@ function isValuesCategory(p: OpenPosition): boolean {
 }
 
 /**
- * The securities and cash accounts that `generateModelo720` leaves out of the
- * file. Callers show them so the user declares them by hand.
+ * The securities, sales and cash accounts that `generateModelo720` leaves out
+ * of the file. Only categories the file has to carry count: an asset below the
+ * 50,000 EUR threshold is not declared at all, so it is never an omission.
+ * Callers show them so the user declares them by hand.
  */
-export function findModelo720Omissions(positions: OpenPosition[], cashBalances?: CashBalance[]): Modelo720Omission[] {
-  const omissions: Modelo720Omission[] = [];
-  for (const position of positions.filter(isValuesCategory)) {
-    const reason = positionOmission(position);
-    if (reason) omissions.push({ kind: "position", reason, position });
-  }
-  for (const cashBalance of (cashBalances ?? []).filter((cb) => cb.averageQ4Cash && new Decimal(cb.endingCash).greaterThan(0))) {
-    const reason = cashOmission(cashBalance);
-    if (reason) omissions.push({ kind: "cash", reason, cashBalance });
-  }
-  return omissions;
+export function findModelo720Omissions(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  config: Modelo720PlanConfig,
+  cashBalances?: CashBalance[],
+): Modelo720Omission[] {
+  return plan720(positions, rateMap, config, undefined, cashBalances).omissions;
 }
 
 /**
@@ -177,16 +188,17 @@ export function modelo720DeclarationId(now: Date = new Date()): string {
 }
 
 /**
- * Read last year's 720 file: the ISINs of its V/I records and the account
- * codes of its C records, which decide the A/M/C origin (423) this year.
+ * Read last year's 720 file: its V/I records (ISIN, clave + subclave, country)
+ * and the account codes of its C records, which decide the A/M/C origin (423)
+ * this year.
  */
-export function readPrevious720(content: string): { isins: string[]; accounts: string[] } {
+export function readPrevious720(content: string): { securities: Previous720Security[]; accounts: string[] } {
   const details = content.split(/\r?\n/).filter((line) => line.startsWith("2"));
   return {
-    isins: details
+    securities: details
       .filter((line) => line[101] === "V" || line[101] === "I")
-      .map((line) => line.slice(131, 143).trim())
-      .filter((isin) => isin.length > 0),
+      .map((line) => ({ isin: line.slice(131, 143).trim(), claveSubclave: line.slice(101, 103), country: line.slice(128, 130) }))
+      .filter((security) => security.isin.length > 0),
     accounts: details
       .filter((line) => line[101] === "C")
       .map((line) => line.slice(155, 189).trim())
@@ -205,8 +217,8 @@ interface Modelo720Config {
   isComplementary: boolean;
   isReplacement: boolean;
   previousDeclarationId?: string;
-  /** ISINs declared in the previous year's 720 — used to determine A/M/C declaration types */
-  previousYearIsins?: string[];
+  /** V/I records of the previous year's 720 (readPrevious720): A/M origin, and the C records of what was sold */
+  previousYearSecurities?: Previous720Security[];
   /** Account codes (156-189) declared in the previous year's 720 — A or M for cash accounts */
   previousYearAccounts?: string[];
   /**
@@ -216,10 +228,116 @@ interface Modelo720Config {
   titulares?: number;
 }
 
+/** The parts of the config that decide which records the file carries. */
+type Modelo720PlanConfig = Pick<Modelo720Config, "year" | "previousYearSecurities" | "previousYearAccounts">;
+
+/**
+ * What the 720 file carries and what it leaves out. The 50,000 EUR threshold
+ * applies per category (V/I securities, C accounts); a category below it is not
+ * declared, so nothing in it is written or reported as omitted.
+ */
+function plan720(
+  positions: OpenPosition[],
+  rateMap: EcbRateMap,
+  config: Modelo720PlanConfig,
+  remainingLots?: Map<string, Lot[]>,
+  cashBalances?: CashBalance[],
+) {
+  const previousSecurities = config.previousYearSecurities ?? [];
+  const previousIsins = new Set(previousSecurities.map((s) => s.isin));
+
+  // Filter to stocks/funds/bonds and calculate EUR values
+  // STK positions use Q4 average FX rate (media del cuarto trimestre);
+  // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
+  const entries = positions
+    .filter(isValuesCategory)
+    .flatMap((p) => {
+      const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
+      // Unvaluable position (no resolvable rate): cannot be written to the
+      // fixed-width record without an EUR value — skip it. The caller surfaces a
+      // warning so the user values and declares it manually.
+      if (ecbRate === null) return [];
+      const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
+
+      // First acquisition date from FIFO lots (earliest lot for this ISIN)
+      let firstAcquisitionDate = "";
+      if (remainingLots) {
+        const lots = remainingLots.get(p.isin);
+        if (lots && lots.length > 0) {
+          const earliest = lots.reduce((min, lot) =>
+            lot.acquireDate < min ? lot.acquireDate : min, lots[0]!.acquireDate);
+          firstAcquisitionDate = earliest;
+        }
+      }
+
+      // Declaration type: A (new), M (existing), C (cancelled/sold)
+      const declType: "A" | "M" = previousIsins.has(p.isin) ? "M" : "A";
+
+      // Counts toward the 50,000 EUR threshold even when the file cannot carry it.
+      return [{ position: p, valueEur, firstAcquisitionDate, declType, omission: positionOmission(p) }];
+    });
+
+  // "C" (cancelled) records for last year's securities no longer HELD. Use the
+  // held set (all V-category positions), NOT `entries` — a position that is
+  // still held but couldn't be valued (no year-end rate) is skipped from
+  // `entries`, yet it must NOT be reported as cancelled/sold (that would tell
+  // AEAT the user liquidated an asset they still hold).
+  const heldIsins = new Set(positions.filter(isValuesCategory).map((p) => p.isin));
+  const cancelled = previousSecurities.filter((s) => !heldIsins.has(s.isin));
+
+  // Category C: cash balances at foreign brokers
+  const previousAccounts = new Set(config.previousYearAccounts ?? []);
+  const cashEntries = (cashBalances ?? [])
+    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
+    .flatMap((cb) => {
+      const values = cashValuesEur(cb, rateMap, config.year);
+      return values
+        ? [{
+          cashBalance: cb,
+          valueEur: values.ending,
+          averageQ4Eur: values.averageQ4,
+          declType: previousAccounts.has(accountCode(cb).code) ? "M" as const : "A" as const,
+          omission: cashOmission(cb),
+        }]
+        : [];
+    });
+
+  // Check 50,000 EUR threshold per category independently
+  const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
+  const totalValueC = cashEntries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
+  const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelled.length > 0;
+  const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
+
+  const omissions: Modelo720Omission[] = [];
+  if (hasValuesRecords) {
+    for (const e of entries) {
+      if (e.omission) omissions.push({ kind: "position", reason: e.omission, position: e.position });
+    }
+    // Last year's file wrote an invalid country (an older version wrote the
+    // ISIN prefix, e.g. XS): repeating it would make AEAT reject the file.
+    for (const security of cancelled) {
+      if (!isIsoCountryCode(security.country)) omissions.push({ kind: "cancelled", reason: "no_country", security });
+    }
+  }
+  if (hasCashRecords) {
+    for (const e of cashEntries) {
+      if (e.omission) omissions.push({ kind: "cash", reason: e.omission, cashBalance: e.cashBalance });
+    }
+  }
+
+  return {
+    entries: hasValuesRecords ? entries.filter((e) => e.omission === null) : [],
+    cancelled: hasValuesRecords ? cancelled.filter((s) => isIsoCountryCode(s.country)) : [],
+    cashEntries: hasCashRecords ? cashEntries.filter((e) => e.omission === null) : [],
+    omissions,
+  };
+}
+
 /**
  * Generate a Modelo 720 fixed-width text file from open positions.
  *
  * Only includes positions where total value per category exceeds 50,000 EUR.
+ * `findModelo720Omissions` lists what the file had to leave out.
  *
  * @param positions - Open positions at year end (Dec 31)
  * @param rateMap - ECB exchange rates
@@ -234,107 +352,15 @@ export function generateModelo720(
   remainingLots?: Map<string, Lot[]>,
   cashBalances?: CashBalance[],
 ): string {
-  const previousIsins = new Set(config.previousYearIsins ?? []);
+  const { entries, cancelled, cashEntries } = plan720(positions, rateMap, config, remainingLots, cashBalances);
 
-  // Filter to stocks/funds/bonds and calculate EUR values
-  // STK positions use Q4 average FX rate (media del cuarto trimestre);
-  // FUND/BOND positions use Dec 31 spot rate (tipo de cambio a 31 de diciembre).
-  const entries = positions
-    .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-    .flatMap((p) => {
-      const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
-      // Unvaluable position (no resolvable rate): cannot be written to the
-      // fixed-width record without an EUR value — skip it. The caller surfaces a
-      // warning so the user values and declares it manually.
-      if (ecbRate === null) return [];
-      const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
-      // Counts toward the 50,000 EUR threshold, but the file cannot carry it:
-      // findModelo720Omissions reports it for the user to declare by hand.
-      const omitted = positionOmission(p) !== null;
+  const detailRecords = [
+    ...entries.map((e) => buildDetailRecord(e.position, e.valueEur, config, e.firstAcquisitionDate, e.declType)),
+    ...cancelled.map((s) => buildCancelledRecord(s, config)),
+    ...cashEntries.map((e) => buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config, e.declType)),
+  ];
 
-      // First acquisition date from FIFO lots (earliest lot for this ISIN)
-      let firstAcquisitionDate = "";
-      if (remainingLots) {
-        const lots = remainingLots.get(p.isin);
-        if (lots && lots.length > 0) {
-          const earliest = lots.reduce((min, lot) =>
-            lot.acquireDate < min ? lot.acquireDate : min, lots[0]!.acquireDate);
-          firstAcquisitionDate = earliest;
-        }
-      }
-
-      // Declaration type: A (new), M (existing), C (cancelled/sold)
-      const declType: "A" | "M" | "C" = previousIsins.has(p.isin) ? "M" : "A";
-
-      return [{ position: p, valueEur, firstAcquisitionDate, declType, omitted }];
-    });
-
-  // Build "C" (cancelled) records for ISINs in previous year but no longer HELD.
-  // Use the held set (all V-category positions), NOT `entries` — a position that
-  // is still held but couldn't be valued (no year-end rate) is skipped from
-  // `entries`, yet it must NOT be reported as cancelled/sold (that would tell
-  // AEAT the user liquidated an asset they still hold).
-  const heldIsins = new Set(
-    positions
-      .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-      .map((p) => p.isin),
-  );
-  const cancelledIsins = [...previousIsins].filter((isin) => !heldIsins.has(isin));
-  const cancelledEntries = cancelledIsins.map((isin) => ({
-    isin,
-    declType: "C" as const,
-  }));
-
-  // Category C: cash balances at foreign brokers
-  const previousAccounts = new Set(config.previousYearAccounts ?? []);
-  const cashEntries = (cashBalances ?? [])
-    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
-    .flatMap((cb) => {
-      const values = cashValuesEur(cb, rateMap, config.year);
-      return values
-        ? [{
-          cashBalance: cb,
-          valueEur: values.ending,
-          averageQ4Eur: values.averageQ4,
-          declType: previousAccounts.has(accountCode(cb).code) ? "M" as const : "A" as const,
-          omitted: cashOmission(cb) !== null,
-        }]
-        : [];
-    });
-
-  // Check 50,000 EUR threshold per category independently
-  const totalValueV = entries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const totalValueC = cashEntries.reduce((s, e) => s.plus(e.valueEur), new Decimal(0));
-  const hasValuesRecords = totalValueV.greaterThanOrEqualTo(50000) || cancelledEntries.length > 0;
-  const hasCashRecords = totalValueC.greaterThanOrEqualTo(50000);
-
-  if (!hasValuesRecords && !hasCashRecords) {
-    return "";
-  }
-
-  // Build records
-  const detailRecords: string[] = [];
-  const writtenEntries = entries.filter((e) => !e.omitted);
-  const writtenCashEntries = cashEntries.filter((e) => !e.omitted);
-
-  // Category V/I records (securities and foreign funds)
-  if (hasValuesRecords) {
-    for (const e of writtenEntries) {
-      detailRecords.push(buildDetailRecord(e.position, e.valueEur, config, e.firstAcquisitionDate, e.declType));
-    }
-    for (const c of cancelledEntries) {
-      detailRecords.push(buildCancelledRecord(c.isin, config));
-    }
-  }
-
-  // Category C records (cash accounts)
-  if (hasCashRecords) {
-    for (const e of writtenCashEntries) {
-      detailRecords.push(buildCashAccountRecord(e.cashBalance, e.valueEur, e.averageQ4Eur, config, e.declType));
-    }
-  }
-
-  // Everything above the threshold had to be left out: no file to submit.
+  // Below both thresholds, or everything above them had to be left out: no file.
   if (detailRecords.length === 0) {
     return "";
   }
@@ -344,10 +370,8 @@ export function generateModelo720(
   // fields (cancelled records add 0). V: 31-Dec value / nothing. C: 31-Dec
   // balance / Q4 average balance.
   const allEntries = [
-    ...(hasValuesRecords ? writtenEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })) : []),
-    ...(hasCashRecords
-      ? writtenCashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) }))
-      : []),
+    ...entries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: new Decimal(0) })),
+    ...cashEntries.map((e) => ({ v1: writtenAmount(e.valueEur), v2: writtenAmount(e.averageQ4Eur) })),
   ];
   const summaryRecord = buildSummaryRecord(config, detailRecords.length, allEntries);
 
@@ -533,11 +557,11 @@ function buildDetailRecord(
 }
 
 /**
- * Build a "C" (cancelled) detail record for an ISIN that was declared
- * in the previous year but no longer held.
+ * Build a "C" (cancelled) detail record for a security declared in the
+ * previous year but no longer held. It repeats last year's clave, subclave and
+ * country so AEAT matches it to the record it cancels.
  */
-function buildCancelledRecord(isin: string, config: Modelo720Config): string {
-  const countryCode = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "  ";
+function buildCancelledRecord(security: Previous720Security, config: Modelo720Config): string {
   const yearEnd = `${config.year}1231`;
 
   let record = "";
@@ -550,11 +574,11 @@ function buildCancelledRecord(isin: string, config: Modelo720Config): string {
   record += declarantName(config);                            // 36-75: Name (declarant/holder)
   record += "1";                                              // 76: Declaration type (owner)
   record += pad("", 25);                                      // 77-101: Reserved
-  record += "V1";                                             // 102-103: Clave V + subclave 1 (stocks)
+  record += pad(security.claveSubclave, 2);                   // 102-103: Clave + subclave, as last year
   record += pad("", 25);                                      // 104-128: Tipo de derecho real (B only)
-  record += pad(countryCode, 2);                              // 129-130: Country code
+  record += pad(security.country, 2);                         // 129-130: Country code, as last year
   record += "1";                                              // 131: ID type (ISIN)
-  record += pad(isin, 12);                                    // 132-143: ISIN
+  record += pad(security.isin, 12);                           // 132-143: ISIN
   record += pad("", 46);                                      // 144-189: Reserved
   record += pad("", 41);                                      // 190-230: Entity name
   record += pad("", 184);                                     // 231-414: Reserved

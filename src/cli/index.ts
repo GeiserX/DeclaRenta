@@ -475,9 +475,8 @@ program
           throw new Error("--titulares debe ser un número entero mayor o igual que 1");
         }
 
-        // ISINs (V/I records) and account codes (C records) from last year's 720 file
-        let previousYearIsins: string[] | undefined;
-        let previousYearAccounts: string[] | undefined;
+        // Securities (V/I records) and account codes (C records) from last year's 720 file
+        let previous: ReturnType<typeof readPrevious720> | undefined;
         if (opts.previous720) {
           let prev: string;
           try {
@@ -486,36 +485,33 @@ program
             console.error(`Error: No se pudo leer el archivo ${opts.previous720}.`);
             process.exit(1);
           }
-          ({ isins: previousYearIsins, accounts: previousYearAccounts } = readPrevious720(prev));
+          previous = readPrevious720(prev);
         }
 
-        const output720 = generateModelo720(
-          statement.openPositions,
-          rateMap,
-          {
-            nif: opts.nif,
-            surname,
-            name: firstName,
-            year: opts.year,
-            phone: opts.phone,
-            contactName: opts.name,
-            declarationId: opts.declarationId ?? modelo720DeclarationId(),
-            isComplementary: false,
-            isReplacement: false,
-            previousYearIsins,
-            previousYearAccounts,
-            titulares: opts.titulares,
-          },
-          undefined,
-          statement.cashBalances,
-        );
+        const config720 = {
+          nif: opts.nif,
+          surname,
+          name: firstName,
+          year: opts.year,
+          phone: opts.phone,
+          contactName: opts.name,
+          declarationId: opts.declarationId ?? modelo720DeclarationId(),
+          isComplementary: false,
+          isReplacement: false,
+          previousYearSecurities: previous?.securities,
+          previousYearAccounts: previous?.accounts,
+          titulares: opts.titulares,
+        };
+        const output720 = generateModelo720(statement.openPositions, rateMap, config720, undefined, statement.cashBalances);
 
         // Assets the file cannot carry: the user declares them by hand.
-        const omissions = findModelo720Omissions(statement.openPositions, statement.cashBalances);
+        const omissions = findModelo720Omissions(statement.openPositions, rateMap, config720, statement.cashBalances);
         for (const o of omissions) {
           const what = o.kind === "position"
             ? `Posición ${o.position.symbol || o.position.description}`
-            : `Cuenta ${o.cashBalance.accountId || "(sin número)"} en ${o.cashBalance.currency}`;
+            : o.kind === "cash"
+              ? `Cuenta ${o.cashBalance.accountId || "(sin número)"} en ${o.cashBalance.currency}`
+              : `Baja de ${o.security.isin} (declarado en el Modelo 720 anterior con país «${o.security.country}»)`;
           const why = {
             no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
             no_country: "no tiene un código de país válido",

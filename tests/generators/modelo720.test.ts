@@ -6,6 +6,7 @@ import {
   findModelo720Omissions,
   modelo720DeclarationId,
   readPrevious720,
+  type Previous720Security,
 } from "../../src/generators/modelo720.js";
 import type { CashBalance, OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -36,6 +37,11 @@ function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
     custodianCountry: "IE",
     ...overrides,
   };
+}
+
+/** Last year's V records as readPrevious720 returns them: shares held at an Irish broker. */
+function lastYear(...isins: string[]): Previous720Security[] {
+  return isins.map((isin) => ({ isin, claveSubclave: "V1", country: "IE" }));
 }
 
 const baseConfig = {
@@ -122,7 +128,7 @@ describe("Modelo 720 Generator", () => {
   describe("A/M/C declaration types", () => {
     it("should use 'A' for new positions not in previous year", () => {
       const positions = [makePosition()];
-      const config = { ...baseConfig, previousYearIsins: ["IE00BK5BQT80"] };
+      const config = { ...baseConfig, previousYearSecurities: lastYear("IE00BK5BQT80") };
       const result = generateModelo720(positions, rateMap, config);
       const detail = result.split("\n")[1]!;
       // Type at position 423 (0-indexed: 422)
@@ -131,17 +137,17 @@ describe("Modelo 720 Generator", () => {
 
     it("should use 'M' for positions already declared last year", () => {
       const positions = [makePosition()];
-      const config = { ...baseConfig, previousYearIsins: ["US78462F1030"] };
+      const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030") };
       const result = generateModelo720(positions, rateMap, config);
       const detail = result.split("\n")[1]!;
       expect(detail[422]).toBe("M");
     });
 
-    it("should default to 'A' when no previousYearIsins provided", () => {
+    it("should default to 'A' when no previousYearSecurities provided", () => {
       const positions = [makePosition()];
       const result = generateModelo720(positions, rateMap, baseConfig);
       const detail = result.split("\n")[1]!;
-      // No previousYearIsins → empty set → not found → 'A'
+      // No previousYearSecurities → empty set → not found → 'A'
       expect(detail[422]).toBe("A");
     });
 
@@ -149,7 +155,7 @@ describe("Modelo 720 Generator", () => {
       const positions = [makePosition()]; // only US78462F1030
       const config = {
         ...baseConfig,
-        previousYearIsins: ["US78462F1030", "IE00BK5BQT80"],
+        previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80"),
       };
       const result = generateModelo720(positions, rateMap, config);
       const lines = result.split("\n");
@@ -165,7 +171,7 @@ describe("Modelo 720 Generator", () => {
       const positions = [makePosition({ positionValue: "10000" })]; // 9200 EUR < 50K
       const config = {
         ...baseConfig,
-        previousYearIsins: ["US78462F1030", "IE00BK5BQT80"],
+        previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80"),
       };
       const result = generateModelo720(positions, rateMap, config);
       // IE00BK5BQT80 is cancelled — should generate output even below 50K
@@ -180,7 +186,7 @@ describe("Modelo 720 Generator", () => {
       const positions = [makePosition()];
       const config = {
         ...baseConfig,
-        previousYearIsins: ["US78462F1030", "DE000A0F5UF5"],
+        previousYearSecurities: lastYear("US78462F1030", "DE000A0F5UF5"),
       };
       const result = generateModelo720(positions, rateMap, config);
       const cancelled = result.split("\n").find((l) => l[0] === "2" && l[422] === "C")!;
@@ -529,7 +535,7 @@ describe("Modelo 720 Generator", () => {
     });
 
     it("writes a cancelled V record with zero valuations at the BOE columns", () => {
-      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80") };
       const cancelled = generateModelo720([makePosition()], rateMap, config)
         .split("\n").find((l) => l[0] === "2" && boeField(l, d.origen) === "C")!;
       expect(cancelled).toHaveLength(500);
@@ -612,7 +618,7 @@ describe("Modelo 720 Generator", () => {
       const cashBalances = [
         { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "40000", countryCode: "IE" },
       ];
-      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80") };
       const records = generateModelo720([makePosition()], rateMap, config, undefined, cashBalances).split("\n");
       expect(records).toHaveLength(4);
       expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], [], [], []]);
@@ -636,7 +642,7 @@ describe("Modelo 720 Generator", () => {
   describe("Record length", () => {
     it("should keep every record at 500 bytes", () => {
       const positions = [makePosition()];
-      const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+      const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80") };
       const cashBalances = [
         { accountId: "U1", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" },
       ];
@@ -772,7 +778,7 @@ describe("Modelo 720 — unvaluable position (missing year-end rate) degrades, d
     const valued = makePosition({ isin: "GB0000000001", symbol: "GBX", currency: "GBP", positionValue: "60000" });
     const result = generateModelo720([heldUnvaluable, valued], rateMap, {
       ...baseConfig,
-      previousYearIsins: ["US0000000099"], // declared last year
+      previousYearSecurities: lastYear("US0000000099"), // declared last year
     });
     // The still-held (but unvaluable) ISIN must NOT be emitted as a cancelled
     // record. It's skipped from detail records entirely, so a cancelled record is
@@ -807,7 +813,7 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
       const details = lines.filter((l) => l[0] === "2");
       expect(details).toHaveLength(1);
       expect(boeField(details[0]!, d.isin)).toBe("US78462F1030");
-      expect(findModelo720Omissions([held(), noIsin])).toEqual([
+      expect(findModelo720Omissions([held(), noIsin], rateMap, baseConfig)).toEqual([
         { kind: "position", reason: "no_isin", position: noIsin },
       ]);
     });
@@ -832,7 +838,7 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
     it("leaves out and reports a security whose custodian country is unknown", () => {
       const unknown = makePosition({ custodianCountry: undefined });
       expect(generateModelo720([unknown, held({ isin: "US0378331005" })], rateMap, baseConfig).split("\n")).toHaveLength(2);
-      expect(findModelo720Omissions([unknown])).toEqual([{ kind: "position", reason: "no_country", position: unknown }]);
+      expect(findModelo720Omissions([unknown], rateMap, baseConfig)).toEqual([{ kind: "position", reason: "no_country", position: unknown }]);
     });
   });
 
@@ -922,26 +928,85 @@ describe("Modelo 720 — codes, identity and account fields the BOE asks for (Or
     it("leaves out and reports an account with no country instead of writing XX", () => {
       const noCountry = { ...account, countryCode: undefined };
       expect(generateModelo720([], rateMap, baseConfig, undefined, [noCountry])).not.toContain("XX");
-      expect(findModelo720Omissions([], [noCountry])).toEqual([{ kind: "cash", reason: "no_country", cashBalance: noCountry }]);
+      expect(findModelo720Omissions([], rateMap, baseConfig, [noCountry])).toEqual([{ kind: "cash", reason: "no_country", cashBalance: noCountry }]);
     });
   });
 
-  it("a cancelled record carries the declarant's name and subclave 1", () => {
-    const config = { ...baseConfig, previousYearIsins: ["US78462F1030", "IE00BK5BQT80"] };
+  it("a cancelled record carries the declarant's name and last year's clave", () => {
+    const config = { ...baseConfig, previousYearSecurities: lastYear("US78462F1030", "IE00BK5BQT80") };
     const cancelled = generateModelo720([held()], rateMap, config)
       .split("\n").find((l) => l[0] === "2" && boeField(l, d.origen) === "C")!;
     expect(boeField(cancelled, d.nombre).trimEnd()).toBe("GARCIA LOPEZ JUAN");
     expect(boeField(cancelled, d.claveSubclave)).toBe("V1");
   });
 
-  it("reads last year's ISINs from V/I records and account codes from C records", () => {
-    const lastYear = generateModelo720(
-      [held(), held({ assetCategory: "FUND", isin: "IE00BK5BQT80" })],
+  it("reads last year's V/I records (ISIN, clave, country) and account codes from C records", () => {
+    const previousFile = generateModelo720(
+      [held(), held({ assetCategory: "FUND", isin: "LU0274208692" })],
       rateMap,
       baseConfig,
       undefined,
       [{ accountId: "U1234567", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" }],
     );
-    expect(readPrevious720(lastYear)).toEqual({ isins: ["US78462F1030", "IE00BK5BQT80"], accounts: ["U1234567"] });
+    expect(readPrevious720(previousFile)).toEqual({
+      securities: [
+        { isin: "US78462F1030", claveSubclave: "V1", country: "IE" },
+        { isin: "LU0274208692", claveSubclave: "I0", country: "LU" },
+      ],
+      accounts: ["U1234567"],
+    });
+  });
+
+  describe("sales since last year (origin C, from --previous-720)", () => {
+    const cancelledRecords = (records: string[]) => records.filter((l) => l[0] === "2" && boeField(l, d.origen) === "C");
+
+    it("repeats last year's clave and country: a sold XS bond passes the validator and a sold fund keeps I0", () => {
+      const previousFile = generateModelo720(
+        [held(), held({ assetCategory: "BOND", isin: "XS2314659447" }), held({ assetCategory: "FUND", isin: "LU0274208692" })],
+        rateMap,
+        baseConfig,
+      );
+      const config = { ...baseConfig, previousYearSecurities: readPrevious720(previousFile).securities };
+      const records = generateModelo720([held()], rateMap, config).split("\n");
+      const [bond, fund] = cancelledRecords(records) as [string, string];
+      expect(boeField(bond, d.isin)).toBe("XS2314659447");
+      expect(boeField(bond, d.claveSubclave)).toBe("V2");
+      expect(boeField(bond, d.pais)).toBe("IE");
+      expect(boeField(fund, d.isin)).toBe("LU0274208692");
+      expect(boeField(fund, d.claveSubclave)).toBe("I0");
+      expect(boeField(fund, d.pais)).toBe("LU");
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], [], [], []]);
+      expect(findModelo720Omissions([held()], rateMap, config)).toEqual([]);
+    });
+
+    it("leaves out and reports a sale whose country in last year's file is not a valid code", () => {
+      // An older version wrote the ISIN prefix as the country, so an XS bond reads "XS".
+      const oldBond = { isin: "XS2314659447", claveSubclave: "V1", country: "XS" };
+      const config = { ...baseConfig, previousYearSecurities: [...lastYear("US78462F1030"), oldBond] };
+      const records = generateModelo720([held()], rateMap, config).split("\n");
+      expect(records).toHaveLength(2);
+      expect(cancelledRecords(records)).toHaveLength(0);
+      expect(validateModelo720Records(records).map((r) => r.errors)).toEqual([[], []]);
+      expect(findModelo720Omissions([held()], rateMap, config)).toEqual([
+        { kind: "cancelled", reason: "no_country", security: oldBond },
+      ]);
+    });
+  });
+
+  describe("omissions follow the 50,000 EUR threshold", () => {
+    it("reports nothing for an ISIN-less position or a country-less account below the threshold", () => {
+      // A Revolut position has no ISIN; 1,000 USD is far below 50,000 EUR.
+      const noIsin = held({ isin: "", symbol: "RVLT", positionValue: "1000" });
+      const noCountry = { accountId: "U1", currency: "EUR", endingCash: "1000", endingSettledCash: "1000", averageQ4Cash: "1000" };
+      expect(generateModelo720([noIsin], rateMap, baseConfig, undefined, [noCountry])).toBe("");
+      expect(findModelo720Omissions([noIsin], rateMap, baseConfig, [noCountry])).toEqual([]);
+    });
+
+    it("reports the ISIN-less position once the category passes the threshold", () => {
+      const noIsin = held({ isin: "", symbol: "RVLT", positionValue: "1000" });
+      expect(findModelo720Omissions([held(), noIsin], rateMap, baseConfig)).toEqual([
+        { kind: "position", reason: "no_isin", position: noIsin },
+      ]);
+    });
   });
 });
