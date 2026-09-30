@@ -16,6 +16,7 @@ import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
 import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal } from "./csv-utils.js";
+import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
 // Header detection
@@ -86,23 +87,37 @@ function resolveColumns(headers: string[]): BinanceColumns {
 // Pair parsing: "BTCEUR" -> { symbol: "BTC", currency: "EUR" }
 // ---------------------------------------------------------------------------
 
-const KNOWN_QUOTES = ["FDUSD", "USDT", "USDC", "BUSD", "EUR", "USD", "BTC", "ETH", "BNB", "GBP", "TRY", "BRL", "ARS"];
+const KNOWN_QUOTES = [
+  "FDUSD", "USDT", "USDC", "BUSD", "TUSD", "USDP", "PYUSD", "USD1", "DAI", "AEUR", "EURI",
+  "EUR", "USD", "GBP", "TRY", "BRL", "ARS", "AUD", "JPY", "MXN", "PLN", "RON", "ZAR", "RUB",
+  "BTC", "ETH", "BNB", "XRP", "TRX", "DOGE", "RLUSD",
+];
+const QUOTES_LONGEST_FIRST = [...KNOWN_QUOTES].sort((a, b) => b.length - a.length);
 
-function parsePair(pair: string): { symbol: string; currency: string } {
+/**
+ * Bases of the real Binance pairs whose right split is NOT the longest quote
+ * (ADAEUR is ADA/EUR, not AD/AEUR; BNBUSD is BNB/USD, not BN/BUSD), plus those
+ * whose base is missing from KNOWN_CRYPTO_SYMBOLS while the wrong split's base
+ * is in it (ARBUSD is AR/BUSD, not ARB/USD; USTBUSD is UST/BUSD, not USTB/USD).
+ * Pinned here so a regeneration of the CoinGecko list cannot flip them.
+ */
+const AMBIGUOUS_PAIR_BASES = new Set(["ADA", "LUNA", "THETA", "GALA", "ENA", "USDT", "BNB", "AR", "UST"]);
+
+const isKnownBase = (symbol: string): boolean => AMBIGUOUS_PAIR_BASES.has(symbol) || KNOWN_CRYPTO_SYMBOLS.has(symbol);
+
+/**
+ * Split a pair on its quote asset. Some quotes end in another quote (TUSD/USD,
+ * AEUR/EUR, BUSD/USD), so a pair can match twice: BTCTUSD is BTC/TUSD but DOTUSD
+ * is DOT/USD, ETHAEUR is ETH/AEUR but ADAEUR is ADA/EUR. When it does, the split
+ * with the longest quote whose base is a known coin wins; with no known base the
+ * longest quote does. Returns null when no quote matches.
+ */
+function parsePair(pair: string): { symbol: string; currency: string } | null {
   const upper = pair.trim().toUpperCase();
-
-  // Try known quote currencies from longest to shortest for correct matching
-  const sorted = [...KNOWN_QUOTES].sort((a, b) => b.length - a.length);
-  for (const quote of sorted) {
-    if (upper.endsWith(quote) && upper.length > quote.length) {
-      return {
-        symbol: upper.slice(0, -quote.length),
-        currency: quote,
-      };
-    }
-  }
-
-  throw new Error(`Binance CSV: par no soportado o ambiguo: ${pair}`);
+  const candidates = QUOTES_LONGEST_FIRST
+    .filter((quote) => upper.endsWith(quote) && upper.length > quote.length)
+    .map((quote) => ({ symbol: upper.slice(0, -quote.length), currency: quote }));
+  return candidates.find((c) => isKnownBase(c.symbol)) ?? candidates[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -400,6 +415,55 @@ function collectWindow(rows: TxRow[], startIdx: number, predicate: (r: TxRow) =>
   return window;
 }
 
+/** Unparsed rows at exactly `epoch` that satisfy `predicate`, scanning forward from `from` (rows are sorted by epoch). */
+function unparsedAt(rows: TxRow[], from: number, epoch: number, predicate: (r: TxRow) => boolean): TxRow[] {
+  const out: TxRow[] = [];
+  for (let j = from; j < rows.length; j++) {
+    const r = rows[j]!;
+    if (r.epoch > epoch) break;
+    if (r.epoch === epoch && !r.parsed && predicate(r)) out.push(r);
+  }
+  return out;
+}
+
+/** Whether any net leg has the given sign (+1 received, -1 given up). */
+function hasSign(legs: NetLeg[], sign: 1 | -1): boolean {
+  return legs.some((l) => (sign > 0 ? l.qty.isPositive() : l.qty.isNegative()));
+}
+
+/**
+ * Straddle guard for the netted Convert path. collectWindow measures ±1s from
+ * the window's first second (t), so when the next conversion starts in this
+ * window's last second (t+1), one of its legs is netted into THIS conversion
+ * and its counterpart at t+2 is left alone (wrong cost here, no lot there).
+ * Binance lists the two legs in either order (given-up first or received
+ * first), so the guard reasons by sign, not by row order. It hands the coins
+ * at t+1 to the next window only when all of these hold:
+ * - the unparsed rows at t+2 are one-sided (only received legs, or only
+ *   given-up legs), so they cannot be a conversion on their own;
+ * - nothing at t+3 has the sign they lack, so their counterpart is not there
+ *   (a next conversion whose other leg sits at t+3 keeps its own legs);
+ * - those coins at t+1 net to the sign the t+2 rows lack;
+ * - what stays in this window is still a complete conversion.
+ * Otherwise the window is returned unchanged, so a single conversion whose
+ * given-up coin is split across two rows one second apart still nets as one.
+ */
+function trimStraddle(rows: TxRow[], startIdx: number, window: TxRow[], predicate: (r: TxRow) => boolean): TxRow[] {
+  const t = rows[startIdx]!.epoch;
+  const edge = window.filter((r) => r.epoch === t + 1);
+  if (edge.length === 0) return window;
+  const next = netLegs(unparsedAt(rows, startIdx, t + 2, predicate));
+  const lacks: 1 | -1 | 0 = hasSign(next, 1) && !hasSign(next, -1) ? -1 : hasSign(next, -1) && !hasSign(next, 1) ? 1 : 0;
+  if (lacks === 0) return window;
+  if (hasSign(netLegs(unparsedAt(rows, startIdx, t + 3, predicate)), lacks)) return window;
+  const moving = new Set(netLegs(edge).filter((l) => hasSign([l], lacks)).map((l) => l.coin));
+  if (moving.size === 0) return window;
+  const head = window.filter((r) => !(r.epoch === t + 1 && moving.has(r.coin)));
+  const headLegs = netLegs(head);
+  if (!hasSign(headLegs, 1) || !hasSign(headLegs, -1)) return window;
+  return head;
+}
+
 /** Strategy-vocabulary ops (Transaction Sold/Revenue/Buy/Spend/Fee). */
 const STRATEGY_OPS = ["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"];
 
@@ -582,8 +646,16 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       if (start.parsed || !TX_CONVERT_OPS.has(start.operation)) continue;
       // Window keys on the SAME operation so a Convert and a fiat-buy in one
       // second never cross-mix.
-      const window = collectWindow(rows, i, (r) => r.operation === start.operation);
+      const sameOp = (r: TxRow): boolean => r.operation === start.operation;
+      const window = trimStraddle(rows, i, collectWindow(rows, i, sameOp), sameOp);
       window.forEach((r) => (r.parsed = true));
+      // A net leg left without a counterpart is handed back (parsed = false),
+      // as Strategy does: a later window can still pair it, and a leg no window
+      // pairs is reported as an unhandled movement instead of dropped silently.
+      const handBack = (group: TxRow[], unpaired: NetLeg[]): void => {
+        const coins = new Set(unpaired.map((l) => l.coin));
+        for (const r of group) if (coins.has(r.coin)) r.parsed = false;
+      };
       if (start.operation === "buy crypto with fiat") {
         // Sub-group by funding-wallet Remark before netting. Fiat-buys are ALL
         // funded in the same coin (EUR/USD), so two independent buys in one second
@@ -599,10 +671,10 @@ function parseBinanceTxCsv(lines: string[]): Statement {
           byRemark.get(r.remark)!.push(r);
         }
         for (const group of byRemark.values()) {
-          pairAndEmit(trades, netLegs(group), addHint, "Buy");
+          handBack(group, pairAndEmit(trades, netLegs(group), addHint, "Buy"));
         }
       } else {
-        pairAndEmit(trades, netLegs(window), addHint, "Convert");
+        handBack(window, pairAndEmit(trades, netLegs(window), addHint, "Convert"));
       }
     }
   }
@@ -730,16 +802,18 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * differ, so `netLegs` keeps them as separate sells (e.g. two Converts spending
  * different coins). When several disposals share one given-up coin — notably
  * `Buy Crypto With Fiat`, always funded in EUR/USD — `netLegs` merges them into
- * a single sell leg, leaving 1 sell vs N buys and dropping all but one buy. The
+ * a single sell leg, leaving 1 sell vs N buys and all but one buy unpaired. The
  * caller must therefore pre-split such windows (step 4 sub-groups fiat buys by
  * funding-wallet Remark) before calling here. When EUR values are absent (all
  * 0), the closest match is the next available buy in order — equivalent to
- * insertion-order pairing, the previous behavior.
+ * insertion-order pairing, the previous behavior. Returns the legs left without
+ * a counterpart, so the Convert path can hand them back instead of losing them.
  */
-function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): void {
+function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): NetLeg[] {
   const sells = legs.filter((l) => l.qty.isNegative());
   const buys = legs.filter((l) => l.qty.isPositive());
   const usedBuys = new Set<number>();
+  const unpaired: NetLeg[] = [];
   for (const sell of sells) {
     let bestIdx = -1;
     let bestDelta = Infinity;
@@ -751,13 +825,17 @@ function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: s
         bestIdx = j;
       }
     }
-    if (bestIdx < 0) break; // no buys left
+    if (bestIdx < 0) {
+      unpaired.push(sell); // no buys left
+      continue;
+    }
     usedBuys.add(bestIdx);
     const buy = buys[bestIdx]!;
     addHint(sell.coin, sell.date, sell.qty, sell.eur);
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
     emitCryptoSwap(trades, sell, buy, label);
   }
+  return [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
 }
 
 function absEur(l: NetLeg): number {
@@ -868,7 +946,11 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
 /**
  * Emit Strategy trades from a window: pair each Transaction Sold with a Revenue,
  * and each Buy with a Spend (by order, all of them — not just the first). Fees in
- * the acquired/received coin reduce cost / proceeds.
+ * the acquired/received coin reduce cost / proceeds. A Sold/Revenue/Buy/Spend
+ * leg left without a counterpart is handed back (parsed = false): when the next
+ * trade starts in this window's last second, its first leg lands here but its
+ * counterpart sits one second later, so a later window must be able to take it.
+ * A leg no window pairs stays unparsed and is reported as an unhandled movement.
  */
 function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint): void {
   const sold = window.filter((r) => r.operation === "transaction sold");
@@ -910,6 +992,10 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
       "Buy",
     );
     applyFee(trades, feeAmount, buyRow.coin);
+  }
+
+  for (const r of [...sold.slice(nSell), ...revenue.slice(nSell), ...bought.slice(nBuy), ...spend.slice(nBuy)]) {
+    r.parsed = false;
   }
 }
 
@@ -1043,6 +1129,7 @@ function parseBinanceCsv(lines: string[]): Statement {
   }
 
   const trades: Trade[] = [];
+  const unsupportedPairs = new Map<string, number>();
   const seenKeys = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
@@ -1056,7 +1143,14 @@ function parseBinanceCsv(lines: string[]): Statement {
     const tradeTime = timeOfDay(dateStr);
 
     const pairStr = (fields[cols.pair] ?? "").trim();
-    const { symbol, currency } = parsePair(pairStr);
+    const pair = parsePair(pairStr);
+    if (!pair) {
+      // One pair we cannot split must not abort the whole export: skip the row
+      // and name it in a warning so the user can add it by hand.
+      unsupportedPairs.set(pairStr, (unsupportedPairs.get(pairStr) ?? 0) + 1);
+      continue;
+    }
+    const { symbol, currency } = pair;
 
     const sideLower = (fields[cols.side] ?? "").trim().toLowerCase();
     if (sideLower !== "buy" && sideLower !== "sell") continue;
@@ -1126,6 +1220,19 @@ function parseBinanceCsv(lines: string[]): Statement {
     });
   }
 
+  const parserMessages: TaxMessage[] = [];
+  if (unsupportedPairs.size > 0) {
+    const count = [...unsupportedPairs.values()].reduce((a, b) => a + b, 0);
+    const pairs = [...unsupportedPairs.keys()].join(", ");
+    parserMessages.push({
+      id: "binance.unsupported_pair",
+      severity: "warning",
+      message: `Se ${count === 1 ? "ha omitido 1 operación" : `han omitido ${count} operaciones`} del CSV de Binance con un par no reconocido: ${pairs}.`,
+      hint: "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
+      context: { count: String(count), pairs },
+    });
+  }
+
   return {
     accountId: "",
     fromDate: "",
@@ -1136,6 +1243,7 @@ function parseBinanceCsv(lines: string[]): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(parserMessages.length > 0 ? { parserMessages } : {}),
   };
 }
 

@@ -18,6 +18,15 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
+      // `npm run test:coverage` (CI) fails under these floors. Lines, statements
+      // and functions hold the 90% target from codecov.yml. Branches were at 82.85%
+      // when this was set, so their floor is 80%.
+      thresholds: {
+        lines: 90,
+        statements: 90,
+        functions: 90,
+        branches: 80,
+      },
       // What counts toward coverage. Kept to code that is unit-testable WITHOUT a
       // full jsdom/browser harness so the numbers reflect logic we actually
       // exercise, not unreachable DOM glue. The narrow original list
