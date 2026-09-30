@@ -230,6 +230,8 @@ export interface OptionExercise {
   accountId: string;
   /** IBKR contract ID — matches Trade.conid for lot key consistency */
   conid?: string;
+  /** OPT, FOP or FSFOP — the option lot is keyed by it (lotKey), like Trade.assetCategory */
+  assetCategory?: AssetCategory;
   symbol: string;
   description: string;
   isin: string;

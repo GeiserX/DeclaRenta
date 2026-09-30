@@ -99,12 +99,17 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let executionsMergedGroups = 0;
   let executionsMergedSources = 0;
   let orderLevelDetailDuplicatesSkipped = 0;
+  let cancelledPairsDropped = 0;
+  let cancelledUnmatchedDropped = 0;
 
   for (const stmt of statements) {
     const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
-    const stmtTrades = filteredRawTrades.map(mapTrade);
+    const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
+    cancelledPairsDropped += pairedCount;
+    cancelledUnmatchedDropped += unmatchedCount;
+    const stmtTrades = kept.map(mapTrade);
     const { merged, mergedGroupCount, sourceFillCount } = mergeExecutionsByOrder(stmtTrades);
     trades.push(...merged);
     executionsMergedGroups += mergedGroupCount;
@@ -174,6 +179,26 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
+  if (cancelledPairsDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades",
+      severity: "info",
+      message: `Se omitieron ${cancelledPairsDropped} operaciones canceladas por IBKR junto con su anulación.`,
+      hint: 'IBKR marca una ejecución cancelada con una fila de anulación ("(Ca.)"). La operación original y su anulación se han descartado: nunca llegaron a ser una compra o venta real.',
+      context: { count: String(cancelledPairsDropped) },
+    });
+  }
+
+  if (cancelledUnmatchedDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades_unmatched",
+      severity: "warning",
+      message: `Se omitieron ${cancelledUnmatchedDropped} anulaciones de IBKR sin la operación original en este archivo.`,
+      hint: "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
+      context: { count: String(cancelledUnmatchedDropped) },
+    });
+  }
+
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
   const accountId = statements.length === 1
@@ -197,6 +222,19 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   };
 }
 
+const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
+
+/**
+ * IBKR sends the underlying's identifier as underlyingSecurityID (an ISIN, or a
+ * CUSIP for some listings), not as underlyingIsin. Take it only when it has the
+ * ISIN shape, so the underlying lot key matches the ISIN-keyed stock trades.
+ */
+function underlyingIsinOf(raw: Record<string, string>): string {
+  if (raw.underlyingIsin) return raw.underlyingIsin;
+  const id = raw.underlyingSecurityID?.trim() ?? "";
+  return ISIN_SHAPE.test(id) ? id : "";
+}
+
 function mapTrade(raw: Record<string, string>): Trade {
   return {
     tradeID: raw.tradeID ?? "",
@@ -216,7 +254,10 @@ function mapTrade(raw: Record<string, string>): Trade {
     cost: raw.cost ?? "0",
     fifoPnlRealized: raw.fifoPnlRealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
-    buySell: (raw.buySell ?? "BUY") as Trade["buySell"],
+    // Canonical "BUY"/"SELL" after trimming and upper-casing. Cancel rows
+    // ("SELL (Ca.)") never get here; any other value passes through and
+    // FifoEngine skips it with a warning instead of treating it as a sale.
+    buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
     commissionCurrency: raw.ibCommissionCurrency ?? "",
@@ -228,9 +269,105 @@ function mapTrade(raw: Record<string, string>): Trade {
     strike: raw.strike || undefined,
     expiry: raw.expiry || undefined,
     underlyingSymbol: raw.underlyingSymbol || undefined,
-    underlyingIsin: raw.underlyingIsin || undefined,
+    underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
+}
+
+/** IBKR notes code for a cancelled execution. */
+const NOTE_CANCELLED = "Ca";
+/** Suffix IBKR appends to buySell on the row that cancels an execution ("SELL (Ca.)"). */
+const CANCEL_SUFFIX = /\s*\(Ca\.\)\s*$/i;
+/** IBKR transactionType of the row that cancels an execution. */
+const TRANSACTION_TYPE_CANCEL = "TradeCancel";
+
+function isCancelRow(raw: Record<string, string>): boolean {
+  if ((raw.transactionType ?? "").trim() === TRANSACTION_TYPE_CANCEL) return true;
+  if (CANCEL_SUFFIX.test(raw.buySell ?? "")) return true;
+  return (raw.notes ?? "").split(";").some((n) => n.trim() === NOTE_CANCELLED);
+}
+
+/** transactionID of the fill a cancel row reverses, or "" when the export lacks the link. */
+function cancelledTransactionId(cancel: Record<string, string>): string {
+  const id = (cancel.origTransactionID ?? "").trim();
+  return id === "0" ? "" : id;
+}
+
+/**
+ * Remove cancelled executions. IBKR keeps the original fill in the Flex file
+ * and adds a reversing row (transactionType "TradeCancel", buySell
+ * "SELL (Ca.)"/"BUY (Ca.)", notes "Ca", opposite quantity). Neither row is a
+ * real transmission or acquisition, so each cancel row is paired with the fill
+ * it cancels and both are dropped.
+ *
+ * The pairing uses IBKR's own link when the export has it: the cancel row's
+ * origTransactionID is the transactionID of the cancelled fill. That matters
+ * when IBKR busts a fill and rebooks it (for example with a corrected
+ * commission): the original and the rebook share instrument, price, quantity,
+ * ibOrderID and tradeDate, and only the link says which one was cancelled.
+ * Exports without that column fall back to a heuristic: same instrument,
+ * currency, price and direction, exactly opposite quantity, with a matching
+ * ibExecID, ibOrderID or tradeDate breaking ties.
+ *
+ * A cancel row with no original in this statement (the fill is outside the
+ * export's period) is dropped alone and counted separately so the user is
+ * warned. It is never flipped into an opposite-direction trade: that would
+ * create a lot or a disposal that never happened.
+ */
+function dropCancelledExecutions(
+  rows: Record<string, string>[],
+): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number } {
+  const cancelIdx: number[] = [];
+  rows.forEach((raw, i) => {
+    if (isCancelRow(raw)) cancelIdx.push(i);
+  });
+  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0 };
+
+  const dropped = new Set<number>(cancelIdx);
+  let pairedCount = 0;
+  let unmatchedCount = 0;
+  for (const ci of cancelIdx) {
+    const cancel = rows[ci]!;
+    const origId = cancelledTransactionId(cancel);
+    if (origId) {
+      const oi = rows.findIndex((o, i) => !dropped.has(i) && (o.transactionID ?? "").trim() === origId);
+      if (oi >= 0) {
+        dropped.add(oi);
+        pairedCount++;
+      } else {
+        unmatchedCount++;
+      }
+      continue;
+    }
+    const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
+    const originalQty = new Decimal(cancel.quantity || "0").neg();
+    const price = new Decimal(cancel.tradePrice || "0");
+    let best = -1;
+    let bestScore = -1;
+    rows.forEach((o, oi) => {
+      if (dropped.has(oi)) return;
+      const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
+      if (!sameInstrument || (o.currency ?? "") !== (cancel.currency ?? "")) return;
+      if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
+      if (!new Decimal(o.quantity || "0").eq(originalQty)) return;
+      if (!new Decimal(o.tradePrice || "0").eq(price)) return;
+      const score =
+        (o.ibExecID && o.ibExecID === cancel.ibExecID ? 4 : 0) +
+        (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
+        (o.tradeDate === cancel.tradeDate ? 1 : 0);
+      if (score > bestScore) {
+        best = oi;
+        bestScore = score;
+      }
+    });
+    if (best >= 0) {
+      dropped.add(best);
+      pairedCount++;
+    } else {
+      unmatchedCount++;
+    }
+  }
+  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount };
 }
 
 /**
@@ -510,6 +647,7 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
 interface OptionEaeDelivery {
   date: string;
   symbol: string;
+  isin: string;
   underlyingSymbol: string;
   tradePrice: string;
   action: string;
@@ -521,7 +659,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
 
   for (const raw of rawRows) {
     if (raw.strike?.trim()) {
-      const action = (raw.action ?? raw.type ?? "").toLowerCase();
+      const action = (raw.action ?? raw.type ?? raw.transactionType ?? "").toLowerCase();
       let mappedAction: OptionExercise["action"] = "Exercise";
       if (action.includes("assign")) mappedAction = "Assignment";
       else if (action.includes("expir") || action.includes("lapse")) mappedAction = "Expiration";
@@ -530,6 +668,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
         transactionID: raw.transactionID ?? "",
         accountId: raw.accountId ?? "",
         ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+        ...(raw.assetCategory?.trim() ? { assetCategory: raw.assetCategory.trim() as OptionExercise["assetCategory"] } : {}),
         symbol: raw.symbol ?? "",
         description: raw.description ?? "",
         isin: raw.isin ?? "",
@@ -542,13 +681,14 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
         quantity: raw.quantity ?? "0",
         proceeds: raw.proceeds ?? raw.amount ?? "0",
         underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
-        underlyingIsin: raw.underlyingIsin ?? "",
+        underlyingIsin: underlyingIsinOf(raw),
         multiplier: raw.multiplier ?? "100",
       });
     } else if (raw.tradePrice?.trim()) {
       deliveryRows.push({
         date: raw.date ?? raw.dateTime?.slice(0, 8) ?? "",
         symbol: raw.symbol ?? "",
+        isin: raw.isin ?? "",
         underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
         tradePrice: raw.tradePrice,
         action: (raw.action ?? raw.type ?? "").toLowerCase(),
@@ -564,6 +704,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
     );
     if (delivery) {
       opt.marketPrice = delivery.tradePrice;
+      if (!opt.underlyingIsin && delivery.isin) opt.underlyingIsin = delivery.isin;
     }
   }
 
