@@ -89,6 +89,7 @@ const es = {
   "casilla.spanish_withholding_detail":
     "Retención a cuenta del IRPF practicada en origen sobre dividendos o intereses de emisores españoles (p. ej. acciones del IBEX), aunque estén en un bróker extranjero. Es un pago a cuenta deducible de la cuota; NO es la deducción por doble imposición (casilla 0588), que solo aplica a impuesto extranjero.",
   "casilla.double_taxation": "Deducción doble imposición",
+  "casilla.dt_foreign_income_total": "Total rendimientos extranjeros",
   "casilla.reintegrated_losses":
     "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -532,7 +533,7 @@ const es = {
   "guide_rw.double_taxation_title": "Deducción por doble imposición internacional",
   "guide_rw.entidad_emisora_label": "Entidad emisora",
   "guide_rw.entidad_emisora_value":
-    "Nombre del broker (ej. Interactive Brokers, Degiro, eToro…). Si consolidas varias operaciones en una sola línea, indica el broker principal.",
+    "Nombre de la empresa o del valor que vendes (ej. Apple Inc.), no el del bróker. En divisas, la moneda (ej. USD). Si consolidas varias operaciones en una sola línea, indica el valor principal.",
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
@@ -572,7 +573,7 @@ const es = {
     "El importe de la casilla <strong>0588</strong> de DeclaRenta. Es el menor entre la retención extranjera pagada y la cuota española correspondiente (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "¿En qué campo del cuadro?",
   "guide_rw.dt_campo_hint":
-    "En el cuadro de doble imposición, rellena DOS filas:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → importe bruto de los dividendos extranjeros (mismo valor que casilla 0029).<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → importe de la casilla 0588 de DeclaRenta.<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
+    "En el cuadro de doble imposición, rellena DOS filas por cada país:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → la columna «Bruto EUR» de ese país en el detalle de la casilla 0588 de DeclaRenta. Si solo hay un país, es la fila «Total rendimientos extranjeros» de ese detalle. No incluye los dividendos españoles ni los de países sin retención.<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → la deducción de ese país en el mismo detalle (con un solo país, el importe de la casilla 0588).<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
   "guide_rw.capital_gains_note":
     "Si tienes muchas operaciones, puedes consolidarlas en una sola línea por tipo de activo usando las fechas genéricas 01/01 y 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note":

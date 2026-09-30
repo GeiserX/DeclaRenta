@@ -86,6 +86,7 @@ const ca: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Retenció a compte de l'IRPF practicada en origen sobre dividends o interessos d'emissors espanyols (p. ex. accions de l'IBEX), encara que estiguin en un bróker estranger. És un pagament a compte deduïble de la quota; NO és la deducció per doble imposició (casella 0588), que només s'aplica a impost estranger.",
   "casilla.double_taxation": "Deducció doble imposició",
+  "casilla.dt_foreign_income_total": "Total rendiments estrangers",
   "casilla.reintegrated_losses":
     "Pèrdues diferides d'anys anteriors ara deduïbles (es van vendre els valors recomprats): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -499,7 +500,7 @@ const ca: TranslationKeys = {
   "guide_rw.double_taxation_title": "Deducció per doble imposició internacional",
   "guide_rw.entidad_emisora_label": "Entitat emissora",
   "guide_rw.entidad_emisora_value":
-    "Nom del broker (ex. Interactive Brokers, Degiro, eToro…). Si consolides diverses operacions en una sola línia, indica el broker principal.",
+    "Nom de l'empresa o del valor que vens (ex. Apple Inc.), no el del broker. En divises, la moneda (ex. USD). Si consolides diverses operacions en una sola línia, indica el valor principal.",
   "guide_rw.tipo_elemento_label": "Tipus d'element patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Accions admeses a negociació»</strong> per a accions cotitzades. Per a fons: «Participacions en IIC». Per a derivats/opcions: «Altres elements patrimonials».",
@@ -539,7 +540,7 @@ const ca: TranslationKeys = {
     "L'import de la casella <strong>0588</strong> de DeclaRenta. És el menor entre la retenció estrangera pagada i la quota espanyola corresponent (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "En quin camp del quadre?",
   "guide_rw.dt_campo_hint":
-    "Al quadre de doble imposició, omple DUES files:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → import brut dels dividends estrangers (mateix valor que casella 0029).<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → import de la casella 0588 de DeclaRenta.<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
+    "Al quadre de doble imposició, omple DUES files per cada país:<br>• <strong>«Altres rendiments nets reduïts obtinguts a l'estranger»</strong> (2a fila) → la columna «Brut EUR» d'aquest país al detall de la casella 0588 de DeclaRenta. Si només hi ha un país, és la fila «Total rendiments estrangers» d'aquest detall. No inclou els dividends espanyols ni els de països sense retenció.<br>• <strong>«Impost satisfet a l'estranger»</strong> (última fila) → la deducció d'aquest país al mateix detall (amb un sol país, l'import de la casella 0588).<br>Si deixes la 2a fila buida, Renta Web mostra l'avís «Ha reflectit l'impost sense fer constar les rendes». Les files 1 i 3 queden a 0.",
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":

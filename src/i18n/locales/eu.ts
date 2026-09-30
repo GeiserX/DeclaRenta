@@ -87,6 +87,7 @@ const eu: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Espainiako jaulkitzaileen dibidendu edo interesen gainean jatorrian egindako PFEZ atxikipena (adib. IBEX akzioak), atzerriko artekari batean egon arren. Kuotatik kentzeko konturako ordainketa da; EZ da nazioarteko zergapetze bikoitzaren kenkaria (0588 laukia), atzerriko zergari soilik aplikatzen zaiona.",
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
+  "casilla.dt_foreign_income_total": "Atzerriko errendimenduak guztira",
   "casilla.reintegrated_losses":
     "Aurreko urteetako galera atzeratuak orain kengarriak (berrerositako balioak saldu ziren): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -499,7 +500,7 @@ const eu: TranslationKeys = {
   "guide_rw.double_taxation_title": "Nazioarteko zergapetze bikoitzagatiko kenkaria",
   "guide_rw.entidad_emisora_label": "Entitate jaulkitzailea",
   "guide_rw.entidad_emisora_value":
-    "Broker-aren izena (adib. Interactive Brokers, Degiro, eToro…). Eragiketa bat baino gehiago lerro batean konsolidatzen badituzu, adierazi broker nagusia.",
+    "Saltzen duzun enpresaren edo baloreren izena (adib. Apple Inc.), ez broker-arena. Dibisetan, moneta (adib. USD). Eragiketa bat baino gehiago lerro batean konsolidatzen badituzu, adierazi balore nagusia.",
   "guide_rw.tipo_elemento_label": "Ondare elementu mota",
   "guide_rw.tipo_elemento_value_capital":
     "Hautatu <strong>«Negoziaziora onartutako akzioak»</strong> kotizatutako akzioetarako. Funts-etarako: «IIC-eko partaidetzak». Deribatu/opsioetarako: «Beste ondare elementu batzuk».",
@@ -539,7 +540,7 @@ const eu: TranslationKeys = {
     "DeclaRenta-ren <strong>0588</strong> gelaxkako zenbatekoa. Atzerrian ordaindutako zergaren eta Espainiako kuota dagokionaren arteko txikiena da (80. art. LIRPF).",
   "guide_rw.dt_campo_label": "Zein eremutan koadroan?",
   "guide_rw.dt_campo_hint":
-    "Zergapetze bikoitzaren koadroan, bete BI lerro:<br>• <strong>«Atzerrian lortutako beste errendimendu garbi murriztuak»</strong> (2. lerroa) → atzerriko dibidenduen zenbateko gordina (0029 gelaxkako balio bera).<br>• <strong>«Atzerrian ordaindutako zerga»</strong> (azken lerroa) → DeclaRenta-ren 0588 gelaxkako zenbatekoa.<br>2. lerroa hutsik uzten baduzu, Renta Web-ek abisu bat erakusten du errentak falta direlako. 1. eta 3. lerroak 0-n geratzen dira.",
+    "Zergapetze bikoitzaren koadroan, bete BI lerro herrialde bakoitzeko:<br>• <strong>«Atzerrian lortutako beste errendimendu garbi murriztuak»</strong> (2. lerroa) → herrialde horren «Gordina EUR» zutabea, DeclaRenta-ren 0588 gelaxkaren xehetasunean. Herrialde bakarra baduzu, xehetasun horretako «Atzerriko errendimenduak guztira» lerroa da. Ez ditu barne hartzen Espainiako dibidenduak, ezta atxikipenik gabeko herrialdeetakoak ere.<br>• <strong>«Atzerrian ordaindutako zerga»</strong> (azken lerroa) → herrialde horren kenkaria, xehetasun berean (herrialde bakarrarekin, 0588 gelaxkako zenbatekoa).<br>2. lerroa hutsik uzten baduzu, Renta Web-ek abisu bat erakusten du errentak falta direlako. 1. eta 3. lerroak 0-n geratzen dira.",
   "guide_rw.capital_gains_note":
     "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note":

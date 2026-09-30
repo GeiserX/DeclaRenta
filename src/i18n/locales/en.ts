@@ -85,6 +85,7 @@ const en: TranslationKeys = {
   "casilla.spanish_withholding_detail":
     "Spanish IRPF withholding applied at source on dividends or interest from Spanish issuers (e.g. IBEX shares), even when held at a foreign broker. It is a prepayment deductible from the tax due; it is NOT the double-taxation deduction (box 0588), which applies only to foreign tax.",
   "casilla.double_taxation": "Double taxation deduction",
+  "casilla.dt_foreign_income_total": "Total foreign income",
   "casilla.reintegrated_losses":
     "Deferred losses from prior years now deductible (the repurchased securities were sold): {{amount}} EUR",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
@@ -497,7 +498,7 @@ const en: TranslationKeys = {
   "guide_rw.double_taxation_title": "International double taxation deduction",
   "guide_rw.entidad_emisora_label": "Issuing entity",
   "guide_rw.entidad_emisora_value":
-    "Broker name (e.g. Interactive Brokers, Degiro, eToro…). If consolidating multiple operations in one line, use the main broker.",
+    "Name of the company or security you sold (e.g. Apple Inc.), not the broker's. For currencies, the currency (e.g. USD). If consolidating several operations in one line, use the main security.",
   "guide_rw.tipo_elemento_label": "Asset type",
   "guide_rw.tipo_elemento_value_capital":
     'Select <strong>"Listed shares"</strong> for quoted stocks. For funds: "Collective investment shares". For derivatives/options: "Other assets".',
@@ -537,7 +538,7 @@ const en: TranslationKeys = {
     "The amount from DeclaRenta's box <strong>0588</strong>. This is the lesser of the foreign tax paid and the corresponding Spanish tax (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "Which field in the dialog?",
   "guide_rw.dt_campo_hint":
-    'In the double taxation dialog, fill TWO rows:<br>• <strong>"Other net reduced income obtained abroad"</strong> (2nd row) → gross dividend amount from abroad (same value as box 0029).<br>• <strong>"Tax paid abroad"</strong> (last row) → the amount from DeclaRenta\'s box 0588.<br>If you leave the 2nd row empty, Renta Web shows a warning about missing income. Rows 1 and 3 stay at 0.',
+    'In the double taxation dialog, fill TWO rows for each country:<br>• <strong>"Other net reduced income obtained abroad"</strong> (2nd row) → that country\'s "Gross EUR" in the box 0588 detail in DeclaRenta. With a single country, it is the "Total foreign income" row of that detail. It leaves out Spanish dividends and countries with no tax withheld.<br>• <strong>"Tax paid abroad"</strong> (last row) → that country\'s deduction in the same detail (with a single country, the amount of box 0588).<br>If you leave the 2nd row empty, Renta Web shows a warning about missing income. Rows 1 and 3 stay at 0.',
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
