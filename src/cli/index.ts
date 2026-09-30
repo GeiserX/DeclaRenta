@@ -552,7 +552,7 @@ program
         );
 
         // Assets the file cannot carry: the user declares them by hand.
-        const omissions = findModelo720Omissions(statement.openPositions, rateMap, config720, statement.cashBalances);
+        const omissions = findModelo720Omissions(statement.openPositions, rateMap, config720, statement.cashBalances, disposals);
         for (const o of omissions) {
           const what = o.kind === "position"
             ? `Posición ${o.position.symbol || o.position.description}`
