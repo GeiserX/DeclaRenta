@@ -650,6 +650,25 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count: String(skippedBadAmount) },
     });
   }
+  // A row still unparsed after every phase has an Operation no phase handles
+  // (futures PnL, card spending, Auto-Invest, cashback...). It is left out of
+  // the report, so name each operation with its row count instead of dropping
+  // it silently.
+  const unhandledOps = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.parsed) unhandledOps.set(r.operation, (unhandledOps.get(r.operation) ?? 0) + 1);
+  }
+  if (unhandledOps.size > 0) {
+    const unhandledCount = [...unhandledOps.values()].reduce((a, b) => a + b, 0);
+    const operations = [...unhandledOps].map(([op, n]) => `${op} (${n})`).join(", ");
+    parserMessages.push({
+      id: "binance.unhandled_operation",
+      severity: "warning",
+      message: `Se ${unhandledCount === 1 ? "ha omitido 1 movimiento" : `han omitido ${unhandledCount} movimientos`} del CSV de Binance con operaciones no reconocidas: ${operations}.`,
+      hint: "Estos movimientos no se han incluido en el cálculo. Si son compras, ventas o ingresos (p. ej. futuros, pagos con Binance Card, Auto-Invest o cashback), añádelos a mano en tu declaración y comunica el nombre de la operación para que se pueda incorporar.",
+      context: { count: String(unhandledCount), operations },
+    });
+  }
 
   return {
     accountId: "",

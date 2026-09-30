@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { lightyearParser } from "../../src/parsers/lightyear.js";
-import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
+import type { CorporateAction, FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // ===========================================================================
@@ -272,5 +272,67 @@ describe("antichurning e2e: full-position Lightyear sale does not block the loss
     expect(report.capitalGains.disposals).toHaveLength(2);
     expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
     expect(report.capitalGains.disposals.every((disposal) => !disposal.washSaleBlocked)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// 4. CASH BUYOUT — a total exit, so the loss is deductible like a total sale.
+// ===========================================================================
+//
+//   BUY 100 TWTR (2022-06-01) @ $70
+//   BUY  10 TWTR (2022-09-15) @ $52   ← inside the 2-month window
+//   TC  -110 TWTR (2022-10-28) "MERGED(Acquisition) FOR USD 54.20 PER SHARE"
+//
+// IBKR reports the buyout only as a TC corporate action; FIFO books it as a
+// synthetic SELL of 110 at $54.20. No TWTR shares remain afterwards, so DGT
+// V3282-18(1) allows the 100-share loss in full, exactly as for a real SELL of
+// 110 on the same day (the positive control below).
+describe("antichurning e2e: a cash buyout is a total exit and does not block the loss", () => {
+  const rates = makeRateMap({
+    "2022-06-01": { USD: "1.00" },
+    "2022-09-15": { USD: "1.00" },
+    "2022-10-28": { USD: "1.00" },
+  });
+  const twtr = { symbol: "TWTR", description: "TWITTER INC", isin: "US90184L1026" };
+  const buys = [
+    makeTrade({ ...twtr, tradeID: "B1", tradeDate: "2022-06-01", quantity: "100", tradePrice: "70" }),
+    makeTrade({ ...twtr, tradeID: "B2", tradeDate: "2022-09-15", quantity: "10", tradePrice: "52" }),
+  ];
+  const buyout: CorporateAction = {
+    transactionID: "CA1",
+    accountId: "U1",
+    symbol: "TWTR",
+    description: "TWTR(US90184L1026) MERGED(Acquisition) FOR USD 54.20 PER SHARE (TWTR, TWITTER INC, US90184L1026)",
+    isin: "US90184L1026",
+    currency: "USD",
+    reportDate: "20221028",
+    dateTime: "20221028;202500",
+    quantity: "-110",
+    amount: "-5962",
+    type: "TC",
+    actionDescription: "Acquisition",
+  };
+
+  it("positive control: a real SELL of all 110 shares blocks nothing", () => {
+    const sell = makeTrade({
+      ...twtr,
+      tradeID: "S1",
+      tradeDate: "2022-10-28",
+      buySell: "SELL",
+      quantity: "-110",
+      tradePrice: "54.20",
+    });
+    const report = generateTaxReport(makeStatement([...buys, sell]), rates, 2022);
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("-1558.00");
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+  });
+
+  it("the cash buyout blocks nothing either (the bought-out shares are not held afterwards)", () => {
+    const report = generateTaxReport({ ...makeStatement(buys), corporateActions: [buyout] }, rates, 2022);
+    // 100 × (54.20 − 70) = −1580.00 and 10 × (54.20 − 52) = +22.00
+    expect(report.capitalGains.disposals.map((d) => d.gainLossEur.toFixed(2))).toEqual(["-1580.00", "22.00"]);
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("-1558.00");
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(report.capitalGains.disposals.every((d) => !d.washSaleBlocked)).toBe(true);
   });
 });

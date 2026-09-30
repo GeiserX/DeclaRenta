@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { coinbaseParser } from "../../src/parsers/coinbase.js";
+import { localizeMessage, localizeHint, setLocale } from "../../src/i18n/index.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -201,6 +202,8 @@ describe("coinbaseParser", () => {
       const result = coinbaseParser.parse(csv);
       expect(result.trades).toHaveLength(0);
       expect(result.cashTransactions).toHaveLength(0);
+      // A fiat deposit is a known non-taxable transfer: skipped without a warning.
+      expect(result.parserMessages).toBeUndefined();
     });
 
     it("should skip rows with zero quantity on buy/sell", () => {
@@ -260,6 +263,159 @@ describe("coinbaseParser", () => {
 
     it("should detect v2 header without preamble", () => {
       expect(coinbaseParser.detect(V2_HEADER)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Advanced Trade, extra reward labels and unrecognised types
+  // -------------------------------------------------------------------------
+
+  describe("Advanced Trade and other transaction types", () => {
+    const V2_HEADER = "ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+
+    it("parses Advanced Trade Buy and Sell as trades", () => {
+      const csv = [
+        V2_HEADER,
+        'at1,2025-02-01 10:00:00 UTC,Advanced Trade Buy,BTC,0.5,EUR,€40000,€20000.00,€20050.00,€50.00,"Bought 0.5 BTC for 20050 EUR on BTC-EUR at 40,000.00 EUR/BTC"',
+        'at2,2025-06-01 10:00:00 UTC,Advanced Trade Sell,BTC,-0.5,EUR,€60000,€30000.00,€29925.00,€75.00,"Sold 0.5 BTC for 29925 EUR on BTC-EUR at 60,000.00 EUR/BTC"',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades).toHaveLength(2);
+
+      const buy = result.trades.find((t) => t.buySell === "BUY")!;
+      expect(buy.symbol).toBe("BTC");
+      expect(buy.quantity).toBe("0.5");
+      expect(buy.cost).toBe("20000.00");
+      expect(buy.commission).toBe("-50");
+      expect(buy.currency).toBe("EUR");
+
+      const sell = result.trades.find((t) => t.buySell === "SELL")!;
+      expect(sell.symbol).toBe("BTC");
+      expect(sell.quantity).toBe("-0.5");
+      expect(sell.proceeds).toBe("30000.00");
+      expect(sell.commission).toBe("-75");
+
+      expect(result.parserMessages).toBeUndefined();
+    });
+
+    it("parses the 'Advance Trade' spelling Coinbase used in some exports", () => {
+      const csv = [
+        V2_HEADER,
+        'at1,2025-02-01 10:00:00 UTC,Advance Trade Buy,ETH,2,EUR,€3000,€6000.00,€6012.00,€12.00,Bought 2 ETH for 6012 EUR on ETH-EUR at 3000 EUR/ETH',
+        'at2,2025-03-01 10:00:00 UTC,Advance Trade Sell,ETH,-1,EUR,€3500,€3500.00,€3493.00,€7.00,Sold 1 ETH for 3493 EUR on ETH-EUR at 3500 EUR/ETH',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades.map((t) => `${t.buySell} ${t.symbol} ${t.quantity}`)).toEqual([
+        "BUY ETH 2",
+        "SELL ETH -1",
+      ]);
+    });
+
+    it("warns when an Advanced Trade pair is quoted in another crypto", () => {
+      const csv = [
+        V2_HEADER,
+        'at1,2025-02-01 10:00:00 UTC,Advanced Trade Buy,ETH,1,EUR,€3000,€3000.00,€3006.00,€6.00,Bought 1 ETH for 0.0752 BTC on ETH-BTC at 0.075 BTC/ETH',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      // The acquired coin keeps its EUR-valued lot...
+      expect(result.trades).toHaveLength(1);
+      expect(result.trades[0]!.symbol).toBe("ETH");
+      expect(result.trades[0]!.cost).toBe("3000.00");
+      // ...and the missing BTC leg is surfaced, not dropped silently.
+      expect(result.parserMessages).toHaveLength(1);
+      const msg = result.parserMessages![0]!;
+      expect(msg.id).toBe("coinbase.advanced_trade_quote_leg_missing");
+      expect(msg.severity).toBe("warning");
+      expect(msg.context).toEqual({ count: "1", pairs: "ETH-BTC" });
+    });
+
+    it("books Inflation Reward as ahorro and Coinbase Earn as base general income", () => {
+      const csv = [
+        V2_HEADER,
+        'r1,2025-02-01 10:00:00 UTC,Inflation Reward,ATOM,1.2,EUR,€8,€9.60,€9.60,€0.00,Inflation reward',
+        'r2,2025-02-02 10:00:00 UTC,Coinbase Earn,GRT,10,EUR,€0.20,€2.00,€2.00,€0.00,Coinbase Earn',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions.map((c) => `${c.symbol} ${c.taxBucket} ${c.amount}`)).toEqual([
+        "ATOM ahorro 9.60",
+        "GRT general 2.00",
+      ]);
+      expect(result.parserMessages).toBeUndefined();
+    });
+
+    it("skips known non-taxable transfer types without a warning", () => {
+      const types = [
+        "Withdrawal", "Exchange Deposit", "Exchange Withdrawal", "Pro Deposit", "Pro Withdrawal",
+        "Prime Deposit", "Transfer", "Retail Staking Transfer", "Retail Unstaking Transfer",
+        "Vault Withdrawal", "Cash to Savings", "Savings to Cash",
+      ];
+      const csv = [
+        V2_HEADER,
+        ...types.map((type, i) => `t${i},2025-02-01 10:00:00 UTC,${type},BTC,0.1,EUR,€40000,€4000.00,€4000.00,€0.00,`),
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+      expect(result.parserMessages).toBeUndefined();
+    });
+
+    it("warns once, naming each unrecognised type and its row count", () => {
+      const csv = [
+        V2_HEADER,
+        'u1,2025-02-01 10:00:00 UTC,Card Spend,BTC,-0.001,EUR,€40000,€40.00,€40.00,€0.00,Card purchase',
+        'u2,2025-02-02 10:00:00 UTC,Card Spend,BTC,-0.002,EUR,€40000,€80.00,€80.00,€0.00,Card purchase',
+        'u3,2025-02-03 10:00:00 UTC,Interest payout,USDC,1.5,EUR,€0.92,€1.38,€1.38,€0.00,Interest',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      expect(result.trades).toHaveLength(0);
+      expect(result.cashTransactions).toHaveLength(0);
+      expect(result.parserMessages).toHaveLength(1);
+      const msg = result.parserMessages![0]!;
+      expect(msg.id).toBe("coinbase.unknown_types_skipped");
+      expect(msg.severity).toBe("warning");
+      expect(msg.message).toContain("Card Spend (2)");
+      expect(msg.message).toContain("Interest payout (1)");
+      expect(msg.context).toEqual({ count: "3", types: "Card Spend (2), Interest payout (1)" });
+    });
+
+    it("localizes both new warnings, and the es text matches the parser's Spanish", () => {
+      const csv = [
+        V2_HEADER,
+        'u1,2025-02-01 10:00:00 UTC,Card Spend,BTC,-0.001,EUR,€40000,€40.00,€40.00,€0.00,Card purchase',
+        'at1,2025-02-01 10:00:00 UTC,Advanced Trade Sell,ETH,-1,EUR,€3000,€3000.00,€2994.00,€6.00,Sold 1 ETH for 0.0748 BTC on ETH-BTC at 0.075 BTC/ETH',
+      ].join("\n");
+      const msgs = coinbaseParser.parse(csv).parserMessages!;
+      expect(msgs.map((m) => m.id)).toEqual([
+        "coinbase.unknown_types_skipped",
+        "coinbase.advanced_trade_quote_leg_missing",
+      ]);
+      try {
+        setLocale("es");
+        for (const m of msgs) {
+          expect(localizeMessage(m)).toBe(m.message);
+          expect(localizeHint(m)).toBe(m.hint);
+        }
+        setLocale("en");
+        for (const m of msgs) {
+          expect(localizeMessage(m)).not.toBe(m.message);
+          expect(localizeMessage(m)).not.toContain("{{");
+        }
+      } finally {
+        setLocale("es");
+      }
+    });
+
+    it("reads a Convert destination with a US thousands separator ('to 2,000 USDC')", () => {
+      const csv = [
+        V2_HEADER,
+        'c1,2025-02-01 10:00:00 UTC,Convert,ETH,-1,EUR,€2000,€2000.00,€1990.00,€10.00,"Converted 1 ETH to 2,000 USDC"',
+      ].join("\n");
+      const result = coinbaseParser.parse(csv);
+      const buy = result.trades.find((t) => t.buySell === "BUY")!;
+      expect(buy.symbol).toBe("USDC");
+      expect(buy.quantity).toBe("2000");
+      expect(buy.tradePrice).toBe("1");
     });
   });
 });
