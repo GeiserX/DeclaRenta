@@ -25,6 +25,7 @@ import {
   findColumn,
   normalizeFractionalCurrency,
   stripBom,
+  timeOfDay,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -238,6 +239,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
 
     const dateStr = fields[cols.date] ?? "";
     const tradeDate = convertDateDMY(dateStr);
+    const tradeTime = cols.time >= 0 ? timeOfDay(fields[cols.time] ?? "") : undefined;
     const quantity = parseNumber(fields[cols.quantity] ?? "0");
     const price = parseNumber(fields[cols.price] ?? "0");
     const currency = cols.priceCurrency >= 0 ? (fields[cols.priceCurrency] ?? "").trim() : "";
@@ -331,6 +333,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       assetCategory: "STK",
       currency: tradeCurrency,
       tradeDate,
+      tradeTime,
       settlementDate: tradeDate, // T+2 estimated, but we use tradeDate for FIFO
       quantity: isSell ? `-${absQtyStr}` : absQtyStr,
       tradePrice,
