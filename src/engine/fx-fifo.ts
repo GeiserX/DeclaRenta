@@ -892,7 +892,9 @@ export class FxFifoEngine {
       if (!d.proceedsFcy.greaterThan(0)) continue; // skip non-positive (defensive)
       events.push({
         kind: "stock_sell",
-        date: normalizeDate(d.sellDate),
+        // Dated on the sale's cash settlement, like the buy's park, so a same-day
+        // round trip parks before it unparks. The rate stays the trade-date one.
+        date: normalizeDate(d.settlementDate || d.sellDate),
         currency: d.currency,
         quantity: new Decimal(0), // unused for stock_sell (amounts are in costFcy/proceedsFcy)
         costFcy: d.costBasisFcy, // principal that was parked at the matching buy
