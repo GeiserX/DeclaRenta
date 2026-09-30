@@ -356,6 +356,7 @@ const es = {
   "m720.category_exceeded": "Supera 50.000 € — obligatorio declarar",
   "m720.category_not_exceeded": "Por debajo del umbral",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
+  "m720.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus posiciones ni saldos a 31 de diciembre, así que no se suman aquí. Comprueba en el extracto de fin de año de {{brokers}} si el saldo de tus cuentas o el valor de tus acciones y fondos en el extranjero supera los 50.000 €.",
   "m720.positions_title": "Posiciones declarables",
   "m720.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
@@ -392,6 +393,7 @@ const es = {
   "d6.no_minimum":
     "Desde la Orden ICT/1408/2021, el D-6 solo es obligatorio si tu participación representa el <strong>10% o más</strong> del capital o derechos de voto de una empresa cotizada extranjera. La mayoría de inversores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
+  "d6.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus valores a 31 de diciembre, así que no aparecen aquí. Consúltalos en el extracto de fin de año de {{brokers}}.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin tipo de cambio disponible para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
@@ -414,6 +416,7 @@ const es = {
   "m721.threshold_not_exceeded":
     "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m721.no_positions": "Sube un informe con posiciones de criptomonedas en Modelo 100 para analizar el Modelo 721.",
+  "m721.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus criptomonedas a 31 de diciembre, así que no se suman aquí. Comprueba en el extracto de fin de año de {{brokers}} si tus criptomonedas en el extranjero superan los 50.000 €.",
   "m721.positions_title": "Posiciones declarables",
   "m721.generate_btn": "Generar fichero Modelo 721",
   "m721.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",

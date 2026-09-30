@@ -5,7 +5,7 @@
  * copy-to-clipboard, and generates the D-6 report file.
  */
 
-import { t } from "../i18n/index.js";
+import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
@@ -16,6 +16,7 @@ import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { copyToClipboard } from "./clipboard.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { formatBrokerList } from "./missing-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -26,6 +27,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedBrokersWithoutHoldings: string[] = [];
 
 /** Initialize D-6 section with empty state */
 export function initSectionD6(): void {
@@ -42,10 +44,21 @@ export function initSectionD6(): void {
     </div>`;
 }
 
-/** Render D-6 section with processed data */
-export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void {
+/**
+ * Render D-6 section with processed data.
+ *
+ * `brokersWithoutHoldings` names the brokers whose export has securities
+ * trades but no year-end securities positions (see findMissingHoldings), so
+ * the section can send the user to that broker's year-end statement.
+ */
+export function renderSectionD6(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  brokersWithoutHoldings: string[] = [],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedBrokersWithoutHoldings = brokersWithoutHoldings;
 
   const container = document.getElementById("d6-content");
   if (!container) return;
@@ -62,8 +75,14 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
       new Decimal(p.quantity).greaterThan(0),
   );
 
+  const missingNotice = brokersWithoutHoldings.length > 0
+    ? `<div class="banner banner-warning d6-no-holdings">${esc(t("d6.brokers_without_holdings", {
+      brokers: formatBrokerList(brokersWithoutHoldings, getCurrentLocale()),
+    }))}</div>`
+    : "";
+
   if (positions.length === 0) {
-    container.innerHTML = `<p class="muted">${t("d6.no_positions")}</p>`;
+    container.innerHTML = missingNotice || `<p class="muted">${t("d6.no_positions")}</p>`;
     return;
   }
 
@@ -99,6 +118,8 @@ export function renderSectionD6(statement: Statement, rateMap: EcbRateMap): void
   // Positions must be the holdings at 31 December of the selected year
   const positionsDate = renderPositionsDateBanner(statement, year);
   html += positionsDate.html;
+
+  html += missingNotice;
 
   // 10% threshold reminder (Orden ICT/1408/2021)
   html += `<div class="banner banner-warning">${t("d6.no_minimum")}</div>`;
@@ -279,6 +300,6 @@ async function generateD6File(): Promise<void> {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSectionD6(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSectionD6(cachedStatement, cachedRateMap);
+    renderSectionD6(cachedStatement, cachedRateMap, cachedBrokersWithoutHoldings);
   }
 }

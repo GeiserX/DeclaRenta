@@ -325,6 +325,7 @@ const en: TranslationKeys = {
   "m720.category_exceeded": "Exceeds 50,000 EUR — filing required",
   "m720.category_not_exceeded": "Below threshold",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
+  "m720.brokers_without_holdings": "The {{brokers}} data you uploaded has no positions or balances at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your foreign account balances or your foreign shares and funds exceed €50,000.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -361,6 +362,7 @@ const en: TranslationKeys = {
   "d6.no_minimum":
     "Since Orden ICT/1408/2021, the D-6 is only required if your stake represents <strong>10% or more</strong> of the capital or voting rights of a listed foreign company. Most retail investors are exempt.",
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
+  "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no exchange rate available for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -383,6 +385,7 @@ const en: TranslationKeys = {
   "m721.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
+  "m721.brokers_without_holdings": "The {{brokers}} data you uploaded has no crypto holdings at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your crypto held abroad exceeds €50,000.",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
   "m721.deadline": "Deadline: January 1 – March 31 of the following year",
