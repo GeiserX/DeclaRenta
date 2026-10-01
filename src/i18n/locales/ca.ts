@@ -40,11 +40,18 @@ const ca: TranslationKeys = {
   "results.filter_losses": "Pèrdues",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» i decimals amb punt: per a programes i fulls de càlcul en anglès",
+  "results.export_csv_excel": "Exportar CSV per a Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» i decimals amb coma: s'obre per columnes amb doble clic a l'Excel en espanyol",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operació(ns)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.newer_years_notice": "Es mostra {{year}}; les teves dades també cobreixen {{years}}.",
   "results.year_mismatch":
     "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
+  "results.settings_used": "Configuració del càlcul: monodivisa {{monodivisa}}, titulars {{titulares}}, autoconversions {{autoconvert}}",
+  "results.setting_yes": "sí",
+  "results.setting_no": "no",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbol",
@@ -362,6 +369,8 @@ const ca: TranslationKeys = {
   "m720.title": "Model 720 — Béns a l'estranger",
   "m720.description": "Declaració informativa sobre béns i drets situats a l'estranger.",
   "m720.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 720.",
+  "m720.obliged_by_changes": "Estàs obligat a presentar el Model 720 pels canvis des de la teva última declaració: cada categoria de dalt n'indica el motiu.",
+  "m720.declared_account_missing": "Un compte que vas declarar no té saldo aquest any ({{accounts}}): si el vas cancel·lar, has de declarar-ne la cancel·lació a mà (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
   "m720.category_v": "Valors (accions, fons, bons)",
@@ -370,6 +379,7 @@ const ca: TranslationKeys = {
   "m720.category_not_exceeded": "Per sota del llindar",
   "m720.category_undetermined": "No es pot determinar: {{count}} posició(ns) sense valorar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
+  "m720.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves posicions ni saldos a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si el saldo dels teus comptes o el valor de les teves accions i fons a l'estranger supera els 50.000 €.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -391,6 +401,24 @@ const ca: TranslationKeys = {
     "No s'ha generat cap fitxer. Superes el llindar de 50.000 €, però cap d'aquests béns no es pot escriure al fitxer: declara'ls a mà al formulari del Model 720, seguint els avisos de dalt.",
   "m720.successive_years_note":
     "Si ja vas presentar el Model 720 en un any anterior, només és obligatori tornar-lo a presentar quan el valor conjunt d'una categoria ha augmentat més de 20.000 € respecte de l'última declaració, o quan has venut o cancel·lat un bé que vas declarar (arts. 42 bis.5 i 42 ter.5 del RD 1065/2007). Si no, presentar-lo és opcional.",
+  "m720.previous_title": "El teu últim Model 720",
+  "m720.previous_help": "Si ja vas presentar el Model 720, puja el fitxer .txt de la teva última declaració. El que ja vas declarar sortirà amb origen M, el que has venut amb origen C (baixa) i s'aplicarà la regla dels 20.000 €. El fitxer es llegeix al teu navegador i no es desa.",
+  "m720.previous_loaded": "Carregat {{name}} (exercici {{year}}): {{securities}} valors i {{accounts}} comptes declarats.",
+  "m720.previous_clear": "Treure",
+  "m720.previous_invalid": "Aquest fitxer no és un Model 720: no té cap registre de detall.",
+  "m720.previous_same_year": "Aquest fitxer és de l'exercici {{fileYear}}. Puja el Model 720 d'un exercici anterior a {{year}}.",
+  "m720.origin": "Origen",
+  "m720.origin_a": "A (alta)",
+  "m720.origin_m": "M (ja declarat)",
+  "m720.successive_last": "Última declaració: {{previous}} €. Variació: {{change}} €.",
+  "m720.successive_increase": "Ha augmentat més de 20.000 €: és obligatori tornar a declarar",
+  "m720.successive_sold": "Has venut valors que vas declarar: és obligatori declarar-ne les baixes",
+  "m720.successive_optional": "No ha augmentat més de 20.000 €: tornar-la a declarar és opcional",
+  "m720.successive_not_required": "Amb el teu últim Model 720, aquest any no estàs obligat a presentar-lo: cap categoria ha augmentat més de 20.000 € i no has venut res del que vas declarar. Pots presentar-lo si vols.",
+  "m720.sold_title": "Baixes: valors venuts des del teu últim Model 720",
+  "m720.sold_help": "El fitxer els inclou amb origen C, amb la data i l'import de l'última venda.",
+  "m720.sold_no_date": "no hi ha cap venda el {{year}} de les accions declarades: la baixa surt sense data d'extinció i amb valoració 0; completa-la abans de presentar",
+  "m720.sold_no_acquisition": "les dades no n'inclouen la compra: la baixa surt sense data d'adquisició; completa-la abans de presentar",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -407,6 +435,7 @@ const ca: TranslationKeys = {
   "d6.no_minimum":
     "Des de l'Orden ICT/1408/2021, el D-6 només és obligatori si la teva participació representa el <strong>10% o més</strong> del capital o drets de vot d'una empresa cotitzada estrangera. La majoria d'inversors minoristes estan exempts.",
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
+  "d6.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen els teus valors a 31 de desembre, així que no apareixen aquí. Consulta'ls a l'extracte de final d'any de {{brokers}}.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -431,6 +460,7 @@ const ca: TranslationKeys = {
   "m721.threshold_undetermined":
     "No es pot determinar si superes el llindar de 50.000 €: el total ({{amount}} €) no inclou {{count}} posició(ns) sense valorar. Valora-les abans de concloure que no has de presentar.",
   "m721.no_positions": "Puja un informe amb posicions de criptomonedes al Model 100 per analitzar el Model 721.",
+  "m721.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves criptomonedes a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si les teves criptomonedes a l'estranger superen els 50.000 €.",
   "m721.positions_title": "Posicions declarables",
   "m721.generate_btn": "Generar fitxer Model 721",
   "m721.deadline": "Termini: 1 gener – 31 març de l'any següent",
@@ -514,6 +544,10 @@ const ca: TranslationKeys = {
   "annex.title": "Annex d'operacions (Anexo C1)",
   "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
   "annex.operations": "operaci\u00f3(ns)",
+  "annex.wash_blocked": "Pèrdua bloquejada per recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compres del mateix valor que la bloquegen: {{dates}}",
+  "annex.wash_hint":
+    "A Renta Web, marca aquesta venda com a «Pèrdues patrimonials no imputables». La pèrdua s'aplicarà quan venguis el que has recomprat.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3 fiscal (base de l'estalvi)",
@@ -638,6 +672,10 @@ const ca: TranslationKeys = {
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
+  "crypto_rates.stored_title": "Preus manuals desats",
+  "crypto_rates.stored_description":
+    "Aquests preus en euros estan desats al teu navegador i s'apliquen cada vegada que processes un fitxer. Corregeix un valor i desa, o esborra'ls tots si n'hi ha algun d'erroni.",
+  "crypto_rates.clear_btn": "Esborra els preus desats",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lots manuals per a posicions transferides",

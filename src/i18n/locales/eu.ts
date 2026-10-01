@@ -40,11 +40,18 @@ const eu: TranslationKeys = {
   "results.filter_losses": "Galerak",
   "results.export_json": "Esportatu JSON",
   "results.export_csv": "Esportatu CSV",
+  "results.export_csv_title": "«,» bereizlea eta puntudun hamartarrak: programetarako eta ingelesezko kalkulu-orrietarako",
+  "results.export_csv_excel": "Esportatu CSV Excelerako (ES)",
+  "results.export_csv_excel_title": "«;» bereizlea eta komadun hamartarrak: zutabetan irekitzen da klik bikoitzarekin Excel espainieraz dagoenean",
   "results.export_pdf": "Esportatu PDF",
   "results.operations_count": "{{count}} eragiketa",
   "results.dividends_count": "{{count}} dibidendu",
+  "results.newer_years_notice": "{{year}} erakusten da; zure datuek {{years}} ere hartzen dute.",
   "results.year_mismatch":
     "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
+  "results.settings_used": "Kalkuluaren ezarpenak: monodibisa {{monodivisa}}, titularrak {{titulares}}, auto-bihurketak {{autoconvert}}",
+  "results.setting_yes": "bai",
+  "results.setting_no": "ez",
 
   "table.isin": "ISIN",
   "table.symbol": "Sinboloa",
@@ -362,6 +369,8 @@ const eu: TranslationKeys = {
   "m720.title": "720 Eredua — Atzerriko ondasunak",
   "m720.description": "Atzerrian dauden ondasun eta eskubideei buruzko aitorpen informatiboa.",
   "m720.threshold_exceeded": "Zure posizioen arabera ({{amount}} €), 720 Eredua aurkeztera behartuta zaude.",
+  "m720.obliged_by_changes": "720 Eredua aurkeztu behar duzu azken aitorpenetik izandako aldaketengatik: goiko kategoria bakoitzak arrazoia adierazten du.",
+  "m720.declared_account_missing": "Aitortu zenuen kontu batek ez du saldorik aurten ({{accounts}}): itxi baduzu, haren ezeztapena eskuz aitortu behar duzu (RGATaren 42 bis.5 art.).",
   "m720.threshold_not_exceeded":
     "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
   "m720.category_v": "Balore-paperak (akzioak, funtsak, bonuak)",
@@ -370,6 +379,7 @@ const eu: TranslationKeys = {
   "m720.category_not_exceeded": "Atalasearen azpitik",
   "m720.category_undetermined": "Ezin da zehaztu: {{count}} posizio baloratu gabe",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
+  "m720.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko posizioak eta saldoak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerriko kontuen saldoak edo atzerriko akzio eta funtsen balioak 50.000 € gainditzen dituen.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -391,6 +401,24 @@ const eu: TranslationKeys = {
     "Ez da fitxategirik sortu. 50.000 €-ko atalasea gainditzen duzu, baina ondasun horietako bat ere ezin da fitxategian idatzi: aitortu itzazu eskuz 720 Ereduaren inprimakian, goiko oharrei jarraituz.",
   "m720.successive_years_note":
     "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
+  "m720.previous_title": "Zure azken 720 Eredua",
+  "m720.previous_help": "720 Eredua lehendik aurkeztu baduzu, igo zure azken aitorpenaren .txt fitxategia. Lehendik aitortutakoak M jatorria izango du, saldutakoak C jatorria (baja), eta 20.000 €-ko araua aplikatuko da. Fitxategia zure nabigatzailean irakurtzen da eta ez da gordetzen.",
+  "m720.previous_loaded": "Kargatuta: {{name}} ({{year}} ekitaldia): {{securities}} balore eta {{accounts}} kontu aitortuta.",
+  "m720.previous_clear": "Kendu",
+  "m720.previous_invalid": "Fitxategi hau ez da 720 Eredua: ez du xehetasun-erregistrorik.",
+  "m720.previous_same_year": "Fitxategi hau {{fileYear}} ekitaldikoa da. Igo {{year}} baino lehenagoko ekitaldi baten 720 Eredua.",
+  "m720.origin": "Jatorria",
+  "m720.origin_a": "A (alta)",
+  "m720.origin_m": "M (lehendik aitortua)",
+  "m720.successive_last": "Azken aitorpena: {{previous}} €. Aldaketa: {{change}} €.",
+  "m720.successive_increase": "20.000 € baino gehiago igo da: berriro aitortu behar da",
+  "m720.successive_sold": "Aitortutako baloreak saldu dituzu: horien bajak aitortu behar dira",
+  "m720.successive_optional": "Ez da 20.000 € baino gehiago igo: berriro aitortzea aukerakoa da",
+  "m720.successive_not_required": "Zure azken 720 Ereduaren arabera, aurten ez zaude aurkeztera behartuta: kategoria bakar bat ere ez da 20.000 € baino gehiago igo eta ez duzu aitortutakorik saldu. Nahi baduzu, aurkez dezakezu.",
+  "m720.sold_title": "Bajak: zure azken 720 Eredutik saldutako baloreak",
+  "m720.sold_help": "Fitxategiak C jatorriarekin jasotzen ditu, azken salmentaren data eta zenbatekoarekin.",
+  "m720.sold_no_date": "{{year}} ekitaldian ez dago aitortutako akzioen salmentarik: baja iraungitze-datarik gabe eta 0 balorazioarekin ateratzen da; osatu aurkeztu aurretik",
+  "m720.sold_no_acquisition": "datuek ez dute erosketa jasotzen: baja eskuratze-datarik gabe ateratzen da; osatu aurkeztu aurretik",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",
@@ -407,6 +435,7 @@ const eu: TranslationKeys = {
   "d6.no_minimum":
     "ICT/1408/2021 Aginduaz geroztik, D-6 soilik nahitaezkoa da zure partaidetza atzerriko enpresa kotizatu baten kapitalaren edo boto-eskubideen <strong>%10 edo gehiago</strong> bada. Txikizkako inbertitzaile gehienak salbuetsita daude.",
   "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
+  "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -431,6 +460,7 @@ const eu: TranslationKeys = {
   "m721.threshold_undetermined":
     "Ezin da zehaztu 50.000 €-ko atalasea gainditzen duzun: guztirakoak ({{amount}} €) ez ditu barne hartzen baloratu gabeko {{count}} posizio. Baloratu itzazu aurkeztu behar ez duzula ondorioztatu aurretik.",
   "m721.no_positions": "Igo kriptomoneda posizioak dituen txostena 100 Ereduan 721 Eredua aztertzeko.",
+  "m721.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko kriptomonetak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerrian dituzun kriptomonetek 50.000 € gainditzen dituzten.",
   "m721.positions_title": "Aitortu beharreko posizioak",
   "m721.generate_btn": "721 Ereduaren fitxategia sortu",
   "m721.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
@@ -514,6 +544,10 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
+  "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
+  "annex.wash_hint":
+    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera berrerosi duzuna saltzen duzunean aplikatuko da.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",
@@ -638,6 +672,10 @@ const eu: TranslationKeys = {
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
+  "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
+  "crypto_rates.stored_description":
+    "Euro prezio hauek zure nabigatzailean gordeta daude eta fitxategi bat prozesatzen duzun bakoitzean aplikatzen dira. Zuzendu balio bat eta gorde, edo ezabatu guztiak bat okerra bada.",
+  "crypto_rates.clear_btn": "Ezabatu gordetako prezioak",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Eskuzko loteak transferitutako posizioentzat",

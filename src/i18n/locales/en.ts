@@ -39,11 +39,18 @@ const en: TranslationKeys = {
   "results.filter_losses": "Losses",
   "results.export_json": "Export JSON",
   "results.export_csv": "Export CSV",
+  "results.export_csv_title": "Comma separator and point decimals: for scripts and English-locale spreadsheets",
+  "results.export_csv_excel": "Export CSV for Excel (ES)",
+  "results.export_csv_excel_title": "Semicolon separator and comma decimals: opens in columns with a double-click in Spanish-locale Excel",
   "results.export_pdf": "Export PDF",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.newer_years_notice": "Showing {{year}}; your data also covers {{years}}.",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
+  "results.settings_used": "Calculation settings: single-currency {{monodivisa}}, holders {{titulares}}, auto-conversions {{autoconvert}}",
+  "results.setting_yes": "yes",
+  "results.setting_no": "no",
 
   "table.isin": "ISIN",
   "table.symbol": "Symbol",
@@ -361,6 +368,8 @@ const en: TranslationKeys = {
   "m720.title": "Modelo 720 — Foreign assets declaration",
   "m720.description": "Informative declaration on assets and rights located abroad.",
   "m720.threshold_exceeded": "Based on your positions ({{amount}} EUR), you are required to file Modelo 720.",
+  "m720.obliged_by_changes": "You must file Modelo 720 because of what changed since your last filing: each category above gives the reason.",
+  "m720.declared_account_missing": "An account you declared has no balance this year ({{accounts}}): if you closed it, you must declare the closing by hand (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
   "m720.category_v": "Securities (stocks, funds, bonds)",
@@ -369,6 +378,7 @@ const en: TranslationKeys = {
   "m720.category_not_exceeded": "Below threshold",
   "m720.category_undetermined": "Cannot be determined: {{count}} position(s) not valued",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
+  "m720.brokers_without_holdings": "The {{brokers}} data you uploaded has no positions or balances at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your foreign account balances or your foreign shares and funds exceed €50,000.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -390,6 +400,24 @@ const en: TranslationKeys = {
     "No file was generated. You are above the 50,000 EUR threshold, but none of those assets can be written to the file: declare them by hand in the Modelo 720 form, following the notices above.",
   "m720.successive_years_note":
     "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
+  "m720.previous_title": "Your last Modelo 720",
+  "m720.previous_help": "If you have filed Modelo 720 before, upload the .txt file of your last return. What you already declared gets origin M, what you sold gets origin C (extinction), and the 20,000 EUR rule is applied. The file is read in your browser and is not stored.",
+  "m720.previous_loaded": "Loaded {{name}} (tax year {{year}}): {{securities}} securities and {{accounts}} accounts declared.",
+  "m720.previous_clear": "Remove",
+  "m720.previous_invalid": "This file is not a Modelo 720: it has no detail records.",
+  "m720.previous_same_year": "This file is for tax year {{fileYear}}. Upload the Modelo 720 of a year before {{year}}.",
+  "m720.origin": "Origin",
+  "m720.origin_a": "A (new)",
+  "m720.origin_m": "M (already declared)",
+  "m720.successive_last": "Last return: {{previous}} EUR. Change: {{change}} EUR.",
+  "m720.successive_increase": "Up more than 20,000 EUR: you must declare it again",
+  "m720.successive_sold": "You sold securities you declared: you must declare their extinction",
+  "m720.successive_optional": "Not up more than 20,000 EUR: declaring it again is optional",
+  "m720.successive_not_required": "Based on your last Modelo 720, you do not have to file this year: no category is up more than 20,000 EUR and you sold nothing you declared. You can still file it if you want.",
+  "m720.sold_title": "Extinctions: securities sold since your last Modelo 720",
+  "m720.sold_help": "The file includes them with origin C, dated and valued by the last sale.",
+  "m720.sold_no_date": "no sale of the declared shares in {{year}}: the record has no extinction date and a value of 0; complete it before filing",
+  "m720.sold_no_acquisition": "the data does not include its purchase: the record has no acquisition date; complete it before filing",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
@@ -407,6 +435,7 @@ const en: TranslationKeys = {
   "d6.no_minimum":
     "Since Orden ICT/1408/2021, the D-6 is only required if your stake represents <strong>10% or more</strong> of the capital or voting rights of a listed foreign company. Most retail investors are exempt.",
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
+  "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -431,6 +460,7 @@ const en: TranslationKeys = {
   "m721.threshold_undetermined":
     "Cannot tell whether you exceed the 50,000 EUR threshold: the total ({{amount}} EUR) leaves out {{count}} position(s) that could not be valued. Value them before concluding that you do not need to file.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
+  "m721.brokers_without_holdings": "The {{brokers}} data you uploaded has no crypto holdings at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your crypto held abroad exceeds €50,000.",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
   "m721.deadline": "Deadline: January 1 – March 31 of the following year",
@@ -512,6 +542,10 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
+  "annex.wash_hint":
+    'In Renta Web, mark this sale as "Non-attributable capital losses". The loss counts once you sell what you bought back.',
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",
@@ -636,6 +670,10 @@ const en: TranslationKeys = {
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
+  "crypto_rates.stored_title": "Saved manual prices",
+  "crypto_rates.stored_description":
+    "These euro prices are saved in your browser and are applied every time you process a file. Correct a value and save, or clear them all if one is wrong.",
+  "crypto_rates.clear_btn": "Clear saved prices",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Manual lots for transferred positions",

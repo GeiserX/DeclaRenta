@@ -40,11 +40,18 @@ const gl: TranslationKeys = {
   "results.filter_losses": "Perdas",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» e decimais con punto: para programas e follas de cálculo en inglés",
+  "results.export_csv_excel": "Exportar CSV para Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» e decimais con coma: ábrese por columnas con dobre clic no Excel en español",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(s)",
   "results.dividends_count": "{{count}} dividendo(s)",
+  "results.newer_years_notice": "Amosando {{year}}; os teus datos tamén cobren {{years}}.",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
+  "results.settings_used": "Axustes do cálculo: monodivisa {{monodivisa}}, titulares {{titulares}}, autoconversións {{autoconvert}}",
+  "results.setting_yes": "si",
+  "results.setting_no": "non",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",
@@ -362,6 +369,8 @@ const gl: TranslationKeys = {
   "m720.title": "Modelo 720 — Bens no estranxeiro",
   "m720.description": "Declaración informativa sobre bens e dereitos situados no estranxeiro.",
   "m720.threshold_exceeded": "Segundo as túas posicións ({{amount}} €), estás obrigado a presentar o Modelo 720.",
+  "m720.obliged_by_changes": "Estás obrigado a presentar o Modelo 720 polos cambios desde a túa última declaración: cada categoría de arriba indica o motivo.",
+  "m720.declared_account_missing": "Unha conta que declaraches non ten saldo este ano ({{accounts}}): se a cancelaches, debes declarar a súa cancelación a man (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "Non superas o limiar de 50.000 € (total: {{amount}} €). Non estás obrigado a presentar.",
   "m720.category_v": "Valores (accións, fondos, bonos)",
@@ -370,6 +379,7 @@ const gl: TranslationKeys = {
   "m720.category_not_exceeded": "Por debaixo do limiar",
   "m720.category_undetermined": "Non se pode determinar: {{count}} posición(s) sen valorar",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
+  "m720.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen as túas posicións nin saldos a 31 de decembro, así que non se suman aquí. Comproba no extracto de fin de ano de {{brokers}} se o saldo das túas contas ou o valor das túas accións e fondos no estranxeiro supera os 50.000 €.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -391,6 +401,24 @@ const gl: TranslationKeys = {
     "Non se xerou ningún ficheiro. Superas o limiar de 50.000 €, pero ningún deses bens pode escribirse no ficheiro: declaraos a man no formulario do Modelo 720, seguindo os avisos de arriba.",
   "m720.successive_years_note":
     "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
+  "m720.previous_title": "O teu último Modelo 720",
+  "m720.previous_help": "Se xa presentaches o Modelo 720, sube o ficheiro .txt da túa última declaración. O que xa declaraches sairá con orixe M, o que vendiches con orixe C (baixa) e aplicarase a regra dos 20.000 €. O ficheiro lese no teu navegador e non se garda.",
+  "m720.previous_loaded": "Cargado {{name}} (exercicio {{year}}): {{securities}} valores e {{accounts}} contas declarados.",
+  "m720.previous_clear": "Quitar",
+  "m720.previous_invalid": "Este ficheiro non é un Modelo 720: non ten ningún rexistro de detalle.",
+  "m720.previous_same_year": "Este ficheiro é do exercicio {{fileYear}}. Sube o Modelo 720 dun exercicio anterior a {{year}}.",
+  "m720.origin": "Orixe",
+  "m720.origin_a": "A (alta)",
+  "m720.origin_m": "M (xa declarado)",
+  "m720.successive_last": "Última declaración: {{previous}} €. Variación: {{change}} €.",
+  "m720.successive_increase": "Aumentou máis de 20.000 €: é obrigatorio volver declarar",
+  "m720.successive_sold": "Vendiches valores que declaraches: é obrigatorio declarar as súas baixas",
+  "m720.successive_optional": "Non aumentou máis de 20.000 €: volver declarala é opcional",
+  "m720.successive_not_required": "Co teu último Modelo 720, este ano non estás obrigado a presentalo: ningunha categoría aumentou máis de 20.000 € e non vendiches nada do que declaraches. Podes presentalo se queres.",
+  "m720.sold_title": "Baixas: valores vendidos desde o teu último Modelo 720",
+  "m720.sold_help": "O ficheiro inclúeos con orixe C, coa data e o importe da última venda.",
+  "m720.sold_no_date": "non hai ningunha venda en {{year}} das accións declaradas: a baixa sae sen data de extinción e con valoración 0; complétaa antes de presentar",
+  "m720.sold_no_acquisition": "os datos non inclúen a súa compra: a baixa sae sen data de adquisición; complétaa antes de presentar",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -407,6 +435,7 @@ const gl: TranslationKeys = {
   "d6.no_minimum":
     "Desde a Orde ICT/1408/2021, o D-6 só é obrigatorio se a túa participación representa o <strong>10% ou máis</strong> do capital ou dereitos de voto dunha empresa cotizada estranxeira. A maioría dos investidores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o D-6.",
+  "d6.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen os teus valores a 31 de decembro, así que non aparecen aquí. Consúltaos no extracto de fin de ano de {{brokers}}.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -431,6 +460,7 @@ const gl: TranslationKeys = {
   "m721.threshold_undetermined":
     "Non se pode determinar se superas o limiar de 50.000 €: o total ({{amount}} €) non inclúe {{count}} posición(s) sen valorar. Valóraas antes de concluír que non debes presentar.",
   "m721.no_positions": "Sube un informe con posicións de criptomoedas no Modelo 100 para analizar o Modelo 721.",
+  "m721.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen as túas criptomoedas a 31 de decembro, así que non se suman aquí. Comproba no extracto de fin de ano de {{brokers}} se as túas criptomoedas no estranxeiro superan os 50.000 €.",
   "m721.positions_title": "Posicións declarables",
   "m721.generate_btn": "Xerar ficheiro Modelo 721",
   "m721.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
@@ -514,6 +544,10 @@ const gl: TranslationKeys = {
   "annex.title": "Anexo de operaci\u00f3ns (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaci\u00f3ns agrupadas por tipo de activo.",
   "annex.operations": "operaci\u00f3n(s)",
+  "annex.wash_blocked": "Perda bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compras do mesmo valor que a bloquean: {{dates}}",
+  "annex.wash_hint":
+    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda aplicarase cando vendas o que recompraches.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3n fiscal (base do aforro)",
@@ -638,6 +672,10 @@ const gl: TranslationKeys = {
   "crypto_rates.save_btn": "Gardar e recalcular",
   "crypto_rates.saved": "Gardado",
   "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
+  "crypto_rates.stored_title": "Prezos manuais gardados",
+  "crypto_rates.stored_description":
+    "Estes prezos en euros están gardados no teu navegador e aplícanse cada vez que procesas un ficheiro. Corrixe un valor e garda, ou bórraos todos se algún é erróneo.",
+  "crypto_rates.clear_btn": "Borrar prezos gardados",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuais para posicións transferidas",

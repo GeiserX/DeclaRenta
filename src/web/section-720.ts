@@ -5,24 +5,31 @@
  * and generates the fixed-width file for AEAT submission.
  */
 
-import { t } from "../i18n/index.js";
+import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
+  checkModelo720SuccessiveYear,
   checkModelo720Thresholds,
   findModelo720Omissions,
+  findUndatedExtinctions,
   generateModelo720,
   modelo720DeclarationId,
   modelo720PositionCountry,
+  readPrevious720,
+  readPrevious720Totals,
+  type Modelo720SuccessiveCategory,
+  type Previous720Totals,
 } from "../generators/modelo720.js";
 import { validateModelo720TextFields } from "../generators/modelo720-validator.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import type { Lot } from "../types/tax.js";
+import type { FifoDisposal, Lot } from "../types/tax.js";
 import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { formatBrokerList } from "./missing-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -34,6 +41,86 @@ function effectiveYearEnd(year: number): string {
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
+let cachedDisposals: FifoDisposal[] | undefined;
+
+/**
+ * Last filed 720, uploaded in this section. It decides the A/M/C origin of
+ * each record and the 20,000 € rule. Kept in memory only, never stored.
+ */
+interface Previous720Upload {
+  name: string;
+  previous: ReturnType<typeof readPrevious720>;
+  totals: Previous720Totals;
+}
+let previous720: Previous720Upload | null = null;
+let previous720Error: { key: "m720.previous_invalid" } | { key: "m720.previous_same_year"; fileYear: number } | null = null;
+
+/** The generator config fields that come from the uploaded 720. */
+function previousConfig(): { previousYearSecurities?: Previous720Upload["previous"]["securities"]; previousYearAccounts?: string[] } {
+  return previous720
+    ? { previousYearSecurities: previous720.previous.securities, previousYearAccounts: previous720.previous.accounts }
+    : {};
+}
+
+/** Read an uploaded 720 file (ISO-8859-15, like the one this tool generates) and re-render. */
+async function loadPrevious720(file: File): Promise<void> {
+  const content = new TextDecoder("iso-8859-15").decode(await file.arrayBuffer());
+  const totals = readPrevious720Totals(content);
+  const year = getProfile().year;
+  if (!content.split(/\r?\n/).some((line) => line.startsWith("2720"))) {
+    previous720 = null;
+    previous720Error = { key: "m720.previous_invalid" };
+  } else if (totals.year !== null && totals.year >= year) {
+    previous720 = null;
+    previous720Error = { key: "m720.previous_same_year", fileYear: totals.year };
+  } else {
+    previous720 = { name: file.name, previous: readPrevious720(content), totals };
+    previous720Error = null;
+  }
+  rerenderSection720();
+}
+
+function previous720CardHtml(year: number): string {
+  let status = "";
+  if (previous720) {
+    const { previous, totals, name } = previous720;
+    status = `<p>${esc(t("m720.previous_loaded", {
+      name,
+      year: totals.year === null ? "—" : String(totals.year),
+      securities: String(new Set(previous.securities.map((s) => s.isin)).size),
+      accounts: String(new Set(previous.accounts).size),
+    }))} <button type="button" id="m720-previous-clear" class="btn-secondary btn-small">${esc(t("m720.previous_clear"))}</button></p>`;
+  } else if (previous720Error) {
+    const message = previous720Error.key === "m720.previous_same_year"
+      ? t(previous720Error.key, { fileYear: String(previous720Error.fileYear), year: String(year) })
+      : t(previous720Error.key);
+    status = `<div class="banner banner-warning">${esc(message)}</div>`;
+  }
+  return `<div class="m720-previous">
+    <h3>${esc(t("m720.previous_title"))}</h3>
+    <p class="muted">${esc(t("m720.previous_help"))}</p>
+    ${previous720 ? "" : `<input type="file" id="m720-previous-input" accept=".txt,text/plain">`}
+    ${status}
+  </div>`;
+}
+
+function bindPrevious720Card(): void {
+  document.getElementById("m720-previous-input")?.addEventListener("change", (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) void loadPrevious720(file);
+  });
+  document.getElementById("m720-previous-clear")?.addEventListener("click", () => {
+    previous720 = null;
+    previous720Error = null;
+    rerenderSection720();
+  });
+}
+
+/** "+1.234,00" for an increase, "-1.234,00" for a decrease. */
+function fmtChange(d: Decimal): string {
+  return d.greaterThan(0) ? `+${fmtEur(d)}` : fmtEur(d);
+}
+let cachedBrokersWithoutHoldings: string[] = [];
 /** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
 let cachedYear: number | null = null;
 
@@ -57,11 +144,26 @@ export function initSection720(): void {
     </div>`;
 }
 
-/** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
+/**
+ * Render 720 section with processed data.
+ *
+ * `brokersWithoutHoldings` names the brokers whose export has no year-end
+ * positions or balances (see findMissingHoldings): they are missing from the
+ * totals, so the section says so and sends the user to that broker's
+ * year-end statement.
+ */
+export function renderSection720(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  yearEndLots?: Map<string, Lot[]>,
+  disposals?: FifoDisposal[],
+  brokersWithoutHoldings: string[] = [],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
   cachedYearEndLots = yearEndLots;
+  cachedDisposals = disposals;
+  cachedBrokersWithoutHoldings = brokersWithoutHoldings;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -70,9 +172,17 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const year = profile.year;
   cachedYear = year;
 
+  const missingNotice = brokersWithoutHoldings.length > 0
+    ? `<div class="banner banner-warning m720-no-holdings">${esc(t("m720.brokers_without_holdings", {
+      brokers: formatBrokerList(brokersWithoutHoldings, getCurrentLocale()),
+    }))}</div>`
+    : "";
+
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
-  if (statement.openPositions.length === 0 && !hasCashBalances) {
-    container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
+  // With nothing held, last year's file still matters: what it declared was sold (C).
+  if (statement.openPositions.length === 0 && !hasCashBalances && !previous720) {
+    container.innerHTML = `${missingNotice || `<p class="muted">${t("m720.no_positions")}</p>`}${previous720CardHtml(year)}`;
+    bindPrevious720Card();
     return;
   }
 
@@ -107,24 +217,42 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const positionsDate = renderPositionsDateBanner(statement, year);
   html += positionsDate.html;
 
+  html += previous720CardHtml(year);
+
   // Per-category threshold checks (720 has independent 50K thresholds)
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
 
+  // With last year's file, a category it declared follows the 20,000 € rule instead
+  const successive = previous720
+    ? checkModelo720SuccessiveYear(statement.openPositions, rateMap, year, statement.cashBalances, previous720.previous, previous720.totals)
+    : null;
+  const sold = successive?.values.sold ?? [];
+
   // `unvalued`: holdings left out of the total. Until the user values them the
   // category cannot be called below the threshold.
-  const categories: { label: string; total: Decimal; exceeds: boolean; unvalued: number }[] = [];
-  if (thresholds.values.total.greaterThan(0) || thresholds.values.unvalued > 0) {
+  const categories: Modelo720CategoryView[] = [];
+  if (thresholds.values.total.greaterThan(0) || thresholds.values.unvalued > 0 || successive?.values.declaredBefore) {
     categories.push({
       label: t("m720.category_v"),
       total: thresholds.values.total,
       exceeds: thresholds.values.exceeds,
       unvalued: thresholds.values.unvalued,
+      successive: successive?.values,
+      sold: sold.length,
     });
   }
-  if (thresholds.accounts.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds, unvalued: 0 });
+  if (thresholds.accounts.total.greaterThan(0) || successive?.accounts.declaredBefore) {
+    categories.push({
+      label: t("m720.category_c"),
+      total: thresholds.accounts.total,
+      exceeds: thresholds.accounts.exceeds,
+      unvalued: 0,
+      successive: successive?.accounts,
+      sold: 0,
+    });
   }
+  const mustFile = categories.some((cat) => (cat.successive?.declaredBefore ? cat.successive.mandatory : cat.exceeds));
 
   for (const cat of categories) {
     const pct = Math.min(cat.total.div(50000).mul(100).toNumber(), 100);
@@ -137,18 +265,30 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         <span>${t("m720.total_value", { amount: fmtEur(cat.total) })}</span>
         <span>50.000 €</span>
       </div>
-      <p class="${cat.exceeds || cat.unvalued > 0 ? "warning" : "muted"}">${cat.exceeds
-        ? t("m720.category_exceeded")
-        : cat.unvalued > 0
-          ? esc(t("m720.category_undetermined", { count: String(cat.unvalued) }))
-          : t("m720.category_not_exceeded")}</p>
+      ${categoryStatusHtml(cat)}
     </div>`;
   }
 
-  if (exceeds) {
+  if (mustFile && exceeds) {
     const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
+  } else if (mustFile) {
+    // Below 50,000 €, the duty comes from last year's filing (a sale to cancel or
+    // a rise over 20,000 €), not from the amount held, so do not quote it.
+    html += `<p class="warning">${esc(t("m720.obliged_by_changes"))}</p>`;
+  }
+  if (!previous720 && exceeds) {
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
+  }
+  html += missingNotice;
+  // A declared account with no balance this year may have been closed, and a
+  // closing must be declared (art. 42 bis.5 RGAT). The file cannot tell, so say
+  // it instead of promising that nothing has to be filed.
+  const missingAccounts = successive?.accounts.missing ?? [];
+  if (missingAccounts.length > 0) {
+    html += `<div class="banner banner-warning m720-missing-accounts">${esc(t("m720.declared_account_missing", { accounts: missingAccounts.join(", ") }))}</div>`;
+  } else if (previous720 && !mustFile && categories.every((cat) => cat.unvalued === 0)) {
+    html += `<div class="banner banner-info">${esc(t("m720.successive_not_required"))}</div>`;
   }
 
   // Positions table (long holdings only: a short is owed, not owned, and the
@@ -158,12 +298,13 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
       && !new Decimal(p.positionValue).isNegative(),
   );
 
+  const declaredIsins = previous720 ? new Set(previous720.previous.securities.map((s) => s.isin)) : null;
   if (positions.length > 0) {
     let unvaluedCount = 0;
     html += `<h3>${t("m720.positions_title")}</h3>
     <div class="table-wrapper"><table>
       <thead><tr>
-        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.country")}</th><th>${t("table.amount_eur")}</th>
+        <th>ISIN</th><th>${t("table.symbol")}</th><th>${t("table.country")}</th><th>${t("table.amount_eur")}</th>${declaredIsins ? `<th>${esc(t("m720.origin"))}</th>` : ""}
       </tr></thead>
       <tbody>${positions.map((p) => {
         let rate: Decimal | null = null;
@@ -180,7 +321,8 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
         if (hasNoMarketValue(p)) rate = null;
         if (rate === null) unvaluedCount++;
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
-        return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td></tr>`;
+        const origin = declaredIsins ? `<td>${esc(t(declaredIsins.has(p.isin) ? "m720.origin_m" : "m720.origin_a"))}</td>` : "";
+        return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td>${origin}</tr>`;
       }).join("")}</tbody>
     </table></div>`;
     if (unvaluedCount > 0) {
@@ -219,8 +361,25 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     </table></div>`;
   }
 
+  // Securities last year's file declared that are no longer held: C records
+  if (sold.length > 0) {
+    const undated = new Map(
+      findUndatedExtinctions(statement.openPositions, { year, ...previousConfig() }, disposals).map((u) => [u.isin, u.missing]),
+    );
+    html += `<h3>${esc(t("m720.sold_title"))}</h3>
+    <p class="muted">${esc(t("m720.sold_help"))}</p>
+    <ul class="m720-sold">${sold.map((s) => {
+      const missing = undated.get(s.isin);
+      const note = missing === "extinctionDate"
+        ? `: ${esc(t("m720.sold_no_date", { year: String(year) }))}`
+        : missing === "acquisitionDate" ? `: ${esc(t("m720.sold_no_acquisition"))}` : "";
+      return `<li><span class="mono">${esc(s.isin)}</span>${note}</li>`;
+    }).join("")}</ul>`;
+  }
+
   // Assets the file leaves out: the user declares them by hand.
-  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year }, statement.cashBalances);
+  // With this year's sales, an old "V " record gets its subclave and is no longer reported as omitted.
+  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year, ...previousConfig() }, statement.cashBalances, disposals);
   if (omissions.length > 0) {
     html += `<div class="banner banner-warning">${esc(t("m720.omitted_title"))}<ul>${omissions.map((o) => {
       const label = o.kind === "position"
@@ -233,7 +392,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   }
 
   // Generate button
-  if (exceeds || positions.length > 0) {
+  if (exceeds || positions.length > 0 || sold.length > 0) {
     html += `<button id="m720-generate-btn"${positionsDate.blocked ? " disabled" : ""}>${t("m720.generate_btn")}</button>`;
   }
 
@@ -252,11 +411,42 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   html += `<div class="deadline-reminder">${t("m720.deadline")}</div>`;
 
   container.innerHTML = html;
+  bindPrevious720Card();
 
   // Bind generate button
   document.getElementById("m720-generate-btn")?.addEventListener("click", () => {
     generate720File();
   });
+}
+
+/** A category bar of the section: its total, what could not be valued, and last year's comparison. */
+interface Modelo720CategoryView {
+  label: string;
+  total: Decimal;
+  exceeds: boolean;
+  unvalued: number;
+  successive?: Modelo720SuccessiveCategory;
+  sold: number;
+}
+
+/**
+ * The obligation line under a category bar: the 50,000 € threshold, or, for a
+ * category last year's file declared, the 20,000 € rule and any sale of it.
+ */
+function categoryStatusHtml(cat: Modelo720CategoryView): string {
+  // Holdings left out of the total: the category cannot be called below 50,000 € or not up 20,000 €.
+  const undetermined = esc(t("m720.category_undetermined", { count: String(cat.unvalued) }));
+  const s = cat.successive;
+  if (!s?.declaredBefore) {
+    return cat.exceeds
+      ? `<p class="warning">${t("m720.category_exceeded")}</p>`
+      : cat.unvalued > 0 ? `<p class="warning">${undetermined}</p>` : `<p class="muted">${t("m720.category_not_exceeded")}</p>`;
+  }
+  const last = `<p class="muted">${esc(t("m720.successive_last", { previous: fmtEur(s.previousTotal), change: fmtChange(s.increase) }))}</p>`;
+  if (cat.exceeds && s.increaseExceeded) return `${last}<p class="warning">${esc(t("m720.successive_increase"))}</p>`;
+  if (cat.sold > 0) return `${last}<p class="warning">${esc(t("m720.successive_sold"))}</p>`;
+  if (cat.unvalued > 0) return `${last}<p class="warning">${undetermined}</p>`;
+  return `${last}<p class="muted">${esc(t(cat.exceeds ? "m720.successive_optional" : "m720.category_not_exceeded"))}</p>`;
 }
 
 function encodeISO885915(str: string): Uint8Array {
@@ -305,7 +495,17 @@ function generate720File(): void {
   const thresholds = checkModelo720Thresholds(
     cachedStatement.openPositions, cachedRateMap, cachedYear, cachedStatement.cashBalances,
   );
-  if (!thresholds.values.exceeds && !thresholds.accounts.exceeds) {
+  // Last year's 720 can make filing mandatory below 50,000 € (a sale to cancel,
+  // art. 42 ter.5 RGAT) or need a closed account declared (art. 42 bis.5), so
+  // the threshold answer only applies when it does neither.
+  const successive = previous720
+    ? checkModelo720SuccessiveYear(
+      cachedStatement.openPositions, cachedRateMap, cachedYear, cachedStatement.cashBalances, previous720.previous, previous720.totals,
+    )
+    : null;
+  const obligedByLastFiling = !!successive
+    && (successive.values.mandatory || successive.accounts.mandatory || successive.accounts.missing.length > 0);
+  if (!thresholds.values.exceeds && !thresholds.accounts.exceeds && !obligedByLastFiling) {
     // A holding with no value in euros may be what passes the threshold, so the
     // answer is "value it first", never "you are not obliged".
     if (thresholds.values.unvalued > 0) {
@@ -348,6 +548,7 @@ function generate720File(): void {
     isComplementary: false,
     isReplacement: false,
     titulares: profile.titulares,
+    ...previousConfig(),
   };
 
   // Validate the free-text inputs (taxpayer name, contact, broker-supplied
@@ -377,10 +578,13 @@ function generate720File(): void {
     }
   }
 
-  const result = generateModelo720(cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances);
+  const result = generateModelo720(
+    cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances, cachedDisposals,
+  );
   if (!result) {
-    // Above the threshold, but everything over it had to be left out of the
-    // file (listed in the banners above): the user declares it by hand.
+    // Above the threshold (or obliged by last year's filing), but everything
+    // that had to go in was left out of the file (listed in the banners above):
+    // the user declares it by hand.
     showNotGeneratedBanner("warning", `<p>${esc(t("m720.not_generated_left_out"))}</p>`);
     return;
   }
@@ -397,6 +601,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedDisposals, cachedBrokersWithoutHoldings);
   }
 }

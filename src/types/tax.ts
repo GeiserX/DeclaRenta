@@ -174,6 +174,12 @@ export interface FifoDisposal {
    */
   blockedLossEur: Decimal;
   /**
+   * Display only: the YYYY-MM-DD dates of the homogeneous purchases inside the
+   * anti-churning window that absorbed this disposal's loss (sorted, unique).
+   * Set by detectWashSales only when `blockedLossEur > 0`. Never used for tax math.
+   */
+  washSaleRepurchaseDates?: string[];
+  /**
    * Prior deferred (blocked) loss RELEASED because this disposal sold shares that
    * were the homogeneous repurchase which previously blocked an earlier loss
    * ("se integrarán a medida que se transmitan los valores que permanezcan en el
@@ -272,10 +278,28 @@ export interface GeneralGainEntry {
   ecbRate: Decimal;
 }
 
+/**
+ * The profile settings a report was computed with. They change the figures, so
+ * the Results header and the CSV/PDF exports print them next to the numbers.
+ */
+export interface ReportSettings {
+  /** Monodivisa mode: the FX engine is off (`ReportOptions.skipFx`). */
+  monodivisa: boolean;
+  /** Broker auto-conversions (AFx/FXCONV) are processed (`ReportOptions.trackAutoConvert`). */
+  trackAutoConvert: boolean;
+  /** Number of account holders the amounts are split between. */
+  titulares: number;
+}
+
 /** Aggregated results for Modelo 100 casillas */
 export interface TaxSummary {
   /** Tax year */
   year: number;
+  /**
+   * Settings used to compute this report. Absent on reports built before the
+   * field existed (e.g. ones saved for the year comparison).
+   */
+  settings?: ReportSettings;
   /** @deprecated Use `messages` for severity-aware rendering */
   warnings: string[];
   /** Structured three-tier messages (error/warning/info) */

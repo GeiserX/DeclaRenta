@@ -9,12 +9,13 @@ import { detectBroker, getBroker } from "../parsers/index.js";
 import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
 import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
 import type { Statement } from "../types/broker.js";
-import type { TaxSummary } from "../types/tax.js";
+import type { ReportSettings, TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
-import { formatCsv } from "../generators/csv.js";
+import { csvDownload } from "./csv-download.js";
+import { formatReportSettings, reportSettingsDiffer } from "../generators/report-settings.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -29,7 +30,7 @@ import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
-import { initProfile, getProfile, saveProfile } from "./profile.js";
+import { initProfile, getProfile, saveProfile, type FiscalProfile } from "./profile.js";
 import { initBrokerGuides, getSelectedBrokerIds, BROKER_ID_TO_PARSER } from "./broker-guides.js";
 import { resolveDetection, DETECTION_ERROR } from "./detection-cache.js";
 import { esc } from "./esc.js";
@@ -44,10 +45,13 @@ import {
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
+import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./missing-holdings.js";
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
+import { pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
@@ -158,6 +162,30 @@ langSelect.addEventListener("change", () => {
   });
 });
 
+// Recalculate when a profile setting that changes the figures is edited
+// (monodivisa, titulares, auto-conversions) while results are on screen. The
+// other fields (NIF, name, phone...) do not change the Modelo 100 figures, so
+// typing them never re-runs the engine.
+document.addEventListener("profilechange", (e) => {
+  if (!currentReport || !mergedStatement || !lastRunSettings) return;
+  const next = settingsFromProfile((e as CustomEvent<FiscalProfile>).detail);
+  if (reportSettingsDiffer(lastRunSettings, next)) rerunWithOverlay();
+});
+
+/**
+ * Re-run the report from the Results step with the same processing overlay the
+ * wizard shows, so the old figures are covered until the new ones are drawn.
+ */
+function rerunWithOverlay(): void {
+  const overlay = document.createElement("div");
+  overlay.className = "processing-overlay";
+  overlay.innerHTML = `<div class="processing-spinner"></div><span class="processing-text">${t("config.processing")}</span>`;
+  document.getElementById("wizard-step-3")?.appendChild(overlay);
+  void processFiles().finally(() => {
+    overlay.remove();
+  });
+}
+
 document.addEventListener("localechange", () => {
   updateStaticText();
   renderFileList();
@@ -229,6 +257,7 @@ const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
+const exportCsvExcelBtn = document.getElementById("export-csv-excel-btn")!;
 const exportPdfBtn = document.getElementById("export-pdf-btn") as HTMLButtonElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
 const fileListDiv = document.getElementById("file-list")!;
@@ -244,10 +273,18 @@ const pendingFiles: File[] = [];
 /** Parsed statement data (available after step 2) */
 let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
+/** Per model, the brokers whose export has no year-end holdings (named in 720/721/D-6). */
+let detectedMissingHoldings: MissingHoldings = { m720: [], m721: [], d6: [] };
 /** Years detected from uploaded data (sorted descending, latest first) */
 let detectedYears: number[] = [];
-/** The active year for processing (auto-detected from data, changeable via dropdown) */
+/** The active year for processing (last closed year in the data by default, changeable via dropdown) */
 let activeYear: number | null = null;
+/** Profile settings the latest processFiles run computed with. */
+let lastRunSettings: ReportSettings | null = null;
+
+function settingsFromProfile(p: FiscalProfile): ReportSettings {
+  return { monodivisa: p.monodivisa, trackAutoConvert: p.trackAutoConvert, titulares: p.titulares };
+}
 /**
  * The year of the results currently rendered on the Results step, or null when
  * none are. Kept apart from `currentReport`, which a failed re-run clears while
@@ -547,6 +584,7 @@ async function parseFiles(): Promise<void> {
 
   const merged = createEmptyStatement();
   const brokerNames: string[] = [];
+  const parsedExports: ParsedExport[] = [];
 
   try {
     for (const file of pendingFiles) {
@@ -555,6 +593,7 @@ async function parseFiles(): Promise<void> {
         const statement = await parseRevolutXlsx(uint8);
         mergeStatement(merged, statement);
         brokerNames.push("Revolut");
+        parsedExports.push({ broker: "Revolut", statement });
         continue;
       }
 
@@ -562,6 +601,7 @@ async function parseFiles(): Promise<void> {
         const statement = await parseEtoroXlsx(uint8);
         mergeStatement(merged, statement);
         brokerNames.push("eToro");
+        parsedExports.push({ broker: "eToro", statement });
         continue;
       }
 
@@ -602,10 +642,12 @@ async function parseFiles(): Promise<void> {
       const statement = parser.parse(content);
       mergeStatement(merged, statement);
       brokerNames.push(parser.name);
+      parsedExports.push({ broker: parser.name, statement });
     }
 
     mergedStatement = finalizeMergedStatement(merged);
     detectedBrokers = [...new Set(brokerNames)];
+    detectedMissingHoldings = findMissingHoldings(parsedExports);
 
     // Detect years from trades + cash transactions. A corrupt date would make
     // parseInt() return NaN (or an absurd year), which then poisons activeYear
@@ -620,10 +662,11 @@ async function parseFiles(): Promise<void> {
     for (const ct of merged.cashTransactions) addYear(ct.dateTime);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
     if (!activeYear) {
-      // detectedYears[0] is undefined when no valid year was found (all dates
-      // corrupt / empty file) — fall back to the current calendar year so we
+      // Open on the last closed year (the one a Renta is filed for), not the
+      // newest year in the data and not the year saved in the profile. With no
+      // valid year at all it falls back to the current calendar year, so we
       // never persist NaN as the active year.
-      activeYear = detectedYears[0] ?? new Date().getFullYear();
+      activeYear = pickDefaultYear(detectedYears);
       // Sync profile so 720/721/D-6 use the same year
       const profile = getProfile();
       profile.year = activeYear;
@@ -756,8 +799,9 @@ function renderSectionSafely(containerId: string, render: () => void): void {
 }
 
 /**
- * Monotonic run token. `processFiles` is triggered from four places (wizard
- * Next, year-select change, manual-rate apply, monodivisa toggle) and is async
+ * Monotonic run token. `processFiles` is triggered from several places (wizard
+ * Next, year-select change, manual-rate or opening-lot apply, and a profile
+ * change to monodivisa, titulares or auto-conversions) and is async
  * (it awaits the ECB fetch and a paint yield), so two runs can overlap — e.g.
  * the user changes the year and immediately edits a manual rate. Without a guard
  * the slower run would resolve last and clobber `currentReport`/the rendered
@@ -775,6 +819,10 @@ async function processFiles(): Promise<void> {
 
   const runToken = ++processRunToken;
   const isStale = () => runToken !== processRunToken;
+  // Read the settings when the run starts, so a change made while it awaits the
+  // ECB fetch is seen as a change and starts a newer run.
+  const profileForReport = getProfile();
+  lastRunSettings = settingsFromProfile(profileForReport);
 
   try {
     const year = activeYear ?? getProfile().year;
@@ -791,7 +839,7 @@ async function processFiles(): Promise<void> {
     // We deliberately do NOT pass `noCache` — past years' ECB rates never
     // change, so the orchestrator's per-(currency, year) memoization makes the
     // repeated processFiles() runs (year-select change, manual-rate entry,
-    // monodivisa toggle) reuse already-fetched rates instead of refetching
+    // profile setting change) reuse already-fetched rates instead of refetching
     // everything each time. The current year is always refetched.
     const allRates: EcbRateMap = await buildEcbRateMap({ statement: merged, year, manualOpeningLots });
     if (isStale()) return; // a newer run started while fetching — let it win
@@ -814,7 +862,6 @@ async function processFiles(): Promise<void> {
     await new Promise<void>((r) => setTimeout(r, 0));
     if (isStale()) return; // superseded during the paint yield — discard this run
 
-    const profileForReport = getProfile();
     const report = generateTaxReport(merged, allRates, year, {
       skipFx: profileForReport.monodivisa,
       trackAutoConvert: profileForReport.trackAutoConvert,
@@ -839,9 +886,10 @@ async function processFiles(): Promise<void> {
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
-    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots));
-    renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
-    renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
+    const missing = detectedMissingHoldings;
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots, report.capitalGains.disposals, missing.m720));
+    renderSectionSafely("m721-content", () => renderSection721(merged, allRates, missing.m721));
+    renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates, missing.d6));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     if (isStale()) return; // a newer run owns the screen now
@@ -875,9 +923,14 @@ exportJsonBtn.addEventListener("click", () => {
 
 exportCsvBtn.addEventListener("click", () => {
   if (!currentReport) return;
-  const csv = formatCsv(currentReport);
-  const blob = new Blob([csv], { type: "text/csv" });
-  downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+  const { blob, filename } = csvDownload(currentReport, "standard");
+  downloadBlob(blob, filename);
+});
+
+exportCsvExcelBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  const { blob, filename } = csvDownload(currentReport, "excel-es");
+  downloadBlob(blob, filename);
 });
 
 exportPdfBtn.addEventListener("click", () => {
@@ -885,7 +938,7 @@ exportPdfBtn.addEventListener("click", () => {
   exportPdfBtn.disabled = true;
   const report = currentReport;
   void import("../generators/pdf-web.js")
-    .then(({ generatePdfWebReport }) => generatePdfWebReport(report, t as (key: string) => string, getCurrentLocale()))
+    .then(({ generatePdfWebReport }) => generatePdfWebReport(report, t, getCurrentLocale()))
     .then((blob) => {
       downloadBlob(blob, `declarenta_${report.year}.pdf`);
     })
@@ -1022,7 +1075,10 @@ function renderResults(report: TaxSummary) {
       <span class="section-year">${t("section.year_label")}
         <select id="results-year-select" class="year-select" aria-label="${esc(t("section.year_label"))}">${yearOptions}</select>
       </span>
+      ${report.settings ? `<span class="section-settings" id="results-settings">${esc(formatReportSettings(report.settings, t))}</span>` : ""}
     </div>`;
+
+    hdrHtml += renderNewerYearsNotice(detectedYears, year);
 
     if (!hasData && detectedYears.length > 0 && !detectedYears.includes(year)) {
       hdrHtml += `<div class="banner banner-warning">
@@ -1047,7 +1103,8 @@ function renderResults(report: TaxSummary) {
   }
 
   // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
-  // could not be valued automatically (no ECB rate / no cross-leg). Re-rendered
+  // could not be valued automatically (no ECB rate / no cross-leg), and as a
+  // collapsed list of saved prices once every swap is valued. Re-rendered
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
@@ -1064,10 +1121,9 @@ function renderResults(report: TaxSummary) {
     }
   }
 
-  const unresolved = report.unresolvedCryptoValuations;
-  if (unresolved && unresolved.length > 0) {
-    const panelHtml = renderManualRatesPanel(unresolved);
-    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
+  if (cryptoPanelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
     const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");
@@ -1198,7 +1254,7 @@ function renderOperationsTable() {
         ${disposals
           .map(
             (d) => `
-          <tr>
+          <tr${washSaleRowAttr(d)}>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
@@ -1208,7 +1264,7 @@ function renderOperationsTable() {
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
-          </tr>
+          </tr>${renderWashSaleDetailRow(d, 9)}
         `,
           )
           .join("")}
