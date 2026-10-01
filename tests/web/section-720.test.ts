@@ -230,6 +230,16 @@ describe("720 section: last year's file", () => {
     expect(text).not.toContain("Según tus posiciones");
   });
 
+  it("warns about a declared account with no balance this year instead of saying nothing must be filed", async () => {
+    const account = { accountId: "U7654321", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" };
+    await upload(generateModelo720([iwda, vwce, aapl], new Map(), config(2024), undefined, [account]));
+    // Same securities, nothing sold, and the account is gone.
+    renderSection720({ ...statement2025(), openPositions: [iwda, vwce, aapl] }, new Map(), undefined, []);
+    const text = $("#m720-content")!.textContent;
+    expect($("#m720-content .m720-missing-accounts")!.textContent).toContain("si la cancelaste, debes declarar su cancelación a mano");
+    expect(text).not.toContain("Con tu último Modelo 720, este año no estás obligado a presentarlo");
+  });
+
   it("rejects a file of the same year and a file that is not a 720", async () => {
     await upload(generateModelo720([iwda], new Map(), config(2025)), "modelo720_2025.txt");
     expect($(".m720-previous .banner-warning")!.textContent).toBe(

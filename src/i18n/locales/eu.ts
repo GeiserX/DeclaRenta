@@ -363,6 +363,7 @@ const eu: TranslationKeys = {
   "m720.description": "Atzerrian dauden ondasun eta eskubideei buruzko aitorpen informatiboa.",
   "m720.threshold_exceeded": "Zure posizioen arabera ({{amount}} €), 720 Eredua aurkeztera behartuta zaude.",
   "m720.obliged_by_changes": "720 Eredua aurkeztu behar duzu azken aitorpenetik izandako aldaketengatik: goiko kategoria bakoitzak arrazoia adierazten du.",
+  "m720.declared_account_missing": "Aitortu zenuen kontu batek ez du saldorik aurten ({{accounts}}): itxi baduzu, haren ezeztapena eskuz aitortu behar duzu (RGATaren 42 bis.5 art.).",
   "m720.threshold_not_exceeded":
     "Ez duzu 50.000 €-ko atalasea gainditzen (guztira: {{amount}} €). Ez zaude aurkeztera behartuta.",
   "m720.category_v": "Balore-paperak (akzioak, funtsak, bonuak)",

@@ -393,6 +393,7 @@ const es = {
   "m720.description": "Declaración informativa sobre bienes y derechos situados en el extranjero.",
   "m720.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 720.",
   "m720.obliged_by_changes": "Estás obligado a presentar el Modelo 720 por los cambios desde tu última declaración: cada categoría de arriba indica el motivo.",
+  "m720.declared_account_missing": "Una cuenta que declaraste no tiene saldo este año ({{accounts}}): si la cancelaste, debes declarar su cancelación a mano (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m720.category_v": "Valores (acciones, fondos, bonos)",

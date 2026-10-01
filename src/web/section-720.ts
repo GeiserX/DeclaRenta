@@ -262,6 +262,13 @@ export function renderSection720(
   }
   if (!previous720 && exceeds) {
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
+  }
+  // A declared account with no balance this year may have been closed, and a
+  // closing must be declared (art. 42 bis.5 RGAT). The file cannot tell, so say
+  // it instead of promising that nothing has to be filed.
+  const missingAccounts = successive?.accounts.missing ?? [];
+  if (missingAccounts.length > 0) {
+    html += `<div class="banner banner-warning m720-missing-accounts">${esc(t("m720.declared_account_missing", { accounts: missingAccounts.join(", ") }))}</div>`;
   } else if (previous720 && !mustFile && categories.every((cat) => cat.unvalued === 0)) {
     html += `<div class="banner banner-info">${esc(t("m720.successive_not_required"))}</div>`;
   }

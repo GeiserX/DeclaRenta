@@ -363,6 +363,7 @@ const ca: TranslationKeys = {
   "m720.description": "Declaració informativa sobre béns i drets situats a l'estranger.",
   "m720.threshold_exceeded": "Segons les teves posicions ({{amount}} €), estàs obligat a presentar el Model 720.",
   "m720.obliged_by_changes": "Estàs obligat a presentar el Model 720 pels canvis des de la teva última declaració: cada categoria de dalt n'indica el motiu.",
+  "m720.declared_account_missing": "Un compte que vas declarar no té saldo aquest any ({{accounts}}): si el vas cancel·lar, has de declarar-ne la cancel·lació a mà (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "No superes el llindar de 50.000 € (total: {{amount}} €). No estàs obligat a presentar.",
   "m720.category_v": "Valors (accions, fons, bons)",

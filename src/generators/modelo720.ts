@@ -322,7 +322,13 @@ export interface Modelo720SuccessiveCategory {
 
 export interface Modelo720SuccessiveResult {
   values: Modelo720SuccessiveCategory & { sold: Previous720Security[] };
-  accounts: Modelo720SuccessiveCategory;
+  /**
+   * `missing`: account codes last year's file declared that have no positive
+   * balance this year. A cancelled account must be declared (art. 42 bis.5
+   * RGAT), but the data cannot tell a closed account from an empty one, and the
+   * generator writes no account cancellations, so the user must check by hand.
+   */
+  accounts: Modelo720SuccessiveCategory & { missing: string[] };
 }
 
 /**
@@ -345,6 +351,10 @@ export function checkModelo720SuccessiveYear(
   const cash = cashCategoryTotals(cashBalances, rateMap, year);
   // Only which ISINs were sold matters here, so no disposals are needed.
   const sold = findCancelledSecurities(positions, previous.securities, year, undefined);
+  const heldAccounts = new Set(
+    (cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0)).map((cb) => accountCode(cb).code),
+  );
+  const missingAccounts = [...new Set(previous.accounts)].filter((code) => !heldAccounts.has(code));
 
   const valuesIncrease = current.values.total.minus(previousTotals.values);
   const accountsIncrease = Decimal.max(
@@ -366,6 +376,7 @@ export function checkModelo720SuccessiveYear(
       increase: accountsIncrease,
       increaseExceeded: accountsIncrease.greaterThan(SUCCESSIVE_INCREASE),
       mandatory: current.accounts.exceeds && accountsIncrease.greaterThan(SUCCESSIVE_INCREASE),
+      missing: missingAccounts,
     },
   };
 }

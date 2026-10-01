@@ -98,6 +98,13 @@ describe("checkModelo720SuccessiveYear", () => {
     expect(result.accounts).toMatchObject({ increaseExceeded: true, mandatory: true });
   });
 
+  it("lists a declared account with no balance this year, so its closing is not missed", () => {
+    expect(check([position(), vwce], [cash("60000", "55000.25")]).accounts.missing).toEqual([]);
+    const result = check([position(), vwce], []);
+    expect(result.accounts.missing).toHaveLength(1);
+    expect(result.accounts.mandatory).toBe(false);
+  });
+
   it("never makes a category mandatory below 50,000 €, whatever the increase", () => {
     // Filed voluntarily at 20,000 €, now 49,000 €: up 29,000 € but still below the threshold.
     const previous = { securities: [{ isin: "IE00B4L5Y983", claveSubclave: "V1", country: "IE" }], accounts: [] };

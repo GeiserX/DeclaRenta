@@ -362,6 +362,7 @@ const en: TranslationKeys = {
   "m720.description": "Informative declaration on assets and rights located abroad.",
   "m720.threshold_exceeded": "Based on your positions ({{amount}} EUR), you are required to file Modelo 720.",
   "m720.obliged_by_changes": "You must file Modelo 720 because of what changed since your last filing: each category above gives the reason.",
+  "m720.declared_account_missing": "An account you declared has no balance this year ({{accounts}}): if you closed it, you must declare the closing by hand (art. 42 bis.5 RGAT).",
   "m720.threshold_not_exceeded":
     "You are below the 50,000 EUR threshold (total: {{amount}} EUR). Filing is not required.",
   "m720.category_v": "Securities (stocks, funds, bonds)",
