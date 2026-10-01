@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
   checkModelo720Thresholds,
   findModelo720Omissions,
@@ -36,9 +36,16 @@ let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
 let cachedBrokersWithoutHoldings: string[] = [];
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
+  cachedYearEndLots = undefined;
   const container = document.getElementById("m720-content");
   if (!container) return;
   container.innerHTML = `
@@ -76,6 +83,7 @@ export function renderSection720(
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
 
   const missingNotice = brokersWithoutHoldings.length > 0
     ? `<div class="banner banner-warning m720-no-holdings">${esc(t("m720.brokers_without_holdings", {
@@ -124,12 +132,19 @@ export function renderSection720(
   const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, year, statement.cashBalances);
   const exceeds = thresholds.values.exceeds || thresholds.accounts.exceeds;
 
-  const categories: { label: string; total: Decimal; exceeds: boolean }[] = [];
-  if (thresholds.values.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_v"), total: thresholds.values.total, exceeds: thresholds.values.exceeds });
+  // `unvalued`: holdings left out of the total. Until the user values them the
+  // category cannot be called below the threshold.
+  const categories: { label: string; total: Decimal; exceeds: boolean; unvalued: number }[] = [];
+  if (thresholds.values.total.greaterThan(0) || thresholds.values.unvalued > 0) {
+    categories.push({
+      label: t("m720.category_v"),
+      total: thresholds.values.total,
+      exceeds: thresholds.values.exceeds,
+      unvalued: thresholds.values.unvalued,
+    });
   }
   if (thresholds.accounts.total.greaterThan(0)) {
-    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds });
+    categories.push({ label: t("m720.category_c"), total: thresholds.accounts.total, exceeds: thresholds.accounts.exceeds, unvalued: 0 });
   }
 
   for (const cat of categories) {
@@ -143,7 +158,11 @@ export function renderSection720(
         <span>${t("m720.total_value", { amount: fmtEur(cat.total) })}</span>
         <span>50.000 €</span>
       </div>
-      <p class="${cat.exceeds ? "warning" : "muted"}">${cat.exceeds ? t("m720.category_exceeded") : t("m720.category_not_exceeded")}</p>
+      <p class="${cat.exceeds || cat.unvalued > 0 ? "warning" : "muted"}">${cat.exceeds
+        ? t("m720.category_exceeded")
+        : cat.unvalued > 0
+          ? esc(t("m720.category_undetermined", { count: String(cat.unvalued) }))
+          : t("m720.category_not_exceeded")}</p>
     </div>`;
   }
 
@@ -179,6 +198,8 @@ export function renderSection720(
         } else {
           rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
+        // No rate, or no market value in the export: unknown, never 0 €.
+        if (hasNoMarketValue(p)) rate = null;
         if (rate === null) unvaluedCount++;
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td></tr>`;
@@ -195,7 +216,7 @@ export function renderSection720(
         <h4>${t("m720.rates_title")}</h4>
         <div class="rates-grid">${uniqueCurrencies.map((cur) => {
           const rate = lookupPositionRate(rateMap, `${year}-12-31`, cur);
-          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
         }).join("")}</div>
       </div>`;
     }
@@ -280,7 +301,7 @@ function encodeISO885915(str: string): Uint8Array {
 }
 
 function generate720File(): void {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("m720-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -299,7 +320,7 @@ function generate720File(): void {
     nif: profile.nif,
     surname: profile.apellidos,
     name: profile.nombre,
-    year: profile.year,
+    year: cachedYear,
     phone: profile.telefono,
     contactName: fullName || "CONTRIBUYENTE",
     declarationId: modelo720DeclarationId(),
@@ -342,7 +363,7 @@ function generate720File(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `modelo720_${profile.year}.txt`;
+  a.download = `modelo720_${cachedYear}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -129,7 +129,7 @@
       <!-- ============================================================ -->
       <section id="section-perfil" class="app-section" hidden>
         <h2 data-i18n="profile.title">Perfil fiscal</h2>
-        <p class="section-description" data-i18n="profile.description">Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.</p>
+        <p class="section-description" data-i18n="profile.description">Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6. Se guardan solo en este navegador, nunca en un servidor.</p>
         <div id="profile-form-container"></div>
       </section>
 
@@ -247,8 +247,8 @@
 
             <h3 data-i18n="results.operations">Operaciones</h3>
             <div class="table-controls">
-              <input type="text" id="ops-search" data-i18n-placeholder="results.search_placeholder" placeholder="Buscar por ISIN o símbolo..." />
-              <select id="ops-filter">
+              <input type="text" id="ops-search" data-i18n-placeholder="results.search_placeholder" placeholder="Buscar por ISIN o símbolo..." data-i18n-aria="a11y.ops_search" aria-label="Buscar operaciones por ISIN o símbolo" />
+              <select id="ops-filter" data-i18n-aria="a11y.ops_filter" aria-label="Filtrar operaciones por resultado">
                 <option value="all" data-i18n="results.filter_all">Todas</option>
                 <option value="gain" data-i18n="results.filter_gains">Ganancias</option>
                 <option value="loss" data-i18n="results.filter_losses">Pérdidas</option>

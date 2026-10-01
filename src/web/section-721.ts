@@ -12,7 +12,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { lookupPositionRate } from "../engine/ecb.js";
 import { buildModelo721Entries } from "../generators/modelo721.js";
 import Decimal from "decimal.js";
-import { fmtEur } from "./format.js";
+import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
 import { formatBrokerList } from "./missing-holdings.js";
@@ -30,6 +30,10 @@ let cachedBrokersWithoutHoldings: string[] = [];
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
   const container = document.getElementById("m721-content");
   if (!container) return;
   container.innerHTML = `
@@ -112,13 +116,20 @@ export function renderSection721(
   html += renderPositionsDateBanner(statement, year).html;
 
   // Threshold check (50,000 EUR). Positions whose currency (often the crypto
-  // coin itself) has no resolvable year-end rate are excluded from the EUR total
-  // and surfaced below for manual valuation, instead of crashing the section.
+  // coin itself) has no resolvable year-end rate, or with no market value, are
+  // excluded from the EUR total and surfaced for manual valuation, instead of
+  // crashing the section. The warning goes before the verdict, and while any
+  // are unvalued the verdict cannot be "not obliged".
   const unvaluedCount = valuation.unvaluedCount;
   const totalValue = valuation.totalValueEur;
 
   const exceeds = totalValue.greaterThanOrEqualTo(50000);
+  const undetermined = !exceeds && unvaluedCount > 0;
   const pct = Math.min(totalValue.div(50000).mul(100).toNumber(), 100);
+
+  if (unvaluedCount > 0) {
+    html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
+  }
 
   html += `<div class="threshold-bar">
     <div class="threshold-track">
@@ -129,10 +140,12 @@ export function renderSection721(
       <span>50.000 €</span>
     </div>
   </div>
-  <p class="${exceeds ? "warning" : "muted"}">
+  <p class="${exceeds || undetermined ? "warning" : "muted"}">
     ${exceeds
       ? t("m721.threshold_exceeded", { amount: fmtEur(totalValue) })
-      : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
+      : undetermined
+        ? esc(t("m721.threshold_undetermined", { amount: fmtEur(totalValue), count: String(unvaluedCount) }))
+        : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
   </p>`;
   html += missingNotice;
 
@@ -151,7 +164,7 @@ export function renderSection721(
       return `<tr>
         <td class="mono">${esc(p.entry.description)}</td>
         <td>${esc(exchange)}</td>
-        <td>${p.entry.quantity.toString()}</td>
+        <td>${fmtQty(p.entry.quantity)}</td>
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
@@ -169,13 +182,9 @@ export function renderSection721(
       <h4>${t("m721.rates_title")}</h4>
       <div class="rates-grid">${uniqueCurrencies.map((cur) => {
         const rate = lookupPositionRate(rateMap, yearEnd, cur);
-        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+        return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
       }).join("")}</div>
     </div>`;
-  }
-
-  if (unvaluedCount > 0) {
-    html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
 
   html += `<div class="banner banner-warning">${t("m721.format_notice")}</div>`;

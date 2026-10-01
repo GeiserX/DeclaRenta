@@ -15,8 +15,17 @@ import { esc } from "./esc.js";
  * Convert a TaxSummary into a StoredReport and save to localStorage.
  */
 export function persistReport(report: TaxSummary, brokers: string[]): void {
-  // Don't persist empty reports (e.g. wrong year selected with no matching data)
-  if (report.capitalGains.disposals.length === 0 && report.dividends.entries.length === 0) return;
+  // Don't persist empty reports (e.g. wrong year selected with no matching data).
+  // A year with only interest, FX or base-general rewards is not empty, and must
+  // replace any earlier snapshot of that year.
+  const isEmpty =
+    report.capitalGains.disposals.length === 0 &&
+    report.dividends.entries.length === 0 &&
+    report.interest.earned.isZero() &&
+    report.interest.paid.isZero() &&
+    report.fxGains.disposals.length === 0 &&
+    report.generalGains.entries.length === 0;
+  if (isEmpty) return;
 
   const currencies = new Set<string>();
   for (const d of report.capitalGains.disposals) currencies.add(d.currency);
@@ -53,19 +62,21 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
 /**
  * Format a variation between two numbers as a percentage string.
  */
-/** Format the percentage variation between two values (e.g. "+12.3%"). */
+/** Format the percentage variation between two values (e.g. "+12,3%"). */
 function formatVariation(current: number, previous: number): string {
   if (previous === 0) return current === 0 ? "—" : "+∞";
   const pct = ((current - previous) / Math.abs(previous)) * 100;
   const sign = pct >= 0 ? "+" : "";
-  return `${sign}${pct.toFixed(1)}%`;
+  return `${sign}${fmtEur(pct, 1)}%`;
 }
 
-/** Return CSS class ("gain" or "loss") based on value direction. */
-function variationClass(current: number, previous: number): string {
-  if (current > previous) return "gain";
-  if (current < previous) return "loss";
-  return "";
+/**
+ * Return CSS class ("gain" or "loss") for a change, from the row's point of view:
+ * a rise is a "loss" where more is worse, and no class where neither is better.
+ */
+function variationClass(current: number, previous: number, higherIsBetter: boolean | null): string {
+  if (higherIsBetter === null || current === previous) return "";
+  return (current > previous) === higherIsBetter ? "gain" : "loss";
 }
 
 // ---------------------------------------------------------------------------
@@ -75,18 +86,22 @@ function variationClass(current: number, previous: number): string {
 interface ComparisonRow {
   label: string;
   key: keyof StoredReport["casillas"];
+  /** Colour a rise green (true), red (false), or not at all (null). */
+  higherIsBetter: boolean | null;
 }
 
+// The first three rows are capitalGains totals, which exclude FX (shown in its
+// own row); their compare.* labels say so, unlike the results page's net figure.
 const COMPARISON_ROWS: ComparisonRow[] = [
-  { label: "casilla.transmission_value", key: "transmissionValue" },
-  { label: "casilla.acquisition_value", key: "acquisitionValue" },
-  { label: "casilla.net_gain_loss", key: "netGainLoss" },
-  { label: "casilla.fx_net_gain_loss", key: "fxNetGainLoss" },
-  { label: "casilla.gross_dividends", key: "grossDividends" },
-  { label: "casilla.interest_earned", key: "interestEarned" },
-  { label: "casilla.interest_paid", key: "interestPaid" },
-  { label: "casilla.general_gains", key: "generalGains" },
-  { label: "casilla.double_taxation", key: "doubleTaxation" },
+  { label: "compare.transmission_value", key: "transmissionValue", higherIsBetter: null },
+  { label: "compare.acquisition_value", key: "acquisitionValue", higherIsBetter: null },
+  { label: "compare.net_gain_loss", key: "netGainLoss", higherIsBetter: true },
+  { label: "casilla.fx_net_gain_loss", key: "fxNetGainLoss", higherIsBetter: true },
+  { label: "casilla.gross_dividends", key: "grossDividends", higherIsBetter: true },
+  { label: "casilla.interest_earned", key: "interestEarned", higherIsBetter: true },
+  { label: "casilla.interest_paid", key: "interestPaid", higherIsBetter: false },
+  { label: "casilla.general_gains", key: "generalGains", higherIsBetter: true },
+  { label: "casilla.double_taxation", key: "doubleTaxation", higherIsBetter: true },
 ];
 
 /**
@@ -122,7 +137,7 @@ export function renderYearComparison(container: HTMLElement): void {
     const varCells = values.length >= 2
       ? values.slice(0, -1).map((v, i) => {
           const prev = values[i + 1]!;
-          return `<td class="${variationClass(v, prev)}">${formatVariation(v, prev)}</td>`;
+          return `<td class="${variationClass(v, prev, row.higherIsBetter)}">${formatVariation(v, prev)}</td>`;
         }).join("")
       : "";
 
@@ -164,7 +179,7 @@ export function renderYearComparison(container: HTMLElement): void {
           </thead>
           <tbody>
             ${rows}
-            <tr class="stats-divider"><td colspan="${1 + sorted.length * 2}"></td></tr>
+            <tr class="stats-divider"><td colspan="${sorted.length * 2}"></td></tr>
             ${statsRows}
           </tbody>
         </table>

@@ -3,7 +3,7 @@
  *
  * This map is the single source of truth shared by charts.ts and
  * operations-annex.ts (it replaced two diverging local copies). The tests
- * pin the canonical Spanish values and the unknown-category fallback so a
+ * pin the translation keys, their Spanish values and the unknown-category fallback so a
  * future edit can't silently re-introduce the "Crypto" vs "Criptomonedas"
  * style drift.
  */
@@ -12,8 +12,20 @@ import { describe, it, expect } from "vitest";
 import { ASSET_LABELS, assetLabel } from "../../src/web/asset-labels.js";
 
 describe("ASSET_LABELS canonical map", () => {
-  it("exposes the canonical Spanish label for every known category", () => {
+  it("maps every known category to its translation key", () => {
     expect(ASSET_LABELS).toEqual({
+      STK: "asset.stk",
+      FUND: "asset.fund",
+      OPT: "asset.opt",
+      FOP: "asset.fop",
+      FSFOP: "asset.fop",
+      CRYPTO: "asset.crypto",
+      BOND: "asset.bond",
+    });
+  });
+
+  it("resolves to the canonical Spanish labels under the Spanish locale", () => {
+    expect(Object.fromEntries(Object.keys(ASSET_LABELS).map((k) => [k, assetLabel(k)]))).toEqual({
       STK: "Acciones",
       FUND: "Fondos / ETFs",
       OPT: "Opciones",
@@ -25,12 +37,12 @@ describe("ASSET_LABELS canonical map", () => {
   });
 
   it("uses the fuller 'Criptomonedas' form (not the old chart 'Crypto')", () => {
-    expect(ASSET_LABELS.CRYPTO).toBe("Criptomonedas");
+    expect(assetLabel("CRYPTO")).toBe("Criptomonedas");
   });
 
   it("maps FOP and FSFOP to the same futures-options label", () => {
     expect(ASSET_LABELS.FOP).toBe(ASSET_LABELS.FSFOP);
-    expect(ASSET_LABELS.FOP).toBe("Opciones sobre futuros");
+    expect(assetLabel("FOP")).toBe("Opciones sobre futuros");
   });
 });
 

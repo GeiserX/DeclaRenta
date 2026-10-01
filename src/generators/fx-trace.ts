@@ -42,6 +42,13 @@ const CSV_COLUMNS: readonly (keyof FxTraceEvent)[] = [
 ];
 
 /**
+ * A plain decimal as the engine writes it (optionally in exponent form). It can
+ * never be a formula, so it is written raw: escapeCsv would prefix a negative
+ * amount with an apostrophe and a spreadsheet would read it as text.
+ */
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i;
+
+/**
  * Serialize an FX-FIFO movement trace to JSONL or CSV.
  *
  * @param trace  the `TaxSummary.fxTrace` array (may be `undefined`/empty)
@@ -59,7 +66,8 @@ export function serializeFxTrace(trace: FxTraceEvent[] | undefined, format: FxTr
         const v = e[col];
         // null (uncovered rate) and absent optionals render as an empty cell.
         if (v === undefined || v === null) return "";
-        return escapeCsv(String(v));
+        const s = String(v);
+        return PLAIN_NUMBER.test(s) ? s : escapeCsv(s);
       }).join(","),
     );
     return [header, ...rows].join("\n");
