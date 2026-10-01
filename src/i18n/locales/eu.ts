@@ -397,6 +397,8 @@ const eu: TranslationKeys = {
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
     "aurten saldua; aurreko 720 Ereduak fitxategiak onartzen ez duen gako edo herrialde batekin aitortu zuen",
+  "m720.not_generated_left_out":
+    "Ez da fitxategirik sortu: aitortu behar duzunetik ezer ezin da fitxategian idatzi. Aitortu eskuz 720 Ereduaren inprimakian, goiko oharrei jarraituz.",
   "m720.successive_years_note":
     "Aurreko urte batean 720 Eredua aurkeztu bazenuen, berriro aurkeztea derrigorrezkoa da soilik kategoria baten balio bateratua azken aitorpenarekiko 20.000 € baino gehiago igo denean, edo aitortu zenuen ondasun bat saldu edo ezeztatu duzunean (1065/2007 EDaren 42 bis.5 eta 42 ter.5 artikuluak). Bestela, aurkeztea aukerakoa da.",
   "m720.previous_title": "Zure azken 720 Eredua",

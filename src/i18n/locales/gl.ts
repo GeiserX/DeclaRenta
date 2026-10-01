@@ -397,6 +397,8 @@ const gl: TranslationKeys = {
     "falta o número de conta",
   "m720.omitted_invalid_code":
     "vendido este ano; o Modelo 720 anterior declarouno cunha clave ou un país que o ficheiro non admite",
+  "m720.not_generated_left_out":
+    "Non se xerou ningún ficheiro: nada do que debes declarar pode escribirse no ficheiro. Decláralo a man no formulario do Modelo 720, seguindo os avisos de arriba.",
   "m720.successive_years_note":
     "Se xa presentaches o Modelo 720 nun ano anterior, só é obrigatorio volver presentalo cando o valor conxunto dunha categoría aumentou máis de 20.000 € respecto da última declaración, ou cando vendiches ou cancelaches un ben que declaraches (arts. 42 bis.5 e 42 ter.5 do RD 1065/2007). Se non, presentalo é opcional.",
   "m720.previous_title": "O teu último Modelo 720",

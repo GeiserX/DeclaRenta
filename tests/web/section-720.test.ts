@@ -228,6 +228,10 @@ describe("720 section: last year's file", () => {
     const text = $("#m720-content")!.textContent;
     expect(text).toContain("Estás obligado a presentar el Modelo 720 por los cambios desde tu última declaración");
     expect(text).not.toContain("Según tus posiciones");
+    // Generate still writes the file with both cancellations: the below-threshold
+    // answer must not stop a filing last year's 720 makes mandatory.
+    expect(await generatedDetails()).toEqual(["US0378331005/A/", "IE00B4L5Y983/C/", "IE00BK5BQT80/C/20250303"]);
+    expect($("#m720-content .m720-not-generated")).toBeNull();
   });
 
   it("warns about a declared account with no balance this year instead of saying nothing must be filed", async () => {
@@ -238,6 +242,20 @@ describe("720 section: last year's file", () => {
     const text = $("#m720-content")!.textContent;
     expect($("#m720-content .m720-missing-accounts")!.textContent).toContain("si la cancelaste, debes declarar su cancelación a mano");
     expect(text).not.toContain("Con tu último Modelo 720, este año no estás obligado a presentarlo");
+  });
+
+  it("asks to declare a closed account by hand without claiming the threshold was passed", async () => {
+    const account = { accountId: "U7654321", currency: "EUR", endingCash: "60000", endingSettledCash: "60000", averageQ4Cash: "60000", countryCode: "IE" };
+    await upload(generateModelo720([aapl], new Map(), config(2024), undefined, [account]));
+    // AAPL (30,000 €) is still held; the account is gone.
+    renderSection720({ ...statement2025(), openPositions: [aapl] }, new Map(), undefined, []);
+    URL.createObjectURL = vi.fn(() => "blob:m720");
+    URL.revokeObjectURL = vi.fn();
+    $("#m720-generate-btn")!.click();
+    const banner = $("#m720-content .m720-not-generated")!;
+    expect(banner.textContent).toContain("nada de lo que debes declarar puede escribirse en el fichero");
+    expect(banner.textContent).not.toContain("Superas el umbral");
+    expect($("#m720-content")!.textContent).not.toContain("No estás obligado a presentar");
   });
 
   it("rejects a file of the same year and a file that is not a 720", async () => {

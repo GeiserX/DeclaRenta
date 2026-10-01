@@ -468,8 +468,61 @@ function encodeISO885915(str: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Say why the click produced no file, next to the button, instead of doing
+ * nothing. A second click replaces the banner rather than stacking another.
+ */
+function showNotGeneratedBanner(kind: "info" | "warning", html: string): void {
+  const container = document.getElementById("m720-content");
+  if (!container) return;
+  container.querySelector(".m720-not-generated")?.remove();
+  const banner = document.createElement("div");
+  banner.className = `banner banner-${kind} m720-not-generated`;
+  banner.setAttribute("role", "status");
+  banner.innerHTML = html;
+  const button = document.getElementById("m720-generate-btn");
+  if (button) button.after(banner);
+  else container.prepend(banner);
+}
+
 function generate720File(): void {
   if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
+
+  // Below 50,000 € in every category there is nothing to file, whatever the
+  // profile says, so answer that before asking for the profile. Each category
+  // is tested on its own, so the amount shown is the larger category total: a
+  // sum of both could pass 50,000 € while neither category does.
+  const thresholds = checkModelo720Thresholds(
+    cachedStatement.openPositions, cachedRateMap, cachedYear, cachedStatement.cashBalances,
+  );
+  // Last year's 720 can make filing mandatory below 50,000 € (a sale to cancel,
+  // art. 42 ter.5 RGAT) or need a closed account declared (art. 42 bis.5), so
+  // the threshold answer only applies when it does neither.
+  const successive = previous720
+    ? checkModelo720SuccessiveYear(
+      cachedStatement.openPositions, cachedRateMap, cachedYear, cachedStatement.cashBalances, previous720.previous, previous720.totals,
+    )
+    : null;
+  const obligedByLastFiling = !!successive
+    && (successive.values.mandatory || successive.accounts.mandatory || successive.accounts.missing.length > 0);
+  if (!thresholds.values.exceeds && !thresholds.accounts.exceeds && !obligedByLastFiling) {
+    // A holding with no value in euros may be what passes the threshold, so the
+    // answer is "value it first", never "you are not obliged".
+    if (thresholds.values.unvalued > 0) {
+      showNotGeneratedBanner(
+        "warning",
+        `<p>${esc(t("m720.positions_unvalued", { count: String(thresholds.values.unvalued) }))}</p>`,
+      );
+      return;
+    }
+    const amount = fmtEur(Decimal.max(thresholds.values.total, thresholds.accounts.total));
+    showNotGeneratedBanner(
+      "info",
+      `<p>${esc(t("m720.threshold_not_exceeded", { amount }))}</p><p>${esc(t("m720.successive_years_note"))}</p>`,
+    );
+    return;
+  }
+
   if (!isProfileComplete()) {
     const container = document.getElementById("m720-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -528,7 +581,13 @@ function generate720File(): void {
   const result = generateModelo720(
     cachedStatement.openPositions, cachedRateMap, config, cachedYearEndLots, cachedStatement.cashBalances, cachedDisposals,
   );
-  if (!result) return; // Below threshold
+  if (!result) {
+    // Above the threshold (or obliged by last year's filing), but everything
+    // that had to go in was left out of the file (listed in the banners above):
+    // the user declares it by hand.
+    showNotGeneratedBanner("warning", `<p>${esc(t("m720.not_generated_left_out"))}</p>`);
+    return;
+  }
 
   const blob = new Blob([encodeISO885915(result) as BlobPart], { type: "text/plain;charset=iso-8859-15" });
   const url = URL.createObjectURL(blob);

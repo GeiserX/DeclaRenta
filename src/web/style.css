@@ -2066,6 +2066,18 @@ footer a:hover {
   color: var(--accent-text);
 }
 
+/* Modelo 720: why the generate button produced no file (one paragraph per reason) */
+.m720-not-generated {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.m720-not-generated p {
+  margin: 0;
+}
+
 .banner a {
   color: inherit;
   font-weight: 600;

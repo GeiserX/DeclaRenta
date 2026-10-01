@@ -396,6 +396,8 @@ const en: TranslationKeys = {
     "the account number is missing",
   "m720.omitted_invalid_code":
     "sold this year; last year's Modelo 720 declared it with a code or country the file does not accept",
+  "m720.not_generated_left_out":
+    "No file was generated: nothing you have to declare can be written to the file. Declare it by hand in the Modelo 720 form, following the notices above.",
   "m720.successive_years_note":
     "If you already filed Modelo 720 in an earlier year, filing again is only required when a category's joint value has risen by more than 20,000 EUR since your last declaration, or when you sold or closed an asset you declared (arts. 42 bis.5 and 42 ter.5 RD 1065/2007). Otherwise filing is optional.",
   "m720.previous_title": "Your last Modelo 720",
