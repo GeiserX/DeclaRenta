@@ -513,6 +513,10 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
+  "annex.wash_hint":
+    'In Renta Web, mark this sale as "Non-attributable capital losses". The loss counts once you sell what you bought back.',
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",

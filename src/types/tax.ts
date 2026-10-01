@@ -174,6 +174,12 @@ export interface FifoDisposal {
    */
   blockedLossEur: Decimal;
   /**
+   * Display only: the YYYY-MM-DD dates of the homogeneous purchases inside the
+   * anti-churning window that absorbed this disposal's loss (sorted, unique).
+   * Set by detectWashSales only when `blockedLossEur > 0`. Never used for tax math.
+   */
+  washSaleRepurchaseDates?: string[];
+  /**
    * Prior deferred (blocked) loss RELEASED because this disposal sold shares that
    * were the homogeneous repurchase which previously blocked an earlier loss
    * ("se integrarán a medida que se transmitan los valores que permanezcan en el
