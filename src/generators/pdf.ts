@@ -93,6 +93,14 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         .fillColor(COLORS.muted)
         .text(`Informe fiscal — Ejercicio ${report.year}`, { align: "left" })
         .text(`Generado el ${new Date().toLocaleDateString("es-ES")} — v${VERSION}`, { align: "left" });
+      if (report.settings) {
+        const s = report.settings;
+        const yesNo = (v: boolean) => (v ? "sí" : "no");
+        doc.text(
+          `Ajustes del cálculo: monodivisa ${yesNo(s.monodivisa)}, titulares ${s.titulares}, autoconversiones ${yesNo(s.trackAutoConvert)}`,
+          { align: "left" },
+        );
+      }
 
       doc.moveDown(1.5);
 

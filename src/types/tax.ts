@@ -278,10 +278,28 @@ export interface GeneralGainEntry {
   ecbRate: Decimal;
 }
 
+/**
+ * The profile settings a report was computed with. They change the figures, so
+ * the Results header and the CSV/PDF exports print them next to the numbers.
+ */
+export interface ReportSettings {
+  /** Monodivisa mode: the FX engine is off (`ReportOptions.skipFx`). */
+  monodivisa: boolean;
+  /** Broker auto-conversions (AFx/FXCONV) are processed (`ReportOptions.trackAutoConvert`). */
+  trackAutoConvert: boolean;
+  /** Number of account holders the amounts are split between. */
+  titulares: number;
+}
+
 /** Aggregated results for Modelo 100 casillas */
 export interface TaxSummary {
   /** Tax year */
   year: number;
+  /**
+   * Settings used to compute this report. Absent on reports built before the
+   * field existed (e.g. ones saved for the year comparison).
+   */
+  settings?: ReportSettings;
   /** @deprecated Use `messages` for severity-aware rendering */
   warnings: string[];
   /** Structured three-tier messages (error/warning/info) */

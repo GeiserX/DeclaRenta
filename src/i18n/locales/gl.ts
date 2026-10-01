@@ -49,6 +49,9 @@ const gl: TranslationKeys = {
   "results.newer_years_notice": "Amosando {{year}}; os teus datos tamén cobren {{years}}.",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
+  "results.settings_used": "Axustes do cálculo: monodivisa {{monodivisa}}, titulares {{titulares}}, autoconversións {{autoconvert}}",
+  "results.setting_yes": "si",
+  "results.setting_no": "non",
 
   "table.isin": "ISIN",
   "table.symbol": "Símbolo",

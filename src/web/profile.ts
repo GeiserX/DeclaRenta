@@ -70,11 +70,19 @@ export function getProfile(): FiscalProfile {
   return { ...DEFAULT_PROFILE };
 }
 
-/** Save the fiscal profile to localStorage */
+/**
+ * Save the fiscal profile to localStorage and announce it with a
+ * `profilechange` event on `document`, so the results can recalculate when a
+ * setting that changes the figures (monodivisa, titulares, auto-conversions)
+ * is edited.
+ */
 export function saveProfile(profile: FiscalProfile): void {
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch { /* localStorage full */ }
+  if (typeof document !== "undefined") {
+    document.dispatchEvent(new CustomEvent<FiscalProfile>("profilechange", { detail: profile }));
+  }
 }
 
 /** Validate a Spanish personal NIF: DNI, NIE (X/Y/Z) or K/L/M */
