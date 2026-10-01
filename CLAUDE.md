@@ -119,10 +119,10 @@ tests/           Vitest tests mirroring src/ structure
 3. `Deploy to GitHub Pages` workflow auto-runs → site live at declarenta.com
 
 ### Production (GitHub Pages)
-- Auto-deploys on merge to main via `Deploy to GitHub Pages` workflow (Vite build → `dist/web` → Pages artifact)
+- Deploys through the `Deploy to GitHub Pages` workflow (Vite build → `dist/web` → Pages artifact), which runs after each successful `Auto Release` on main. A merge deploys only when it also releases.
 - **declarenta.com** (custom domain, Cloudflare DNS) — the canonical production URL
 - **geiserx.github.io/DeclaRenta** — same Pages deploy, alternative URL
-- No Docker, no Portainer, no geiserback. The `drumsergio/declarenta` Docker image still builds in CI but is not deployed anywhere.
+- No server deployment, on geiserback or anywhere else. The `drumsergio/declarenta` Docker image still builds in CI but is not deployed anywhere.
 
 ## Critical Rules
 
