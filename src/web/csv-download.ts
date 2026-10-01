@@ -9,7 +9,7 @@
 import type { TaxSummary } from "../types/tax.js";
 import { formatCsv, type CsvDialect } from "../generators/csv.js";
 
-const UTF8_BOM = "﻿";
+const UTF8_BOM = "\uFEFF";
 
 export function csvDownload(report: TaxSummary, dialect: CsvDialect): { blob: Blob; filename: string } {
   const blob = new Blob([UTF8_BOM + formatCsv(report, dialect)], { type: "text/csv;charset=utf-8" });

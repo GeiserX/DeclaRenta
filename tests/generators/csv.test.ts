@@ -344,6 +344,16 @@ describe("formatCsv — excel-es dialect", () => {
     expect(formatCsv(report)).toBe(formatCsv(report, "standard"));
   });
 
+  it("writes an option strike with a decimal comma too", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.strike = "182.5";
+    const cols = formatCsv(report, "excel-es").split("\n").find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
+    expect(cols[17]).toBe("182,5");
+    // The standard file keeps the broker's dot.
+    const std = formatCsv(report).split("\n").find((l) => l.startsWith("US0378331005,AAPL,APPLE INC,STK"))!.split(",");
+    expect(std[17]).toBe("182.5");
+  });
+
   it("uses ';' as separator and ',' as decimal mark", () => {
     const csv = formatCsv(makeReport(), "excel-es");
     const lines = csv.split("\n");

@@ -54,7 +54,7 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
       d.washSaleBlocked ? "SI" : "NO",
       tx(d.optionScenario ?? ""),
       tx(d.putCall ?? ""),
-      tx(d.strike ?? ""),
+      tx(num(d.strike ?? "")), // a number from the broker, so the decimal comma applies
       tx(d.expiry ?? ""),
       tx(d.underlyingSymbol ?? ""),
       // Appended last so existing column positions stay put.
