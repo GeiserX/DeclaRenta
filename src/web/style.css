@@ -962,7 +962,7 @@ tbody tr.wash-sale-detail td {
 
 tbody tr.wash-sale-detail summary {
   cursor: pointer;
-  color: var(--warning);
+  color: var(--warning-text);
   font-weight: 600;
 }
 
