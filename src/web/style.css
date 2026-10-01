@@ -6,9 +6,12 @@
   --surface-raised: #1a1f2b;
   --border: #232a3a;
   --text: #e8eaed;
-  --muted: #7a8194;
+  --muted: #8a91a4;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(59, 130, 246, 0.08);
   --accent-glow: rgba(59, 130, 246, 0.15);
   --gold: #e5a63b;
@@ -16,6 +19,13 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
+  /* Text-only variants of the status colours: fills and bars keep the tokens
+     above, text uses these so it stays at WCAG AA (4.5:1) on every surface. */
+  --success-text: #22c55e;
+  --success-fill: #15803d;
+  --warning-text: #f59e0b;
+  --danger-text: #f87171;
+  --accent-text: #60a5fa;
   --row-alt: rgba(255, 255, 255, 0.02);
   --row-hover: rgba(59, 130, 246, 0.06);
   --drop-hover: rgba(59, 130, 246, 0.06);
@@ -40,6 +50,9 @@
     --muted: #5f6b7a;
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
+    /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+    --accent-fill: #2563eb;
+    --accent-fill-hover: #1d4ed8;
     --accent-subtle: rgba(37, 99, 235, 0.06);
     --accent-glow: rgba(37, 99, 235, 0.1);
     --gold: #b8860b;
@@ -47,6 +60,11 @@
     --success: #16a34a;
     --warning: #d97706;
     --danger: #dc2626;
+    --success-text: #15803d;
+    --success-fill: #15803d;
+    --warning-text: #b45309;
+    --danger-text: #b91c1c;
+    --accent-text: #2563eb;
     --row-alt: rgba(0, 0, 0, 0.02);
     --row-hover: rgba(37, 99, 235, 0.05);
     --drop-hover: rgba(37, 99, 235, 0.04);
@@ -71,6 +89,9 @@
   --muted: #5f6b7a;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(37, 99, 235, 0.06);
   --accent-glow: rgba(37, 99, 235, 0.1);
   --gold: #b8860b;
@@ -78,6 +99,11 @@
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
+  --success-text: #15803d;
+  --success-fill: #15803d;
+  --warning-text: #b45309;
+  --danger-text: #b91c1c;
+  --accent-text: #2563eb;
   --row-alt: rgba(0, 0, 0, 0.02);
   --row-hover: rgba(37, 99, 235, 0.05);
   --drop-hover: rgba(37, 99, 235, 0.04);
@@ -98,9 +124,12 @@
   --surface-raised: #1a1f2b;
   --border: #232a3a;
   --text: #e8eaed;
-  --muted: #7a8194;
+  --muted: #8a91a4;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(59, 130, 246, 0.08);
   --accent-glow: rgba(59, 130, 246, 0.15);
   --gold: #e5a63b;
@@ -108,6 +137,11 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
+  --success-text: #22c55e;
+  --success-fill: #15803d;
+  --warning-text: #f59e0b;
+  --danger-text: #f87171;
+  --accent-text: #60a5fa;
   --row-alt: rgba(255, 255, 255, 0.02);
   --row-hover: rgba(59, 130, 246, 0.06);
   --drop-hover: rgba(59, 130, 246, 0.06);
@@ -164,7 +198,7 @@
   overflow: visible;
   clip: auto;
   white-space: normal;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border-radius: 6px;
   z-index: 100;
@@ -220,7 +254,7 @@ header h1 {
 }
 
 .brand-accent {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 header .subtitle {
@@ -255,7 +289,7 @@ h2 {
 h3 {
   font-size: 1.1rem;
   margin: 1.5rem 0 0.75rem;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Broker card grid (legacy, kept for reference) */
@@ -318,8 +352,8 @@ h3 {
 }
 
 .broker-card.selected .broker-card-check {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
 }
 
 .broker-card-name {
@@ -332,7 +366,7 @@ h3 {
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   background: var(--tag-bg);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   letter-spacing: 0.03em;
 }
@@ -351,7 +385,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   padding: 0.15rem 0.55rem;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: white;
   border-radius: 99px;
   font-size: 0.68rem;
@@ -445,7 +479,7 @@ h3 {
 .broker-chip.selected {
   border-color: var(--accent);
   background: var(--accent-subtle, rgba(59, 130, 246, 0.08));
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   box-shadow: 0 0 0 1px var(--accent);
 }
@@ -474,7 +508,7 @@ h3 {
 .broker-chip-logo--text {
   font-size: 0.6rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-subtle);
   letter-spacing: 0;
 }
@@ -739,7 +773,7 @@ h3 {
 }
 
 #drop-zone:hover .drop-icon {
-  color: var(--accent);
+  color: var(--accent-text);
   transform: translateY(-2px);
 }
 
@@ -778,7 +812,7 @@ h3 {
 }
 
 .file-tag .remove-file:hover {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .help {
@@ -808,7 +842,7 @@ input[type="text"]::placeholder {
 }
 
 button {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: white;
   border: none;
   border-radius: 10px;
@@ -827,7 +861,7 @@ button {
 }
 
 button:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
@@ -928,7 +962,7 @@ tbody tr.wash-sale-detail td {
 
 tbody tr.wash-sale-detail summary {
   cursor: pointer;
-  color: var(--warning);
+  color: var(--warning-text);
   font-weight: 600;
 }
 
@@ -942,11 +976,11 @@ tbody tr.wash-sale-detail details p {
 }
 
 .gain {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .loss {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .warning {
@@ -955,7 +989,7 @@ tbody tr.wash-sale-detail details p {
   background: var(--warning-bg);
   border: 1px solid var(--warning-border);
   border-radius: 6px;
-  color: var(--warning);
+  color: var(--warning-text);
   font-size: 0.85rem;
 }
 
@@ -975,7 +1009,7 @@ details {
 
 details summary {
   cursor: pointer;
-  color: var(--warning);
+  color: var(--warning-text);
   font-size: 0.85rem;
 }
 
@@ -1102,7 +1136,7 @@ details ul {
 
 .sidebar-link.active {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   box-shadow: inset 3px 0 0 var(--accent);
 }
@@ -1141,13 +1175,13 @@ details ul {
 .sidebar-badge.badge-success {
   background: rgba(34, 197, 94, 0.1);
   border-color: rgba(34, 197, 94, 0.3);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .sidebar-badge.badge-warning {
   background: var(--warning-bg);
   border-color: var(--warning-border);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .sidebar-badge:empty {
@@ -1226,7 +1260,7 @@ th.sortable {
 }
 
 th.sortable:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* The header's button only makes it reachable by keyboard; it looks like plain header text. */
@@ -1276,7 +1310,7 @@ footer {
 }
 
 footer a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -1291,7 +1325,7 @@ footer a:hover {
 }
 
 .heart {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .sponsor-btn {
@@ -1457,7 +1491,7 @@ footer a:hover {
 }
 
 .wizard-indicator.active .wizard-step-num {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   box-shadow:
     0 0 0 4px var(--accent-subtle),
@@ -1466,7 +1500,7 @@ footer a:hover {
 }
 
 .wizard-indicator.completed .wizard-step-num {
-  background: var(--success);
+  background: var(--success-fill);
   color: #fff;
   box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
 }
@@ -1595,7 +1629,7 @@ footer a:hover {
 
 .btn-danger {
   background: transparent;
-  color: var(--danger);
+  color: var(--danger-text);
   border: 1px solid var(--danger);
 }
 
@@ -1649,7 +1683,7 @@ footer a:hover {
 }
 
 .review-card .review-value.accent {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .review-files {
@@ -1779,7 +1813,7 @@ footer a:hover {
 }
 
 .casilla-copy:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-subtle);
   border-color: var(--accent);
 }
@@ -1794,7 +1828,7 @@ footer a:hover {
 }
 
 .casilla-copy.copied {
-  color: var(--success, #16a34a);
+  color: var(--success-text);
   border-color: currentColor;
 }
 
@@ -1933,7 +1967,7 @@ footer a:hover {
 .profile-field-error {
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .profile-field-error[hidden] {
@@ -1958,7 +1992,7 @@ footer a:hover {
 }
 
 .profile-saved-msg {
-  color: var(--success);
+  color: var(--success-text);
   font-size: 0.85rem;
   margin: 0;
   opacity: 0;
@@ -2003,7 +2037,7 @@ footer a:hover {
 }
 .monodivisa-warning {
   font-size: 0.78rem;
-  color: var(--warning);
+  color: var(--warning-text);
   margin: 8px 0 0;
   line-height: 1.5;
   font-weight: 500;
@@ -2023,13 +2057,13 @@ footer a:hover {
 .banner-warning {
   background: var(--warning-bg);
   border: 1px solid var(--warning-border);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .banner-info {
   background: var(--tag-bg);
   border: 1px solid var(--tag-border);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .banner a {
@@ -2105,7 +2139,7 @@ footer a:hover {
   border: 1px solid var(--tag-border);
   border-radius: 6px;
   font-size: 0.8rem;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Threshold indicator */
@@ -2177,11 +2211,11 @@ footer a:hover {
 
 .copy-btn:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .copy-btn.copied {
-  color: var(--success);
+  color: var(--success-text);
   border-color: var(--success);
 }
 
@@ -2198,7 +2232,7 @@ footer a:hover {
   justify-content: space-between;
   align-items: center;
   padding: 0.85rem 1.25rem;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  background: linear-gradient(135deg, var(--accent-fill) 0%, var(--accent-fill-hover) 100%);
   color: #fff;
   border-radius: 12px;
   margin-bottom: 1.5rem;
@@ -2209,6 +2243,13 @@ footer a:hover {
 .section-header-bar .section-deadline {
   font-size: 0.9rem;
   opacity: 0.9;
+}
+
+.section-header-bar .section-settings {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-left: 1rem;
+  text-align: right;
 }
 
 .year-select {
@@ -2265,7 +2306,7 @@ footer a:hover {
   border: 1px solid var(--tag-border);
   border-radius: 8px;
   font-size: 0.85rem;
-  color: var(--accent);
+  color: var(--accent-text);
   margin-top: 1.5rem;
 }
 
@@ -2335,7 +2376,7 @@ footer a:hover {
   font-size: 0.75rem;
   font-weight: 600;
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   border: 1px solid var(--tag-border);
@@ -2391,7 +2432,7 @@ footer a:hover {
 }
 
 .guide-section-warning h4 {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .guide-section-tip {
@@ -2400,7 +2441,7 @@ footer a:hover {
 }
 
 .guide-section-tip h3 {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .guide-tip {
@@ -2469,7 +2510,7 @@ footer a:hover {
   display: inline-block;
   padding: 0.6rem 1.5rem;
   margin-top: 1rem;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border-radius: 8px;
   text-decoration: none;
@@ -2479,7 +2520,7 @@ footer a:hover {
 }
 
 .empty-state .btn-cta:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 /* Footer trust signal */
@@ -2616,7 +2657,7 @@ footer a:hover {
   border-radius: 20px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.02em;
   white-space: nowrap;
   transition:
@@ -2681,7 +2722,7 @@ footer a:hover {
   font-size: 1.05rem;
   font-weight: 700;
   border-radius: 12px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   cursor: pointer;
@@ -2694,7 +2735,7 @@ footer a:hover {
 }
 
 .splash-cta:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
   transform: translateY(-2px);
   box-shadow: 0 6px 28px rgba(59, 130, 246, 0.4);
 }
@@ -2971,7 +3012,7 @@ footer a:hover {
 .crypto-rates-panel h4 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .crypto-rates-panel > p,
@@ -3026,7 +3067,7 @@ footer a:hover {
   margin-left: 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .manual-opening-lots-error-msg {
@@ -3034,7 +3075,7 @@ footer a:hover {
   margin-top: 0.5rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .manual-opening-lots-error-msg[hidden] {
@@ -3072,7 +3113,7 @@ footer a:hover {
 .manual-opening-lots-effect {
   font-size: 0.84rem;
   margin: 0 0 1rem;
-  color: var(--warning);
+  color: var(--warning-text);
   font-weight: 600;
 }
 
@@ -3105,7 +3146,7 @@ footer a:hover {
   border-radius: 999px;
   background: color-mix(in srgb, var(--warning) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
-  color: var(--warning);
+  color: var(--warning-text);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -3224,11 +3265,11 @@ footer a:hover {
 .msg-error {
   background: rgba(239, 68, 68, 0.08);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .msg-error .msg-hint {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 /* Warning tier — amber, open by default */

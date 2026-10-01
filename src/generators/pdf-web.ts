@@ -4,9 +4,10 @@ import type { CellHookData } from "jspdf-autotable";
 import type { TranslationKey } from "../i18n/index.js";
 import { localizeMessage, localizeHint } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
+import { formatReportSettings } from "./report-settings.js";
 import { pdfSafeText } from "./pdf-text.js";
 
-export type TranslationFn = (key: TranslationKey) => string;
+export type TranslationFn = (key: TranslationKey, params?: Record<string, string>) => string;
 
 // Injected by Vite at build time; vitest.config.ts provides "dev" fallback
 declare const __APP_VERSION__: string;
@@ -84,16 +85,21 @@ export async function generatePdfWebReport(
     MARGIN,
     MARGIN + 16,
   );
+  // The settings the figures were computed with (monodivisa, titulares and
+  // auto-conversions change the amounts), so the printout says which ones.
+  if (report.settings) {
+    doc.text(formatReportSettings(report.settings, t), MARGIN, MARGIN + 21, { maxWidth: CONTENT_W });
+  }
 
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.3);
-  doc.line(MARGIN, MARGIN + 20, MARGIN + CONTENT_W, MARGIN + 20);
+  doc.line(MARGIN, MARGIN + 25, MARGIN + CONTENT_W, MARGIN + 25);
 
   // --- Section 1: Casillas ---
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(C.header);
-  doc.text(t("pdf.section_casillas"), MARGIN, MARGIN + 27);
+  doc.text(t("pdf.section_casillas"), MARGIN, MARGIN + 32);
 
   const blocks = computeCasillaBlocksWithFx(report);
   const casillasBody: string[][] = [];
@@ -137,7 +143,7 @@ export async function generatePdfWebReport(
   }
 
   autoTable(doc, {
-    startY: MARGIN + 30,
+    startY: MARGIN + 35,
     head: [[t("table.casilla"), t("table.concept"), t("table.amount_eur")]],
     body: casillasBody,
     theme: "striped",
@@ -154,7 +160,7 @@ export async function generatePdfWebReport(
   // contentEndY tracks the real bottom of all rendered content across the whole document.
   // Sections using autoTable update it via lastTableY(); the warnings section updates it
   // directly from the manual-text cursor so the ECB footnote never overlaps either.
-  let contentEndY = lastTableY(doc, MARGIN + 30);
+  let contentEndY = lastTableY(doc, MARGIN + 35);
 
   // --- Section 2: Operaciones ---
   if (report.capitalGains.disposals.length > 0) {
