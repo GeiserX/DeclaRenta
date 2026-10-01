@@ -40,6 +40,9 @@ const ca: TranslationKeys = {
   "results.filter_losses": "Pèrdues",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» i decimals amb punt: per a programes i fulls de càlcul en anglès",
+  "results.export_csv_excel": "Exportar CSV per a Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» i decimals amb coma: s'obre per columnes amb doble clic a l'Excel en espanyol",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operació(ns)",
   "results.dividends_count": "{{count}} dividend(s)",
@@ -643,6 +646,10 @@ const ca: TranslationKeys = {
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
+  "crypto_rates.stored_title": "Preus manuals desats",
+  "crypto_rates.stored_description":
+    "Aquests preus en euros estan desats al teu navegador i s'apliquen cada vegada que processes un fitxer. Corregeix un valor i desa, o esborra'ls tots si n'hi ha algun d'erroni.",
+  "crypto_rates.clear_btn": "Esborra els preus desats",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lots manuals per a posicions transferides",

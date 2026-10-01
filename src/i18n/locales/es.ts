@@ -41,6 +41,9 @@ const es = {
   "results.filter_losses": "Pérdidas",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» y decimales con punto: para programas y hojas de cálculo en inglés",
+  "results.export_csv_excel": "Exportar CSV para Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» y decimales con coma: se abre por columnas con doble clic en Excel en español",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(es)",
   "results.dividends_count": "{{count}} dividendo(s)",
@@ -676,6 +679,10 @@ const es = {
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
+  "crypto_rates.stored_title": "Precios manuales guardados",
+  "crypto_rates.stored_description":
+    "Estos precios en euros están guardados en tu navegador y se aplican cada vez que procesas un archivo. Corrige un valor y guarda, o bórralos todos si alguno es erróneo.",
+  "crypto_rates.clear_btn": "Borrar precios guardados",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuales para posiciones transferidas",

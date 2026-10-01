@@ -14,7 +14,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
-import { formatCsv } from "../generators/csv.js";
+import { csvDownload } from "./csv-download.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -231,6 +231,7 @@ const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
+const exportCsvExcelBtn = document.getElementById("export-csv-excel-btn")!;
 const exportPdfBtn = document.getElementById("export-pdf-btn") as HTMLButtonElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
 const fileListDiv = document.getElementById("file-list")!;
@@ -885,9 +886,14 @@ exportJsonBtn.addEventListener("click", () => {
 
 exportCsvBtn.addEventListener("click", () => {
   if (!currentReport) return;
-  const csv = formatCsv(currentReport);
-  const blob = new Blob([csv], { type: "text/csv" });
-  downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+  const { blob, filename } = csvDownload(currentReport, "standard");
+  downloadBlob(blob, filename);
+});
+
+exportCsvExcelBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  const { blob, filename } = csvDownload(currentReport, "excel-es");
+  downloadBlob(blob, filename);
 });
 
 exportPdfBtn.addEventListener("click", () => {
@@ -1057,7 +1063,8 @@ function renderResults(report: TaxSummary) {
   }
 
   // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
-  // could not be valued automatically (no ECB rate / no cross-leg). Re-rendered
+  // could not be valued automatically (no ECB rate / no cross-leg), and as a
+  // collapsed list of saved prices once every swap is valued. Re-rendered
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
@@ -1074,10 +1081,9 @@ function renderResults(report: TaxSummary) {
     }
   }
 
-  const unresolved = report.unresolvedCryptoValuations;
-  if (unresolved && unresolved.length > 0) {
-    const panelHtml = renderManualRatesPanel(unresolved);
-    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
+  if (cryptoPanelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
     const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");

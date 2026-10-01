@@ -39,6 +39,9 @@ const en: TranslationKeys = {
   "results.filter_losses": "Losses",
   "results.export_json": "Export JSON",
   "results.export_csv": "Export CSV",
+  "results.export_csv_title": "Comma separator and point decimals: for scripts and English-locale spreadsheets",
+  "results.export_csv_excel": "Export CSV for Excel (ES)",
+  "results.export_csv_excel_title": "Semicolon separator and comma decimals: opens in columns with a double-click in Spanish-locale Excel",
   "results.export_pdf": "Export PDF",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
@@ -641,6 +644,10 @@ const en: TranslationKeys = {
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
+  "crypto_rates.stored_title": "Saved manual prices",
+  "crypto_rates.stored_description":
+    "These euro prices are saved in your browser and are applied every time you process a file. Correct a value and save, or clear them all if one is wrong.",
+  "crypto_rates.clear_btn": "Clear saved prices",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Manual lots for transferred positions",

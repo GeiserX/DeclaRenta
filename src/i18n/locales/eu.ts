@@ -40,6 +40,9 @@ const eu: TranslationKeys = {
   "results.filter_losses": "Galerak",
   "results.export_json": "Esportatu JSON",
   "results.export_csv": "Esportatu CSV",
+  "results.export_csv_title": "«,» bereizlea eta puntudun hamartarrak: programetarako eta ingelesezko kalkulu-orrietarako",
+  "results.export_csv_excel": "Esportatu CSV Excelerako (ES)",
+  "results.export_csv_excel_title": "«;» bereizlea eta komadun hamartarrak: zutabetan irekitzen da klik bikoitzarekin Excel espainieraz dagoenean",
   "results.export_pdf": "Esportatu PDF",
   "results.operations_count": "{{count}} eragiketa",
   "results.dividends_count": "{{count}} dibidendu",
@@ -643,6 +646,10 @@ const eu: TranslationKeys = {
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
+  "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
+  "crypto_rates.stored_description":
+    "Euro prezio hauek zure nabigatzailean gordeta daude eta fitxategi bat prozesatzen duzun bakoitzean aplikatzen dira. Zuzendu balio bat eta gorde, edo ezabatu guztiak bat okerra bada.",
+  "crypto_rates.clear_btn": "Ezabatu gordetako prezioak",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Eskuzko loteak transferitutako posizioentzat",
