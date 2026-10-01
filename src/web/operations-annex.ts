@@ -9,6 +9,7 @@ import type { TaxSummary, FifoDisposal } from "../types/tax.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
+import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -74,7 +75,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
 
     ops.forEach((d, i) => {
       const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
-      const blocked = d.washSaleBlocked ? ' class="wash-sale-blocked"' : "";
+      const blocked = washSaleRowAttr(d);
       const optionInfo = d.optionScenario
         ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
         : "";
@@ -89,7 +90,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td class="num">${fmtEur(d.costBasisEur)}</td>
               <td class="num">${fmtEur(d.proceedsEur)}</td>
               <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
-            </tr>`;
+            </tr>${renderWashSaleDetailRow(d, 9)}`;
     });
 
     html += `

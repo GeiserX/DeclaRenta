@@ -39,9 +39,13 @@ const en: TranslationKeys = {
   "results.filter_losses": "Losses",
   "results.export_json": "Export JSON",
   "results.export_csv": "Export CSV",
+  "results.export_csv_title": "Comma separator and point decimals: for scripts and English-locale spreadsheets",
+  "results.export_csv_excel": "Export CSV for Excel (ES)",
+  "results.export_csv_excel_title": "Semicolon separator and comma decimals: opens in columns with a double-click in Spanish-locale Excel",
   "results.export_pdf": "Export PDF",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.newer_years_notice": "Showing {{year}}; your data also covers {{years}}.",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
 
@@ -371,6 +375,7 @@ const en: TranslationKeys = {
   "m720.category_not_exceeded": "Below threshold",
   "m720.category_undetermined": "Cannot be determined: {{count}} position(s) not valued",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
+  "m720.brokers_without_holdings": "The {{brokers}} data you uploaded has no positions or balances at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your foreign account balances or your foreign shares and funds exceed €50,000.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -425,6 +430,7 @@ const en: TranslationKeys = {
   "d6.no_minimum":
     "Since Orden ICT/1408/2021, the D-6 is only required if your stake represents <strong>10% or more</strong> of the capital or voting rights of a listed foreign company. Most retail investors are exempt.",
   "d6.no_positions": "Upload a report with open positions in Modelo 100 to analyze D-6.",
+  "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
@@ -449,6 +455,7 @@ const en: TranslationKeys = {
   "m721.threshold_undetermined":
     "Cannot tell whether you exceed the 50,000 EUR threshold: the total ({{amount}} EUR) leaves out {{count}} position(s) that could not be valued. Value them before concluding that you do not need to file.",
   "m721.no_positions": "Upload a report with crypto positions in Modelo 100 to analyze Modelo 721.",
+  "m721.brokers_without_holdings": "The {{brokers}} data you uploaded has no crypto holdings at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your crypto held abroad exceeds €50,000.",
   "m721.positions_title": "Declarable positions",
   "m721.generate_btn": "Generate Modelo 721 file",
   "m721.deadline": "Deadline: January 1 – March 31 of the following year",
@@ -530,6 +537,10 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
+  "annex.wash_hint":
+    'In Renta Web, mark this sale as "Non-attributable capital losses". The loss counts once you sell what you bought back.',
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",
@@ -654,6 +665,10 @@ const en: TranslationKeys = {
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
+  "crypto_rates.stored_title": "Saved manual prices",
+  "crypto_rates.stored_description":
+    "These euro prices are saved in your browser and are applied every time you process a file. Correct a value and save, or clear them all if one is wrong.",
+  "crypto_rates.clear_btn": "Clear saved prices",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Manual lots for transferred positions",

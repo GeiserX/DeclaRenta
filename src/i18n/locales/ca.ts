@@ -40,9 +40,13 @@ const ca: TranslationKeys = {
   "results.filter_losses": "Pèrdues",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» i decimals amb punt: per a programes i fulls de càlcul en anglès",
+  "results.export_csv_excel": "Exportar CSV per a Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» i decimals amb coma: s'obre per columnes amb doble clic a l'Excel en espanyol",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operació(ns)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.newer_years_notice": "Es mostra {{year}}; les teves dades també cobreixen {{years}}.",
   "results.year_mismatch":
     "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
 
@@ -372,6 +376,7 @@ const ca: TranslationKeys = {
   "m720.category_not_exceeded": "Per sota del llindar",
   "m720.category_undetermined": "No es pot determinar: {{count}} posició(ns) sense valorar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
+  "m720.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves posicions ni saldos a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si el saldo dels teus comptes o el valor de les teves accions i fons a l'estranger supera els 50.000 €.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -425,6 +430,7 @@ const ca: TranslationKeys = {
   "d6.no_minimum":
     "Des de l'Orden ICT/1408/2021, el D-6 només és obligatori si la teva participació representa el <strong>10% o més</strong> del capital o drets de vot d'una empresa cotitzada estrangera. La majoria d'inversors minoristes estan exempts.",
   "d6.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el D-6.",
+  "d6.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen els teus valors a 31 de desembre, així que no apareixen aquí. Consulta'ls a l'extracte de final d'any de {{brokers}}.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
@@ -449,6 +455,7 @@ const ca: TranslationKeys = {
   "m721.threshold_undetermined":
     "No es pot determinar si superes el llindar de 50.000 €: el total ({{amount}} €) no inclou {{count}} posició(ns) sense valorar. Valora-les abans de concloure que no has de presentar.",
   "m721.no_positions": "Puja un informe amb posicions de criptomonedes al Model 100 per analitzar el Model 721.",
+  "m721.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves criptomonedes a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si les teves criptomonedes a l'estranger superen els 50.000 €.",
   "m721.positions_title": "Posicions declarables",
   "m721.generate_btn": "Generar fitxer Model 721",
   "m721.deadline": "Termini: 1 gener – 31 març de l'any següent",
@@ -532,6 +539,10 @@ const ca: TranslationKeys = {
   "annex.title": "Annex d'operacions (Anexo C1)",
   "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
   "annex.operations": "operaci\u00f3(ns)",
+  "annex.wash_blocked": "Pèrdua bloquejada per recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compres del mateix valor que la bloquegen: {{dates}}",
+  "annex.wash_hint":
+    "A Renta Web, marca aquesta venda com a «Pèrdues patrimonials no imputables». La pèrdua s'aplicarà quan venguis el que has recomprat.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3 fiscal (base de l'estalvi)",
@@ -656,6 +667,10 @@ const ca: TranslationKeys = {
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
+  "crypto_rates.stored_title": "Preus manuals desats",
+  "crypto_rates.stored_description":
+    "Aquests preus en euros estan desats al teu navegador i s'apliquen cada vegada que processes un fitxer. Corregeix un valor i desa, o esborra'ls tots si n'hi ha algun d'erroni.",
+  "crypto_rates.clear_btn": "Esborra els preus desats",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lots manuals per a posicions transferides",

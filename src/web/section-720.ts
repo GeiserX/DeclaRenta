@@ -5,7 +5,7 @@
  * and generates the fixed-width file for AEAT submission.
  */
 
-import { t } from "../i18n/index.js";
+import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
@@ -29,6 +29,7 @@ import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { formatBrokerList } from "./missing-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -119,6 +120,7 @@ function bindPrevious720Card(): void {
 function fmtChange(d: Decimal): string {
   return d.greaterThan(0) ? `+${fmtEur(d)}` : fmtEur(d);
 }
+let cachedBrokersWithoutHoldings: string[] = [];
 /** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
 let cachedYear: number | null = null;
 
@@ -142,17 +144,26 @@ export function initSection720(): void {
     </div>`;
 }
 
-/** Render 720 section with processed data */
+/**
+ * Render 720 section with processed data.
+ *
+ * `brokersWithoutHoldings` names the brokers whose export has no year-end
+ * positions or balances (see findMissingHoldings): they are missing from the
+ * totals, so the section says so and sends the user to that broker's
+ * year-end statement.
+ */
 export function renderSection720(
   statement: Statement,
   rateMap: EcbRateMap,
   yearEndLots?: Map<string, Lot[]>,
   disposals?: FifoDisposal[],
+  brokersWithoutHoldings: string[] = [],
 ): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
   cachedYearEndLots = yearEndLots;
   cachedDisposals = disposals;
+  cachedBrokersWithoutHoldings = brokersWithoutHoldings;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -161,10 +172,16 @@ export function renderSection720(
   const year = profile.year;
   cachedYear = year;
 
+  const missingNotice = brokersWithoutHoldings.length > 0
+    ? `<div class="banner banner-warning m720-no-holdings">${esc(t("m720.brokers_without_holdings", {
+      brokers: formatBrokerList(brokersWithoutHoldings, getCurrentLocale()),
+    }))}</div>`
+    : "";
+
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
   // With nothing held, last year's file still matters: what it declared was sold (C).
   if (statement.openPositions.length === 0 && !hasCashBalances && !previous720) {
-    container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>${previous720CardHtml(year)}`;
+    container.innerHTML = `${missingNotice || `<p class="muted">${t("m720.no_positions")}</p>`}${previous720CardHtml(year)}`;
     bindPrevious720Card();
     return;
   }
@@ -263,6 +280,7 @@ export function renderSection720(
   if (!previous720 && exceeds) {
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
   }
+  html += missingNotice;
   // A declared account with no balance this year may have been closed, and a
   // closing must be declared (art. 42 bis.5 RGAT). The file cannot tell, so say
   // it instead of promising that nothing has to be filed.
@@ -524,6 +542,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedDisposals);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedDisposals, cachedBrokersWithoutHoldings);
   }
 }
