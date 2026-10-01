@@ -887,7 +887,7 @@ async function processFiles(): Promise<void> {
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
     const missing = detectedMissingHoldings;
-    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots, missing.m720));
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots, report.capitalGains.disposals, missing.m720));
     renderSectionSafely("m721-content", () => renderSection721(merged, allRates, missing.m721));
     renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates, missing.d6));
     updateBadge("renta", t("badge.complete"), "success");

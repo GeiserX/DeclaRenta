@@ -96,7 +96,7 @@ describe("Modelo 720 and D-6 with transaction-only exports", () => {
   it("720 names Binance instead of asking for an upload", () => {
     const statement = binanceParser.parse(fixture("binance-tx-sample.csv"));
     const missing = findMissingHoldings([{ broker: "Binance", statement }]);
-    renderSection720(statement, noRates, undefined, missing.m720);
+    renderSection720(statement, noRates, undefined, undefined, missing.m720);
     const text = content("m720-content").textContent;
     expect(text).not.toContain(t("m720.no_positions"));
     expect(text).toContain(t("m720.brokers_without_holdings", { brokers: "Binance" }));

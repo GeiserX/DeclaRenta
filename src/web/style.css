@@ -2310,6 +2310,30 @@ footer a:hover {
   margin-top: 1.5rem;
 }
 
+/* Modelo 720: upload of the last filed 720 */
+.m720-previous {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.m720-previous h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.m720-previous .muted {
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+
+.m720-sold {
+  margin: 0.5rem 0 1rem 1.25rem;
+  font-size: 0.875rem;
+}
+
 /* Filing guide */
 .filing-guide {
   margin-top: 1.5rem;
