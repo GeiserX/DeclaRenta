@@ -14,7 +14,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
-import { formatCsv } from "../generators/csv.js";
+import { csvDownload } from "./csv-download.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -231,6 +231,7 @@ const opsTable = document.getElementById("operations-table")!;
 const divsTable = document.getElementById("dividends-table")!;
 const exportJsonBtn = document.getElementById("export-json-btn")!;
 const exportCsvBtn = document.getElementById("export-csv-btn")!;
+const exportCsvExcelBtn = document.getElementById("export-csv-excel-btn")!;
 const exportPdfBtn = document.getElementById("export-pdf-btn") as HTMLButtonElement;
 const brokerSelect = document.getElementById("broker-select") as HTMLSelectElement;
 const fileListDiv = document.getElementById("file-list")!;
@@ -885,9 +886,14 @@ exportJsonBtn.addEventListener("click", () => {
 
 exportCsvBtn.addEventListener("click", () => {
   if (!currentReport) return;
-  const csv = formatCsv(currentReport);
-  const blob = new Blob([csv], { type: "text/csv" });
-  downloadBlob(blob, `declarenta_${currentReport.year}.csv`);
+  const { blob, filename } = csvDownload(currentReport, "standard");
+  downloadBlob(blob, filename);
+});
+
+exportCsvExcelBtn.addEventListener("click", () => {
+  if (!currentReport) return;
+  const { blob, filename } = csvDownload(currentReport, "excel-es");
+  downloadBlob(blob, filename);
 });
 
 exportPdfBtn.addEventListener("click", () => {
