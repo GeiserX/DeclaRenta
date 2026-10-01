@@ -141,7 +141,21 @@ describe("renderManualRatesPanel with nothing left to value", () => {
     setManualRate("SOL", "2025-04-10", "40");
     const html = renderManualRatesPanel(unresolved);
     expect(html).toContain("crypto-rates-clear-btn");
-    expect(html).not.toContain("<details");
+    // The SOL price is for a swap that no longer needs one: it stays editable
+    // in a collapsed list inside the same panel, with one Save button.
+    expect(html).toContain('<details class="crypto-rates-stored-inline">');
+    expect(html).toMatch(/data-currency="SOL"\s+data-date="2025-04-10"[\s\S]*value="40"/);
+    expect(html.match(/id="crypto-rates-save-btn"/g)).toHaveLength(1);
+  });
+
+  it("does not list a saved price twice when its swap is still in the table", () => {
+    setManualRate("ETH", "2025-05-01", "3000");
+    const unresolved: UnresolvedValuation[] = [
+      { symbol: "BTC", description: "BTC", currency: "ETH", date: "2025-05-01", quantity: "1", reason: "no-ecb" },
+    ];
+    const html = renderManualRatesPanel(unresolved);
+    expect(html).not.toContain("crypto-rates-stored-inline");
+    expect(html.match(/data-currency="ETH"/g)).toHaveLength(1);
   });
 });
 

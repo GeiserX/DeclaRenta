@@ -3059,6 +3059,19 @@ footer a:hover {
   margin-top: 0.85rem;
 }
 
+/* Saved prices listed inside the panel that still asks for others */
+.crypto-rates-stored-inline {
+  margin: 1rem 0;
+}
+
+.crypto-rates-stored-inline > summary {
+  cursor: pointer;
+}
+
+.crypto-rates-stored-inline .table-wrapper {
+  margin-top: 0.75rem;
+}
+
 .manual-opening-lots-actions,
 .crypto-rates-actions {
   display: flex;

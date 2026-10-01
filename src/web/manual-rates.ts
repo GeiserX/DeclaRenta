@@ -248,8 +248,9 @@ function renderClearRatesButton(): string {
  * price makes its row leave the "please value this" table, so without this
  * list a mistyped price would keep driving the gain with no way to see it.
  */
-function renderStoredRatesPanel(stored: StoredManualRate[]): string {
-  const rows = [...stored]
+/** One editable row per saved price, oldest date first. */
+function storedRateRows(stored: StoredManualRate[]): string {
+  return [...stored]
     .sort((a, b) => a.date.localeCompare(b.date) || a.currency.localeCompare(b.currency))
     .map(
       (e) => `<tr>
@@ -266,6 +267,28 @@ function renderStoredRatesPanel(stored: StoredManualRate[]): string {
       </tr>`,
     )
     .join("");
+}
+
+/** Collapsed list of the saved prices, inside a panel that already has the Save button. */
+function storedRatesList(stored: StoredManualRate[]): string {
+  return `<details class="crypto-rates-stored-inline">
+    <summary class="crypto-rates-stored-summary">
+      <span class="crypto-rates-stored-summary-text">${esc(tr("crypto_rates.stored_title"))}</span>
+      <span class="crypto-rates-stored-summary-count">${stored.length}</span>
+    </summary>
+    <div class="table-wrapper"><table>
+      <thead><tr>
+        <th>${esc(tr("crypto_rates.col_currency"))}</th>
+        <th>${esc(tr("crypto_rates.col_date"))}</th>
+        <th>${esc(tr("crypto_rates.col_eur_per_unit"))}</th>
+      </tr></thead>
+      <tbody>${storedRateRows(stored)}</tbody>
+    </table></div>
+  </details>`;
+}
+
+function renderStoredRatesPanel(stored: StoredManualRate[]): string {
+  const rows = storedRateRows(stored);
 
   return `<details class="crypto-rates-panel crypto-rates-stored-panel">
     <summary class="crypto-rates-stored-summary">
@@ -304,6 +327,9 @@ function renderStoredRatesPanel(stored: StoredManualRate[]): string {
 export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): string {
   const stored = readStored();
   if (unresolved.length === 0) return stored.length > 0 ? renderStoredRatesPanel(stored) : "";
+  // Prices already saved for swaps that no longer need one stay editable here
+  // too; otherwise a mistyped one could only be removed with "clear all".
+  const savedElsewhere = stored.filter((e) => !unresolved.some((u) => u.currency === e.currency && u.date === e.date));
 
   const rows = unresolved
     .map((u, i) => {
@@ -343,6 +369,7 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
+    ${savedElsewhere.length > 0 ? storedRatesList(savedElsewhere) : ""}
     <div class="crypto-rates-actions">
       <button type="button" id="crypto-rates-save-btn" class="btn-cta">${esc(tr("crypto_rates.save_btn"))}</button>
       ${stored.length > 0 ? renderClearRatesButton() : ""}
