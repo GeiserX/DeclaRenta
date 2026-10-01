@@ -182,6 +182,7 @@ export function detectWashSales(
     blockedLossEur: new Decimal(0),
     reintegratedLossEur: new Decimal(0),
     washSaleBlocked: false,
+    washSaleRepurchaseDates: undefined,
   }));
 
   const holdingAfterByAssetTime = new Map<string, Map<number, Decimal>>();
@@ -361,6 +362,10 @@ export function detectWashSales(
     const blocked = absorbed.greaterThanOrEqualTo(qty) ? lossAbs : lossAbs.mul(absorbed).div(qty);
     disposal.blockedLossEur = blocked;
     disposal.washSaleBlocked = blocked.greaterThan(0);
+    if (disposal.washSaleBlocked) {
+      // Display-only trail so the UI can say WHICH purchases blocked this loss.
+      disposal.washSaleRepurchaseDates = [...new Set(consumed.map((c) => c.date))].sort();
+    }
 
     // Attach the deferred loss to each consumed repurchase date, pro-rata to the
     // quantity consumed there, so a later sale of those shares releases it.

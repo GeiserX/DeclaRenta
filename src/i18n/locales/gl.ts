@@ -515,6 +515,10 @@ const gl: TranslationKeys = {
   "annex.title": "Anexo de operaci\u00f3ns (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaci\u00f3ns agrupadas por tipo de activo.",
   "annex.operations": "operaci\u00f3n(s)",
+  "annex.wash_blocked": "Perda bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compras do mesmo valor que a bloquean: {{dates}}",
+  "annex.wash_hint":
+    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda aplicarase cando vendas o que recompraches.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3n fiscal (base do aforro)",
