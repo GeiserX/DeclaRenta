@@ -46,6 +46,7 @@ const eu: TranslationKeys = {
   "results.export_pdf": "Esportatu PDF",
   "results.operations_count": "{{count}} eragiketa",
   "results.dividends_count": "{{count}} dibidendu",
+  "results.newer_years_notice": "{{year}} erakusten da; zure datuek {{years}} ere hartzen dute.",
   "results.year_mismatch":
     "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
 

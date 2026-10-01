@@ -46,6 +46,7 @@ const gl: TranslationKeys = {
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(s)",
   "results.dividends_count": "{{count}} dividendo(s)",
+  "results.newer_years_notice": "Amosando {{year}}; os teus datos tamén cobren {{years}}.",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
 
