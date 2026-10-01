@@ -373,6 +373,7 @@ const eu: TranslationKeys = {
   "m720.category_not_exceeded": "Atalasearen azpitik",
   "m720.category_undetermined": "Ezin da zehaztu: {{count}} posizio baloratu gabe",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
+  "m720.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko posizioak eta saldoak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerriko kontuen saldoak edo atzerriko akzio eta funtsen balioak 50.000 € gainditzen dituen.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -408,6 +409,7 @@ const eu: TranslationKeys = {
   "d6.no_minimum":
     "ICT/1408/2021 Aginduaz geroztik, D-6 soilik nahitaezkoa da zure partaidetza atzerriko enpresa kotizatu baten kapitalaren edo boto-eskubideen <strong>%10 edo gehiago</strong> bada. Txikizkako inbertitzaile gehienak salbuetsita daude.",
   "d6.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan D-6 aztertzeko.",
+  "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
@@ -432,6 +434,7 @@ const eu: TranslationKeys = {
   "m721.threshold_undetermined":
     "Ezin da zehaztu 50.000 €-ko atalasea gainditzen duzun: guztirakoak ({{amount}} €) ez ditu barne hartzen baloratu gabeko {{count}} posizio. Baloratu itzazu aurkeztu behar ez duzula ondorioztatu aurretik.",
   "m721.no_positions": "Igo kriptomoneda posizioak dituen txostena 100 Ereduan 721 Eredua aztertzeko.",
+  "m721.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko kriptomonetak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerrian dituzun kriptomonetek 50.000 € gainditzen dituzten.",
   "m721.positions_title": "Aitortu beharreko posizioak",
   "m721.generate_btn": "721 Ereduaren fitxategia sortu",
   "m721.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
@@ -515,6 +518,10 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
+  "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
+  "annex.wash_hint":
+    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera berrerosi duzuna saltzen duzunean aplikatuko da.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",
@@ -639,6 +646,10 @@ const eu: TranslationKeys = {
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
+  "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
+  "crypto_rates.stored_description":
+    "Euro prezio hauek zure nabigatzailean gordeta daude eta fitxategi bat prozesatzen duzun bakoitzean aplikatzen dira. Zuzendu balio bat eta gorde, edo ezabatu guztiak bat okerra bada.",
+  "crypto_rates.clear_btn": "Ezabatu gordetako prezioak",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Eskuzko loteak transferitutako posizioentzat",

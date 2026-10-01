@@ -44,10 +44,12 @@ import {
 import { initSection720, renderSection720, rerenderSection720 } from "./section-720.js";
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
+import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./missing-holdings.js";
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
+import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
@@ -245,6 +247,8 @@ const pendingFiles: File[] = [];
 /** Parsed statement data (available after step 2) */
 let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
+/** Per model, the brokers whose export has no year-end holdings (named in 720/721/D-6). */
+let detectedMissingHoldings: MissingHoldings = { m720: [], m721: [], d6: [] };
 /** Years detected from uploaded data (sorted descending, latest first) */
 let detectedYears: number[] = [];
 /** The active year for processing (auto-detected from data, changeable via dropdown) */
@@ -548,6 +552,7 @@ async function parseFiles(): Promise<void> {
 
   const merged = createEmptyStatement();
   const brokerNames: string[] = [];
+  const parsedExports: ParsedExport[] = [];
 
   try {
     for (const file of pendingFiles) {
@@ -556,6 +561,7 @@ async function parseFiles(): Promise<void> {
         const statement = await parseRevolutXlsx(uint8);
         mergeStatement(merged, statement);
         brokerNames.push("Revolut");
+        parsedExports.push({ broker: "Revolut", statement });
         continue;
       }
 
@@ -563,6 +569,7 @@ async function parseFiles(): Promise<void> {
         const statement = await parseEtoroXlsx(uint8);
         mergeStatement(merged, statement);
         brokerNames.push("eToro");
+        parsedExports.push({ broker: "eToro", statement });
         continue;
       }
 
@@ -603,10 +610,12 @@ async function parseFiles(): Promise<void> {
       const statement = parser.parse(content);
       mergeStatement(merged, statement);
       brokerNames.push(parser.name);
+      parsedExports.push({ broker: parser.name, statement });
     }
 
     mergedStatement = finalizeMergedStatement(merged);
     detectedBrokers = [...new Set(brokerNames)];
+    detectedMissingHoldings = findMissingHoldings(parsedExports);
 
     // Detect years from trades + cash transactions. A corrupt date would make
     // parseInt() return NaN (or an absurd year), which then poisons activeYear
@@ -840,9 +849,10 @@ async function processFiles(): Promise<void> {
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
     // failure in one is logged and shown inline in that section, without
     // aborting the others or the main flow.
-    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots));
-    renderSectionSafely("m721-content", () => renderSection721(merged, allRates));
-    renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates));
+    const missing = detectedMissingHoldings;
+    renderSectionSafely("m720-content", () => renderSection720(merged, allRates, report.yearEndLots, missing.m720));
+    renderSectionSafely("m721-content", () => renderSection721(merged, allRates, missing.m721));
+    renderSectionSafely("d6-content", () => renderSectionD6(merged, allRates, missing.d6));
     updateBadge("renta", t("badge.complete"), "success");
   } catch (err) {
     if (isStale()) return; // a newer run owns the screen now
@@ -1053,7 +1063,8 @@ function renderResults(report: TaxSummary) {
   }
 
   // Manual crypto valuation panel — surfaced when some crypto↔crypto swaps
-  // could not be valued automatically (no ECB rate / no cross-leg). Re-rendered
+  // could not be valued automatically (no ECB rate / no cross-leg), and as a
+  // collapsed list of saved prices once every swap is valued. Re-rendered
   // here each time results render, so it stays in sync on locale change too.
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
@@ -1070,10 +1081,9 @@ function renderResults(report: TaxSummary) {
     }
   }
 
-  const unresolved = report.unresolvedCryptoValuations;
-  if (unresolved && unresolved.length > 0) {
-    const panelHtml = renderManualRatesPanel(unresolved);
-    casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
+  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
+  if (cryptoPanelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
     const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");
@@ -1204,7 +1214,7 @@ function renderOperationsTable() {
         ${disposals
           .map(
             (d) => `
-          <tr>
+          <tr${washSaleRowAttr(d)}>
             <td class="mono">${esc(d.isin)}</td>
             <td>${esc(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
@@ -1214,7 +1224,7 @@ function renderOperationsTable() {
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
-          </tr>
+          </tr>${renderWashSaleDetailRow(d, 9)}
         `,
           )
           .join("")}

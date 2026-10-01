@@ -403,6 +403,7 @@ const es = {
   "m720.category_not_exceeded": "Por debajo del umbral",
   "m720.category_undetermined": "No se puede determinar: {{count}} posición(es) sin valorar",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
+  "m720.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus posiciones ni saldos a 31 de diciembre, así que no se suman aquí. Comprueba en el extracto de fin de año de {{brokers}} si el saldo de tus cuentas o el valor de tus acciones y fondos en el extranjero supera los 50.000 €.",
   "m720.positions_title": "Posiciones declarables",
   "m720.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
@@ -439,6 +440,7 @@ const es = {
   "d6.no_minimum":
     "Desde la Orden ICT/1408/2021, el D-6 solo es obligatorio si tu participación representa el <strong>10% o más</strong> del capital o derechos de voto de una empresa cotizada extranjera. La mayoría de inversores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el D-6.",
+  "d6.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus valores a 31 de diciembre, así que no aparecen aquí. Consúltalos en el extracto de fin de año de {{brokers}}.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
@@ -463,6 +465,7 @@ const es = {
   "m721.threshold_undetermined":
     "No se puede determinar si superas el umbral de 50.000 €: el total ({{amount}} €) no incluye {{count}} posición(es) sin valorar. Valóralas antes de concluir que no debes presentar.",
   "m721.no_positions": "Sube un informe con posiciones de criptomonedas en Modelo 100 para analizar el Modelo 721.",
+  "m721.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus criptomonedas a 31 de diciembre, así que no se suman aquí. Comprueba en el extracto de fin de año de {{brokers}} si tus criptomonedas en el extranjero superan los 50.000 €.",
   "m721.positions_title": "Posiciones declarables",
   "m721.generate_btn": "Generar fichero Modelo 721",
   "m721.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
@@ -548,6 +551,10 @@ const es = {
   "annex.title": "Anexo de operaciones (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaciones agrupadas por tipo de activo.",
   "annex.operations": "operación(es)",
+  "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
+  "annex.wash_hint":
+    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida se aplicará cuando vendas lo que recompraste.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
@@ -672,6 +679,10 @@ const es = {
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
+  "crypto_rates.stored_title": "Precios manuales guardados",
+  "crypto_rates.stored_description":
+    "Estos precios en euros están guardados en tu navegador y se aplican cada vez que procesas un archivo. Corrige un valor y guarda, o bórralos todos si alguno es erróneo.",
+  "crypto_rates.clear_btn": "Borrar precios guardados",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuales para posiciones transferidas",

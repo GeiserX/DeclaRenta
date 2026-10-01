@@ -102,3 +102,28 @@ describe("renderOperationsAnnex — shared asset labels", () => {
     expect(html).toContain("WIDGET");
   });
 });
+
+describe("renderOperationsAnnex — anti-churning marker", () => {
+  it("highlights a blocked sale and adds an expandable line with amount and repurchase dates", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({
+        gainLossEur: new Decimal(-400),
+        proceedsEur: new Decimal(520),
+        costBasisEur: new Decimal(920),
+        washSaleBlocked: true,
+        blockedLossEur: new Decimal(400),
+        washSaleRepurchaseDates: ["2025-10-01"],
+      }),
+    ]));
+    expect(html).toContain('<tr class="wash-sale-blocked">');
+    expect(html).toContain('<tr class="wash-sale-detail"><td colspan="9">');
+    expect(html).toContain("Pérdida bloqueada por recompra: 400,00 EUR");
+    expect(html).toContain("01/10/2025");
+  });
+
+  it("adds no marker to a sale without a blocked loss", () => {
+    const html = renderOperationsAnnex(makeSummary([makeDisposal()]));
+    expect(html).not.toContain("wash-sale-blocked");
+    expect(html).not.toContain("wash-sale-detail");
+  });
+});
