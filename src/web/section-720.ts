@@ -119,9 +119,16 @@ function bindPrevious720Card(): void {
 function fmtChange(d: Decimal): string {
   return d.greaterThan(0) ? `+${fmtEur(d)}` : fmtEur(d);
 }
+/** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
+let cachedYear: number | null = null;
 
 /** Initialize 720 section with empty state */
 export function initSection720(): void {
+  // Also forget the data behind the last render: after the upload list
+  // changes, a locale switch or the generate button must not bring it back.
+  cachedStatement = null;
+  cachedRateMap = null;
+  cachedYearEndLots = undefined;
   const container = document.getElementById("m720-content");
   if (!container) return;
   container.innerHTML = `
@@ -152,6 +159,7 @@ export function renderSection720(
 
   const profile = getProfile();
   const year = profile.year;
+  cachedYear = year;
 
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
   // With nothing held, last year's file still matters: what it declared was sold (C).
@@ -244,9 +252,13 @@ export function renderSection720(
     </div>`;
   }
 
-  if (mustFile) {
+  if (mustFile && exceeds) {
     const totalValue = thresholds.values.total.plus(thresholds.accounts.total);
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
+  } else if (mustFile) {
+    // Below 50,000 €, the duty comes from last year's filing (a sale to cancel or
+    // a rise over 20,000 €), not from the amount held, so do not quote it.
+    html += `<p class="warning">${esc(t("m720.obliged_by_changes"))}</p>`;
   }
   if (!previous720 && exceeds) {
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
@@ -299,7 +311,7 @@ export function renderSection720(
         <h4>${t("m720.rates_title")}</h4>
         <div class="rates-grid">${uniqueCurrencies.map((cur) => {
           const rate = lookupPositionRate(rateMap, `${year}-12-31`, cur);
-          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${rate.toFixed(4)} €`}</span>`;
+          return `<span class="rate-item">${esc(cur)}: ${rate === null ? "—" : `${fmtEur(rate, 4)} €`}</span>`;
         }).join("")}</div>
       </div>`;
     }
@@ -341,7 +353,8 @@ export function renderSection720(
   }
 
   // Assets the file leaves out: the user declares them by hand.
-  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year, ...previousConfig() }, statement.cashBalances);
+  // With this year's sales, an old "V " record gets its subclave and is no longer reported as omitted.
+  const omissions = findModelo720Omissions(statement.openPositions, rateMap, { year, ...previousConfig() }, statement.cashBalances, disposals);
   if (omissions.length > 0) {
     html += `<div class="banner banner-warning">${esc(t("m720.omitted_title"))}<ul>${omissions.map((o) => {
       const label = o.kind === "position"
@@ -431,7 +444,7 @@ function encodeISO885915(str: string): Uint8Array {
 }
 
 function generate720File(): void {
-  if (!cachedStatement || !cachedRateMap) return;
+  if (!cachedStatement || !cachedRateMap || cachedYear === null) return;
   if (!isProfileComplete()) {
     const container = document.getElementById("m720-content");
     if (container && !container.querySelector(".profile-required")) {
@@ -450,7 +463,7 @@ function generate720File(): void {
     nif: profile.nif,
     surname: profile.apellidos,
     name: profile.nombre,
-    year: profile.year,
+    year: cachedYear,
     phone: profile.telefono,
     contactName: fullName || "CONTRIBUYENTE",
     declarationId: modelo720DeclarationId(),
@@ -496,7 +509,7 @@ function generate720File(): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `modelo720_${profile.year}.txt`;
+  a.download = `modelo720_${cachedYear}.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -170,9 +170,9 @@ async function generatedDetails(): Promise<string[]> {
 }
 
 describe("720 section: last year's file", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubGlobal("localStorage", memoryStorage());
-    setLocale("es");
+    await setLocale("es");
     localStorage.setItem("declarenta_profile", JSON.stringify({
       nif: "12345678Z", apellidos: "GARCIA LOPEZ", nombre: "JUAN", telefono: "600123456", year: 2025,
     }));
@@ -180,12 +180,12 @@ describe("720 section: last year's file", () => {
     renderSection720(statement2025(), new Map(), undefined, [vwceSale]);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Module state outlives a test: remove any loaded file.
     $("#m720-previous-clear")?.click();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
-    setLocale("es");
+    await setLocale("es");
   });
 
   it("marks everything A until a file is loaded", async () => {
@@ -207,7 +207,7 @@ describe("720 section: last year's file", () => {
 
   it("re-renders in the new language and keeps the loaded file", async () => {
     await upload(file2024);
-    setLocale("en");
+    await setLocale("en");
     rerenderSection720();
     expect($(".m720-previous h3")!.textContent).toBe("Your last Modelo 720");
     expect($("#m720-previous-clear")!.textContent).toBe("Remove");
@@ -219,6 +219,15 @@ describe("720 section: last year's file", () => {
     renderSection720({ ...statement2025(), openPositions: [iwda, vwce, aapl] }, new Map(), undefined, []);
     expect($("#m720-content")!.textContent).toContain("Con tu último Modelo 720, este año no estás obligado a presentarlo");
     expect($("#m720-content .warning")).toBeNull();
+  });
+
+  it("names last year's filing, not the amount held, as the reason to file below 50,000 €", async () => {
+    await upload(file2024);
+    // Only AAPL (30,000 €) is left: IWDA and VWCE, both declared, were sold.
+    renderSection720({ ...statement2025(), openPositions: [aapl] }, new Map(), undefined, [vwceSale]);
+    const text = $("#m720-content")!.textContent;
+    expect(text).toContain("Estás obligado a presentar el Modelo 720 por los cambios desde tu última declaración");
+    expect(text).not.toContain("Según tus posiciones");
   });
 
   it("rejects a file of the same year and a file that is not a 720", async () => {

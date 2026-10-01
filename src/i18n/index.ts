@@ -3,18 +3,25 @@
  *
  * Zero dependencies. Supports 5 locales: es, en, ca, eu, gl.
  * Spanish is the default. Locale preference stored in localStorage.
+ *
+ * Only Spanish is bundled up front: it is the default and the fallback for any
+ * missing key. The other four tables load on demand, so a visitor downloads
+ * only the locale they use. setLocale() and initLocale() wait for that load
+ * before switching, so t() never returns a half-loaded locale.
  */
 
 import es, { type TranslationKeys } from "./locales/es.js";
-import en from "./locales/en.js";
-import ca from "./locales/ca.js";
-import eu from "./locales/eu.js";
-import gl from "./locales/gl.js";
 
 export type Locale = "es" | "en" | "ca" | "eu" | "gl";
 export type TranslationKey = keyof TranslationKeys;
 
-const LOCALES: Record<Locale, TranslationKeys> = { es, en, ca, eu, gl };
+const LOCALES: Partial<Record<Locale, TranslationKeys>> = { es };
+const LOADERS: Record<Exclude<Locale, "es">, () => Promise<{ default: TranslationKeys }>> = {
+  en: () => import("./locales/en.js"),
+  ca: () => import("./locales/ca.js"),
+  eu: () => import("./locales/eu.js"),
+  gl: () => import("./locales/gl.js"),
+};
 const LOCALE_NAMES: Record<Locale, string> = {
   es: "Español",
   en: "English",
@@ -38,13 +45,36 @@ export function detectLocale(): Locale {
   return "es";
 }
 
+function isLocale(value: string): value is Locale {
+  return Object.prototype.hasOwnProperty.call(LOCALE_NAMES, value);
+}
+
+/** Load a locale's table once; later calls resolve at once. */
+async function loadLocale(locale: Locale): Promise<void> {
+  if (locale === "es" || LOCALES[locale]) return;
+  LOCALES[locale] = (await LOADERS[locale]()).default;
+}
+
+/** Bumped by every switch, so only the latest of two overlapping loads applies. */
+let switchSeq = 0;
+
 /**
- * Initialize the i18n system. Call once on app startup.
+ * Initialize the i18n system. Call once on app startup, and await it before
+ * the first render. If the saved or detected locale cannot load (offline, a
+ * missing chunk), the app stays in Spanish rather than failing to start.
  */
-export function initLocale(): void {
+export async function initLocale(): Promise<void> {
   let saved: string | null = null;
   try { saved = localStorage.getItem("locale"); } catch { /* Node/SSR */ }
-  currentLocale = saved && saved in LOCALES ? (saved as Locale) : detectLocale();
+  const locale = saved && isLocale(saved) ? saved : detectLocale();
+  const seq = ++switchSeq;
+  try {
+    await loadLocale(locale);
+  } catch {
+    if (seq === switchSeq) currentLocale = "es";
+    return;
+  }
+  if (seq === switchSeq) currentLocale = locale;
 }
 
 /**
@@ -63,10 +93,15 @@ export function getLocaleNames(): Record<Locale, string> {
 
 /**
  * Set the active locale and persist to localStorage.
- * Dispatches a "localechange" CustomEvent on document.
+ * Loads the locale first, then dispatches a "localechange" CustomEvent on
+ * document. Until the load finishes the previous locale stays active.
+ * Rejects if the locale cannot load; the previous locale then stays active.
  */
-export function setLocale(locale: Locale): void {
-  if (!(locale in LOCALES)) return;
+export async function setLocale(locale: Locale): Promise<void> {
+  if (!isLocale(locale)) return;
+  const seq = ++switchSeq;
+  await loadLocale(locale);
+  if (seq !== switchSeq) return;
   currentLocale = locale;
   try { localStorage.setItem("locale", locale); } catch { /* Node/SSR */ }
   if (typeof document !== "undefined") {
@@ -81,7 +116,7 @@ export function setLocale(locale: Locale): void {
  * @example t("results.operations_count", { count: "42" }) → "42 operación(es)"
  */
 export function t(key: TranslationKey, params?: Record<string, string>): string {
-  const translations = LOCALES[currentLocale] as Record<string, string>;
+  const translations = (LOCALES[currentLocale] ?? es) as Record<string, string>;
   let text = translations[key as string] ?? (es as Record<string, string>)[key as string] ?? key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {

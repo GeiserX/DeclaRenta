@@ -69,6 +69,14 @@ const es = {
   "table.concept": "Concepto",
   "table.amount_eur": "Importe (EUR)",
   "table.currency": "Divisa",
+  "table.fx_origin": "Origen",
+  "table.fx_lot": "Lote FIFO",
+  "fx.trigger.conversion": "Conversión de divisa",
+  "fx.trigger.dividend": "Dividendo",
+  "fx.trigger.interest": "Intereses",
+  "fx.trigger.commission": "Comisión",
+  "fx.trigger.stock_purchase": "Compra de valores",
+  "fx.trigger.stock_sale": "Venta de valores",
 
   // Casillas
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
@@ -89,6 +97,7 @@ const es = {
   "casilla.spanish_withholding_detail":
     "Retención a cuenta del IRPF practicada en origen sobre dividendos o intereses de emisores españoles (p. ej. acciones del IBEX), aunque estén en un bróker extranjero. Es un pago a cuenta deducible de la cuota; NO es la deducción por doble imposición (casilla 0588), que solo aplica a impuesto extranjero.",
   "casilla.double_taxation": "Deducción doble imposición",
+  "casilla.dt_foreign_income_total": "Total rendimientos extranjeros",
   "casilla.reintegrated_losses":
     "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
   "casilla.blocked_losses":
@@ -97,6 +106,9 @@ const es = {
   "messages.errors_title": "{{count}} error(es) — requiere atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
   "messages.info_title": "{{count}} nota(s) informativa(s)",
+  "pdf.severity_error": "Error",
+  "pdf.severity_warning": "Aviso",
+  "pdf.severity_info": "Nota",
   "pdf.section_messages": "Mensajes",
 
   // Charts
@@ -104,6 +116,27 @@ const es = {
   "chart.monthly_gl": "Ganancia/Pérdida por mes",
   "chart.currency_composition": "Composición por divisa",
   "chart.withholdings_country": "Retenciones por país",
+  "chart.month_1": "Ene",
+  "chart.month_2": "Feb",
+  "chart.month_3": "Mar",
+  "chart.month_4": "Abr",
+  "chart.month_5": "May",
+  "chart.month_6": "Jun",
+  "chart.month_7": "Jul",
+  "chart.month_8": "Ago",
+  "chart.month_9": "Sep",
+  "chart.month_10": "Oct",
+  "chart.month_11": "Nov",
+  "chart.month_12": "Dic",
+  "asset.stk": "Acciones",
+  "asset.fund": "Fondos / ETFs",
+  "asset.opt": "Opciones",
+  "asset.fop": "Opciones sobre futuros",
+  "asset.crypto": "Criptomonedas",
+  "asset.bond": "Bonos",
+  "option.expiration": "Expiración",
+  "option.close": "Cierre anticipado",
+  "option.exercise": "Ejercicio/Asignación",
 
   // Footer
   "footer.docs": "Documentación",
@@ -123,6 +156,9 @@ const es = {
   "a11y.theme_toggle": "Cambiar tema",
   "a11y.drop_zone": "Zona de carga de ficheros",
   "a11y.file_input": "Seleccionar ficheros",
+  "a11y.ops_search": "Buscar operaciones por ISIN o símbolo",
+  "a11y.ops_filter": "Filtrar operaciones por resultado",
+  "a11y.remove_file": "Quitar {{name}}",
 
   // Theme
   "theme.toggle": "Cambiar tema",
@@ -171,7 +207,10 @@ const es = {
   "compare.net_gain_loss": "Ganancia/Pérdida neta (transmisiones, sin divisas)",
 
   // Errors
-  "error.no_broker_detected": 'No se pudo detectar el broker de "{{filename}}". Selecciona el broker manualmente.',
+  "error.no_broker_detected":
+    'No se pudo detectar el broker de "{{filename}}". Si es un informe de broker, selecciona el broker manualmente; si no lo es, quítalo de la lista.',
+  "error.empty_file":
+    'El fichero "{{filename}}" está vacío. Quítalo de la lista o vuelve a exportarlo desde tu broker.',
   "error.file_too_large":
     'El fichero "{{filename}}" supera el límite de {{limit}} MB y se ha descartado. Exporta un periodo más corto o divide el fichero.',
   "error.prefix": "Error: ",
@@ -190,11 +229,12 @@ const es = {
 
   // Fiscal profile
   "profile.title": "Perfil fiscal",
-  "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6.",
+  "profile.description": "Estos datos se utilizan para generar los ficheros de los modelos 720 y D-6. Se guardan solo en este navegador, nunca en un servidor.",
   "profile.section_personal": "Datos personales",
   "profile.section_declaration": "Configuración de la declaración",
   "profile.nif_label": "NIF/NIE:",
-  "profile.nif_placeholder": "12345678A",
+  "profile.nif_placeholder": "12345678Z",
+  "profile.nif_invalid": "El NIF/NIE no es válido: revisa los dígitos y la letra de control.",
   "profile.surname_label": "Apellidos:",
   "profile.surname_placeholder": "García López",
   "profile.name_label": "Nombre:",
@@ -215,6 +255,8 @@ const es = {
     "Si la cuenta tiene varios titulares (p. ej. cuenta conjunta o de gananciales), DeclaRenta divide todos los importes a partes iguales para mostrar la parte que corresponde a cada contribuyente (Art. 11.3 LIRPF). Cada titular presenta su declaración individual por su parte.",
   "profile.saved": "Perfil guardado",
   "profile.save_btn": "Guardar perfil",
+  "profile.clear_btn": "Borrar mis datos de este navegador",
+  "profile.clear_confirm": "¿Borrar de este navegador tu perfil fiscal, los informes guardados y los valores introducidos a mano?",
   "profile.incomplete_banner": "Completa tu perfil fiscal para generar los modelos 720 y D-6.",
   "profile.go_to_profile": "Ir al perfil",
 
@@ -235,7 +277,7 @@ const es = {
     "En la configuración, activa las secciones:<ul><li><strong>Trades</strong> (obligatorio)</li><li><strong>Cash Transactions</strong> — dividendos y retenciones (obligatorio)</li><li><strong>Open Positions</strong> — para Modelo 720/D-6 (recomendado)</li><li><strong>Financial Instrument Information</strong> (recomendado)</li></ul>",
   "guide.ibkr.step5":
     "En cada sección, <strong>selecciona todos los campos disponibles</strong> (marca todas las casillas). Cuantos más datos incluyas, más preciso será el cálculo. Como mínimo asegúrate de incluir el campo <strong>Notes</strong> en Trades — es necesario para detectar conversiones automáticas de divisa.",
-  "guide.ibkr.step6": "Formato de salida: <strong>XML</strong>",
+  "guide.ibkr.step6": "Formato de salida: <strong>XML</strong>. En <em>Date Format</em>, deja <strong>yyyyMMdd</strong>",
   "guide.ibkr.step7": "Incluye <strong>todos los años disponibles</strong> para cálculo FIFO correcto",
   "guide.ibkr.step8": "Guarda la consulta, ejecútala y descarga el fichero <code>.xml</code>",
 
@@ -350,6 +392,7 @@ const es = {
   "m720.title": "Modelo 720 — Bienes en el extranjero",
   "m720.description": "Declaración informativa sobre bienes y derechos situados en el extranjero.",
   "m720.threshold_exceeded": "Según tus posiciones ({{amount}} €), estás obligado a presentar el Modelo 720.",
+  "m720.obliged_by_changes": "Estás obligado a presentar el Modelo 720 por los cambios desde tu última declaración: cada categoría de arriba indica el motivo.",
   "m720.threshold_not_exceeded":
     "No superas el umbral de 50.000 € (total: {{amount}} €). No estás obligado a presentar.",
   "m720.category_v": "Valores (acciones, fondos, bonos)",
@@ -465,6 +508,10 @@ const es = {
     "Las posiciones de tu fichero son a fecha {{date}}, no a 31/12/{{year}}. Estos modelos declaran lo que tenías a 31 de diciembre, así que no se genera ningún fichero con ellas. Descarga un informe que termine el 31/12/{{year}} (en IBKR, un Flex Query con fecha final 31/12/{{year}}) y súbelo de nuevo.",
   "section.positions_date_unknown":
     "Tu broker no indica a qué fecha corresponden las posiciones. Comprueba que el informe refleje lo que tenías a 31/12/{{year}}: si lo descargaste más tarde, las posiciones y sus valores pueden no coincidir.",
+  "merge.holdings_other_date":
+    "Posiciones y saldos de la cuenta {{account}} a fecha {{date}} fuera de los modelos 720, 721 y D-6: no son los de 31/12/{{year}}.",
+  "merge.holdings_other_date.hint":
+    "Ese fichero termina en otra fecha. Sus operaciones y movimientos sí se tienen en cuenta, pero estos modelos declaran lo que tenías a 31 de diciembre, así que sus posiciones y saldos no se suman. Si te falta el informe de esa cuenta a 31/12/{{year}}, súbelo también.",
 
   // Badge statuses
   "badge.complete": "Completo",
@@ -550,7 +597,7 @@ const es = {
   "guide_rw.double_taxation_title": "Deducción por doble imposición internacional",
   "guide_rw.entidad_emisora_label": "Entidad emisora",
   "guide_rw.entidad_emisora_value":
-    "Nombre del broker (ej. Interactive Brokers, Degiro, eToro…). Si consolidas varias operaciones en una sola línea, indica el broker principal.",
+    "Nombre de la empresa o del valor que vendes (ej. Apple Inc.), no el del bróker. En divisas, la moneda (ej. USD). Si consolidas varias operaciones en una sola línea, indica el valor principal.",
   "guide_rw.tipo_elemento_label": "Tipo de elemento patrimonial",
   "guide_rw.tipo_elemento_value_capital":
     "Selecciona <strong>«Acciones admitidas a negociación»</strong> para acciones cotizadas. Para fondos: «Participaciones en IIC». Para derivados/opciones: «Otros elementos patrimoniales».",
@@ -590,7 +637,7 @@ const es = {
     "El importe de la casilla <strong>0588</strong> de DeclaRenta. Es el menor entre la retención extranjera pagada y la cuota española correspondiente (Art. 80 LIRPF).",
   "guide_rw.dt_campo_label": "¿En qué campo del cuadro?",
   "guide_rw.dt_campo_hint":
-    "En el cuadro de doble imposición, rellena DOS filas:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → importe bruto de los dividendos extranjeros (mismo valor que casilla 0029).<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → importe de la casilla 0588 de DeclaRenta.<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
+    "En el cuadro de doble imposición, rellena DOS filas por cada país:<br>• <strong>«Otros rendimientos netos reducidos obtenidos en el extranjero»</strong> (2ª fila) → la columna «Bruto EUR» de ese país en el detalle de la casilla 0588 de DeclaRenta. Si solo hay un país, es la fila «Total rendimientos extranjeros» de ese detalle. No incluye los dividendos españoles ni los de países sin retención.<br>• <strong>«Impuesto satisfecho en el extranjero»</strong> (última fila) → la deducción de ese país en el mismo detalle (con un solo país, el importe de la casilla 0588).<br>Si dejas la 2ª fila vacía, Renta Web muestra el aviso «Ha reflejado el impuesto sin hacer constar las rentas». Las filas 1 y 3 quedan a 0.",
   "guide_rw.capital_gains_note":
     "Si tienes muchas operaciones, puedes consolidarlas en una sola línea por tipo de activo usando las fechas genéricas 01/01 y 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note":
@@ -695,6 +742,9 @@ const es = {
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
+  "fifo.split_unresolved": "⚠ Split de {{symbol}} el {{date}} sin aplicar: no hay acciones anteriores con las que calcular la proporción.",
+  "fifo.split_unresolved.hint":
+    "Sube también los extractos de años anteriores, desde la apertura de la cuenta. Si no, el número de acciones y el coste de las ventas posteriores de este valor no serán correctos.",
   "fifo.merger_applied":
     "🔄 Fusión: {{oldIsin}} → {{newIsin}} (ratio {{ratio}}, {{lotsTransferred}} lotes transferidos, {{date}})",
   "fifo.merger_applied.hint":
@@ -711,16 +761,16 @@ const es = {
   "fifo.corporate_action_unhandled.hint":
     "Si cambió el número de acciones o el ISIN de la posición, revisa el coste de las ventas posteriores de este valor.",
   "fifo.sell_without_lots":
-    "⚠ Venta sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
+    "⚠ Venta sin lotes: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Coste base = 0 (posible posición corta o datos previos incompletos).",
   "fifo.sell_without_lots.hint":
-    "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la primera compra de este valor.",
+    "¿Incluye tu exportación los años anteriores? Descarga de tu broker un periodo que cubra desde la primera compra de este valor.",
   "fifo.cover_without_lots":
     "⚠ Cierre de corto sin lotes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Ganancia no calculada (posición corta abierta fuera del periodo o datos previos incompletos).",
   "fifo.cover_without_lots.hint":
     "¿Has incluido los años anteriores en tu Flex Query? Selecciona un periodo que cubra desde la venta que abrió esta posición corta.",
-  "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}} ({{isin}}) × {{quantity}} el {{date}}. Coste base = 0.",
+  "fifo.insufficient_lots": "⚠ Lotes insuficientes: {{symbol}}{{isinSuffix}} × {{quantity}} el {{date}}. Coste base = 0.",
   "fifo.insufficient_lots.hint":
-    "El Flex Query no cubre todas las compras previas de este valor. Amplía el periodo de consulta.",
+    "El fichero no cubre todas las compras previas de este valor. Exporta desde tu broker un periodo más amplio.",
   "fifo.option_invalid_date": "⚠ Evento OptionEAE sin fecha válida para {{symbol}}. Omitido.",
   "fifo.option_invalid_date.hint":
     "Evento de opción omitido por fecha inválida. Revisa que el Flex Query incluye la sección 'Option Exercises, Assignments & Expirations'.",
@@ -792,6 +842,10 @@ const es = {
     "Órdenes de Flatex ejecutadas en varias partes: {{orders}}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.",
   "flatex.commission.multi_fill_prorated.hint":
     "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total de comisiones de cada orden es exacto; solo el reparto entre ejecuciones es aproximado.",
+  "flatex.depot.repeated_fills":
+    "Operaciones de Flatex repetidas y contadas una sola vez: {{fills}}. Tenían el mismo número de orden y de apunte (TA-Nr.) que otra ya cargada.",
+  "flatex.depot.repeated_fills.hint":
+    "Suele pasar al subir el mismo CSV de Depotumsätze dos veces, o dos exportaciones con fechas que se solapan. Si de verdad son operaciones distintas, revisa el archivo: Flatex da a cada ejecución su propio TA-Nr.",
   "flatex.dividends.net_amounts":
     "Flatex anota los dividendos por el importe neto cobrado, ya descontada la retención, y el CSV de Kontoumsätze no incluye la retención.",
   "flatex.dividends.net_amounts.hint":
@@ -799,6 +853,10 @@ const es = {
   "degiro.rows_skipped": "Se omitieron {{count}} filas sin ISIN/sin importe.",
   "degiro.rows_skipped.hint":
     "Estas filas tenían cantidad o precio pero les faltaba el ISIN o el importe, por lo que no se pudieron incluir como operaciones. Suele indicar que las columnas del CSV no se han reconocido bien: vuelve a exportar el CSV de Transacciones de Degiro sin modificar las cabeceras.",
+  "degiro.corporate_action_pair":
+    "Posible operación societaria el {{date}}: {{oldProduct}} ({{oldIsin}}) → {{newProduct}} ({{newIsin}}). Degiro la anota como una venta y una compra.",
+  "degiro.corporate_action_pair.hint":
+    "Degiro anota los cambios de ISIN, los splits y los canjes de acciones como una venta del valor antiguo y una compra del nuevo, sin número de orden ni costes. DeclaRenta los calcula así: declara una ganancia o pérdida ese día, y las acciones nuevas toman ese precio y esa fecha como coste. Revisa la comunicación de Degiro o del emisor. Si fue un simple cambio de ISIN, un split o un canje fiscalmente neutro (régimen especial de la Ley del Impuesto sobre Sociedades), no hubo venta: las acciones nuevas conservan el coste y la fecha de compra de las antiguas, así que corrige esa operación en tu declaración. Si fue un canje que tributa (art. 37.1.e LIRPF), el cálculo es correcto.",
   "degiro.transaction_tax": "Impuesto sobre transacciones financieras pagado en {{product}} ({{isin}}): {{amount}} {{currency}}.",
   "degiro.transaction_tax.hint":
     "Degiro cobra este impuesto al comprar acciones españolas, francesas o italianas y solo lo muestra en el CSV de Cuenta. Forma parte del valor de adquisición (art. 35.1.b LIRPF): súmalo al coste de las compras de ese valor, porque DeclaRenta no lo añade automáticamente.",
@@ -810,6 +868,10 @@ const es = {
     "Se han omitido {{count}} movimiento(s) del CSV de Binance con operaciones no reconocidas: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Estos movimientos no se han incluido en el cálculo. Si son compras, ventas o ingresos (p. ej. futuros, pagos con Binance Card, Auto-Invest o cashback), añádelos a mano en tu declaración y comunica el nombre de la operación para que se pueda incorporar.",
+  "binance.unsupported_pair":
+    "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
+  "binance.unsupported_pair.hint":
+    "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
   "etoro.closed_types_skipped":
     "Se ha(n) omitido {{count}} posición(es) cerrada(s) de eToro de un tipo no soportado: {{types}}.",
   "etoro.closed_types_skipped.hint":

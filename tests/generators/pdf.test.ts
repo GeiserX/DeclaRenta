@@ -76,7 +76,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
     doubleTaxation: {
       deduction: new Decimal("75"),
       byCountry: {
-        US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
+        US: { grossIncome: new Decimal("500"), taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
       },
     },
     fxGains: {
@@ -213,8 +213,8 @@ describe("PDF Report Generator", () => {
       doubleTaxation: {
         deduction: new Decimal("150"),
         byCountry: {
-          US: { taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
-          DE: { taxPaid: new Decimal("100"), deductionAllowed: new Decimal("75") },
+          US: { grossIncome: new Decimal("500"), taxPaid: new Decimal("75"), deductionAllowed: new Decimal("75") },
+          DE: { grossIncome: new Decimal("500"), taxPaid: new Decimal("100"), deductionAllowed: new Decimal("75") },
         },
       },
     });
@@ -535,5 +535,31 @@ describe("PDF Report Generator", () => {
     const rendered = captureRenderedText(spy);
     expect(rendered.filter((s) => s.includes("INFO-")).length).toBe(20);
     expect(rendered.some((s) => s.includes("... y 5 mensajes informativos más"))).toBe(true);
+  });
+
+  it("passes only text the built-in WinAnsi font can encode", async () => {
+    // Helvetica here is WinAnsi only: ⛔ ⚠ ℹ → and emoji have no glyph code and
+    // print as garbage ("&Ô", "!9"). Latin-1 plus the WinAnsi extras is fine.
+    const WIN_ANSI_EXTRA = new Set("€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ");
+    const encodable = (s: string) => {
+      for (const ch of s) {
+        if (ch.codePointAt(0)! > 0xff && !WIN_ANSI_EXTRA.has(ch)) return false;
+      }
+      return true;
+    };
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport({
+      messages: [
+        { id: "test.unkeyed_error", severity: "error", message: "ERRX", hint: "HINTX" },
+        { id: "test.unkeyed_warning", severity: "warning", message: "⚠️ WARNX 💶" },
+        { id: "test.unkeyed_info", severity: "info", message: "ℹ INFOX" },
+      ],
+    }));
+    const rendered = captureRenderedText(spy);
+    const bad = rendered.filter((s) => !encodable(s));
+    expect(bad).toEqual([]);
+    expect(rendered.find((s) => s.includes("ERRX"))).toContain("HINTX");
+    expect(rendered.some((s) => s.includes("WARNX"))).toBe(true);
+    expect(rendered.some((s) => s.includes("INFOX"))).toBe(true);
   });
 });
