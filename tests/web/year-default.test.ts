@@ -32,8 +32,8 @@ describe("pickDefaultYear", () => {
     expect(pickDefaultYear([2026], MAY_2026)).toBe(2026);
   });
 
-  it("falls back to today's year when no year was detected", () => {
-    expect(pickDefaultYear([], MAY_2026)).toBe(2026);
+  it("falls back to the last closed year when no year was detected", () => {
+    expect(pickDefaultYear([], MAY_2026)).toBe(2025);
   });
 
   it("follows the calendar: in January the year that just ended is the last closed one", () => {
