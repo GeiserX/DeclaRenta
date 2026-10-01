@@ -5,7 +5,7 @@
  * and generates the fixed-width file for AEAT submission.
  */
 
-import { t } from "../i18n/index.js";
+import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
 import {
@@ -23,6 +23,7 @@ import Decimal from "decimal.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { formatBrokerList } from "./missing-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -34,6 +35,7 @@ function effectiveYearEnd(year: number): string {
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedYearEndLots: Map<string, Lot[]> | undefined;
+let cachedBrokersWithoutHoldings: string[] = [];
 /** Year the section was drawn with. The file uses it, so it matches the screen even if the profile year changes later. */
 let cachedYear: number | null = null;
 
@@ -57,11 +59,24 @@ export function initSection720(): void {
     </div>`;
 }
 
-/** Render 720 section with processed data */
-export function renderSection720(statement: Statement, rateMap: EcbRateMap, yearEndLots?: Map<string, Lot[]>): void {
+/**
+ * Render 720 section with processed data.
+ *
+ * `brokersWithoutHoldings` names the brokers whose export has no year-end
+ * positions or balances (see findMissingHoldings): they are missing from the
+ * totals, so the section says so and sends the user to that broker's
+ * year-end statement.
+ */
+export function renderSection720(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  yearEndLots?: Map<string, Lot[]>,
+  brokersWithoutHoldings: string[] = [],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
   cachedYearEndLots = yearEndLots;
+  cachedBrokersWithoutHoldings = brokersWithoutHoldings;
 
   const container = document.getElementById("m720-content");
   if (!container) return;
@@ -70,9 +85,15 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
   const year = profile.year;
   cachedYear = year;
 
+  const missingNotice = brokersWithoutHoldings.length > 0
+    ? `<div class="banner banner-warning m720-no-holdings">${esc(t("m720.brokers_without_holdings", {
+      brokers: formatBrokerList(brokersWithoutHoldings, getCurrentLocale()),
+    }))}</div>`
+    : "";
+
   const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
   if (statement.openPositions.length === 0 && !hasCashBalances) {
-    container.innerHTML = `<p class="muted">${t("m720.no_positions")}</p>`;
+    container.innerHTML = missingNotice || `<p class="muted">${t("m720.no_positions")}</p>`;
     return;
   }
 
@@ -150,6 +171,7 @@ export function renderSection720(statement: Statement, rateMap: EcbRateMap, year
     html += `<p class="warning">${t("m720.threshold_exceeded", { amount: fmtEur(totalValue) })}</p>`;
     html += `<div class="banner banner-info">${t("m720.successive_years_note")}</div>`;
   }
+  html += missingNotice;
 
   // Positions table (long holdings only: a short is owed, not owned, and the
   // threshold above leaves it out too)
@@ -349,6 +371,6 @@ function generate720File(): void {
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection720(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots);
+    renderSection720(cachedStatement, cachedRateMap, cachedYearEndLots, cachedBrokersWithoutHoldings);
   }
 }
