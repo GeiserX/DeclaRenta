@@ -131,7 +131,57 @@ describe("crypto-rates Save next to the opening-lots panel", () => {
     const stored = JSON.parse(localStorage.getItem(RATES_KEY) ?? "[]") as { currency: string; eurPerUnit: string }[];
     expect(stored).toEqual([{ currency: "SOL", date: `${YEAR}-04-01`, eurPerUnit: "30000" }]);
     // The rerun values the swap, so the panel asking for the rate goes away.
-    await waitFor(() => document.querySelector(".crypto-rate-input") === null || null, "crypto panel gone");
+    await waitFor(() => document.querySelector(".crypto-rates-stored-panel"), "saved prices panel");
+    expect(document.querySelector("#wizard-step-3 div.crypto-rates-panel")).toBeNull();
+  });
+});
+
+describe("saved crypto prices once every swap is valued", () => {
+  async function saveMistypedPrice(): Promise<HTMLDetailsElement> {
+    type(document.querySelector<HTMLInputElement>(".crypto-rate-input"), "30000");
+    document.getElementById("crypto-rates-save-btn")!.click();
+    return waitFor(
+      () => document.querySelector<HTMLDetailsElement>(".crypto-rates-stored-panel"),
+      "saved prices panel",
+    );
+  }
+
+  it("lists the saved price collapsed, with its value", async () => {
+    const panel = await saveMistypedPrice();
+    expect(panel.open).toBe(false);
+    const input = panel.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+    expect(input.dataset.currency).toBe("SOL");
+    expect(input.dataset.date).toBe(`${YEAR}-04-01`);
+    expect(input.value).toBe("30000");
+  });
+
+  it("corrects a saved price in place", async () => {
+    const panel = await saveMistypedPrice();
+    type(panel.querySelector<HTMLInputElement>(".crypto-rate-input"), "3,5");
+    panel.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+
+    const stored = JSON.parse(localStorage.getItem(RATES_KEY) ?? "[]") as { eurPerUnit: string }[];
+    expect(stored.map((e) => e.eurPerUnit)).toEqual(["3.5"]);
+    await waitFor(
+      () =>
+        document.querySelector<HTMLInputElement>(".crypto-rates-stored-panel .crypto-rate-input")?.value === "3.5" ||
+        null,
+      "corrected price shown",
+    );
+  });
+
+  it("clears every saved price and asks for the rate again", async () => {
+    const panel = await saveMistypedPrice();
+    panel.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+
+    expect(localStorage.getItem(RATES_KEY)).toBeNull();
+    const asking = await waitFor(
+      () => document.querySelector<HTMLElement>("#wizard-step-3 div.crypto-rates-panel"),
+      "crypto panel back",
+    );
+    expect(asking.querySelector<HTMLInputElement>(".crypto-rate-input")!.value).toBe("");
+    expect(document.querySelector(".crypto-rates-stored-panel")).toBeNull();
+    expect(asking.querySelector("#crypto-rates-clear-btn")).toBeNull();
   });
 });
 

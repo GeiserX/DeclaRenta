@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   clearManualOpeningLots,
+  clearManualRates,
   getManualRates,
+  renderManualRatesPanel,
   setManualRate,
   getManualOpeningLots,
   renderManualOpeningLotsPanel,
   setManualOpeningLots,
 } from "../../src/web/manual-rates.js";
 import { lookupRateInMap } from "../../src/engine/ecb.js";
+import type { UnresolvedValuation } from "../../src/types/tax.js";
 
 // Shim localStorage exactly as tests/web/profile.test.ts does (no jsdom).
 let store: Record<string, string> = {};
@@ -101,6 +104,58 @@ describe("getManualRates resilience", () => {
     const map = getManualRates();
     expect(lookupRateInMap(map, "2025-04-10", "SOL")).not.toBeNull();
     expect(map.size).toBe(1);
+  });
+});
+
+describe("clearManualRates", () => {
+  it("empties getManualRates after a price was saved", () => {
+    setManualRate("SOL", "2025-04-10", "40");
+    clearManualRates();
+    expect(store[KEY]).toBeUndefined();
+    expect(getManualRates().size).toBe(0);
+  });
+});
+
+describe("renderManualRatesPanel with nothing left to value", () => {
+  it("renders nothing when no prices are saved", () => {
+    expect(renderManualRatesPanel([])).toBe("");
+  });
+
+  it("lists the saved prices in a collapsed panel with an editable value and a clear button", () => {
+    setManualRate("SOL", "2025-04-10", "30000");
+    const html = renderManualRatesPanel([]);
+
+    expect(html).toContain('<details class="crypto-rates-panel crypto-rates-stored-panel">');
+    expect(html).toContain('data-currency="SOL"');
+    expect(html).toContain('data-date="2025-04-10"');
+    expect(html).toContain('value="30000"');
+    expect(html).toContain('id="crypto-rates-save-btn"');
+    expect(html).toContain('id="crypto-rates-clear-btn"');
+  });
+
+  it("offers the clear button next to Save while swaps still need a price and prices are saved", () => {
+    const unresolved: UnresolvedValuation[] = [
+      { symbol: "BTC", description: "BTC", currency: "ETH", date: "2025-05-01", quantity: "1", reason: "no-ecb" },
+    ];
+    expect(renderManualRatesPanel(unresolved)).not.toContain("crypto-rates-clear-btn");
+    setManualRate("SOL", "2025-04-10", "40");
+    const html = renderManualRatesPanel(unresolved);
+    expect(html).toContain("crypto-rates-clear-btn");
+    // The SOL price is for a swap that no longer needs one: it stays editable
+    // in a collapsed list inside the same panel, with one Save button.
+    expect(html).toContain('<details class="crypto-rates-stored-inline">');
+    expect(html).toMatch(/data-currency="SOL"\s+data-date="2025-04-10"[\s\S]*value="40"/);
+    expect(html.match(/id="crypto-rates-save-btn"/g)).toHaveLength(1);
+  });
+
+  it("does not list a saved price twice when its swap is still in the table", () => {
+    setManualRate("ETH", "2025-05-01", "3000");
+    const unresolved: UnresolvedValuation[] = [
+      { symbol: "BTC", description: "BTC", currency: "ETH", date: "2025-05-01", quantity: "1", reason: "no-ecb" },
+    ];
+    const html = renderManualRatesPanel(unresolved);
+    expect(html).not.toContain("crypto-rates-stored-inline");
+    expect(html.match(/data-currency="ETH"/g)).toHaveLength(1);
   });
 });
 
