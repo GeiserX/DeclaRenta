@@ -512,6 +512,10 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
+  "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
+  "annex.wash_hint":
+    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera berrerosi duzuna saltzen duzunean aplikatuko da.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",

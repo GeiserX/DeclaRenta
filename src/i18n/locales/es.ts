@@ -545,6 +545,10 @@ const es = {
   "annex.title": "Anexo de operaciones (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaciones agrupadas por tipo de activo.",
   "annex.operations": "operación(es)",
+  "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
+  "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
+  "annex.wash_hint":
+    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida se aplicará cuando vendas lo que recompraste.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
