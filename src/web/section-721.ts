@@ -5,7 +5,7 @@
  * and explains that official XML generation is not implemented yet.
  */
 
-import { t } from "../i18n/index.js";
+import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -15,6 +15,7 @@ import Decimal from "decimal.js";
 import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
+import { formatBrokerList } from "./missing-holdings.js";
 
 /** Return year-end date or today if the year hasn't ended yet */
 function effectiveYearEnd(year: number): string {
@@ -25,6 +26,7 @@ function effectiveYearEnd(year: number): string {
 
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
+let cachedBrokersWithoutHoldings: string[] = [];
 
 /** Initialize 721 section with empty state */
 export function initSection721(): void {
@@ -45,10 +47,22 @@ export function initSection721(): void {
     </div>`;
 }
 
-/** Render 721 section with processed data */
-export function renderSection721(statement: Statement, rateMap: EcbRateMap): void {
+/**
+ * Render 721 section with processed data.
+ *
+ * `brokersWithoutHoldings` names the brokers whose export has crypto activity
+ * but no year-end crypto holdings (see findMissingHoldings): their coins are
+ * missing from the total, so the section says so and sends the user to that
+ * broker's year-end statement.
+ */
+export function renderSection721(
+  statement: Statement,
+  rateMap: EcbRateMap,
+  brokersWithoutHoldings: string[] = [],
+): void {
   cachedStatement = statement;
   cachedRateMap = rateMap;
+  cachedBrokersWithoutHoldings = brokersWithoutHoldings;
 
   const container = document.getElementById("m721-content");
   if (!container) return;
@@ -61,8 +75,14 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
   const valuation = buildModelo721Entries(statement.openPositions, rateMap, yearEnd);
   const positions = valuation.positions;
 
+  const missingNotice = brokersWithoutHoldings.length > 0
+    ? `<div class="banner banner-warning m721-no-holdings">${esc(t("m721.brokers_without_holdings", {
+      brokers: formatBrokerList(brokersWithoutHoldings, getCurrentLocale()),
+    }))}</div>`
+    : "";
+
   if (positions.length === 0) {
-    container.innerHTML = `<p class="muted">${t("m721.no_positions")}</p>`;
+    container.innerHTML = missingNotice || `<p class="muted">${t("m721.no_positions")}</p>`;
     return;
   }
 
@@ -127,6 +147,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
         ? esc(t("m721.threshold_undetermined", { amount: fmtEur(totalValue), count: String(unvaluedCount) }))
         : t("m721.threshold_not_exceeded", { amount: fmtEur(totalValue) })}
   </p>`;
+  html += missingNotice;
 
   // Positions table
   html += `<h3>${t("m721.positions_title")}</h3>
@@ -189,7 +210,7 @@ export function renderSection721(statement: Statement, rateMap: EcbRateMap): voi
 /** Re-render if data was previously cached (for locale changes) */
 export function rerenderSection721(): void {
   if (cachedStatement && cachedRateMap) {
-    renderSection721(cachedStatement, cachedRateMap);
+    renderSection721(cachedStatement, cachedRateMap, cachedBrokersWithoutHoldings);
   } else {
     initSection721();
   }

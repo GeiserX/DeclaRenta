@@ -834,6 +834,50 @@ describe("proportional blocking + reintegration", () => {
   });
 });
 
+describe("washSaleRepurchaseDates (display trail)", () => {
+  const AAPL = "US0378331005";
+
+  it("records the post-sale repurchase date that blocked the loss", () => {
+    const result = detectWashSales(
+      [makeDisposal({ sellDate: "2025-06-15", gainLossEur: new Decimal(-100) })],
+      [makeTrade(AAPL, "2025-06-15", "SELL"), makeTrade(AAPL, "2025-07-01", "BUY")],
+    );
+    expect(result[0]!.washSaleRepurchaseDates).toEqual(["2025-07-01"]);
+  });
+
+  it("lists every in-window purchase that absorbed part of the loss, sorted and unique", () => {
+    // Sell 10 at a loss; 20 bought before (10 survive the sale) and 4 + 4 after.
+    // Post-sale buys are consumed first (8), then 2 from the surviving pre-sale lot.
+    const result = detectWashSales(
+      [makeDisposal({ sellDate: "2025-06-15", gainLossEur: new Decimal(-100) })],
+      [
+        makeTrade(AAPL, "2025-05-20", "BUY", "20"),
+        makeTrade(AAPL, "2025-06-15", "SELL", "10"),
+        makeTrade(AAPL, "2025-07-10", "BUY", "4"),
+        makeTrade(AAPL, "2025-07-01", "BUY", "4"),
+      ],
+    );
+    expect(result[0]!.washSaleRepurchaseDates).toEqual(["2025-05-20", "2025-07-01", "2025-07-10"]);
+  });
+
+  it("leaves the trail unset when the loss is not blocked", () => {
+    const result = detectWashSales(
+      [makeDisposal({ sellDate: "2025-06-15", gainLossEur: new Decimal(-100) })],
+      [makeTrade(AAPL, "2025-06-15", "SELL"), makeTrade(AAPL, "2025-12-01", "BUY")],
+    );
+    expect(result[0]!.washSaleBlocked).toBe(false);
+    expect(result[0]!.washSaleRepurchaseDates).toBeUndefined();
+  });
+
+  it("clears a stale trail when the input disposal carried one", () => {
+    const result = detectWashSales(
+      [makeDisposal({ sellDate: "2025-06-15", gainLossEur: new Decimal(50), washSaleRepurchaseDates: ["2025-07-01"] })],
+      [makeTrade(AAPL, "2025-06-15", "SELL"), makeTrade(AAPL, "2025-07-01", "BUY")],
+    );
+    expect(result[0]!.washSaleRepurchaseDates).toBeUndefined();
+  });
+});
+
 describe("detectWashSales at scale (one heavily traded ISIN)", () => {
   it("checks 20,000 same-ISIN trades without re-scanning every trade per sale", () => {
     // 10,000 round trips, 40 a day across 2024: buy one day, sell the next, every
