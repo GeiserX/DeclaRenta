@@ -353,9 +353,98 @@ describe("formatCsv settings section", () => {
     expect(lines[6]).toBe("# GANANCIAS PATRIMONIALES");
   });
 
+  it("uses the Excel separator in the settings section too", () => {
+    const csv = formatCsv(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }), "excel-es");
+    expect(csv.split("\n").slice(1, 5)).toEqual(["Ajuste;Valor", "Monodivisa;SI", "Titulares;2", "Procesar_Autoconversiones;NO"]);
+  });
+
   it("omits the section for a report without settings", () => {
     const csv = formatCsv(makeReport());
     expect(csv).not.toContain("# AJUSTES DEL CALCULO");
     expect(csv.split("\n")[0]).toBe("# GANANCIAS PATRIMONIALES");
+  });
+});
+
+describe("formatCsv — excel-es dialect", () => {
+  it("keeps the standard dialect as the default", () => {
+    const report = makeReport();
+    expect(formatCsv(report)).toBe(formatCsv(report, "standard"));
+  });
+
+  it("writes an option strike with a decimal comma too", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.strike = "182.5";
+    const cols = formatCsv(report, "excel-es").split("\n").find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
+    expect(cols[17]).toBe("182,5");
+    // The standard file keeps the broker's dot.
+    const std = formatCsv(report).split("\n").find((l) => l.startsWith("US0378331005,AAPL,APPLE INC,STK"))!.split(",");
+    expect(std[17]).toBe("182.5");
+  });
+
+  it("uses ';' as separator and ',' as decimal mark", () => {
+    const csv = formatCsv(makeReport(), "excel-es");
+    const lines = csv.split("\n");
+
+    const header = lines[lines.indexOf("# GANANCIAS PATRIMONIALES") + 1]!;
+    expect(header.startsWith("ISIN;Simbolo;Descripcion;Categoria;")).toBe(true);
+    expect(header).not.toContain(",");
+
+    const cols = lines.find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
+    expect(cols).toHaveLength(21);
+    expect(cols[6]).toBe("10");
+    expect(cols[7]).toBe("800,00");
+    expect(cols[8]).toBe("1000,00");
+    expect(cols[9]).toBe("200,00");
+    expect(cols[10]).toBe("189");
+    expect(cols[12]).toBe("0,920000");
+    expect(cols[13]).toBe("0,910000");
+    expect(cols[20]).toBe("0,00"); // Perdida_Bloqueada_EUR, decimal comma too
+
+    expect(lines).toContain("US0378331005;AAPL;APPLE INC;20250601;50,00;7,50;US;USD");
+    expect(lines).toContain("US0378331005;AAPL;US;1;50,00;7,50;USD");
+    expect(lines).toContain("0029;Dividendos brutos;50,00");
+    expect(lines).toContain("0588;Deduccion doble imposicion;7,50");
+  });
+
+  it("writes negative amounts with a comma decimal", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.gainLossEur = new Decimal("-123.45");
+    const csv = formatCsv(report, "excel-es");
+    const cols = csv.split("\n").find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
+    expect(cols[9]).toBe("-123,45");
+  });
+
+  it("does not quote text that only contains a comma", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.description = "BERKSHIRE HATHAWAY, CL B";
+    const csv = formatCsv(report, "excel-es");
+    expect(csv).toContain(";BERKSHIRE HATHAWAY, CL B;");
+  });
+
+  it("quotes text that contains a ';'", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.description = "FOO; BAR";
+    const csv = formatCsv(report, "excel-es");
+    expect(csv).toContain(';"FOO; BAR";');
+  });
+
+  it("keeps formula-injection protection", () => {
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.description = "=HYPERLINK(1)";
+    const csv = formatCsv(report, "excel-es");
+    expect(csv).toContain(";'=HYPERLINK(1);");
+  });
+
+  it("has the same number of lines as the standard dialect", () => {
+    const report = makeReport();
+    expect(formatCsv(report, "excel-es").split("\n")).toHaveLength(formatCsv(report).split("\n").length);
+  });
+});
+
+describe("escapeCsv — separator", () => {
+  it("quotes on the given separator instead of ','", () => {
+    expect(escapeCsv("a;b", ";")).toBe('"a;b"');
+    expect(escapeCsv("a,b", ";")).toBe("a,b");
+    expect(escapeCsv('a"b', ";")).toBe('"a""b"');
   });
 });

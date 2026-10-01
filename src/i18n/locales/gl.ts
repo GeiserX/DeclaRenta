@@ -40,6 +40,9 @@ const gl: TranslationKeys = {
   "results.filter_losses": "Perdas",
   "results.export_json": "Exportar JSON",
   "results.export_csv": "Exportar CSV",
+  "results.export_csv_title": "Separador «,» e decimais con punto: para programas e follas de cálculo en inglés",
+  "results.export_csv_excel": "Exportar CSV para Excel (ES)",
+  "results.export_csv_excel_title": "Separador «;» e decimais con coma: ábrese por columnas con dobre clic no Excel en español",
   "results.export_pdf": "Exportar PDF",
   "results.operations_count": "{{count}} operación(s)",
   "results.dividends_count": "{{count}} dividendo(s)",
@@ -373,6 +376,7 @@ const gl: TranslationKeys = {
   "m720.category_not_exceeded": "Por debaixo do limiar",
   "m720.category_undetermined": "Non se pode determinar: {{count}} posición(s) sen valorar",
   "m720.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o Modelo 720.",
+  "m720.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen as túas posicións nin saldos a 31 de decembro, así que non se suman aquí. Comproba no extracto de fin de ano de {{brokers}} se o saldo das túas contas ou o valor das túas accións e fondos no estranxeiro supera os 50.000 €.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -408,6 +412,7 @@ const gl: TranslationKeys = {
   "d6.no_minimum":
     "Desde a Orde ICT/1408/2021, o D-6 só é obrigatorio se a túa participación representa o <strong>10% ou máis</strong> do capital ou dereitos de voto dunha empresa cotizada estranxeira. A maioría dos investidores minoristas están exentos.",
   "d6.no_positions": "Sube un informe con posicións abertas no Modelo 100 para analizar o D-6.",
+  "d6.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen os teus valores a 31 de decembro, así que non aparecen aquí. Consúltaos no extracto de fin de ano de {{brokers}}.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
@@ -432,6 +437,7 @@ const gl: TranslationKeys = {
   "m721.threshold_undetermined":
     "Non se pode determinar se superas o limiar de 50.000 €: o total ({{amount}} €) non inclúe {{count}} posición(s) sen valorar. Valóraas antes de concluír que non debes presentar.",
   "m721.no_positions": "Sube un informe con posicións de criptomoedas no Modelo 100 para analizar o Modelo 721.",
+  "m721.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen as túas criptomoedas a 31 de decembro, así que non se suman aquí. Comproba no extracto de fin de ano de {{brokers}} se as túas criptomoedas no estranxeiro superan os 50.000 €.",
   "m721.positions_title": "Posicións declarables",
   "m721.generate_btn": "Xerar ficheiro Modelo 721",
   "m721.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
@@ -643,6 +649,10 @@ const gl: TranslationKeys = {
   "crypto_rates.save_btn": "Gardar e recalcular",
   "crypto_rates.saved": "Gardado",
   "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
+  "crypto_rates.stored_title": "Prezos manuais gardados",
+  "crypto_rates.stored_description":
+    "Estes prezos en euros están gardados no teu navegador e aplícanse cada vez que procesas un ficheiro. Corrixe un valor e garda, ou bórraos todos se algún é erróneo.",
+  "crypto_rates.clear_btn": "Borrar prezos gardados",
 
   // Manual opening lots for transferred positions
   "opening_lots.title": "Lotes manuais para posicións transferidas",
