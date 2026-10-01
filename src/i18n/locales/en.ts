@@ -45,6 +45,7 @@ const en: TranslationKeys = {
   "results.export_pdf": "Export PDF",
   "results.operations_count": "{{count}} transaction(s)",
   "results.dividends_count": "{{count}} dividend(s)",
+  "results.newer_years_notice": "Showing {{year}}; your data also covers {{years}}.",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
   "results.settings_used": "Calculation settings: single-currency {{monodivisa}}, holders {{titulares}}, auto-conversions {{autoconvert}}",
