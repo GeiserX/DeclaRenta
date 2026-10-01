@@ -1,7 +1,8 @@
 name: Deploy to GitHub Pages
 
 on:
-  workflow_run:
+  # Fires only after our own Auto Release on main; it never runs PR code.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["Auto Release"]
     types: [completed]
   workflow_dispatch:
@@ -27,6 +28,23 @@ jobs:
           # This job builds and uploads an artifact; it never pushes.
           persist-credentials: false
 
+      # After Auto Release, main may already hold commits merged while that release
+      # was being validated. Build the tag the release cut instead: the oldest
+      # release tag that contains the commit it ran on. If it cut none, rebuild the
+      # newest tag. A manual run builds the branch it was started on.
+      - name: Check out the release tag
+        id: release
+        env:
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          TAG="$(git tag -l 'v*' --sort=-version:refname | head -1)"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            CUT="$(git tag -l 'v*' --contains "$RELEASED_SHA" --sort=version:refname | head -1)"
+            TAG="${CUT:-$TAG}"
+            git checkout --detach "$TAG"
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -34,15 +52,12 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
-      # The release bump commit cannot land on main (the ruleset requires a PR), so
-      # every tag sits on a commit main never contains and `git describe` on main
-      # finds an old tag. Stamp the site with the newest release tag instead.
       - name: Build web
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          APP_VERSION="$(git tag -l 'v*' --sort=-version:refname | head -1)"
-          export APP_VERSION="${APP_VERSION#v}"
           echo "Building declarenta.com as version ${APP_VERSION}"
           npm run build:web
 

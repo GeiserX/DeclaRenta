@@ -62,6 +62,11 @@ function lastWeekdayOfYear(year: number): string {
  */
 export function positionsDateMismatch(statement: { toDate: string }, year: number): boolean | "unknown" {
   if (!statement.toDate) return "unknown";
-  const toDate = normalizeDate(statement.toDate);
-  return !(toDate >= lastWeekdayOfYear(year) && toDate <= `${year}-12-31`);
+  return !isYearEndDate(statement.toDate, year);
+}
+
+/** Whether `date` is 31 December of `year` or the last weekday before it (see above). */
+export function isYearEndDate(date: string, year: number): boolean {
+  const day = normalizeDate(date);
+  return day >= lastWeekdayOfYear(year) && day <= `${year}-12-31`;
 }

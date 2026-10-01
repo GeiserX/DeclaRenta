@@ -28,7 +28,8 @@ jobs:
       new_tag: ${{ steps.version.outputs.new_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        # This job pushes the bump commit and the tag, so the credentials stay.
+        uses: actions/checkout@v7 # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
           # The main ruleset only accepts changes through a PR. This deploy key is its
@@ -39,9 +40,12 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 22
+          # No dependency cache in the job that tags and publishes a release.
+          package-manager-cache: false
 
+      # No install scripts: this job holds a key that can push to main and tags.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Validate release artifacts before tagging
         run: |
@@ -113,9 +117,10 @@ jobs:
 
       - name: Sync package.json version and tag
         if: steps.version.outputs.new_tag != ''
+        env:
+          NEW_TAG: ${{ steps.version.outputs.new_tag }}
         run: |
-          VERSION="${{ steps.version.outputs.new_tag }}"
-          VERSION="${VERSION#v}"
+          VERSION="${NEW_TAG#v}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -133,15 +138,15 @@ jobs:
             done
           fi
 
-          git tag -a "${{ steps.version.outputs.new_tag }}" -m "Release ${{ steps.version.outputs.new_tag }}"
-          git push origin "${{ steps.version.outputs.new_tag }}"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
 
       - name: Generate changelog
         if: steps.version.outputs.new_tag != ''
+        env:
+          VERSION: ${{ steps.version.outputs.new_tag }}
+          PREV_TAG: ${{ steps.version.outputs.latest }}
         run: |
-          VERSION="${{ steps.version.outputs.new_tag }}"
-          PREV_TAG="${{ steps.version.outputs.latest }}"
-
           if [ "$PREV_TAG" = "v0.0.0" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD)
           fi
@@ -173,12 +178,12 @@ jobs:
 
             echo "---"
             echo ""
-            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$PREV_TAG...$VERSION"
+            echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/$PREV_TAG...$VERSION"
           } > changelog.md
 
       - name: Create GitHub Release
         if: steps.version.outputs.new_tag != ''
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ steps.version.outputs.new_tag }}
           body_path: changelog.md
@@ -203,16 +208,21 @@ jobs:
     needs: release
     if: needs.release.outputs.new_tag != ''
     runs-on: ubuntu-latest
+    # It only reads tags and the log; it never pushes.
+    permissions:
+      contents: read
     steps:
       - name: Checkout for changelog
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Build message
         id: msg
+        env:
+          TAG: ${{ needs.release.outputs.new_tag }}
         run: |
-          TAG="${{ needs.release.outputs.new_tag }}"
           PREV_TAG=$(git tag -l "v*" --sort=-version:refname | grep -v "^${TAG}$" | head -1)
           COMMITS=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"• %s" 2>/dev/null | grep -v "\[skip ci\]" | head -10)
 
@@ -221,7 +231,7 @@ jobs:
 
           ${COMMITS}
 
-          [Ver release](https://github.com/${{ github.repository }}/releases/tag/${TAG}) · [Usar online](https://declarenta.com)
+          [Ver release](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}) · [Usar online](https://declarenta.com)
           MSGEOF
           )
 
@@ -230,10 +240,16 @@ jobs:
           echo "$MSG" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
+      # The text holds commit subjects, so it reaches curl as data through env,
+      # never pasted into the script where bash would run $( ) or backticks in it.
       - name: Send to Telegram
+        env:
+          TEXT: ${{ steps.msg.outputs.text }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            -d chat_id="${TG_CHAT}" \
             -d parse_mode="Markdown" \
             -d disable_web_page_preview="true" \
-            --data-urlencode "text=${{ steps.msg.outputs.text }}"
+            --data-urlencode "text=${TEXT}"

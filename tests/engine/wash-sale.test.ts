@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { detectWashSales, addMonths } from "../../src/engine/wash-sale.js";
+import { parseDate } from "../../src/engine/dates.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
 import type { CorporateAction, Trade } from "../../src/types/ibkr.js";
 
@@ -62,36 +63,36 @@ function makeSplit(isin: string, date: string, description = "AAPL(US0378331005)
 }
 
 describe("addMonths (calendar-clamped)", () => {
+  // Inputs come from parseDate (UTC midnight), exactly as detectWashSales builds them,
+  // and results are read back as UTC instants. CI also runs this file under
+  // TZ=Europe/Madrid, where local-time month arithmetic drifts by an hour across DST.
+  const add = (date: string, months: number): string => addMonths(parseDate(date), months).toISOString();
+
   it("clamps Jan 31 + 1 month to the last day of February (non-leap)", () => {
-    const result = addMonths(new Date(2025, 0, 31), 1); // 2025-01-31, Feb 2025 = 28d
-    expect(result.getFullYear()).toBe(2025);
-    expect(result.getMonth()).toBe(1); // February
-    expect(result.getDate()).toBe(28); // clamped, NOT Mar 2/3
+    expect(add("2025-01-31", 1)).toBe("2025-02-28T00:00:00.000Z"); // clamped, NOT Mar 2/3
   });
 
   it("clamps Jan 31 + 1 month to Feb 29 in a leap year", () => {
-    const result = addMonths(new Date(2024, 0, 31), 1); // 2024-01-31, Feb 2024 = 29d
-    expect(result.getMonth()).toBe(1);
-    expect(result.getDate()).toBe(29);
+    expect(add("2024-01-31", 1)).toBe("2024-02-29T00:00:00.000Z");
   });
 
   it("clamps Dec 31 + 2 months to the last day of February next year", () => {
-    const result = addMonths(new Date(2025, 11, 31), 2); // 2025-12-31 → Feb 2026
-    expect(result.getFullYear()).toBe(2026);
-    expect(result.getMonth()).toBe(1); // February
-    expect(result.getDate()).toBe(28); // clamped, NOT Mar 2/3
+    expect(add("2025-12-31", 2)).toBe("2026-02-28T00:00:00.000Z"); // clamped, NOT Mar 2/3
   });
 
   it("clamps Mar 31 - 1 month to the last day of February (no overflow)", () => {
-    const result = addMonths(new Date(2025, 2, 31), -1); // 2025-03-31 → Feb 2025
-    expect(result.getMonth()).toBe(1);
-    expect(result.getDate()).toBe(28);
+    expect(add("2025-03-31", -1)).toBe("2025-02-28T00:00:00.000Z");
   });
 
   it("preserves the day when the target month is long enough", () => {
-    const result = addMonths(new Date(2025, 0, 15), 1); // 2025-01-15 → 2025-02-15
-    expect(result.getMonth()).toBe(1);
-    expect(result.getDate()).toBe(15);
+    expect(add("2025-01-15", 1)).toBe("2025-02-15T00:00:00.000Z");
+  });
+
+  it("stays on UTC midnight when the window crosses a daylight-saving change", () => {
+    expect(add("2025-02-15", 2)).toBe("2025-04-15T00:00:00.000Z"); // into summer time
+    expect(add("2025-05-15", -2)).toBe("2025-03-15T00:00:00.000Z"); // back into winter time
+    expect(add("2025-09-15", 2)).toBe("2025-11-15T00:00:00.000Z"); // out of summer time
+    expect(add("2025-11-15", -2)).toBe("2025-09-15T00:00:00.000Z");
   });
 });
 
@@ -332,6 +333,38 @@ describe("detectWashSales", () => {
 
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.washSaleBlocked).toBe(true);
+  });
+
+  it.each([
+    ["2025-02-15", "2025-04-15"], // window end crosses the spring daylight-saving change
+    ["2025-05-15", "2025-03-15"], // window start crosses it backwards
+    ["2025-01-15", "2025-03-15"], // control: no daylight-saving change inside the window
+  ])("blocks the full loss for a sale on %s and a repurchase exactly two months away on %s", (sellDate, buyDate) => {
+    // The same day-of-month two months out is the last day of the term, so it is inside the window
+    // in every timezone the tool runs in. The 2024 holding sits outside every window and keeps
+    // shares in the patrimony after the sale, so a pre-sale repurchase is not released by the
+    // total-sale carve-out.
+    const disposals = [makeDisposal({ sellDate, gainLossEur: new Decimal(-200) })];
+    const trades = [
+      makeTrade("US0378331005", "2024-06-03", "BUY"),
+      makeTrade("US0378331005", sellDate, "SELL"),
+      makeTrade("US0378331005", buyDate, "BUY"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(true);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("200.00");
+  });
+
+  it("does NOT block a repurchase one day past a window end that crosses daylight saving", () => {
+    const disposals = [makeDisposal({ sellDate: "2025-02-15", gainLossEur: new Decimal(-200) })];
+    const trades = [
+      makeTrade("US0378331005", "2025-02-15", "SELL"),
+      makeTrade("US0378331005", "2025-04-16", "BUY"),
+    ];
+
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.washSaleBlocked).toBe(false);
   });
 
   it("does NOT block the symmetric case when the repurchase falls just outside the window", () => {
@@ -798,5 +831,34 @@ describe("proportional blocking + reintegration", () => {
     expect(lossSale.blockedLossEur.toFixed(2)).toBe("1000.00");
     // …and it RELEASES when the surviving repurchased lot is sold — not stranded.
     expect(laterSale.reintegratedLossEur.toFixed(2)).toBe("1000.00");
+  });
+});
+
+describe("detectWashSales at scale (one heavily traded ISIN)", () => {
+  it("checks 20,000 same-ISIN trades without re-scanning every trade per sale", () => {
+    // 10,000 round trips, 40 a day across 2024: buy one day, sell the next, every
+    // other sale at a loss. Each loss sits inside the 2-month window of thousands
+    // of buys and each sell day needs the position left after it. Walking every
+    // trade for each sale took several seconds here; a sorted sweep takes well
+    // under a second. The bound is loose on purpose so a slow CI runner passes.
+    const isin = "US0378331005";
+    const day = (n: number): string => new Date(Date.UTC(2024, 0, 2 + n)).toISOString().slice(0, 10);
+    const trades: Trade[] = [];
+    const disposals: FifoDisposal[] = [];
+    for (let i = 0; i < 10_000; i++) {
+      const buyDate = day(Math.floor(i / 40));
+      const sellDate = day(Math.floor(i / 40) + 1);
+      trades.push(makeTrade(isin, buyDate, "BUY"), makeTrade(isin, sellDate, "SELL"));
+      disposals.push(
+        makeDisposal({ isin, sellDate, acquireDate: buyDate, gainLossEur: new Decimal(i % 2 === 0 ? -10 : 10) }),
+      );
+    }
+
+    const start = performance.now();
+    const result = detectWashSales(disposals, trades);
+    const elapsedMs = performance.now() - start;
+
+    expect(result.filter((d) => d.washSaleBlocked).length).toBeGreaterThan(0);
+    expect(elapsedMs).toBeLessThan(2_000);
   });
 });

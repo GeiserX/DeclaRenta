@@ -1537,3 +1537,102 @@ describe("IBKR option underlying ISIN and category", () => {
     expect(cusip.trades[0]!.underlyingIsin).toBeUndefined();
   });
 });
+
+describe("IBKR settlement date (settleDateTarget)", () => {
+  it("reads settleDateTarget from a real Flex export, so trades carry their settlement date", () => {
+    const r = parseIbkrFlexXml(fixture("ibkr-autoconvert.xml"));
+    expect(r.trades.length).toBeGreaterThan(0);
+    expect(r.trades.every((t) => t.settlementDate !== "")).toBe(true);
+    // PYPL bought 2025-04-10, settles T+1.
+    const pypl = r.trades.find((t) => t.tradeID === "TXN-0003")!;
+    expect(pypl.tradeDate).toBe("20250410");
+    expect(pypl.settlementDate).toBe("20250411");
+  });
+
+  it("dates a USD→EUR conversion traded 31 Dec and settling 2 Jan in the next year, at the settlement rate", () => {
+    const xml = `<FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1" fromDate="20250101" toDate="20260131" period="Custom">
+          <Trades>
+            <Trade tradeID="F1" accountId="U1" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+                   tradeDate="20251103" settleDateTarget="20251105" quantity="-800" tradePrice="1.25" tradeMoney="-1000"
+                   proceeds="1000" cost="0" buySell="SELL" openCloseIndicator="" exchange="IDEALFX"
+                   ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+            <Trade tradeID="C1" accountId="U1" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+                   tradeDate="20251231" settleDateTarget="20260102" quantity="900" tradePrice="1.1111" tradeMoney="1000"
+                   proceeds="-1000" cost="0" buySell="BUY" openCloseIndicator="" exchange="IDEALFX"
+                   ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+          </Trades>
+          <CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+    const rates: EcbRateMap = new Map([
+      ["2025-11-03", new Map([["USD", "0.80"]])],
+      ["2025-11-05", new Map([["USD", "0.80"]])],
+      ["2025-12-31", new Map([["USD", "0.90"]])],
+      ["2026-01-02", new Map([["USD", "0.95"]])],
+    ]);
+    const statement = parseIbkrFlexXml(xml);
+
+    const y2025 = generateTaxReport(statement, rates, 2025);
+    expect(y2025.fxGains.disposals).toHaveLength(0);
+    expect(y2025.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+
+    const y2026 = generateTaxReport(statement, rates, 2026);
+    expect(y2026.fxGains.disposals).toHaveLength(1);
+    expect(y2026.fxGains.disposals[0]!.disposeDate).toBe("2026-01-02");
+    // $1000 × (0.95 − 0.80) at the settlement-date rate, not 0.90 on the trade date.
+    expect(y2026.fxGains.netGainLoss.toFixed(2)).toBe("150.00");
+  });
+});
+
+describe("IBKR Flex date format (Date Format setting)", () => {
+  // The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
+  // dd-MMM-yy and more. Those dates never match the declaration year, so the
+  // file used to produce a clean report with 0 gains and 0 dividends.
+  function flexXml(tradeDates: [string, string], cashDateTime: string): string {
+    return `<FlexQueryResponse queryName="Test" type="AF">
+      <FlexStatements count="1">
+        <FlexStatement accountId="U1" fromDate="20240101" toDate="20241231" period="LastYear">
+          <Trades>
+            <Trade tradeID="B1" accountId="U1" symbol="ACME" description="ACME" isin="US0000000001" assetCategory="STK" currency="EUR"
+                   tradeDate="${tradeDates[0]}" quantity="10" tradePrice="100" tradeMoney="1000" proceeds="-1000" cost="1000"
+                   buySell="BUY" openCloseIndicator="O" exchange="X" ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+            <Trade tradeID="S1" accountId="U1" symbol="ACME" description="ACME" isin="US0000000001" assetCategory="STK" currency="EUR"
+                   tradeDate="${tradeDates[1]}" quantity="-10" tradePrice="150" tradeMoney="-1500" proceeds="1500" cost="-1000"
+                   buySell="SELL" openCloseIndicator="C" exchange="X" ibCommission="0" ibCommissionCurrency="EUR" taxes="0" multiplier="1" />
+          </Trades>
+          <CashTransactions>
+            <CashTransaction transactionID="D1" accountId="U1" symbol="ACME" description="ACME Cash Dividend" isin="US0000000001"
+                   currency="EUR" dateTime="${cashDateTime}" amount="50" fxRateToBase="1" type="Dividends" />
+          </CashTransactions>
+          <CorporateActions /><OpenPositions /><SecuritiesInfo />
+        </FlexStatement>
+      </FlexStatements>
+    </FlexQueryResponse>`;
+  }
+
+  it.each([
+    ["yyyyMMdd", ["20240110", "20240603"], "20240615;093000"],
+    ["yyyy-MM-dd", ["2024-01-10", "2024-06-03"], "2024-06-15;093000"],
+    ["yyyyMMdd, no date/time separator", ["20240110", "20240603"], "20240615093000"],
+  ] as const)("accepts %s dates and reports the gain and dividend", (_label, tradeDates, cashDateTime) => {
+    const report = generateTaxReport(parseIbkrFlexXml(flexXml([...tradeDates], cashDateTime)), new Map(), 2024);
+    expect(report.capitalGains.netGainLoss.toFixed(2)).toBe("500.00");
+    expect(report.dividends.grossIncome.toFixed(2)).toBe("50.00");
+  });
+
+  it.each([
+    ["MM/dd/yyyy", "01/10/2024"],
+    ["dd/MM/yyyy", "10/01/2024"],
+    ["dd-MMM-yy", "10-Jan-24"],
+    ["MMddyyyy", "01102024"],
+  ])("rejects %s trade dates instead of returning an empty report", (_label, date) => {
+    expect(() => parseIbkrFlexXml(flexXml([date, "20240603"], "20240615"))).toThrow(/yyyyMMdd/);
+  });
+
+  it("rejects a cash transaction date in another format (dividend-only files too)", () => {
+    expect(() => parseIbkrFlexXml(flexXml(["20240110", "20240603"], "06/15/2024;093000"))).toThrow(/06\/15\/2024/);
+  });
+});

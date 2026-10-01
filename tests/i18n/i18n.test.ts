@@ -7,8 +7,8 @@ import eu from "../../src/i18n/locales/eu.js";
 import gl from "../../src/i18n/locales/gl.js";
 
 describe("i18n", () => {
-  beforeEach(() => {
-    setLocale("es");
+  beforeEach(async () => {
+    await setLocale("es");
   });
 
   describe("t()", () => {
@@ -17,13 +17,13 @@ describe("i18n", () => {
       expect(t("app.subtitle")).toBe("Broker extranjero → Renta española");
     });
 
-    it("should return English text when locale is en", () => {
-      setLocale("en");
+    it("should return English text when locale is en", async () => {
+      await setLocale("en");
       expect(t("app.subtitle")).toBe("Foreign broker → Spanish tax return");
     });
 
-    it("should return Catalan text when locale is ca", () => {
-      setLocale("ca");
+    it("should return Catalan text when locale is ca", async () => {
+      await setLocale("ca");
       expect(t("app.subtitle")).toBe("Broker estranger → Renda espanyola");
     });
 
@@ -36,9 +36,9 @@ describe("i18n", () => {
         .toBe("2 fichero(s) procesado(s) — IBKR, Degiro — 150 operaciones");
     });
 
-    it("should fall back to Spanish if key missing in locale", () => {
+    it("should fall back to Spanish if key missing in locale", async () => {
       // All locales should have all keys, but test fallback behavior
-      setLocale("es");
+      await setLocale("es");
       expect(t("app.title")).toBe("DeclaRenta");
     });
 
@@ -50,24 +50,24 @@ describe("i18n", () => {
   });
 
   describe("locale management", () => {
-    it("should reset to detected locale on initLocale()", () => {
-      setLocale("ca"); // Set to something other than default
-      initLocale();
+    it("should reset to detected locale on initLocale()", async () => {
+      await setLocale("ca"); // Set to something other than default
+      await initLocale();
       // initLocale always resets to detected locale
       const expected = detectLocale();
       expect(getCurrentLocale()).toBe(expected);
     });
 
-    it("should switch locale with setLocale()", () => {
-      setLocale("en");
+    it("should switch locale with setLocale()", async () => {
+      await setLocale("en");
       expect(getCurrentLocale()).toBe("en");
-      setLocale("ca");
+      await setLocale("ca");
       expect(getCurrentLocale()).toBe("ca");
     });
 
-    it("should ignore invalid locale", () => {
-      setLocale("es");
-      setLocale("xx" as Locale);
+    it("should ignore invalid locale", async () => {
+      await setLocale("es");
+      await setLocale("xx" as Locale);
       expect(getCurrentLocale()).toBe("es");
     });
   });

@@ -125,6 +125,8 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
 
+  assertFlexDateFormat(trades.map((t) => t.tradeDate), cashTransactions.map((c) => c.dateTime));
+
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
   const parserMessages: TaxMessage[] = [];
@@ -222,6 +224,30 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   };
 }
 
+/**
+ * A Flex date starts with yyyyMMdd or yyyy-MM-dd (plausible year, month, day).
+ * dateTime values carry a time after it, with or without a separator
+ * ("20240615;093000", "20240615093000"); the time is not checked here.
+ */
+const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|3[01])/;
+
+/**
+ * The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
+ * dd-MMM-yy and more. Those dates never match the declaration year, so the
+ * report would come out empty with no message. Refuse the file instead and say
+ * which setting to change.
+ */
+function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): void {
+  for (const raw of [...tradeDates, ...cashDateTimes]) {
+    if (raw !== "" && !FLEX_DATE_PREFIX.test(raw)) {
+      throw new Error(
+        `IBKR Flex Query: formato de fecha no soportado ("${raw}"). ` +
+          "En la configuración de la Flex Query, elige Date Format: yyyyMMdd y vuelve a exportar el fichero.",
+      );
+    }
+  }
+}
+
 const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
 /**
@@ -246,7 +272,9 @@ function mapTrade(raw: Record<string, string>): Trade {
     assetCategory: (raw.assetCategory ?? "STK") as Trade["assetCategory"],
     currency: raw.currency ?? "",
     tradeDate: raw.tradeDate ?? "",
-    settlementDate: raw.settlementDate ?? "",
+    // Flex exports name the attribute settleDateTarget; settlementDate is kept
+    // for hand-written and older XML.
+    settlementDate: raw.settlementDate || raw.settleDateTarget || "",
     quantity: raw.quantity ?? "0",
     tradePrice: raw.tradePrice ?? "0",
     tradeMoney: raw.tradeMoney ?? "0",
