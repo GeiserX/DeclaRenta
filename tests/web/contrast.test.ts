@@ -83,6 +83,13 @@ describe("theme text contrast (WCAG AA)", () => {
       }
     }
 
+    for (const fill of ["--accent-fill", "--accent-fill-hover", "--success-fill"]) {
+      it(`${name}: white text on ${fill} >= 4.5:1`, () => {
+        expect(vars[fill], `${fill} missing in ${name}`).toBeDefined();
+        expect(contrast([255, 255, 255], parseColor(vars[fill]!).rgb)).toBeGreaterThanOrEqual(AA);
+      });
+    }
+
     it(`${name}: --warning-text on the warning banner background >= 4.5:1`, () => {
       const banner = over(parseColor(vars["--warning-bg"]!), parseColor(vars["--surface"]!).rgb);
       expect(contrast(parseColor(vars["--warning-text"]!).rgb, banner)).toBeGreaterThanOrEqual(AA);
@@ -97,6 +104,16 @@ describe("theme text contrast (WCAG AA)", () => {
     const rootColours = { ...THEMES["dark (default :root)"] };
     delete rootColours["--topbar-h"];
     expect(rootColours).toEqual(THEMES['dark ([data-theme="dark"])']);
+  });
+
+  it("white text only sits on the --*-fill tokens, never on the raw status colours", () => {
+    const offenders: string[] = [];
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const body = m[2]!;
+      if (!/(^|[\s;])color:\s*(white|#fff\b|#ffffff)/i.test(body)) continue;
+      if (/background(-color)?:[^;]*var\(--(accent|accent-hover|success|warning|danger)\)/.test(body)) offenders.push(m[1]!.trim());
+    }
+    expect(offenders).toEqual([]);
   });
 
   it("text never uses the fill tokens directly (only the --*-text variants)", () => {

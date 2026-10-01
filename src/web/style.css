@@ -9,6 +9,9 @@
   --muted: #8a91a4;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(59, 130, 246, 0.08);
   --accent-glow: rgba(59, 130, 246, 0.15);
   --gold: #e5a63b;
@@ -19,6 +22,7 @@
   /* Text-only variants of the status colours: fills and bars keep the tokens
      above, text uses these so it stays at WCAG AA (4.5:1) on every surface. */
   --success-text: #22c55e;
+  --success-fill: #15803d;
   --warning-text: #f59e0b;
   --danger-text: #f87171;
   --accent-text: #60a5fa;
@@ -46,6 +50,9 @@
     --muted: #5f6b7a;
     --accent: #2563eb;
     --accent-hover: #1d4ed8;
+    /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+    --accent-fill: #2563eb;
+    --accent-fill-hover: #1d4ed8;
     --accent-subtle: rgba(37, 99, 235, 0.06);
     --accent-glow: rgba(37, 99, 235, 0.1);
     --gold: #b8860b;
@@ -54,6 +61,7 @@
     --warning: #d97706;
     --danger: #dc2626;
     --success-text: #15803d;
+    --success-fill: #15803d;
     --warning-text: #b45309;
     --danger-text: #b91c1c;
     --accent-text: #2563eb;
@@ -81,6 +89,9 @@
   --muted: #5f6b7a;
   --accent: #2563eb;
   --accent-hover: #1d4ed8;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(37, 99, 235, 0.06);
   --accent-glow: rgba(37, 99, 235, 0.1);
   --gold: #b8860b;
@@ -89,6 +100,7 @@
   --warning: #d97706;
   --danger: #dc2626;
   --success-text: #15803d;
+  --success-fill: #15803d;
   --warning-text: #b45309;
   --danger-text: #b91c1c;
   --accent-text: #2563eb;
@@ -115,6 +127,9 @@
   --muted: #8a91a4;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  /* Fills under white text: #fff reaches 5.17:1 and 6.70:1 on these. */
+  --accent-fill: #2563eb;
+  --accent-fill-hover: #1d4ed8;
   --accent-subtle: rgba(59, 130, 246, 0.08);
   --accent-glow: rgba(59, 130, 246, 0.15);
   --gold: #e5a63b;
@@ -123,6 +138,7 @@
   --warning: #f59e0b;
   --danger: #ef4444;
   --success-text: #22c55e;
+  --success-fill: #15803d;
   --warning-text: #f59e0b;
   --danger-text: #f87171;
   --accent-text: #60a5fa;
@@ -182,7 +198,7 @@
   overflow: visible;
   clip: auto;
   white-space: normal;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border-radius: 6px;
   z-index: 100;
@@ -336,8 +352,8 @@ h3 {
 }
 
 .broker-card.selected .broker-card-check {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
 }
 
 .broker-card-name {
@@ -369,7 +385,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   padding: 0.15rem 0.55rem;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: white;
   border-radius: 99px;
   font-size: 0.68rem;
@@ -826,7 +842,7 @@ input[type="text"]::placeholder {
 }
 
 button {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: white;
   border: none;
   border-radius: 10px;
@@ -845,7 +861,7 @@ button {
 }
 
 button:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
@@ -1443,7 +1459,7 @@ footer a:hover {
 }
 
 .wizard-indicator.active .wizard-step-num {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   box-shadow:
     0 0 0 4px var(--accent-subtle),
@@ -1452,7 +1468,7 @@ footer a:hover {
 }
 
 .wizard-indicator.completed .wizard-step-num {
-  background: var(--success);
+  background: var(--success-fill);
   color: #fff;
   box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.1);
 }
@@ -2184,7 +2200,7 @@ footer a:hover {
   justify-content: space-between;
   align-items: center;
   padding: 0.85rem 1.25rem;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  background: linear-gradient(135deg, var(--accent-fill) 0%, var(--accent-fill-hover) 100%);
   color: #fff;
   border-radius: 12px;
   margin-bottom: 1.5rem;
@@ -2431,7 +2447,7 @@ footer a:hover {
   display: inline-block;
   padding: 0.6rem 1.5rem;
   margin-top: 1rem;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border-radius: 8px;
   text-decoration: none;
@@ -2441,7 +2457,7 @@ footer a:hover {
 }
 
 .empty-state .btn-cta:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 /* Footer trust signal */
@@ -2643,7 +2659,7 @@ footer a:hover {
   font-size: 1.05rem;
   font-weight: 700;
   border-radius: 12px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   cursor: pointer;
@@ -2656,7 +2672,7 @@ footer a:hover {
 }
 
 .splash-cta:hover {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
   transform: translateY(-2px);
   box-shadow: 0 6px 28px rgba(59, 130, 246, 0.4);
 }
