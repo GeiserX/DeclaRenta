@@ -31,7 +31,12 @@ npm-debug.log*
 *.tsbuildinfo
 
 # Local agent tooling (not part of the project)
-.claude/
+.claude/*
+!.claude/settings.json
 .tbd/
-AGENTS.md
 .omc/
+
+# Beads: bead text lives in the Dolt tracker only, never in git
+.beads/issues.jsonl
+.beads/interactions.jsonl
+.beads/events.jsonl

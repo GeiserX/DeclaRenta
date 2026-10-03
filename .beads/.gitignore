@@ -62,6 +62,7 @@ backup/
 # JSONL exports: bead text lives in the Dolt tracker only (sync.remote), never in git
 issues.jsonl
 interactions.jsonl
+events.jsonl
 
 # Per-project environment file (Dolt connection config, GH#2520)
 .env
