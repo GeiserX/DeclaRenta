@@ -33,7 +33,6 @@ npm-debug.log*
 # Local agent tooling (not part of the project)
 .claude/*
 !.claude/settings.json
-.tbd/
 .omc/
 
 # Beads: bead text lives in the Dolt tracker only, never in git
