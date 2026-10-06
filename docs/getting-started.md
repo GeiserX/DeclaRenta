@@ -36,7 +36,7 @@ Los importes se copian a mano en Renta Web, que no importa estos datos. La [Guí
 La imagen publicada sirve la misma web estática con nginx en el puerto 80:
 
 ```bash
-docker run -p 8080:80 drumsergio/declarenta:0.58.30
+docker run -p 8080:80 drumsergio/declarenta:0.61.0
 ```
 
 Después abre `http://localhost:8080`. La imagen se publica para `linux/amd64`.
