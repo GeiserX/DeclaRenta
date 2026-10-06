@@ -118,6 +118,10 @@ tests/           Vitest tests mirroring src/ structure
 2. Auto Release workflow creates semver tag (e.g. `v0.15.6`)
 3. `Deploy to GitHub Pages` workflow auto-runs → site live at declarenta.com
 
+The release commit also rewrites the `drumsergio/declarenta:X.Y.Z` pin in `README.md` and `docs/getting-started.md`, so never edit that tag by hand.
+
+To ship a run of merges as one release, disable Auto Release (`gh workflow disable "Auto Release"`), merge, then enable it again and start it by hand with `bump: minor`. Enable it in the same session that disabled it: while it is off, no merge is released or deployed to Pages. It stayed off from 1 to 7 October 2026 after a batch like that.
+
 ### Production (GitHub Pages)
 - Deploys through the `Deploy to GitHub Pages` workflow (Vite build → `dist/web` → Pages artifact), which runs after every successful `Auto Release` run on main, including a run that found nothing to release and cut no tag, or by hand (`workflow_dispatch`). So a merge deploys only while Auto Release is enabled and the merge changes more than docs (Auto Release ignores `**.md`, `docs/**`, `LICENSE` and `.gitignore`).
 - **declarenta.com** (custom domain, Cloudflare DNS) — the canonical production URL

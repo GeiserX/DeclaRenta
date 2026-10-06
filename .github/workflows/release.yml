@@ -127,7 +127,17 @@ jobs:
           CURRENT=$(node -p "require('./package.json').version")
           if [ "$CURRENT" != "$VERSION" ]; then
             npm version "$VERSION" --no-git-tag-version
-            git add package.json package-lock.json
+          fi
+
+          # The self-hosting command in the README and on the getting-started page
+          # pins the image to the release being cut, so it never falls behind.
+          sed -i -E "s#drumsergio/declarenta:[0-9]+\.[0-9]+\.[0-9]+#drumsergio/declarenta:${VERSION}#g" \
+            README.md docs/getting-started.md
+          grep -qF "drumsergio/declarenta:${VERSION}" README.md
+          grep -qF "drumsergio/declarenta:${VERSION}" docs/getting-started.md
+
+          if ! git diff --quiet -- package.json package-lock.json README.md docs/getting-started.md; then
+            git add package.json package-lock.json README.md docs/getting-started.md
             git commit -m "chore: bump version to $VERSION [skip ci]"
 
             # Retry push with rebase to handle concurrent merges
