@@ -30,7 +30,7 @@ DeclaRenta es una aplicación web gratuita que lee los informes de tu broker ext
 Entra en [declarenta.com](https://declarenta.com), pulsa Comenzar y arrastra el informe de tu broker (`.xml`, `.csv`, `.json` o `.xlsx`). En tres pasos verás cada casilla del Modelo 100 con su importe. Para alojarlo tú mismo:
 
 ```bash
-docker run -p 8080:80 drumsergio/declarenta:0.58.30
+docker run -p 8080:80 drumsergio/declarenta:0.61.1
 ```
 
 Luego abre `http://localhost:8080`. Ficheros de ejemplo, la CLI y el hosting estático están en [Primeros pasos](https://declarenta.com/docs/getting-started/).
