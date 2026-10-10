@@ -1,6 +1,7 @@
-import { defineConfig } from "vite";
-import { resolve } from "path";
+import { defineConfig, type Plugin } from "vite";
+import { join, relative, resolve, sep } from "path";
 import { execSync } from "child_process";
+import { readdirSync, readFileSync, writeFileSync } from "fs";
 
 function tryExec(cmd: string): string | undefined {
   try {
@@ -19,10 +20,44 @@ const commitHash = process.env.COMMIT_HASH
   ?? tryExec("git rev-parse --short HEAD")
   ?? "dev";
 
+// Built files the service worker does not precache: itself, files for GitHub
+// Pages and crawlers, the social card, and the docs.html redirect page.
+const NOT_PRECACHED = new Set(["sw.js", "CNAME", "robots.txt", "sitemap.xml", "og-image.png", "docs.html"]);
+const PRECACHE_PLACEHOLDER = "const PRECACHE_URLS = [];";
+
+// Writes the app shell (every built file except NOT_PRECACHED) into sw.js, so
+// the first visit caches the whole app. The hashed asset names only exist after
+// the build, which is why the list cannot live in the source file.
+function precacheAppShell(): Plugin {
+  let outDir = "";
+  return {
+    name: "declarenta-precache-app-shell",
+    apply: "build",
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const urls = readdirSync(outDir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => relative(outDir, join(entry.parentPath, entry.name)).split(sep).join("/"))
+        .filter((file) => !NOT_PRECACHED.has(file))
+        .map((file) => (file === "index.html" ? "./" : `./${file}`))
+        .sort();
+      const swPath = join(outDir, "sw.js");
+      const sw = readFileSync(swPath, "utf-8");
+      if (!sw.includes(PRECACHE_PLACEHOLDER)) {
+        throw new Error(`${swPath} has no "${PRECACHE_PLACEHOLDER}" line to fill`);
+      }
+      writeFileSync(swPath, sw.replace(PRECACHE_PLACEHOLDER, `const PRECACHE_URLS = ${JSON.stringify(urls)};`));
+    },
+  };
+}
+
 export default defineConfig({
   root: "src/web",
   publicDir: resolve(__dirname, "src/web/public"),
   base: "/",
+  plugins: [precacheAppShell()],
   define: {
     __APP_VERSION__: JSON.stringify(version),
     __COMMIT_HASH__: JSON.stringify(commitHash),
