@@ -1,26 +1,40 @@
 /**
- * DeclaRenta Service Worker — network-first caching.
+ * DeclaRenta Service Worker — precached app shell, network-first caching.
  *
  * Strategy:
+ * - Install: precache the app shell (every file the build lists below), so the
+ *   app works offline after the first visit, not only after a second one
  * - Static assets (HTML, CSS, JS): network-first, cache fallback for offline
  * - ECB API calls: network-first with cache fallback (stale rates better than none)
  *
  * This ensures users always get the latest deploy while still working offline.
  */
 
-const CACHE_NAME = "declarenta-cache";
+// The build replaces this empty list with the app shell (vite.config.ts).
+const PRECACHE_URLS = [];
 
-self.addEventListener("install", () => {
+// One cache per deploy: main.ts registers this file as sw.js?v=<commit>.
+const CACHE_NAME = `declarenta-${new URL(self.location.href).searchParams.get("v") ?? "dev"}`;
+
+self.addEventListener("install", (event) => {
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      // "reload" skips the HTTP cache, so a stale index.html cannot be paired
+      // with this deploy's hashed assets.
+      cache.addAll(PRECACHE_URLS.map((url) => new Request(url, { cache: "reload" })))
+    )
+  );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => caches.delete(key)))
-    )
+    caches.keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+      )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
