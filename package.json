@@ -76,20 +76,20 @@
     "decimal.js": "^10.5.0",
     "fast-xml-parser": "^5.11.2",
     "jspdf": "4.2.1",
-    "jspdf-autotable": "5.0.8",
+    "jspdf-autotable": "5.0.9",
     "pdfkit": "^0.20.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/pdfkit": "^0.17.6",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
     "tsup": "^8.4.0",
     "tsx": "^4.23.15",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.71.1",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
     "vitest": "^4.1.8"
   },
