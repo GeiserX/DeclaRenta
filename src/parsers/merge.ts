@@ -128,7 +128,7 @@ export function finalizeMergedStatement(statement: Statement): Statement {
  * their cash settlement in two separate files. The trade carries the broker
  * order number in `notes`; the cash leg carries the same key in `orderKey`.
  *
- * commission = | |netAmount| − grossTradeMoney |
+ * commission = −| |netAmount| − grossTradeMoney |  (negative = charged, like every parser)
  *   - BUY:  gross is what the position costs; broker debits gross + fee  → |net| > gross
  *   - SELL: gross is the position value; broker credits gross − fee      → |net| < gross
  *
@@ -245,7 +245,7 @@ function reconcileOrderLegs(statement: Statement): void {
         }
         const gross = new Decimal(trade.tradeMoney);
         const net = new Decimal(leg.netAmount).abs();
-        trade.commission = net.minus(gross).abs().toFixed();
+        trade.commission = net.minus(gross).abs().negated().toFixed();
         trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
       });
       continue;
@@ -262,7 +262,7 @@ function reconcileOrderLegs(statement: Statement): void {
     const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
     const totalFee = net.minus(gross).abs();
     for (const trade of trades) {
-      trade.commission = totalFee.mul(trade.tradeMoney).div(gross).toFixed();
+      trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
       trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
     }
     proratedOrders++;

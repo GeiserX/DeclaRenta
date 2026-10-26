@@ -127,7 +127,7 @@ describe("resolveCryptoTradeValues", () => {
         currency: "SOL",
         symbol: "BTC",
         tradePrice: "1500",
-        commission: "1.5",
+        commission: "-1.5",
         commissionCurrency: "DOGE",
       });
 
@@ -298,7 +298,7 @@ describe("resolveCryptoTradeValues", () => {
         openCloseIndicator: "O",
         exchange: "NASDAQ",
         commissionCurrency: "USD",
-        commission: "1",
+        commission: "-1",
         taxes: "0",
         multiplier: "1",
       };
