@@ -300,8 +300,6 @@ export interface TaxSummary {
    * field existed (e.g. ones saved for the year comparison).
    */
   settings?: ReportSettings;
-  /** @deprecated Use `messages` for severity-aware rendering */
-  warnings: string[];
   /** Structured three-tier messages (error/warning/info) */
   messages: TaxMessage[];
   /**

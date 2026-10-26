@@ -7,7 +7,6 @@ import type { TaxSummary } from "../../src/types/tax.js";
 function report(): TaxSummary {
   return {
     year: 2025,
-    warnings: [],
     messages: [],
     capitalGains: {
       transmissionValue: new Decimal(0),
