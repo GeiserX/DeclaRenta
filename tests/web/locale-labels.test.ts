@@ -38,7 +38,6 @@ function disposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
 function summary(disposals: FifoDisposal[], fxDisposals: TaxSummary["fxGains"]["disposals"] = []): TaxSummary {
   return {
     year: 2025,
-    warnings: [],
     messages: [],
     capitalGains: {
       transmissionValue: new Decimal(1092),

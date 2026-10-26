@@ -594,7 +594,6 @@ export function generateTaxReport(
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
   let fxAcquisitionValue = new Decimal(0);
-  let fxWarningsList: string[] = [];
   let fxMessagesList: TaxMessage[] = [];
   let fxTrace: FxTraceEvent[] | undefined;
 
@@ -640,7 +639,6 @@ export function generateTaxReport(
     // Undated warnings (missing lots summaries) refer to events across all years —
     // showing them when the target year has zero FX activity is misleading noise.
     if (fxDisposals.length > 0) {
-      fxWarningsList = filterByYear(fxEngine.warnings, yearStr, (w) => w);
       fxMessagesList = filterByYear(
         fxEngine.messages,
         yearStr,
@@ -667,8 +665,7 @@ export function generateTaxReport(
     .plus(interestEarned);
   const doubleTaxation = calculateDoubleTaxation(dividendEntries, year, totalSavingsBase);
 
-  // Filter warnings to those relevant to the selected year
-  const yearWarnings = filterByYear(fifoEngine.warnings, yearStr, (w) => w);
+  // Filter messages to those relevant to the selected year
   const yearMessages = filterByYear(
     fifoEngine.messages,
     yearStr,
@@ -684,15 +681,6 @@ export function generateTaxReport(
     (m) => m.context,
   );
   const yearUnresolvedCrypto = valuation.unresolved.filter((u) => u.date.startsWith(yearStr));
-
-  // Prepend parser warnings (unparsed sections, etc.)
-  const allWarnings = [
-    ...(statement.parserWarnings ?? []),
-    ...yearWarnings,
-    ...fxWarningsList,
-    ...manualOpeningLotMessages.map((m) => m.message),
-    ...cryptoValuationMessages.map((m) => m.message),
-  ];
 
   // Aggregate structured messages from all sources
   const allMessages: TaxMessage[] = [
@@ -714,7 +702,6 @@ export function generateTaxReport(
       hint: "Estos ingresos se pagan en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralos manualmente como rendimientos del capital mobiliario (Casilla 0027).",
       context: { count: String(unresolvableInterest) },
     });
-    allWarnings.push(cryptoMsg);
   }
 
   if (unvaluedDividendCurrencies.size > 0) {
@@ -728,7 +715,6 @@ export function generateTaxReport(
       hint: "El BCE no publica un tipo de cambio oficial para esa divisa en la fecha de cobro. Calcula el importe en euros a esa fecha, súmalo a mano a la casilla 0029 y ten en cuenta su retención en la deducción por doble imposición internacional (casilla 0588).",
       context: { count: String(count), currencies },
     });
-    allWarnings.push(divMsg);
   }
 
   if (unresolvableGeneralGains > 0) {
@@ -740,7 +726,6 @@ export function generateTaxReport(
       hint: "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
       context: { count: String(unresolvableGeneralGains) },
     });
-    allWarnings.push(ggMsg);
   }
 
   // Shared-titularity notice: amounts have been split equally per contribuyente.
@@ -832,7 +817,6 @@ export function generateTaxReport(
       trackAutoConvert: options?.trackAutoConvert !== false,
       titulares,
     },
-    warnings: allWarnings,
     messages: allMessages,
     unresolvedCryptoValuations: yearUnresolvedCrypto.length > 0 ? yearUnresolvedCrypto : undefined,
     capitalGains: {

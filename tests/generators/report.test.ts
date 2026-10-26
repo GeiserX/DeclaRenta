@@ -822,30 +822,6 @@ describe("generateTaxReport", () => {
     expect(hint).toBeUndefined();
   });
 
-  it("should keep warnings and messages in sync", () => {
-    const rates = makeRateMap({ "2025-09-20": "0.91" });
-
-    const statement = makeStatement({
-      trades: [
-        makeTrade({ tradeID: "1", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
-      ],
-    });
-
-    const report = generateTaxReport(statement, rates, 2025);
-    // Info-only reconciliation/method notes are added to the structured `messages`
-    // array only, never to the deprecated `warnings` string array — so they are
-    // excluded from the backward-compat sync check.
-    const infoOnlyIds = new Set([
-      "report.competitor_reconciliation",
-      "report.fx_method_consistency",
-      "report.fx_deferred_no_conversion",
-    ]);
-    const nonHintMessages = report.messages.filter((m) => !infoOnlyIds.has(m.id));
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- verifying backward compat sync
-    const warningsCount = report.warnings.length;
-    expect(warningsCount).toBe(nonHintMessages.length);
-  });
-
   describe("titulares (per-contribuyente split)", () => {
     function makeMixedStatement(): FlexStatement {
       return makeStatement({

@@ -38,7 +38,6 @@ function stubLocalStorage(): void {
 function emptySummary(year: number): TaxSummary {
   return {
     year,
-    warnings: [],
     messages: [],
     capitalGains: {
       transmissionValue: D(0),

@@ -81,7 +81,6 @@ function makeSummaryWithDisposals(
   const acquisitionValue = disposals.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
   return {
     year: 2025,
-    warnings: [],
     messages: [],
     capitalGains: {
       transmissionValue,

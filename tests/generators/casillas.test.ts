@@ -58,7 +58,6 @@ function makeFxDisposal(overrides: Partial<FxDisposal> = {}): FxDisposal {
 function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
   return {
     year: 2025,
-    warnings: [],
     messages: [],
     capitalGains: {
       transmissionValue: new Decimal(0),
