@@ -181,7 +181,7 @@ describe("flatexParser — commission reconciliation (both files)", () => {
     const stmt = parseBoth();
     // WASTE MANAGEMENT buy: gross 20 × 188.12 = 3762.4; Konto net -3770.3
     const waste = stmt.trades.find((t) => t.isin === "US94106L1098")!;
-    expect(waste.commission).toBe("7.9");
+    expect(waste.commission).toBe("-7.9");
     // IBKR convention: cost/proceeds stay GROSS; FIFO adds commission to basis.
     expect(waste.cost).toBe("3762.4");
     expect(waste.tradeMoney).toBe("3762.4");
@@ -191,7 +191,7 @@ describe("flatexParser — commission reconciliation (both files)", () => {
     const stmt = parseBoth();
     // PROSPECT sell: gross 274 × 2.082 = 570.468; Konto net +562.57
     const prospect = stmt.trades.find((t) => t.isin === "US74348T1025")!;
-    expect(prospect.commission).toBe("7.898");
+    expect(prospect.commission).toBe("-7.898");
     expect(prospect.proceeds).toBe("570.468"); // gross; FIFO subtracts the fee
   });
 
@@ -280,8 +280,8 @@ describe("flatexParser — multi-fill and foreign-venue commission", () => {
 
     const stmt = parsePair(depot, konto);
     expect(stmt.trades.map((t) => [t.quantity, t.commission])).toEqual([
-      ["10", "7.9"],
-      ["30", "7.9"],
+      ["10", "-7.9"],
+      ["30", "-7.9"],
     ]);
 
     const sale: (typeof stmt.trades)[number] = {
@@ -317,8 +317,8 @@ describe("flatexParser — multi-fill and foreign-venue commission", () => {
     const stmt = parsePair(depot, konto);
     const byQuantity = [...stmt.trades].sort((a, b) => Number(a.quantity) - Number(b.quantity));
     expect(byQuantity.map((t) => [t.quantity, t.commission])).toEqual([
-      ["10", "7.9"],
-      ["30", "7.9"],
+      ["10", "-7.9"],
+      ["30", "-7.9"],
     ]);
     expect(stmt.parserMessages ?? []).toEqual([]);
   });
@@ -375,8 +375,8 @@ describe("flatexParser — multi-fill and foreign-venue commission", () => {
 
     const stmt = parsePair(depot, konto);
     expect(stmt.trades.map((t) => [t.tradeID, t.quantity, t.commission])).toEqual([
-      ["4000000061", "10", "7.9"],
-      ["4000000062", "10", "7.9"],
+      ["4000000061", "10", "-7.9"],
+      ["4000000062", "10", "-7.9"],
     ]);
     expect(stmt.parserMessages ?? []).toEqual([]);
   });

@@ -189,7 +189,7 @@ describe("statement merge utilities", () => {
     finalizeMergedStatement(statement);
 
     const trade = statement.trades[0]!;
-    expect(trade.commission).toBe("7.9");
+    expect(trade.commission).toBe("-7.9");
     expect(trade.cost).toBe("10"); // gross, unchanged by reconciliation
     expect(trade.notes).toBeUndefined();
     expect(statement.pendingOrderLegs).toBeUndefined();
@@ -212,8 +212,8 @@ describe("statement merge utilities", () => {
     finalizeMergedStatement(statement);
 
     expect(statement.trades.map((t) => [t.tradeID, t.commission])).toEqual([
-      ["F1", "7.9"],
-      ["F2", "7.9"],
+      ["F1", "-7.9"],
+      ["F2", "-7.9"],
     ]);
     expect(statement.parserMessages ?? []).toEqual([]);
   });
@@ -231,7 +231,7 @@ describe("statement merge utilities", () => {
 
     finalizeMergedStatement(statement);
 
-    expect(statement.trades.map((t) => t.commission)).toEqual(["3.95", "11.85"]);
+    expect(statement.trades.map((t) => t.commission)).toEqual(["-3.95", "-11.85"]);
     const msg = statement.parserMessages!.find((m) => m.id === "flatex.commission.multi_fill_prorated");
     expect(msg?.context).toEqual({ orders: "1" });
   });

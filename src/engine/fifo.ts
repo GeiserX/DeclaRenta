@@ -40,6 +40,18 @@ function lotKey(trade: { isin: string; symbol: string; assetCategory: string; co
   return `${trade.assetCategory}:${trade.symbol}`;
 }
 
+/**
+ * Commission as a COST in the trade currency: positive = fee paid, negative =
+ * rebate received. `Trade.commission` follows the broker cash sign (negative =
+ * charged), so the cost is its negation. IBKR reports exchange/liquidity
+ * rebates as a positive `ibCommission`; taking the absolute value booked them
+ * as fees, raising the cost of a buy and lowering the proceeds of a sale by
+ * twice the rebate (Art. 35.1.b / 35.2 LIRPF: only expenses actually borne).
+ */
+function commissionCost(trade: { commission: string }): Decimal {
+  return new Decimal(trade.commission || "0").negated();
+}
+
 /** " (ISIN)" after a symbol in a message, or nothing when the asset has no ISIN (most crypto). */
 function isinSuffix(isin: string): string {
   return isin ? ` (${isin})` : "";
@@ -861,7 +873,7 @@ export class FifoEngine {
     const quantity = new Decimal(trade.quantity).abs();
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
-    const commission = new Decimal(trade.commission).abs();
+    const commission = commissionCost(trade);
     const taxes = new Decimal(trade.taxes || "0").abs();
     // Cost basis is kept in the share's currency (FCY). A commission in a
     // DIFFERENT currency is homogenized to the share currency via the trade-date
@@ -902,7 +914,7 @@ export class FifoEngine {
   private consumeLots(trade: Trade, rateMap: EcbRateMap): void {
     const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     let remaining = new Decimal(trade.quantity).abs();
-    const commission = new Decimal(trade.commission).abs();
+    const commission = commissionCost(trade);
     const taxes = new Decimal(trade.taxes || "0").abs();
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
@@ -1108,7 +1120,7 @@ export class FifoEngine {
     const quantity = new Decimal(trade.quantity).abs();
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
-    const commission = new Decimal(trade.commission).abs();
+    const commission = commissionCost(trade);
     const taxes = new Decimal(trade.taxes || "0").abs();
     const commissionFcy = this.homogenizeCommission(commission, trade, ecbRate, rateMap);
     // Short opens by SELLING: store the proceeds received, in the share currency
@@ -1139,7 +1151,7 @@ export class FifoEngine {
   private consumeShortLots(trade: Trade, rateMap: EcbRateMap): void {
     const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     let remaining = new Decimal(trade.quantity).abs();
-    const commission = new Decimal(trade.commission).abs();
+    const commission = commissionCost(trade);
     const taxes = new Decimal(trade.taxes || "0").abs();
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
@@ -1441,6 +1453,21 @@ export class FifoEngine {
   }
 
   /**
+   * EUR-per-FCY rate for an exercise amount made of the strike leg (paid or
+   * received on the exercise date) plus a signed premium leg (paid or received
+   * when the option was opened). Default mode converts the whole amount at the
+   * exercise-date rate; the FX engine carries the drift. Monodivisa converts
+   * each leg at its own date's rate (Art. 35.1), as the expiration path does
+   * for the premium, so this returns the blended rate whose product with
+   * `strikeFcy + premiumFcy` is that EUR sum.
+   */
+  private exerciseRate(strikeFcy: Decimal, premiumFcy: Decimal, exerciseRate: Decimal, premiumRate: Decimal): Decimal {
+    const totalFcy = strikeFcy.plus(premiumFcy);
+    if (!this.traditionalCostBasis || totalFcy.isZero()) return exerciseRate;
+    return strikeFcy.mul(exerciseRate).plus(premiumFcy.mul(premiumRate)).dividedBy(totalFcy);
+  }
+
+  /**
    * Append a synthetic underlying acquisition lot produced by an option
    * exercise/assignment. The lot's identity (ISIN, symbol, currency, ECB rate)
    * and acquireDate are constant across the three call sites (call buyer, put
@@ -1526,7 +1553,8 @@ export class FifoEngine {
         // currency, so the lot stays single-currency.
         const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
         const totalCostFcy = baseShareCostFcy.plus(optionPremiumFcy);
-        this.addUnderlyingLot(underlyingKey, ex, date, ecbRate, {
+        const lotRate = this.exerciseRate(baseShareCostFcy, optionPremiumFcy, ecbRate, lot.ecbRate);
+        this.addUnderlyingLot(underlyingKey, ex, date, lotRate, {
           quantity: consumed.mul(sharesPerContract),
           pricePerShare: priceForUnderlying,
           costInFcy: totalCostFcy,
@@ -1534,10 +1562,12 @@ export class FifoEngine {
         });
       } else {
         // Put buyer exercising: sells shares at strike, premium reduces proceeds
-        // (all in FCY; consumeLotsForExercise converts at the exercise date).
+        // (all in FCY; converted at the exercise date, the premium at its own
+        // date in monodivisa).
         const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
         const netProceedsFcy = shareProceedsFcy.minus(optionPremiumFcy);
-        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
+        const proceedsRate = this.exerciseRate(shareProceedsFcy, optionPremiumFcy.negated(), ecbRate, lot.ecbRate);
+        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex, proceedsRate);
       }
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -1576,15 +1606,18 @@ export class FifoEngine {
 
       // Call writer assigned: SELL shares at strike, premium adds to proceeds
       // Put writer assigned: BUY shares at strike, premium reduces cost.
-      // All amounts in FCY; conversion happens at the exercise date downstream.
+      // All amounts in FCY; converted at the exercise date downstream (the
+      // premium at its own date in monodivisa, see exerciseRate).
       if (ex.putCall === "C") {
         const shareProceedsFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
         const netProceedsFcy = shareProceedsFcy.plus(optionPremiumFcy);
-        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex);
+        const proceedsRate = this.exerciseRate(shareProceedsFcy, optionPremiumFcy, ecbRate, lot.ecbRate);
+        this.consumeLotsForExercise(underlyingKey, consumed.mul(sharesPerContract), netProceedsFcy, date, ecbRate, ex, proceedsRate);
       } else {
         const baseShareCostFcy = priceForUnderlying.mul(consumed).mul(sharesPerContract);
         const totalCostFcy = baseShareCostFcy.minus(optionPremiumFcy);
-        this.addUnderlyingLot(underlyingKey, ex, date, ecbRate, {
+        const lotRate = this.exerciseRate(baseShareCostFcy, optionPremiumFcy.negated(), ecbRate, lot.ecbRate);
+        this.addUnderlyingLot(underlyingKey, ex, date, lotRate, {
           quantity: consumed.mul(sharesPerContract),
           pricePerShare: priceForUnderlying,
           costInFcy: totalCostFcy,
@@ -1648,6 +1681,8 @@ export class FifoEngine {
     date: string,
     ecbRate: Decimal,
     ex: OptionExercise,
+    /** Rate for the proceeds; differs from `ecbRate` only in monodivisa (exerciseRate). */
+    proceedsRate: Decimal = ecbRate,
   ): void {
     const lots = this.lots.get(underlyingKey);
     if (!lots || lots.length === 0) {
@@ -1658,7 +1693,7 @@ export class FifoEngine {
         hint: "Asignación de PUT registrada con coste base = 0 del subyacente. El Flex Query puede no cubrir la adquisición original.",
         context: { symbol: ex.underlyingSymbol, date, quantity: shares.toString() },
       });
-      const proceedsEur = proceedsFcy.mul(ecbRate);
+      const proceedsEur = proceedsFcy.mul(proceedsRate);
       this.disposals.push({
         isin: ex.underlyingIsin,
         symbol: ex.underlyingSymbol,
@@ -1705,7 +1740,7 @@ export class FifoEngine {
         partialProceedsFcy,
         costBasisFcy,
         { rate: lot.ecbRate, currency: lot.currency },
-        { rate: ecbRate, currency: ex.currency },
+        { rate: proceedsRate, currency: ex.currency },
       );
 
       this.disposals.push({
@@ -1753,7 +1788,7 @@ export class FifoEngine {
       });
       const fraction = remaining.dividedBy(shares);
       const partialProceedsFcy = proceedsFcy.mul(fraction);
-      const partialProceedsEur = partialProceedsFcy.mul(ecbRate);
+      const partialProceedsEur = partialProceedsFcy.mul(proceedsRate);
       this.disposals.push({
         isin: ex.underlyingIsin,
         symbol: ex.underlyingSymbol,

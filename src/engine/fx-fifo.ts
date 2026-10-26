@@ -581,16 +581,18 @@ export class FxFifoEngine {
         acquiring = trade.buySell === "BUY";
       }
 
-      // Commission increases cost basis (BUY) or reduces proceeds (SELL)
+      // Commission increases cost basis (BUY) or reduces proceeds (SELL). Signed
+      // like fifo.ts commissionCost: `commission` is negative when charged, so a
+      // positive value (a broker rebate) lowers the cost instead of raising it.
       let commissionEur: Decimal | undefined;
-      const commAbs = new Decimal(trade.commission).abs();
-      if (commAbs.greaterThan(0)) {
+      const commCost = new Decimal(trade.commission || "0").negated();
+      if (!commCost.isZero()) {
         const commCcy = trade.commissionCurrency || trade.currency;
         if (commCcy === "EUR") {
-          commissionEur = commAbs;
+          commissionEur = commCost;
         } else {
           const commRate = getEcbRate(rateMap, date, commCcy);
-          commissionEur = commAbs.mul(commRate);
+          commissionEur = commCost.mul(commRate);
         }
       }
 
@@ -980,9 +982,9 @@ export class FxFifoEngine {
       const pricePerShare = new Decimal(trade.tradePrice);
       const multiplier = new Decimal(trade.multiplier || "1");
       const taxes = new Decimal(trade.taxes || "0").abs();
-      const commission = new Decimal(trade.commission).abs();
+      const commission = new Decimal(trade.commission || "0").negated(); // signed cost, as fifo.ts
       let commissionFcy = commission;
-      if (commission.greaterThan(0) && trade.commissionCurrency && trade.commissionCurrency !== trade.currency) {
+      if (!commission.isZero() && trade.commissionCurrency && trade.commissionCurrency !== trade.currency) {
         const commEcbRate = getEcbRate(rateMap, trade.tradeDate, trade.commissionCurrency);
         commissionFcy = commission.mul(commEcbRate).dividedBy(ecbRate);
       }

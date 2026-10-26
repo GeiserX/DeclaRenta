@@ -38,7 +38,7 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
     openCloseIndicator: "O",
     exchange: "IDEALFX",
     commissionCurrency: "USD",
-    commission: "2",
+    commission: "-2",
     taxes: "0",
     multiplier: "1",
     ...overrides,

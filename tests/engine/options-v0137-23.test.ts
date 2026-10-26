@@ -38,7 +38,7 @@ function makeOptionTrade(overrides: Partial<Trade> = {}): Trade {
     openCloseIndicator: "O",
     exchange: "CBOE",
     commissionCurrency: "USD",
-    commission: "1.50",
+    commission: "-1.50",
     taxes: "0",
     multiplier: "100",
     putCall: "C",
@@ -72,7 +72,7 @@ function makeStockTrade(overrides: Partial<Trade> = {}): Trade {
     openCloseIndicator: "O",
     exchange: "NASDAQ",
     commissionCurrency: "USD",
-    commission: "1",
+    commission: "-1",
     taxes: "0",
     multiplier: "1",
     ...overrides,
@@ -171,7 +171,7 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
           tradeDate: "20250315",
           tradePrice: "8.00",
           tradeMoney: "800",
-          commission: "1.50",
+          commission: "-1.50",
         }),
       ], rateMap);
 
@@ -207,7 +207,7 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
           tradeDate: "20250201",
           tradePrice: "3.00",
           tradeMoney: "300",
-          commission: "1.50",
+          commission: "-1.50",
         }),
       ], rateMap);
 
@@ -386,7 +386,7 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
           tradeDate: "20250201",
           tradePrice: "3.00",
           tradeMoney: "300",
-          commission: "1.50",
+          commission: "-1.50",
         }),
         makeOptionTrade({
           tradeID: "9",
@@ -395,7 +395,7 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
           tradeDate: "20250201",
           tradePrice: "2.80",
           tradeMoney: "280",
-          commission: "1.50",
+          commission: "-1.50",
         }),
       ], rateMap);
 
