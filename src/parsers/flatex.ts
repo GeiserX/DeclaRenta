@@ -176,6 +176,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       commission: "0",
       taxes: "0",
       multiplier: "1",
+      brokerSource: "Flatex",
       ...(orderKey ? { notes: `flatex-order:${orderKey}` } : {}),
     });
   }
@@ -300,6 +301,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       amount,
       fxRateToBase: "1",
       type,
+      brokerSource: "Flatex",
     });
   }
 

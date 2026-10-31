@@ -264,6 +264,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
       commission: feeDec.isZero() ? "0" : feeDec.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
+      brokerSource: "Kraken",
     });
 
     // A crypto-quoted pair (XETHXXBT) is a permuta (Art. 37.1.h LIRPF): the
@@ -296,6 +297,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         commission: "0",
         taxes: "0",
         multiplier: "1",
+      brokerSource: "Kraken",
       });
     }
   }
@@ -390,6 +392,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         type: "Crypto Reward Income",
         taxBucket: "ahorro",
         rewardQuantity: netAmount.abs().toString(),
+        brokerSource: "Kraken",
       });
     } else if (!["trade", "deposit", "withdrawal", "transfer", "earn"].includes(type)) {
       const key = type || "(vacío)";

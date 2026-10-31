@@ -206,6 +206,7 @@ function parseTrades(
       commission: "0",
       taxes: "0",
       multiplier: "1",
+      brokerSource: "Revolut",
     });
 
     // SELL leg (closing)
@@ -233,6 +234,7 @@ function parseTrades(
       commission: `-${feeStr}`,
       taxes: "0",
       multiplier: "1",
+      brokerSource: "Revolut",
     });
   }
 
@@ -369,6 +371,7 @@ function parseTransactionLog(
         amount: totalAmountDec.toString(),
         fxRateToBase: currencyRaw === "EUR" ? "1" : new Decimal(1).div(fxRate).toString(),
         type: "Deposits/Withdrawals",
+        brokerSource: "Revolut",
       });
       continue;
     }
@@ -400,6 +403,7 @@ function parseTransactionLog(
           amount: totalAmountDec.toString(),
           fxRateToBase: "1",
           type: "Dividends",
+          brokerSource: "Revolut",
         });
         netDividends++;
       }
@@ -429,6 +433,7 @@ function parseTransactionLog(
         amount: "0",
         type: signedQtyDec.greaterThan(0) ? "FS" : "RS",
         actionDescription: type,
+        brokerSource: "Revolut",
       });
       const pos = positions.get(ticker);
       if (pos) pos.netQty = Decimal.max(0, pos.netQty.plus(signedQtyDec));
@@ -479,6 +484,7 @@ function parseTransactionLog(
         commission: "0",
         taxes: "0",
         multiplier: "1",
+      brokerSource: "Revolut",
       });
 
       const pos = positions.get(ticker) ?? {
@@ -513,6 +519,7 @@ function parseTransactionLog(
         commission: "0",
         taxes: "0",
         multiplier: "1",
+      brokerSource: "Revolut",
       });
 
       const pos = positions.get(ticker);
@@ -543,6 +550,7 @@ function parseTransactionLog(
         markPrice: "0",
         positionValue: "0",
         fifoPnlUnrealized: "0",
+        brokerSource: "Revolut",
         fxRateToBase: "1",
       });
     }

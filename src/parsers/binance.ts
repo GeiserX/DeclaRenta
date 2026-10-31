@@ -599,6 +599,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
         type: "Crypto Reward Income",
         taxBucket: isAhorro ? "ahorro" : "general",
         rewardQuantity: r.change.abs().toString(),
+        brokerSource: "Binance",
         ...(r.eurValue !== null ? { rewardCostBasisEur: r.eurValue.abs().toString() } : {}),
       });
     }

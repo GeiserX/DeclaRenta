@@ -66,6 +66,7 @@ export interface ManualOpeningLot {
   acquireDate: string;
   quantity: string;
   pricePerShare: string;
+  brokerSource?: string;
 }
 
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
@@ -105,6 +106,8 @@ export interface Lot {
   underlyingSymbol?: string;
   /** Underlying ISIN for derivatives */
   underlyingIsin?: string;
+  /** Optional: which broker produced this disposal (for audit traceability) */
+  brokerSource?: string;
 }
 
 /** Result of consuming lots via FIFO for a sale */
@@ -202,6 +205,8 @@ export interface FifoDisposal {
   underlyingSymbol?: string;
   /** Underlying ISIN */
   underlyingIsin?: string;
+  /** Optional: which broker produced this disposal (for audit traceability) */
+  brokerSource?: string;
 }
 
 /** Dividend received from a foreign security */
@@ -446,6 +451,7 @@ export interface FxLot {
   costPerUnit: Decimal;
   /** Total EUR cost for this lot */
   costInEur: Decimal;
+  brokerSource?: string;
 }
 
 /**
@@ -528,6 +534,7 @@ export interface FxTraceEvent {
   lotAcquireDate?: string;
   /** Optional human note (e.g. "uncovered", "missing-lots floor → gain 0"). */
   note?: string;
+  brokerSource?: string;
 }
 
 /** Result of consuming FX lots via FIFO for a currency disposal */
@@ -543,6 +550,7 @@ export interface FxDisposal {
   holdingPeriodDays: number;
   /** FIFO lot ID consumed (for audit traceability) */
   lotId: string;
+  brokerSource?: string;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */
