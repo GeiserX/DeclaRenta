@@ -210,6 +210,7 @@ function parseTrading212Csv(lines: string[]): Statement {
         amount: amountDec.neg().toString(),
         fxRateToBase: "1",
         type: "Withholding Tax",
+        brokerSource: "Trading 212",
       });
       continue;
     }
@@ -232,6 +233,7 @@ function parseTrading212Csv(lines: string[]): Statement {
         amount: amountDec.toString(),
         fxRateToBase: "1",
         type: "Dividends",
+        brokerSource: "Trading 212",
       });
       continue;
     }
@@ -253,6 +255,7 @@ function parseTrading212Csv(lines: string[]): Statement {
         amount: amountDec.toString(),
         fxRateToBase: "1",
         type: "Broker Interest Received",
+        brokerSource: "Trading 212",
       });
       continue;
     }
@@ -325,6 +328,7 @@ function parseTrading212Csv(lines: string[]): Statement {
       commission: commissionDec.isZero() ? "0" : commissionDec.neg().toString(),
       taxes: taxesDec.isZero() ? "0" : taxesDec.neg().toString(),
       multiplier: "1",
+      brokerSource: "Trading 212",
     });
   }
 

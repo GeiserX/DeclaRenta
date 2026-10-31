@@ -357,6 +357,7 @@ export class FifoEngine {
             commission: "0",
             taxes: "0",
             multiplier: "1",
+            brokerSource: ca.brokerSource,
           });
           continue;
         }
@@ -440,6 +441,7 @@ export class FifoEngine {
       costInFcy: Decimal;
       currency: string;
       ecbRate: Decimal;
+      brokerSource?: string;
     }[] = [];
     for (const ca of (corporateActions ?? []).filter((ca) => ca.type === "SD")) {
       const qty = new Decimal(ca.quantity);
@@ -458,6 +460,7 @@ export class FifoEngine {
         costInFcy: amount,
         currency: ca.currency,
         ecbRate,
+        brokerSource: ca.brokerSource,
       });
       this.emit({
         id: "fifo.scrip_dividend",
@@ -657,6 +660,7 @@ export class FifoEngine {
     costInFcy: Decimal;
     currency: string;
     ecbRate: Decimal;
+    brokerSource?: string;
   }): void {
     const lot: Lot = {
       id: `LOT-${this.nextLotId++}`,
@@ -669,6 +673,7 @@ export class FifoEngine {
       costInFcy: sd.costInFcy,
       currency: sd.currency,
       ecbRate: sd.ecbRate,
+      brokerSource: sd.brokerSource,
     };
     if (!this.lots.has(sd.key)) {
       this.lots.set(sd.key, []);
@@ -902,6 +907,7 @@ export class FifoEngine {
             underlyingIsin: trade.underlyingIsin,
           }
         : {}),
+      brokerSource: trade.brokerSource,
     };
 
     const key = lotKey(trade);
@@ -938,6 +944,7 @@ export class FifoEngine {
       holdingPeriodDays: number;
       acquireEcbRate: Decimal;
       optionFields?: Partial<FifoDisposal>;
+      brokerSource?: string;
     }): FifoDisposal => ({
       isin: trade.isin,
       symbol: trade.symbol,
@@ -960,6 +967,7 @@ export class FifoEngine {
       washSaleBlocked: false, // Set later by wash sale detection
       blockedLossEur: new Decimal(0), // Set later by detectWashSales (proportional)
       reintegratedLossEur: new Decimal(0), // Set later by detectWashSales
+      brokerSource: parts.brokerSource ?? trade.brokerSource,
       ...(parts.optionFields ?? {}),
     });
 
@@ -1139,6 +1147,7 @@ export class FifoEngine {
       currency: trade.currency,
       ecbRate,
       isShort: true,
+      brokerSource: trade.brokerSource,
     };
 
     const key = lotKey(trade);
@@ -1242,6 +1251,7 @@ export class FifoEngine {
         blockedLossEur: new Decimal(0),
         reintegratedLossEur: new Decimal(0),
         isShort: true,
+        brokerSource: trade.brokerSource,
       });
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -1380,6 +1390,7 @@ export class FifoEngine {
           expiry: ex.expiry,
           underlyingSymbol: ex.underlyingSymbol,
           underlyingIsin: ex.underlyingIsin,
+          brokerSource: ex.brokerSource,
         });
 
         lot.quantity = lot.quantity.minus(consumed);
@@ -1426,6 +1437,7 @@ export class FifoEngine {
           blockedLossEur: new Decimal(0),
           reintegratedLossEur: new Decimal(0),
           isShort: true,
+          brokerSource: ex.brokerSource,
           optionScenario: "expiration",
           putCall: ex.putCall,
           strike: ex.strike,
@@ -1492,6 +1504,7 @@ export class FifoEngine {
       costInFcy: parts.costInFcy,
       currency: ex.currency,
       ecbRate,
+      brokerSource: ex.brokerSource,
     };
     if (!this.lots.has(underlyingKey)) this.lots.set(underlyingKey, []);
     this.lots.get(underlyingKey)!.push(underlyingLot);
@@ -1721,6 +1734,7 @@ export class FifoEngine {
         expiry: ex.expiry,
         underlyingSymbol: ex.underlyingSymbol,
         underlyingIsin: ex.underlyingIsin,
+        brokerSource: ex.brokerSource,
       });
       return;
     }
@@ -1770,6 +1784,7 @@ export class FifoEngine {
         expiry: ex.expiry,
         underlyingSymbol: ex.underlyingSymbol,
         underlyingIsin: ex.underlyingIsin,
+        brokerSource: ex.brokerSource,
       });
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -1816,6 +1831,7 @@ export class FifoEngine {
         expiry: ex.expiry,
         underlyingSymbol: ex.underlyingSymbol,
         underlyingIsin: ex.underlyingIsin,
+        brokerSource: ex.brokerSource,
       });
     }
   }

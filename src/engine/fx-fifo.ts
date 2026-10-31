@@ -74,6 +74,7 @@ export interface FxEvent {
   commissionEur?: Decimal;
   /** Real EUR value applied to this conversion (spread-laden), BEFORE commission. When present, the effective rate realEurAmount/|quantity| is used instead of ecbRate (issue #253). */
   realEurAmount?: Decimal;
+  brokerSource?: string;
   /**
    * Discriminator for the carry-basis stock events. Absent → a plain
    * acquire/dispose driven by signed `quantity` (the original behavior).
@@ -259,6 +260,7 @@ export class FxFifoEngine {
       ...(fields.lotId !== undefined ? { lotId: fields.lotId } : {}),
       ...(fields.lotAcquireDate !== undefined ? { lotAcquireDate: fields.lotAcquireDate } : {}),
       ...(fields.note !== undefined ? { note: fields.note } : {}),
+      ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
     });
   }
 
@@ -623,6 +625,7 @@ export class FxFifoEngine {
           trigger: "conversion",
           commissionEur,
           realEurAmount,
+          brokerSource: trade.brokerSource,
         });
       } else {
         events.push({
@@ -633,6 +636,7 @@ export class FxFifoEngine {
           trigger: "conversion",
           commissionEur,
           realEurAmount,
+          brokerSource: trade.brokerSource,
         });
       }
 
@@ -655,6 +659,7 @@ export class FxFifoEngine {
             quantity: acquiring ? otherAmount.negated() : otherAmount,
             ecbRate: getEcbRate(rateMap, date, other),
             trigger: "conversion",
+            brokerSource: trade.brokerSource,
           });
         }
       }
@@ -781,24 +786,24 @@ export class FxFifoEngine {
         // `greaterThan(0)`, not `isPositive()` — decimal.js treats +0 as positive,
         // and a zero-quantity event would make addLot compute 0/0 = NaN.
         if (net.greaterThan(0)) {
-          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "dividend" });
+          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
         }
       } else if (tx.type === "Withholding Tax") {
         // Netted into its income inflow above (or dropped if orphan). Never a
         // disposal. A positive-amount WHT (a refund) IS currency received → acquire.
         // Defensive: not observed in current broker exports, but symmetric and cheap.
         if (amount.greaterThan(0)) {
-          events.push({ date, currency: tx.currency, quantity: amount, ecbRate, trigger: "dividend" });
+          events.push({ date, currency: tx.currency, quantity: amount, ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
         }
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
         // Interest can also carry withholding (e.g. "WITHHOLDING ON CREDIT INT");
         // net it the same way — a withholding is a pago a cuenta whatever the income.
         const net = consumeWithholding(tx.currency, date, amount.abs());
         if (net.greaterThan(0)) {
-          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "interest" });
+          events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
         }
       } else if (tx.type === "Broker Interest Paid" || tx.type === "Bond Interest Paid") {
-        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest" });
+        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
       } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
         if (amount.lessThan(0)) {
           events.push({
@@ -807,9 +812,10 @@ export class FxFifoEngine {
             quantity: amount.abs().negated(),
             ecbRate,
             trigger: "commission",
+            brokerSource: tx.brokerSource,
           });
         } else {
-          events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "commission" });
+          events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "commission", brokerSource: tx.brokerSource });
         }
       }
     }
@@ -903,6 +909,7 @@ export class FxFifoEngine {
         proceedsFcy: d.proceedsFcy, // FULL net proceeds in FCY (already net of commission/taxes)
         ecbRate: d.sellEcbRate, // sale-date ECB rate (for the profit and uncovered/unmatched re-add)
         trigger: "stock_sale",
+        brokerSource: d.brokerSource,
         // Per-position key (isin || symbol) — IDENTICAL derivation to the buy
         // producer, so this sell unparks ONLY its own position's principal. An
         // option-exercise/assignment STK disposal carries the underlying's
@@ -1002,6 +1009,7 @@ export class FxFifoEngine {
         // Per-position key (isin || symbol) — IDENTICAL derivation to the sell
         // producer (extractStockProceedsFxEvents), so the SELL of this exact
         // position reclaims the principal parked here and no other.
+        brokerSource: trade.brokerSource,
         positionKey: FxFifoEngine.positionKey(trade),
       });
     }
@@ -1048,6 +1056,7 @@ export class FxFifoEngine {
         coveredCostPerUnit: ecbRate,
         coveredAcquireDate: date,
         positionKey: lot.isin || lot.symbol,
+        brokerSource: lot.brokerSource,
       });
     }
 
@@ -1105,6 +1114,7 @@ export class FxFifoEngine {
       quantity: event.quantity,
       costPerUnit,
       costInEur: totalCost,
+      brokerSource: event.brokerSource,
     };
 
     if (!this.lots.has(event.currency)) {
@@ -1139,6 +1149,7 @@ export class FxFifoEngine {
         trigger: event.trigger,
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
+        brokerSource: event.brokerSource,
       });
       this.record("dispose", event, {
         quantityFcy: remaining,
@@ -1183,6 +1194,7 @@ export class FxFifoEngine {
         trigger: event.trigger,
         holdingPeriodDays: holdingDays,
         lotId: lot.id,
+        brokerSource: event.brokerSource,
       });
 
       const lotIdConsumed = lot.id;
@@ -1227,6 +1239,7 @@ export class FxFifoEngine {
         trigger: event.trigger,
         holdingPeriodDays: 0,
         lotId: "UNKNOWN",
+        brokerSource: event.brokerSource,
       });
       this.record("dispose", event, {
         quantityFcy: remaining,
@@ -1275,7 +1288,7 @@ export class FxFifoEngine {
    * pool FIFO-correct. Stable for equal dates (inserts AFTER same-date lots), so
    * same-date ordering is unchanged from the old append.
    */
-  private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal): void {
+  private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal, brokerSource?: string): void {
     if (!q.greaterThan(0)) return;
     const lot: FxLot = {
       id: `FX-${this.nextLotId++}`,
@@ -1284,6 +1297,7 @@ export class FxFifoEngine {
       quantity: q,
       costPerUnit: rate,
       costInEur: q.mul(rate),
+      ...(brokerSource !== undefined ? { brokerSource } : {}),
     };
     if (!this.lots.has(currency)) this.lots.set(currency, []);
     const lots = this.lots.get(currency)!;
@@ -1456,7 +1470,7 @@ export class FxFifoEngine {
           // the park), so the pool stays FIFO-ordered by genuine age (issue #230).
           // An uncovered slice (no tracked origin) re-adds at the sale date.
           const reAddDate = p.acquireDate ?? event.date;
-          this.pushPoolLot(event.currency, reAddDate, give, reAddRate);
+          this.pushPoolLot(event.currency, reAddDate, give, reAddRate, event.brokerSource);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -1494,7 +1508,7 @@ export class FxFifoEngine {
     // branch that makes a sell-without-tracked-buy equal the full-proceeds model.
     if (need.greaterThan(EPS) && placed.lessThan(readd.minus(EPS))) {
       const g = Decimal.min(need, readd.minus(placed));
-      this.pushPoolLot(event.currency, event.date, g, saleRate);
+      this.pushPoolLot(event.currency, event.date, g, saleRate, event.brokerSource);
       placed = placed.plus(g);
       this.record("unpark", event, {
         quantityFcy: g,
@@ -1512,7 +1526,7 @@ export class FxFifoEngine {
     // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
     const profit = proc.minus(placed);
     if (profit.greaterThan(EPS)) {
-      this.pushPoolLot(event.currency, event.date, profit, saleRate);
+      this.pushPoolLot(event.currency, event.date, profit, saleRate, event.brokerSource);
       this.record("profit", event, { quantityFcy: profit, rate: saleRate });
       this.accumulate("profit", event.currency, profit);
     }

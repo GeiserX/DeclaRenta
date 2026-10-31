@@ -159,6 +159,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
         amount,
         fxRateToBase: "1",
         type: signed.isPositive() ? "Broker Interest Received" : "Broker Interest Paid",
+        brokerSource: "Scalable Capital",
       });
       continue;
     }
@@ -181,6 +182,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
         amount,
         fxRateToBase: "1",
         type: "Dividends",
+        brokerSource: "Scalable Capital",
       });
 
       // If there's a tax amount, add withholding
@@ -198,6 +200,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
           amount: new Decimal(tax).abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
+          brokerSource: "Scalable Capital",
         });
       }
       continue;
@@ -242,6 +245,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       commission: feeNum !== 0 ? `-${Math.abs(feeNum)}` : "0",
       taxes: tax,
       multiplier: "1",
+      brokerSource: "Scalable Capital",
     });
   }
 

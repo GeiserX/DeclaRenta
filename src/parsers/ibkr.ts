@@ -299,6 +299,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingSymbol: raw.underlyingSymbol || undefined,
     underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
+    brokerSource: "IBKR",
   };
 }
 
@@ -600,6 +601,7 @@ function mapCashTransaction(raw: Record<string, string>): CashTransaction {
     amount: raw.amount ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
     type: (raw.type ?? "") as CashTransaction["type"],
+    brokerSource: "IBKR",
   };
 }
 
@@ -617,6 +619,7 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
     amount: raw.amount ?? "0",
     type: raw.type ?? "",
     actionDescription: raw.actionDescription ?? "",
+    brokerSource: "IBKR",
   };
 }
 
@@ -643,6 +646,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     fifoPnlUnrealized: raw.fifoPnlUnrealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
     custodianCountry: IBKR_CUSTODIAN_COUNTRY,
+    brokerSource: "IBKR",
   };
 }
 
@@ -656,6 +660,7 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     assetCategory: (raw.assetCategory ?? "STK") as SecurityInfo["assetCategory"],
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
+    brokerSource: "IBKR",
   };
 }
 
@@ -669,6 +674,7 @@ function mapCashBalance(raw: Record<string, string>): CashBalance {
     openedDate: raw.openedDate ?? raw.openDate,
     institutionName: raw.institutionName ?? raw.brokerName,
     countryCode: raw.countryCode ?? raw.country,
+    brokerSource: "IBKR",
   };
 }
 
@@ -711,6 +717,7 @@ function parseOptionEaeRows(rawRows: Record<string, string>[]): OptionExercise[]
         underlyingSymbol: raw.underlyingSymbol ?? raw.symbol ?? "",
         underlyingIsin: underlyingIsinOf(raw),
         multiplier: raw.multiplier ?? "100",
+        brokerSource: "IBKR",
       });
     } else if (raw.tradePrice?.trim()) {
       deliveryRows.push({

@@ -161,6 +161,7 @@ function parseFreedom24(input: string): Statement {
       commission: commDec.isZero() ? "0" : commDec.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
+      brokerSource: "Freedom24",
     });
   }
 
@@ -202,6 +203,7 @@ function parseFreedom24(input: string): Statement {
       amount,
       fxRateToBase: "1",
       type: "Dividends",
+      brokerSource: "Freedom24",
     });
 
     // Withholding tax (if present)
@@ -219,6 +221,7 @@ function parseFreedom24(input: string): Statement {
         amount: taxDec.isPositive() ? taxDec.neg().toString() : taxDec.toString(),
         fxRateToBase: "1",
         type: "Withholding Tax",
+        brokerSource: "Freedom24",
       });
     }
   }
