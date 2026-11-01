@@ -177,10 +177,11 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           .rect(MARGIN, tableY, CONTENT_WIDTH, 16)
           .fill(COLORS.primary);
 
-        // Purchase and sale broker after the dates, only when the sales name
-        // more than one broker; the table then uses a smaller font and narrower
+        // Purchase and sale broker after the dates, only when the listed sales
+        // name more than one broker; the table then uses a smaller font and narrower
         // columns to stay inside the page.
-        const brokers = showBrokerColumns(report.capitalGains.disposals);
+        const maxRows = Math.min(report.capitalGains.disposals.length, 50);
+        const brokers = showBrokerColumns(report.capitalGains.disposals.slice(0, maxRows));
         const tableFont = brokers ? 6.5 : FONT_SIZE.small;
         const cols = opsColumns(brokers);
         const col = (key: OpsColumnKey) => cols.find((c) => c.key === key)!;
@@ -193,7 +194,6 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         doc.y = tableY + 18;
 
         // Table rows
-        const maxRows = Math.min(report.capitalGains.disposals.length, 50);
         for (let i = 0; i < maxRows; i++) {
           const d = report.capitalGains.disposals[i]!;
           const rowY = doc.y;
@@ -340,21 +340,22 @@ type OpsColumnKey =
 /**
  * Operations table columns, left to right, 4 pt apart. Without the broker
  * columns the widths are the original layout; with them every column narrows
- * so the eleven fit in CONTENT_WIDTH at the smaller font.
+ * so the eleven fit in CONTENT_WIDTH at the smaller font, still wide enough at
+ * 6.5 pt for a 12-character ISIN and a 7-digit amount on one line.
  */
 function opsColumns(brokers: boolean): { key: OpsColumnKey; label: string; x: number; w: number }[] {
   const spec: [OpsColumnKey, string, number, number][] = [
     // key, label, width, width with brokers
-    ["isin", "ISIN", 68, 46],
+    ["isin", "ISIN", 68, 52],
     ["symbol", "Símbolo", 46, 46],
     ["buyDate", "F. Compra", 52, 36],
     ["sellDate", "F. Venta", 52, 36],
     ["buyBroker", "Broker compra", 0, 56],
     ["sellBroker", "Broker venta", 0, 56],
     ["units", "Uds.", 28, 26],
-    ["cost", "Coste EUR", 56, 34],
-    ["proceeds", "Venta EUR", 56, 34],
-    ["gainLoss", "G/P EUR", 48, 32],
+    ["cost", "Coste EUR", 56, 37],
+    ["proceeds", "Venta EUR", 56, 37],
+    ["gainLoss", "G/P EUR", 48, 36],
     ["ecb", "Tipo ECB", 48, 32],
   ];
   const cols: { key: OpsColumnKey; label: string; x: number; w: number }[] = [];
