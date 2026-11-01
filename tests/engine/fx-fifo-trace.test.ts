@@ -134,6 +134,8 @@ describe("FxFifoEngine.getTrace — park + unpark + profit (full round-trip)", (
     expect(park.rate).toBe("0.9"); // carried from the funding lot
     expect(park.poolBalanceFcy).toBe("0"); // pool drained by the buy
     expect(park.parkedBalanceFcy).toBe("1000"); // moved into the parked queue
+    expect(park.lotId).toBe("FX-1"); // the funding lot it consumed
+    expect(park.lotAcquireDate).toBe("2025-01-01");
   });
 
   it("unparks 1000 (principal re-added at its carried basis) and profits 200 @1.05", () => {
@@ -143,9 +145,22 @@ describe("FxFifoEngine.getTrace — park + unpark + profit (full round-trip)", (
     expect(unpark.rate).toBe("0.9"); // re-added at the CARRIED basis, not the sale rate
     const profit = byKind(trace, "profit")[0]!;
     expect(profit.quantityFcy).toBe("200"); // proceeds 1200 − principal 1000
-    expect(unpark.lotId).toBeDefined();
     expect(profit.rate).toBe("1.05"); // profit valued at the sale rate
-    expect(profit.lotId).toBeDefined();
+  });
+
+  it("stamps the CREATED lot on unpark/profit, and the dispose rows consume exactly those lots", () => {
+    const trace = traceOf(ROUND_TRIP);
+    const unpark = byKind(trace, "unpark")[0]!;
+    const profit = byKind(trace, "profit")[0]!;
+    // Re-added principal: a fresh lot id, but the ORIGINAL funding date (carried).
+    expect(unpark.lotId).toBe("FX-2");
+    expect(unpark.lotAcquireDate).toBe("2025-01-01");
+    // Profit: a fresh lot dated on the sale date.
+    expect(profit.lotId).toBe("FX-3");
+    expect(profit.lotAcquireDate).toBe("2025-01-03");
+    const disposes = byKind(trace, "dispose");
+    expect(disposes.map((e) => e.lotId)).toEqual(["FX-2", "FX-3"]);
+    expect(disposes.map((e) => e.lotAcquireDate)).toEqual(["2025-01-01", "2025-01-03"]);
   });
 
   it("keeps seq monotonic increasing with no gaps", () => {
@@ -226,5 +241,62 @@ describe("FxFifoEngine.getTrace — running balances are post-event sums", () =>
     expect(dispose.quantityFcy).toBe("400");
     expect(dispose.poolBalanceFcy).toBe("600"); // 1000 − 400 left spendable
     expect(dispose.parkedBalanceFcy).toBe("0");
+  });
+});
+
+describe("FxFifoEngine.getTrace — lotId links every consumed lot to the row that created it", () => {
+  const CREATES = new Set<FxTraceEvent["kind"]>(["acquire", "unpark", "profit"]);
+  const CONSUMES = new Set<FxTraceEvent["kind"]>(["park", "dispose"]);
+
+  /**
+   * Every lotId on a park/dispose row (other than the "UNKNOWN" floor) must appear
+   * on exactly one EARLIER acquire/unpark/profit row of the same currency, with the
+   * same lotAcquireDate; and no lot id is created twice.
+   */
+  function expectLinked(trace: FxTraceEvent[]): void {
+    const created = new Map<string, FxTraceEvent>();
+    for (const ev of trace) {
+      if (CREATES.has(ev.kind)) {
+        expect(ev.lotId, `${ev.kind} #${ev.seq} has no lotId`).toBeDefined();
+        expect(ev.lotAcquireDate, `${ev.kind} #${ev.seq} has no lotAcquireDate`).toBeDefined();
+        expect(created.has(ev.lotId!), `${ev.lotId} created twice`).toBe(false);
+        created.set(ev.lotId!, ev);
+      } else if (CONSUMES.has(ev.kind) && ev.lotId !== undefined && ev.lotId !== "UNKNOWN") {
+        const origin = created.get(ev.lotId);
+        expect(origin, `${ev.kind} #${ev.seq} consumes ${ev.lotId}, never created earlier`).toBeDefined();
+        expect(ev.currency).toBe(origin!.currency);
+        expect(ev.lotAcquireDate).toBe(origin!.lotAcquireDate);
+      }
+    }
+  }
+
+  it("a sell with no tracked buy re-adds the proceeds as a new lot dated on the sale", () => {
+    // No buy parked anything for this position, so the sale takes the full-proceeds branch.
+    const trace = traceOf([["sell", "USD", 1000, 1200, 1.05], ["conv", "USD", 1200, 1.1]]);
+    const unpark = byKind(trace, "unpark")[0]!;
+    expect(unpark.note).toContain("venta sin compra rastreada");
+    expect(unpark.lotId).toBe("FX-1");
+    expect(unpark.lotAcquireDate).toBe("2025-01-01");
+    expect(byKind(trace, "profit")[0]!.lotId).toBe("FX-2");
+    expect(byKind(trace, "dispose").map((e) => e.lotId)).toEqual(["FX-1", "FX-2"]);
+    expectLinked(trace);
+  });
+
+  it("holds across currencies, partial parks, a profit, a loss and an overdrawn conversion", () => {
+    const trace = traceOf([
+      ["fund", "USD", 1000, 0.9],
+      ["fund", "JPY", 50000, 0.006],
+      ["fund", "USD", 500, 0.95],
+      ["buy", "USD", 1200], // spans both USD funding lots
+      ["sell", "USD", 1200, 1500, 1.0], // profit
+      ["buy", "JPY", 30000],
+      ["sell", "JPY", 30000, 20000, 0.0065], // loss → discard
+      ["sell", "USD", 400, 450, 1.02], // no tracked buy → full-proceeds unpark
+      ["conv", "USD", 2500, 1.05], // more than the pool holds → UNKNOWN floor
+      ["conv", "JPY", 40000, 0.007],
+    ]);
+    expect(trace.some((e) => e.kind === "dispose" && e.lotId === "UNKNOWN")).toBe(true);
+    expect(trace.some((e) => e.kind === "discard")).toBe(true);
+    expectLinked(trace);
   });
 });
