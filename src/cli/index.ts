@@ -15,8 +15,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { Command, InvalidArgumentError, Option } from "commander";
 import Decimal from "decimal.js";
 import { detectBroker, getBroker, brokerParsers } from "../parsers/index.js";
-import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
-import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
+import { parseXlsxExport } from "../parsers/xlsx.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
@@ -152,21 +151,13 @@ async function parseAndMerge(
   for (const file of inputFiles) {
     // Check for binary XLSX (Revolut, eToro) first
     const buf = readFileSync(file);
-    if (await detectRevolutXlsx(buf)) {
-      const statement = await parseRevolutXlsx(buf);
-      mergeStatement(merged, statement, "Revolut");
-      brokerNames.push("Revolut");
+    const xlsx = await parseXlsxExport(buf);
+    if (xlsx) {
+      const { broker, statement } = xlsx;
+      mergeStatement(merged, statement, broker);
+      brokerNames.push(broker);
       console.error(
-        `  [Revolut XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
-      );
-      continue;
-    }
-    if (await detectEtoroXlsx(buf)) {
-      const statement = await parseEtoroXlsx(buf);
-      mergeStatement(merged, statement, "eToro");
-      brokerNames.push("eToro");
-      console.error(
-        `  [eToro XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
+        `  [${broker} XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
       );
       continue;
     }

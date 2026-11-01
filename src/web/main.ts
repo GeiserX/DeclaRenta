@@ -6,8 +6,7 @@
  */
 
 import { detectBroker, getBroker } from "../parsers/index.js";
-import { parseEtoroXlsx, detectEtoroXlsx } from "../parsers/etoro.js";
-import { parseRevolutXlsx, detectRevolutXlsx } from "../parsers/revolut.js";
+import { detectXlsxBroker, parseXlsxExport } from "../parsers/xlsx.js";
 import type { Statement } from "../types/broker.js";
 import type { ReportSettings, TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -505,10 +504,8 @@ async function previewDetectBroker(file: File): Promise<string | null> {
   if (cached !== undefined) return cached === DETECTION_ERROR ? null : cached;
   try {
     const uint8 = await getFileBytes(file);
-    let result: string | null = null;
-    if (await detectRevolutXlsx(uint8)) result = "Revolut";
-    else if (await detectEtoroXlsx(uint8)) result = "eToro";
-    else result = detectBroker(new TextDecoder("utf-8").decode(uint8))?.name ?? null;
+    const result =
+      (await detectXlsxBroker(uint8)) ?? detectBroker(new TextDecoder("utf-8").decode(uint8))?.name ?? null;
     detectionCache.set(key, result);
     return result;
   } catch {
@@ -589,19 +586,11 @@ async function parseFiles(): Promise<void> {
   try {
     for (const file of pendingFiles) {
       const uint8 = await getFileBytes(file);
-      if (await detectRevolutXlsx(uint8)) {
-        const statement = await parseRevolutXlsx(uint8);
-        mergeStatement(merged, statement, "Revolut");
-        brokerNames.push("Revolut");
-        parsedExports.push({ broker: "Revolut", statement });
-        continue;
-      }
-
-      if (await detectEtoroXlsx(uint8)) {
-        const statement = await parseEtoroXlsx(uint8);
-        mergeStatement(merged, statement, "eToro");
-        brokerNames.push("eToro");
-        parsedExports.push({ broker: "eToro", statement });
+      const xlsx = await parseXlsxExport(uint8);
+      if (xlsx) {
+        mergeStatement(merged, xlsx.statement, xlsx.broker);
+        brokerNames.push(xlsx.broker);
+        parsedExports.push(xlsx);
         continue;
       }
 
