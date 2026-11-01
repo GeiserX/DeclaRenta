@@ -469,6 +469,29 @@ describe("generatePdfWebReport broker columns fit their cells", () => {
   });
 });
 
+describe("generatePdfWebReport broker columns keep a wide symbol on one line", () => {
+  it("cuts a wide upper-case symbol instead of wrapping its last letter to a second line", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, symbol: "ACME WORLD ETF", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, brokerSource: "Degiro" },
+        ],
+      },
+    });
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    // Every text run of the symbol: one run, starting "ACME", never a lone "E".
+    const runs = [...text.matchAll(/\((ACME[^)]*|E)\) Tj/g)].map((m) => m[1]);
+    expect(runs).toHaveLength(1);
+    // Cut to the cell with an ellipsis; the CSV and the screen keep the full name.
+    expect(runs[0]).toMatch(/^ACME WO.*\.\.\.$/);
+  });
+});
+
 describe("generatePdfWebReport broker columns keep the G/P colours", () => {
   it("colours the G/P cell, not another column, in the two-broker layout", async () => {
     const base = makeReport();
