@@ -910,8 +910,21 @@ button[disabled] {
   overflow-x: auto;
 }
 
-.annex-table th {
+/* With the purchase and sale broker columns: eleven columns, so tighter cell
+   padding and headers that may wrap keep the table inside a desktop screen,
+   while a broker name stays on one line. */
+.annex-table--brokers th,
+.annex-table--brokers td {
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+}
+
+.annex-table--brokers th {
   white-space: normal;
+}
+
+.annex-table--brokers .annex-broker {
+  white-space: nowrap;
 }
 
 table {

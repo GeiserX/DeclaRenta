@@ -68,7 +68,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
         <span class="annex-group-total ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</span>
       </summary>
       <div class="annex-table-wrap">
-        <table class="annex-table">
+        <table class="annex-table${brokers ? " annex-table--brokers" : ""}">
           <thead>
             <tr>
               <th>#</th>
@@ -92,8 +92,8 @@ export function renderOperationsAnnex(report: TaxSummary): string {
         : "";
       const brokerCells = brokers
         ? `
-              <td>${esc(d.acquireBrokerSource ?? "—")}</td>
-              <td>${esc(d.brokerSource ?? "—")}</td>`
+              <td class="annex-broker">${esc(d.acquireBrokerSource ?? "—")}</td>
+              <td class="annex-broker">${esc(d.brokerSource ?? "—")}</td>`
         : "";
       html += `
             <tr${blocked}>
