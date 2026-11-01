@@ -955,6 +955,13 @@ button[disabled] {
   vertical-align: bottom;
 }
 
+/* An option row's badge ("Cierre anticipado Call @100") takes its own line
+   under the symbol and never breaks, so the row is two lines, not three to five. */
+.annex-table--brokers .option-badge {
+  display: block;
+  white-space: nowrap;
+}
+
 /* Amounts never wrap: the subtotal "+527,35 EUR" broke before "EUR". */
 .annex-table td.num {
   white-space: nowrap;
@@ -2948,6 +2955,13 @@ footer a:hover {
   .annex-table--brokers,
   .ops-table--brokers {
     font-size: 0.75rem;
+  }
+
+  /* The eleven-column tables already scroll sideways inside their box here, and
+     a touch screen shows no tooltip: show the whole symbol, still on one line. */
+  .annex-table--brokers .cell-symbol,
+  .ops-table--brokers .cell-symbol {
+    max-width: none;
   }
 
   th,

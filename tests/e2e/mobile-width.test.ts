@@ -451,6 +451,7 @@ describe.skipIf(!CHROME)("results step layout", () => {
     annexScrolls: boolean[];
     wrapped: string[];
     symbols: { text: string; title: string }[];
+    truncated: string[];
   }
 
   for (const width of [1280, 390]) {
@@ -483,6 +484,9 @@ describe.skipIf(!CHROME)("results step layout", () => {
             annexScrolls: [...document.querySelectorAll(".annex-table-wrap")].map((el) => el.scrollWidth > el.clientWidth),
             wrapped: cells.filter((td) => linesOf(td) > 1).map((td) => td.textContent.trim()),
             symbols: [...document.querySelectorAll(".cell-symbol")].map((el) => ({ text: el.textContent, title: el.title })),
+            truncated: [...document.querySelectorAll(".cell-symbol")]
+              .filter((el) => el.scrollWidth > el.clientWidth)
+              .map((el) => el.textContent),
           };
         })()`);
       }
@@ -505,8 +509,38 @@ describe.skipIf(!CHROME)("results step layout", () => {
           expect(layout.opsScrolls, locale).toBe(false);
           expect(layout.annexScrolls.length, locale).toBeGreaterThan(0);
           expect(layout.annexScrolls, locale).not.toContain(true);
+        } else {
+          // A phone has no tooltip; the table scrolls inside its box, so the
+          // whole symbol shows.
+          expect(layout.truncated, locale).toEqual([]);
         }
       }
+    }, 120_000);
+  }
+
+  for (const width of [1280, 390]) {
+    it(`keeps an option row of the two-broker annex to the symbol line and one badge line at ${width}px`, async () => {
+      const { evaluate, close } = await openResults(width, [
+        join(ROOT, "tests/fixtures/ibkr-options.xml"),
+        join(ROOT, "tests/fixtures/two-broker-degiro.csv"),
+      ]);
+      const cells = await evaluate<{ text: string; lines: number; badgeLines: number }[]>(`(() => {
+        const linesOf = ${LINES_OF};
+        return [...document.querySelectorAll(".annex-table--brokers .option-badge")].map((badge) => ({
+          text: badge.parentElement.textContent.trim(),
+          lines: linesOf(badge.parentElement),
+          badgeLines: linesOf(badge),
+        }));
+      })()`);
+      const scrollWidth = await evaluate<number>(`document.documentElement.scrollWidth`);
+      await close();
+
+      expect(cells.length).toBeGreaterThan(0);
+      for (const cell of cells) {
+        expect(cell.badgeLines, cell.text).toBe(1);
+        expect(cell.lines, cell.text).toBe(2);
+      }
+      expect(scrollWidth).toBe(width);
     }, 120_000);
   }
 });
