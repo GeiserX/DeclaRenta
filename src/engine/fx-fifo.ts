@@ -1481,13 +1481,12 @@ export class FxFifoEngine {
         const x = Decimal.min(need, p.q);
         const give = Decimal.min(x, readd.minus(placed));
         let reAddedLot: FxLot | undefined;
-        let reAddDate: string | undefined;
         if (give.greaterThan(EPS)) {
           const reAddRate = p.rate === null ? saleRate : p.rate;
           // Re-add the principal at its ORIGINAL acquisition date (carried through
           // the park), so the pool stays FIFO-ordered by genuine age (issue #230).
           // An uncovered slice (no tracked origin) re-adds at the sale date.
-          reAddDate = p.acquireDate ?? event.date;
+          const reAddDate = p.acquireDate ?? event.date;
           // Same for the broker: a carried slice keeps the broker its dollars
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
@@ -1507,7 +1506,7 @@ export class FxFifoEngine {
             quantityFcy: give,
             rate: p.rate === null ? saleRate : p.rate,
             lotId: reAddedLot?.id,
-            lotAcquireDate: reAddDate,
+            lotAcquireDate: reAddedLot?.acquireDate,
             note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined,
           });
           this.accumulate("unpark", event.currency, give);
@@ -1537,7 +1536,7 @@ export class FxFifoEngine {
         quantityFcy: g,
         rate: saleRate,
         lotId: unparkLot?.id,
-        lotAcquireDate: event.date,
+        lotAcquireDate: unparkLot?.acquireDate,
         note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)",
       });
       this.accumulate("unpark", event.currency, g);
@@ -1556,7 +1555,7 @@ export class FxFifoEngine {
         quantityFcy: profit,
         rate: saleRate,
         lotId: profitLot?.id,
-        lotAcquireDate: event.date,
+        lotAcquireDate: profitLot?.acquireDate,
       });
       this.accumulate("profit", event.currency, profit);
     }
