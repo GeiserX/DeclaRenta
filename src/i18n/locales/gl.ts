@@ -57,6 +57,8 @@ const gl: TranslationKeys = {
   "table.symbol": "Símbolo",
   "table.buy_date": "D. Compra",
   "table.sell_date": "D. Venda",
+  "table.buy_broker": "Broker compra",
+  "table.sell_broker": "Broker venda",
   "table.units": "Uds.",
   "table.cost_eur": "Custo EUR",
   "table.proceeds_eur": "Venda EUR",

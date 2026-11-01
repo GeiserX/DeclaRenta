@@ -409,3 +409,40 @@ describe("generatePdfWebReport settings line", () => {
   });
 });
 
+
+describe("generatePdfWebReport broker columns", () => {
+  // Short labels: a long key would wrap inside the narrow header cell.
+  const tb = (key: string) => (key === "table.buy_broker" ? "BUYB" : key === "table.sell_broker" ? "SELLB" : key);
+  const withBrokers = (sale: [string, string | undefined], other: [string, string | undefined]) => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    return makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: sale[0], acquireBrokerSource: sale[1] },
+          { ...b!, brokerSource: other[0], acquireBrokerSource: other[1] },
+        ],
+      },
+    });
+  };
+
+  it("prints the purchase and sale broker when the sales cross brokers", async () => {
+    const text = await pdfText(await generatePdfWebReport(
+      withBrokers(["Degiro", "Interactive Brokers"], ["Degiro", undefined]),
+      tb,
+    ));
+    expect(text).toContain("(BUYB)");
+    expect(text).toContain("(SELLB)");
+    expect(text).toContain("Degiro");
+    expect(text).toContain("Interactive");
+    // The dash of the sale without lots stays 1-byte WinAnsi text.
+    expect(text).not.toContain("\u0000");
+  });
+
+  it("prints no broker columns for a single-broker report", async () => {
+    const text = await pdfText(await generatePdfWebReport(withBrokers(["Degiro", "Degiro"], ["Degiro", undefined]), tb));
+    expect(text).not.toContain("BUYB");
+    expect(text).not.toContain("Degiro");
+  });
+});

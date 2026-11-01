@@ -10,6 +10,7 @@ import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
+import { showBrokerColumns } from "../generators/broker-columns.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -25,6 +26,16 @@ function optionScenarioLabel(scenario: string): string {
 export function renderOperationsAnnex(report: TaxSummary): string {
   const disposals = report.capitalGains.disposals;
   if (disposals.length === 0) return "";
+
+  // Purchase and sale broker, only when the sales name more than one broker.
+  // Decided once for the whole annex so every group has the same columns.
+  const brokers = showBrokerColumns(disposals);
+  const columnCount = brokers ? 11 : 9;
+  const brokerHead = brokers
+    ? `
+              <th>${esc(t("table.buy_broker"))}</th>
+              <th>${esc(t("table.sell_broker"))}</th>`
+    : "";
 
   // Group by asset category
   const groups = new Map<string, FifoDisposal[]>();
@@ -64,7 +75,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <th>ISIN</th>
               <th>${t("table.symbol")}</th>
               <th>${t("table.buy_date")}</th>
-              <th>${t("table.sell_date")}</th>
+              <th>${t("table.sell_date")}</th>${brokerHead}
               <th>${t("table.units")}</th>
               <th>${t("table.cost_eur")}</th>
               <th>${t("table.proceeds_eur")}</th>
@@ -79,25 +90,30 @@ export function renderOperationsAnnex(report: TaxSummary): string {
       const optionInfo = d.optionScenario
         ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
         : "";
+      const brokerCells = brokers
+        ? `
+              <td>${esc(d.acquireBrokerSource ?? "—")}</td>
+              <td>${esc(d.brokerSource ?? "—")}</td>`
+        : "";
       html += `
             <tr${blocked}>
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
               <td>${esc(d.symbol)}${optionInfo}</td>
               <td>${esc(formatDate(d.acquireDate))}</td>
-              <td>${esc(formatDate(d.sellDate))}</td>
+              <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
               <td class="num">${fmtEur(d.costBasisEur)}</td>
               <td class="num">${fmtEur(d.proceedsEur)}</td>
               <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
-            </tr>${renderWashSaleDetailRow(d, 9)}`;
+            </tr>${renderWashSaleDetailRow(d, columnCount)}`;
     });
 
     html += `
           </tbody>
           <tfoot>
             <tr class="annex-subtotal">
-              <td colspan="6">${esc(label)}</td>
+              <td colspan="${columnCount - 3}">${esc(label)}</td>
               <td class="num">${fmtEur(subtotalCost)}</td>
               <td class="num">${fmtEur(subtotalProceeds)}</td>
               <td class="num ${glClass}">${subtotalGL.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(subtotalGL)} EUR</td>

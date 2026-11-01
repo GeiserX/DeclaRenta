@@ -57,6 +57,8 @@ const ca: TranslationKeys = {
   "table.symbol": "Símbol",
   "table.buy_date": "D. Compra",
   "table.sell_date": "D. Venda",
+  "table.buy_broker": "Broker compra",
+  "table.sell_broker": "Broker venda",
   "table.units": "Uds.",
   "table.cost_eur": "Cost EUR",
   "table.proceeds_eur": "Venda EUR",

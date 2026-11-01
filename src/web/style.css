@@ -904,6 +904,16 @@ button[disabled] {
   box-shadow: var(--shadow-sm);
 }
 
+/* Operations annex: a wide table (phones, or the broker columns) scrolls
+   sideways inside its group instead of being cut off. */
+.annex-table-wrap {
+  overflow-x: auto;
+}
+
+.annex-table th {
+  white-space: normal;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

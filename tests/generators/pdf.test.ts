@@ -583,3 +583,40 @@ describe("PDF Report Generator settings line", () => {
   });
 });
 
+
+describe("PDF Report Generator broker columns", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const withBrokers = (sale: [string, string | undefined], other: [string, string | undefined]) => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    return makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: sale[0], acquireBrokerSource: sale[1] },
+          { ...b!, brokerSource: other[0], acquireBrokerSource: other[1] },
+        ],
+      },
+    });
+  };
+
+  it("prints the purchase and sale broker when the sales cross brokers", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(withBrokers(["Degiro", "Interactive Brokers"], ["Degiro", undefined]));
+    const rendered = spy.mock.calls.map((args) => String(args[0]));
+    expect(rendered).toContain("Broker compra");
+    expect(rendered).toContain("Broker venta");
+    expect(rendered).toContain("Interactive Brokers");
+    expect(rendered.filter((s) => s === "Degiro")).toHaveLength(2);
+    expect(rendered).toContain("—");
+  });
+
+  it("prints no broker columns for a single-broker report", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(withBrokers(["Degiro", "Degiro"], ["Degiro", undefined]));
+    const rendered = spy.mock.calls.map((args) => String(args[0]));
+    expect(rendered).not.toContain("Broker compra");
+    expect(rendered).not.toContain("Degiro");
+  });
+});
