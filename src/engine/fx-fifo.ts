@@ -1120,7 +1120,12 @@ export class FxFifoEngine {
       this.lots.set(event.currency, []);
     }
     this.lots.get(event.currency)!.push(lot);
-    this.record("acquire", event, { quantityFcy: event.quantity, rate: costPerUnit });
+    this.record("acquire", event, {
+      quantityFcy: event.quantity,
+      rate: costPerUnit,
+      lotId: lot.id,
+      lotAcquireDate: lot.acquireDate,
+    });
     this.accumulate("acquire", event.currency, event.quantity);
   }
 
@@ -1288,8 +1293,8 @@ export class FxFifoEngine {
    * pool FIFO-correct. Stable for equal dates (inserts AFTER same-date lots), so
    * same-date ordering is unchanged from the old append.
    */
-  private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal, brokerSource?: string): void {
-    if (!q.greaterThan(0)) return;
+  private pushPoolLot(currency: string, date: string, q: Decimal, rate: Decimal, brokerSource?: string): FxLot | undefined {
+    if (!q.greaterThan(0)) return undefined;
     const lot: FxLot = {
       id: `FX-${this.nextLotId++}`,
       currency,
@@ -1314,6 +1319,7 @@ export class FxFifoEngine {
       else lo = mid + 1;
     }
     lots.splice(lo, 0, lot);
+    return lot;
   }
 
   /**
@@ -1389,7 +1395,12 @@ export class FxFifoEngine {
         lot.costInEur = lot.costInEur.minus(costPortion);
         if (lot.quantity.lessThan(EPS)) lots.shift();
         remaining = remaining.minus(consumed);
-        this.record("park", event, { quantityFcy: consumed, rate: lot.costPerUnit, lotAcquireDate: lot.acquireDate });
+        this.record("park", event, {
+          quantityFcy: consumed,
+          rate: lot.costPerUnit,
+          lotId: lot.id,
+          lotAcquireDate: lot.acquireDate,
+        });
         this.accumulate("park", event.currency, consumed);
       }
     }
@@ -1469,6 +1480,7 @@ export class FxFifoEngine {
         const p = park[0]!;
         const x = Decimal.min(need, p.q);
         const give = Decimal.min(x, readd.minus(placed));
+        let reAddedLot: FxLot | undefined;
         if (give.greaterThan(EPS)) {
           const reAddRate = p.rate === null ? saleRate : p.rate;
           // Re-add the principal at its ORIGINAL acquisition date (carried through
@@ -1478,7 +1490,7 @@ export class FxFifoEngine {
           // Same for the broker: a carried slice keeps the broker its dollars
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
-          this.pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
+          reAddedLot = this.pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -1493,6 +1505,8 @@ export class FxFifoEngine {
           this.record("unpark", event, {
             quantityFcy: give,
             rate: p.rate === null ? saleRate : p.rate,
+            lotId: reAddedLot?.id,
+            lotAcquireDate: reAddedLot?.acquireDate,
             note: p.rate === null ? "uncovered → re-añadido al tipo de venta" : undefined,
           });
           this.accumulate("unpark", event.currency, give);
@@ -1516,11 +1530,13 @@ export class FxFifoEngine {
     // branch that makes a sell-without-tracked-buy equal the full-proceeds model.
     if (need.greaterThan(EPS) && placed.lessThan(readd.minus(EPS))) {
       const g = Decimal.min(need, readd.minus(placed));
-      this.pushPoolLot(event.currency, event.date, g, saleRate, event.brokerSource);
+      const unparkLot = this.pushPoolLot(event.currency, event.date, g, saleRate, event.brokerSource);
       placed = placed.plus(g);
       this.record("unpark", event, {
         quantityFcy: g,
         rate: saleRate,
+        lotId: unparkLot?.id,
+        lotAcquireDate: unparkLot?.acquireDate,
         note: "venta sin compra rastreada → re-añadido al tipo de venta (full-proceeds)",
       });
       this.accumulate("unpark", event.currency, g);
@@ -1534,8 +1550,13 @@ export class FxFifoEngine {
     // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
     const profit = proc.minus(placed);
     if (profit.greaterThan(EPS)) {
-      this.pushPoolLot(event.currency, event.date, profit, saleRate, event.brokerSource);
-      this.record("profit", event, { quantityFcy: profit, rate: saleRate });
+      const profitLot = this.pushPoolLot(event.currency, event.date, profit, saleRate, event.brokerSource);
+      this.record("profit", event, {
+        quantityFcy: profit,
+        rate: saleRate,
+        lotId: profitLot?.id,
+        lotAcquireDate: profitLot?.acquireDate,
+      });
       this.accumulate("profit", event.currency, profit);
     }
   }

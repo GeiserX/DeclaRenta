@@ -524,16 +524,24 @@ export interface FxTraceEvent {
   parkedBalanceFcy: string;
   /** park/unpark/discard/profit only: the position (isin || symbol) whose principal moved. */
   positionKey?: string;
-  /** dispose only: the consumed lot id (or "UNKNOWN" for a missing-lots floor). */
+  /**
+   * The pool lot this row touches. On acquire/unpark/profit it is the lot CREATED
+   * (the id later park/dispose rows reference); on park/dispose it is the lot
+   * CONSUMED ("UNKNOWN" for a missing-lots floor). Absent on discard and on a park
+   * with no pool lot behind it (uncovered or covered manual opening lot).
+   */
   lotId?: string;
   /**
-   * dispose/park only: the ORIGINAL acquisition date (YYYY-MM-DD) of the consumed
-   * pool lot — the field that PROVES date-FIFO order. `lotId` is a creation-order
-   * counter shared across all currencies, so it is NOT a FIFO indicator (a re-added
-   * carried principal keeps its old acquisition date but gets a fresh re-stamped
-   * lotId). This date is the real FIFO key: across consecutive `dispose` rows of one
-   * currency it is non-decreasing, which is what oldest-first FIFO means. Absent for
-   * a missing-lots floor (no real lot) and for an uncovered park (no tracked origin).
+   * Acquisition date (YYYY-MM-DD) of the {@link lotId} lot. On unpark it is the
+   * carried original date (the sale date for an uncovered or untracked slice); on
+   * profit, the sale date; on a covered manual park, the manual lot's date (that row
+   * has no lotId). On dispose it is the field that PROVES date-FIFO order. `lotId`
+   * is a creation-order counter shared across all currencies, so it is NOT a FIFO
+   * indicator (a re-added carried principal keeps its old acquisition date but gets
+   * a fresh re-stamped lotId). This date is the real FIFO key: across consecutive
+   * `dispose` rows of one currency it is non-decreasing, which is what oldest-first
+   * FIFO means. Absent for a missing-lots floor (no real lot), on discard, and for
+   * an uncovered park (no tracked origin).
    * Same datum as {@link FxDisposal.acquireDate}; prefixed `lot` here to disambiguate
    * from this event's own `date` (the movement date).
    */
