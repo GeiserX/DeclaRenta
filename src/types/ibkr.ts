@@ -142,6 +142,8 @@ export interface CashTransaction {
   amount: string;
   fxRateToBase: string;
   type: CashTransactionType;
+  /** Optional: which broker produced this cash transaction (for cross-broker reports) */
+  brokerSource?: string;
   /**
    * Tax bucket for crypto reward income. Distinguishes a rendimiento del capital
    * mobiliario / interest (`"ahorro"` → savings base, e.g. staking, Simple Earn
@@ -196,6 +198,7 @@ export interface CorporateAction {
   amount: string;
   type: string;
   actionDescription: string;
+  brokerSource?: string;
 }
 
 export interface OpenPosition {
@@ -217,6 +220,7 @@ export interface OpenPosition {
    * Modelo 720 writes it in positions 129-130 of a clave V record.
    */
   custodianCountry?: string;
+  brokerSource?: string;
 }
 
 export interface SecurityInfo {
@@ -228,6 +232,7 @@ export interface SecurityInfo {
   assetCategory: AssetCategory;
   multiplier: string;
   subCategory: string;
+  brokerSource?: string;
 }
 
 /** Cash balance at a foreign broker (for Modelo 720, category C — Cuentas) */
@@ -244,6 +249,7 @@ export interface CashBalance {
   institutionName?: string;
   /** Country code of the foreign account/institution when known. */
   countryCode?: string;
+  brokerSource?: string;
 }
 
 export type AssetCategory = "STK" | "OPT" | "FUT" | "FOP" | "FSFOP" | "CASH" | "BOND" | "FUND" | "WAR" | "CRYPTO" | "CFD";
@@ -274,4 +280,5 @@ export interface OptionExercise {
   multiplier: string;
   /** Market price of underlying at exercise (from paired delivery row, DGT V0137-23) */
   marketPrice?: string;
+  brokerSource?: string;
 }

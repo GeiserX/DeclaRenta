@@ -14,7 +14,7 @@ import type { FxTraceEvent } from "../../src/types/tax.js";
 
 /** The exact CSV header the serializer emits (CSV_COLUMNS in fx-trace.ts). */
 const CSV_HEADER =
-  "seq,date,kind,currency,trigger,quantityFcy,rate,costBasisEur,proceedsEur,gainLossEur,poolBalanceFcy,parkedBalanceFcy,positionKey,lotId,lotAcquireDate,note";
+  "seq,date,kind,currency,trigger,quantityFcy,rate,costBasisEur,proceedsEur,gainLossEur,poolBalanceFcy,parkedBalanceFcy,positionKey,lotId,lotAcquireDate,note,brokerSource";
 
 /** A fully-populated dispose event (every optional field present). */
 function disposeEvent(): FxTraceEvent {
@@ -117,8 +117,13 @@ describe("serializeFxTrace — CSV format", () => {
   it("renders every column for a fully-populated event", () => {
     const row = serializeFxTrace([disposeEvent()], "csv").split("\n")[1];
     // seq,date,kind,currency,trigger,quantityFcy,rate,costBasisEur,proceedsEur,
-    // gainLossEur,poolBalanceFcy,parkedBalanceFcy,positionKey,lotId,lotAcquireDate,note
-    expect(row).toBe("2,2025-01-03,dispose,USD,conversion,1000,1.05,900,1050,150,0,0,,FX-1,2025-01-01,");
+    // gainLossEur,poolBalanceFcy,parkedBalanceFcy,positionKey,lotId,lotAcquireDate,note,brokerSource
+    expect(row).toBe("2,2025-01-03,dispose,USD,conversion,1000,1.05,900,1050,150,0,0,,FX-1,2025-01-01,,");
+  });
+
+  it("writes the event's broker in the last column", () => {
+    const row = serializeFxTrace([{ ...disposeEvent(), brokerSource: "Trading 212" }], "csv").split("\n")[1];
+    expect(row!.split(",").at(-1)).toBe("Trading 212");
   });
 
   it("renders null rate as an EMPTY cell (not \"null\")", () => {
@@ -143,8 +148,8 @@ describe("serializeFxTrace — CSV format", () => {
 
   it("renders absent optional fields as EMPTY cells (not \"undefined\")", () => {
     const row = serializeFxTrace([acquireEvent()], "csv").split("\n")[1]!;
-    // acquire has no costBasisEur/proceedsEur/gainLossEur/positionKey/lotId/lotAcquireDate/note.
-    expect(row).toBe("1,2025-01-01,acquire,USD,conversion,1000,0.9,,,,1000,0,,,,");
+    // acquire has no costBasisEur/proceedsEur/gainLossEur/positionKey/lotId/lotAcquireDate/note/brokerSource.
+    expect(row).toBe("1,2025-01-01,acquire,USD,conversion,1000,0.9,,,,1000,0,,,,,");
     expect(row).not.toContain("undefined");
   });
 
@@ -165,10 +170,9 @@ describe("serializeFxTrace — CSV format", () => {
     const row = serializeFxTrace([ev], "csv").split("\n")[1]!;
     // The comma-bearing note must be wrapped in double quotes by escapeCsv.
     expect(row).toContain('"principal perdido, sin efecto de divisa"');
-    // Header columns = 15; a correctly-escaped note leaves the quoted comma
-    // inside one field, so a naive split on the FIRST 14 commas still works:
-    // the quoted field is the trailing one here.
-    expect(row.endsWith('"principal perdido, sin efecto de divisa"')).toBe(true);
+    // A correctly-escaped note leaves the quoted comma inside one field: the
+    // quoted note is followed only by the empty brokerSource cell.
+    expect(row.endsWith('"principal perdido, sin efecto de divisa",')).toBe(true);
   });
 
   it("escapes a positionKey containing a double quote by doubling it", () => {

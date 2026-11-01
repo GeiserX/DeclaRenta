@@ -279,7 +279,7 @@ function synthesizeRewardLots(
       commission: "0",
       taxes: "0",
       multiplier: "1",
-      brokerSource: "Binance",
+      brokerSource: t.brokerSource,
     });
   }
   return lots;

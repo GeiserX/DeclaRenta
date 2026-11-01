@@ -320,19 +320,42 @@ describe("formatCsv", () => {
 
     const header = lines.find((l) => l.startsWith("ISIN,Simbolo,Descripcion"))!.split(",");
     const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
-    expect(header[header.length - 1]).toBe("Perdida_Bloqueada_EUR");
+    const blockedCol = header.indexOf("Perdida_Bloqueada_EUR");
+    expect(blockedCol).toBe(20);
     expect(row).toHaveLength(header.length);
     expect(row[14]).toBe("SI");
-    expect(row[row.length - 1]).toBe("400.00");
+    expect(row[blockedCol]).toBe("400.00");
 
     expect(lines).toContain("—,Perdidas bloqueadas antichurning (Art. 33.5.f — informativo),400.00");
     expect(lines).toContain("—,Perdidas reintegradas antichurning (Art. 33.5.f — informativo),250.00");
   });
 
+  it("appends the sale and acquisition broker as the last two columns", () => {
+    // Bought at one broker, sold at another: FIFO pools lots per ISIN across
+    // brokers, so the row names both. Earlier columns keep their positions.
+    const report = makeReport();
+    const d = report.capitalGains.disposals[0]!;
+    d.brokerSource = "Degiro";
+    d.acquireBrokerSource = "Interactive Brokers";
+    const lines = formatCsv(report).split("\n");
+
+    const header = lines.find((l) => l.startsWith("ISIN,Simbolo,Descripcion"))!.split(",");
+    const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
+    expect(header.slice(-3)).toEqual(["Perdida_Bloqueada_EUR", "Broker_Venta", "Broker_Compra"]);
+    expect(row).toHaveLength(header.length);
+    expect(row.slice(-2)).toEqual(["Degiro", "Interactive Brokers"]);
+  });
+
+  it("leaves the broker columns empty when the disposal names no broker", () => {
+    const lines = formatCsv(makeReport()).split("\n");
+    const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
+    expect(row.slice(-2)).toEqual(["", ""]);
+  });
+
   it("writes 0.00 in the blocked column and no anti-churning summary rows when nothing is blocked", () => {
     const lines = formatCsv(makeReport()).split("\n");
     const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
-    expect(row[row.length - 1]).toBe("0.00");
+    expect(row[20]).toBe("0.00");
     expect(lines.some((l) => /antichurning/i.test(l) && l.startsWith("—,"))).toBe(false);
   });
 });
@@ -389,7 +412,7 @@ describe("formatCsv — excel-es dialect", () => {
     expect(header).not.toContain(",");
 
     const cols = lines.find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
-    expect(cols).toHaveLength(21);
+    expect(cols).toHaveLength(23);
     expect(cols[6]).toBe("10");
     expect(cols[7]).toBe("800,00");
     expect(cols[8]).toBe("1000,00");

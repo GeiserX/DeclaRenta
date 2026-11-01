@@ -154,7 +154,7 @@ async function parseAndMerge(
     const buf = readFileSync(file);
     if (await detectRevolutXlsx(buf)) {
       const statement = await parseRevolutXlsx(buf);
-      mergeStatement(merged, statement);
+      mergeStatement(merged, statement, "Revolut");
       brokerNames.push("Revolut");
       console.error(
         `  [Revolut XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
@@ -163,7 +163,7 @@ async function parseAndMerge(
     }
     if (await detectEtoroXlsx(buf)) {
       const statement = await parseEtoroXlsx(buf);
-      mergeStatement(merged, statement);
+      mergeStatement(merged, statement, "eToro");
       brokerNames.push("eToro");
       console.error(
         `  [eToro XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
@@ -183,7 +183,7 @@ async function parseAndMerge(
     }
 
     const statement = parser.parse(content);
-    mergeStatement(merged, statement);
+    mergeStatement(merged, statement, parser.name);
     brokerNames.push(parser.name);
 
     console.error(
@@ -813,6 +813,8 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       tipo_ecb_compra: d.acquireEcbRate.toFixed(6),
       tipo_ecb_venta: d.sellEcbRate.toFixed(6),
       bloqueada_antichurning: d.washSaleBlocked,
+      broker_venta: d.brokerSource,
+      broker_compra: d.acquireBrokerSource,
     })),
     operaciones_fx: report.fxGains.disposals.map((d) => ({
       divisa: d.currency,
@@ -825,6 +827,8 @@ function formatReport(report: ReturnType<typeof generateTaxReport>) {
       dias_tenencia: d.holdingPeriodDays,
       origen: d.trigger,
       lote_fifo: d.lotId,
+      broker_venta: d.brokerSource,
+      broker_compra: d.acquireBrokerSource,
     })),
     dividendos: report.dividends.entries.map((d) => ({
       isin: d.isin,
