@@ -84,7 +84,7 @@
     "@types/node": "^22.20.5",
     "@types/pdfkit": "^0.17.7",
     "@vitest/coverage-v8": "^4.1.12",
-    "eslint": "^9.39.5",
+    "eslint": "^10.14.0",
     "jsdom": "^29.1.1",
     "tsup": "^8.4.0",
     "tsx": "^4.23.15",
@@ -93,8 +93,9 @@
     "vite": "^8.3.5",
     "vitest": "^4.1.8"
   },
-  "overrides__comment": "esbuild pinned to clear GHSA-gv7w-rqvm-qjhr (High) + GHSA-g7r4-m6w7-qqqr (Low), both <0.28.1. tsup/tsx pull esbuild transitively below the fix; this dedupes all copies to 0.28.1. Vite 8 uses Rolldown/Oxc (not esbuild) for the web build, so this can't re-trigger the v6 destructuring-target failure. Drop this override once tsup/tsx/vite raise their own esbuild floor to >=0.28.1.",
+  "overrides__comment": "esbuild pinned to clear GHSA-gv7w-rqvm-qjhr (High) + GHSA-g7r4-m6w7-qqqr (Low), both <0.28.1. tsup/tsx pull esbuild transitively below the fix; this dedupes all copies to 0.28.1. Vite 8 uses Rolldown/Oxc (not esbuild) for the web build, so this can't re-trigger the v6 destructuring-target failure. Drop this override once tsup/tsx/vite raise their own esbuild floor to >=0.28.1. minimatch pinned to ^11.0.1 to clear GHSA-g3hv-75wg-m249 (all <11.0.1): eslint and typescript-estree still ask for ^10; drop it once both allow >=11.0.1.",
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "minimatch": "^11.0.1"
   }
 }
