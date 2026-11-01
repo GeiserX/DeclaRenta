@@ -165,20 +165,37 @@ describe("results operations table — purchase and sale broker", () => {
     expect(ops().querySelectorAll("tbody tr")).toHaveLength(0);
   });
 
-  it("spans the wash-sale line over all eleven columns", async () => {
-    // A Degiro loss bought back within two months (Art. 33.5.f LIRPF), next to
-    // the IBKR file, so the table has the broker columns and a blocked row.
-    const washDegiro = [
+  /**
+   * A Degiro loss bought back within two months (Art. 33.5.f LIRPF), so the
+   * table has a blocked row.
+   */
+  const WASH_DEGIRO = {
+    name: "wash-degiro.csv",
+    type: "text/csv",
+    content: [
       fixture(DEGIRO.name).split("\n")[0],
       "15-04-2025,15:30,CUARTA SA,XX0000000104,MAD,MESI,10,41.0000,EUR,-410.00,EUR,-410.00,EUR,,0.00,EUR,-410.00,EUR,3333dddd-4444-eeee-5555-ffff6666aaaa",
       "01-04-2025,15:30,CUARTA SA,XX0000000104,MAD,MESI,-10,40.0000,EUR,400.00,EUR,400.00,EUR,,0.00,EUR,400.00,EUR,4444eeee-5555-ffff-6666-aaaa7777bbbb",
       "03-03-2025,10:15,CUARTA SA,XX0000000104,MAD,MESI,10,50.0000,EUR,-500.00,EUR,-500.00,EUR,,0.00,EUR,-500.00,EUR,5555ffff-6666-aaaa-7777-bbbb8888cccc",
-    ].join("\n");
+    ].join("\n"),
+  };
+
+  it("spans the wash-sale line over all eleven columns", async () => {
+    // Next to the IBKR file, so the table has the broker columns.
     await loadApp();
-    await toResults([IBKR, { name: "wash-degiro.csv", type: "text/csv", content: washDegiro }]);
+    await toResults([IBKR, WASH_DEGIRO]);
     expect(headers()).toHaveLength(11);
     const detail = ops().querySelectorAll(".wash-sale-detail td");
     expect(detail).toHaveLength(1);
     expect(detail[0]!.getAttribute("colspan")).toBe("11");
+  });
+
+  it("keeps the wash-sale line at nine columns for a one-broker report", async () => {
+    await loadApp();
+    await toResults([WASH_DEGIRO]);
+    expect(headers()).toHaveLength(9);
+    const detail = ops().querySelectorAll(".wash-sale-detail td");
+    expect(detail).toHaveLength(1);
+    expect(detail[0]!.getAttribute("colspan")).toBe("9");
   });
 });

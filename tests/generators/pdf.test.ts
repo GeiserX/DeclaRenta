@@ -753,8 +753,11 @@ describe("PDF Report Generator wrapped table cells", () => {
     const rowTop = boxes.find((x) => x.text === "XX0000000101")!.top - 2;
     const nextTop = boxes.find((x) => x.text === "XX0000000103")!.top - 2;
     expect(nextTop - rowTop).toBeGreaterThan(14);
-    // The first (even) row's background reaches the next row.
+    // The first (even) row's background reaches the next row...
     expect(rects).toContainEqual({ y: rowTop, h: nextTop - rowTop });
+    // ...and the wrapped symbol's last line stays inside it.
+    const symbol = boxes.find((x) => x.text === "ACME WORLD")!;
+    expect(nextTop).toBeGreaterThanOrEqual(symbol.bottom);
   });
 
   it("draws G/P in its gain or loss colour and the brokers in the text colour", async () => {
@@ -782,6 +785,8 @@ describe("PDF Report Generator wrapped table cells", () => {
     expect(colours.get("-250.00")).toBe("#e53e3e");
     expect(colours.get("Interactive Brokers")).toBe("#1a202c");
     expect(colours.get("Degiro")).toBe("#1a202c");
+    // The ECB rate stays muted.
+    expect(colours.get("0.9200")).toBe("#718096");
   });
 
   it("keeps the 14 pt row when nothing wraps", async () => {

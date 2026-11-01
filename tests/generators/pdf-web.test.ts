@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import { jsPDF } from "jspdf";
 import Decimal from "decimal.js";
 import { generatePdfWebReport } from "../../src/generators/pdf-web.js";
 import type { TaxSummary } from "../../src/types/tax.js";
@@ -524,10 +525,17 @@ describe("generatePdfWebReport footer", () => {
       .filter((m) => m[2]!.includes("orientativo"));
     expect(lines.length).toBeGreaterThan(0);
     const marginPt = (14 * 72) / 25.4;
+    const pageW = 595.28;
+    const measure = new jsPDF({ unit: "pt", format: "a4" });
+    measure.setFont("helvetica", "normal");
+    measure.setFontSize(6.5);
     for (const m of lines) {
       const x = Number(m[1]);
+      const right = x + measure.getTextWidth(m[2]!);
       expect(x).toBeGreaterThanOrEqual(marginPt);
-      expect(x).toBeLessThan(595.28 / 2); // centred: it starts left of the middle
+      expect(right).toBeLessThanOrEqual(pageW - marginPt);
+      // Centred: as much room on the left as on the right.
+      expect(Math.abs(x - (pageW - right))).toBeLessThan(1);
     }
   });
 });

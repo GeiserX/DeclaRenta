@@ -453,6 +453,8 @@ describe.skipIf(!CHROME)("results step layout", () => {
     symbols: { text: string; title: string }[];
     truncated: string[];
     fontSizes: string[];
+    /** Per broker table: font size, cell padding, header wrap, symbol cap and sort-arrow room. */
+    tuning: string[];
   }
 
   for (const width of [1280, 390]) {
@@ -490,6 +492,17 @@ describe.skipIf(!CHROME)("results step layout", () => {
               .map((el) => el.textContent),
             fontSizes: [...document.querySelectorAll(".ops-table--brokers, .annex-table--brokers")]
               .map((el) => getComputedStyle(el).fontSize),
+            tuning: [...document.querySelectorAll(".ops-table--brokers, .annex-table--brokers")].map((table) => {
+              const td = getComputedStyle(table.querySelector("tbody td"));
+              const th = getComputedStyle(table.querySelector("thead th"));
+              const symbol = getComputedStyle(table.querySelector(".cell-symbol"));
+              const sortable = table.querySelector("th.sortable");
+              return [
+                getComputedStyle(table).fontSize, td.paddingLeft, td.paddingRight, th.whiteSpace,
+                symbol.maxWidth, symbol.overflowX, symbol.textOverflow,
+                sortable ? getComputedStyle(sortable).paddingRight : "-",
+              ].join(" ");
+            }),
           };
         })()`);
       }
@@ -514,6 +527,16 @@ describe.skipIf(!CHROME)("results step layout", () => {
         expect(layout.boxes.length, locale).toBeGreaterThan(1);
         for (const box of layout.boxes) {
           expect(box.endsWith(" auto"), `${locale}: ${layout.boxes.join(", ")}`).toBe(true);
+        }
+        if (width === 1280) {
+          // What keeps the eleven columns narrow on a desktop: a smaller font,
+          // tighter padding, headers that may wrap, a symbol cut at 5rem and just
+          // the room the sort arrow needs. Read as computed styles, since whether
+          // the table then fits 1280 px depends on the system font.
+          expect(new Set(layout.tuning), locale).toEqual(new Set([
+            "12.8px 4px 4px normal 80px hidden ellipsis 13.6px",
+            "12.8px 4px 4px normal 80px hidden ellipsis -",
+          ]));
         }
         if (width === 390) {
           // A phone has no tooltip; the table scrolls inside its box, so the
