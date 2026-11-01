@@ -92,6 +92,8 @@ describe("FxFifoEngine.getTrace — acquire", () => {
     expect(ev.rate).toBe("0.9"); // costPerUnit = (1000 × 0.9) / 1000
     expect(ev.poolBalanceFcy).toBe("1000");
     expect(ev.parkedBalanceFcy).toBe("0");
+    expect(ev.lotId).toBe("FX-1");
+    expect(ev.lotAcquireDate).toBe("2025-01-01");
   });
 });
 
@@ -141,7 +143,9 @@ describe("FxFifoEngine.getTrace — park + unpark + profit (full round-trip)", (
     expect(unpark.rate).toBe("0.9"); // re-added at the CARRIED basis, not the sale rate
     const profit = byKind(trace, "profit")[0]!;
     expect(profit.quantityFcy).toBe("200"); // proceeds 1200 − principal 1000
+    expect(unpark.lotId).toBeDefined();
     expect(profit.rate).toBe("1.05"); // profit valued at the sale rate
+    expect(profit.lotId).toBeDefined();
   });
 
   it("keeps seq monotonic increasing with no gaps", () => {
