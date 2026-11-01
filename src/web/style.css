@@ -912,8 +912,9 @@ button[disabled] {
 
 /* With the purchase and sale broker columns (the annex and the results
    operations table): eleven columns, so a smaller font, tighter cell padding,
-   headers that may wrap and a shorter symbol keep the table inside a 1280 px
-   screen, while every cell stays on one line. */
+   headers that may wrap and a shorter symbol keep every cell on one line. With
+   most system fonts the table then fits a 1280 px screen; where it does not
+   (a wider font, seven-digit amounts) it scrolls inside its box. */
 .annex-table--brokers,
 .ops-table--brokers {
   font-size: 0.8rem;

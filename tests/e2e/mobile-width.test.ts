@@ -447,8 +447,8 @@ describe.skipIf(!CHROME)("results step layout", () => {
     lang: string;
     scrollWidth: number;
     opsCols: string[];
-    opsScrolls: boolean;
-    annexScrolls: boolean[];
+    /** Each table box as "scrollWidth/clientWidth overflow-x", the results table first. */
+    boxes: string[];
     wrapped: string[];
     symbols: { text: string; title: string }[];
     truncated: string[];
@@ -481,8 +481,8 @@ describe.skipIf(!CHROME)("results step layout", () => {
             lang: document.documentElement.lang,
             scrollWidth: document.documentElement.scrollWidth,
             opsCols: [...ops.querySelectorAll("thead th")].map((th) => th.dataset.col),
-            opsScrolls: ops.scrollWidth > ops.clientWidth,
-            annexScrolls: [...document.querySelectorAll(".annex-table-wrap")].map((el) => el.scrollWidth > el.clientWidth),
+            boxes: [ops, ...document.querySelectorAll(".annex-table-wrap")]
+              .map((el) => el.scrollWidth + "/" + el.clientWidth + " " + getComputedStyle(el).overflowX),
             wrapped: cells.filter((td) => linesOf(td) > 1).map((td) => td.textContent.trim()),
             symbols: [...document.querySelectorAll(".cell-symbol")].map((el) => ({ text: el.textContent, title: el.title })),
             truncated: [...document.querySelectorAll(".cell-symbol")]
@@ -507,12 +507,15 @@ describe.skipIf(!CHROME)("results step layout", () => {
         expect(layout.wrapped, locale).toEqual([]);
         // A symbol cut short keeps its full name in the tooltip.
         expect(layout.symbols, locale).toContainEqual({ text: "ACME WORLD ETF", title: "ACME WORLD ETF" });
-        if (width === 1280) {
-          // A desktop screen shows both eleven-column tables without scrolling sideways.
-          expect(layout.opsScrolls, locale).toBe(false);
-          expect(layout.annexScrolls.length, locale).toBeGreaterThan(0);
-          expect(layout.annexScrolls, locale).not.toContain(true);
-        } else {
+        // Whether an eleven-column table fits its box depends on the visitor's
+        // system font (Linux falls back to a wider one than macOS), so a table
+        // wider than its box must scroll inside it, never be cut off. The
+        // numbers are in the message so a regression shows its size.
+        expect(layout.boxes.length, locale).toBeGreaterThan(1);
+        for (const box of layout.boxes) {
+          expect(box.endsWith(" auto"), `${locale}: ${layout.boxes.join(", ")}`).toBe(true);
+        }
+        if (width === 390) {
           // A phone has no tooltip; the table scrolls inside its box, so the
           // whole symbol shows.
           expect(layout.truncated, locale).toEqual([]);
