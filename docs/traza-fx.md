@@ -54,6 +54,7 @@ Cada fila es un movimiento del motor, con estas columnas:
 | `lotId` | Identificador del lote consumido (`UNKNOWN` = sin lote previo suficiente → ganancia FX forzada a 0). **Es un contador de orden de creación, compartido entre divisas — NO indica el orden FIFO.** |
 | `lotAcquireDate` | Fecha de adquisición original del lote consumido. **Esta es la prueba del FIFO:** en `dispose` consecutivos de una misma divisa es no decreciente (se consume siempre el dólar más antiguo primero). |
 | `note` | Aclaración del movimiento |
+| `brokerSource` | Broker del fichero del que sale el movimiento (vacío si no consta) |
 
 > **Por qué `lotId` (FX-N) no va en orden ascendente:** el número de lote se asigna al **crearse** el lote y es único para todas las divisas. Cuando vendes un valor en divisa, su principal vuelve a la *pool* conservando su **fecha de adquisición original** (antigua) pero con un número de lote **nuevo** (distinto, no necesariamente mayor), e insertado en su posición por fecha — así que una conversión puede consumir `FX-5` antes que `FX-2` si `FX-5` es más antiguo por fecha. Eso es FIFO correcto. La columna que hay que mirar para verificarlo es **`lotAcquireDate`**, no `lotId`.
 
