@@ -39,6 +39,8 @@ const CSV_COLUMNS: readonly (keyof FxTraceEvent)[] = [
   "lotId",
   "lotAcquireDate",
   "note",
+  // Appended last so existing column positions stay put.
+  "brokerSource",
 ];
 
 /**

@@ -54,7 +54,7 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
 
   // Capital gains section
   lines.push("# GANANCIAS PATRIMONIALES");
-  lines.push(header("ISIN,Simbolo,Descripcion,Categoria,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning,Opcion_Escenario,Put_Call,Strike,Vencimiento,Subyacente,Perdida_Bloqueada_EUR"));
+  lines.push(header("ISIN,Simbolo,Descripcion,Categoria,Fecha_Compra,Fecha_Venta,Cantidad,Coste_EUR,Venta_EUR,Ganancia_EUR,Dias,Divisa,Tipo_ECB_Compra,Tipo_ECB_Venta,Bloqueada_Antichurning,Opcion_Escenario,Put_Call,Strike,Vencimiento,Subyacente,Perdida_Bloqueada_EUR,Broker_Venta,Broker_Compra"));
   for (const d of report.capitalGains.disposals) {
     lines.push(row([
       tx(d.isin), tx(d.symbol), tx(d.description),
@@ -70,6 +70,8 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
       tx(d.underlyingSymbol ?? ""),
       // Appended last so existing column positions stay put.
       num(d.blockedLossEur.toFixed(2)),
+      tx(d.brokerSource ?? ""),
+      tx(d.acquireBrokerSource ?? ""),
     ]));
   }
 
