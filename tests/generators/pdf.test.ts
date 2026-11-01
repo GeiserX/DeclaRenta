@@ -728,6 +728,62 @@ describe("PDF Report Generator wrapped table cells", () => {
     expect(nextRow.top).toBeGreaterThanOrEqual(symbol.bottom);
   });
 
+  it("stripes the whole height of a grown row", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, isin: "XX0000000101", symbol: "ACME WORLD ETF" },
+          { ...b!, isin: "XX0000000103" },
+        ],
+      },
+    });
+    type Doc = InstanceType<typeof PDFDocument>;
+    const rects: { y: number; h: number }[] = [];
+    const proto = PDFDocument.prototype as unknown as { rect: (this: Doc, ...args: number[]) => Doc };
+    const originalRect = proto.rect;
+    vi.spyOn(proto, "rect").mockImplementation(function (this: Doc, ...args: number[]) {
+      rects.push({ y: args[1]!, h: args[3]! });
+      return originalRect.apply(this, args);
+    });
+    const boxes = recordBoxes();
+    await generatePdfReport(report);
+    const rowTop = boxes.find((x) => x.text === "XX0000000101")!.top - 2;
+    const nextTop = boxes.find((x) => x.text === "XX0000000103")!.top - 2;
+    expect(nextTop - rowTop).toBeGreaterThan(14);
+    // The first (even) row's background reaches the next row.
+    expect(rects).toContainEqual({ y: rowTop, h: nextTop - rowTop });
+  });
+
+  it("draws G/P in its gain or loss colour and the brokers in the text colour", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, gainLossEur: new Decimal("-250"), brokerSource: "Degiro", acquireBrokerSource: "Degiro" },
+        ],
+      },
+    });
+    type Doc = InstanceType<typeof PDFDocument> & { _fillColor?: [unknown, unknown] };
+    const colours = new Map<string, unknown>();
+    const proto = PDFDocument.prototype as unknown as { text: (this: Doc, ...args: unknown[]) => Doc };
+    const original = proto.text;
+    vi.spyOn(proto, "text").mockImplementation(function (this: Doc, ...args: unknown[]) {
+      colours.set(String(args[0]), this._fillColor?.[0]);
+      return original.apply(this, args);
+    });
+    await generatePdfReport(report);
+    expect(colours.get("1000.00")).toBe("#38a169");
+    expect(colours.get("-250.00")).toBe("#e53e3e");
+    expect(colours.get("Interactive Brokers")).toBe("#1a202c");
+    expect(colours.get("Degiro")).toBe("#1a202c");
+  });
+
   it("keeps the 14 pt row when nothing wraps", async () => {
     const boxes = recordBoxes();
     await generatePdfReport(makeReport());

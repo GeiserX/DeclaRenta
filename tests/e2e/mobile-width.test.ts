@@ -452,6 +452,7 @@ describe.skipIf(!CHROME)("results step layout", () => {
     wrapped: string[];
     symbols: { text: string; title: string }[];
     truncated: string[];
+    fontSizes: string[];
   }
 
   for (const width of [1280, 390]) {
@@ -487,6 +488,8 @@ describe.skipIf(!CHROME)("results step layout", () => {
             truncated: [...document.querySelectorAll(".cell-symbol")]
               .filter((el) => el.scrollWidth > el.clientWidth)
               .map((el) => el.textContent),
+            fontSizes: [...document.querySelectorAll(".ops-table--brokers, .annex-table--brokers")]
+              .map((el) => getComputedStyle(el).fontSize),
           };
         })()`);
       }
@@ -513,6 +516,9 @@ describe.skipIf(!CHROME)("results step layout", () => {
           // A phone has no tooltip; the table scrolls inside its box, so the
           // whole symbol shows.
           expect(layout.truncated, locale).toEqual([]);
+          // Same 0.75rem as every other table on a phone.
+          expect(layout.fontSizes.length, locale).toBeGreaterThan(1);
+          expect(new Set(layout.fontSizes), locale).toEqual(new Set(["12px"]));
         }
       }
     }, 120_000);
