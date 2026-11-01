@@ -1196,6 +1196,14 @@ function renderOperationsTable() {
   // ones the search and filter leave), so the columns do not come and go while
   // typing. With them the search also matches broker names.
   const brokers = showBrokerColumns(currentReport.capitalGains.disposals);
+  // The search box says what it matches; the data-i18n keys keep it right on a
+  // language switch.
+  const placeholderKey = brokers ? "results.search_placeholder_brokers" : "results.search_placeholder";
+  const ariaKey = brokers ? "a11y.ops_search_brokers" : "a11y.ops_search";
+  opsSearch.dataset.i18nPlaceholder = placeholderKey;
+  opsSearch.dataset.i18nAria = ariaKey;
+  opsSearch.placeholder = t(placeholderKey);
+  opsSearch.setAttribute("aria-label", t(ariaKey));
   let disposals = [...currentReport.capitalGains.disposals];
 
   if (search) {

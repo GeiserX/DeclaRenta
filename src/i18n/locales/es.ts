@@ -36,6 +36,7 @@ const es = {
   "results.dividends": "Dividendos",
   "results.no_dividends": "Sin dividendos",
   "results.search_placeholder": "Buscar por ISIN o símbolo...",
+  "results.search_placeholder_brokers": "Buscar por ISIN, símbolo o broker...",
   "results.filter_all": "Todas",
   "results.filter_gains": "Ganancias",
   "results.filter_losses": "Pérdidas",
@@ -166,6 +167,7 @@ const es = {
   "a11y.drop_zone": "Zona de carga de ficheros",
   "a11y.file_input": "Seleccionar ficheros",
   "a11y.ops_search": "Buscar operaciones por ISIN o símbolo",
+  "a11y.ops_search_brokers": "Buscar operaciones por ISIN, símbolo o broker",
   "a11y.ops_filter": "Filtrar operaciones por resultado",
   "a11y.remove_file": "Quitar {{name}}",
 

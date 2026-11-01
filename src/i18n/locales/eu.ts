@@ -35,6 +35,7 @@ const eu: TranslationKeys = {
   "results.dividends": "Dibidenduak",
   "results.no_dividends": "Dibidendurik ez",
   "results.search_placeholder": "Bilatu ISIN edo sinboloz...",
+  "results.search_placeholder_brokers": "Bilatu ISIN, sinbolo edo brokerrez...",
   "results.filter_all": "Denak",
   "results.filter_gains": "Irabaziak",
   "results.filter_losses": "Galerak",
@@ -160,6 +161,7 @@ const eu: TranslationKeys = {
   "a11y.drop_zone": "Fitxategiak igotzeko eremua",
   "a11y.file_input": "Fitxategiak hautatu",
   "a11y.ops_search": "Bilatu eragiketak ISIN edo sinboloz",
+  "a11y.ops_search_brokers": "Bilatu eragiketak ISIN, sinbolo edo brokerrez",
   "a11y.ops_filter": "Iragazi eragiketak emaitzaren arabera",
   "a11y.remove_file": "Kendu {{name}}",
 

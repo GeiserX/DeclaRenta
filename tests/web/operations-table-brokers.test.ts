@@ -139,9 +139,23 @@ describe("results operations table — purchase and sale broker", () => {
     expect(rows().map((r) => r[0])).toEqual(["BETA"]);
   });
 
+  it("says in the search box that it also finds the broker", async () => {
+    await loadApp();
+    await toResults([IBKR, DEGIRO]);
+    const input = document.getElementById("ops-search") as HTMLInputElement;
+    expect(input.placeholder).toBe("Buscar por ISIN, símbolo o broker...");
+    expect(input.getAttribute("aria-label")).toBe("Buscar operaciones por ISIN, símbolo o broker");
+    // A language switch re-reads the same keys.
+    expect(input.dataset.i18nPlaceholder).toBe("results.search_placeholder_brokers");
+    expect(input.dataset.i18nAria).toBe("a11y.ops_search_brokers");
+  });
+
   it("keeps nine columns for a one-broker report, and the search does not match the hidden broker", async () => {
     await loadApp();
     const table = await toResults([IBKR]);
+    const input = document.getElementById("ops-search") as HTMLInputElement;
+    expect(input.placeholder).toBe("Buscar por ISIN o símbolo...");
+    expect(input.dataset.i18nPlaceholder).toBe("results.search_placeholder");
     expect(headers()).toHaveLength(9);
     expect(headers()).not.toContain("Broker compra");
     expect(table.classList.contains("ops-table--brokers")).toBe(false);

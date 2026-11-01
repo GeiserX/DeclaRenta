@@ -35,6 +35,7 @@ const gl: TranslationKeys = {
   "results.dividends": "Dividendos",
   "results.no_dividends": "Sen dividendos",
   "results.search_placeholder": "Buscar por ISIN ou símbolo...",
+  "results.search_placeholder_brokers": "Buscar por ISIN, símbolo ou broker...",
   "results.filter_all": "Todas",
   "results.filter_gains": "Ganancias",
   "results.filter_losses": "Perdas",
@@ -159,6 +160,7 @@ const gl: TranslationKeys = {
   "a11y.drop_zone": "Zona de carga de ficheiros",
   "a11y.file_input": "Seleccionar ficheiros",
   "a11y.ops_search": "Buscar operacións por ISIN ou símbolo",
+  "a11y.ops_search_brokers": "Buscar operacións por ISIN, símbolo ou broker",
   "a11y.ops_filter": "Filtrar operacións por resultado",
   "a11y.remove_file": "Quitar {{name}}",
 
