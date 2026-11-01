@@ -155,7 +155,7 @@ La legislación fiscal española exige usar tipos de cambio oficiales, no los de
 
 Si tienes el mismo ISIN en varios brokers (por ejemplo, acciones de Apple compradas en IBKR y en Degiro), DeclaRenta unifica las colas FIFO por ISIN. Al subir ficheros de múltiples brokers, todas las operaciones se ordenan cronológicamente y los lotes se consumen en orden global, independientemente del broker de origen.
 
-Por eso una venta en un broker puede consumir acciones compradas en otro. El anexo de operaciones y los PDF muestran el broker de compra y el de venta de cada línea cuando hay más de un broker; con uno solo, esas columnas no aparecen. El CSV (`Broker_Venta`, `Broker_Compra`) y el JSON de la CLI (`broker_venta`, `broker_compra`) los incluyen también cuando hay un solo broker.
+Por eso una venta en un broker puede consumir acciones compradas en otro. La tabla de operaciones de los resultados, el anexo de operaciones y los PDF muestran el broker de compra y el de venta de cada línea cuando hay más de un broker; con uno solo, esas columnas no aparecen. En la tabla de resultados se puede ordenar por cada broker y el buscador encuentra también el nombre del broker. El CSV (`Broker_Venta`, `Broker_Compra`) y el JSON de la CLI (`broker_venta`, `broker_compra`) los incluyen también cuando hay un solo broker.
 
 ### Precisión decimal
 

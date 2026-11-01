@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="TestQuery" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U0000002" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades>
+        <Trade tradeID="300000001" accountId="U0000002" symbol="ACMEW" description="ACME WORLD ETF"
+               isin="XX0000000101" assetCategory="STK" currency="EUR"
+               tradeDate="20250110" settlementDate="20250114"
+               quantity="20" tradePrice="50.00" tradeMoney="1000.00"
+               proceeds="-1000.00" cost="1000.00" fifoPnlRealized="0"
+               fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="IBIS" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="300000002" accountId="U0000002" symbol="BETA" description="BETA CHIPS INC"
+               isin="XX0000000102" assetCategory="STK" currency="EUR"
+               tradeDate="20250203" settlementDate="20250205"
+               quantity="10" tradePrice="100.00" tradeMoney="1000.00"
+               proceeds="-1000.00" cost="1000.00" fifoPnlRealized="0"
+               fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="IBIS" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="300000003" accountId="U0000002" symbol="BETA" description="BETA CHIPS INC"
+               isin="XX0000000102" assetCategory="STK" currency="EUR"
+               tradeDate="20250602" settlementDate="20250604"
+               quantity="-10" tradePrice="152.735" tradeMoney="-1527.35"
+               proceeds="1527.35" cost="-1000.00" fifoPnlRealized="527.35"
+               fxRateToBase="1" buySell="SELL" openCloseIndicator="C"
+               exchange="IBIS" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+      </Trades>
+      <CashTransactions />
+      <CorporateActions />
+      <OpenPositions />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

@@ -35,6 +35,7 @@ const ca: TranslationKeys = {
   "results.dividends": "Dividends",
   "results.no_dividends": "Sense dividends",
   "results.search_placeholder": "Cercar per ISIN o símbol...",
+  "results.search_placeholder_brokers": "Cercar per ISIN, símbol o broker...",
   "results.filter_all": "Totes",
   "results.filter_gains": "Guanys",
   "results.filter_losses": "Pèrdues",
@@ -159,6 +160,7 @@ const ca: TranslationKeys = {
   "a11y.drop_zone": "Zona de càrrega de fitxers",
   "a11y.file_input": "Seleccionar fitxers",
   "a11y.ops_search": "Cercar operacions per ISIN o símbol",
+  "a11y.ops_search_brokers": "Cercar operacions per ISIN, símbol o broker",
   "a11y.ops_filter": "Filtrar operacions per resultat",
   "a11y.remove_file": "Treure {{name}}",
 

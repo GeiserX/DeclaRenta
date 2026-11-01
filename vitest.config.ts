@@ -48,6 +48,7 @@ export default defineConfig({
         "src/web/format.ts", // Spanish number formatting (fmtEur) — tests/web/format.test.ts
         "src/web/charts.ts", // pure SVG/data extraction (extractChartData) — tests/web/charts.test.ts
         "src/web/operations-annex.ts", // operations annex data builder (pure)
+        "src/web/symbol-cell.ts", // symbol cell markup (pure) — tests/web/operations-annex.test.ts
         "src/web/detection-cache.ts", // broker-detection cache resolution (pure) — tests/web/detection-cache.test.ts
         "src/web/year-default.ts", // default tax year + newer-years notice (pure) — tests/web/year-default.test.ts
       ],

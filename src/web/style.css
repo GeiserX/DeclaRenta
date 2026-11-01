@@ -910,20 +910,61 @@ button[disabled] {
   overflow-x: auto;
 }
 
-/* With the purchase and sale broker columns: eleven columns, so tighter cell
-   padding and headers that may wrap keep the table inside a desktop screen,
-   while a broker name stays on one line. */
-.annex-table--brokers th,
-.annex-table--brokers td {
-  padding-left: 0.375rem;
-  padding-right: 0.375rem;
+/* With the purchase and sale broker columns (the annex and the results
+   operations table): eleven columns, so a smaller font, tighter cell padding,
+   headers that may wrap and a shorter symbol keep every cell on one line. With
+   most system fonts the table then fits a 1280 px screen; where it does not
+   (a wider font, seven-digit amounts) it scrolls inside its box. */
+.annex-table--brokers,
+.ops-table--brokers {
+  font-size: 0.8rem;
 }
 
-.annex-table--brokers th {
+.annex-table--brokers th,
+.annex-table--brokers td,
+.ops-table--brokers th,
+.ops-table--brokers td {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.annex-table--brokers th,
+.ops-table--brokers th {
   white-space: normal;
 }
 
-.annex-table--brokers .annex-broker {
+/* Just the room the sort arrow takes (8px wide, 0.3rem from the edge). */
+.ops-table--brokers th.sortable {
+  padding-right: 0.85rem;
+}
+
+.annex-table--brokers .annex-broker,
+.ops-table--brokers .cell-broker {
+  white-space: nowrap;
+}
+
+/* In the eleven-column tables a symbol stays on one line, cut with an ellipsis
+   past 5rem (the full symbol is in its title). Broker product names such as
+   "ACME WORLD ETF" otherwise wrap and make the row two or three lines tall. */
+.annex-table--brokers .cell-symbol,
+.ops-table--brokers .cell-symbol {
+  display: inline-block;
+  max-width: 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* An option row's badge ("Cierre anticipado Call @100") takes its own line
+   under the symbol and never breaks, so the row is two lines, not three to five. */
+.annex-table--brokers .option-badge {
+  display: block;
+  white-space: nowrap;
+}
+
+/* Amounts never wrap: the subtotal "+527,35 EUR" broke before "EUR". */
+.annex-table td.num {
   white-space: nowrap;
 }
 
@@ -2911,8 +2952,17 @@ footer a:hover {
     flex-direction: column;
   }
 
-  table {
+  table,
+  .annex-table--brokers,
+  .ops-table--brokers {
     font-size: 0.75rem;
+  }
+
+  /* The eleven-column tables already scroll sideways inside their box here, and
+     a touch screen shows no tooltip: show the whole symbol, still on one line. */
+  .annex-table--brokers .cell-symbol,
+  .ops-table--brokers .cell-symbol {
+    max-width: none;
   }
 
   th,

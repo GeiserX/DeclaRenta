@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import { jsPDF } from "jspdf";
 import Decimal from "decimal.js";
 import { generatePdfWebReport } from "../../src/generators/pdf-web.js";
 import type { TaxSummary } from "../../src/types/tax.js";
@@ -469,6 +470,29 @@ describe("generatePdfWebReport broker columns fit their cells", () => {
   });
 });
 
+describe("generatePdfWebReport broker columns keep a wide symbol on one line", () => {
+  it("cuts a wide upper-case symbol instead of wrapping its last letter to a second line", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, symbol: "ACME WORLD ETF", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, brokerSource: "Degiro" },
+        ],
+      },
+    });
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    // Every text run of the symbol: one run, starting "ACME", never a lone "E".
+    const runs = [...text.matchAll(/\((ACME[^)]*|E)\) Tj/g)].map((m) => m[1]);
+    expect(runs).toHaveLength(1);
+    // Cut to the cell with an ellipsis; the CSV and the screen keep the full name.
+    expect(runs[0]).toMatch(/^ACME WO.*\.\.\.$/);
+  });
+});
+
 describe("generatePdfWebReport broker columns keep the G/P colours", () => {
   it("colours the G/P cell, not another column, in the two-broker layout", async () => {
     const base = makeReport();
@@ -489,5 +513,29 @@ describe("generatePdfWebReport broker columns keep the G/P colours", () => {
       [...text.matchAll(new RegExp(`${rg} rg\\n[^\\n]*\\n\\(([^)]*)\\) Tj`, "g"))].map((m) => m[1]);
     expect(coloured("0\\.22 0\\.631 0\\.412")).toContain("+1000.00");
     expect(coloured("0\\.898 0\\.243 0\\.243")).toContain("-500.00");
+  });
+});
+
+describe("generatePdfWebReport footer", () => {
+  it("keeps the disclaimer inside the page margins", async () => {
+    await setLocale("es");
+    const text = await pdfText(await generatePdfWebReport(makeReport(), realT, "es"));
+    // jsPDF writes each line as "<x> <y> Td (<text>) Tj", x in points from the left edge.
+    const lines = [...text.matchAll(/(-?[\d.]+) [\d.]+ Td\n\(([^)]*)\) Tj/g)]
+      .filter((m) => m[2]!.includes("orientativo"));
+    expect(lines.length).toBeGreaterThan(0);
+    const marginPt = (14 * 72) / 25.4;
+    const pageW = 595.28;
+    const measure = new jsPDF({ unit: "pt", format: "a4" });
+    measure.setFont("helvetica", "normal");
+    measure.setFontSize(6.5);
+    for (const m of lines) {
+      const x = Number(m[1]);
+      const right = x + measure.getTextWidth(m[2]!);
+      expect(x).toBeGreaterThanOrEqual(marginPt);
+      expect(right).toBeLessThanOrEqual(pageW - marginPt);
+      // Centred: as much room on the left as on the right.
+      expect(Math.abs(x - (pageW - right))).toBeLessThan(1);
+    }
   });
 });

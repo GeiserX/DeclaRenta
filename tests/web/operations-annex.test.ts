@@ -178,3 +178,14 @@ describe("renderOperationsAnnex — purchase and sale broker", () => {
     expect(html).toContain(">A&lt;b&gt;</td>");
   });
 });
+
+describe("renderOperationsAnnex — cells that must not wrap", () => {
+  it("puts the symbol in a one-line cell that keeps the full name", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({ symbol: "ACME WORLD ETF", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" }),
+      makeDisposal({ symbol: 'A"B<C', brokerSource: "Degiro" }),
+    ]));
+    expect(html).toContain('<span class="cell-symbol" title="ACME WORLD ETF">ACME WORLD ETF</span>');
+    expect(html).toContain('<span class="cell-symbol" title="A&quot;B&lt;C">A&quot;B&lt;C</span>');
+  });
+});

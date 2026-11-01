@@ -66,7 +66,8 @@ const OPS_COLUMNS = {
 // both on one line; a long broker name wraps inside its 16 mm.
 const OPS_COLUMNS_WITH_BROKERS = {
   0: { cellWidth: 22 },
-  1: { cellWidth: 19 },
+  // One line: a wide symbol ("ACME WORLD E") is cut with "...", never wrapped.
+  1: { cellWidth: 19, overflow: "ellipsize" },
   2: { cellWidth: 16 },
   3: { cellWidth: 16 },
   4: { cellWidth: 16 },
@@ -403,7 +404,9 @@ export async function generatePdfWebReport(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(C.muted);
-  doc.text(t("pdf.footer"), MARGIN, PAGE_H - MARGIN, { maxWidth: CONTENT_W, align: "center" });
+  // jsPDF centres each line on x, so x is the middle of the page; at MARGIN
+  // the left half of the line fell off the page.
+  doc.text(t("pdf.footer"), PAGE_W / 2, PAGE_H - MARGIN, { maxWidth: CONTENT_W, align: "center" });
 
   return doc.output("blob");
 }

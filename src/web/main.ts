@@ -15,6 +15,7 @@ import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
 import { generateTaxReport } from "../generators/report.js";
 import { csvDownload } from "./csv-download.js";
 import { formatReportSettings, reportSettingsDiffer } from "../generators/report-settings.js";
+import { showBrokerColumns } from "../generators/broker-columns.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
 import { openDisclaimer } from "./disclaimer.js";
@@ -51,6 +52,7 @@ import { validateStatement, renderValidationIssues } from "./validation.js";
 import { pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
+import { symbolCell } from "./symbol-cell.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import Decimal from "decimal.js";
@@ -1190,11 +1192,27 @@ function renderOperationsTable() {
   const search = opsSearch.value.toLowerCase();
   const filter = opsFilter.value;
 
+  // Purchase and sale broker columns, decided from every sale (not only the
+  // ones the search and filter leave), so the columns do not come and go while
+  // typing. With them the search also matches broker names.
+  const brokers = showBrokerColumns(currentReport.capitalGains.disposals);
+  // The search box says what it matches; the data-i18n keys keep it right on a
+  // language switch.
+  const placeholderKey = brokers ? "results.search_placeholder_brokers" : "results.search_placeholder";
+  const ariaKey = brokers ? "a11y.ops_search_brokers" : "a11y.ops_search";
+  opsSearch.dataset.i18nPlaceholder = placeholderKey;
+  opsSearch.dataset.i18nAria = ariaKey;
+  opsSearch.placeholder = t(placeholderKey);
+  opsSearch.setAttribute("aria-label", t(ariaKey));
   let disposals = [...currentReport.capitalGains.disposals];
 
   if (search) {
+    const matches = (s: string | undefined) => s !== undefined && s.toLowerCase().includes(search);
     disposals = disposals.filter(
-      (d) => d.isin.toLowerCase().includes(search) || d.symbol.toLowerCase().includes(search),
+      (d) =>
+        matches(d.isin) ||
+        matches(d.symbol) ||
+        (brokers && (matches(d.acquireBrokerSource) || matches(d.brokerSource))),
     );
   }
   if (filter === "gain") {
@@ -1213,6 +1231,8 @@ function renderOperationsTable() {
       else if (col === "symbol") cmp = a.symbol.localeCompare(b.symbol);
       else if (col === "buyDate") cmp = normalizeDate(a.acquireDate).localeCompare(normalizeDate(b.acquireDate));
       else if (col === "sellDate") cmp = normalizeDate(a.sellDate).localeCompare(normalizeDate(b.sellDate));
+      else if (col === "buyBroker") cmp = (a.acquireBrokerSource ?? "").localeCompare(b.acquireBrokerSource ?? "");
+      else if (col === "sellBroker") cmp = (a.brokerSource ?? "").localeCompare(b.brokerSource ?? "");
       else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
       else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
       else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
@@ -1225,13 +1245,14 @@ function renderOperationsTable() {
   const th = (label: string, col: string) => sortableTh(label, col, opsSort);
 
   opsTable.innerHTML = `
-    <table>
+    <table${brokers ? ' class="ops-table--brokers"' : ""}>
       <thead>
         <tr>
           ${th(t("table.isin"), "isin")}
           ${th(t("table.symbol"), "symbol")}
           ${th(t("table.buy_date"), "buyDate")}
           ${th(t("table.sell_date"), "sellDate")}
+          ${brokers ? th(t("table.buy_broker"), "buyBroker") + th(t("table.sell_broker"), "sellBroker") : ""}
           ${th(t("table.units"), "qty")}
           ${th(t("table.cost_eur"), "cost")}
           ${th(t("table.proceeds_eur"), "proceeds")}
@@ -1245,15 +1266,17 @@ function renderOperationsTable() {
             (d) => `
           <tr${washSaleRowAttr(d)}>
             <td class="mono">${esc(d.isin)}</td>
-            <td>${esc(d.symbol)}</td>
+            <td>${symbolCell(d.symbol)}</td>
             <td>${esc(formatDate(d.acquireDate))}</td>
-            <td>${esc(formatDate(d.sellDate))}</td>
+            <td>${esc(formatDate(d.sellDate))}</td>${brokers ? `
+            <td class="cell-broker">${esc(d.acquireBrokerSource ?? "—")}</td>
+            <td class="cell-broker">${esc(d.brokerSource ?? "—")}</td>` : ""}
             <td>${fmtQty(d.quantity)}</td>
             <td>${fmtEur(d.costBasisEur)}</td>
             <td>${fmtEur(d.proceedsEur)}</td>
             <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
             <td>${d.holdingPeriodDays}</td>
-          </tr>${renderWashSaleDetailRow(d, 9)}
+          </tr>${renderWashSaleDetailRow(d, brokers ? 11 : 9)}
         `,
           )
           .join("")}

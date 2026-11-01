@@ -10,6 +10,7 @@ import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { assetLabel } from "./asset-labels.js";
 import { esc } from "./esc.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
+import { symbolCell } from "./symbol-cell.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
@@ -99,7 +100,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
             <tr${blocked}>
               <td>${i + 1}</td>
               <td class="mono">${esc(d.isin)}</td>
-              <td>${esc(d.symbol)}${optionInfo}</td>
+              <td>${symbolCell(d.symbol)}${optionInfo}</td>
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>

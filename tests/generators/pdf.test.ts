@@ -681,3 +681,120 @@ describe("PDF Report Generator broker columns fit the page", () => {
     expect(rendered).not.toContain("Broker compra");
   });
 });
+
+describe("PDF Report Generator wrapped table cells", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  // Every text drawn with a column width: where it starts and how far down its
+  // (possibly wrapped) lines reach, measured at the font size in use.
+  function recordBoxes(): { text: string; top: number; bottom: number }[] {
+    type Doc = InstanceType<typeof PDFDocument>;
+    type TextFn = (this: Doc, ...args: unknown[]) => Doc;
+    const boxes: { text: string; top: number; bottom: number }[] = [];
+    const proto = PDFDocument.prototype as unknown as { text: TextFn };
+    const original = proto.text;
+    vi.spyOn(proto, "text").mockImplementation(function (this: Doc, ...args: unknown[]) {
+      const [text, , y, options] = args as [unknown, unknown, unknown, { width?: number } | undefined];
+      if (typeof options?.width === "number" && typeof y === "number") {
+        const s = String(text);
+        boxes.push({ text: s, top: y, bottom: y + this.heightOfString(s, { width: options.width }) });
+      }
+      return original.apply(this, args);
+    });
+    return boxes;
+  }
+
+  it("grows a row whose symbol wraps, so it does not run into the next row (one broker)", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, isin: "XX0000000101", symbol: "ACME WORLD ETF" },
+          { ...b!, isin: "XX0000000103", symbol: "TERCERA SA" },
+        ],
+      },
+    });
+    const boxes = recordBoxes();
+    await generatePdfReport(report);
+    const symbol = boxes.find((x) => x.text === "ACME WORLD")!;
+    const nextRow = boxes.find((x) => x.text === "XX0000000103")!;
+    expect(symbol).toBeDefined();
+    expect(nextRow).toBeDefined();
+    // The symbol does wrap at 7.5 pt in its 46 pt column...
+    expect(symbol.bottom - symbol.top).toBeGreaterThan(12);
+    // ...and the next row starts below its last line.
+    expect(nextRow.top).toBeGreaterThanOrEqual(symbol.bottom);
+  });
+
+  it("stripes the whole height of a grown row", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, isin: "XX0000000101", symbol: "ACME WORLD ETF" },
+          { ...b!, isin: "XX0000000103" },
+        ],
+      },
+    });
+    type Doc = InstanceType<typeof PDFDocument>;
+    const rects: { y: number; h: number }[] = [];
+    const proto = PDFDocument.prototype as unknown as { rect: (this: Doc, ...args: number[]) => Doc };
+    const originalRect = proto.rect;
+    vi.spyOn(proto, "rect").mockImplementation(function (this: Doc, ...args: number[]) {
+      rects.push({ y: args[1]!, h: args[3]! });
+      return originalRect.apply(this, args);
+    });
+    const boxes = recordBoxes();
+    await generatePdfReport(report);
+    const rowTop = boxes.find((x) => x.text === "XX0000000101")!.top - 2;
+    const nextTop = boxes.find((x) => x.text === "XX0000000103")!.top - 2;
+    expect(nextTop - rowTop).toBeGreaterThan(14);
+    // The first (even) row's background reaches the next row...
+    expect(rects).toContainEqual({ y: rowTop, h: nextTop - rowTop });
+    // ...and the wrapped symbol's last line stays inside it.
+    const symbol = boxes.find((x) => x.text === "ACME WORLD")!;
+    expect(nextTop).toBeGreaterThanOrEqual(symbol.bottom);
+  });
+
+  it("draws G/P in its gain or loss colour and the brokers in the text colour", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, gainLossEur: new Decimal("-250"), brokerSource: "Degiro", acquireBrokerSource: "Degiro" },
+        ],
+      },
+    });
+    type Doc = InstanceType<typeof PDFDocument> & { _fillColor?: [unknown, unknown] };
+    const colours = new Map<string, unknown>();
+    const proto = PDFDocument.prototype as unknown as { text: (this: Doc, ...args: unknown[]) => Doc };
+    const original = proto.text;
+    vi.spyOn(proto, "text").mockImplementation(function (this: Doc, ...args: unknown[]) {
+      colours.set(String(args[0]), this._fillColor?.[0]);
+      return original.apply(this, args);
+    });
+    await generatePdfReport(report);
+    expect(colours.get("1000.00")).toBe("#38a169");
+    expect(colours.get("-250.00")).toBe("#e53e3e");
+    expect(colours.get("Interactive Brokers")).toBe("#1a202c");
+    expect(colours.get("Degiro")).toBe("#1a202c");
+    // The ECB rate stays muted.
+    expect(colours.get("0.9200")).toBe("#718096");
+  });
+
+  it("keeps the 14 pt row when nothing wraps", async () => {
+    const boxes = recordBoxes();
+    await generatePdfReport(makeReport());
+    const [first, second] = makeReport().capitalGains.disposals;
+    const top1 = boxes.find((x) => x.text === first!.isin)!.top;
+    const top2 = boxes.find((x) => x.text === second!.isin)!.top;
+    expect(top2 - top1).toBe(14);
+  });
+});
