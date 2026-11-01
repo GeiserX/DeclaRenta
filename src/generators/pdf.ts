@@ -198,43 +198,51 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           const d = report.capitalGains.disposals[i]!;
           const rowY = doc.y;
 
-          if (i % 2 === 0) {
-            doc.rect(MARGIN, rowY, CONTENT_WIDTH, 14).fill(COLORS.bg);
-          }
-
           const gainLoss = d.gainLossEur;
           const glColor = gainLoss.greaterThanOrEqualTo(0) ? COLORS.success : COLORS.accent;
 
-          const cell = (key: OpsColumnKey, text: string) => {
-            const c = col(key);
-            doc.text(text, c.x, rowY + 2, { width: c.w });
-          };
-          doc.fontSize(tableFont).fillColor(COLORS.text);
-          cell("isin", d.isin);
           const scenarioTag = d.optionScenario === "expiration" ? "EXP" : d.optionScenario === "exercise" ? "EJ" : "CL";
           const symbolLabel = d.optionScenario
             ? `${(d.underlyingSymbol ?? d.symbol).slice(0, 6)}${d.putCall ?? ""} [${scenarioTag}]`
             : d.symbol.slice(0, 10);
-          cell("symbol", symbolLabel);
-          cell("buyDate", formatDate(d.acquireDate));
-          cell("sellDate", formatDate(d.sellDate));
+          const cells: [OpsColumnKey, string, string][] = [
+            ["isin", d.isin, COLORS.text],
+            ["symbol", symbolLabel, COLORS.text],
+            ["buyDate", formatDate(d.acquireDate), COLORS.text],
+            ["sellDate", formatDate(d.sellDate), COLORS.text],
+            ["units", d.quantity.toString(), COLORS.text],
+            ["cost", d.costBasisEur.toFixed(2), COLORS.text],
+            ["proceeds", d.proceedsEur.toFixed(2), COLORS.text],
+            ["gainLoss", gainLoss.toFixed(2), glColor],
+            ["ecb", d.sellEcbRate.toFixed(4), COLORS.muted],
+          ];
+
+          // A cell too narrow for its text wraps (a symbol such as "TERCERA SA"
+          // at 7.5 pt), so the row is as tall as its tallest cell; a fixed
+          // 14 pt row let the second line run into the next row.
+          doc.fontSize(tableFont);
+          const textHeight = Math.max(...cells.map(([key, text]) => doc.heightOfString(text, { width: col(key).w })));
+          const rowHeight = Math.max(14, Math.ceil(textHeight) + 4);
+
+          if (i % 2 === 0) {
+            doc.rect(MARGIN, rowY, CONTENT_WIDTH, rowHeight).fill(COLORS.bg);
+          }
+
+          for (const [key, text, color] of cells) {
+            const c = col(key);
+            doc.fillColor(color).text(text, c.x, rowY + 2, { width: c.w });
+          }
           if (brokers) {
             // One line each: a name too long for the column ends in "...",
             // never wraps into the next row.
+            doc.fillColor(COLORS.text);
             for (const [key, name] of [["buyBroker", d.acquireBrokerSource], ["sellBroker", d.brokerSource]] as const) {
               const c = col(key);
               doc.text(pdfSafeText(name ?? "—"), c.x, rowY + 2, { width: c.w, height: tableFont * 1.6, ellipsis: true });
             }
           }
-          cell("units", d.quantity.toString());
-          cell("cost", d.costBasisEur.toFixed(2));
-          cell("proceeds", d.proceedsEur.toFixed(2));
-          doc.fillColor(glColor);
-          cell("gainLoss", gainLoss.toFixed(2));
-          doc.fillColor(COLORS.muted);
-          cell("ecb", d.sellEcbRate.toFixed(4));
 
-          doc.y = rowY + 14;
+          doc.y = rowY + rowHeight;
           checkPageBreak(doc);
         }
 

@@ -1,12 +1,16 @@
 /**
- * Phone-width layout check for the results step (wizard step 3).
+ * Layout check for the results step (wizard step 3).
  *
  * Builds the real web app, serves it with `vite preview`, drives headless
- * Chrome over the DevTools protocol through the upload wizard with
+ * Chrome (dark theme) over the DevTools protocol through the upload wizard with
  * tests/fixtures/ibkr-sample.xml, and measures the rendered page at 375 and
  * 390 CSS px. The casilla amounts are what the user types into Renta Web, so
  * the page must not scroll sideways and every amount and copy button must sit
  * inside the screen.
+ *
+ * It also uploads the two-broker fixtures and checks, at 1280 and 390 px, that
+ * the operations table and the annex show the purchase and sale broker with no
+ * cell wrapped to a second line.
  *
  * ECB requests are answered locally with a flat rate, so the test needs no
  * network. It needs a Chrome or Chromium binary (CHROME_PATH, or a standard
@@ -22,6 +26,11 @@ import { build, preview, type PreviewServer } from "vite";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const FIXTURE = join(ROOT, "tests/fixtures/ibkr-sample.xml");
+// Two brokers: a sale at Degiro uses shares bought at Interactive Brokers.
+const TWO_BROKER_FIXTURES = [
+  join(ROOT, "tests/fixtures/two-broker-ibkr.xml"),
+  join(ROOT, "tests/fixtures/two-broker-degiro.csv"),
+];
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,
@@ -218,7 +227,7 @@ interface Layout {
   annexWraps: { right: number; overflowX: string; scrolls: boolean }[];
 }
 
-describe.skipIf(!CHROME)("results step fits a phone screen", () => {
+describe.skipIf(!CHROME)("results step layout", () => {
   let outDir = "";
   let profileDir = "";
   let server: PreviewServer | undefined;
@@ -265,7 +274,11 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     if (leaked) throw new Error("mobile-width e2e: Chrome processes still alive 5 s after SIGKILL");
   }, 30_000);
 
-  async function resultsLayouts(width: number): Promise<Layout[]> {
+  /** Opens the app at `width`, uploads `files` and walks the wizard to the results step. */
+  async function openResults(
+    width: number,
+    files: string[],
+  ): Promise<{ evaluate: <T>(expression: string) => Promise<T>; close: () => Promise<unknown> }> {
     const c = cdp!;
     const { targetId } = await c.send("Target.createTarget", { url: "about:blank" });
     const { sessionId } = (await c.send("Target.attachToTarget", { targetId, flatten: true })) as { sessionId: string };
@@ -315,6 +328,7 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     // Phones draw overlay scrollbars; without this, Linux Chrome reserves 15px
     // for a classic scrollbar and the page measures narrower than the screen.
     await send("Emulation.setScrollbarsHidden", { hidden: true });
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
     await send("Page.navigate", { url: baseUrl });
     await waitFor(`document.readyState === "complete" && !!document.getElementById("splash-cta")`, "page load");
 
@@ -322,7 +336,7 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     await waitFor(`!document.body.classList.contains("splash-visible")`, "splash dismissed");
     const { root } = (await send("DOM.getDocument")) as { root: { nodeId: number } };
     const { nodeId } = (await send("DOM.querySelector", { nodeId: root.nodeId, selector: "#file-input" })) as { nodeId: number };
-    await send("DOM.setFileInputFiles", { nodeId, files: [FIXTURE] });
+    await send("DOM.setFileInputFiles", { nodeId, files });
 
     await waitFor(`!document.getElementById("wizard-next").disabled`, "file accepted");
     await evaluate(`document.getElementById("wizard-next").click()`);
@@ -339,7 +353,11 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     await evaluate(`document.querySelectorAll(".annex-group").forEach((d) => { d.open = true; })`);
     // Let fonts and late layout settle before measuring.
     await evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
+    return { evaluate, close: () => c.send("Target.closeTarget", { targetId }) };
+  }
 
+  async function resultsLayouts(width: number): Promise<Layout[]> {
+    const { evaluate, close } = await openResults(width, [FIXTURE]);
     const measure = `(() => {
       const rect = (el) => el.getBoundingClientRect();
       return {
@@ -366,7 +384,7 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
     // figures, so check the layout still holds with the widest plausible value.
     await evaluate(`document.querySelectorAll("#casillas .casilla-value").forEach((el) => { el.textContent = "-1.234.567,89 EUR"; })`);
     const largeAmounts = await evaluate<Layout>(measure);
-    await c.send("Target.closeTarget", { targetId });
+    await close();
     return [asRendered, largeAmounts];
   }
 
@@ -400,6 +418,93 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
         for (const w of layout.annexWraps) {
           expect(w.right).toBeLessThanOrEqual(width);
           if (w.scrolls) expect(w.overflowX).toBe("auto");
+        }
+      }
+    }, 120_000);
+  }
+
+  /**
+   * Text lines a cell's text takes. Text boxes whose tops are within 6 px sit
+   * on one line (a smaller badge font starts a little lower).
+   */
+  const LINES_OF = `(el) => {
+    const tops = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of range.getClientRects()) if (r.width > 0) tops.push(r.top);
+    }
+    tops.sort((a, b) => a - b);
+    let lines = 0;
+    let last = -Infinity;
+    for (const top of tops) if (top - last > 6) { lines++; last = top; }
+    return lines;
+  }`;
+
+  interface TwoBrokerLayout {
+    lang: string;
+    scrollWidth: number;
+    opsCols: string[];
+    opsScrolls: boolean;
+    annexScrolls: boolean[];
+    wrapped: string[];
+    symbols: { text: string; title: string }[];
+  }
+
+  for (const width of [1280, 390]) {
+    it(`keeps the two-broker operations table and annex on one line per row at ${width}px, in every locale`, async () => {
+      const { evaluate, close } = await openResults(width, TWO_BROKER_FIXTURES);
+      const layouts: Record<string, TwoBrokerLayout> = {};
+      for (const locale of ["es", "en", "ca", "gl", "eu"]) {
+        // Switching the language re-renders the results; reopen the annex groups.
+        await evaluate(`(async () => {
+          const select = document.getElementById("lang-select");
+          select.value = "${locale}";
+          select.dispatchEvent(new Event("change"));
+          for (let i = 0; i < 100 && document.documentElement.lang !== "${locale}"; i++) await new Promise((r) => setTimeout(r, 50));
+          await new Promise((r) => setTimeout(r, 300));
+          document.querySelectorAll(".annex-group").forEach((d) => { d.open = true; });
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        })()`);
+        layouts[locale] = await evaluate<TwoBrokerLayout>(`(() => {
+          const linesOf = ${LINES_OF};
+          const ops = document.getElementById("operations-table");
+          const cells = [
+            ...ops.querySelectorAll("tbody tr:not(.wash-sale-detail) td"),
+            ...document.querySelectorAll(".annex-table tbody tr:not(.wash-sale-detail) td, .annex-table tfoot td"),
+          ];
+          return {
+            lang: document.documentElement.lang,
+            scrollWidth: document.documentElement.scrollWidth,
+            opsCols: [...ops.querySelectorAll("thead th")].map((th) => th.dataset.col),
+            opsScrolls: ops.scrollWidth > ops.clientWidth,
+            annexScrolls: [...document.querySelectorAll(".annex-table-wrap")].map((el) => el.scrollWidth > el.clientWidth),
+            wrapped: cells.filter((td) => linesOf(td) > 1).map((td) => td.textContent.trim()),
+            symbols: [...document.querySelectorAll(".cell-symbol")].map((el) => ({ text: el.textContent, title: el.title })),
+          };
+        })()`);
+      }
+      await close();
+
+      for (const [locale, layout] of Object.entries(layouts)) {
+        expect(layout.lang, locale).toBe(locale);
+        // The page never scrolls sideways.
+        expect(layout.scrollWidth, locale).toBe(width);
+        expect(layout.opsCols, locale).toEqual(
+          ["isin", "symbol", "buyDate", "sellDate", "buyBroker", "sellBroker", "qty", "cost", "proceeds", "gl", "days"],
+        );
+        // No cell wraps: not the long symbol, not a broker name, not an amount
+        // (the subtotal "+877,35 EUR" included).
+        expect(layout.wrapped, locale).toEqual([]);
+        // A symbol cut short keeps its full name in the tooltip.
+        expect(layout.symbols, locale).toContainEqual({ text: "ACME WORLD ETF", title: "ACME WORLD ETF" });
+        if (width === 1280) {
+          // A desktop screen shows both eleven-column tables without scrolling sideways.
+          expect(layout.opsScrolls, locale).toBe(false);
+          expect(layout.annexScrolls.length, locale).toBeGreaterThan(0);
+          expect(layout.annexScrolls, locale).not.toContain(true);
         }
       }
     }, 120_000);

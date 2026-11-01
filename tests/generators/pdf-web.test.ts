@@ -491,3 +491,20 @@ describe("generatePdfWebReport broker columns keep the G/P colours", () => {
     expect(coloured("0\\.898 0\\.243 0\\.243")).toContain("-500.00");
   });
 });
+
+describe("generatePdfWebReport footer", () => {
+  it("keeps the disclaimer inside the page margins", async () => {
+    await setLocale("es");
+    const text = await pdfText(await generatePdfWebReport(makeReport(), realT, "es"));
+    // jsPDF writes each line as "<x> <y> Td (<text>) Tj", x in points from the left edge.
+    const lines = [...text.matchAll(/(-?[\d.]+) [\d.]+ Td\n\(([^)]*)\) Tj/g)]
+      .filter((m) => m[2]!.includes("orientativo"));
+    expect(lines.length).toBeGreaterThan(0);
+    const marginPt = (14 * 72) / 25.4;
+    for (const m of lines) {
+      const x = Number(m[1]);
+      expect(x).toBeGreaterThanOrEqual(marginPt);
+      expect(x).toBeLessThan(595.28 / 2); // centred: it starts left of the middle
+    }
+  });
+});

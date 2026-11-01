@@ -403,7 +403,9 @@ export async function generatePdfWebReport(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(C.muted);
-  doc.text(t("pdf.footer"), MARGIN, PAGE_H - MARGIN, { maxWidth: CONTENT_W, align: "center" });
+  // jsPDF centres each line on x, so x is the middle of the page; at MARGIN
+  // the left half of the line fell off the page.
+  doc.text(t("pdf.footer"), PAGE_W / 2, PAGE_H - MARGIN, { maxWidth: CONTENT_W, align: "center" });
 
   return doc.output("blob");
 }

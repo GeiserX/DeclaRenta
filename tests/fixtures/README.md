@@ -8,6 +8,7 @@ Anonymized sample files for broker parser tests. All data is fake (dummy ISINs, 
 | `modelo720-2023-sample.txt` | DeclaRenta output | Modelo 720 (fixed width, ISO-8859-15) | 2023 filing declaring GLOBEX (held in `ibkr-sample.xml`) and INITECH (not held): last year's 720 for the web upload |
 | `degiro-transactions-sample.csv` | Degiro | CSV (19-col Spanish) | 13 rows: USD+EUR buys/sells, FX rates, zero-price rights row |
 | `degiro-account-sample.csv` | Degiro | CSV (12-col Spanish) | Dividends, withholdings, STT, cash sweep |
+| `two-broker-ibkr.xml` + `two-broker-degiro.csv` | Interactive Brokers + Degiro | XML + CSV | Uploaded together: three EUR sales, one at Degiro using shares bought at Interactive Brokers (broker columns in the results table, the annex and the PDFs) |
 | `binance-sample.csv` | Binance | CSV (Trade History) | 2 BTC trades (buy+sell), 1 ETH buy |
 | `binance-tx-sample.csv` | Binance | CSV (Transaction History) | Deposit, Convert pair, Strategy Sold+Revenue, Buy+Spend |
 | `coinbase-sample.csv` | Coinbase | CSV (v1) | 1 BTC buy, 1 BTC sell, 1 ETH staking income |
