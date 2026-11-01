@@ -57,6 +57,8 @@ const eu: TranslationKeys = {
   "table.symbol": "Sinboloa",
   "table.buy_date": "Erosketa D.",
   "table.sell_date": "Salmenta D.",
+  "table.buy_broker": "Erosketa brokerra",
+  "table.sell_broker": "Salmenta brokerra",
   "table.units": "Ud.",
   "table.cost_eur": "Kostua EUR",
   "table.proceeds_eur": "Salmenta EUR",

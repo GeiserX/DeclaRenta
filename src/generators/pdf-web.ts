@@ -6,6 +6,7 @@ import { localizeMessage, localizeHint } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 import { formatReportSettings } from "./report-settings.js";
 import { pdfSafeText } from "./pdf-text.js";
+import { showBrokerColumns } from "./broker-columns.js";
 
 export type TranslationFn = (key: TranslationKey, params?: Record<string, string>) => string;
 
@@ -46,6 +47,36 @@ function formatDate(d: string): string {
 function eur(d: Decimal): string {
   return d.toFixed(2) + " EUR";
 }
+
+// Operations table column widths (mm); each set adds up to CONTENT_W.
+const OPS_COLUMNS = {
+  0: { cellWidth: 24 },
+  1: { cellWidth: 20 },
+  2: { cellWidth: 17 },
+  3: { cellWidth: 17 },
+  4: { cellWidth: 14, halign: "right" },
+  5: { cellWidth: 22, halign: "right" },
+  6: { cellWidth: 22, halign: "right" },
+  7: { cellWidth: 20, halign: "right" },
+  8: { cellWidth: 26, halign: "right" },
+} as const;
+
+// With the broker columns: at 6.5 pt plus cell padding, ISIN 22 mm holds any
+// 12-character ISIN and symbol 19 mm the 12 characters the symbol is cut to,
+// both on one line; a long broker name wraps inside its 16 mm.
+const OPS_COLUMNS_WITH_BROKERS = {
+  0: { cellWidth: 22 },
+  1: { cellWidth: 19 },
+  2: { cellWidth: 16 },
+  3: { cellWidth: 16 },
+  4: { cellWidth: 16 },
+  5: { cellWidth: 16 },
+  6: { cellWidth: 14, halign: "right" },
+  7: { cellWidth: 17, halign: "right" },
+  8: { cellWidth: 17, halign: "right" },
+  9: { cellWidth: 16, halign: "right" },
+  10: { cellWidth: 13, halign: "right" },
+} as const;
 
 function lastTableY(doc: unknown, fallback: number): number {
   return (doc as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? fallback;
@@ -175,6 +206,10 @@ export async function generatePdfWebReport(
       d.gainLossEur.greaterThanOrEqualTo(0) ? C.successRgb : C.dangerRgb,
     );
 
+    // Purchase and sale broker after the dates, only when the sales name more
+    // than one broker. The other columns narrow so the table keeps the page width.
+    const brokers = showBrokerColumns(report.capitalGains.disposals);
+
     const opsBody = report.capitalGains.disposals.map((d) => {
       const scenarioTag =
         d.optionScenario === "expiration" ? "EXP"
@@ -190,6 +225,7 @@ export async function generatePdfWebReport(
         symbol,
         formatDate(d.acquireDate),
         formatDate(d.sellDate),
+        ...(brokers ? [pdfSafeText(d.acquireBrokerSource ?? "—"), pdfSafeText(d.brokerSource ?? "—")] : []),
         d.quantity.toFixed(4),
         d.costBasisEur.toFixed(2),
         d.proceedsEur.toFixed(2),
@@ -203,6 +239,7 @@ export async function generatePdfWebReport(
       head: [[
         t("table.isin"), t("table.symbol"),
         t("table.buy_date"), t("table.sell_date"),
+        ...(brokers ? [t("table.buy_broker"), t("table.sell_broker")] : []),
         t("table.units"), t("table.cost_eur"),
         t("table.proceeds_eur"), t("table.gain_loss_eur"), "ECB",
       ]],
@@ -212,20 +249,10 @@ export async function generatePdfWebReport(
       bodyStyles: { fontSize: 6.5, textColor: C.textRgb },
       alternateRowStyles: { fillColor: C.rowAlt },
       tableWidth: CONTENT_W,
-      columnStyles: {
-        0: { cellWidth: 24 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 17 },
-        3: { cellWidth: 17 },
-        4: { cellWidth: 14, halign: "right" },
-        5: { cellWidth: 22, halign: "right" },
-        6: { cellWidth: 22, halign: "right" },
-        7: { cellWidth: 20, halign: "right" },
-        8: { cellWidth: 26, halign: "right" },
-      },
+      columnStyles: brokers ? OPS_COLUMNS_WITH_BROKERS : OPS_COLUMNS,
       margin: { left: MARGIN, right: MARGIN },
       didParseCell: (data: CellHookData) => {
-        if (data.section === "body" && data.column.index === 7) {
+        if (data.section === "body" && data.column.index === (brokers ? 9 : 7)) {
           data.cell.styles.textColor = opsColors[data.row.index] ?? C.textRgb;
         }
       },

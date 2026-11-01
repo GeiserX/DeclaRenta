@@ -126,3 +126,55 @@ describe("renderOperationsAnnex — anti-churning marker", () => {
     expect(html).not.toContain("wash-sale-detail");
   });
 });
+
+describe("renderOperationsAnnex — purchase and sale broker", () => {
+  it("adds no broker columns when every sale and lot comes from one broker", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({ brokerSource: "Degiro", acquireBrokerSource: "Degiro" }),
+      makeDisposal({ brokerSource: "Degiro" }),
+    ]));
+    expect(html).not.toContain("Broker compra");
+    expect(html).not.toContain("Broker venta");
+    expect(html).not.toContain(">Degiro<");
+    expect(html).toContain('<td colspan="6">');
+    // One-broker tables keep the plain layout: no tighter padding, no wrapping headers.
+    expect(html).toContain('<table class="annex-table">');
+  });
+
+  it("names the purchase and the sale broker of each row when the sales cross brokers", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({ brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" }),
+      // A sale without lots has no purchase broker.
+      makeDisposal({ symbol: "MSFT", brokerSource: "Degiro" }),
+    ]));
+    expect(html).toContain("<th>Broker compra</th>");
+    expect(html).toContain("<th>Broker venta</th>");
+    const rows = html.split("<tr").filter((r) => r.includes("<td>1</td>") || r.includes("<td>2</td>"));
+    expect(rows[0]).toMatch(/<td class="annex-broker">Interactive Brokers<\/td>\s*<td class="annex-broker">Degiro<\/td>/);
+    expect(rows[1]).toMatch(/<td class="annex-broker">—<\/td>\s*<td class="annex-broker">Degiro<\/td>/);
+    // The subtotal label and the anti-churning line span the two extra columns.
+    expect(html).toContain('<td colspan="8">');
+    expect(html).toContain('<table class="annex-table annex-table--brokers">');
+  });
+
+  it("widens the anti-churning line to the broker columns", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({
+        gainLossEur: new Decimal(-400),
+        washSaleBlocked: true,
+        blockedLossEur: new Decimal(400),
+        brokerSource: "Degiro",
+        acquireBrokerSource: "Interactive Brokers",
+      }),
+    ]));
+    expect(html).toContain('<tr class="wash-sale-detail"><td colspan="11">');
+  });
+
+  it("escapes broker names", () => {
+    const html = renderOperationsAnnex(makeSummary([
+      makeDisposal({ brokerSource: "A<b>", acquireBrokerSource: "B&C" }),
+    ]));
+    expect(html).toContain(">B&amp;C</td>");
+    expect(html).toContain(">A&lt;b&gt;</td>");
+  });
+});

@@ -59,6 +59,8 @@ const es = {
   "table.symbol": "Símbolo",
   "table.buy_date": "F. Compra",
   "table.sell_date": "F. Venta",
+  "table.buy_broker": "Broker compra",
+  "table.sell_broker": "Broker venta",
   "table.units": "Uds.",
   "table.cost_eur": "Coste EUR",
   "table.proceeds_eur": "Venta EUR",

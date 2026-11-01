@@ -56,6 +56,8 @@ const en: TranslationKeys = {
   "table.symbol": "Symbol",
   "table.buy_date": "Buy Date",
   "table.sell_date": "Sell Date",
+  "table.buy_broker": "Buy Broker",
+  "table.sell_broker": "Sell Broker",
   "table.units": "Units",
   "table.cost_eur": "Cost EUR",
   "table.proceeds_eur": "Proceeds EUR",

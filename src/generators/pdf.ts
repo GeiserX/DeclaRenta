@@ -13,6 +13,7 @@ import type { TaxSummary } from "../types/tax.js";
 import { localizeHint, localizeMessage, t } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 import { pdfSafeText } from "./pdf-text.js";
+import { showBrokerColumns } from "./broker-columns.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -176,27 +177,23 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           .rect(MARGIN, tableY, CONTENT_WIDTH, 16)
           .fill(COLORS.primary);
 
-        const cols = [
-          { label: "ISIN", x: MARGIN + 4, w: 68 },
-          { label: "Símbolo", x: MARGIN + 76, w: 46 },
-          { label: "F. Compra", x: MARGIN + 126, w: 52 },
-          { label: "F. Venta", x: MARGIN + 182, w: 52 },
-          { label: "Uds.", x: MARGIN + 238, w: 28 },
-          { label: "Coste EUR", x: MARGIN + 270, w: 56 },
-          { label: "Venta EUR", x: MARGIN + 330, w: 56 },
-          { label: "G/P EUR", x: MARGIN + 390, w: 48 },
-          { label: "Tipo ECB", x: MARGIN + 442, w: 48 },
-        ];
+        // Purchase and sale broker after the dates, only when the listed sales
+        // name more than one broker; the table then uses a smaller font and narrower
+        // columns to stay inside the page.
+        const maxRows = Math.min(report.capitalGains.disposals.length, 50);
+        const brokers = showBrokerColumns(report.capitalGains.disposals.slice(0, maxRows));
+        const tableFont = brokers ? 6.5 : FONT_SIZE.small;
+        const cols = opsColumns(brokers);
+        const col = (key: OpsColumnKey) => cols.find((c) => c.key === key)!;
 
-        doc.fontSize(FONT_SIZE.small).fillColor("#ffffff");
-        for (const col of cols) {
-          doc.text(col.label, col.x, tableY + 3, { width: col.w });
+        doc.fontSize(tableFont).fillColor("#ffffff");
+        for (const c of cols) {
+          doc.text(c.label, c.x, tableY + 3, { width: c.w });
         }
 
         doc.y = tableY + 18;
 
         // Table rows
-        const maxRows = Math.min(report.capitalGains.disposals.length, 50);
         for (let i = 0; i < maxRows; i++) {
           const d = report.capitalGains.disposals[i]!;
           const rowY = doc.y;
@@ -208,20 +205,34 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
           const gainLoss = d.gainLossEur;
           const glColor = gainLoss.greaterThanOrEqualTo(0) ? COLORS.success : COLORS.accent;
 
-          doc.fontSize(FONT_SIZE.small).fillColor(COLORS.text);
-          doc.text(d.isin, cols[0]!.x, rowY + 2, { width: cols[0]!.w });
+          const cell = (key: OpsColumnKey, text: string) => {
+            const c = col(key);
+            doc.text(text, c.x, rowY + 2, { width: c.w });
+          };
+          doc.fontSize(tableFont).fillColor(COLORS.text);
+          cell("isin", d.isin);
           const scenarioTag = d.optionScenario === "expiration" ? "EXP" : d.optionScenario === "exercise" ? "EJ" : "CL";
           const symbolLabel = d.optionScenario
             ? `${(d.underlyingSymbol ?? d.symbol).slice(0, 6)}${d.putCall ?? ""} [${scenarioTag}]`
             : d.symbol.slice(0, 10);
-          doc.text(symbolLabel, cols[1]!.x, rowY + 2, { width: cols[1]!.w });
-          doc.text(formatDate(d.acquireDate), cols[2]!.x, rowY + 2, { width: cols[2]!.w });
-          doc.text(formatDate(d.sellDate), cols[3]!.x, rowY + 2, { width: cols[3]!.w });
-          doc.text(d.quantity.toString(), cols[4]!.x, rowY + 2, { width: cols[4]!.w });
-          doc.text(d.costBasisEur.toFixed(2), cols[5]!.x, rowY + 2, { width: cols[5]!.w });
-          doc.text(d.proceedsEur.toFixed(2), cols[6]!.x, rowY + 2, { width: cols[6]!.w });
-          doc.fillColor(glColor).text(gainLoss.toFixed(2), cols[7]!.x, rowY + 2, { width: cols[7]!.w });
-          doc.fillColor(COLORS.muted).text(d.sellEcbRate.toFixed(4), cols[8]!.x, rowY + 2, { width: cols[8]!.w });
+          cell("symbol", symbolLabel);
+          cell("buyDate", formatDate(d.acquireDate));
+          cell("sellDate", formatDate(d.sellDate));
+          if (brokers) {
+            // One line each: a name too long for the column ends in "...",
+            // never wraps into the next row.
+            for (const [key, name] of [["buyBroker", d.acquireBrokerSource], ["sellBroker", d.brokerSource]] as const) {
+              const c = col(key);
+              doc.text(pdfSafeText(name ?? "—"), c.x, rowY + 2, { width: c.w, height: tableFont * 1.6, ellipsis: true });
+            }
+          }
+          cell("units", d.quantity.toString());
+          cell("cost", d.costBasisEur.toFixed(2));
+          cell("proceeds", d.proceedsEur.toFixed(2));
+          doc.fillColor(glColor);
+          cell("gainLoss", gainLoss.toFixed(2));
+          doc.fillColor(COLORS.muted);
+          cell("ecb", d.sellEcbRate.toFixed(4));
 
           doc.y = rowY + 14;
           checkPageBreak(doc);
@@ -320,6 +331,42 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
       reject(err instanceof Error ? err : new Error(String(err)));
     }
   });
+}
+
+type OpsColumnKey =
+  | "isin" | "symbol" | "buyDate" | "sellDate" | "buyBroker" | "sellBroker"
+  | "units" | "cost" | "proceeds" | "gainLoss" | "ecb";
+
+/**
+ * Operations table columns, left to right, 4 pt apart. Without the broker
+ * columns the widths are the original layout; with them every column narrows
+ * so the eleven fit in CONTENT_WIDTH at the smaller font, still wide enough at
+ * 6.5 pt for a 12-character ISIN and a 7-digit amount on one line.
+ */
+function opsColumns(brokers: boolean): { key: OpsColumnKey; label: string; x: number; w: number }[] {
+  const spec: [OpsColumnKey, string, number, number][] = [
+    // key, label, width, width with brokers
+    ["isin", "ISIN", 68, 52],
+    ["symbol", "Símbolo", 46, 46],
+    ["buyDate", "F. Compra", 52, 36],
+    ["sellDate", "F. Venta", 52, 36],
+    ["buyBroker", "Broker compra", 0, 56],
+    ["sellBroker", "Broker venta", 0, 56],
+    ["units", "Uds.", 28, 26],
+    ["cost", "Coste EUR", 56, 37],
+    ["proceeds", "Venta EUR", 56, 37],
+    ["gainLoss", "G/P EUR", 48, 36],
+    ["ecb", "Tipo ECB", 48, 32],
+  ];
+  const cols: { key: OpsColumnKey; label: string; x: number; w: number }[] = [];
+  let x = MARGIN + 4;
+  for (const [key, label, w, wBrokers] of spec) {
+    const width = brokers ? wBrokers : w;
+    if (width === 0) continue;
+    cols.push({ key, label, x, w: width });
+    x += width + 4;
+  }
+  return cols;
 }
 
 function sectionHeader(doc: InstanceType<typeof PDFDocument>, title: string): void {

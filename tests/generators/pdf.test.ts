@@ -583,3 +583,101 @@ describe("PDF Report Generator settings line", () => {
   });
 });
 
+
+describe("PDF Report Generator broker columns", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const withBrokers = (sale: [string, string | undefined], other: [string, string | undefined]) => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    return makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: sale[0], acquireBrokerSource: sale[1] },
+          { ...b!, brokerSource: other[0], acquireBrokerSource: other[1] },
+        ],
+      },
+    });
+  };
+
+  it("prints the purchase and sale broker when the sales cross brokers", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(withBrokers(["Degiro", "Interactive Brokers"], ["Degiro", undefined]));
+    const rendered = spy.mock.calls.map((args) => String(args[0]));
+    expect(rendered).toContain("Broker compra");
+    expect(rendered).toContain("Broker venta");
+    expect(rendered).toContain("Interactive Brokers");
+    expect(rendered.filter((s) => s === "Degiro")).toHaveLength(2);
+    expect(rendered).toContain("—");
+  });
+
+  it("prints no broker columns for a single-broker report", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(withBrokers(["Degiro", "Degiro"], ["Degiro", undefined]));
+    const rendered = spy.mock.calls.map((args) => String(args[0]));
+    expect(rendered).not.toContain("Broker compra");
+    expect(rendered).not.toContain("Degiro");
+  });
+});
+
+describe("PDF Report Generator broker columns fit the page", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  // Records, for every text drawn with a column width, whether it fits that
+  // width at the font size in use when it is drawn. pdfkit wraps a word that
+  // does not fit, and the tail lands inside the next row.
+  function recordFits(): Map<string, boolean> {
+    type Doc = InstanceType<typeof PDFDocument>;
+    type TextFn = (this: Doc, ...args: unknown[]) => Doc;
+    const fits = new Map<string, boolean>();
+    const proto = PDFDocument.prototype as unknown as { text: TextFn };
+    const original = proto.text;
+    vi.spyOn(proto, "text").mockImplementation(function (this: Doc, ...args: unknown[]) {
+      const [text, , , options] = args as [unknown, unknown, unknown, { width?: number } | undefined];
+      if (typeof options?.width === "number") {
+        fits.set(String(text), this.widthOfString(String(text)) <= options.width);
+      }
+      return original.apply(this, args);
+    });
+    return fits;
+  }
+
+  it("keeps a 12-character ISIN and 7-digit amounts on one line in the two-broker layout", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          {
+            ...a!, isin: "DE000A0WMPJ6", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers",
+            costBasisEur: new Decimal("1234567.89"), proceedsEur: new Decimal("1111111.11"),
+            gainLossEur: new Decimal("-123456.78"),
+          },
+          { ...b!, isin: "GB00BH4HKS39", brokerSource: "Degiro" },
+        ],
+      },
+    });
+    const fits = recordFits();
+    await generatePdfReport(report);
+    expect(fits.get("Broker compra")).toBeDefined(); // the two-broker layout was drawn
+    for (const s of ["DE000A0WMPJ6", "GB00BH4HKS39", "1234567.89", "1111111.11", "-123456.78"]) {
+      expect(fits.get(s), s).toBe(true);
+    }
+  });
+
+  it("decides the broker columns from the 50 sales it lists, not the ones it leaves out", async () => {
+    const [a] = makeReport().capitalGains.disposals;
+    const disposals = Array.from({ length: 51 }, (_, i) => ({
+      ...a!,
+      isin: `US${String(i).padStart(10, "0")}`,
+      brokerSource: i < 50 ? "Degiro" : "Interactive Brokers",
+    }));
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport({ capitalGains: { ...makeReport().capitalGains, disposals } }));
+    const rendered = spy.mock.calls.map((args) => String(args[0]));
+    expect(rendered).toContain("... y 1 operaciones más");
+    expect(rendered).not.toContain("Broker compra");
+  });
+});

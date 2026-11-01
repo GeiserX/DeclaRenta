@@ -215,6 +215,7 @@ interface Layout {
   appContentWidth: number;
   values: { right: number; rowRight: number }[];
   copies: { right: number; width: number }[];
+  annexWraps: { right: number; overflowX: string; scrolls: boolean }[];
 }
 
 describe.skipIf(!CHROME)("results step fits a phone screen", () => {
@@ -334,6 +335,8 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
       `!document.getElementById("wizard-step-3").hidden && document.querySelectorAll("#casillas .casilla-value").length > 0`,
       "step 3 with casillas",
     );
+    // Open the operations annex groups: their tables are wider than a phone.
+    await evaluate(`document.querySelectorAll(".annex-group").forEach((d) => { d.open = true; })`);
     // Let fonts and late layout settle before measuring.
     await evaluate(`new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`);
 
@@ -351,6 +354,11 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
           return { right: range.getBoundingClientRect().right, rowRight: rect(el.closest(".casilla-trigger")).right };
         }),
         copies: [...document.querySelectorAll("#casillas .casilla-copy")].map((el) => ({ right: rect(el).right, width: rect(el).width })),
+        annexWraps: [...document.querySelectorAll(".annex-table-wrap")].map((el) => ({
+          right: rect(el).right,
+          overflowX: getComputedStyle(el).overflowX,
+          scrolls: el.scrollWidth > el.clientWidth,
+        })),
       };
     })()`;
     const asRendered = await evaluate<Layout>(measure);
@@ -385,6 +393,13 @@ describe.skipIf(!CHROME)("results step fits a phone screen", () => {
           expect(cp.right).toBeLessThanOrEqual(width);
           expect(cp.width).toBeGreaterThan(0);
           expect(cp.width).toBeLessThan(100);
+        }
+
+        // The annex tables scroll sideways inside the screen instead of being cut off.
+        expect(layout.annexWraps.length).toBeGreaterThan(0);
+        for (const w of layout.annexWraps) {
+          expect(w.right).toBeLessThanOrEqual(width);
+          if (w.scrolls) expect(w.overflowX).toBe("auto");
         }
       }
     }, 120_000);

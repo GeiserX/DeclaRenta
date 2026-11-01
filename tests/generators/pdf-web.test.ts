@@ -409,3 +409,85 @@ describe("generatePdfWebReport settings line", () => {
   });
 });
 
+
+describe("generatePdfWebReport broker columns", () => {
+  // Short labels: a long key would wrap inside the narrow header cell.
+  const tb = (key: string) => (key === "table.buy_broker" ? "BUYB" : key === "table.sell_broker" ? "SELLB" : key);
+  const withBrokers = (sale: [string, string | undefined], other: [string, string | undefined]) => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    return makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: sale[0], acquireBrokerSource: sale[1] },
+          { ...b!, brokerSource: other[0], acquireBrokerSource: other[1] },
+        ],
+      },
+    });
+  };
+
+  it("prints the purchase and sale broker when the sales cross brokers", async () => {
+    const text = await pdfText(await generatePdfWebReport(
+      withBrokers(["Degiro", "Interactive Brokers"], ["Degiro", undefined]),
+      tb,
+    ));
+    expect(text).toContain("(BUYB)");
+    expect(text).toContain("(SELLB)");
+    expect(text).toContain("Degiro");
+    expect(text).toContain("Interactive");
+    // The dash of the sale without lots stays 1-byte WinAnsi text.
+    expect(text).not.toContain("\u0000");
+  });
+
+  it("prints no broker columns for a single-broker report", async () => {
+    const text = await pdfText(await generatePdfWebReport(withBrokers(["Degiro", "Degiro"], ["Degiro", undefined]), tb));
+    expect(text).not.toContain("BUYB");
+    expect(text).not.toContain("Degiro");
+  });
+});
+
+describe("generatePdfWebReport broker columns fit their cells", () => {
+  it("keeps a 12-character ISIN and a 12-character symbol on one line in the two-broker layout", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, isin: "DE000A0WMPJ6", symbol: "Acme World E", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, isin: "GB00BH4HKS39", brokerSource: "Degiro" },
+        ],
+      },
+    });
+    // A cell too narrow for its text is split by autotable into two text runs.
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    expect(text).toContain("(DE000A0WMPJ6)");
+    expect(text).toContain("(GB00BH4HKS39)");
+    expect(text).toContain("(Acme World E)");
+  });
+});
+
+describe("generatePdfWebReport broker columns keep the G/P colours", () => {
+  it("colours the G/P cell, not another column, in the two-broker layout", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, brokerSource: "Degiro" },
+        ],
+      },
+    });
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    // jsPDF sets the fill colour (successRgb 56,161,105 / dangerRgb 229,62,62) right before the cell text.
+    const coloured = (rg: string) =>
+      [...text.matchAll(new RegExp(`${rg} rg\\n[^\\n]*\\n\\(([^)]*)\\) Tj`, "g"))].map((m) => m[1]);
+    expect(coloured("0\\.22 0\\.631 0\\.412")).toContain("+1000.00");
+    expect(coloured("0\\.898 0\\.243 0\\.243")).toContain("-500.00");
+  });
+});
