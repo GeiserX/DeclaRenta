@@ -148,7 +148,7 @@ describe("serializeFxTrace — CSV format", () => {
 
   it("renders absent optional fields as EMPTY cells (not \"undefined\")", () => {
     const row = serializeFxTrace([acquireEvent()], "csv").split("\n")[1]!;
-    // acquire has no costBasisEur/proceedsEur/gainLossEur/positionKey/lotId/lotAcquireDate/note/brokerSource.
+    // This fixture omits costBasisEur/proceedsEur/gainLossEur/positionKey/lotId/lotAcquireDate/note/brokerSource.
     expect(row).toBe("1,2025-01-01,acquire,USD,conversion,1000,0.9,,,,1000,0,,,,,");
     expect(row).not.toContain("undefined");
   });
