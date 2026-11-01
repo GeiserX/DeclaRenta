@@ -66,7 +66,6 @@ export interface ManualOpeningLot {
   acquireDate: string;
   quantity: string;
   pricePerShare: string;
-  brokerSource?: string;
 }
 
 /** Option exercise/close scenario per DGT V0137-23 (Art. 37.1.m LIRPF) */
@@ -106,7 +105,7 @@ export interface Lot {
   underlyingSymbol?: string;
   /** Underlying ISIN for derivatives */
   underlyingIsin?: string;
-  /** Optional: which broker produced this disposal (for audit traceability) */
+  /** Broker where this lot was acquired (the parser name, e.g. "Degiro"), for audit traceability */
   brokerSource?: string;
 }
 
@@ -205,8 +204,14 @@ export interface FifoDisposal {
   underlyingSymbol?: string;
   /** Underlying ISIN */
   underlyingIsin?: string;
-  /** Optional: which broker produced this disposal (for audit traceability) */
+  /** Broker of the sale (the closing trade, option expiry or exercise), for audit traceability */
   brokerSource?: string;
+  /**
+   * Broker where the consumed lot was acquired. FIFO pools lots per ISIN across
+   * every broker, so it can differ from `brokerSource` (bought at one broker,
+   * sold at another). Absent when no lot was consumed (sale without lots).
+   */
+  acquireBrokerSource?: string;
 }
 
 /** Dividend received from a foreign security */
@@ -451,6 +456,7 @@ export interface FxLot {
   costPerUnit: Decimal;
   /** Total EUR cost for this lot */
   costInEur: Decimal;
+  /** Broker the currency came from (conversion, dividend, sale proceeds), for audit traceability */
   brokerSource?: string;
 }
 
@@ -534,6 +540,7 @@ export interface FxTraceEvent {
   lotAcquireDate?: string;
   /** Optional human note (e.g. "uncovered", "missing-lots floor → gain 0"). */
   note?: string;
+  /** Broker of the event that caused this movement (not of the pool lot it touches) */
   brokerSource?: string;
 }
 
@@ -550,7 +557,13 @@ export interface FxDisposal {
   holdingPeriodDays: number;
   /** FIFO lot ID consumed (for audit traceability) */
   lotId: string;
+  /** Broker of the event that spent or converted the currency */
   brokerSource?: string;
+  /**
+   * Broker the consumed lot came from. The FX pool is per currency across every
+   * broker, so it can differ from `brokerSource`. Absent for a missing-lots floor.
+   */
+  acquireBrokerSource?: string;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */

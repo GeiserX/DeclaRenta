@@ -223,7 +223,6 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         taxBucket: incomeBucket,
         rewardQuantity: toFiniteDecimal(quantity).abs().toString(),
         rewardCostBasisEur: toFiniteDecimal(eurAmount).abs().toString(),
-        brokerSource: "Coinbase",
       });
       continue;
     }
@@ -262,7 +261,6 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         commission: feeDec.isZero() ? "0" : feeDec.abs().neg().toString(),
         taxes: "0",
         multiplier: "1",
-        brokerSource: "Coinbase",
       });
 
       // Open (buy) the destination asset
@@ -298,7 +296,6 @@ function parseCoinbaseCsv(lines: string[]): Statement {
           commission: "0",
           taxes: "0",
           multiplier: "1",
-        brokerSource: "Coinbase",
         });
       } else {
         // No parseable destination in Notes: the acquired coin gets no BUY lot.
@@ -357,7 +354,6 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       commission: feeDec2.isZero() ? "0" : feeDec2.abs().neg().toString(),
       taxes: "0",
       multiplier: "1",
-      brokerSource: "Coinbase",
     });
   }
 

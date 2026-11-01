@@ -313,7 +313,7 @@ export class FxFifoEngine {
    * sale rate/date). The carried EUR basis is `rate`; the carried date is
    * `acquireDate` — both travel with the principal across the round-trip.
    */
-  private parked: Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null }[]> = new Map();
+  private parked: Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null; brokerSource?: string }[]> = new Map();
 
   /**
    * Stable identity of a foreign-stock POSITION for the parked FIFO. `isin ||
@@ -1056,7 +1056,6 @@ export class FxFifoEngine {
         coveredCostPerUnit: ecbRate,
         coveredAcquireDate: date,
         positionKey: lot.isin || lot.symbol,
-        brokerSource: lot.brokerSource,
       });
     }
 
@@ -1195,6 +1194,7 @@ export class FxFifoEngine {
         holdingPeriodDays: holdingDays,
         lotId: lot.id,
         brokerSource: event.brokerSource,
+        acquireBrokerSource: lot.brokerSource,
       });
 
       const lotIdConsumed = lot.id;
@@ -1377,7 +1377,12 @@ export class FxFifoEngine {
         // Carry BOTH the consumed lot's EUR basis AND its ORIGINAL acquisition
         // date, so the matching sell re-adds the principal at its true age (issue
         // #230) — not the sale date, which would mis-order the FIFO frontier.
-        park.push({ q: consumed, rate: lot.costPerUnit, acquireDate: lot.acquireDate });
+        park.push({
+          q: consumed,
+          rate: lot.costPerUnit,
+          acquireDate: lot.acquireDate,
+          ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
+        });
         // Reduce the pool lot in lockstep (quantity + EUR cost), shift when empty.
         const costPortion = consumed.mul(lot.costPerUnit);
         lot.quantity = lot.quantity.minus(consumed);
@@ -1470,7 +1475,10 @@ export class FxFifoEngine {
           // the park), so the pool stays FIFO-ordered by genuine age (issue #230).
           // An uncovered slice (no tracked origin) re-adds at the sale date.
           const reAddDate = p.acquireDate ?? event.date;
-          this.pushPoolLot(event.currency, reAddDate, give, reAddRate, event.brokerSource);
+          // Same for the broker: a carried slice keeps the broker its dollars
+          // came from; an uncovered one is sale proceeds, so the sale's broker.
+          const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
+          this.pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -1547,7 +1555,7 @@ export class FxFifoEngine {
    * (reference/unit harnesses). Whatever stays here at the end is principal in
    * positions still open at the period boundary — never converted, never taxed.
    */
-  getParked(): Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null }[]> {
+  getParked(): Map<string, { q: Decimal; rate: Decimal | null; acquireDate: string | null; brokerSource?: string }[]> {
     return this.parked;
   }
 }

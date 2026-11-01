@@ -591,7 +591,7 @@ async function parseFiles(): Promise<void> {
       const uint8 = await getFileBytes(file);
       if (await detectRevolutXlsx(uint8)) {
         const statement = await parseRevolutXlsx(uint8);
-        mergeStatement(merged, statement);
+        mergeStatement(merged, statement, "Revolut");
         brokerNames.push("Revolut");
         parsedExports.push({ broker: "Revolut", statement });
         continue;
@@ -599,7 +599,7 @@ async function parseFiles(): Promise<void> {
 
       if (await detectEtoroXlsx(uint8)) {
         const statement = await parseEtoroXlsx(uint8);
-        mergeStatement(merged, statement);
+        mergeStatement(merged, statement, "eToro");
         brokerNames.push("eToro");
         parsedExports.push({ broker: "eToro", statement });
         continue;
@@ -640,7 +640,7 @@ async function parseFiles(): Promise<void> {
       }
 
       const statement = parser.parse(content);
-      mergeStatement(merged, statement);
+      mergeStatement(merged, statement, parser.name);
       brokerNames.push(parser.name);
       parsedExports.push({ broker: parser.name, statement });
     }

@@ -154,7 +154,7 @@ async function parseAndMerge(
     const buf = readFileSync(file);
     if (await detectRevolutXlsx(buf)) {
       const statement = await parseRevolutXlsx(buf);
-      mergeStatement(merged, statement);
+      mergeStatement(merged, statement, "Revolut");
       brokerNames.push("Revolut");
       console.error(
         `  [Revolut XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
@@ -163,7 +163,7 @@ async function parseAndMerge(
     }
     if (await detectEtoroXlsx(buf)) {
       const statement = await parseEtoroXlsx(buf);
-      mergeStatement(merged, statement);
+      mergeStatement(merged, statement, "eToro");
       brokerNames.push("eToro");
       console.error(
         `  [eToro XLSX] ${file}: ${statement.trades.length} operaciones, ${statement.cashTransactions.length} transacciones`,
@@ -183,7 +183,7 @@ async function parseAndMerge(
     }
 
     const statement = parser.parse(content);
-    mergeStatement(merged, statement);
+    mergeStatement(merged, statement, parser.name);
     brokerNames.push(parser.name);
 
     console.error(

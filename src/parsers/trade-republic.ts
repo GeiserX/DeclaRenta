@@ -211,7 +211,6 @@ function parseTrCsv(lines: string[]): Statement {
         commission: absFee.isZero() ? "0" : absFee.neg().toString(),
         taxes: absTax.isZero() ? "0" : absTax.neg().toString(),
         multiplier: "1",
-        brokerSource: "Trade Republic",
       });
       continue;
     }
@@ -242,7 +241,6 @@ function parseTrCsv(lines: string[]): Statement {
         amount: divAmount,
         fxRateToBase: fxToBase,
         type: "Dividends",
-        brokerSource: "Trade Republic",
       });
 
       // Withholding tax (if present)
@@ -259,7 +257,6 @@ function parseTrCsv(lines: string[]): Statement {
           amount: tax > 0 ? toFiniteDecimal(taxStr).abs().neg().toString() : taxStr,
           fxRateToBase: "1",
           type: "Withholding Tax",
-          brokerSource: "Trade Republic",
         });
       }
       continue;
@@ -282,7 +279,6 @@ function parseTrCsv(lines: string[]): Statement {
         amount: toFiniteDecimalString(amountStr),
         fxRateToBase: "1",
         type: "Broker Interest Received",
-        brokerSource: "Trade Republic",
       });
       continue;
     }
@@ -302,7 +298,6 @@ function parseTrCsv(lines: string[]): Statement {
           amount: amountStr,
           fxRateToBase: "1",
           type: "Broker Interest Received",
-        brokerSource: "Trade Republic",
         });
       }
       continue;

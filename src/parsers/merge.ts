@@ -22,7 +22,16 @@ export function createEmptyStatement(): Statement {
   };
 }
 
-export function mergeStatement(target: Statement, source: Statement): Statement {
+/**
+ * Append `source` to `target`. With `brokerName` (the parser's `name`, e.g.
+ * "Interactive Brokers"), every row of `source` that does not already name its
+ * broker gets `brokerSource = brokerName`, so trades, cash, positions and the
+ * FIFO lots and disposals built from them can be traced back to their broker.
+ * Stamping here, where both the web and the CLI merge each parsed file, covers
+ * every parser, including future ones, with the same name the user sees.
+ */
+export function mergeStatement(target: Statement, source: Statement, brokerName?: string): Statement {
+  if (brokerName) stampBroker(source, brokerName);
   target.accountId = target.accountId || source.accountId;
   target.fromDate = minDate(target.fromDate, source.fromDate);
   target.toDate = maxDate(target.toDate, source.toDate);
@@ -50,6 +59,21 @@ export function mergeStatement(target: Statement, source: Statement): Statement 
   ];
 
   return target;
+}
+
+function stampBroker(statement: Statement, brokerName: string): void {
+  const rows: { brokerSource?: string }[][] = [
+    statement.trades,
+    statement.cashTransactions,
+    statement.corporateActions,
+    statement.openPositions,
+    statement.securitiesInfo,
+    statement.cashBalances ?? [],
+    statement.optionExercises ?? [],
+  ];
+  for (const list of rows) {
+    for (const row of list) row.brokerSource ??= brokerName;
+  }
 }
 
 /**

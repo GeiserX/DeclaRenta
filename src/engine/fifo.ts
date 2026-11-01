@@ -783,6 +783,7 @@ export class FifoEngine {
         costInFcy: spinOffCost,
         currency: lot.currency,
         ecbRate: lot.ecbRate,
+        brokerSource: lot.brokerSource,
       });
     }
 
@@ -944,7 +945,7 @@ export class FifoEngine {
       holdingPeriodDays: number;
       acquireEcbRate: Decimal;
       optionFields?: Partial<FifoDisposal>;
-      brokerSource?: string;
+      acquireBrokerSource?: string;
     }): FifoDisposal => ({
       isin: trade.isin,
       symbol: trade.symbol,
@@ -967,7 +968,8 @@ export class FifoEngine {
       washSaleBlocked: false, // Set later by wash sale detection
       blockedLossEur: new Decimal(0), // Set later by detectWashSales (proportional)
       reintegratedLossEur: new Decimal(0), // Set later by detectWashSales
-      brokerSource: parts.brokerSource ?? trade.brokerSource,
+      brokerSource: trade.brokerSource,
+      acquireBrokerSource: parts.acquireBrokerSource,
       ...(parts.optionFields ?? {}),
     });
 
@@ -1057,6 +1059,7 @@ export class FifoEngine {
           gainLossEur,
           holdingPeriodDays: holdingDays,
           acquireEcbRate: lot.ecbRate,
+          acquireBrokerSource: lot.brokerSource,
           optionFields:
             trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP"
               ? {
@@ -1252,6 +1255,7 @@ export class FifoEngine {
         reintegratedLossEur: new Decimal(0),
         isShort: true,
         brokerSource: trade.brokerSource,
+        acquireBrokerSource: lot.brokerSource,
       });
 
       lot.quantity = lot.quantity.minus(consumed);
@@ -1391,6 +1395,7 @@ export class FifoEngine {
           underlyingSymbol: ex.underlyingSymbol,
           underlyingIsin: ex.underlyingIsin,
           brokerSource: ex.brokerSource,
+          acquireBrokerSource: lot.brokerSource,
         });
 
         lot.quantity = lot.quantity.minus(consumed);
@@ -1438,6 +1443,7 @@ export class FifoEngine {
           reintegratedLossEur: new Decimal(0),
           isShort: true,
           brokerSource: ex.brokerSource,
+          acquireBrokerSource: lot.brokerSource,
           optionScenario: "expiration",
           putCall: ex.putCall,
           strike: ex.strike,
@@ -1785,6 +1791,7 @@ export class FifoEngine {
         underlyingSymbol: ex.underlyingSymbol,
         underlyingIsin: ex.underlyingIsin,
         brokerSource: ex.brokerSource,
+        acquireBrokerSource: lot.brokerSource,
       });
 
       lot.quantity = lot.quantity.minus(consumed);

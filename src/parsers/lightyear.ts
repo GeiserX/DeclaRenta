@@ -229,7 +229,6 @@ function parseLightyearCsv(lines: string[]): Statement {
         amount: grossDec.toString(),
         fxRateToBase: "1",
         type: "Dividends",
-        brokerSource: "LY",
       });
 
       // Withholding tax (if present)
@@ -247,7 +246,6 @@ function parseLightyearCsv(lines: string[]): Statement {
           amount: taxDec.neg().abs().neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
-          brokerSource: "LY",
         });
       }
       continue;
@@ -273,7 +271,6 @@ function parseLightyearCsv(lines: string[]): Statement {
         amount: amountDec.toString(),
         fxRateToBase: "1",
         type: "Broker Interest Received",
-        brokerSource: "LY",
       });
       continue;
     }
@@ -328,7 +325,6 @@ function parseLightyearCsv(lines: string[]): Statement {
         ...(realEurAmount ? { realEurAmount } : {}),
         taxes: "0",
         multiplier: "1",
-        brokerSource: "LY",
       });
       continue;
     }
@@ -376,7 +372,6 @@ function parseLightyearCsv(lines: string[]): Statement {
       commission: feeDec.isZero() ? "0" : feeDec.neg().toString(),
       taxes: "0",
       multiplier: "1",
-      brokerSource: "LY",
     });
   }
 

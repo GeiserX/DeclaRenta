@@ -290,7 +290,6 @@ function parseClosedPositions(
       commission: "0",
       taxes: "0",
       multiplier: "1",
-      brokerSource: "eToro",
     });
 
     // Sell leg (closing)
@@ -322,7 +321,6 @@ function parseClosedPositions(
       commission: "0",
       taxes: "0",
       multiplier: "1",
-      brokerSource: "eToro",
     });
   }
 
@@ -455,7 +453,6 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
       amount: grossAmount,
       fxRateToBase: "1",
       type: "Dividends",
-      brokerSource: "eToro",
     });
 
     // Withholding tax
@@ -472,7 +469,6 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
         amount: taxAmount,
         fxRateToBase: "1",
         type: "Withholding Tax",
-        brokerSource: "eToro",
       });
     }
   }
@@ -531,7 +527,6 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
       amount,
       fxRateToBase: "1",
       type: "Broker Interest Received",
-      brokerSource: "eToro",
     });
   }
 

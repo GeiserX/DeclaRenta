@@ -349,7 +349,6 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       commission: commissionValue,
       taxes: "0",
       multiplier: "1",
-      brokerSource: "Degiro",
     };
     trades.push(trade);
 
@@ -544,7 +543,6 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
       amount,
       fxRateToBase: fx,
       type,
-      brokerSource: "Degiro",
     });
   }
 
