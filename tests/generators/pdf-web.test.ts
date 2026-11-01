@@ -446,3 +446,25 @@ describe("generatePdfWebReport broker columns", () => {
     expect(text).not.toContain("Degiro");
   });
 });
+
+describe("generatePdfWebReport broker columns fit their cells", () => {
+  it("keeps a 12-character ISIN and a 12-character symbol on one line in the two-broker layout", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, isin: "DE000A0WMPJ6", symbol: "Acme World E", brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, isin: "GB00BH4HKS39", brokerSource: "Degiro" },
+        ],
+      },
+    });
+    // A cell too narrow for its text is split by autotable into two text runs.
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    expect(text).toContain("(DE000A0WMPJ6)");
+    expect(text).toContain("(GB00BH4HKS39)");
+    expect(text).toContain("(Acme World E)");
+  });
+});

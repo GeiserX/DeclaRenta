@@ -61,17 +61,20 @@ const OPS_COLUMNS = {
   8: { cellWidth: 26, halign: "right" },
 } as const;
 
+// With the broker columns: at 6.5 pt plus cell padding, ISIN 22 mm holds any
+// 12-character ISIN and symbol 19 mm the 12 characters the symbol is cut to,
+// both on one line; a long broker name wraps inside its 16 mm.
 const OPS_COLUMNS_WITH_BROKERS = {
-  0: { cellWidth: 20 },
-  1: { cellWidth: 16 },
+  0: { cellWidth: 22 },
+  1: { cellWidth: 19 },
   2: { cellWidth: 16 },
   3: { cellWidth: 16 },
-  4: { cellWidth: 17 },
-  5: { cellWidth: 17 },
+  4: { cellWidth: 16 },
+  5: { cellWidth: 16 },
   6: { cellWidth: 14, halign: "right" },
-  7: { cellWidth: 18, halign: "right" },
-  8: { cellWidth: 18, halign: "right" },
-  9: { cellWidth: 17, halign: "right" },
+  7: { cellWidth: 17, halign: "right" },
+  8: { cellWidth: 17, halign: "right" },
+  9: { cellWidth: 16, halign: "right" },
   10: { cellWidth: 13, halign: "right" },
 } as const;
 
