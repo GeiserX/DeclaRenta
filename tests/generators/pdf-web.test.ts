@@ -468,3 +468,26 @@ describe("generatePdfWebReport broker columns fit their cells", () => {
     expect(text).toContain("(Acme World E)");
   });
 });
+
+describe("generatePdfWebReport broker columns keep the G/P colours", () => {
+  it("colours the G/P cell, not another column, in the two-broker layout", async () => {
+    const base = makeReport();
+    const [a, b] = base.capitalGains.disposals;
+    const report = makeReport({
+      capitalGains: {
+        ...base.capitalGains,
+        disposals: [
+          { ...a!, brokerSource: "Degiro", acquireBrokerSource: "Interactive Brokers" },
+          { ...b!, brokerSource: "Degiro" },
+        ],
+      },
+    });
+    const text = await pdfText(await generatePdfWebReport(report, t));
+    expect(text).toContain("(Degiro)"); // the two-broker layout was drawn
+    // jsPDF sets the fill colour (successRgb 56,161,105 / dangerRgb 229,62,62) right before the cell text.
+    const coloured = (rg: string) =>
+      [...text.matchAll(new RegExp(`${rg} rg\\n[^\\n]*\\n\\(([^)]*)\\) Tj`, "g"))].map((m) => m[1]);
+    expect(coloured("0\\.22 0\\.631 0\\.412")).toContain("+1000.00");
+    expect(coloured("0\\.898 0\\.243 0\\.243")).toContain("-500.00");
+  });
+});
