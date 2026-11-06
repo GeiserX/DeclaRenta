@@ -20,9 +20,11 @@
   --md-typeset-a-color:         #f59e0b;
 }
 
-/* Amber on white is 2.1:1. #b45309 is the same hue at 5.0:1. */
+/* Amber on white is 2.1:1. #b45309 is the same hue at 5.0:1. Modern paints
+   the active nav item in the accent, so the accent takes it too. */
 [data-md-color-scheme="default"] {
   --md-typeset-a-color:         #b45309;
+  --md-accent-fg-color:         #b45309;
 }
 
 /* Header logo at a fixed size (the mark is the app icon without its plate). */
@@ -36,14 +38,29 @@
    tight. Only the first .md-header__topic is the site name; the second is the
    page title, swapped in on scroll, and must not change. Impact is a system
    font on macOS and Windows; elsewhere the stack falls back to a heavy sans
-   (font: false in mkdocs.yml keeps the privacy promise: no Google Fonts). */
+   (font = false in zensical.toml keeps the privacy promise: no Google Fonts). */
 .md-header__topic:first-child .md-ellipsis {
   font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   font-weight: 900;
   font-size: 1.05rem;
   letter-spacing: -0.02em;
   text-transform: uppercase;
+}
+
+/* The amber only on the dark scheme: Zensical's modern header takes the page
+   background, so on the light scheme it is white, and amber on white is 2.1:1.
+   There the name keeps the default text colour. */
+[data-md-color-scheme="slate"] .md-header__topic:first-child .md-ellipsis {
   color: #f59e0b;
+}
+
+/* The mark's face is white, and modern's light header is white too: on the
+   light scheme the mark sits on a black plate, the banner's left panel. */
+[data-md-color-scheme="default"] .md-header__button.md-logo img {
+  background-color: #000000;
+  border-radius: 0.3rem;
+  padding: 0.1rem;
+  box-sizing: border-box;
 }
 
 /* Keep the mark and the name close, so they read as one unit. */

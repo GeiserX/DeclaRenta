@@ -108,22 +108,29 @@ jobs:
       - name: Install dependencies
         run: pip install -r docs/requirements-docs.txt
 
+      # Builds into dist/web/docs (site_dir in zensical.toml), as deploy.yml does.
       - name: Build
-        run: mkdocs build --strict
+        run: python -m zensical build --clean --strict
 
-      # Material fetches the repo's stars and latest release from api.github.com
+      # What the strict build does not check: a page in no nav entry, a nav
+      # entry for a missing file, a missing image, a /rooted link, a raw <title>
+      # in a page.
+      - name: Check the built site
+        run: python -I .github/scripts/site-check.py dist/web/docs
+
+      # The theme fetches the repo's stars and latest release from api.github.com
       # for every element marked data-md-component="source", which would send
       # each reader's IP to GitHub. overrides/partials/source.html keeps the
       # header link without that marker. The last two lines are controls: the
       # fetch code is still in the bundle, and the link still renders.
       - name: No GitHub API call from the docs pages
         run: |
-          if grep -rl 'data-md-component="source"' site/; then
+          if grep -rl 'data-md-component="source"' dist/web/docs/; then
             echo "::error::The docs would call api.github.com from the reader's browser (see overrides/partials/source.html)"
             exit 1
           fi
-          grep -rlq 'api.github.com' site/assets/javascripts/
-          grep -q 'class="md-source"' site/index.html
+          grep -rlq 'api.github.com' dist/web/docs/assets/javascripts/
+          grep -q 'class="md-source"' dist/web/docs/index.html
 
   workflows:
     name: workflows (zizmor)
