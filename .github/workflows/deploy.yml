@@ -73,8 +73,16 @@ jobs:
       - name: Install docs dependencies
         run: pip install -r docs/requirements-docs.txt
 
+      # site_dir in zensical.toml is dist/web/docs. python -m, not the bare
+      # zensical command, so every GeiserX repo builds the same way.
       - name: Build docs
-        run: mkdocs build --strict --site-dir dist/web/docs
+        run: python -m zensical build --clean --strict
+
+      # What the strict build does not check: a page in no nav entry, a nav
+      # entry for a missing file, a missing image, a /rooted link, a raw <title>
+      # in a page.
+      - name: Check the built docs
+        run: python -I .github/scripts/site-check.py dist/web/docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5

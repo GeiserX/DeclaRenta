@@ -73,3 +73,14 @@ updates:
       - dependency-name: '*'
         update-types:
           - version-update:semver-major
+  # The docs site's one pin (zensical). Monthly: the strict build and
+  # site-check in the docs (strict) CI job prove each bump.
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build(docs)
+    labels:
+      - documentation
+      - automated
