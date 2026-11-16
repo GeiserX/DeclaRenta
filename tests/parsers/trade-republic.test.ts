@@ -100,3 +100,29 @@ describe("Trade Republic: crypto is keyed by ticker", () => {
     expect(disposals[0]!.gainLossEur.toString()).toBe("50");
   });
 });
+
+// Issue #96: TR converts a foreign dividend and credits EUR, so the taxpayer
+// never holds the USD. The parser keeps the dividend in USD (0029 at the ECB
+// rate) but flags it so the FX engine opens no lot.
+describe("Trade Republic: foreign dividends credited in EUR", () => {
+  const csv = [
+    HEADER,
+    '"2025-03-14T10:00:00Z","2025-03-14","DEFAULT","CASH","DIVIDEND","STOCK","Acme Corp","US0000001001","10","","9.00","","-1.35","EUR","10.00","USD","0.900000","Cash Dividend","tx-usd","","","",""',
+    '"2025-04-14T10:00:00Z","2025-04-14","DEFAULT","CASH","DIVIDEND","STOCK","Euro Corp","DE0000001001","10","","5.00","","","EUR","","","","Cash Dividend","tx-eur","","","",""',
+  ].join("\n");
+  const cash = tradeRepublicParser.parse(csv).cashTransactions;
+
+  it("flags the USD dividend as converted by the broker", () => {
+    const div = cash.find((c) => c.transactionID === "tx-usd")!;
+    expect(div.currency).toBe("USD");
+    expect(div.amount).toBe("10");
+    expect(div.brokerConvertedToBase).toBe(true);
+  });
+
+  it("leaves the EUR withholding and an EUR dividend unflagged", () => {
+    const wht = cash.find((c) => c.transactionID === "tx-usd-wht")!;
+    expect(wht.currency).toBe("EUR");
+    expect(wht.brokerConvertedToBase).toBeUndefined();
+    expect(cash.find((c) => c.transactionID === "tx-eur")!.brokerConvertedToBase).toBeUndefined();
+  });
+});

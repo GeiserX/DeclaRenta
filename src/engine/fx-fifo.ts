@@ -738,8 +738,8 @@ export class FxFifoEngine {
      * bucket, so two same-(currency,date) incomes split one withholding total rather
      * than each netting it in full; order within a key doesn't change the total netted.
      * NOTE: this keys on the EXACT same-date (currency,date), deliberately coarser
-     * AND stricter than the income path's matcher in dividends.ts (ISIN + currency +
-     * ≤7-day window). Coarser is safe for FX because lots are fungible per currency
+     * AND stricter than the income path's matcher in dividends.ts (ISIN, same currency
+     * first, ≤7-day window). Coarser is safe for FX because lots are fungible per currency
      * (the net-per-currency total is what matters, not which issuer). Stricter on the
      * date means a withholding booked on a DIFFERENT settle-date than its dividend
      * isn't matched here → it's an orphan, dropped, and the lot stays gross. That is
@@ -757,6 +757,10 @@ export class FxFifoEngine {
 
     for (const tx of cashTransactions) {
       if (tx.currency === "EUR") continue;
+      // The broker converted this income to EUR before crediting it (Trade
+      // Republic, issue #96): no foreign currency ever entered the account,
+      // so it opens no FX lot. Its income value (0029) is unaffected.
+      if (tx.brokerConvertedToBase) continue;
 
       const amount = new Decimal(tx.amount);
       if (amount.isZero()) continue;
