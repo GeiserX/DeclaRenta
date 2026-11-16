@@ -2,8 +2,10 @@
  * ECB exchange rate fetcher.
  *
  * Fetches official ECB daily reference rates via the SDMX REST API.
- * DGT consultas vinculantes (V2324-10, V0583-16) require "tipo de cambio
- * vigente" — ECB daily rates serve as the safe-harbor official source.
+ * The ECB rate is the official exchange rate by law (Ley 46/1998 art. 36: "tendrá
+ * la consideración de cambio oficial ... el que publique para el euro el Banco
+ * Central Europeo"). The DGT values foreign-currency income at the rate in force
+ * when it becomes payable (V1024-11, dividends; V0463-21, interest).
  */
 
 import Decimal from "decimal.js";

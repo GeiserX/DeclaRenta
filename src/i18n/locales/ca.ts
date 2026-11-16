@@ -245,7 +245,7 @@ const ca: TranslationKeys = {
   "profile.monodivisa_detail":
     "Valora cada acció en moneda estrangera com el mètode tradicional i eines com Autodeclaro o Taxdown: la compra al tipus de canvi del dia de compra i la venda al del dia de venda (Art. 35.1). L'efecte divisa queda dins del guany de l'acció. A més, apaga tot el càlcul de divisa: no calcula cap resultat de divisa (caselles 1633/1637), tampoc en les conversions USD→EUR que facis tu ni en les automàtiques del bróker. Si converteixes divisa, fes servir el mode per defecte, que sí que les calcula. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
   "profile.monodivisa_warning":
-    "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2324-10).",
+    "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2422-20).",
   "profile.track_autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "Activat per defecte. Interactive Brokers no reconverteix a euros en vendre una acció, així que el saldo en divisa és real i convertir-lo després genera un guany o pèrdua patrimonial (art. 33.1 LIRPF). Desactiva-ho només si el teu bróker fa un round-trip complet EUR↔divisa i vols ignorar l'efecte de la divisa.",

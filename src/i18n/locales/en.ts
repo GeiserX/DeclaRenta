@@ -245,7 +245,7 @@ const en: TranslationKeys = {
   "profile.monodivisa_detail":
     "Values each foreign-currency share the way the traditional method and tools such as Autodeclaro or Taxdown do: the buy at the buy-date exchange rate and the sale at the sale-date rate (Art. 35.1). The currency effect stays inside the share's gain. It also switches off the whole currency calculation: no currency result is computed at all (casillas 1633/1637), not even for USD→EUR conversions you make yourself or your broker's automatic conversions. If you convert currency, use the default mode, which computes them. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
   "profile.monodivisa_warning":
-    "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
+    "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2422-20).",
   "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",

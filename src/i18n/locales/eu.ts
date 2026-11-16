@@ -246,7 +246,7 @@ const eu: TranslationKeys = {
   "profile.monodivisa_detail":
     "Atzerriko monetako akzio bakoitza metodo tradizionalak eta Autodeclaro edo Taxdown bezalako tresnek bezala balioesten du: erosketa erosketa-eguneko kanbio-tasan eta salmenta salmenta-egunekoan (35.1 art.). Dibisaren eragina akzioaren irabaziaren barruan geratzen da. Gainera, dibisaren kalkulu osoa itzaltzen du: ez du dibisa-emaitzarik batere kalkulatzen (1633/1637 laukitxoak), ezta zuk egindako USD→EUR bihurketetan edo brokerraren bihurketa automatikoetan ere. Dibisa bihurtzen baduzu, erabili modu lehenetsia, horiek kalkulatzen baititu. Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
   "profile.monodivisa_warning":
-    "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2324-10) arabera.",
+    "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2422-20) arabera.",
   "profile.track_autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "Lehenetsita aktibatuta. Interactive Brokersek ez du eurotara berriz bihurtzen akzio bat saltzean, beraz dibisa-saldoa erreala da eta gero bihurtzeak ondare-irabazi edo -galera sortzen du (LIRPF 33.1 art.). Desaktibatu soilik zure artekariak EUR↔dibisa round-trip osoa egiten badu eta dibisaren eragina alde batera utzi nahi baduzu.",
