@@ -627,7 +627,7 @@ const en: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
-    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. While you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert to euros (Art. 14.2.e LIRPF). If using single-currency mode, this section does not apply.",
+    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. While you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). If using single-currency mode, this section does not apply.",
   "guide_rw.dividends_note":
     "Dividends from foreign brokers have no Spanish withholding. Foreign withholding tax is NOT entered here: it is deducted separately in box 0588 (double taxation).",
   "guide_rw.interest_note":

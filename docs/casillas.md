@@ -25,7 +25,7 @@
 
 **Notas:**
 - La divisa es un elemento patrimonial: la ganancia/pérdida es valor de transmisión − valor de adquisición (Art. **33.1** LIRPF), imputada en la conversión efectiva a euros (Art. 14.2.e). La divisa comparte el bloque «otros elementos patrimoniales» (casillas 1633/1637) con opciones, cripto y fondos no cotizados. La casilla 1626 es «Tipo de elemento patrimonial. Clave», y 1631 es la «Fecha de transmisión» — no son importes.
-- Cada conversión EUR→FCY crea un lote en la cola FIFO de esa divisa, valorado al tipo del día de la conversión (Art. 35.1 LIRPF). La ley no fija en qué orden sale la divisa: aplicar FIFO es una inferencia por analogía con el Art. 37.2, que solo habla de valores.
+- Cada conversión EUR→FCY crea un lote en la cola FIFO de esa divisa, valorado por lo que realmente costó (Art. 35.1 LIRPF): el importe en euros que aplicó el bróker cuando el extracto lo da, y si no, el tipo BCE del día de la conversión. La transmisión se valora igual. La ley no fija en qué orden sale la divisa: aplicar FIFO es una inferencia por analogía con el Art. 37.2, que solo habla de valores.
 - Cada conversión de la divisa (por ejemplo, USD→EUR) consume lotes por FIFO y realiza una ganancia o pérdida de divisa. Lo mismo ocurre con los intereses y comisiones que pagas en esa divisa.
 - Comprar valores en divisa no realiza nada. La divisa gastada queda apartada con su coste de origen y vuelve a la cola cuando vendes los valores.
 - Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker» en el perfil fiscal, o con `--skip-auto-convert` en la CLI.
@@ -47,7 +47,7 @@
 **Notas:**
 - Los dividendos incluyen tanto dividendos ordinarios como "Payment In Lieu of Dividends" (dividendos sustitutivos en operaciones de préstamo de valores).
 - Las retenciones extranjeras NO se deducen aquí — se declaran en la casilla 0588.
-- La conversión a EUR usa el tipo de cambio oficial del BCE del día de pago (Ley 46/1998 art. 36; DGT V1024-11 para dividendos y V0463-21 para intereses: tipo vigente cuando el cobro es exigible).
+- El informe convierte a EUR con el tipo oficial del BCE (Ley 46/1998 art. 36) del día de pago que da el extracto. La regla de la DGT es el tipo vigente el día en que el cobro es exigible (V1024-11 para dividendos, V0463-21 para intereses). Normalmente coincide con el día de pago; si el bróker paga más tarde, los dos tipos pueden diferir.
 - Los gastos genuinos de administración y depósito de valores negociables (cuando el bróker los detalla) sí son deducibles en la **Casilla 0037** (Art. 26.1.a LIRPF); la casilla 0027 recoge ingresos íntegros, nunca gastos.
 - Las cuotas de suscripción del bróker (p. ej. planes de trading de tarifa plana) NO son «gastos de administración y depósito de valores negociables», por lo que no son deducibles.
 

@@ -629,7 +629,7 @@ const eu: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note":
-    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro bihurtzen duzunean agertzen dira —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. Dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da euro benetan bihurtu arte (Art. 14.2.e LIRPF). Monodibisa modua erabiltzen baduzu, atal hau ez da aplikagarria.",
+    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro edo beste dibisa batera bihurtzen duzunean agertzen dira (adib. USD→GBP) —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. Dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da benetan bihurtu arte, euro edo beste dibisa batera (Art. 14.2.e LIRPF). Monodibisa modua erabiltzen baduzu, atal hau ez da aplikagarria.",
   "guide_rw.dividends_note":
     "Atzerriko broker-en dibidenduek ez dute Espainiako atxikipenik. Atzerriko atxikipena (withholding tax) EZ da hemen jartzen: 0588 gelaxkan kentzen da bereizita (zergapetze bikoitza).",
   "guide_rw.interest_note":

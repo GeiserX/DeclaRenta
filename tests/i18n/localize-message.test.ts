@@ -79,9 +79,9 @@ describe("localizeMessage / localizeHint", () => {
     const m: LocalizableMessage = {
       id: "report.monodivisa_conversions_skipped",
       message:
-        "El modo monodivisa ha dejado sin calcular 3 conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
+        "El modo monodivisa ha dejado sin calcular 42 conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
       hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
-      context: { count: "3" },
+      context: { count: "42" },
     };
 
     it("Spanish locale text is byte-identical to the engine's message and hint", () => {
@@ -91,7 +91,8 @@ describe("localizeMessage / localizeHint", () => {
 
     it.each(["en", "ca", "eu", "gl"] as const)("%s interpolates the count and is not the Spanish fallback", async (loc) => {
       await setLocale(loc);
-      expect(localizeMessage(m)).toContain("3");
+      expect(localizeMessage(m)).toContain("42");
+      expect(localizeMessage(m)).not.toContain("{{count}}");
       expect(localizeMessage(m)).not.toBe(m.message);
       expect(localizeHint(m)).not.toBe(m.hint);
     });
