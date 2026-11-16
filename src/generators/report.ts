@@ -784,6 +784,29 @@ export function generateTaxReport(
     }
   }
 
+  // Monodivisa drops every currency conversion silently (the FX engine is off), so
+  // say how many this year's file had. Mirrors extractFxEvents' filter: a non-EUR
+  // CASH trade, minus AFx/FXCONV rows when the user also opted out of those.
+  if (options?.skipFx) {
+    const trackAutoConvert = options.trackAutoConvert !== false;
+    const skippedConversions = statement.trades.filter(
+      (tr) =>
+        tr.assetCategory === "CASH" &&
+        tr.currency !== "EUR" &&
+        (trackAutoConvert || !FxFifoEngine.isFxconv(tr)) &&
+        normalizeDate(tr.settlementDate || tr.tradeDate).startsWith(yearStr),
+    ).length;
+    if (skippedConversions > 0) {
+      allMessages.push({
+        id: "report.monodivisa_conversions_skipped",
+        severity: "info",
+        message: `El modo monodivisa ha dejado sin calcular ${skippedConversions} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).`,
+        hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+        context: { count: String(skippedConversions) },
+      });
+    }
+  }
+
   // Final boundary guard (audit [HIGH/ERR]): scan every top-level monetary total
   // destined for a casilla and coerce any non-finite (NaN/Infinity) value to 0,
   // so a corrupt source amount can never render as a literal "NaN"/"Infinito" in

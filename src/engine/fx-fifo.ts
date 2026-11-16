@@ -1063,7 +1063,7 @@ export class FxFifoEngine {
   }
 
   /** Detect FXCONV (automatic broker conversions for settlement) */
-  private static isFxconv(trade: Trade): boolean {
+  static isFxconv(trade: Trade): boolean {
     const desc = (trade.description || "").toUpperCase();
     const exch = (trade.exchange || "").toUpperCase();
     const notes = (trade.notes || "").toUpperCase().split(";");

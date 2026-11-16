@@ -808,6 +808,10 @@ const en: TranslationKeys = {
     "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
     "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
+  "report.monodivisa_conversions_skipped":
+    "Single-currency mode left {{count}} currency conversion(s) from this tax year uncalculated (manual or automatic broker conversions). This mode computes no currency result at all (boxes 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "The default mode does calculate currency conversions. If you converted currency (for example, from USD to EUR), turn off single-currency mode in your fiscal profile to include their result.",
   "report.non_finite_total":
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":

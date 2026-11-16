@@ -822,6 +822,82 @@ describe("generateTaxReport", () => {
     expect(hint).toBeUndefined();
   });
 
+  // Issue #230: monodivisa switches off the whole FX engine, so a real currency
+  // conversion is dropped without a trace. The report must say how many.
+  describe("monodivisa notice for dropped currency conversions (#230)", () => {
+    const rates = makeRateMap({
+      "2024-11-04": "0.9100",
+      "2025-01-10": "0.9200",
+      "2025-03-15": "0.9300",
+      "2025-06-15": "0.9500",
+      "2025-09-20": "0.9400",
+    });
+    const conversion = (id: string, date: string, qty: string, extra: Partial<Trade> = {}): Trade =>
+      makeTrade({
+        tradeID: id,
+        tradeDate: date,
+        settlementDate: date,
+        symbol: "EUR.USD",
+        description: "EUR.USD",
+        isin: "",
+        assetCategory: "CASH",
+        currency: "USD",
+        quantity: qty,
+        tradePrice: "1.0870",
+        tradeMoney: qty,
+        proceeds: new Decimal(qty).negated().toString(),
+        buySell: qty.startsWith("-") ? "SELL" : "BUY",
+        exchange: "IDEALFX",
+        ...extra,
+      });
+    const stockTrades = [
+      makeTrade({ tradeID: "s1", tradeDate: "2025-03-15", quantity: "10", tradePrice: "100", buySell: "BUY" }),
+      makeTrade({ tradeID: "s2", tradeDate: "2025-09-20", quantity: "-10", tradePrice: "120", buySell: "SELL" }),
+    ];
+    const withConversions = (): FlexStatement =>
+      makeStatement({
+        trades: [
+          // Prior year: outside the report year, not counted.
+          conversion("fx-2024", "2024-11-04", "1000"),
+          conversion("fx-buy", "2025-01-10", "5000"),
+          // Broker auto-conversion (IBKR AFx).
+          conversion("fx-afx", "2025-06-15", "-5000", { notes: "AFx" }),
+          ...stockTrades,
+        ],
+      });
+    const notice = (report: ReturnType<typeof generateTaxReport>) =>
+      report.messages.find((m) => m.id === "report.monodivisa_conversions_skipped");
+
+    it("monodivisa on with conversions → one info message with this year's count", () => {
+      const report = generateTaxReport(withConversions(), rates, 2025, { skipFx: true });
+      const msg = notice(report);
+      expect(msg).toBeDefined();
+      expect(msg!.severity).toBe("info");
+      expect(msg!.context).toEqual({ count: "2" });
+      expect(msg!.message).toContain("2 conversión(es) de divisa");
+      expect(msg!.hint).toContain("modo por defecto");
+      expect(report.messages.filter((m) => m.id === "report.monodivisa_conversions_skipped")).toHaveLength(1);
+      // The notice changes no figure: the FX block stays zero.
+      expect(report.fxGains.transmissionValue.toString()).toBe("0");
+      expect(report.fxGains.acquisitionValue.toString()).toBe("0");
+    });
+
+    it("does not count AFx rows when the user also opted out of auto-conversions", () => {
+      const report = generateTaxReport(withConversions(), rates, 2025, { skipFx: true, trackAutoConvert: false });
+      expect(notice(report)?.context).toEqual({ count: "1" });
+    });
+
+    it("monodivisa off → no notice (the FX engine computes the conversions)", () => {
+      const report = generateTaxReport(withConversions(), rates, 2025);
+      expect(notice(report)).toBeUndefined();
+    });
+
+    it("monodivisa on without conversions → no notice", () => {
+      const report = generateTaxReport(makeStatement({ trades: stockTrades }), rates, 2025, { skipFx: true });
+      expect(notice(report)).toBeUndefined();
+    });
+  });
+
   describe("titulares (per-contribuyente split)", () => {
     function makeMixedStatement(): FlexStatement {
       return makeStatement({

@@ -810,6 +810,10 @@ const gl: TranslationKeys = {
     "Se outra ferramenta amosa un importe distinto, pode deberse a que non calcula as ganancias por tipo de cambio (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
     "Podes activar o modo monodivisa no teu perfil fiscal para comparar: valora as accións igual que Autodeclaro ou Taxdown (compra ao tipo do día de compra, venda ao do día de venda), pero non calcula ningún resultado de divisa, tampouco nas conversións USD→EUR. Se convertes divisa, o modo por defecto é o que o calcula.",
+  "report.monodivisa_conversions_skipped":
+    "O modo monodivisa deixou sen calcular {{count}} conversión(s) de divisa deste exercicio (manuais ou automáticas do bróker). Este modo non calcula ningún resultado de divisa (casillas 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "O modo por defecto si calcula as conversións de divisa. Se convertiches divisa (por exemplo, de USD a EUR), desactiva o modo monodivisa no teu perfil fiscal para incluír o seu resultado.",
   "report.non_finite_total":
     "Detectouse un valor non finito (NaN/Infinito) nun total calculado; revisa os arquivos importados.",
   "report.non_finite_total.hint":

@@ -810,6 +810,10 @@ const ca: TranslationKeys = {
     "Si una altra eina mostra un import diferent, pot ser perquè no calcula els guanys per tipus de canvi (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
     "Pots activar el mode monodivisa al teu perfil fiscal per comparar: valora les accions igual que Autodeclaro o Taxdown (compra al tipus del dia de compra, venda al del dia de venda), però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR. Si converteixes divisa, el mode per defecte és el que el calcula.",
+  "report.monodivisa_conversions_skipped":
+    "El mode monodivisa ha deixat sense calcular {{count}} conversió(ns) de divisa d'aquest exercici (manuals o automàtiques del bróker). Aquest mode no calcula cap resultat de divisa (caselles 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "El mode per defecte sí que calcula les conversions de divisa. Si has convertit divisa (per exemple, d'USD a EUR), desactiva el mode monodivisa al teu perfil fiscal per incloure'n el resultat.",
   "report.non_finite_total":
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":

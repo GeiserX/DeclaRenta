@@ -812,6 +812,10 @@ const eu: TranslationKeys = {
     "Beste tresna batek zenbateko desberdina erakusten badu, baliteke kanbio-tasagatiko irabaziak ez kalkulatzea izatea (33.1 art. LIRPF).",
   "report.competitor_reconciliation.hint":
     "Moneta bakarreko (monodibisa) modua aktiba dezakezu zure zerga-profilean alderatzeko: akzioak Autodeclaro edo Taxdown bezala balioesten ditu (erosketa erosketa-eguneko tasan, salmenta salmenta-egunekoan), baina ez du dibisa-emaitzarik batere kalkulatzen, ezta USD→EUR bihurketetan ere. Dibisa bihurtzen baduzu, modu lehenetsiak kalkulatzen du.",
+  "report.monodivisa_conversions_skipped":
+    "Monodibisa moduak ekitaldi honetako {{count}} dibisa-bihurketa kalkulatu gabe utzi ditu (eskuzkoak edo brokerraren automatikoak). Modu honek ez du dibisa-emaitzarik batere kalkulatzen (1633/1637 laukiak).",
+  "report.monodivisa_conversions_skipped.hint":
+    "Modu lehenetsiak dibisa-bihurketak kalkulatzen ditu. Dibisa bihurtu baduzu (adibidez, USDtik EURera), desaktibatu monodibisa modua zure zerga-profilean haien emaitza sartzeko.",
   "report.non_finite_total":
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":
