@@ -629,7 +629,7 @@ const ca: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
-    "Els guanys per tipus de canvi es declaren apart dels guanys de valors. Només apareixen si has operat amb divises manualment (ex. conversions EUR→USD a IBKR). Si uses mode monodivisa, aquesta secció no aplica.",
+    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que converteixes efectivament a euros (Art. 14.2.e LIRPF). Si uses mode monodivisa, aquesta secció no aplica.",
   "guide_rw.dividends_note":
     "Els dividends de brokers estrangers no porten retenció espanyola. La retenció estrangera (withholding tax) NO es posa aquí: es dedueix apart a la casella 0588 (doble imposició).",
   "guide_rw.interest_note":

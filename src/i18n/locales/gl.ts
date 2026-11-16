@@ -629,7 +629,7 @@ const gl: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Se tes moitas operacións, podes consolidalas nunha soa liña por tipo de activo usando as datas xenéricas 01/01 e 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note":
-    "As ganancias por tipo de cambio decláranse aparte das ganancias de valores. Só aparecen se operaches con divisas manualmente (ex. conversións EUR→USD en IBKR). Se usas modo monodivisa, esta sección non aplica.",
+    "As ganancias por tipo de cambio decláranse aparte das ganancias de valores. Aparecen cando convertes divisa a euros —incluídas as conversións automáticas do teu bróker (p. ex. AFx/FXCONV en IBKR)—, non só nas conversións manuais. Mentres manteñas a divisa (p. ex. compras e vendes accións en USD sen pasar a euros), a diferenza de cambio queda diferida ata que convertes efectivamente a euros (Art. 14.2.e LIRPF). Se usas modo monodivisa, esta sección non aplica.",
   "guide_rw.dividends_note":
     "Os dividendos de brokers estranxeiros non levan retención española. A retención estranxeira (withholding tax) NON se pon aquí: dedúcese aparte na casilla 0588 (dobre imposición).",
   "guide_rw.interest_note":
