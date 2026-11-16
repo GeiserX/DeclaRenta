@@ -243,9 +243,10 @@ describe("issue #230 e2e: sell foreign stock but never convert → FX deferred (
 // 3. MONODIVISA — same as #1 but skipFx:true → traditional method (Art. 35.1).
 // ===========================================================================
 //
-// Monodivisa mode (Autodeclaro/Taxdown parity) disables the FX FIFO engine
-// entirely AND values the stock cost at the ACQUISITION-date rate (the
-// traditional method some advisors use, Art. 35.1). The foreign-stock-proceeds
+// Monodivisa mode disables the FX FIFO engine entirely (no FX result at all,
+// not even for real FCY→EUR conversions; it matches Autodeclaro/Taxdown only in
+// how shares are valued) AND values the stock cost at the ACQUISITION-date
+// rate (the traditional method some advisors use, Art. 35.1). The foreign-stock-proceeds
 // producer lives inside the same skipFx block, so it is suppressed too: no FX
 // disposal, all FX casillas zero. The buy→sale FX drift is NOT lost — it is
 // EMBEDDED in the stock line (cost at the buy rate, proceeds at the sale rate),

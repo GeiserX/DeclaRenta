@@ -255,7 +255,7 @@ const es = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
   "profile.monodivisa_detail":
-    "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637): el efecto divisa queda embebido en el coste de la acción, valorado al tipo del día de COMPRA (Art. 35.1). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios (y con el método tradicional que usan algunos asesores) que tratan todas las operaciones como moneda única EUR. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
+    "Valora cada acción en moneda extranjera como el método tradicional y herramientas como Autodeclaro o Taxdown: la compra al tipo de cambio del día de compra y la venta al del día de venta (Art. 35.1). El efecto divisa queda dentro de la ganancia de la acción. Además, apaga todo el cálculo de divisa: no calcula ningún resultado de divisa (casillas 1633/1637), tampoco en las conversiones USD→EUR que hagas tú ni en las automáticas del bróker. Si conviertes divisa, usa el modo por defecto, que sí las calcula. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
   "profile.monodivisa_warning":
     "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
   "profile.track_autoconvert_label": "Procesar autoconversiones del bróker (AFx/FXCONV)",
@@ -673,7 +673,7 @@ const es = {
   "guide_rw.blocked_losses_hint":
     "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Estas pérdidas se difieren al ejercicio siguiente porque se recompró el mismo valor en los 2 meses posteriores (cotizados) o 1 año (no cotizados). El importe se suma a la adquisición de la nueva posición.",
   "guide_rw.closing_tip":
-    "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que no calcula las ganancias por tipo de cambio por separado — activa el modo monodivisa en tu perfil para comparar.",
+    "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que valora de otra forma las acciones en divisa — activa el modo monodivisa en tu perfil para comparar. Ese modo valora las acciones como esas herramientas, pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR; si conviertes divisa, el modo por defecto es el que lo calcula.",
 
   // PDF report
   "pdf.subtitle": "Informe fiscal — Ejercicio",
@@ -846,7 +846,7 @@ const es = {
   "report.competitor_reconciliation":
     "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
   "report.non_finite_total":
     "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
   "report.non_finite_total.hint":

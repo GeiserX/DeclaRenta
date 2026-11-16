@@ -244,7 +244,7 @@ const eu: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Modu sinplifikatua (EUR monodibisa)",
   "profile.monodivisa_detail":
-    "Ez ditu kanbio-tasaren irabaziak bereizita kalkulatzen (1633/1637 laukitxoak): dibisaren eragina akzioaren kostuan txertatuta geratzen da, EROSKETA-eguneko tasarekin balioetsita (35.1 art.). Autodeclaro, Taxdown eta eragiketa guztiak EUR moneta bakar gisa tratatzen dituzten beste zerbitzu batzuekin bateragarria (eta aholkulari batzuek erabiltzen duten metodo tradizionalarekin). Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
+    "Atzerriko monetako akzio bakoitza metodo tradizionalak eta Autodeclaro edo Taxdown bezalako tresnek bezala balioesten du: erosketa erosketa-eguneko kanbio-tasan eta salmenta salmenta-egunekoan (35.1 art.). Dibisaren eragina akzioaren irabaziaren barruan geratzen da. Gainera, dibisaren kalkulu osoa itzaltzen du: ez du dibisa-emaitzarik batere kalkulatzen (1633/1637 laukitxoak), ezta zuk egindako USD→EUR bihurketetan edo brokerraren bihurketa automatikoetan ere. Dibisa bihurtzen baduzu, erabili modu lehenetsia, horiek kalkulatzen baititu. Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
   "profile.monodivisa_warning":
     "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2324-10) arabera.",
   "profile.track_autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
@@ -640,7 +640,7 @@ const eu: TranslationKeys = {
   "guide_rw.blocked_losses_hint":
     "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egozteko ondare galerak»</strong> gelaxka Renta Web-en. Galera hauek hurrengo ekitaldira atzeratzen dira balio bera 2 hilabetetan (kotizatuak) edo urtebetean (kotizatu gabeak) berrerosi zelako. Zenbatekoa posizio berriaren eskuraketa kostuari gehitzen zaio.",
   "guide_rw.closing_tip":
-    "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek (Autodeclaro, Taxdown) ondare irabazietan zenbateko desberdina erakusten badu, kanbio-tasagatiko irabaziak bereizita kalkulatzen ez dituelako izan daiteke — aktibatu monodibisa modua zure profilean konparatzeko.",
+    "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek (Autodeclaro, Taxdown) ondare irabazietan zenbateko desberdina erakusten badu, dibisako akzioak beste modu batera balioesten dituelako izan daiteke — aktibatu monodibisa modua zure profilean konparatzeko. Modu horrek tresna horiek bezala balioesten ditu akzioak, baina ez du dibisa-emaitzarik batere kalkulatzen, ezta USD→EUR bihurketetan ere; dibisa bihurtzen baduzu, modu lehenetsiak kalkulatzen du.",
 
   // PDF report
   "pdf.subtitle": "Zerga txostena — Ekitaldia",
@@ -811,7 +811,7 @@ const eu: TranslationKeys = {
   "report.competitor_reconciliation":
     "Beste tresna batek zenbateko desberdina erakusten badu, baliteke kanbio-tasagatiko irabaziak ez kalkulatzea izatea (33.1 art. LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Moneta bakarreko modua aktiba dezakezu zure zerga-profilean Autodeclaro edo Taxdown bezalako tresnekin alderatzeko.",
+    "Moneta bakarreko (monodibisa) modua aktiba dezakezu zure zerga-profilean alderatzeko: akzioak Autodeclaro edo Taxdown bezala balioesten ditu (erosketa erosketa-eguneko tasan, salmenta salmenta-egunekoan), baina ez du dibisa-emaitzarik batere kalkulatzen, ezta USD→EUR bihurketetan ere. Dibisa bihurtzen baduzu, modu lehenetsiak kalkulatzen du.",
   "report.non_finite_total":
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":

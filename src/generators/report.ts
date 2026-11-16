@@ -590,7 +590,10 @@ export function generateTaxReport(
   //    held divisa); the opt-out (trackAutoConvert === false) restores the
   //    per-trade isFxconv() skip. Manual CASH/income and tracked stock round-trips
   //    always accrue/move FCY lots.
-  // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
+  // skipFx: monodivisa mode — the WHOLE FX engine is off: no FX result at all, not
+  // even for the taxpayer's own FCY→EUR conversions or broker AFx/FXCONV ones. It
+  // matches tools like Autodeclaro/Taxdown only in how shares are valued (buy at
+  // the buy-date rate, sale at the sale-date rate; see traditionalCostBasis).
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
   let fxAcquisitionValue = new Decimal(0);
@@ -746,7 +749,7 @@ export function generateTaxReport(
       severity: "info",
       message:
         "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
-      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
     });
     // Method-consistency warning: the FX gain on a foreign currency is realized
     // here only when the currency is converted to euros (defer / carry-basis,

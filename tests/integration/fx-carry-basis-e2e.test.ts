@@ -497,9 +497,10 @@ describe("carry-basis e2e #3: buy consumes the cheap tranche → leftover micro-
 // 4. MONODIVISA — Test #1's statement with { skipFx: true } → all FX zero.
 // ===========================================================================
 //
-// Monodivisa mode (Autodeclaro/Taxdown parity) disables the whole FX FIFO
-// engine — including the carry-basis stock-buy/sell producers (they live inside
-// the same `skipFx` block in report.ts) — AND values the stock cost at the
+// Monodivisa mode disables the whole FX FIFO engine (it matches Autodeclaro/
+// Taxdown only in how shares are valued, not in currency results) — including
+// the carry-basis stock-buy/sell producers (they live inside the same `skipFx`
+// block in report.ts) — AND values the stock cost at the
 // ACQUISITION-date rate (traditional method, Art. 35.1). So the headline scenario
 // that produces €155 of carry-basis FX gain with FX ON produces ZERO FX with FX
 // OFF, while the buy→sale FX drift on the AAPL principal (1000 USD × (1.00 − 0.95)

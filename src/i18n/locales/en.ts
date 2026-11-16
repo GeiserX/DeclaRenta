@@ -243,7 +243,7 @@ const en: TranslationKeys = {
   "profile.phone_placeholder": "600123456",
   "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
   "profile.monodivisa_detail":
-    "Does not calculate FX gains separately (casillas 1633/1637): the currency effect is embedded in the stock cost, valued at the BUY-date rate (Art. 35.1). Compatible with Autodeclaro, Taxdown, and other services (and the traditional method some advisors use) that treat all operations as single-currency EUR. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
+    "Values each foreign-currency share the way the traditional method and tools such as Autodeclaro or Taxdown do: the buy at the buy-date exchange rate and the sale at the sale-date rate (Art. 35.1). The currency effect stays inside the share's gain. It also switches off the whole currency calculation: no currency result is computed at all (casillas 1633/1637), not even for USD→EUR conversions you make yourself or your broker's automatic conversions. If you convert currency, use the default mode, which computes them. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
   "profile.monodivisa_warning":
     "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
   "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
@@ -638,7 +638,7 @@ const en: TranslationKeys = {
   "guide_rw.blocked_losses_hint":
     'If DeclaRenta shows blocked losses, tick the <strong>"Non-attributable capital losses"</strong> box in Renta Web. These losses are deferred to the next year because the same security was repurchased within 2 months (listed) or 1 year (unlisted). The amount is added to the acquisition cost of the new position.',
   "guide_rw.closing_tip":
-    'After entering all data, use the "Verify declaration" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because they don\'t calculate FX gains separately — enable single-currency mode in your profile to compare.',
+    'After entering all data, use the "Verify declaration" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because it values foreign-currency shares differently — enable single-currency mode in your profile to compare. That mode values shares like those tools, but computes no currency result at all, not even for USD→EUR conversions; if you convert currency, the default mode is the one that computes it.',
 
   // PDF report
   "pdf.subtitle": "Tax report — Year",
@@ -807,7 +807,7 @@ const en: TranslationKeys = {
   "report.competitor_reconciliation":
     "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "You can enable single-currency mode in your fiscal profile to compare with tools such as Autodeclaro or Taxdown.",
+    "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
   "report.non_finite_total":
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":

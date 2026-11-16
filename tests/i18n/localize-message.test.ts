@@ -67,10 +67,10 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         message: "irrelevant",
-        hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+        hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
       };
       expect(localizeHint(m)).toBe(
-        "You can enable single-currency mode in your fiscal profile to compare with tools such as Autodeclaro or Taxdown.",
+        "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
       );
     });
   });
