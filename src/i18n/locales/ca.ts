@@ -241,7 +241,7 @@ const ca: TranslationKeys = {
   "profile.ccaa_label": "Comunitat Autònoma:",
   "profile.phone_label": "Telèfon:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Mode simplificat (monodivisa EUR)",
+  "profile.monodivisa_label": "Mètode tradicional (monodivisa, cost al tipus de compra)",
   "profile.monodivisa_detail":
     "Valora cada acció en moneda estrangera com el mètode tradicional i eines com Autodeclaro o Taxdown: la compra al tipus de canvi del dia de compra i la venda al del dia de venda (Art. 35.1). L'efecte divisa queda dins del guany de l'acció. A més, apaga tot el càlcul de divisa: no calcula cap resultat de divisa (caselles 1633/1637), tampoc en les conversions USD→EUR que facis tu ni en les automàtiques del bróker. Si converteixes divisa, fes servir el mode per defecte, que sí que les calcula. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
   "profile.monodivisa_warning":

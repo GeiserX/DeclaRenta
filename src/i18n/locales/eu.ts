@@ -242,7 +242,7 @@ const eu: TranslationKeys = {
   "profile.ccaa_label": "Autonomia Erkidegoa:",
   "profile.phone_label": "Telefonoa:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Modu sinplifikatua (EUR monodibisa)",
+  "profile.monodivisa_label": "Metodo tradizionala (monodibisa, kostua erosketa-eguneko tasan)",
   "profile.monodivisa_detail":
     "Atzerriko monetako akzio bakoitza metodo tradizionalak eta Autodeclaro edo Taxdown bezalako tresnek bezala balioesten du: erosketa erosketa-eguneko kanbio-tasan eta salmenta salmenta-egunekoan (35.1 art.). Dibisaren eragina akzioaren irabaziaren barruan geratzen da. Gainera, dibisaren kalkulu osoa itzaltzen du: ez du dibisa-emaitzarik batere kalkulatzen (1633/1637 laukitxoak), ezta zuk egindako USD→EUR bihurketetan edo brokerraren bihurketa automatikoetan ere. Dibisa bihurtzen baduzu, erabili modu lehenetsia, horiek kalkulatzen baititu. Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
   "profile.monodivisa_warning":

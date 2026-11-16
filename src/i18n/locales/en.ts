@@ -241,7 +241,7 @@ const en: TranslationKeys = {
   "profile.ccaa_label": "Autonomous Community:",
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
+  "profile.monodivisa_label": "Traditional method (single-currency, cost at the buy-date rate)",
   "profile.monodivisa_detail":
     "Values each foreign-currency share the way the traditional method and tools such as Autodeclaro or Taxdown do: the buy at the buy-date exchange rate and the sale at the sale-date rate (Art. 35.1). The currency effect stays inside the share's gain. It also switches off the whole currency calculation: no currency result is computed at all (casillas 1633/1637), not even for USD→EUR conversions you make yourself or your broker's automatic conversions. If you convert currency, use the default mode, which computes them. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
   "profile.monodivisa_warning":

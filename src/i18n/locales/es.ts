@@ -253,7 +253,7 @@ const es = {
   "profile.ccaa_label": "Comunidad Autónoma:",
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
+  "profile.monodivisa_label": "Método tradicional (monodivisa, coste al tipo de compra)",
   "profile.monodivisa_detail":
     "Valora cada acción en moneda extranjera como el método tradicional y herramientas como Autodeclaro o Taxdown: la compra al tipo de cambio del día de compra y la venta al del día de venta (Art. 35.1). El efecto divisa queda dentro de la ganancia de la acción. Además, apaga todo el cálculo de divisa: no calcula ningún resultado de divisa (casillas 1633/1637), tampoco en las conversiones USD→EUR que hagas tú ni en las automáticas del bróker. Si conviertes divisa, usa el modo por defecto, que sí las calcula. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
   "profile.monodivisa_warning":
