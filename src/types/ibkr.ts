@@ -163,6 +163,15 @@ export interface CashTransaction {
    * (then no lot is created and the income is surfaced for manual valuation).
    */
   rewardCostBasisEur?: string;
+  /**
+   * The broker credited this foreign-currency income in the account currency
+   * (EUR): it converted the amount itself before crediting, so the taxpayer
+   * never held the foreign currency. The row is still valued at the ECB rate
+   * of its date for the income boxes (0029), but it opens NO FX lot in the
+   * divisa engine (issue #96, Trade Republic). Absent = the currency really
+   * entered the account (IBKR multi-currency cash).
+   */
+  brokerConvertedToBase?: boolean;
 }
 
 export type CashTransactionType =

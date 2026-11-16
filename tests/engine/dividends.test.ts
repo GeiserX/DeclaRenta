@@ -496,4 +496,102 @@ describe("calculateDividends", () => {
       expect(entries[0]!.withholdingTaxEur.toFixed(2)).toBe("13.80");
     });
   });
+
+  // Issue #96: an EUR-only broker (Trade Republic) keeps a US dividend in USD
+  // but books its withholding in EUR. The matcher used to require the same
+  // currency, so the two never paired and Casilla 0588 lost the US tax.
+  describe("withholding in another currency (issue #96)", () => {
+    it("pairs an EUR withholding with its USD dividend and values it 1:1, not at the USD rate", () => {
+      const rates = makeRateMap({ "2025-03-14": { USD: "0.918" } });
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "d", isin: "US0000001001", dateTime: "20250314", amount: "10", type: "Dividends" }),
+        makeCashTx({ transactionID: "w", isin: "US0000001001", currency: "EUR", dateTime: "20250314", amount: "-1.35", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.currency).toBe("USD");
+      expect(entries[0]!.grossAmountEur.toFixed(4)).toBe("9.1800");
+      // 1.35 EUR, never 1.35 x 0.918 = 1.2393.
+      expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("1.3500");
+    });
+
+    it("values a USD withholding of an EUR dividend at the USD rate of the withholding's own date", () => {
+      const rates = makeRateMap({ "2025-03-14": { USD: "0.90" }, "2025-03-17": { USD: "0.80" } });
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "d", isin: "US0000001001", currency: "EUR", dateTime: "20250314", amount: "50", type: "Dividends" }),
+        makeCashTx({ transactionID: "w", isin: "US0000001001", currency: "USD", dateTime: "20250317", amount: "-10", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries[0]!.grossAmountEur.toFixed(2)).toBe("50.00");
+      expect(entries[0]!.withholdingTaxEur.toFixed(2)).toBe("8.00");
+    });
+
+    it("prefers a same-currency withholding over a lower-index one in another currency", () => {
+      // IBKR-style row: USD dividend + USD withholding, valued at the dividend
+      // rate exactly as before. A stray EUR withholding of the same ISIN sits
+      // first in the file and must not win.
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "w-eur", currency: "EUR", amount: "-4", type: "Withholding Tax" }),
+        makeCashTx({ transactionID: "d", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w-usd", amount: "-15", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.withholdingTaxEur.toFixed(2)).toBe("13.80");
+    });
+
+    it("never lets a cross-currency fallback take a withholding that a same-currency dividend claims", () => {
+      // Two payments of one ISIN in the window: a USD dividend with no
+      // withholding of its own (first in the file), and an EUR dividend whose
+      // EUR withholding follows. The EUR withholding belongs to the EUR one.
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" }, "2025-06-03": { USD: "0.92" } });
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "d-usd", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "d-eur", currency: "EUR", dateTime: "20250603", amount: "80", type: "Dividends" }),
+        makeCashTx({ transactionID: "w-eur", currency: "EUR", dateTime: "20250603", amount: "-12", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries.map((e) => [e.currency, e.withholdingTaxEur.toFixed(2)])).toEqual([
+        ["USD", "0.00"],
+        ["EUR", "12.00"],
+      ]);
+    });
+
+    it("does not pair across currencies when the rows carry no ISIN", () => {
+      const rates = makeRateMap({ "2025-06-01": { USD: "0.92" } });
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "d", isin: "", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w", isin: "", currency: "EUR", amount: "-4", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, rates);
+
+      expect(entries[0]!.withholdingTaxEur.toFixed(2)).toBe("0.00");
+    });
+
+    it("reports the dividend as unvalued when its other-currency withholding has no rate", () => {
+      const unvalued: string[] = [];
+      const transactions: CashTransaction[] = [
+        makeCashTx({ transactionID: "d", amount: "100", type: "Dividends" }),
+        makeCashTx({ transactionID: "w", currency: "CNH", amount: "-10", type: "Withholding Tax" }),
+      ];
+
+      const entries = calculateDividends(transactions, new Map(), {
+        lookupRate: (_date, currency) => (currency === "USD" ? new Decimal("0.92") : null),
+        onUnvalued: (div) => unvalued.push(div.transactionID),
+      });
+
+      expect(entries).toHaveLength(0);
+      expect(unvalued).toEqual(["d"]);
+    });
+  });
 });

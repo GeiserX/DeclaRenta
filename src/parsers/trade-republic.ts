@@ -228,6 +228,9 @@ function parseTrCsv(lines: string[]): Statement {
       );
       const divCurrency = originalCurrency || currency;
       const fxToBase = fxRate || "1";
+      // TR converts a foreign dividend and credits the account currency: the
+      // taxpayer never holds the USD, so it must not open an FX lot (#96).
+      const brokerConverted = divCurrency !== currency;
 
       cashTransactions.push({
         transactionID: txId || `tr-div-${tradeDate}-${symbol}-${i}`,
@@ -241,6 +244,7 @@ function parseTrCsv(lines: string[]): Statement {
         amount: divAmount,
         fxRateToBase: fxToBase,
         type: "Dividends",
+        ...(brokerConverted ? { brokerConvertedToBase: true } : {}),
       });
 
       // Withholding tax (if present)
