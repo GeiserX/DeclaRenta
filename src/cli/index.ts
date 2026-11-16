@@ -201,7 +201,7 @@ program
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
   .option(
     "--monodivisa",
-    "Modo tradicional (como Autodeclaro/Taxdown/asesor): apaga el motor de divisa y valora el coste FCY al tipo del día de COMPRA (Art. 35.1), embebiendo el efecto divisa en la línea de la acción",
+    "Método tradicional: valora las acciones como Autodeclaro/Taxdown o un asesor (compra al tipo del día de COMPRA, venta al del día de venta; Art. 35.1), con el efecto divisa dentro de la línea de la acción. Apaga TODO el motor de divisa: no calcula ningún resultado de divisa, tampoco en conversiones USD→EUR propias ni en las automáticas del bróker. Si conviertes divisa, usa el modo por defecto",
   )
   .option(
     "--skip-auto-convert",

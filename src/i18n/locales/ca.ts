@@ -241,11 +241,11 @@ const ca: TranslationKeys = {
   "profile.ccaa_label": "Comunitat Autònoma:",
   "profile.phone_label": "Telèfon:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Mode simplificat (monodivisa EUR)",
+  "profile.monodivisa_label": "Mètode tradicional (monodivisa, cost al tipus de compra)",
   "profile.monodivisa_detail":
-    "No calcula guanys per tipus de canvi de forma separada (caselles 1633/1637): l'efecte divisa queda embegut en el cost de l'acció, valorat al tipus del dia de COMPRA (Art. 35.1). Compatible amb Autodeclaro, Taxdown i altres serveis (i amb el mètode tradicional que fan servir alguns assessors) que tracten totes les operacions com a moneda única EUR. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
+    "Valora cada acció en moneda estrangera com el mètode tradicional i eines com Autodeclaro o Taxdown: la compra al tipus de canvi del dia de compra i la venda al del dia de venda (Art. 35.1). L'efecte divisa queda dins del guany de l'acció. A més, apaga tot el càlcul de divisa: no calcula cap resultat de divisa (caselles 1633/1637), tampoc en les conversions USD→EUR que facis tu ni en les automàtiques del bróker. Si converteixes divisa, fes servir el mode per defecte, que sí que les calcula. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
   "profile.monodivisa_warning":
-    "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2324-10).",
+    "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2422-20).",
   "profile.track_autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "Activat per defecte. Interactive Brokers no reconverteix a euros en vendre una acció, així que el saldo en divisa és real i convertir-lo després genera un guany o pèrdua patrimonial (art. 33.1 LIRPF). Desactiva-ho només si el teu bróker fa un round-trip complet EUR↔divisa i vols ignorar l'efecte de la divisa.",
@@ -629,7 +629,7 @@ const ca: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
-    "Els guanys per tipus de canvi es declaren apart dels guanys de valors. Només apareixen si has operat amb divises manualment (ex. conversions EUR→USD a IBKR). Si uses mode monodivisa, aquesta secció no aplica.",
+    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros o a una altra divisa (p. ex. USD→GBP) —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que la converteixes efectivament, a euros o a una altra divisa (Art. 14.2.e LIRPF). Si uses mode monodivisa, aquesta secció no aplica.",
   "guide_rw.dividends_note":
     "Els dividends de brokers estrangers no porten retenció espanyola. La retenció estrangera (withholding tax) NO es posa aquí: es dedueix apart a la casella 0588 (doble imposició).",
   "guide_rw.interest_note":
@@ -640,7 +640,7 @@ const ca: TranslationKeys = {
   "guide_rw.blocked_losses_hint":
     "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web. Aquestes pèrdues es difereixen a l'exercici següent perquè es va recomprar el mateix valor en els 2 mesos posteriors (cotitzats) o 1 any (no cotitzats). L'import se suma a l'adquisició de la nova posició.",
   "guide_rw.closing_tip":
-    "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina (Autodeclaro, Taxdown) mostra un import diferent en guanys patrimonials, pot ser perquè no calcula els guanys per tipus de canvi per separat — activa el mode monodivisa al teu perfil per comparar.",
+    "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina (Autodeclaro, Taxdown) mostra un import diferent en guanys patrimonials, pot ser perquè valora d'una altra manera les accions en divisa — activa el mode monodivisa al teu perfil per comparar. Aquest mode valora les accions com aquestes eines, però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR; si converteixes divisa, el mode per defecte és el que el calcula.",
 
   // PDF report
   "pdf.subtitle": "Informe fiscal — Exercici",
@@ -809,7 +809,11 @@ const ca: TranslationKeys = {
   "report.competitor_reconciliation":
     "Si una altra eina mostra un import diferent, pot ser perquè no calcula els guanys per tipus de canvi (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Pots activar el mode monodivisa al teu perfil fiscal per comparar amb eines com Autodeclaro o Taxdown.",
+    "Pots activar el mode monodivisa al teu perfil fiscal per comparar: valora les accions igual que Autodeclaro o Taxdown (compra al tipus del dia de compra, venda al del dia de venda), però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR. Si converteixes divisa, el mode per defecte és el que el calcula.",
+  "report.monodivisa_conversions_skipped":
+    "El mode monodivisa ha deixat sense calcular {{count}} conversió(ns) de divisa d'aquest exercici (manuals o automàtiques del bróker). Aquest mode no calcula cap resultat de divisa (caselles 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "El mode per defecte sí que calcula les conversions de divisa. Si has convertit divisa (per exemple, d'USD a EUR), desactiva el mode monodivisa al teu perfil fiscal per incloure'n el resultat.",
   "report.non_finite_total":
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":

@@ -253,11 +253,11 @@ const es = {
   "profile.ccaa_label": "Comunidad Autónoma:",
   "profile.phone_label": "Teléfono:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Modo simplificado (monodivisa EUR)",
+  "profile.monodivisa_label": "Método tradicional (monodivisa, coste al tipo de compra)",
   "profile.monodivisa_detail":
-    "No calcula ganancias por tipo de cambio de forma separada (casillas 1633/1637): el efecto divisa queda embebido en el coste de la acción, valorado al tipo del día de COMPRA (Art. 35.1). Compatible con el enfoque de Autodeclaro, Taxdown y otros servicios (y con el método tradicional que usan algunos asesores) que tratan todas las operaciones como moneda única EUR. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
+    "Valora cada acción en moneda extranjera como el método tradicional y herramientas como Autodeclaro o Taxdown: la compra al tipo de cambio del día de compra y la venta al del día de venta (Art. 35.1). El efecto divisa queda dentro de la ganancia de la acción. Además, apaga todo el cálculo de divisa: no calcula ningún resultado de divisa (casillas 1633/1637), tampoco en las conversiones USD→EUR que hagas tú ni en las automáticas del bróker. Si conviertes divisa, usa el modo por defecto, que sí las calcula. Nota: en una actualización reciente este modo valora el coste al tipo de la fecha de compra; la ganancia de valores en moneda extranjera puede diferir de cifras guardadas en versiones anteriores — revísala si ya presentaste con una versión previa.",
   "profile.monodivisa_warning":
-    "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2324-10).",
+    "⚠ Este modo puede distorsionar las ganancias patrimoniales declaradas (infraestimar o sobreestimar). El modo completo (por defecto) es más riguroso según el Art. 33.1 LIRPF (DGT V2422-20).",
   "profile.track_autoconvert_label": "Procesar autoconversiones del bróker (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "Activado por defecto. Interactive Brokers no reconvierte a euros al vender una acción, así que el saldo en divisa es real y su conversión posterior genera ganancia o pérdida patrimonial (Art. 33.1 LIRPF). Desactívalo solo si tu bróker hace un round-trip completo EUR↔divisa y quieres ignorar el efecto de la divisa.",
@@ -662,7 +662,7 @@ const es = {
   "guide_rw.capital_gains_note":
     "Si tienes muchas operaciones, puedes consolidarlas en una sola línea por tipo de activo usando las fechas genéricas 01/01 y 31/12. Renta Web acepta importes agregados.",
   "guide_rw.fx_note":
-    "Las ganancias por tipo de cambio se declaran aparte de las ganancias de valores. Solo aparecen si has operado con divisas manualmente (ej. conversiones EUR→USD en IBKR). Si usas modo monodivisa, esta sección no aplica.",
+    "Las ganancias por tipo de cambio se declaran aparte de las ganancias de valores. Aparecen cuando conviertes divisa a euros o a otra divisa (p. ej. USD→GBP) —incluidas las conversiones automáticas de tu bróker (p. ej. AFx/FXCONV en IBKR)—, no solo en las conversiones manuales. Mientras mantienes la divisa (p. ej. compras y vendes acciones en USD sin pasar a euros), la diferencia de cambio queda diferida hasta que la conviertes efectivamente, a euros o a otra divisa (Art. 14.2.e LIRPF). Si usas modo monodivisa, esta sección no aplica.",
   "guide_rw.dividends_note":
     "Los dividendos de brokers extranjeros no llevan retención española. La retención extranjera (withholding tax) NO se pone aquí: se deduce aparte en la casilla 0588 (doble imposición).",
   "guide_rw.interest_note":
@@ -673,7 +673,7 @@ const es = {
   "guide_rw.blocked_losses_hint":
     "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Estas pérdidas se difieren al ejercicio siguiente porque se recompró el mismo valor en los 2 meses posteriores (cotizados) o 1 año (no cotizados). El importe se suma a la adquisición de la nueva posición.",
   "guide_rw.closing_tip":
-    "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que no calcula las ganancias por tipo de cambio por separado — activa el modo monodivisa en tu perfil para comparar.",
+    "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta (Autodeclaro, Taxdown) muestra un importe distinto en ganancias patrimoniales, puede deberse a que valora de otra forma las acciones en divisa — activa el modo monodivisa en tu perfil para comparar. Ese modo valora las acciones como esas herramientas, pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR; si conviertes divisa, el modo por defecto es el que lo calcula.",
 
   // PDF report
   "pdf.subtitle": "Informe fiscal — Ejercicio",
@@ -846,7 +846,11 @@ const es = {
   "report.competitor_reconciliation":
     "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
+  "report.monodivisa_conversions_skipped":
+    "El modo monodivisa ha dejado sin calcular {{count}} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
   "report.non_finite_total":
     "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
   "report.non_finite_total.hint":

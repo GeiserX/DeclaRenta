@@ -863,7 +863,8 @@ export class FxFifoEngine {
    * rate — reproducing the pre-#230 full-proceeds behavior exactly. This is the
    * load-bearing safety property: nothing changes for single-year/AFx files.
    *
-   * SAME FILTERS AS THE BUY/CONSUMER SIDE (V2324-10 symmetry). STK/FUND/BOND only
+   * SAME FILTERS AS THE BUY/CONSUMER SIDE (so every parked principal has a
+   * matching re-add; an engine invariant, not a DGT rule). STK/FUND/BOND only
    * (CRYPTO permutas' proceedsFcy is a coin, not fiat → crypto path; OPT/FOP/CASH
    * excluded — CASH conversions are the FX engine's own events). `currency ≠ EUR`,
    * ECB-resolvable, `proceedsFcy > 0`, and NOT a short close (`isShort`): a cover
@@ -945,7 +946,7 @@ export class FxFifoEngine {
    * here equals the principal the SELL re-adds via `costBasisFcy` — the two sides
    * reconcile.
    *
-   * SAME FILTERS AS THE SELL SIDE (V2324-10 symmetry): `buySell === "BUY"`,
+   * SAME FILTERS AS THE SELL SIDE (engine invariant, not a DGT rule): `buySell === "BUY"`,
    * STK/FUND/BOND only, `currency ≠ EUR`, ECB-resolvable, NOT an FXCONV/AFx trade.
    * EXCLUDES short-cover buys (`openCloseIndicator === "C"`): a cover is the CLOSE
    * of a short, not a fresh FCY outflow to acquire a long position — mirroring the
@@ -1063,7 +1064,7 @@ export class FxFifoEngine {
   }
 
   /** Detect FXCONV (automatic broker conversions for settlement) */
-  private static isFxconv(trade: Trade): boolean {
+  static isFxconv(trade: Trade): boolean {
     const desc = (trade.description || "").toUpperCase();
     const exch = (trade.exchange || "").toUpperCase();
     const notes = (trade.notes || "").toUpperCase().split(";");

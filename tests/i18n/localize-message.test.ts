@@ -67,11 +67,34 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         message: "irrelevant",
-        hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+        hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
       };
       expect(localizeHint(m)).toBe(
-        "You can enable single-currency mode in your fiscal profile to compare with tools such as Autodeclaro or Taxdown.",
+        "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
       );
+    });
+  });
+
+  describe("monodivisa dropped-conversions notice (#230)", () => {
+    const m: LocalizableMessage = {
+      id: "report.monodivisa_conversions_skipped",
+      message:
+        "El modo monodivisa ha dejado sin calcular 42 conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
+      hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+      context: { count: "42" },
+    };
+
+    it("Spanish locale text is byte-identical to the engine's message and hint", () => {
+      expect(localizeMessage(m)).toBe(m.message);
+      expect(localizeHint(m)).toBe(m.hint);
+    });
+
+    it.each(["en", "ca", "eu", "gl"] as const)("%s interpolates the count and is not the Spanish fallback", async (loc) => {
+      await setLocale(loc);
+      expect(localizeMessage(m)).toContain("42");
+      expect(localizeMessage(m)).not.toContain("{{count}}");
+      expect(localizeMessage(m)).not.toBe(m.message);
+      expect(localizeHint(m)).not.toBe(m.hint);
     });
   });
 

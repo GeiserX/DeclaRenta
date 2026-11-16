@@ -590,7 +590,10 @@ export function generateTaxReport(
   //    held divisa); the opt-out (trackAutoConvert === false) restores the
   //    per-trade isFxconv() skip. Manual CASH/income and tracked stock round-trips
   //    always accrue/move FCY lots.
-  // skipFx: monodivisa mode — treat all as EUR, no separate FX saldo (like Autodeclaro/Taxdown)
+  // skipFx: monodivisa mode — the WHOLE FX engine is off: no FX result at all, not
+  // even for the taxpayer's own FCY→EUR conversions or broker AFx/FXCONV ones. It
+  // matches tools like Autodeclaro/Taxdown only in how shares are valued (buy at
+  // the buy-date rate, sale at the sale-date rate; see traditionalCostBasis).
   let fxDisposals: ReturnType<FxFifoEngine["processEvents"]> = [];
   let fxTransmissionValue = new Decimal(0);
   let fxAcquisitionValue = new Decimal(0);
@@ -746,7 +749,7 @@ export function generateTaxReport(
       severity: "info",
       message:
         "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
-      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar con herramientas como Autodeclaro o Taxdown.",
+      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
     });
     // Method-consistency warning: the FX gain on a foreign currency is realized
     // here only when the currency is converted to euros (defer / carry-basis,
@@ -777,6 +780,29 @@ export function generateTaxReport(
         message:
           "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
         hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Bajo el criterio de DeclaRenta solo se declara la ganancia de divisa al convertir a euros.",
+      });
+    }
+  }
+
+  // Monodivisa drops every currency conversion silently (the FX engine is off), so
+  // say how many this year's file had. Mirrors extractFxEvents' filter: a non-EUR
+  // CASH trade, minus AFx/FXCONV rows when the user also opted out of those.
+  if (options?.skipFx) {
+    const trackAutoConvert = options.trackAutoConvert !== false;
+    const skippedConversions = statement.trades.filter(
+      (tr) =>
+        tr.assetCategory === "CASH" &&
+        tr.currency !== "EUR" &&
+        (trackAutoConvert || !FxFifoEngine.isFxconv(tr)) &&
+        normalizeDate(tr.settlementDate || tr.tradeDate).startsWith(yearStr),
+    ).length;
+    if (skippedConversions > 0) {
+      allMessages.push({
+        id: "report.monodivisa_conversions_skipped",
+        severity: "info",
+        message: `El modo monodivisa ha dejado sin calcular ${skippedConversions} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).`,
+        hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+        context: { count: String(skippedConversions) },
       });
     }
   }

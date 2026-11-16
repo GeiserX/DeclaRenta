@@ -241,11 +241,11 @@ const en: TranslationKeys = {
   "profile.ccaa_label": "Autonomous Community:",
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Simplified mode (single-currency EUR)",
+  "profile.monodivisa_label": "Traditional method (single-currency, cost at the buy-date rate)",
   "profile.monodivisa_detail":
-    "Does not calculate FX gains separately (casillas 1633/1637): the currency effect is embedded in the stock cost, valued at the BUY-date rate (Art. 35.1). Compatible with Autodeclaro, Taxdown, and other services (and the traditional method some advisors use) that treat all operations as single-currency EUR. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
+    "Values each foreign-currency share the way the traditional method and tools such as Autodeclaro or Taxdown do: the buy at the buy-date exchange rate and the sale at the sale-date rate (Art. 35.1). The currency effect stays inside the share's gain. It also switches off the whole currency calculation: no currency result is computed at all (casillas 1633/1637), not even for USD→EUR conversions you make yourself or your broker's automatic conversions. If you convert currency, use the default mode, which computes them. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
   "profile.monodivisa_warning":
-    "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2324-10).",
+    "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2422-20).",
   "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
   "profile.track_autoconvert_detail":
     "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",
@@ -627,7 +627,7 @@ const en: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
-    "FX gains are declared separately from securities gains. They only appear if you manually traded currencies (e.g. EUR→USD conversions in IBKR). If using single-currency mode, this section does not apply.",
+    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. While you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). If using single-currency mode, this section does not apply.",
   "guide_rw.dividends_note":
     "Dividends from foreign brokers have no Spanish withholding. Foreign withholding tax is NOT entered here: it is deducted separately in box 0588 (double taxation).",
   "guide_rw.interest_note":
@@ -638,7 +638,7 @@ const en: TranslationKeys = {
   "guide_rw.blocked_losses_hint":
     'If DeclaRenta shows blocked losses, tick the <strong>"Non-attributable capital losses"</strong> box in Renta Web. These losses are deferred to the next year because the same security was repurchased within 2 months (listed) or 1 year (unlisted). The amount is added to the acquisition cost of the new position.',
   "guide_rw.closing_tip":
-    'After entering all data, use the "Verify declaration" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because they don\'t calculate FX gains separately — enable single-currency mode in your profile to compare.',
+    'After entering all data, use the "Verify declaration" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because it values foreign-currency shares differently — enable single-currency mode in your profile to compare. That mode values shares like those tools, but computes no currency result at all, not even for USD→EUR conversions; if you convert currency, the default mode is the one that computes it.',
 
   // PDF report
   "pdf.subtitle": "Tax report — Year",
@@ -807,7 +807,11 @@ const en: TranslationKeys = {
   "report.competitor_reconciliation":
     "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "You can enable single-currency mode in your fiscal profile to compare with tools such as Autodeclaro or Taxdown.",
+    "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
+  "report.monodivisa_conversions_skipped":
+    "Single-currency mode left {{count}} currency conversion(s) from this tax year uncalculated (manual or automatic broker conversions). This mode computes no currency result at all (boxes 1633/1637).",
+  "report.monodivisa_conversions_skipped.hint":
+    "The default mode does calculate currency conversions. If you converted currency (for example, from USD to EUR), turn off single-currency mode in your fiscal profile to include their result.",
   "report.non_finite_total":
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":

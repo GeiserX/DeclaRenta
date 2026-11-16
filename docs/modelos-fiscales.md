@@ -181,7 +181,7 @@ DeclaRenta implementa las siguientes normas de la legislación fiscal española:
 | Art. 46 LIRPF | Base del ahorro: ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales. |
 | Art. 49 LIRPF | Compensación de pérdidas patrimoniales: arrastre 4 años, compensación cruzada con límite del 25%. |
 | Art. 80 LIRPF | Deducción por doble imposición internacional: menor entre impuesto pagado en origen y cuota española. |
-| PGC NRV 11a / DGT V0583-16 | Tipos de cambio: el BCE constituye la referencia oficial para la conversión de moneda extranjera (safe harbor). |
+| Ley 46/1998 art. 36 | Tipos de cambio: el cambio oficial del euro frente a otras divisas es el que publica el Banco Central Europeo. |
 | Ley 7/2024 | Introduce el tramo del 30% en la base del ahorro para rentas superiores a 300.000 EUR. |
 | RD 1065/2007 | Reglamento general de gestión e inspección tributaria. Regula la obligación de informar sobre bienes en el extranjero (Modelo 720). |
 | Orden EHA/3290/2008 | Regula la declaración de inversiones españolas en el exterior (Modelo D-6). |
