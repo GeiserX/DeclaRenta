@@ -162,3 +162,74 @@ describe("a EUR lot sold in USD leaves the USD lot of the same ISIN parked", () 
     expect([f2(v.stock), f2(v.fx)]).toEqual(["-72.50", "12.50"]);
   });
 });
+
+describe("a USD position delivered by a EUR option exercise", () => {
+  // Fund 1000 USD for 800, buy 10 AAA at 0.90, then a EUR put on the same ISIN
+  // is exercised: the 10 shares go for 1000 EUR at the strike. Same economics as
+  // the EUR sale above: 1000 − 800 = 200 = stock 100 + currency 100. A trap: the
+  // exercise path did not mark the lot's currency, so the USD stayed parked
+  // (100 reported instead of 200).
+  const build = (opts: { lotCurrency?: string } = {}) => {
+    const { st, rates } = toStatement({ ...cycle, ev: cycle.ev.filter((e) => e.k !== "sell") });
+    if (opts.lotCurrency) relist(st, rates, { "2024-03-01": { ccy: opts.lotCurrency } });
+    rates.set("2024-06-03", new Map([["USD", "0.85"]]));
+    st.optionExercises = [
+      {
+        transactionID: "ex1",
+        accountId: "U1",
+        symbol: "AAA 240621P00100000",
+        description: "AAA 21JUN24 100 P",
+        isin: "",
+        currency: "EUR",
+        date: "2024-06-03",
+        action: "Exercise",
+        putCall: "P",
+        strike: "100",
+        expiry: "2024-06-21",
+        quantity: "1",
+        proceeds: "0",
+        underlyingSymbol: "AAA",
+        underlyingIsin: ISIN_A,
+        multiplier: "10",
+      },
+    ];
+    return { st, rates };
+  };
+  const exerciseRows = (r: ReturnType<typeof figures>["report"]) =>
+    r.capitalGains.disposals.filter((d) => d.optionScenario === "exercise");
+
+  it("books the dollars' drift up to the share purchase: 100 stock + 100 currency = 200", () => {
+    const { st, rates } = build();
+    const v = figures(st, rates, TRAD);
+    expect(exerciseRows(v.report).map((d) => [d.currency, f2(d.proceedsEur), f2(d.costBasisEur)])).toEqual([["EUR", "1000.00", "900.00"]]);
+    expect([f2(v.stock), f2(v.fx)]).toEqual(["100.00", "100.00"]);
+    const rows = v.report.fxGains.disposals;
+    expect(rows.map((d) => [d.trigger, f2(d.proceedsEur), f2(d.costBasisEur)])).toEqual([["stock_sale_cross", "900.00", "800.00"]]);
+    const ids = v.report.messages.map((m) => m.id);
+    expect(ids).not.toContain("report.fx_traditional_orphan");
+    expect(ids).not.toContain("fx.conservation_mismatch");
+  });
+
+  it("a same-currency exercise carries no lot currency", () => {
+    const { st, rates } = build({ lotCurrency: "EUR" });
+    const v = figures(st, rates, TRAD);
+    expect(exerciseRows(v.report).map((d) => [d.currency, d.acquireCurrency])).toEqual([["EUR", undefined]]);
+  });
+
+  it("an exercise with no lot to deliver carries no lot currency", () => {
+    const { st, rates } = toStatement({ ...cycle, ev: cycle.ev.filter((e) => e.k === "fund") });
+    rates.set("2024-06-03", new Map([["USD", "0.85"]]));
+    st.optionExercises = build().st.optionExercises;
+    const v = figures(st, rates, TRAD);
+    const ex = exerciseRows(v.report);
+    expect(ex).toHaveLength(1);
+    expect(ex[0]!.acquireCurrency).toBeUndefined();
+  });
+
+  it("the default and monodivisa never mark it", () => {
+    const { st, rates } = build();
+    for (const o of [{}, MONO]) {
+      expect(exerciseRows(figures(st, rates, o).report).every((d) => d.acquireCurrency === undefined)).toBe(true);
+    }
+  });
+});

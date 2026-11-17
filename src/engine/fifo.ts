@@ -1811,6 +1811,10 @@ export class FifoEngine {
         underlyingIsin: ex.underlyingIsin,
         brokerSource: ex.brokerSource,
         acquireBrokerSource: lot.brokerSource,
+        // «Tradicional con divisa»: shares bought in another currency than the
+        // option's (a EUR option delivering USD-bought shares) release the lot
+        // currency's parked principal, as a cross-currency sale does (consumeLots).
+        ...(this.markLotCurrency && lot.currency !== ex.currency ? { acquireCurrency: lot.currency } : {}),
       });
 
       lot.quantity = lot.quantity.minus(consumed);
