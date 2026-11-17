@@ -886,3 +886,72 @@ describe("matchWithholdings: cancelled dividends (issue #438 review)", () => {
     expect(match.parts[0]).toEqual([]);
   });
 });
+
+describe("withholding corrections stay at their own broker (issue #438 review)", () => {
+  const r = makeRateMap({ "2024-12-31": { USD: "1" }, "2025-01-02": { USD: "1" }, "2025-01-03": { USD: "1" } });
+  const isin = "IE00B4L5Y983";
+  const row = (id: string, type: CashTransaction["type"], dateTime: string, amount: string, brokerSource?: string) =>
+    makeCashTx({ transactionID: id, isin, currency: "EUR", dateTime, amount, type, ...(brokerSource ? { brokerSource } : {}) });
+  const show = (entries: ReturnType<typeof calculateDividends>) =>
+    entries.map((e) => `${e.payDate}:${e.withholdingTaxEur.toFixed(2)}`);
+
+  it("a refund at broker A never goes to broker B's nearer dividend, across the year end", () => {
+    const entries = calculateDividends(
+      [
+        row("da", "Dividends", "20241231", "100", "A"),
+        row("wa", "Withholding Tax", "20241231", "-15", "A"),
+        row("db", "Dividends", "20250102", "100", "B"),
+        row("wb", "Withholding Tax", "20250102", "-15", "B"),
+        row("ra", "Withholding Tax", "20250103", "15", "A"),
+      ],
+      r,
+    );
+    expect(show(entries)).toEqual(["2024-12-31:0.00", "2025-01-02:15.00"]);
+  });
+
+  it("an extra withholding row at broker A never joins broker B's nearer dividend", () => {
+    // A reverses its 15 and withholds 10 again on 3 January.
+    const entries = calculateDividends(
+      [
+        row("da", "Dividends", "20241231", "100", "A"),
+        row("wa", "Withholding Tax", "20241231", "-15", "A"),
+        row("db", "Dividends", "20250102", "100", "B"),
+        row("wb", "Withholding Tax", "20250102", "-15", "B"),
+        row("ra", "Withholding Tax", "20250103", "15", "A"),
+        row("na", "Withholding Tax", "20250103", "-10", "A"),
+      ],
+      r,
+    );
+    expect(show(entries)).toEqual(["2024-12-31:10.00", "2025-01-02:15.00"]);
+  });
+
+  it("rows with no broker name keep matching any dividend, as in a single-broker file", () => {
+    const entries = calculateDividends(
+      [
+        row("da", "Dividends", "20241231", "100", "A"),
+        row("wa", "Withholding Tax", "20241231", "-15", "A"),
+        row("db", "Dividends", "20250102", "100"),
+        row("wb", "Withholding Tax", "20250102", "-15"),
+        row("r", "Withholding Tax", "20250103", "15"),
+      ],
+      r,
+    );
+    expect(show(entries)).toEqual(["2024-12-31:15.00", "2025-01-02:0.00"]);
+  });
+
+  it("a refund still moves to make room within its own broker", () => {
+    const rr = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-10": { USD: "1" } });
+    const entries = calculateDividends(
+      [
+        row("a", "Dividends", "20250303", "10", "A"),
+        row("wa", "Withholding Tax", "20250303", "-1.00", "A"),
+        row("b", "Dividends", "20250310", "10", "A"),
+        row("wb", "Withholding Tax", "20250310", "-1.00", "A"),
+        row("r1", "Withholding Tax", "20250308", "1.00", "A"),
+        row("r2", "Withholding Tax", "20250316", "1.00", "A"),
+      ],
+      rr,
+    );
+    expect(show(entries)).toEqual(["2025-03-03:0.00", "2025-03-10:0.00"]);
+  });
+});

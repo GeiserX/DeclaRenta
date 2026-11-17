@@ -70,6 +70,9 @@ export interface WithholdingMatch {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const yearOf = (date: string): string => normalizeDate(date).slice(0, 4);
+/** Both rows come from one broker, or one of them names none (a single-broker file). */
+const sameBroker = (a: CashTransaction, b: CashTransaction): boolean =>
+  !a.brokerSource || !b.brokerSource || a.brokerSource === b.brokerSource;
 
 /**
  * Match every withholding row to the dividend it belongs to (issues #96, #438).
@@ -176,7 +179,10 @@ export function matchWithholdings(
   // one currency: a stray row in another currency never joins it (issue #96).
   // A dividend with no pair has no tax a row could correct: every unpaired
   // withholding in its reach was already its pair in pass 1 or 2. Rows with no
-  // ISIN share the "" bucket, so they also need the same symbol. A row with no
+  // ISIN share the "" bucket, so they also need the same symbol. A row
+  // corrects only a dividend of its own broker: a refund at one broker never
+  // goes to another broker's nearer dividend of the same ISIN (a row with no
+  // broker name, as in a single-broker file, joins any). A row with no
   // dividend in reach stays unpaired, as before.
   const parts: WithholdingPart[][] = pair.map((index) => (index >= 0 ? [{ index, amount: amounts[index]! }] : []));
   // What each dividend withheld so far and no refund took back, in its pair's currency.
@@ -194,6 +200,7 @@ export function matchWithholdings(
         pair[divIndex]! >= 0 &&
         withholdings[pair[divIndex]!]!.currency === w.currency &&
         (w.isin !== "" || w.symbol === dividends[divIndex]!.symbol) &&
+        sameBroker(w, dividends[divIndex]!) &&
         reaches(index, divIndex),
     );
   };
