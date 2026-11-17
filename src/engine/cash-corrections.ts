@@ -17,9 +17,10 @@
  *
  * The fix is to cancel exact reversal pairs at the SOURCE, before any consumer
  * runs. A reversal is, by construction, an opposite-sign line of identical
- * magnitude for the same (type, security, currency, date). We pair each positive
- * with an equal-magnitude negative in its group and drop both. Whatever is left
- * is the genuine net movement.
+ * magnitude for the same (type, security, currency, date), at the same broker
+ * and with the same conversion status (`brokerConvertedToBase`). We pair each
+ * positive with an equal-magnitude negative in its group and drop both.
+ * Whatever is left is the genuine net movement.
  *
  * DELIBERATELY CONSERVATIVE — only EXACT opposite-sign pairs cancel:
  *   • Two SAME-sign rows of equal magnitude (e.g. two real −€19 withholdings on
@@ -36,11 +37,12 @@ import { normalizeDate } from "./dates.js";
 /**
  * Cancel exact opposite-sign reversal pairs in a cash-transaction stream.
  *
- * Groups by `(type, isin, currency, normalized date, |amount|)`. Within each
- * group, cancels `min(#positive, #negative)` pairs (a reversal annihilates one
- * same-magnitude movement of the opposite sign), preserving the original order
- * of every surviving row (the dividend matcher relies on index order for its
- * lowest-index tie-break, so order must be stable).
+ * Groups by `(type, isin, currency, normalized date, |amount|, broker,
+ * converted)`. Within each group, cancels `min(#positive, #negative)` pairs
+ * (a reversal annihilates one same-magnitude movement of the opposite sign),
+ * preserving the original order of every surviving row (the dividend matcher
+ * relies on index order for its lowest-index tie-break, so order must be
+ * stable).
  *
  * Pure: returns a new array; never mutates the input.
  */
@@ -51,7 +53,13 @@ export function collapseCorrections(transactions: CashTransaction[]): CashTransa
   transactions.forEach((tx, index) => {
     const amount = new Decimal(tx.amount);
     if (amount.isZero()) return; // a zero line can't be (or cancel) a reversal
-    const key = `${tx.type}|${tx.isin}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}`;
+    // The broker and the conversion status scope the pair too: a row at one
+    // broker is never a reversal of a row at another, and a broker-converted
+    // row (no foreign currency held) never cancels one that held it. The FX
+    // path reads these rows, so such a pair would drop a genuine credit from
+    // the currency pool (PR #445 review).
+    const scope = `${tx.brokerSource ?? ""}|${tx.brokerConvertedToBase === true ? "converted" : ""}`;
+    const key = `${tx.type}|${tx.isin}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}|${scope}`;
     const group = groups.get(key) ?? { positives: [], negatives: [] };
     if (amount.isPositive()) group.positives.push(index);
     else group.negatives.push(index);

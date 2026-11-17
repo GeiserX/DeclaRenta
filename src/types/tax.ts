@@ -119,8 +119,8 @@ export interface FifoDisposal {
   description: string;
   sellDate: string;
   /**
-   * Cash settlement date of the sale, when the trade carries one. The FX engine
-   * dates the sale's unpark here, on the same axis as the buy's park.
+   * Cash settlement date of the sale, when the trade carries one. Audit only:
+   * the FX engine dates every event on its trade date (rule R0, issue #437).
    */
   settlementDate?: string;
   acquireDate: string;
@@ -159,8 +159,9 @@ export interface FifoDisposal {
   currency: string;
   /**
    * Currency of the consumed lot when it differs from the sale's (a position
-   * bought on one listing and sold on another). Written only under
-   * «Tradicional con divisa» (`FifoEngine({ markLotCurrency: true })`).
+   * bought on one listing and sold on another, or a crypto permuta). Written
+   * whenever the FX engine runs (`FifoEngine({ markLotCurrency: true })`), never
+   * in monodivisa.
    */
   acquireCurrency?: string;
   /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */

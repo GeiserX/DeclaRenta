@@ -1549,7 +1549,7 @@ describe("IBKR settlement date (settleDateTarget)", () => {
     expect(pypl.settlementDate).toBe("20250411");
   });
 
-  it("dates a USD→EUR conversion traded 31 Dec and settling 2 Jan in the next year, at the settlement rate", () => {
+  it("dates a USD→EUR conversion traded 31 Dec and settling 2 Jan in the year it was traded, at that day's rate (issue #437)", () => {
     const xml = `<FlexQueryResponse queryName="Test" type="AF">
       <FlexStatements count="1">
         <FlexStatement accountId="U1" fromDate="20250101" toDate="20260131" period="Custom">
@@ -1575,15 +1575,17 @@ describe("IBKR settlement date (settleDateTarget)", () => {
     ]);
     const statement = parseIbkrFlexXml(xml);
 
+    // The parser still reads the settlement date; the FX engine dates on the trade date.
+    expect(statement.trades.find((t) => t.tradeID === "C1")!.settlementDate).toBe("20260102");
+
     const y2025 = generateTaxReport(statement, rates, 2025);
-    expect(y2025.fxGains.disposals).toHaveLength(0);
-    expect(y2025.fxGains.netGainLoss.toFixed(2)).toBe("0.00");
+    expect(y2025.fxGains.disposals).toHaveLength(1);
+    expect(y2025.fxGains.disposals[0]!.disposeDate).toBe("2025-12-31");
+    // $1000 × (0.90 − 0.80) at the trade-date rate, not 0.95 on the settlement date.
+    expect(y2025.fxGains.netGainLoss.toFixed(2)).toBe("100.00");
 
     const y2026 = generateTaxReport(statement, rates, 2026);
-    expect(y2026.fxGains.disposals).toHaveLength(1);
-    expect(y2026.fxGains.disposals[0]!.disposeDate).toBe("2026-01-02");
-    // $1000 × (0.95 − 0.80) at the settlement-date rate, not 0.90 on the trade date.
-    expect(y2026.fxGains.netGainLoss.toFixed(2)).toBe("150.00");
+    expect(y2026.fxGains.disposals).toHaveLength(0);
   });
 });
 

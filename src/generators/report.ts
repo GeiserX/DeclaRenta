@@ -618,9 +618,13 @@ export function generateTaxReport(
   //    keeps the FX engine on in its own mode (see FxFifoEngine.unparkTraditional).
   const traditionalFx = options?.traditionalFx === true && options.skipFx !== true;
   const traditionalCost = options?.skipFx === true || traditionalFx;
-  const fifoEngine = new FifoEngine(
-    traditionalFx ? { traditionalCostBasis: true, markLotCurrency: true } : { traditionalCostBasis: traditionalCost },
-  );
+  // markLotCurrency whenever the FX engine runs: a lot sold in another currency
+  // than it was bought in releases its own currency's parked principal (#434,
+  // #441). Monodivisa computes no currency and keeps its disposals' shape.
+  const fifoEngine = new FifoEngine({
+    traditionalCostBasis: traditionalCost,
+    ...(options?.skipFx === true ? {} : { markLotCurrency: true }),
+  });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
   // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
   // see it too, or the bought-out shares still count as held (V3282-18 total exit).
@@ -806,29 +810,25 @@ export function generateTaxReport(
     // «Tradicional con divisa» runs the same producers and engine in its own
     // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
     const fxEngine = traditionalFx ? new FxFifoEngine({ traditionalFx: true }) : new FxFifoEngine();
-    const tradOpts = traditionalFx ? { traditionalFx: true } : undefined;
     if (options?.fxTrace) fxEngine.enableTrace();
     // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
     // (trackAutoConvert === false) restores the historical skip (issue #239).
     const trackAutoConvert = options?.trackAutoConvert !== false;
-    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert, tradOpts);
-    const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap, tradOpts);
+    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
+    // The collapsed rows, the ones the income path reads (issue #439): a
+    // reversed and re-credited dividend opens one lot, not three.
+    const cashFxEvents = FxFifoEngine.extractCashFxEvents(allCashTransactions, rateMap);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
     // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
     // stock SELL re-adds that principal at its carried basis plus the profit at the
     // sale rate. The BUY producer reads the FULL, unfiltered, all-year
     // `statement.trades` (a buy must park before its matching sell re-adds — the
-    // 4-phase + date sort in processEvents handles same-day ordering); the SELL
+    // trade-date sort in processEvents handles same-day ordering); the SELL
     // producer reads the FULL, unsplit, pre-wash-sale disposals across ALL years —
     // NOT the year-filtered/titulares-split `disposals`. Neither emits a disposal;
     // only a later USD→EUR conversion realizes the deferred gain (Art. 14.2.e). FX
     // disposals are year-filtered below and split at splitFxDisposal.
-    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(
-      statement.trades,
-      rateMap,
-      trackAutoConvert,
-      tradOpts,
-    );
+    const stockPurchaseFxEvents = FxFifoEngine.extractStockPurchaseFxEvents(statement.trades, rateMap, trackAutoConvert);
     const manualOpeningLotFxEvents = FxFifoEngine.extractManualOpeningLotFxEvents(usableManualOpeningLots, rateMap);
     const stockProceedsFxEvents = traditionalFx
       ? FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true })
@@ -1019,7 +1019,7 @@ export function generateTaxReport(
         tr.assetCategory === "CASH" &&
         tr.currency !== "EUR" &&
         (trackAutoConvert || !FxFifoEngine.isFxconv(tr)) &&
-        normalizeDate(tr.settlementDate || tr.tradeDate).startsWith(yearStr),
+        normalizeDate(tr.tradeDate || tr.settlementDate).startsWith(yearStr),
     ).length;
     if (skippedConversions > 0) {
       allMessages.push({
