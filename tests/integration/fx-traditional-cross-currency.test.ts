@@ -51,7 +51,7 @@ function gbpToEur(st: FlexStatement, rates: EcbRateMap, d: string, gbp: string, 
     proceeds: `-${gbp}`,
     cost: gbp,
     buySell: "BUY",
-    openCloseIndicator: "",
+    openCloseIndicator: "O", // what the IBKR parser sets when the row has none
     exchange: "IDEALFX",
     commission: "0",
     commissionCurrency: "GBP",

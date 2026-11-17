@@ -99,9 +99,9 @@ export function toStatement(sc: Scenario): { st: FlexStatement; rates: EcbRateMa
           proceeds: side === "SELL" ? e.usd : `-${e.usd}`,
           cost: e.usd,
           buySell: side,
-          openCloseIndicator: "",
+          openCloseIndicator: "O", // what the IBKR parser sets when the row has none
           exchange: "IDEALFX",
-        } as Partial<Trade>),
+        }),
       );
     } else if (e.k === "buy" || e.k === "sell") {
       const money = new Decimal(e.qty).mul(e.px).toString();
