@@ -2106,8 +2106,10 @@ export class FxFifoEngine {
             const shifted = p.rate.plus(shift);
             if (shifted.lessThan(0)) {
               // Guard (row 8): book the slice's own drift now, re-add at r_s.
+              // The guard row already reports p.shifts (they are in r_lot, its
+              // cost); r_s = r_b + shift holds only this sale's shift.
               if (this.bookLostDollars(event, give, p, buyRate, true)) guardRows++;
-              lot = readd(ccy, event.date, give, saleRate, p.brokerSource, shifts);
+              lot = readd(ccy, event.date, give, saleRate, p.brokerSource, shift.isZero() ? undefined : [{ year: saleYear, perUnit: shift }]);
               note = `guarda de coste negativo: diferencia hasta la compra declarada ahora; re-añadido al tipo de venta ${saleRate.toString()} €/${ccy}`;
             } else {
               lot = readd(ccy, p.acquireDate ?? event.date, give, shifted, p.brokerSource, shifts);
@@ -2223,7 +2225,7 @@ export class FxFifoEngine {
       ...(p.brokerSource !== undefined ? { acquireBrokerSource: p.brokerSource } : {}),
       ...(declaredShiftEur !== undefined ? { declaredShiftEur } : {}),
     });
-    this.record("dispose", event, {
+    this.record("dispose", guard ? { ...event, trigger: "stock_sale_guard" } : event, {
       quantityFcy: q,
       rate: buyRate,
       costBasisEur,

@@ -133,3 +133,40 @@ describe("a sale whose commission exceeds its gross (review r4598114592)", () =>
     expect(withCommission(MONO).fxGains.disposals).toEqual([]);
   });
 });
+
+describe("negative-cost guard (review r4598114603, r4598114654)", () => {
+  // 2023: 1000 USD at 1.00 go through AAA (bought at 1.00, sold at 0.50), so
+  // they come back at 0.50 with a 2023 shift of −0.50. 2024: BBB bought at 2.00
+  // and sold at 1.00: 0.50 + 1.00 − 2.00 < 0, the guard books 1500 and re-adds
+  // the dollars at 1.00. 2025: converted at 1.10.
+  const sc: Scenario = {
+    id: "GRD",
+    years: [2023, 2024, 2025],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2023-02-01", usd: "1000", r: "1.00" },
+      { k: "buy", d: "2023-03-01", sym: "AAA", qty: "10", px: "100", r: "1.00" },
+      { k: "sell", d: "2023-06-01", sym: "AAA", qty: "10", px: "100", r: "0.50" },
+      { k: "buy", d: "2024-03-01", sym: "BBB", qty: "10", px: "100", r: "2.00" },
+      { k: "sell", d: "2024-06-03", sym: "BBB", qty: "10", px: "100", r: "1.00" },
+      { k: "conv", d: "2025-02-03", usd: "1000", r: "1.10" },
+    ],
+  };
+
+  it("the guard row reports the 2023 shift once; the re-added lot carries only the 2024 one", () => {
+    const per = run(sc, { ...TRAD, fxTrace: true });
+    const guard = per.get(2024)!.report.fxGains.disposals.filter((d) => d.trigger === "stock_sale_guard");
+    expect(guard.map((d) => [f2(d.gainLossEur), f2(d.declaredShiftEur!)])).toEqual([["1500.00", "-500.00"]]);
+    const conv = per.get(2025)!.report.fxGains.disposals;
+    expect(conv.map((d) => [d.trigger, f2(d.gainLossEur), f2(d.declaredShiftEur!)])).toEqual([["conversion", "100.00", "-1000.00"]]);
+    const inflight = per.get(2025)!.report.messages.find((m) => m.id === "report.fx_traditional_inflight")!;
+    expect([inflight.context?.amount, inflight.context?.years]).toEqual(["-1000.00", "2024"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+  });
+
+  it("the guard's trace row has the trigger of its disposal", () => {
+    const trace = run(sc, { ...TRAD, fxTrace: true }).get(2024)!.report.fxTrace ?? [];
+    const rows = trace.filter((t) => t.kind === "dispose" && t.date === "2024-06-03");
+    expect(rows.map((t) => t.trigger)).toEqual(["stock_sale_guard"]);
+  });
+});
