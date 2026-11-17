@@ -182,3 +182,134 @@ describe("issue #438 — the real IBKR correction-only export", () => {
     expect(m?.context).toEqual({ year: "2022", reportYear: "2023", amount: new Decimal("0.39").mul("0.92").toFixed(2) });
   });
 });
+
+// Review of #438: corrections the first fix still got wrong, end to end in the
+// three FX methods. 0588 must be the net tax really paid, a refund must never
+// vanish, and a correction of an earlier year must neither lower this year's
+// 0588 nor go unreported.
+describe("issue #438 — refunds that must go to the right dividend", () => {
+  const rates = rateMap(2024, 2025);
+  const cases: [string, string[], { gross: string; paid: string; d0588: string }][] = [
+    [
+      "the dividend itself is reversed and rebooked on other dates",
+      [
+        cash("Dividends", "10.00", "20250310"),
+        cash("Withholding Tax", "-1.50", "20250310"),
+        cash("Dividends", "-10.00", "20250314"),
+        cash("Withholding Tax", "1.50", "20250314"),
+        cash("Dividends", "10.00", "20250316"),
+        cash("Withholding Tax", "-1.00", "20250316"),
+      ],
+      { gross: "9.00", paid: "0.90", d0588: "0.90" },
+    ],
+    [
+      "a reclassification: reversed, then rebooked as 8.00 withheld 1.20 the same day",
+      [
+        cash("Dividends", "10.00", "20250310"),
+        cash("Withholding Tax", "-1.50", "20250310"),
+        cash("Dividends", "-10.00", "20250314"),
+        cash("Withholding Tax", "1.50", "20250314"),
+        cash("Dividends", "8.00", "20250314"),
+        cash("Withholding Tax", "-1.20", "20250314"),
+      ],
+      { gross: "7.20", paid: "1.08", d0588: "1.08" },
+    ],
+    [
+      "a payment in lieu listed first on the same day keeps its withholding",
+      [
+        cash("Payment In Lieu Of Dividends", "2.00", "20250310"),
+        cash("Withholding Tax", "-0.30", "20250310"),
+        cash("Dividends", "10.00", "20250310"),
+        cash("Withholding Tax", "-1.50", "20250310"),
+        cash("Withholding Tax", "0.50", "20250312"),
+      ],
+      { gross: "10.80", paid: "1.17", d0588: "1.17" },
+    ],
+    [
+      "a refund nearer to a dividend that withheld less than it",
+      [
+        cash("Dividends", "10.00", "20250303"),
+        cash("Withholding Tax", "-1.50", "20250303"),
+        cash("Dividends", "2.00", "20250310"),
+        cash("Withholding Tax", "-0.20", "20250310"),
+        cash("Withholding Tax", "0.50", "20250307"),
+      ],
+      { gross: "10.80", paid: "1.08", d0588: "1.08" },
+    ],
+  ];
+  for (const [label, rows, want] of cases) {
+    for (const method of METHODS) {
+      it(`${label} (${method})`, () => {
+        const r = generateTaxReport(merged(statement(rows)), rates, 2025, reportOptionsForMethod(method));
+        expect(r.dividends.grossIncome.toFixed(2)).toBe(want.gross);
+        expect(r.doubleTaxation.byCountry.US!.taxPaid.toFixed(2)).toBe(want.paid);
+        expect(r.doubleTaxation.deduction.toFixed(2)).toBe(want.d0588);
+        for (const e of r.dividends.entries) expect(e.withholdingTaxEur.isNegative()).toBe(false);
+      });
+    }
+  }
+});
+
+describe("issue #438 — an earlier year's correction counts once, in the right year", () => {
+  const rates = rateMap(2023, 2025);
+  const warnings = (r: TaxSummary) => r.messages.filter((x) => x.id === MSG_ID).map((x) => x.context);
+
+  // Weekly payer: 2024-12-27 withheld 1.50; the 2025 statement corrects it to
+  // 1.00 (rows dated 2024-12-27, posted 2025-01-20) and has the next weekly
+  // dividend, 2025-01-03, exactly 7 days later, withheld 1.50.
+  const w2024 = statement([cash("Dividends", "10.00", "20241227"), cash("Withholding Tax", "-1.50", "20241227")], "20240101", "20241231");
+  const w2025 = statement(
+    [
+      cash("Dividends", "10.00", "20250103"),
+      cash("Withholding Tax", "-1.50", "20250103"),
+      cash("Withholding Tax", "1.50", "20241227", "20250120"),
+      cash("Withholding Tax", "-1.00", "20241227", "20250120"),
+    ],
+    "20250101",
+    "20251231",
+  );
+  for (const method of METHODS) {
+    it(`weekly payer, 2025 file only: 2025's 0588 keeps its 1.35 and the 0.45 goes to the warning (${method})`, () => {
+      const r = generateTaxReport(merged(w2025), rates, 2025, reportOptionsForMethod(method));
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("1.35");
+      expect(warnings(r)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+    });
+    it(`weekly payer, both files: 2024 = 0.90, 2025 = 1.35 plus the warning (${method})`, () => {
+      const both = merged(w2024, w2025);
+      expect(generateTaxReport(both, rates, 2024, reportOptionsForMethod(method)).doubleTaxation.deduction.toFixed(2)).toBe("0.90");
+      const r = generateTaxReport(both, rates, 2025, reportOptionsForMethod(method));
+      expect(r.doubleTaxation.deduction.toFixed(2)).toBe("1.35");
+      expect(warnings(r)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+    });
+  }
+
+  // A refund dated in January (its own booking day) for a late-December dividend.
+  const j2024 = statement([cash("Dividends", "10.00", "20241230"), cash("Withholding Tax", "-1.50", "20241230")], "20240101", "20241231");
+  const j2025 = statement([cash("Withholding Tax", "0.50", "20250103")]);
+  for (const method of METHODS) {
+    it(`a January refund of a December dividend warns, alone or with 2024's file (${method})`, () => {
+      const alone = generateTaxReport(merged(j2025), rates, 2025, reportOptionsForMethod(method));
+      expect(warnings(alone)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+      const both = merged(j2024, j2025);
+      expect(generateTaxReport(both, rates, 2024, reportOptionsForMethod(method)).doubleTaxation.deduction.toFixed(2)).toBe("0.90");
+      const r2025 = generateTaxReport(both, rates, 2025, reportOptionsForMethod(method));
+      expect(r2025.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+      expect(warnings(r2025)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+    });
+  }
+
+  // The 2025 file has a refund of a June 2024 withholding and a dividend paid
+  // on 2024-12-31 but posted 2025-01-02, with its own withholding. That
+  // withholding was never in 2024's file, so it must not offset the refund.
+  const d2025 = statement([
+    cash("Withholding Tax", "0.50", "20240610", "20250115"),
+    cash("Dividends", "10.00", "20241231", "20250102"),
+    cash("Withholding Tax", "-1.50", "20241231", "20250102"),
+  ]);
+  for (const method of METHODS) {
+    it(`a dividend posted late brings its own withholding, which never hides a refund (${method})`, () => {
+      const r = generateTaxReport(merged(d2025), rates, 2025, reportOptionsForMethod(method));
+      expect(warnings(r)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+    });
+  }
+});

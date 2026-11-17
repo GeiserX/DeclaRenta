@@ -741,3 +741,87 @@ describe("withholding corrections (issue #438)", () => {
     expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("1.3500");
   });
 });
+
+// Review of #438: a refund must never vanish into a dividend that withheld less
+// than it, a reversed dividend must never take a withholding, and a correction
+// IBKR posts next year must stay with a dividend of its own year.
+describe("withholding corrections: where a refund goes (issue #438)", () => {
+  const r1 = makeRateMap({
+    "2025-03-03": { USD: "1" },
+    "2025-03-07": { USD: "1" },
+    "2025-03-10": { USD: "1" },
+    "2025-03-12": { USD: "1" },
+    "2025-03-14": { USD: "1" },
+    "2025-03-16": { USD: "1" },
+  });
+  const div = (id: string, dateTime: string, amount = "10", extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime, amount, type: "Dividends", ...extra });
+  const wht = (id: string, dateTime: string, amount: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime, amount, type: "Withholding Tax", ...extra });
+  const show = (entries: ReturnType<typeof calculateDividends>) =>
+    entries.map((e) => `${e.grossAmountEur.toFixed(2)}/${e.withholdingTaxEur.toFixed(2)}`);
+
+  it("a refund nearer to a dividend that withheld less is not lost: 1.50 + 0.20 − 0.50 = 1.20", () => {
+    const entries = calculateDividends(
+      [div("a", "20250303"), wht("wa", "20250303", "-1.50"), div("b", "20250310", "2"), wht("wb", "20250310", "-0.20"), wht("r", "20250307", "0.50")],
+      r1,
+    );
+    expect(show(entries)).toEqual(["10.00/1.00", "2.00/0.20"]);
+  });
+
+  it("on a tie, the refund goes to the dividend that withheld at least the refund, not the first one", () => {
+    const entries = calculateDividends(
+      [
+        makeCashTx({ transactionID: "pil", dateTime: "20250310", amount: "2", type: "Payment In Lieu Of Dividends" }),
+        wht("wp", "20250310", "-0.30"),
+        div("d", "20250310"),
+        wht("wd", "20250310", "-1.50"),
+        wht("r", "20250312", "0.50"),
+      ],
+      r1,
+    );
+    expect(show(entries)).toEqual(["2.00/0.30", "10.00/1.00"]);
+  });
+
+  it("a refund larger than any one withholding is split, never dropped while some dividend in reach withheld it", () => {
+    const entries = calculateDividends(
+      [div("a", "20250303"), wht("wa", "20250303", "-0.40"), div("b", "20250310"), wht("wb", "20250310", "-0.40"), wht("r", "20250307", "0.60")],
+      r1,
+    );
+    const total = entries.reduce((s, e) => s.plus(e.withholdingTaxEur), new Decimal(0));
+    expect(total.toFixed(2)).toBe("0.20");
+  });
+
+  it("a reversed dividend takes no withholding; the reversal goes back to the dividend it reverses", () => {
+    // 03-10 paid 10.00 withheld 1.50; 03-14 reverses both; 03-16 rebooks 10.00 withheld 1.00.
+    const entries = calculateDividends(
+      [
+        div("d1", "20250310"),
+        wht("w1", "20250310", "-1.50"),
+        div("rev", "20250314", "-10"),
+        wht("w-rev", "20250314", "1.50"),
+        div("d2", "20250316"),
+        wht("w2", "20250316", "-1.00"),
+      ],
+      r1,
+    );
+    expect(show(entries)).toEqual(["10.00/0.00", "-10.00/0.00", "10.00/1.00"]);
+  });
+
+  it("a row IBKR posts in a later year joins only a dividend of its own year", () => {
+    // Weekly payer: the 2024-12-27 correction (posted 2025-01-20) is exactly
+    // 7 days from the 2025-01-03 dividend, which must keep its own 1.50.
+    const r = makeRateMap({ "2024-12-27": { USD: "1" }, "2025-01-03": { USD: "1" } });
+    const late = { reportDate: "2025-01-20" };
+    const rows = [
+      div("d25", "20250103"),
+      wht("w-late-rev", "20241227", "1.50", late),
+      wht("w-late-new", "20241227", "-1.00", late),
+      wht("w25", "20250103", "-1.50"),
+    ];
+    expect(show(calculateDividends(rows, r))).toEqual(["10.00/1.50"]);
+    // With 2024's dividend in the data, the correction nets there.
+    const both = calculateDividends([div("d24", "20241227"), wht("w24", "20241227", "-1.50"), ...rows], r);
+    expect(show(both)).toEqual(["10.00/1.00", "10.00/1.50"]);
+  });
+});

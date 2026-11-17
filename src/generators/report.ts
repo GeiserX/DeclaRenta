@@ -24,7 +24,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
-import { calculateDividends } from "../engine/dividends.js";
+import { calculateDividends, matchWithholdings } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
@@ -96,30 +96,56 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
 }
 
 /**
- * Withholding corrections posted in `year` for dividends of earlier years
- * (issue #438), as the net EUR refund per earlier year, oldest first. Only rows
- * that carry the broker's posting date (`reportDate`, IBKR) count: without it a
- * merged multi-year upload cannot tell a late correction from an ordinary row.
- * Each row is valued in its own currency on its own date; a row with no rate is
- * left out. Years whose late rows raise the withholding (net ≤ 0) are dropped.
+ * Withholding corrections in this year's rows for dividends of earlier years
+ * (issue #438), as the net EUR refund per earlier year, oldest first. This
+ * year's rows are the ones posted in `year`: the broker's posting date
+ * (`reportDate`, IBKR) when the export has it, else the row's own date. A part
+ * of such a row counts for an earlier year Y when:
+ *   - the matcher gives it to a dividend of Y posted before `year` (filed with
+ *     Y's statement), e.g. a January refund of a late-December dividend;
+ *   - it joins no dividend and is dated in Y (IBKR dates a late correction on
+ *     its dividend's day, and Y's file was not uploaded);
+ *   - it joins no dividend and is dated in the first 7 days of `year`: only a
+ *     dividend of late December (Y = year − 1) can be in its reach.
+ * A part given to a dividend posted in `year` is that dividend's own
+ * withholding: it was never filed, so it never offsets a refund. The matcher
+ * runs on the RAW rows: collapseCorrections would cancel a late reversal
+ * against the original row of a merged earlier-year file. Each part is valued
+ * in its own currency on its own date; a part with no rate is left out. Years
+ * whose net raises the withholding (≤ 0) are dropped.
  */
-function lateWithholdingRefunds(
+function priorYearWithholdingRefunds(
   cashTransactions: CashTransaction[],
   year: number,
   resolvedRateMap: EcbRateMap,
   manualRates: EcbRateMap | undefined,
 ): [number, Decimal][] {
+  const yearOf = (date: string) => Number(normalizeDate(date).slice(0, 4));
+  const postedYear = (t: CashTransaction) => yearOf(t.reportDate || t.dateTime);
+  const { dividends, withholdings, parts } = matchWithholdings(cashTransactions);
   const byYear = new Map<number, Decimal>();
-  for (const t of cashTransactions) {
-    if (t.type !== "Withholding Tax" || !t.reportDate) continue;
-    if (Number(normalizeDate(t.reportDate).slice(0, 4)) !== year) continue;
-    const date = normalizeDate(t.dateTime);
-    const rowYear = Number(date.slice(0, 4));
-    if (!(rowYear < year)) continue;
-    const rate = lookupIncomeRate(date, t.currency, resolvedRateMap, manualRates);
-    if (rate === null) continue;
-    byYear.set(rowYear, (byYear.get(rowYear) ?? new Decimal(0)).plus(new Decimal(t.amount).mul(rate)));
-  }
+  const add = (earlierYear: number, w: CashTransaction, amount: Decimal) => {
+    const rate = lookupIncomeRate(normalizeDate(w.dateTime), w.currency, resolvedRateMap, manualRates);
+    if (rate === null) return;
+    byYear.set(earlierYear, (byYear.get(earlierYear) ?? new Decimal(0)).plus(amount.mul(rate)));
+  };
+  const matched = withholdings.map(() => new Decimal(0));
+  parts.forEach((divParts, divIndex) => {
+    const div = dividends[divIndex]!;
+    const filed = postedYear(div) < year;
+    for (const { index, amount } of divParts) {
+      matched[index] = matched[index]!.plus(amount);
+      if (filed && postedYear(withholdings[index]!) === year) add(yearOf(div.dateTime), withholdings[index]!, amount);
+    }
+  });
+  withholdings.forEach((w, index) => {
+    if (postedYear(w) !== year) return;
+    const unmatched = new Decimal(w.amount).minus(matched[index]!);
+    if (unmatched.isZero()) return;
+    const date = normalizeDate(w.dateTime);
+    if (yearOf(date) < year) add(yearOf(date), w, unmatched);
+    else if (date <= `${year}-01-07`) add(year - 1, w, unmatched);
+  });
   return [...byYear].filter(([, net]) => net.greaterThan(0)).sort(([a], [b]) => a - b);
 }
 
@@ -965,11 +991,12 @@ export function generateTaxReport(
 
   // A withholding correction posted in this year for a dividend of an earlier
   // year (issue #438): IBKR keeps the dividend's date in dateTime and posts the
-  // rows later (reportDate). That year's 0588 was computed with the original
-  // withholding; when the correction lowers it, the user may owe a
-  // complementaria. Read from the RAW rows: collapseCorrections would cancel the
-  // late reversal against the original row of a merged earlier-year file.
-  for (const [lateYear, netRefundEur] of lateWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
+  // rows later (reportDate); other brokers date a refund on its own day, in
+  // January for a late-December dividend. That year's 0588 was computed with
+  // the original withholding; when the correction lowers it, the user may owe
+  // a complementaria. This year's boxes never include it: the matcher gives a
+  // late-posted row only to a dividend of its own year.
+  for (const [lateYear, netRefundEur] of priorYearWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
     const ctx = { year: String(lateYear), reportYear: yearStr, amount: fmt2(splitInterestAmount(netRefundEur, titulares)) };
     allMessages.push({
       id: "report.withholding_corrected_prior_year",
