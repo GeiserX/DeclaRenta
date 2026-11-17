@@ -1326,8 +1326,21 @@ export class FxFifoEngine {
    * Dividends/interest received in FCY create acquisition lots;
    * withholding tax and fees paid in FCY consume lots.
    */
-  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
+  static extractCashFxEvents(
+    cashTransactions: CashTransaction[],
+    rateMap: EcbRateMap,
+    options?: { traditionalFx?: boolean },
+  ): FxEvent[] {
     const events: FxEvent[] = [];
+    // R0 (issue #434): «Tradicional con divisa» dates every FX event on its
+    // trade date and never reads settlement, so a cash row goes on `dateTime`
+    // (a fee charged on 31 December that settles on 2 January belongs to the
+    // earlier year). Every key below (income lot, withholding netting, refund)
+    // uses this one date, so a withholding still nets into the income it was
+    // taken from. The default keeps settlement dating.
+    const cashDate = options?.traditionalFx
+      ? (tx: CashTransaction): string => normalizeDate(tx.dateTime || tx.settleDate)
+      : (tx: CashTransaction): string => normalizeDate(tx.settleDate || tx.dateTime);
 
     // Withholding tax (retención en origen) on a foreign-currency dividend/interest
     // is a PAGO A CUENTA: it is deducted at source, the withheld FCY never enters
@@ -1371,7 +1384,7 @@ export class FxFifoEngine {
     for (const tx of cashTransactions) {
       if (tx.type !== "Withholding Tax" || tx.currency === "EUR") continue;
       const amt = new Decimal(tx.amount);
-      const key = whtKey(tx.brokerSource, tx.currency, normalizeDate(tx.settleDate || tx.dateTime));
+      const key = whtKey(tx.brokerSource, tx.currency, cashDate(tx));
       whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).minus(amt));
       if (amt.greaterThan(0) && !refundRowByKey.has(key)) refundRowByKey.set(key, tx);
     }
@@ -1413,7 +1426,7 @@ export class FxFifoEngine {
       // its withholding never held FCY either, so its key opens no refund lot.
       if (tx.brokerConvertedToBase) {
         if (tx.type !== "Withholding Tax") {
-          convertedKeys.add(whtKey(tx.brokerSource, tx.currency, normalizeDate(tx.settleDate || tx.dateTime)));
+          convertedKeys.add(whtKey(tx.brokerSource, tx.currency, cashDate(tx)));
         }
         continue;
       }
@@ -1433,7 +1446,7 @@ export class FxFifoEngine {
       // report.ts surfaces a warning so the user values it manually.
       if (!isEcbResolvable(tx.currency)) continue;
 
-      const date = normalizeDate(tx.settleDate || tx.dateTime);
+      const date = cashDate(tx);
       // A resolvable currency whose rate was not fetched (e.g. an FCY income in
       // a year with no trades) must not throw — skip the event and let report.ts
       // surface it. lookupRateInMap returns null instead of throwing.
@@ -1484,7 +1497,7 @@ export class FxFifoEngine {
       if (!pending.isNegative() || convertedKeys.has(key)) continue;
       const tx = refundRowByKey.get(key)!; // pending < 0 needs at least one positive row
       if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) continue;
-      const date = normalizeDate(tx.settleDate || tx.dateTime);
+      const date = cashDate(tx);
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
       if (ecbRate === null) continue;
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
