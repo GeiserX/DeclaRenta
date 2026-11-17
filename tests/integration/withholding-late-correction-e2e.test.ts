@@ -313,3 +313,78 @@ describe("issue #438 — an earlier year's correction counts once, in the right 
     });
   }
 });
+
+describe("issue #438 — the prior-year warning names the box the withholding went to", () => {
+  const SPANISH_ID = "report.spanish_withholding_corrected_prior_year";
+  const rates = rateMap(2023, 2025);
+  /** A Telefónica (Spanish issuer, EUR) IBKR cash row. */
+  const tef = (type: string, amount: string, date: string, reportDate = date) =>
+    `<CashTransaction transactionID="${id++}" accountId="U1" symbol="TEF" description="TEF(ES0178430E18) CASH DIVIDEND EUR 0.15 PER SHARE${type === "Withholding Tax" ? " - ES TAX" : ""}" isin="ES0178430E18" currency="EUR" dateTime="${date};202000" settleDate="${date}" reportDate="${reportDate}" amount="${amount}" fxRateToBase="1" type="${type}" levelOfDetail="DETAIL" />`;
+  const t2024 = statement([tef("Dividends", "15.00", "20241210"), tef("Withholding Tax", "-2.85", "20241210")], "20240101", "20241231");
+  // IBKR re-posts the Spanish 19% as 15% in 2025, dated on the dividend's day.
+  const t2025 = statement([tef("Withholding Tax", "2.85", "20241210", "20250120"), tef("Withholding Tax", "-2.25", "20241210", "20250120")]);
+
+  for (const method of METHODS) {
+    it(`a Spanish withholding's correction points to 0597, not 0588 (${method})`, () => {
+      const r = generateTaxReport(merged(t2025), rates, 2025, reportOptionsForMethod(method));
+      expect(r.messages.some((x) => x.id === MSG_ID)).toBe(false);
+      const m = r.messages.filter((x) => x.id === SPANISH_ID);
+      expect(m).toHaveLength(1);
+      expect(m[0]!.severity).toBe("warning");
+      expect(m[0]!.context).toEqual({ year: "2024", reportYear: "2025", amount: "0.60" });
+      expect(m[0]!.message).toContain("0597");
+      expect(m[0]!.message).not.toContain("0588");
+      expect(m[0]!.hint).not.toContain("0588");
+    });
+  }
+
+  it("with 2024's file too, 2024's 0597 is recomputed and 2025 still warns about 0597", () => {
+    const both = merged(t2024, t2025);
+    expect(generateTaxReport(both, rates, 2024).dividends.spanishWithholding.toFixed(2)).toBe("2.25");
+    const r = generateTaxReport(both, rates, 2025);
+    expect(r.messages.filter((x) => x.id === SPANISH_ID).map((x) => x.context)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.60" }]);
+    expect(r.messages.some((x) => x.id === MSG_ID)).toBe(false);
+  });
+
+  it("Spanish and foreign corrections in one file get one warning each", () => {
+    const mixed = statement([
+      tef("Withholding Tax", "2.85", "20241210", "20250120"),
+      tef("Withholding Tax", "-2.25", "20241210", "20250120"),
+      cash("Withholding Tax", "1.50", "20241210", "20250120"),
+      cash("Withholding Tax", "-1.00", "20241210", "20250120"),
+    ]);
+    const r = generateTaxReport(merged(mixed), rates, 2025);
+    expect(r.messages.filter((x) => x.id === SPANISH_ID).map((x) => x.context)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.60" }]);
+    expect(r.messages.filter((x) => x.id === MSG_ID).map((x) => x.context)).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+  });
+
+  it("the Spanish text of the 0597 warning is the es locale's, byte for byte", () => {
+    const r = generateTaxReport(merged(t2025), rates, 2025);
+    const m = r.messages.find((x) => x.id === SPANISH_ID)!;
+    const fill = (s: string) => s.replace(/\{\{(\w+)\}\}/g, (_x, k: string) => m.context![k]!);
+    expect(m.message).toBe(fill(es[SPANISH_ID as keyof typeof es] as string));
+    expect(m.hint).toBe(fill(es[`${SPANISH_ID}.hint` as keyof typeof es] as string));
+  });
+});
+
+describe("issue #438 — the warning values a refund the way the dividend's year does", () => {
+  // USD is 0.90 in 2024 and 0.80 in 2025. A 2024-12-30 dividend withheld 1.50
+  // gets a 0.50 refund dated 2025-01-03.
+  const rates = rateMap(2023, 2024);
+  for (const [day, fx] of rateMap(2025, 2025, "0.80")) rates.set(day, fx);
+  const j2024 = statement([cash("Dividends", "10.00", "20241230"), cash("Withholding Tax", "-1.50", "20241230")], "20240101", "20241231");
+  const j2025 = statement([cash("Withholding Tax", "0.50", "20250103")]);
+  const warnings = (r: TaxSummary) => r.messages.filter((x) => x.id === MSG_ID).map((x) => x.context);
+
+  it("matched to its dividend: the stated drop equals what 2024's 0588 loses (dividend-date rate)", () => {
+    const both = merged(j2024, j2025);
+    const filed = generateTaxReport(merged(j2024), rates, 2024).doubleTaxation.deduction;
+    const recomputed = generateTaxReport(both, rates, 2024).doubleTaxation.deduction;
+    expect(filed.minus(recomputed).toFixed(2)).toBe("0.45"); // 1.35 − 0.90
+    expect(warnings(generateTaxReport(both, rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "0.45" }]);
+  });
+
+  it("with no dividend in the data, the refund keeps its own date's rate", () => {
+    expect(warnings(generateTaxReport(merged(j2025), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "0.40" }]);
+  });
+});

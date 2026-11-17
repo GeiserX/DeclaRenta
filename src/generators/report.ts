@@ -24,7 +24,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
-import { calculateDividends, matchWithholdings } from "../engine/dividends.js";
+import { calculateDividends, matchWithholdings, withholdingCountry } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
@@ -110,32 +110,42 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
  * A part given to a dividend posted in `year` is that dividend's own
  * withholding: it was never filed, so it never offsets a refund. The matcher
  * runs on the RAW rows: collapseCorrections would cancel a late reversal
- * against the original row of a merged earlier-year file. Each part is valued
- * in its own currency on its own date; a part with no rate is left out. Years
- * whose net raises the withholding (≤ 0) are dropped.
+ * against the original row of a merged earlier-year file. A part joined to a
+ * dividend is valued as that dividend's withholding is (its rate on the
+ * dividend's date when in the dividend's currency, else its own date's rate),
+ * so the stated drop is what the recalculated year loses; an unjoined part at
+ * its own date's rate. A part with no rate is left out. The country is the
+ * dividend's withholding country (the row's own when unjoined): a Spanish one
+ * went to casilla 0597, any other to 0588. Years whose net raises the
+ * withholding (≤ 0) are dropped.
  */
 function priorYearWithholdingRefunds(
   cashTransactions: CashTransaction[],
   year: number,
   resolvedRateMap: EcbRateMap,
   manualRates: EcbRateMap | undefined,
-): [number, Decimal][] {
+): { year: number; spanish: boolean; amount: Decimal }[] {
   const yearOf = (date: string) => Number(normalizeDate(date).slice(0, 4));
   const postedYear = (t: CashTransaction) => yearOf(t.reportDate || t.dateTime);
-  const { dividends, withholdings, parts } = matchWithholdings(cashTransactions);
-  const byYear = new Map<number, Decimal>();
-  const add = (earlierYear: number, w: CashTransaction, amount: Decimal) => {
-    const rate = lookupIncomeRate(normalizeDate(w.dateTime), w.currency, resolvedRateMap, manualRates);
+  const { dividends, withholdings, pair, parts } = matchWithholdings(cashTransactions);
+  const byYear = new Map<string, { year: number; spanish: boolean; amount: Decimal }>();
+  const add = (earlierYear: number, country: string, valuedOn: CashTransaction, amount: Decimal) => {
+    const rate = lookupIncomeRate(normalizeDate(valuedOn.dateTime), valuedOn.currency, resolvedRateMap, manualRates);
     if (rate === null) return;
-    byYear.set(earlierYear, (byYear.get(earlierYear) ?? new Decimal(0)).plus(amount.mul(rate)));
+    const spanish = country === "ES";
+    const key = `${earlierYear}|${spanish}`;
+    const prev = byYear.get(key)?.amount ?? new Decimal(0);
+    byYear.set(key, { year: earlierYear, spanish, amount: prev.plus(amount.mul(rate)) });
   };
   const matched = withholdings.map(() => new Decimal(0));
   parts.forEach((divParts, divIndex) => {
     const div = dividends[divIndex]!;
     const filed = postedYear(div) < year;
+    const country = withholdingCountry(div, pair[divIndex]! >= 0 ? withholdings[pair[divIndex]!] : undefined);
     for (const { index, amount } of divParts) {
+      const w = withholdings[index]!;
       matched[index] = matched[index]!.plus(amount);
-      if (filed && postedYear(withholdings[index]!) === year) add(yearOf(div.dateTime), withholdings[index]!, amount);
+      if (filed && postedYear(w) === year) add(yearOf(div.dateTime), country, w.currency === div.currency ? div : w, amount);
     }
   });
   withholdings.forEach((w, index) => {
@@ -143,10 +153,12 @@ function priorYearWithholdingRefunds(
     const unmatched = new Decimal(w.amount).minus(matched[index]!);
     if (unmatched.isZero()) return;
     const date = normalizeDate(w.dateTime);
-    if (yearOf(date) < year) add(yearOf(date), w, unmatched);
-    else if (date <= `${year}-01-07`) add(year - 1, w, unmatched);
+    if (yearOf(date) < year) add(yearOf(date), withholdingCountry(w), w, unmatched);
+    else if (date <= `${year}-01-07`) add(year - 1, withholdingCountry(w), w, unmatched);
   });
-  return [...byYear].filter(([, net]) => net.greaterThan(0)).sort(([a], [b]) => a - b);
+  return [...byYear.values()]
+    .filter(({ amount }) => amount.greaterThan(0))
+    .sort((a, b) => a.year - b.year || Number(a.spanish) - Number(b.spanish));
 }
 
 /** Divide an interest amount (already abs-valued EUR) by the number of titulares. */
@@ -992,19 +1004,30 @@ export function generateTaxReport(
   // A withholding correction posted in this year for a dividend of an earlier
   // year (issue #438): IBKR keeps the dividend's date in dateTime and posts the
   // rows later (reportDate); other brokers date a refund on its own day, in
-  // January for a late-December dividend. That year's 0588 was computed with
-  // the original withholding; when the correction lowers it, the user may owe
-  // a complementaria. This year's boxes never include it: the matcher gives a
+  // January for a late-December dividend. That year's 0588 (foreign tax) or
+  // 0597 (Spanish retención) was computed with the original withholding; when
+  // the correction lowers it, the user may owe a complementaria. Each box gets
+  // its own message. This year's boxes never include it: the matcher gives a
   // late-posted row only to a dividend of its own year.
-  for (const [lateYear, netRefundEur] of priorYearWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
-    const ctx = { year: String(lateYear), reportYear: yearStr, amount: fmt2(splitInterestAmount(netRefundEur, titulares)) };
-    allMessages.push({
-      id: "report.withholding_corrected_prior_year",
-      severity: "warning",
-      message: `Este fichero trae correcciones de retenciones en origen de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0588 de ese año pudo salir alta.`,
-      hint: `La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
-      context: ctx,
-    });
+  for (const { year: lateYear, spanish, amount } of priorYearWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
+    const ctx = { year: String(lateYear), reportYear: yearStr, amount: fmt2(splitInterestAmount(amount, titulares)) };
+    allMessages.push(
+      spanish
+        ? {
+            id: "report.spanish_withholding_corrected_prior_year",
+            severity: "warning",
+            message: `Este fichero trae correcciones de retenciones españolas de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0597 de ese año pudo salir alta.`,
+            hint: `La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
+            context: ctx,
+          }
+        : {
+            id: "report.withholding_corrected_prior_year",
+            severity: "warning",
+            message: `Este fichero trae correcciones de retenciones en origen de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0588 de ese año pudo salir alta.`,
+            hint: `La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
+            context: ctx,
+          },
+    );
   }
 
   if (unresolvableGeneralGains > 0) {

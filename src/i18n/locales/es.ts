@@ -886,6 +886,10 @@ const es = {
     "Este fichero trae correcciones de retenciones en origen de {{year}} anotadas en {{reportYear}}: la retención de {{year}} baja {{amount}} €. Si presentaste {{year}} con la retención original, la casilla 0588 de ese año pudo salir alta.",
   "report.withholding_corrected_prior_year.hint":
     "La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de {{year}}. Las casillas de {{reportYear}} no cambian.",
+  "report.spanish_withholding_corrected_prior_year":
+    "Este fichero trae correcciones de retenciones españolas de {{year}} anotadas en {{reportYear}}: la retención de {{year}} baja {{amount}} €. Si presentaste {{year}} con la retención original, la casilla 0597 de ese año pudo salir alta.",
+  "report.spanish_withholding_corrected_prior_year.hint":
+    "La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de {{year}}. Las casillas de {{reportYear}} no cambian.",
   "report.crypto_general_gain_unvalued":
     "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
   "report.crypto_general_gain_unvalued.hint":

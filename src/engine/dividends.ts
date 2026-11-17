@@ -19,6 +19,24 @@ import { normalizeDate, parseDate } from "./dates.js";
  */
 const COUNTRY_MARKER = /\b([A-Z]{2})\s+(?:Tax|TAX|WHT)\b/;
 
+/**
+ * The country of a dividend's withholding (or of a withholding row on its own,
+ * with no pair). Precedence:
+ *  1. Explicit "XX Tax" / "XX WHT" marker in the row's description.
+ *  2. The same marker in the paired withholding's description (IBKR writes
+ *     "AAPL(US0378331005) Cash Dividend ... - US Tax").
+ *  3. The ISIN issuer-country prefix (first 2 letters). Best signal for
+ *     brokers like Flatex whose German descriptions carry no country marker
+ *     — without it every Flatex dividend would fall through to "XX". ES →
+ *     domestic, so it stays out of the foreign double-taxation pool
+ *     (Casilla 0588) and goes to Casilla 0597 (double-taxation.ts).
+ */
+export function withholdingCountry(row: CashTransaction, pair?: CashTransaction): string {
+  const isinPrefix = /^[A-Z]{2}/.test(row.isin) ? row.isin.slice(0, 2) : "";
+  const countryMatch = row.description.match(COUNTRY_MARKER) ?? pair?.description.match(COUNTRY_MARKER);
+  return countryMatch?.[1] ?? (isinPrefix || "XX");
+}
+
 export interface DividendValuationOptions {
   /**
    * Non-throwing EUR-per-unit lookup. When given, it replaces the ECB lookup,
@@ -122,9 +140,10 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
   // Pass 1: same ISIN, same currency, within 7 days, first unconsumed (in
   // dividend order). This is the original matcher, so every broker that books
   // the withholding in the dividend's currency (IBKR, Degiro, ...) pairs
-  // exactly as before.
+  // exactly as before. Rows with no ISIN share the "" bucket, so they also
+  // need the same symbol.
   const pair = dividends.map((div, divIndex) => {
-    const index = findWithholding(divIndex, (w) => w.currency === div.currency);
+    const index = findWithholding(divIndex, (w) => w.currency === div.currency && (div.isin !== "" || w.symbol === div.symbol));
     if (index >= 0) consumedWithholdings.add(index);
     return index;
   });
@@ -192,10 +211,72 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
   //   2. a dividend that withheld at least the refund;
   //   3. any dividend that still has some withholding; the rest of the
   //      refund goes on to the next one.
-  // Then nearest date, then the first dividend in the file.
+  // Then nearest date, then the first dividend in the file. When every
+  // dividend in a refund's reach is full, an earlier refund that can go to
+  // another dividend in its own reach moves there to make room, so a refund
+  // is only left out when no allocation could fit it.
+  const reachOf = new Map<number, number[]>();
+  const reach = (index: number): number[] => {
+    let r = reachOf.get(index);
+    if (!r) reachOf.set(index, (r = candidates(index)));
+    return r;
+  };
+  /** Per refund, what it gave each dividend. */
+  const given = new Map<number, Map<number, Decimal>>();
+  const give = (index: number, divIndex: number, amount: Decimal): void => {
+    let byDividend = given.get(index);
+    if (!byDividend) given.set(index, (byDividend = new Map<number, Decimal>()));
+    const total = (byDividend.get(divIndex) ?? new Decimal(0)).plus(amount);
+    if (total.isZero()) byDividend.delete(divIndex);
+    else byDividend.set(divIndex, total);
+    capacity[divIndex] = capacity[divIndex]!.minus(amount);
+  };
+  /**
+   * Free room for refund `index` by moving earlier refunds along a chain of
+   * dividends (shortest first) to one that still has capacity. Gives the
+   * refund what the chain frees, up to `rest`, and returns it (0 when no chain
+   * exists). Every move stays within the moved refund's own reach.
+   */
+  const makeRoom = (index: number, rest: Decimal): Decimal => {
+    // How a dividend was reached: the refund that would move onto it, and the
+    // dividend that refund leaves (−1 for refund `index` itself).
+    const via = new Map<number, [number, number]>();
+    const queue: number[] = [];
+    for (const divIndex of reach(index)) {
+      via.set(divIndex, [index, -1]);
+      queue.push(divIndex);
+    }
+    for (let q = 0; q < queue.length; q++) {
+      const at = queue[q]!;
+      if (capacity[at]!.greaterThan(0)) {
+        let amount = Decimal.min(rest, capacity[at]!);
+        for (let d = at; via.get(d)![1] >= 0; d = via.get(d)![1]) {
+          const [moved, from] = via.get(d)!;
+          amount = Decimal.min(amount, given.get(moved)!.get(from)!);
+        }
+        for (let d = at; d >= 0; ) {
+          const [moved, from] = via.get(d)!;
+          give(moved, d, amount);
+          if (from >= 0) give(moved, from, amount.negated());
+          d = from;
+        }
+        return amount;
+      }
+      for (const [moved, byDividend] of given) {
+        if (moved === index || !byDividend.get(at)?.greaterThan(0)) continue;
+        for (const next of reach(moved)) {
+          if (via.has(next)) continue;
+          via.set(next, [moved, at]);
+          queue.push(next);
+        }
+      }
+    }
+    return new Decimal(0);
+  };
+  const refunds: number[] = [];
   withholdings.forEach((_w, index) => {
     if (consumedWithholdings.has(index) || !isRefund[index]) return;
-    const reach = candidates(index);
+    refunds.push(index);
     let rest = amounts[index]!;
     while (rest.greaterThan(0)) {
       const rank = (divIndex: number): number =>
@@ -203,7 +284,7 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
           ? parts[divIndex]!.some((p) => p.amount.equals(rest.negated())) ? 1 : 2
           : 3;
       let best = -1;
-      for (const divIndex of reach) {
+      for (const divIndex of reach(index)) {
         if (!capacity[divIndex]!.greaterThan(0)) continue;
         if (
           best < 0 ||
@@ -213,14 +294,16 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
           best = divIndex;
         }
       }
-      if (best < 0) break;
-      const take = Decimal.min(rest, capacity[best]!);
-      parts[best]!.push({ index, amount: take });
-      capacity[best] = capacity[best]!.minus(take);
+      const take = best >= 0 ? Decimal.min(rest, capacity[best]!) : makeRoom(index, rest);
+      if (take.isZero()) break;
+      if (best >= 0) give(index, best, take);
       rest = rest.minus(take);
-      consumedWithholdings.add(index);
     }
   });
+  // A refund's parts follow the withholdings, in file order.
+  for (const index of refunds) {
+    for (const [divIndex, amount] of given.get(index) ?? []) parts[divIndex]!.push({ index, amount });
+  }
 
   return { dividends, withholdings, pair, parts };
 }
@@ -266,18 +349,7 @@ export function calculateDividends(
     const netEur = parts[divIndex]!.reduce((sum, p, i) => sum.plus(p.amount.mul(partRates[i]!)), new Decimal(0));
     const withholdingTaxEur = netEur.isNegative() ? netEur.negated() : new Decimal(0);
 
-    // Country precedence:
-    //  1. Explicit "XX Tax" / "XX WHT" marker in the dividend description.
-    //  2. The same marker in the matched withholding description (IBKR writes
-    //     "AAPL(US0378331005) Cash Dividend ... - US Tax").
-    //  3. The ISIN issuer-country prefix (first 2 letters). Best signal for
-    //     brokers like Flatex whose German descriptions carry no country marker
-    //     — without it every Flatex dividend would fall through to "XX". ES →
-    //     domestic, so it stays out of the foreign double-taxation pool
-    //     (Casilla 0588); its zero withholding is skipped in double-taxation.ts.
-    const isinPrefix = /^[A-Z]{2}/.test(div.isin) ? div.isin.slice(0, 2) : "";
-    const countryMatch = div.description.match(COUNTRY_MARKER) ?? matching?.description.match(COUNTRY_MARKER);
-    const country = countryMatch?.[1] ?? (isinPrefix || "XX");
+    const country = withholdingCountry(div, matching);
 
     entries.push({
       isin: div.isin,

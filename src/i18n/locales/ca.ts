@@ -849,6 +849,10 @@ const ca: TranslationKeys = {
     "Aquest fitxer porta correccions de retencions en origen de {{year}} anotades l'any {{reportYear}}: la retenció de {{year}} baixa {{amount}} €. Si vas presentar la declaració de {{year}} amb la retenció original, la casella 0588 d'aquell any pot haver sortit alta.",
   "report.withholding_corrected_prior_year.hint":
     "La deducció per doble imposició internacional (casella 0588, art. 80 LIRPF) només admet l'impost pagat de debò a l'estranger. Puja el fitxer de {{year}} juntament amb aquest i calcula {{year}}: DeclaRenta suma la correcció a la retenció del seu dividend. Si la casella 0588 baixa respecte de la que vas presentar, pot caldre una declaració complementària de {{year}}. Les caselles de {{reportYear}} no canvien.",
+  "report.spanish_withholding_corrected_prior_year":
+    "Aquest fitxer porta correccions de retencions espanyoles de {{year}} anotades l'any {{reportYear}}: la retenció de {{year}} baixa {{amount}} €. Si vas presentar la declaració de {{year}} amb la retenció original, la casella 0597 d'aquell any pot haver sortit alta.",
+  "report.spanish_withholding_corrected_prior_year.hint":
+    "La retenció espanyola sobre dividends d'emissors espanyols és un pagament a compte (casella 0597, retencions del capital mobiliari) i només compta el que s'ha retingut de debò. Puja el fitxer de {{year}} juntament amb aquest i calcula {{year}}: DeclaRenta suma la correcció a la retenció del seu dividend. Si la casella 0597 baixa respecte de la que vas presentar, pot caldre una declaració complementària de {{year}}. Les caselles de {{reportYear}} no canvien.",
   "report.crypto_general_gain_unvalued":
     "Hi ha {{count}} guany(s) patrimonial(s) en criptomoneda (p. ex. airdrops o comissions de referits) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_general_gain_unvalued.hint":

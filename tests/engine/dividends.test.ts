@@ -824,4 +824,49 @@ describe("withholding corrections: where a refund goes (issue #438)", () => {
     const both = calculateDividends([div("d24", "20241227"), wht("w24", "20241227", "-1.50"), ...rows], r);
     expect(show(both)).toEqual(["10.00/1.00", "10.00/1.50"]);
   });
+
+  it("a refund that could go elsewhere makes room for a later refund that has only one dividend in reach", () => {
+    // a (03-03) and b (03-10) each withheld 1.00. Refund r1 (03-08) reaches
+    // both and is nearer to b; refund r2 (03-16) reaches only b. Both refunds
+    // fit: r1 on a, r2 on b. Neither may be dropped.
+    const r = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-10": { USD: "1" } });
+    const entries = calculateDividends(
+      [
+        div("a", "20250303"),
+        wht("wa", "20250303", "-1.00"),
+        div("b", "20250310"),
+        wht("wb", "20250310", "-1.00"),
+        wht("r1", "20250308", "1.00"),
+        wht("r2", "20250316", "1.00"),
+      ],
+      r,
+    );
+    expect(show(entries)).toEqual(["10.00/0.00", "10.00/0.00"]);
+  });
+
+  it("without the competing refund, the refund still goes to the nearest dividend", () => {
+    const r = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-10": { USD: "1" } });
+    const entries = calculateDividends(
+      [div("a", "20250303"), wht("wa", "20250303", "-1.00"), div("b", "20250310"), wht("wb", "20250310", "-1.00"), wht("r1", "20250308", "1.00")],
+      r,
+    );
+    expect(show(entries)).toEqual(["10.00/1.00", "10.00/0.00"]);
+  });
+});
+
+describe("withholdings of rows with no ISIN (issue #438 review)", () => {
+  const r = makeRateMap({ "2025-03-10": { USD: "1" } });
+  it("pass 1 pairs a dividend with no ISIN only with a withholding of its own symbol", () => {
+    // Two symbol-only dividends on one day; the other symbol's withholding comes first in the file.
+    const entries = calculateDividends(
+      [
+        makeCashTx({ transactionID: "da", isin: "", symbol: "AAA", dateTime: "20250310", amount: "10", type: "Dividends" }),
+        makeCashTx({ transactionID: "db", isin: "", symbol: "BBB", dateTime: "20250310", amount: "20", type: "Dividends" }),
+        makeCashTx({ transactionID: "wb", isin: "", symbol: "BBB", dateTime: "20250310", amount: "-3.00", type: "Withholding Tax" }),
+        makeCashTx({ transactionID: "wa", isin: "", symbol: "AAA", dateTime: "20250310", amount: "-1.50", type: "Withholding Tax" }),
+      ],
+      r,
+    );
+    expect(entries.map((e) => `${e.symbol}:${e.withholdingTaxEur.toFixed(2)}`)).toEqual(["AAA:1.50", "BBB:3.00"]);
+  });
 });
