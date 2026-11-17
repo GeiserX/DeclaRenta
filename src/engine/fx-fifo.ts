@@ -162,6 +162,14 @@ export interface TraditionalFxStats {
   parkedAtCheckpoint: TraditionalParkedAtYearEnd[];
 }
 
+/** «Tradicional con divisa»: a stock buy's principal parked with no tracked origin. */
+interface NullPark {
+  event: FxEvent;
+  currency: string;
+  date: string;
+  qty: Decimal;
+}
+
 export class FxFifoEngine {
   /**
    * «Tradicional con divisa» (issue #434, `ReportOptions.traditionalFx`). Off by
@@ -386,7 +394,11 @@ export class FxFifoEngine {
     parkedAtCheckpoint: [],
   };
   /** «Tradicional con divisa»: every `null` park of the current pass (late-cover plan). */
-  private nullParks: { currency: string; date: string; qty: Decimal }[] = [];
+  private nullParks: NullPark[] = [];
+  /** «Tradicional con divisa»: the acquisition each pool lot of the current pass came from. */
+  private lotSource: Map<FxLot, FxEvent> = new Map();
+  /** «Tradicional con divisa»: per acquisition, the quantity stock buys of the current pass took. */
+  private usedByBuys: Map<FxEvent, Decimal> = new Map();
   /** «Tradicional con divisa»: late-cover parts of an acquisition → that acquisition's own date. */
   private movedFrom: Map<FxEvent, string> = new Map();
   /** «Tradicional con divisa»: covers are off in the plain pass and for these currencies. */
@@ -564,18 +576,22 @@ export class FxFifoEngine {
    *     date, quantity). With none, it is the result.
    *  2. Each `null` park takes, oldest first, the acquisitions of that currency
    *     (conversions, dividends, interest) dated 1 to {@link LATE_COVER_DAYS}
-   *     calendar days after the buy, up to its quantity. That part runs on the
+   *     calendar days after the buy, up to its quantity. Only the part of an
+   *     acquisition that no stock buy took in pass 1 can cover: funding pass 1
+   *     gave to a covered buy keeps it (review: moving it left that buy with
+   *     no funding lot). That part runs on the
    *     buy's date, before the stock legs, at its own rate and with its own date
    *     as the lot's acquisition date. The buy then parks it like any covered
    *     slice, even when a sale had already returned part of the principal
    *     before the funding (a trap: covering only the slice still parked left
    *     1000 phantom USD, −92.50 on a closed cycle). Same-day covers run too.
-   *  3. A cover must never create a shortfall. When the buy really used
-   *     dollars the upload does not show (an opening balance, spec row 17), the
-   *     later acquisition is new money, and covering with it makes a later
-   *     disposal find no lot (a trap: +150 and a false missing-lots note). So a
-   *     currency whose missing-lot total grows in pass 2 keeps none of its
-   *     covers: a third pass runs without them.
+   *  3. A cover must never create a shortfall or new uncovered principal.
+   *     When the buy really used dollars the upload does not show (an opening
+   *     balance, spec row 17), the later acquisition is new money, and covering
+   *     with it makes a later disposal find no lot (a trap: +150 and a false
+   *     missing-lots note). So a currency whose missing-lot total grows in pass
+   *     2, or where a stock buy parks more `null` than in pass 1, keeps none of
+   *     its covers: a third pass runs without them.
    * Older `null` slices keep the untracked-origin path (spec row 17).
    */
   private processTraditional(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
@@ -596,25 +612,38 @@ export class FxFifoEngine {
     };
     const shortfall = (): Map<string, Decimal> => new Map([...this.fxMissing].map(([c, m]) => [c, m.totalQty]));
 
+    // Per stock buy, the quantity it parked `null` in a pass.
+    const uncoveredByBuy = (parks: NullPark[]): Map<FxEvent, Decimal> => {
+      const m = new Map<FxEvent, Decimal>();
+      for (const p of parks) m.set(p.event, (m.get(p.event) ?? new Decimal(0)).plus(p.qty));
+      return m;
+    };
+
     this.coversOn = false;
     this.coversOff = new Set();
     this.runEvents(events, options);
     const nullParks = this.nullParks;
     if (nullParks.length === 0) return this.disposals;
     const short1 = shortfall();
+    const null1 = uncoveredByBuy(nullParks);
+    const used = this.usedByBuys;
 
     restore();
     this.coversOn = true;
-    this.runEvents(this.planLateCovers(events, nullParks) ?? events, options);
+    this.runEvents(this.planLateCovers(events, nullParks, used) ?? events, options);
     const short2 = shortfall();
     for (const [ccy, qty] of short2) {
       if (qty.greaterThan((short1.get(ccy) ?? new Decimal(0)).plus(FxFifoEngine.EPS))) this.coversOff.add(ccy);
+    }
+    // No buy may end up with more untracked principal than in pass 1.
+    for (const [buy, qty] of uncoveredByBuy(this.nullParks)) {
+      if (qty.greaterThan((null1.get(buy) ?? new Decimal(0)).plus(FxFifoEngine.EPS))) this.coversOff.add(buy.currency);
     }
     if (this.coversOff.size === 0) return this.disposals;
 
     restore();
     const kept = nullParks.filter((p) => !this.coversOff.has(p.currency));
-    return this.runEvents(this.planLateCovers(events, kept) ?? events, options);
+    return this.runEvents(this.planLateCovers(events, kept, used) ?? events, options);
   }
 
   private static cloneLots(lots: Map<string, FxLot[]>): Map<string, FxLot[]> {
@@ -624,13 +653,11 @@ export class FxFifoEngine {
   /**
    * The events with each late cover moved to its buy's date (see
    * {@link processTraditional}), or null when no `null` park has a cover.
-   * A conversion split in two keeps its rate: `realEurAmount` and
+   * `used` is what pass 1's stock buys took of each acquisition: only the rest
+   * can cover. A conversion split in two keeps its rate: `realEurAmount` and
    * `commissionEur` are split in the same proportion.
    */
-  private planLateCovers(
-    events: FxEvent[],
-    nullParks: { currency: string; date: string; qty: Decimal }[],
-  ): FxEvent[] | null {
+  private planLateCovers(events: FxEvent[], nullParks: NullPark[], used: Map<FxEvent, Decimal>): FxEvent[] | null {
     const EPS = FxFifoEngine.EPS;
     this.movedFrom = new Map();
     const candidates = events
@@ -638,7 +665,9 @@ export class FxFifoEngine {
       .map((e, idx) => ({ e, idx }))
       .sort((a, b) => a.e.date.localeCompare(b.e.date) || a.idx - b.idx)
       .map((x) => x.e);
+    // `left`: what stays on the acquisition's own date; `free`: what can still cover.
     const left = new Map<FxEvent, Decimal>();
+    const free = new Map<FxEvent, Decimal>();
     const parts: FxEvent[] = [];
     for (const np of nullParks) {
       let need = np.qty;
@@ -647,13 +676,14 @@ export class FxFifoEngine {
         if (c.currency !== np.currency) continue;
         const age = daysBetween(np.date, c.date);
         if (age < 1 || age > FxFifoEngine.LATE_COVER_DAYS) continue;
-        const cap = left.get(c) ?? c.quantity;
+        const cap = free.get(c) ?? c.quantity.minus(used.get(c) ?? 0);
         if (!cap.greaterThan(EPS)) continue;
         const x = Decimal.min(need, cap);
         const part = FxFifoEngine.splitAcquisition(c, x, np.date);
         this.movedFrom.set(part, c.date);
         parts.push(part);
-        left.set(c, cap.minus(x));
+        free.set(c, cap.minus(x));
+        left.set(c, (left.get(c) ?? c.quantity).minus(x));
         need = need.minus(x);
       }
     }
@@ -685,6 +715,8 @@ export class FxFifoEngine {
     this.parked.clear();
     this.tradStats = { lostDollarSales: [], guardSales: [], uncovered: [], inflight: new Map(), parkedAtCheckpoint: [] };
     this.nullParks = [];
+    this.lotSource = new Map();
+    this.usedByBuys = new Map();
     this.trace = [];
     this.traceSeq = 0;
     // Transient per-currency conservation accumulators — like fxMissing/parked,
@@ -1468,6 +1500,7 @@ export class FxFifoEngine {
       this.lots.set(event.currency, []);
     }
     this.lots.get(event.currency)!.push(lot);
+    if (this.traditionalFx) this.lotSource.set(lot, event);
     this.record("acquire", event, {
       quantityFcy: event.quantity,
       rate: costPerUnit,
@@ -1806,6 +1839,10 @@ export class FxFifoEngine {
           ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
           ...this.traditionalTags(event, lot.shifts),
         });
+        if (this.traditionalFx) {
+          const src = this.lotSource.get(lot);
+          if (src) this.usedByBuys.set(src, (this.usedByBuys.get(src) ?? new Decimal(0)).plus(consumed));
+        }
         // Reduce the pool lot in lockstep (quantity + EUR cost), shift when empty.
         const costPortion = consumed.mul(lot.costPerUnit);
         lot.quantity = lot.quantity.minus(consumed);
@@ -1827,7 +1864,7 @@ export class FxFifoEngine {
     // date, which is correct for genuinely-untracked dollars).
     if (remaining.greaterThan(EPS)) {
       park.push({ q: remaining, rate: null, acquireDate: null, ...this.traditionalTags(event, undefined) });
-      if (this.traditionalFx) this.nullParks.push({ currency: event.currency, date: event.date, qty: remaining });
+      if (this.traditionalFx) this.nullParks.push({ event, currency: event.currency, date: event.date, qty: remaining });
       this.record("park", event, {
         quantityFcy: remaining,
         rate: null,

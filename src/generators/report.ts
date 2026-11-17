@@ -427,8 +427,9 @@ const fmt2 = (d: Decimal): string => d.toFixed(2);
  *    that amount if that year was filed with the default method.
  *  - `fx_traditional_uncovered` (info): a sale this year returned principal
  *    with no EUR origin in the upload (deposits, older years). An acquisition
- *    1 to 7 calendar days AFTER the buy covers it instead, unless that makes a
- *    later disposal find no lot (late-cover rule, FxFifoEngine.LATE_COVER_DAYS).
+ *    1 to 7 calendar days AFTER the buy covers it instead, unless another buy
+ *    already used it, or covering makes a later disposal find no lot or leaves
+ *    another buy untracked (late-cover rule, FxFifoEngine.LATE_COVER_DAYS).
  *  - `fx_traditional_orphan` (warning): principal still parked under a position
  *    with no shares at the year end (ISIN change, merger, spin-off): its drift
  *    before the purchase is never declared.
