@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { calculateDividends } from "../../src/engine/dividends.js";
+import { calculateDividends, matchWithholdings } from "../../src/engine/dividends.js";
 import type { CashTransaction } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -868,5 +868,21 @@ describe("withholdings of rows with no ISIN (issue #438 review)", () => {
       r,
     );
     expect(entries.map((e) => `${e.symbol}:${e.withholdingTaxEur.toFixed(2)}`)).toEqual(["AAA:1.50", "BBB:3.00"]);
+  });
+});
+
+describe("matchWithholdings: cancelled dividends (issue #438 review)", () => {
+  it("a cancelled dividend stays in the match with no withholding, and its withholding goes to the next dividend", () => {
+    const original = makeCashTx({ transactionID: "d1", dateTime: "20240303", amount: "10", type: "Dividends" });
+    const rows = [
+      original,
+      makeCashTx({ transactionID: "d2", dateTime: "20240310", amount: "10", type: "Dividends" }),
+      makeCashTx({ transactionID: "w1", dateTime: "20240303", amount: "-1.50", type: "Withholding Tax" }),
+    ];
+    expect(matchWithholdings(rows).pair).toEqual([0, -1]);
+    const match = matchWithholdings(rows, new Set([original]));
+    expect(match.dividends[0]).toBe(original);
+    expect(match.pair).toEqual([-1, 0]);
+    expect(match.parts[0]).toEqual([]);
   });
 });

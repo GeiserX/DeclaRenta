@@ -111,13 +111,15 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
  * year's own boxes and never the earlier one's. A part of this year's row
  * that joins no dividend counts at its own date's rate for the year it is
  * dated in, or for `year − 1` when dated in the first 7 days of `year` (only a
- * late-December dividend is in its reach). The matcher runs on the RAW rows:
- * collapseCorrections would cancel a late reversal against the original row of
- * a merged earlier-year file. A dividend with a part that has no rate, before
- * or after, is left out, as is an unjoined part with no rate. The country is
- * the dividend's withholding country (the row's own when unjoined): a Spanish
- * one went to casilla 0597, any other to 0588. Years whose net raises the
- * withholding (≤ 0) are dropped.
+ * late-December dividend is in its reach). Each run matches the rows the
+ * report matches (collapseCorrections on that run's rows), so a reversed
+ * dividend never takes a withholding the report gives to its rebooked one; a
+ * dividend that a reversal posted in `year` cancels stays in the run with no
+ * withholding, so its whole filed withholding is the drop. A dividend with a
+ * part that has no rate, before or after, is left out, as is an unjoined part
+ * with no rate. The country is the dividend's withholding country (the row's
+ * own when unjoined): a Spanish one went to casilla 0597, any other to 0588.
+ * Years whose net raises the withholding (≤ 0) are dropped.
  */
 function priorYearWithholdingRefunds(
   cashTransactions: CashTransaction[],
@@ -136,8 +138,21 @@ function priorYearWithholdingRefunds(
     byYear.set(key, { year: earlierYear, spanish, amount: prev.plus(amountEur) });
   };
 
-  const filed = matchWithholdings(cashTransactions.filter((t) => postedYear(t) < year));
-  const now = matchWithholdings(cashTransactions.filter((t) => postedYear(t) <= year));
+  // Each run matches the rows the report matches: collapseCorrections on the
+  // same rows, so a withholding joins the dividend it joins in the report, and
+  // a reversed dividend never takes one. A cancelled dividend stays in the run
+  // with no withholding, so one filed and reversed in `year` is still found
+  // below and its whole filed withholding is the drop.
+  const run = (rows: CashTransaction[]) => {
+    const kept = new Set(collapseCorrections(rows));
+    const isDividend = (t: CashTransaction) => t.type === "Dividends" || t.type === "Payment In Lieu Of Dividends";
+    return matchWithholdings(
+      rows.filter((t) => kept.has(t) || isDividend(t)),
+      new Set(rows.filter((t) => !kept.has(t) && isDividend(t))),
+    );
+  };
+  const filed = run(cashTransactions.filter((t) => postedYear(t) < year));
+  const now = run(cashTransactions.filter((t) => postedYear(t) <= year));
   const nowIndex = new Map(now.dividends.map((div, divIndex) => [div, divIndex]));
   const value = (match: WithholdingMatch, divIndex: number) => {
     const div = match.dividends[divIndex]!;

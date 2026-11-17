@@ -445,3 +445,63 @@ describe("issue #438 — the warning states what the earlier year loses when a l
     expect(warnings(r)).toEqual([]);
   });
 });
+
+describe("issue #438 — the warning leaves out a reversed dividend, as the report does", () => {
+  const warnings = (r: TaxSummary) => r.messages.filter((x) => x.id === MSG_ID).map((x) => x.context);
+  const drop = (y2024: ReturnType<typeof statement>, y2025: ReturnType<typeof statement>, rates: EcbRateMap) =>
+    generateTaxReport(merged(y2024), rates, 2024)
+      .doubleTaxation.deduction.minus(generateTaxReport(merged(y2024, y2025), rates, 2024).doubleTaxation.deduction)
+      .toFixed(2);
+  // USD is 0.90 up to 2024-03-03 and 0.80 after. The 3 March 2024 dividend is
+  // reversed on its own day and rebooked on 10 March; its −1.50 withholding is
+  // dated 3 March. The report cancels the dividend and its reversal, so the
+  // withholding belongs to the rebooked dividend (2024 filed 1.50 × 0.80).
+  const rates = rateMap(2023, 2025);
+  for (const [day] of rates) if (day > "2024-03-03") rates.set(day, new Map([["USD", "0.80"]]));
+  const y2024 = statement(
+    [
+      cash("Dividends", "10.00", "20240303"),
+      cash("Dividends", "-10.00", "20240303"),
+      cash("Dividends", "10.00", "20240310"),
+      cash("Withholding Tax", "-1.50", "20240303"),
+    ],
+    "20240101",
+    "20241231",
+  );
+
+  it("a late refund of the rebooked dividend's withholding is valued at the rebooked dividend's rate", () => {
+    const y2025 = statement([cash("Withholding Tax", "0.50", "20240305", "20250120")]);
+    expect(drop(y2024, y2025, rates)).toBe("0.40");
+    expect(warnings(generateTaxReport(merged(y2024, y2025), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "0.40" }]);
+  });
+
+  it("a reversal posted next year: the filed dividend loses its whole withholding", () => {
+    // 2024 filed the 3 March dividend with its 1.50 (× 0.90). The 2025 file
+    // reverses it, dated on its day: recomputed, 2024 has no dividend and no
+    // withholding.
+    const filed = statement([cash("Dividends", "10.00", "20240303"), cash("Withholding Tax", "-1.50", "20240303")], "20240101", "20241231");
+    const y2025 = statement([cash("Dividends", "-10.00", "20240303", "20250120"), cash("Withholding Tax", "1.50", "20240303", "20250120")]);
+    expect(drop(filed, y2025, rates)).toBe("1.35");
+    expect(warnings(generateTaxReport(merged(filed, y2025), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "1.35" }]);
+    // The dividend reversal alone, with the withholding left in place: the
+    // withholding has no dividend now, so 2024 loses it all the same.
+    const onlyDividend = statement([cash("Dividends", "-10.00", "20240303", "20250120")]);
+    expect(drop(filed, onlyDividend, rates)).toBe("1.35");
+    expect(warnings(generateTaxReport(merged(filed, onlyDividend), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "1.35" }]);
+  });
+
+  it("a reversal and an identical rebook posted next year, withholding redone too: no drop, no warning", () => {
+    // The 2025 file reverses the 3 March dividend and its withholding and books
+    // both again, all dated 3 March 2024. The report cancels one dividend and
+    // one withholding pair: 2024 is unchanged.
+    const filed = statement([cash("Dividends", "10.00", "20240303"), cash("Withholding Tax", "-1.50", "20240303")], "20240101", "20241231");
+    const y2025 = statement([
+      cash("Dividends", "-10.00", "20240303", "20250120"),
+      cash("Withholding Tax", "1.50", "20240303", "20250120"),
+      cash("Dividends", "10.00", "20240303", "20250120"),
+      cash("Withholding Tax", "-1.50", "20240303", "20250120"),
+    ]);
+    expect(drop(filed, y2025, rates)).toBe("0.00");
+    expect(warnings(generateTaxReport(merged(filed, y2025), rates, 2025))).toEqual([]);
+  });
+});

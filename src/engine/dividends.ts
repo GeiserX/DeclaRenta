@@ -86,7 +86,15 @@ const yearOf = (date: string): string => normalizeDate(date).slice(0, 4);
  * rest goes to the next dividend it can correct, and only what no dividend in
  * reach withheld is left out. So no refund is lost and no row counts twice.
  */
-export function matchWithholdings(cashTransactions: CashTransaction[]): WithholdingMatch {
+export function matchWithholdings(
+  cashTransactions: CashTransaction[],
+  /**
+   * Dividends that take no withholding, as if they were not in the rows (a
+   * dividend `collapseCorrections` cancels against its reversal). They stay
+   * in `dividends`, with no parts, so a caller can still find them.
+   */
+  cancelledDividends?: ReadonlySet<CashTransaction>,
+): WithholdingMatch {
   const dividends = cashTransactions.filter(
     (t) => t.type === "Dividends" || t.type === "Payment In Lieu Of Dividends",
   );
@@ -101,7 +109,7 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
   // A negative dividend is a reversal of a dividend (issue #438): it paid no
   // tax, so no withholding row ever joins it. A rebooked dividend keeps its own
   // withholding, and the reversal's +X joins the dividend it reverses.
-  const isReversal = dividends.map((d) => new Decimal(d.amount).isNegative());
+  const isReversal = dividends.map((d) => new Decimal(d.amount).isNegative() || !!cancelledDividends?.has(d));
   // A row posted in a later year than its date (IBKR posts a correction in
   // next year's statement, dated on its dividend's day) belongs to a dividend
   // of its own year. Without this, a weekly payer's next dividend, in the new
