@@ -843,6 +843,14 @@ const en: TranslationKeys = {
     "There are {{count}} dividend(s) in {{currencies}} that could not be valued automatically and are not included in the calculated amounts.",
   "report.dividend_unvalued.hint":
     "The ECB publishes no official rate for that currency on the payment date. Compute the amount in euros on that date, add it by hand to box 0029, and include its withholding in the international double-taxation deduction (box 0588).",
+  "report.withholding_corrected_prior_year":
+    "This file has corrections to {{year}} foreign withholding tax, posted in {{reportYear}}: the {{year}} withholding goes down by {{amount}} €. If you filed {{year}} with the original withholding, that year's box 0588 may have come out too high.",
+  "report.withholding_corrected_prior_year.hint":
+    "The international double-taxation deduction (box 0588, art. 80 LIRPF) only allows the tax you really paid abroad. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0588 comes out lower than the one you filed, you may need a supplementary return (declaración complementaria) for {{year}}. The {{reportYear}} boxes do not change.",
+  "report.spanish_withholding_corrected_prior_year":
+    "This file has corrections to {{year}} Spanish withholding tax, posted in {{reportYear}}: the {{year}} withholding goes down by {{amount}} €. If you filed {{year}} with the original withholding, that year's box 0597 may have come out too high.",
+  "report.spanish_withholding_corrected_prior_year.hint":
+    "Spanish withholding on dividends from Spanish issuers is a payment on account (box 0597, capital-income withholdings), and only what was really withheld counts. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0597 comes out lower than the one you filed, you may need a supplementary return (declaración complementaria) for {{year}}. The {{reportYear}} boxes do not change.",
   "report.crypto_general_gain_unvalued":
     "There are {{count}} crypto capital gain(s) (e.g. airdrops or referral commissions) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_general_gain_unvalued.hint":
