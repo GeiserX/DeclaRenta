@@ -11,9 +11,11 @@
  *   • Gross income (Casilla 0029) double-counts the duplicate (only partially
  *     self-correcting, because the reversal carries `type:"Dividends"` and is
  *     summed with its sign — fragile, and wrong if the pair straddles a filter).
- *   • Withholding is computed per matched entry as `.abs()` (dividends.ts), so a
- *     −€19 original, a −€19 duplicate and a +€19 reversal all become +€19 and
- *     ADD to €57 instead of netting to the real €19.
+ *   • Withholding was computed per matched entry as `.abs()` (dividends.ts), so
+ *     a −€19 original, a −€19 duplicate and a +€19 reversal all became +€19 and
+ *     ADDED to €57 instead of netting to the real €19. Since issue #438
+ *     dividends.ts sums every withholding row of a dividend with its sign, so
+ *     corrections this pass leaves (partial, or on another date) net there too.
  *
  * The fix is to cancel exact reversal pairs at the SOURCE, before any consumer
  * runs. A reversal is, by construction, an opposite-sign line of identical
@@ -37,9 +39,10 @@ import { normalizeDate } from "./dates.js";
 /**
  * Cancel exact opposite-sign reversal pairs in a cash-transaction stream.
  *
- * Groups by `(type, isin, currency, normalized date, |amount|, broker,
- * converted)`. Within each group, cancels `min(#positive, #negative)` pairs
- * (a reversal annihilates one same-magnitude movement of the opposite sign),
+ * Groups by `(type, security, currency, normalized date, |amount|, broker,
+ * converted)`, where the security is the ISIN, or the symbol when the row has
+ * no ISIN. Within each group, cancels `min(#positive, #negative)` pairs (a
+ * reversal annihilates one same-magnitude movement of the opposite sign),
  * preserving the original order of every surviving row (the dividend matcher
  * relies on index order for its lowest-index tie-break, so order must be
  * stable).
@@ -53,13 +56,16 @@ export function collapseCorrections(transactions: CashTransaction[]): CashTransa
   transactions.forEach((tx, index) => {
     const amount = new Decimal(tx.amount);
     if (amount.isZero()) return; // a zero line can't be (or cancel) a reversal
+    // The security is its ISIN, or its symbol when the row has none: two rows
+    // with no ISIN of different symbols are not a reversal of each other.
+    const security = tx.isin ? `isin:${tx.isin}` : `symbol:${tx.symbol}`;
     // The broker and the conversion status scope the pair too: a row at one
     // broker is never a reversal of a row at another, and a broker-converted
     // row (no foreign currency held) never cancels one that held it. The FX
     // path reads these rows, so such a pair would drop a genuine credit from
     // the currency pool (PR #445 review).
     const scope = `${tx.brokerSource ?? ""}|${tx.brokerConvertedToBase === true ? "converted" : ""}`;
-    const key = `${tx.type}|${tx.isin}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}|${scope}`;
+    const key = `${tx.type}|${security}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}|${scope}`;
     const group = groups.get(key) ?? { positives: [], negatives: [] };
     if (amount.isPositive()) group.positives.push(index);
     else group.negatives.push(index);

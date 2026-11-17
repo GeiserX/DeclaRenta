@@ -39,6 +39,39 @@ function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap 
 }
 
 describe("collapseCorrections", () => {
+  it("rows with no ISIN cancel only within one symbol (a withholding of AAA is not reversed by a refund of BBB)", () => {
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "a", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "b", isin: "", symbol: "BBB", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    expect(collapseCorrections(txs)).toBe(txs);
+  });
+
+  it("rows with no ISIN and the same symbol still cancel", () => {
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "a1", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "a2", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "a3", isin: "", symbol: "AAA", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    expect(collapseCorrections(txs).map((t) => t.transactionID)).toEqual(["a1"]);
+  });
+
+  it("with no ISIN, AAA keeps its withholding after collapsing next to BBB's refund", () => {
+    const rates = makeRateMap({ "2025-06-10": { EUR: "1" } });
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "da", isin: "", symbol: "AAA", amount: "10" }),
+      makeCashTx({ transactionID: "wa", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "db", isin: "", symbol: "BBB", amount: "10" }),
+      makeCashTx({ transactionID: "wb", isin: "", symbol: "BBB", amount: "-3.00", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "rb", isin: "", symbol: "BBB", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    const entries = calculateDividends(collapseCorrections(txs), rates);
+    expect(entries.map((e) => [e.symbol, e.withholdingTaxEur.toFixed(2)])).toEqual([
+      ["AAA", "1.50"],
+      ["BBB", "1.50"],
+    ]);
+  });
+
   it("cancels an exact opposite-sign reversal pair (duplicate dividend + storno)", () => {
     const txs: CashTransaction[] = [
       makeCashTx({ transactionID: "d1", amount: "100" }), // real
@@ -156,7 +189,10 @@ describe("calculateDividends with collapsed corrections (Giovanni's full DEGIRO 
     expect(totalGross.toFixed(2)).toBe("100.00");
   });
 
-  it("WITHOUT collapsing, the same input triples the withholding (pins the bug it fixes)", () => {
+  // Before issue #438 the matcher took one row per dividend and its absolute
+  // value, so this input gave 57.00 (3 × |19|). It now sums every row of a
+  // dividend with its sign, so even uncollapsed the total is the real 19.00.
+  it("WITHOUT collapsing, the matcher alone nets the reversal too (issue #438; was 57.00)", () => {
     const rates = makeRateMap({ "2025-06-10": { EUR: "1" } });
     const raw: CashTransaction[] = [
       makeCashTx({ transactionID: "d1", amount: "100", type: "Dividends" }),
@@ -168,6 +204,6 @@ describe("calculateDividends with collapsed corrections (Giovanni's full DEGIRO 
     ];
     const entries = calculateDividends(raw, rates); // no collapse
     const total = entries.reduce((s, e) => s.plus(e.withholdingTaxEur), entries[0]!.withholdingTaxEur.minus(entries[0]!.withholdingTaxEur));
-    expect(total.toFixed(2)).toBe("57.00"); // the bug: 3 × |19|, abs destroys the reversal's sign
+    expect(total.toFixed(2)).toBe("19.00");
   });
 });

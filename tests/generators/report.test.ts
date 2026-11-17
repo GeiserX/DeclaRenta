@@ -1538,3 +1538,38 @@ describe("dividend country, valuation and year boundary", () => {
     });
   });
 });
+
+describe("interest totals keep each row's direction (PR #444 review)", () => {
+  const rates = makeRateMap({ "2025-06-01": "0.90", "2025-06-02": "0.90" });
+  const interest = (id: string, type: CashTransaction["type"], amount: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, symbol: "", isin: "", description: id, dateTime: "20250601", amount, type, ...extra });
+  const report = (rows: CashTransaction[]) => generateTaxReport(makeStatement({ cashTransactions: rows }), rates, 2025);
+
+  it("a credit at one broker and a reversal at another net to zero, never 18 EUR", () => {
+    const r = report([
+      interest("a", "Broker Interest Received", "10", { brokerSource: "A" }),
+      interest("b", "Broker Interest Received", "-10", { brokerSource: "B" }),
+    ]);
+    expect(r.interest.earned.toFixed(2)).toBe("0.00");
+    expect(r.interest.paid.toFixed(2)).toBe("0.00");
+  });
+
+  it("a negative Interest Received row on another day lowers the interest earned", () => {
+    const r = report([interest("a", "Broker Interest Received", "10"), interest("b", "Broker Interest Received", "-4", { dateTime: "20250602" })]);
+    expect(r.interest.earned.toFixed(2)).toBe("5.40");
+    expect(r.interest.entries.map((e) => `${e.type}:${e.amountEur.toFixed(2)}`)).toEqual(["earned:9.00", "earned:-3.60"]);
+  });
+
+  it("a refund of interest paid lowers the interest paid", () => {
+    const r = report([interest("p", "Broker Interest Paid", "-10"), interest("rp", "Broker Interest Paid", "3", { dateTime: "20250602" })]);
+    expect(r.interest.paid.toFixed(2)).toBe("6.30");
+    expect(r.interest.earned.toFixed(2)).toBe("0.00");
+    expect(r.interest.entries.map((e) => `${e.type}:${e.amountEur.toFixed(2)}`)).toEqual(["paid:9.00", "paid:-2.70"]);
+  });
+
+  it("positive receipts and negative charges still add to their own totals (control)", () => {
+    const r = report([interest("a", "Broker Interest Received", "10"), interest("p", "Broker Interest Paid", "-4")]);
+    expect(r.interest.earned.toFixed(2)).toBe("9.00");
+    expect(r.interest.paid.toFixed(2)).toBe("3.60");
+  });
+});
