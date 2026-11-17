@@ -777,7 +777,7 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
     (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
   ).length;
 
-  // Every trade currency is listed (crypto quotes too); only fiat ones ask for a method.
+  // Every trade currency is listed (crypto quotes too); those with an ECB rate (stablecoins too) ask for a method.
   const tradeCurrencies = new Set<string>();
   for (const tr of merged.trades) tradeCurrencies.add(tr.currency);
   tradeCurrencies.delete("EUR");

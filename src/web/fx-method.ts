@@ -11,7 +11,7 @@
 
 import type { Statement } from "../types/broker.js";
 import type { FxMethod } from "../types/tax.js";
-import { isFiat } from "../engine/ecb.js";
+import { isEcbResolvable } from "../engine/ecb.js";
 import { t, type TranslationKey } from "../i18n/index.js";
 import { esc } from "./esc.js";
 import { FX_METHOD_NAME_KEY } from "../generators/report-settings.js";
@@ -46,16 +46,20 @@ export function methodRisk(m: FxMethod): string | null {
 }
 
 /**
- * The foreign fiat currencies in an upload, sorted. Trades and cash movements
- * (dividends, interest, conversions) both count: the method changes how either
- * is valued. Crypto quote currencies are not fiat, so a crypto-only file does
- * not ask for a method.
+ * The foreign currencies in an upload that the method values, sorted: every
+ * non-EUR currency with an ECB rate, stablecoins included. Trades and cash
+ * movements (dividends, interest, conversions) both count: the method changes
+ * how either is valued. A crypto trade quoted in USDT counts too: the engine
+ * values USDT at the USD rate, so its cost moves with the method (a trap:
+ * counting only fiat forced the default on a crypto-only USDT upload, though
+ * the saved monodivisa changed its gain). A crypto quote with no ECB rate
+ * (BTC, ETH) and a EUR stablecoin do not ask for a method.
  */
 export function foreignCurrencies(statement: Statement): string[] {
   const set = new Set<string>();
   const add = (c: string | undefined) => {
     const code = (c ?? "").trim().toUpperCase();
-    if (code && code !== "EUR" && isFiat(code)) set.add(code);
+    if (code && code !== "EUR" && isEcbResolvable(code)) set.add(code);
   };
   for (const tr of statement.trades) add(tr.currency);
   for (const ct of statement.cashTransactions) add(ct.currency);
