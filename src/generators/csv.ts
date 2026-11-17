@@ -11,10 +11,17 @@
  *   the file split into columns with numbers Excel can sum.
  */
 
-import type { TaxSummary } from "../types/tax.js";
+import { fxMethodOf, type FxMethod, type TaxSummary } from "../types/tax.js";
 import { computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 
 export type CsvDialect = "standard" | "excel-es";
+
+/** `Metodo_Divisa` cell: the method name in the file's ASCII, upper-case style. */
+const CSV_FX_METHOD: Record<FxMethod, string> = {
+  multidivisa: "CRITERIO_DGT_MULTIDIVISA",
+  "tradicional-divisa": "TRADICIONAL_CON_DIVISA",
+  monodivisa: "TRADICIONAL_SIN_DIVISA_MONODIVISA",
+};
 
 export function escapeCsv(val: string, separator = ","): string {
   // Prevent spreadsheet formula injection (=, +, -, @ can execute formulas in
@@ -41,11 +48,14 @@ export function formatCsv(report: TaxSummary, dialect: CsvDialect = "standard"):
 
   const lines: string[] = [];
 
-  // Settings the figures were computed with (monodivisa and titulares change
-  // every amount below), so an exported file says which options produced it.
+  // Settings the figures were computed with (the fiscal method and titulares
+  // change every amount below), so an exported file says which options produced
+  // it. `Metodo_Divisa` names the method (issue #434); the `Monodivisa SI/NO` row
+  // stays for one release for readers that parse it.
   if (report.settings) {
     lines.push("# AJUSTES DEL CALCULO");
     lines.push(header("Ajuste,Valor"));
+    lines.push(row(["Metodo_Divisa", CSV_FX_METHOD[fxMethodOf(report.settings)]]));
     lines.push(row(["Monodivisa", report.settings.monodivisa ? "SI" : "NO"]));
     lines.push(row(["Titulares", String(report.settings.titulares)]));
     lines.push(row(["Procesar_Autoconversiones", report.settings.trackAutoConvert ? "SI" : "NO"]));

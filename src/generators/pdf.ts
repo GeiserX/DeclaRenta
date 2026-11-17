@@ -9,11 +9,18 @@
 
 import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
-import type { TaxSummary } from "../types/tax.js";
+import { fxMethodOf, type FxMethod, type TaxSummary } from "../types/tax.js";
 import { localizeHint, localizeMessage, t } from "../i18n/index.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer } from "./casillas.js";
 import { pdfSafeText } from "./pdf-text.js";
 import { showBrokerColumns } from "./broker-columns.js";
+
+/** Method names in the (Spanish) PDF header, issue #434. */
+const PDF_FX_METHOD_NAME: Record<FxMethod, string> = {
+  multidivisa: "Criterio DGT (multidivisa)",
+  "tradicional-divisa": "Tradicional con divisa",
+  monodivisa: "Tradicional sin divisa (monodivisa)",
+};
 
 declare const __PACKAGE_VERSION__: string | undefined;
 const VERSION = typeof __PACKAGE_VERSION__ === "string" ? __PACKAGE_VERSION__ : "dev";
@@ -98,7 +105,7 @@ export function generatePdfReport(report: TaxSummary): Promise<Buffer> {
         const s = report.settings;
         const yesNo = (v: boolean) => (v ? "sí" : "no");
         doc.text(
-          `Ajustes del cálculo: monodivisa ${yesNo(s.monodivisa)}, titulares ${s.titulares}, autoconversiones ${yesNo(s.trackAutoConvert)}`,
+          `Ajustes del cálculo: método ${PDF_FX_METHOD_NAME[fxMethodOf(s)]}, titulares ${s.titulares}, autoconversiones ${yesNo(s.trackAutoConvert)}`,
           { align: "left" },
         );
       }

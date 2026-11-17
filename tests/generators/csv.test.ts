@@ -364,20 +364,37 @@ describe("formatCsv settings section", () => {
   it("opens with the settings the figures were computed with", () => {
     const csv = formatCsv(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }));
     const lines = csv.split("\n");
-    expect(lines.slice(0, 6)).toEqual([
+    expect(lines.slice(0, 7)).toEqual([
       "# AJUSTES DEL CALCULO",
       "Ajuste,Valor",
+      "Metodo_Divisa,TRADICIONAL_SIN_DIVISA_MONODIVISA",
       "Monodivisa,SI",
       "Titulares,2",
       "Procesar_Autoconversiones,NO",
       "",
     ]);
-    expect(lines[6]).toBe("# GANANCIAS PATRIMONIALES");
+    expect(lines[7]).toBe("# GANANCIAS PATRIMONIALES");
+  });
+
+  it("names each method in Metodo_Divisa; «Tradicional con divisa» keeps Monodivisa NO", () => {
+    const row = (settings: object) =>
+      formatCsv(makeReport({ settings: { monodivisa: false, trackAutoConvert: true, titulares: 1, ...settings } }))
+        .split("\n")
+        .filter((l) => l.startsWith("Metodo_Divisa,") || l.startsWith("Monodivisa,"));
+    expect(row({})).toEqual(["Metodo_Divisa,CRITERIO_DGT_MULTIDIVISA", "Monodivisa,NO"]);
+    expect(row({ traditionalFx: true })).toEqual(["Metodo_Divisa,TRADICIONAL_CON_DIVISA", "Monodivisa,NO"]);
+    expect(row({ monodivisa: true })).toEqual(["Metodo_Divisa,TRADICIONAL_SIN_DIVISA_MONODIVISA", "Monodivisa,SI"]);
   });
 
   it("uses the Excel separator in the settings section too", () => {
     const csv = formatCsv(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }), "excel-es");
-    expect(csv.split("\n").slice(1, 5)).toEqual(["Ajuste;Valor", "Monodivisa;SI", "Titulares;2", "Procesar_Autoconversiones;NO"]);
+    expect(csv.split("\n").slice(1, 6)).toEqual([
+      "Ajuste;Valor",
+      "Metodo_Divisa;TRADICIONAL_SIN_DIVISA_MONODIVISA",
+      "Monodivisa;SI",
+      "Titulares;2",
+      "Procesar_Autoconversiones;NO",
+    ]);
   });
 
   it("omits the section for a report without settings", () => {
