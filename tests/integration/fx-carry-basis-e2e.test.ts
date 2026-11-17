@@ -540,29 +540,29 @@ describe("carry-basis e2e #4: monodivisa (skipFx) → traditional cost basis (Ar
 });
 
 // ===========================================================================
-// 5. T+2 SETTLEMENT TIMING — the buy must park on the cash SETTLEMENT date, not
-//    the trade date, or a funding conversion that settles AFTER the stock trade
-//    date sorts too late and the buy parks "uncovered" (silent regression to
-//    full-proceeds even though the account IS tracked). (CodeRabbit #232 finding.)
+// 5. T+2 SETTLEMENT TIMING — every FX event is dated on its TRADE date (rule R0,
+//    issue #437), so a funding conversion traded before the buy covers it even
+//    when it SETTLES after the buy's trade date (CodeRabbit #232 finding).
 // ===========================================================================
 //
-// Funding EUR→USD $2000: trade-dated 2024-02-01 but SETTLES 2024-02-05 @ 0.90.
-// Two stock BUYs ($1000 each): trade-dated 2024-02-03 (BEFORE funding settles)
-//   but settling 2024-02-07 (AFTER). AAPL is sold; MSFT stays OPEN at year end.
-// Dating the park on the buys' SETTLEMENT (02-07 > 02-05) lets them consume the
-// funding lot → AAPL carries 0.90, MSFT's $1000 defers → conv $1100 = €155.
-// Dating it on the TRADE date (02-03 < 02-05) would sort BOTH buys before the
-// funding acquire → the pool is empty → both park UNCOVERED → the conversion
-// eats the funding lot at 0.90 directly → €165 (the silent T+2 regression).
-// The open MSFT position is what makes the two datings DIVERGE in the final
-// number (a single position nets to €155 either way — the gap only surfaces when
-// principal is left parked/deferred). This is the multi-position construction
-// that actually exercises CodeRabbit #232's settlement-timing finding.
+// Funding EUR→USD $2000: traded 2024-02-01 @ 0.90, SETTLES 2024-02-05 (0.95).
+// Two stock BUYs ($1000 each): traded 2024-02-03 (BEFORE funding settles),
+//   settling 2024-02-07 (AFTER). AAPL is sold; MSFT stays OPEN at year end.
+// Trade dating (02-01 < 02-03) lets the buys consume the funding lot → AAPL
+// carries 0.90, MSFT's $1000 defers → conv $1100 = €155.
+// Mixed axes (funding on its settlement 02-05, buys on their trade date 02-03)
+// would sort BOTH buys before the funding acquire → both park UNCOVERED → the
+// conversion eats the funding lot directly → €165. Settlement dating for both
+// would value the funding at 0.95 (its settlement-date rate) → €105.
+// The open MSFT position is what makes the datings DIVERGE in the final
+// number (a single position nets the same either way — the gap only surfaces
+// when principal is left parked/deferred).
 describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is still consumed (T+2)", () => {
   const rates = makeRateMap({
-    "2024-02-05": { USD: "0.90" }, // funding SETTLEMENT date (the tracked lot)
+    "2024-02-01": { USD: "0.90" }, // funding TRADE date (the tracked lot)
     "2024-02-03": { USD: "0.92" }, // stock buy TRADE date (rate lookup only; never the carried basis)
-    "2024-02-07": { USD: "0.93" }, // stock buy SETTLEMENT date (where the park is dated)
+    "2024-02-05": { USD: "0.95" }, // funding SETTLEMENT date (never read)
+    "2024-02-07": { USD: "0.93" }, // stock buy SETTLEMENT date (never read)
     "2024-06-20": { USD: "1.00" }, // sale
     "2024-09-10": { USD: "1.05" }, // conversion
   });
@@ -592,12 +592,13 @@ describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is
   ]);
   const report = generateTaxReport(statement, rates, 2024);
 
-  it("parks on settlement → consumes the late-settling funding → carried €155, not uncovered €165", () => {
+  it("parks on the trade date → consumes the late-settling funding → carried €155, not uncovered €165", () => {
     expect(report.fxGains.netGainLoss.toFixed(2)).toBe("155.00");
-    // The regression guard: trade-date parking would sort both buys before the
-    // funding acquire, leaving them uncovered, and the conversion would eat the
-    // funding lot directly → €165.00. Verified to flip exactly that way.
+    // The regression guards: funding dated on its settlement would leave both
+    // buys uncovered (€165.00); settlement dating for all would value the
+    // funding at 0.95 (€105.00).
     expect(report.fxGains.netGainLoss.toFixed(2)).not.toBe("165.00");
+    expect(report.fxGains.netGainLoss.toFixed(2)).not.toBe("105.00");
   });
 
   it("the conversion's principal leg carries the 0.90 funding basis (proves coverage)", () => {
@@ -610,8 +611,8 @@ describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is
 
 // ===========================================================================
 // 6. SAME-DAY ROUND TRIP WITH T+1 SETTLEMENT — the buy's park and the sale's
-//    unpark must sit on the SAME date axis (settlement), or the sale unparks on
-//    its trade date before the buy has parked on its settlement date.
+//    unpark must sit on the SAME date axis (the trade date, rule R0), or the
+//    sale unparks before the buy has parked.
 // ===========================================================================
 //
 // Fund $1000 @0.80 (2025-06-02). Buy and sell AAPL for $1000 on 2025-06-10 @0.90,

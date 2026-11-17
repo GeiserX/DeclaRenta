@@ -22,8 +22,8 @@ import type { FxEvent } from "../../src/engine/fx-fifo.js";
  * to an FxEvent and feed them to one processEvents call. To make the engine's
  * (date, phase) sort reproduce the reference's array order EXACTLY, every op gets
  * a STRICTLY INCREASING date — all reference scenarios are already in causal
- * order, so distinct ascending dates preserve that order while the 4-phase
- * same-day rank stays irrelevant (never two ops share a date here). The engine's
+ * order, so distinct ascending dates preserve that order while the same-day
+ * phase order stays irrelevant (never two ops share a date here). The engine's
  * total FX gain is Σ gainLossEur over all disposals (only conversions produce
  * them) — the same quantity the reference's fx() accumulates.
  */
@@ -232,7 +232,7 @@ describe("FX carry-basis-defer engine — reference scenarios (issue #230 follow
     });
   });
 
-  describe("4-phase same-day ordering reduces to the old 2-phase sort with no stock events", () => {
+  describe("same-day phase ordering reduces to the old 2-phase sort with no stock events", () => {
     it("same-day acquire + dispose (no stock events) → acquire processed first (byte-identical to old)", () => {
       // Two events on the SAME date: an acquire (+1000@0.90) and a dispose
       // (−1000@1.00). Phase 0 (acquire) must run before phase 3 (dispose) so the

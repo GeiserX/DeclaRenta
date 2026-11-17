@@ -73,10 +73,12 @@ describe("results page on the real engine, cycle fixture", () => {
     );
     // Columns: Criterio DGT, Tradicional con divisa, Tradicional sin divisa. The
     // total is rounded from the unrounded parts, so it can be a cent off the
-    // sum of the two rounded rows above it (437,48 − 267,59 shows as 169,90).
+    // sum of the two rounded rows above it (method-totals-precision.test.ts).
+    // Both methods that compute the currency give the same total, EUR out − EUR
+    // in, since the default dates FX events on the trade date (issue #437).
     expect(rows[0]).toEqual(["+437,48", "+240,38", "+240,38"]);
-    expect(rows[1]).toEqual(["−267,59", "−57,36", "0,00"]);
-    expect(rows[2]).toEqual(["+169,90", "+183,02", "+240,38"]);
+    expect(rows[1]).toEqual(["−254,46", "−57,36", "0,00"]);
+    expect(rows[2]).toEqual(["+183,02", "+183,02", "+240,38"]);
   });
 
   it("method notes go to «Cómo se ha calculado»; the risk line is the only warning", () => {

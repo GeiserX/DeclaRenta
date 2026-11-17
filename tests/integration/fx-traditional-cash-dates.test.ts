@@ -1,10 +1,10 @@
 /**
- * «Tradicional con divisa» (issue #434), R0: in this mode every FX event is
- * dated on its trade date and settlement dates are not read. A cash row (fee,
- * interest, dividend, withholding) therefore goes on its `dateTime`, not on its
- * `settleDate`. A USD fee charged on 31 December that settles on 2 January
- * belongs to the earlier year. The withholding netting key follows the same
- * date as the income it nets into. The default keeps settlement dating.
+ * Rule R0 (issue #434 for «Tradicional con divisa», issue #437 for the
+ * default): every FX event is dated on its trade date and settlement dates are
+ * not read. A cash row (fee, interest, dividend, withholding) therefore goes on
+ * its `dateTime`, not on its `settleDate`. A USD fee charged on 31 December
+ * that settles on 2 January belongs to the earlier year. The withholding
+ * netting key follows the same date as the income it nets into.
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -34,7 +34,7 @@ function feeSettledInJanuary() {
   return { st, rates };
 }
 
-describe("cash rows are dated by their trade date in «Tradicional con divisa»", () => {
+describe("cash rows are dated by their trade date", () => {
   it("a fee charged on 31 December books in that year, at that day's rate", () => {
     const { st, rates } = feeSettledInJanuary();
     const y25 = generateTaxReport(st, rates, 2025, TRAD);
@@ -46,14 +46,14 @@ describe("cash rows are dated by their trade date in «Tradicional con divisa»"
     expect(y26.fxGains.disposals.filter((d) => d.trigger === "commission")).toEqual([]);
   });
 
-  it("the default still dates the fee by its settlement (unchanged)", () => {
+  it("the default dates it the same way (issue #437)", () => {
     const { st, rates } = feeSettledInJanuary();
     const y25 = generateTaxReport(st, rates, 2025, {});
     const y26 = generateTaxReport(st, rates, 2026, {});
-    expect(y25.fxGains.disposals.filter((d) => d.trigger === "commission")).toEqual([]);
-    const fee26 = y26.fxGains.disposals.filter((d) => d.trigger === "commission");
-    expect(fee26.map((d) => d.disposeDate)).toEqual(["2026-01-02"]);
-    expect(f2(fee26[0]!.proceedsEur)).toBe("9.50");
+    const fee25 = y25.fxGains.disposals.filter((d) => d.trigger === "commission");
+    expect(fee25.map((d) => d.disposeDate)).toEqual(["2025-12-31"]);
+    expect(f2(fee25[0]!.proceedsEur)).toBe("9.00");
+    expect(y26.fxGains.disposals.filter((d) => d.trigger === "commission")).toEqual([]);
   });
 });
 
@@ -83,13 +83,8 @@ describe("the withholding nets into its dividend on the same date basis", () => 
     row({ transactionID: "2", amount: "-15", type: "Withholding Tax", settleDate: "20251231" }),
   ];
 
-  it("«Tradicional con divisa»: one net 85 USD lot on the trade date", () => {
-    const ev = FxFifoEngine.extractCashFxEvents(cash, rates, { traditionalFx: true });
-    expect(ev.map((e) => [e.date, e.quantity.toString(), e.ecbRate.toString()])).toEqual([["2025-12-31", "85", "0.9"]]);
-  });
-
-  it("default: keyed by settlement, unchanged (the tax row is an orphan, the lot stays gross)", () => {
+  it("one net 85 USD lot on the trade date, in every method that runs the FX engine", () => {
     const ev = FxFifoEngine.extractCashFxEvents(cash, rates);
-    expect(ev.map((e) => [e.date, e.quantity.toString(), e.ecbRate.toString()])).toEqual([["2026-01-02", "100", "0.95"]]);
+    expect(ev.map((e) => [e.date, e.quantity.toString(), e.ecbRate.toString()])).toEqual([["2025-12-31", "85", "0.9"]]);
   });
 });
