@@ -35,6 +35,11 @@ function makeDisposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
     acquireEcbRate: new Decimal("0.92"),
     assetCategory: "STK",
     washSaleBlocked: false,
+    gainLossFcy: new Decimal(0),
+    proceedsFcy: new Decimal(0),
+    costBasisFcy: new Decimal(0),
+    blockedLossEur: new Decimal(0),
+    reintegratedLossEur: new Decimal(0),
     ...overrides,
   };
 }
@@ -64,6 +69,7 @@ function makeReport(overrides: Partial<TaxSummary> = {}): TaxSummary {
       acquisitionValue: new Decimal(0),
       netGainLoss: new Decimal(0),
       blockedLosses: new Decimal(0),
+      reintegratedLosses: new Decimal(0),
       disposals: [],
     },
     dividends: { grossIncome: new Decimal(0), deductibleExpenses: new Decimal(0), spanishWithholding: new Decimal(0), entries: [] },
@@ -161,7 +167,7 @@ describe("computeCasillaBlocksWithFx", () => {
     const report = makeReport({
       capitalGains: {
         transmissionValue: new Decimal(300), acquisitionValue: new Decimal(100),
-        netGainLoss: new Decimal(200), blockedLosses: new Decimal(0),
+        netGainLoss: new Decimal(200), blockedLosses: new Decimal(0), reintegratedLosses: new Decimal(0),
         disposals: [makeDisposal({ assetCategory: "OPT", proceedsEur: new Decimal(300), costBasisEur: new Decimal(100), gainLossEur: new Decimal(200) })],
       },
       fxGains: {
@@ -181,7 +187,7 @@ describe("computeCasillaBlocksWithFx", () => {
     const report = makeReport({
       capitalGains: {
         transmissionValue: new Decimal(1000), acquisitionValue: new Decimal(800),
-        netGainLoss: new Decimal(200), blockedLosses: new Decimal(0),
+        netGainLoss: new Decimal(200), blockedLosses: new Decimal(0), reintegratedLosses: new Decimal(0),
         disposals: [makeDisposal({ assetCategory: "STK" })],
       },
       fxGains: {
@@ -215,7 +221,7 @@ describe("computeCasillaBlocksWithFx", () => {
     const report = makeReport({
       capitalGains: {
         transmissionValue: new Decimal(1300), acquisitionValue: new Decimal(900),
-        netGainLoss: new Decimal(400), blockedLosses: new Decimal(0),
+        netGainLoss: new Decimal(400), blockedLosses: new Decimal(0), reintegratedLosses: new Decimal(0),
         disposals: [
           makeDisposal({ assetCategory: "STK", proceedsEur: new Decimal(1000), costBasisEur: new Decimal(800), gainLossEur: new Decimal(200) }),
           makeDisposal({ assetCategory: "OPT", proceedsEur: new Decimal(300), costBasisEur: new Decimal(100), gainLossEur: new Decimal(200) }),

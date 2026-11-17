@@ -11,8 +11,8 @@ describe("scalableParser - branch coverage", () => {
     ].join("\n");
     const result = scalableParser.parse(input);
     expect(result.cashTransactions).toHaveLength(2);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
-    expect(result.cashTransactions[1].type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
+    expect(result.cashTransactions[1]!.type).toBe("Withholding Tax");
   });
 
   it("should parse dividend without withholding tax", () => {
@@ -22,7 +22,7 @@ describe("scalableParser - branch coverage", () => {
     ].join("\n");
     const result = scalableParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
   });
 
   it("should parse sell trade", () => {
@@ -32,7 +32,7 @@ describe("scalableParser - branch coverage", () => {
     ].join("\n");
     const result = scalableParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should parse savings plan as buy", () => {
@@ -42,7 +42,7 @@ describe("scalableParser - branch coverage", () => {
     ].join("\n");
     const result = scalableParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("BUY");
+    expect(result.trades[0]!.buySell).toBe("BUY");
   });
 
   it("should skip non-executed transactions", () => {
@@ -95,7 +95,7 @@ describe("scalableParser - branch coverage", () => {
       "2025-01-15;10:00;executed;REF001;Vanguard;ETF;distribution;IE00B3RBWM25;0;0;5.00;0;0.75;EUR",
     ].join("\n");
     const result = scalableParser.parse(input);
-    const wht = result.cashTransactions.find((ct) => ct.type === "Withholding Tax");
+    const wht = result.cashTransactions.find((ct) => ct.type === "Withholding Tax")!;
     expect(wht).toBeDefined();
     expect(wht.amount).toBe("-0.75");
   });
@@ -115,7 +115,7 @@ describe("scalableParser - branch coverage", () => {
       "2025-01-15;10:00;executed;MY-REF-456;iShares;ETF;buy;IE00B4L5Y983;10;45.00;450;0;0;EUR",
     ].join("\n");
     const result = scalableParser.parse(input);
-    expect(result.trades[0].tradeID).toBe("MY-REF-456");
+    expect(result.trades[0]!.tradeID).toBe("MY-REF-456");
   });
 
   it("should generate fallback trade ID when no reference", () => {
@@ -124,7 +124,7 @@ describe("scalableParser - branch coverage", () => {
       "2025-01-15;10:00;executed;;iShares;ETF;buy;IE00B4L5Y983;10;45.00;450;0;0;EUR",
     ].join("\n");
     const result = scalableParser.parse(input);
-    expect(result.trades[0].tradeID).toContain("scalable");
+    expect(result.trades[0]!.tradeID).toContain("scalable");
   });
 });
 

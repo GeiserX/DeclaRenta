@@ -22,6 +22,11 @@ function makeDisposal(overrides: Partial<FifoDisposal>): FifoDisposal {
     acquireEcbRate: new Decimal("0.92"),
     assetCategory: "STK",
     washSaleBlocked: false,
+    gainLossFcy: new Decimal(0),
+    proceedsFcy: new Decimal(0),
+    costBasisFcy: new Decimal(0),
+    blockedLossEur: new Decimal(0),
+    reintegratedLossEur: new Decimal(0),
     ...overrides,
   };
 }

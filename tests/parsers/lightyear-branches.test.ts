@@ -11,8 +11,8 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Broker Interest Received");
-    expect(result.cashTransactions[0].symbol).toBe("INTEREST");
+    expect(result.cashTransactions[0]!.type).toBe("Broker Interest Received");
+    expect(result.cashTransactions[0]!.symbol).toBe("INTEREST");
   });
 
   it("should parse reward income", () => {
@@ -22,7 +22,7 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Broker Interest Received");
+    expect(result.cashTransactions[0]!.type).toBe("Broker Interest Received");
   });
 
   it("should skip zero amount interest", () => {
@@ -41,8 +41,8 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.cashTransactions).toHaveLength(2);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
-    expect(result.cashTransactions[1].type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
+    expect(result.cashTransactions[1]!.type).toBe("Withholding Tax");
   });
 
   it("should parse dividend without withholding tax", () => {
@@ -52,7 +52,7 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
   });
 
   it("should skip dividend without ticker", () => {
@@ -142,7 +142,7 @@ describe("lightyearParser - branch coverage", () => {
       "15/01/2025,MY-REF-123,AAPL,US0378331005,Buy,10,USD,175,1750,0.92,0,1750,0",
     ].join("\n");
     const result = lightyearParser.parse(input);
-    expect(result.trades[0].tradeID).toContain("MY-REF-123");
+    expect(result.trades[0]!.tradeID).toContain("MY-REF-123");
   });
 
   it("should generate fallback trade ID when no reference", () => {
@@ -151,7 +151,7 @@ describe("lightyearParser - branch coverage", () => {
       "15/01/2025,,AAPL,US0378331005,Buy,10,USD,175,1750,0.92,0,1750,0",
     ].join("\n");
     const result = lightyearParser.parse(input);
-    expect(result.trades[0].tradeID).toContain("20250115");
+    expect(result.trades[0]!.tradeID).toContain("20250115");
   });
 
   it("should parse income with ticker (interest on a specific holding)", () => {
@@ -161,7 +161,7 @@ describe("lightyearParser - branch coverage", () => {
     ].join("\n");
     const result = lightyearParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].symbol).toBe("BRICEKSP");
+    expect(result.cashTransactions[0]!.symbol).toBe("BRICEKSP");
   });
 });
 

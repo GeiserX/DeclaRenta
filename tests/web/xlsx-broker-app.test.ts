@@ -40,7 +40,7 @@ const IBKR = `<?xml version="1.0" encoding="UTF-8"?>
 </FlexQueryResponse>`;
 
 /** Revolut realized-gains export (binary XLSX), one EUR sale. */
-function revolutXlsx(): Uint8Array {
+function revolutXlsx(): Uint8Array<ArrayBuffer> {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
     ["Date acquired", "Date sold", "Symbol", "Quantity", "Cost basis", "Gross proceeds", "Gross PnL", "Fees", "Net PnL", "Currency"],
@@ -48,7 +48,8 @@ function revolutXlsx(): Uint8Array {
   ]);
   XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
-  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  // A copy, not a view: File wants bytes backed by a plain ArrayBuffer.
+  return new Uint8Array(buf);
 }
 
 async function waitFor<T>(probe: () => T | null | undefined, label: string): Promise<T> {

@@ -6,39 +6,39 @@ describe("modelo720-validator - additional branches", () => {
     // 100-char record — short but still has type and model
     const record = "2720" + "2025" + "12345678A" + " ".repeat(83);
     const results = validateModelo720Records([record]);
-    expect(results[0].valid).toBe(false);
-    expect(results[0].errors.some((e) => e.includes("Longitud incorrecta"))).toBe(true);
+    expect(results[0]!.valid).toBe(false);
+    expect(results[0]!.errors.some((e) => e.includes("Longitud incorrecta"))).toBe(true);
   });
 
   it("should validate record with invalid register type", () => {
     const record = "3" + "720" + "2025" + "12345678A" + " ".repeat(487);
     const results = validateModelo720Records([record]);
-    expect(results[0].errors.some((e) => e.includes("Tipo de registro inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Tipo de registro inválido"))).toBe(true);
   });
 
   it("should validate record with invalid model number", () => {
     const record = "1" + "721" + "2025" + "12345678A" + " ".repeat(487);
     const results = validateModelo720Records([record]);
-    expect(results[0].errors.some((e) => e.includes("Número de modelo inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Número de modelo inválido"))).toBe(true);
   });
 
   it("should validate record with non-numeric year", () => {
     const record = "1" + "720" + "ABCD" + "12345678A" + " ".repeat(487);
     const results = validateModelo720Records([record]);
-    expect(results[0].errors.some((e) => e.includes("Ejercicio inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Ejercicio inválido"))).toBe(true);
   });
 
   it("should validate NIE format (starts with X/Y/Z)", () => {
     const record = "1" + "720" + "2025" + "X1234567A" + " ".repeat(487);
     const results = validateModelo720Records([record]);
     // NIE format should be valid
-    expect(results[0].errors.filter((e) => e.includes("NIF")).length).toBe(0);
+    expect(results[0]!.errors.filter((e) => e.includes("NIF")).length).toBe(0);
   });
 
   it("should reject invalid NIF format", () => {
     const record = "1" + "720" + "2025" + "AAAA1234B" + " ".repeat(487);
     const results = validateModelo720Records([record]);
-    expect(results[0].errors.some((e) => e.includes("Formato de NIF inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Formato de NIF inválido"))).toBe(true);
   });
 
   it("should validate detail record (type 2) with all fields", () => {
@@ -72,8 +72,8 @@ describe("modelo720-validator - additional branches", () => {
 
     const validRecord = arr.join("");
     const results = validateModelo720Records([validRecord]);
-    expect(results[0].valid).toBe(true);
-    expect(results[0].errors).toHaveLength(0);
+    expect(results[0]!.valid).toBe(true);
+    expect(results[0]!.errors).toHaveLength(0);
   });
 
   it("should detect invalid country code in detail record", () => {
@@ -92,7 +92,7 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Código de país ISO inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Código de país ISO inválido"))).toBe(true);
   });
 
   it("should detect non-numeric acquisition value", () => {
@@ -111,7 +111,7 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Valoración 1 no numérica"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Valoración 1 no numérica"))).toBe(true);
   });
 
   it("should detect non-numeric valuation value", () => {
@@ -129,7 +129,7 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Valoración 2 no numérica"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Valoración 2 no numérica"))).toBe(true);
   });
 
   it("should detect non-numeric quantity", () => {
@@ -147,7 +147,7 @@ describe("modelo720-validator - additional branches", () => {
     "ABCDEFGHIJKL".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Número de valores no numérico"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Número de valores no numérico"))).toBe(true);
   });
 
   it("should detect invalid declaration type in detail record", () => {
@@ -165,7 +165,7 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Tipo de declaración inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Tipo de declaración inválido"))).toBe(true);
   });
 
   it("should validate summary record (type 1) with non-numeric totals", () => {
@@ -182,9 +182,9 @@ describe("modelo720-validator - additional branches", () => {
     // Suma de valoración 2 at positions 164-180 (indices 163-179): non-numeric
     "ABCDEFGHIJKLMNOPQ".split("").forEach((c, i) => arr[163 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("Número de registros no numérico"))).toBe(true);
-    expect(results[0].errors.some((e) => e.includes("Suma de valoración 1 no numérica"))).toBe(true);
-    expect(results[0].errors.some((e) => e.includes("Suma de valoración 2 no numérica"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Número de registros no numérico"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Suma de valoración 1 no numérica"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("Suma de valoración 2 no numérica"))).toBe(true);
   });
 
   it("should validate ISIN checksum (Luhn) on detail record with id type 1", () => {
@@ -204,7 +204,7 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.some((e) => e.includes("ISIN con dígito de control inválido"))).toBe(true);
+    expect(results[0]!.errors.some((e) => e.includes("ISIN con dígito de control inválido"))).toBe(true);
   });
 
   it("should pass valid ISIN checksum (US0378331005 = AAPL)", () => {
@@ -223,6 +223,6 @@ describe("modelo720-validator - additional branches", () => {
     "000000000010".split("").forEach((c, i) => arr[462 + i] = c);
     "10000".split("").forEach((c, i) => arr[475 + i] = c);
     const results = validateModelo720Records([arr.join("")]);
-    expect(results[0].errors.filter((e) => e.includes("ISIN"))).toHaveLength(0);
+    expect(results[0]!.errors.filter((e) => e.includes("ISIN"))).toHaveLength(0);
   });
 });

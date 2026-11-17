@@ -229,6 +229,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(true);
   });
@@ -242,6 +245,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(false);
   });
@@ -254,6 +260,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(true);
   });
@@ -267,6 +276,9 @@ describe("isProfileComplete", () => {
         ccaa: "",
         telefono: "",
         year: 2025,
+        fxMethod: "multidivisa",
+        titulares: 1,
+        trackAutoConvert: true,
       });
       expect(isProfileComplete()).toBe(true);
     }
@@ -280,6 +292,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(false);
   });
@@ -292,6 +307,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(false);
   });
@@ -304,6 +322,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(false);
   });
@@ -316,6 +337,9 @@ describe("isProfileComplete", () => {
       ccaa: "",
       telefono: "",
       year: 2025,
+      fxMethod: "multidivisa",
+      titulares: 1,
+      trackAutoConvert: true,
     });
     expect(isProfileComplete()).toBe(false);
   });

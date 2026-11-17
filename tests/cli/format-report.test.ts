@@ -34,7 +34,7 @@ function cashTrade(id: string, date: string, usd: string, side: "BUY" | "SELL"):
     fifoPnlRealized: "0",
     fxRateToBase: "1",
     buySell: side,
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
     commissionCurrency: "USD",
     commission: "0",

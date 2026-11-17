@@ -8,7 +8,7 @@ describe("degiroParser - Transactions CSV branches", () => {
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("BUY");
+    expect(result.trades[0]!.buySell).toBe("BUY");
   });
 
   it("should parse sell trade (positive value)", () => {
@@ -17,7 +17,7 @@ describe("degiroParser - Transactions CSV branches", () => {
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should skip rows with zero price", () => {
@@ -43,7 +43,7 @@ describe("degiroParser - Transactions CSV branches", () => {
     const result = degiroParser.parse(input);
     expect(result.trades).toHaveLength(1);
     // Commission should include AutoFX (stored as negative)
-    expect(parseFloat(result.trades[0].commission)).toBe(-1.5);
+    expect(parseFloat(result.trades[0]!.commission)).toBe(-1.5);
   });
 
   it("should handle orderId in next column when current is empty", () => {
@@ -75,7 +75,7 @@ describe("degiroParser - Account CSV branches", () => {
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
   });
 
   it("should parse withholding tax from account CSV", () => {
@@ -84,7 +84,7 @@ describe("degiroParser - Account CSV branches", () => {
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0]!.type).toBe("Withholding Tax");
   });
 
   it("should recognize English withholding tax description", () => {
@@ -93,9 +93,9 @@ describe("degiroParser - Account CSV branches", () => {
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Withholding Tax");
-    expect(result.cashTransactions[0].amount).toBe("-0.38");
-    expect(result.cashTransactions[0].currency).toBe("USD");
+    expect(result.cashTransactions[0]!.type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0]!.amount).toBe("-0.38");
+    expect(result.cashTransactions[0]!.currency).toBe("USD");
   });
 
   it("should skip non-dividend/withholding rows in account CSV", () => {

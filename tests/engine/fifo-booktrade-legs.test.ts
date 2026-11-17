@@ -7,13 +7,12 @@
  * the shares are delivered twice.
  */
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { FifoEngine } from "../../src/engine/fifo.js";
 import type { Trade, OptionExercise } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 const DATES = ["2025-01-10", "2025-01-15", "2025-01-17", "2025-02-20", "2025-03-01"];
-const rateMap: EcbRateMap = new Map(DATES.map((d) => [d, new Map([["USD", new Decimal(1)]])]));
+const rateMap: EcbRateMap = new Map(DATES.map((d) => [d, new Map([["USD", "1"]])]));
 
 const HUT_ISIN = "US44812J1043";
 

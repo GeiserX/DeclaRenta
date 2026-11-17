@@ -46,14 +46,14 @@ function makeTrade(overrides: Partial<Trade> = {}): Trade {
 }
 
 const rateMap: EcbRateMap = new Map([
-  ["2025-03-15", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-03-14", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-03-17", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-06-01", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-06-15", new Map([["USD", new Decimal("0.95")]])],
-  ["2025-06-14", new Map([["USD", new Decimal("0.95")]])],
-  ["2025-09-01", new Map([["USD", new Decimal("0.90")]])],
-  ["2025-01-10", new Map([["USD", new Decimal("0.90")]])],
+  ["2025-03-15", new Map([["USD", "0.92"]])],
+  ["2025-03-14", new Map([["USD", "0.92"]])],
+  ["2025-03-17", new Map([["USD", "0.92"]])],
+  ["2025-06-01", new Map([["USD", "0.92"]])],
+  ["2025-06-15", new Map([["USD", "0.95"]])],
+  ["2025-06-14", new Map([["USD", "0.95"]])],
+  ["2025-09-01", new Map([["USD", "0.90"]])],
+  ["2025-01-10", new Map([["USD", "0.90"]])],
 ]);
 
 describe("FxFifoEngine", () => {
@@ -204,7 +204,7 @@ describe("FxFifoEngine", () => {
 
     it("EUR.GBP SELL = acquiring GBP (positive, uses tradeMoney)", () => {
       const rateMapWithGbp: EcbRateMap = new Map([
-        ["2025-03-15", new Map([["GBP", new Decimal("1.15")]])],
+        ["2025-03-15", new Map([["GBP", "1.15"]])],
       ]);
       const trades = [makeTrade({ symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commissionCurrency: "EUR", buySell: "SELL", quantity: "-2000", tradeMoney: "-1700", settlementDate: "20250315" })];
       const events = FxFifoEngine.extractFxEvents(trades, rateMapWithGbp);
@@ -219,9 +219,9 @@ describe("FxFifoEngine", () => {
     // received is acquired, each at its own ECB rate. Rates for all three sides.
     const crossRateMap: EcbRateMap = new Map([
       ["2025-03-15", new Map([
-        ["USD", new Decimal("0.92")],
-        ["GBP", new Decimal("1.17")],
-        ["JPY", new Decimal("0.0062")],
+        ["USD", "0.92"],
+        ["GBP", "1.17"],
+        ["JPY", "0.0062"],
       ])],
     ]);
 
@@ -280,10 +280,10 @@ describe("FxFifoEngine", () => {
 
     it("cross-rate pair: GBP spent on USD leaves the GBP pool, and later GBP disposals consume the right lots", () => {
       const gbpRates: EcbRateMap = new Map([
-        ["2025-01-10", new Map([["GBP", new Decimal("1.20")]])],
-        ["2025-03-15", new Map([["GBP", new Decimal("1.17")], ["USD", new Decimal("0.92")]])],
-        ["2025-06-15", new Map([["GBP", new Decimal("1.18")]])],
-        ["2025-09-01", new Map([["GBP", new Decimal("1.10")]])],
+        ["2025-01-10", new Map([["GBP", "1.20"]])],
+        ["2025-03-15", new Map([["GBP", "1.17"], ["USD", "0.92"]])],
+        ["2025-06-15", new Map([["GBP", "1.18"]])],
+        ["2025-09-01", new Map([["GBP", "1.10"]])],
       ]);
       const trades = [
         // Buy 1000 GBP with EUR

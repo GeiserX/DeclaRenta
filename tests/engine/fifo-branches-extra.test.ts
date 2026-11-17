@@ -21,8 +21,8 @@ import type { EcbRateMap } from "../../src/types/ecb.js";
 function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap {
   const map: EcbRateMap = new Map();
   for (const [date, currencies] of Object.entries(rates)) {
-    const inner = new Map<string, Decimal>();
-    for (const [ccy, rate] of Object.entries(currencies)) inner.set(ccy, new Decimal(rate));
+    const inner = new Map<string, string>();
+    for (const [ccy, rate] of Object.entries(currencies)) inner.set(ccy, rate);
     map.set(date, inner);
   }
   return map;

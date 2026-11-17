@@ -12,15 +12,15 @@ import {
 import { generateTaxReport } from "../../src/generators/report.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
 import * as XLSX from "xlsx";
-import type { CashBalance, FlexStatement, OpenPosition, Trade } from "../../src/types/ibkr.js";
+import type { AssetCategory, CashBalance, FlexStatement, OpenPosition, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Lot } from "../../src/types/tax.js";
 import { validateModelo720Records } from "../../src/generators/modelo720-validator.js";
 import { BOE_720, boeField } from "./modelo720-boe-layout.js";
 
 const rateMap: EcbRateMap = new Map([
-  ["2025-12-31", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.15")]])],
-  ["2025-12-30", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.15")]])],
+  ["2025-12-31", new Map([["USD", "0.92"], ["GBP", "1.15"]])],
+  ["2025-12-30", new Map([["USD", "0.92"], ["GBP", "1.15"]])],
 ]);
 
 function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
@@ -528,7 +528,7 @@ describe("Modelo 720 Generator", () => {
       // with the needed currency — effectively verifying the Q4 average path
       // degrades to a single-date average (equivalent to spot).
       const singleQ4RateMap: EcbRateMap = new Map([
-        ["2025-12-31", new Map([["USD", new Decimal("0.92")]])],
+        ["2025-12-31", new Map([["USD", "0.92"]])],
       ]);
 
       const positions = [makePosition({ positionValue: "60000", assetCategory: "STK", currency: "USD" })];
@@ -546,8 +546,8 @@ describe("Modelo 720 Generator", () => {
       // CHF data and the year-end fallback also has none → the position can't be
       // valued. It must be SKIPPED (excluded from the file), not crash.
       const noChfRateMap: EcbRateMap = new Map([
-        ["2025-12-31", new Map([["GBP", new Decimal("1.15")]])],
-        ["2025-12-30", new Map([["GBP", new Decimal("1.15")]])],
+        ["2025-12-31", new Map([["GBP", "1.15"]])],
+        ["2025-12-30", new Map([["GBP", "1.15"]])],
       ]);
 
       const positions = [makePosition({ positionValue: "60000", assetCategory: "STK", currency: "CHF" })];
@@ -1498,7 +1498,7 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
   describe("a sale read from last year's file as an older version wrote it (103 blank)", () => {
     // Released versions wrote 102-103 as "V " and the ISIN prefix at 129-130.
     // This year's sale trade gives the asset category, and so the subclave.
-    function saleOf(security: Previous720Security, assetCategory: string | null) {
+    function saleOf(security: Previous720Security, assetCategory: AssetCategory | null) {
       const trade = (overrides: Partial<Trade>) =>
         eurTrade({ symbol: "OLD", description: "SOLD SINCE LAST YEAR", isin: security.isin, ...(assetCategory ? { assetCategory } : {}), ...overrides });
       const s: FlexStatement = {

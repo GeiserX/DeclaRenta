@@ -158,7 +158,7 @@ describe("FifoEngine - sell with no lots (short sale)", () => {
 
     const disposals = engine.processTrades(trades, rateMap);
     expect(disposals).toHaveLength(1);
-    expect(disposals[0].costBasisEur.toNumber()).toBe(0);
+    expect(disposals[0]!.costBasisEur.toNumber()).toBe(0);
     expect(engine.warnings.some((w) => w.includes("Venta sin lotes"))).toBe(true);
   });
 });

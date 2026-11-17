@@ -42,8 +42,8 @@ describe("coinbaseParser.parse - edge cases", () => {
     ].join("\n");
     const result = coinbaseParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].symbol).toBe("BTC");
-    expect(result.trades[0].buySell).toBe("BUY");
+    expect(result.trades[0]!.symbol).toBe("BTC");
+    expect(result.trades[0]!.buySell).toBe("BUY");
   });
 
   it("should parse sell transactions", () => {
@@ -53,7 +53,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     ].join("\n");
     const result = coinbaseParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should parse convert transactions with notes", () => {
@@ -64,9 +64,9 @@ describe("coinbaseParser.parse - edge cases", () => {
     const result = coinbaseParser.parse(input);
     // Convert produces SELL + BUY
     expect(result.trades).toHaveLength(2);
-    expect(result.trades[0].buySell).toBe("SELL");
-    expect(result.trades[1].buySell).toBe("BUY");
-    expect(result.trades[1].symbol).toBe("ETH");
+    expect(result.trades[0]!.buySell).toBe("SELL");
+    expect(result.trades[1]!.buySell).toBe("BUY");
+    expect(result.trades[1]!.symbol).toBe("ETH");
   });
 
   it("should parse convert without notes (no buy leg)", () => {
@@ -77,7 +77,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     const result = coinbaseParser.parse(input);
     // Convert with no notes only produces SELL leg
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should parse staking income as cash transaction", () => {
@@ -88,7 +88,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     const result = coinbaseParser.parse(input);
     expect(result.trades).toHaveLength(0);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Crypto Reward Income");
+    expect(result.cashTransactions[0]!.type).toBe("Crypto Reward Income");
   });
 
   it("should parse rewards income as cash transaction", () => {
@@ -98,7 +98,7 @@ describe("coinbaseParser.parse - edge cases", () => {
     ].join("\n");
     const result = coinbaseParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Crypto Reward Income");
+    expect(result.cashTransactions[0]!.type).toBe("Crypto Reward Income");
   });
 
   it("should parse learning reward as cash transaction", () => {
@@ -154,7 +154,7 @@ describe("coinbaseParser.parse - edge cases", () => {
       "2025-03-15T10:00:00Z,Buy,BTC,0.01,EUR,40000,400,400,0,",
     ].join("\n");
     const result = coinbaseParser.parse(input);
-    expect(result.trades[0].commission).toBe("0");
+    expect(result.trades[0]!.commission).toBe("0");
   });
 
   it("should handle V2 format headers", () => {

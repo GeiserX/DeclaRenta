@@ -112,7 +112,7 @@ function fundUsd(id: string, date: string, usd: string): Trade {
     proceeds: usd,
     cost: usd,
     buySell: "SELL", // SELL EUR.USD = acquire USD (quote side) → +lot
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
   });
 }
@@ -134,7 +134,7 @@ function convUsd(id: string, date: string, usd: string): Trade {
     proceeds: `-${usd}`,
     cost: usd,
     buySell: "BUY", // BUY EUR.USD = dispose USD (quote side) → −lot (conversion)
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
   });
 }

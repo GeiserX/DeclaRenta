@@ -381,7 +381,7 @@ describe("generateTaxReport", () => {
           proceeds: "-1100",
           cost: "1100",
           buySell: "BUY",
-          openCloseIndicator: "",
+          openCloseIndicator: "O",
           exchange: "IDEALFX",
         }),
       ],

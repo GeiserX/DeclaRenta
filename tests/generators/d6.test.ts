@@ -1,11 +1,10 @@
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { generateD6Report } from "../../src/generators/d6.js";
 import type { OpenPosition } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 const rateMap: EcbRateMap = new Map([
-  ["2025-12-31", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.15")]])],
+  ["2025-12-31", new Map([["USD", "0.92"], ["GBP", "1.15"]])],
 ]);
 
 function makePosition(overrides: Partial<OpenPosition> = {}): OpenPosition {
