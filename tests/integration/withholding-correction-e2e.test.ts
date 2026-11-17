@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import Decimal from "decimal.js";
 import { readFileSync } from "fs";
 import { ibkrParser } from "../../src/parsers/ibkr.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
@@ -73,7 +74,7 @@ describe("issue #436 — IBKR withholding correction, end to end", () => {
   it("opens one 9.00 USD lot for the dividend", () => {
     const lots = (corrected.fxTrace ?? []).filter((t) => t.kind === "acquire");
     expect(lots).toHaveLength(1);
-    expect(Number(lots[0]!.quantityFcy)).toBe(9);
+    expect(new Decimal(lots[0]!.quantityFcy).toFixed(2)).toBe("9.00");
     expect(lots[0]!.date).toBe("2025-03-10");
   });
 
@@ -129,14 +130,14 @@ describe("issue #436 — a real IBKR correction-only export", () => {
   it("parses the six withholding rows, three of them positive", () => {
     const wht = stmt.cashTransactions.filter((t) => t.type === "Withholding Tax");
     expect(wht).toHaveLength(6);
-    expect(wht.filter((t) => Number(t.amount) > 0)).toHaveLength(3);
+    expect(wht.filter((t) => new Decimal(t.amount).greaterThan(0))).toHaveLength(3);
   });
 
   it("opens one 0.13 USD lot per correction date, the net dollars received", () => {
     const r = generateTaxReport(stmt, rates, 2022, { fxTrace: true });
     const lots = (r.fxTrace ?? []).filter((t) => t.kind === "acquire");
-    expect(lots.map((l) => [l.date, Number(l.quantityFcy)]).sort()).toEqual([
-      ["2022-04-01", 0.13], ["2022-04-30", 0.13], ["2022-12-01", 0.13],
+    expect(lots.map((l) => [l.date, new Decimal(l.quantityFcy).toFixed(2)]).sort()).toEqual([
+      ["2022-04-01", "0.13"], ["2022-04-30", "0.13"], ["2022-12-01", "0.13"],
     ]);
   });
 });

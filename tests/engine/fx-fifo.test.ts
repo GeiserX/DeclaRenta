@@ -776,7 +776,7 @@ describe("FxFifoEngine", () => {
     });
 
     it("never mixes currencies, and ignores EUR withholding rows", () => {
-      const gbpRates: EcbRateMap = new Map([["2025-03-15", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.18")]])]]);
+      const gbpRates: EcbRateMap = new Map([["2025-03-15", new Map([["USD", "0.92"], ["GBP", "1.18"]])]]);
       const events = FxFifoEngine.extractCashFxEvents([
         div(D, "10"), wht(D, "-1.50"),
         wht(D, "2", "GBP"), // a GBP refund with no GBP income: its own GBP lot
@@ -792,6 +792,13 @@ describe("FxFifoEngine", () => {
 
     it("a refund on a broker-converted row opens no lot (Trade Republic, issue #96)", () => {
       const events = FxFifoEngine.extractCashFxEvents([{ ...wht(D, "1.50"), brokerConvertedToBase: true }], rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("a refund on the key of a broker-converted dividend opens no lot (the withholding row carries no flag)", () => {
+      const events = FxFifoEngine.extractCashFxEvents([
+        { ...div(D, "10"), brokerConvertedToBase: true }, wht(D, "-1.50"), wht(D, "1.50"), wht(D, "-1.00"), wht(D, "1.50"),
+      ], rateMap);
       expect(events).toHaveLength(0);
     });
 

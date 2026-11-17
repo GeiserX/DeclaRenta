@@ -776,12 +776,19 @@ export class FxFifoEngine {
       return gross.minus(applied);
     };
 
+    const convertedKeys = new Set<string>();
     for (const tx of cashTransactions) {
       if (tx.currency === "EUR") continue;
       // The broker converted this income to EUR before crediting it (Trade
       // Republic, issue #96): no foreign currency ever entered the account,
-      // so it opens no FX lot. Its income value (0029) is unaffected.
-      if (tx.brokerConvertedToBase) continue;
+      // so it opens no FX lot. Its income value (0029) is unaffected. A refund of
+      // its withholding never held FCY either, so its key opens no refund lot.
+      if (tx.brokerConvertedToBase) {
+        if (tx.type !== "Withholding Tax") {
+          convertedKeys.add(whtKey(tx.brokerSource, tx.currency, normalizeDate(tx.settleDate || tx.dateTime)));
+        }
+        continue;
+      }
 
       const amount = new Decimal(tx.amount);
       if (amount.isZero()) continue;
@@ -846,7 +853,7 @@ export class FxFifoEngine {
     // on its key date, under the same guards a cash row passes above. A leftover
     // net deduction (pending > 0) is an orphan and stays dropped, never a disposal.
     for (const [key, pending] of whtByKey) {
-      if (!pending.isNegative()) continue;
+      if (!pending.isNegative() || convertedKeys.has(key)) continue;
       const tx = refundRowByKey.get(key)!; // pending < 0 needs at least one positive row
       if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) continue;
       const date = normalizeDate(tx.settleDate || tx.dateTime);
