@@ -939,6 +939,39 @@ describe("withholding corrections stay at their own broker (issue #438 review)",
     expect(show(entries)).toEqual(["2024-12-31:15.00", "2025-01-02:0.00"]);
   });
 
+  it("a dividend's own withholding is its pair even when another broker's row comes first in the file", () => {
+    // Pass 1 took the first row in file order, B's −5, as A's pair, so A's +15
+    // refund found only 5 to take back and B kept A's 15.
+    const rr = makeRateMap({ "2025-03-10": { USD: "1" }, "2025-03-11": { USD: "1" } });
+    const entries = calculateDividends(
+      [
+        row("da", "Dividends", "20250310", "100", "A"),
+        row("db", "Dividends", "20250311", "100", "B"),
+        row("wb", "Withholding Tax", "20250311", "-5", "B"),
+        row("wa", "Withholding Tax", "20250310", "-15", "A"),
+        row("ra", "Withholding Tax", "20250310", "15", "A"),
+      ],
+      rr,
+    );
+    expect(show(entries)).toEqual(["2025-03-10:0.00", "2025-03-11:5.00"]);
+  });
+
+  it("a withholding in another currency (pass 2) pairs only with its own broker's dividend", () => {
+    const rr = makeRateMap({ "2025-03-10": { USD: "1.10" }, "2025-03-11": { USD: "1.10" } });
+    const usd = (id: string, dateTime: string, brokerSource: string) =>
+      makeCashTx({ transactionID: id, isin, currency: "USD", dateTime, amount: "100", type: "Dividends", brokerSource });
+    const entries = calculateDividends(
+      [
+        usd("da", "20250310", "A"),
+        usd("db", "20250311", "B"),
+        row("wb", "Withholding Tax", "20250311", "-1", "B"),
+        row("wa", "Withholding Tax", "20250310", "-2", "A"),
+      ],
+      rr,
+    );
+    expect(show(entries)).toEqual(["2025-03-10:2.00", "2025-03-11:1.00"]);
+  });
+
   it("a refund still moves to make room within its own broker", () => {
     const rr = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-10": { USD: "1" } });
     const entries = calculateDividends(

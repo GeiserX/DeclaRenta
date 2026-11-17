@@ -78,8 +78,9 @@ const sameBroker = (a: CashTransaction, b: CashTransaction): boolean =>
  * Match every withholding row to the dividend it belongs to (issues #96, #438).
  *
  * IBKR reports dividends and withholding tax as separate CashTransaction
- * entries, matched by ISIN + date proximity (±7 days), preferring a
- * withholding in the dividend's own currency.
+ * entries, matched by ISIN + date proximity (±7 days) at the same broker,
+ * preferring a withholding in the dividend's own currency. A row or dividend
+ * with no broker name (a single-broker file) matches any broker.
  *
  * A dividend's withholding can be several rows (issue #438): a partial refund
  * (−1.50, then +0.50), a reversal and a new withholding on another date (−1.50,
@@ -137,22 +138,28 @@ export function matchWithholdings(
     Math.abs(withholdingTimes[index]! - divTimes[divIndex]!) <= SEVEN_DAYS_MS &&
     (!postedLate[index] || yearOf(withholdings[index]!.dateTime) === yearOf(dividends[divIndex]!.dateTime));
 
-  /** First unconsumed, non-refund withholding of the dividend's ISIN within 7 days that passes `accept`. */
+  /**
+   * First unconsumed, non-refund withholding of the dividend's ISIN and broker
+   * within 7 days that passes `accept`. In a merged upload another broker's
+   * row listed first never becomes the pair, so pass 3 (which keeps each row
+   * at its own broker) finds every dividend paired with its own tax.
+   */
   const findWithholding = (divIndex: number, accept: (w: CashTransaction) => boolean): number => {
     const div = dividends[divIndex]!;
     for (const index of withholdingIndexByIsin.get(div.isin) ?? []) {
-      if (!consumedWithholdings.has(index) && !isRefund[index] && accept(withholdings[index]!) && reaches(index, divIndex)) {
+      const w = withholdings[index]!;
+      if (!consumedWithholdings.has(index) && !isRefund[index] && sameBroker(w, div) && accept(w) && reaches(index, divIndex)) {
         return index;
       }
     }
     return -1;
   };
 
-  // Pass 1: same ISIN, same currency, within 7 days, first unconsumed (in
-  // dividend order). This is the original matcher, so every broker that books
-  // the withholding in the dividend's currency (IBKR, Degiro, ...) pairs
-  // exactly as before. Rows with no ISIN share the "" bucket, so they also
-  // need the same symbol.
+  // Pass 1: same ISIN, same currency, same broker, within 7 days, first
+  // unconsumed (in dividend order). In a single-broker file this is the
+  // original matcher, so every broker that books the withholding in the
+  // dividend's currency (IBKR, Degiro, ...) pairs exactly as before. Rows with
+  // no ISIN share the "" bucket, so they also need the same symbol.
   const pair = dividends.map((div, divIndex) => {
     const index = findWithholding(divIndex, (w) => w.currency === div.currency && (div.isin !== "" || w.symbol === div.symbol));
     if (index >= 0) consumedWithholdings.add(index);
