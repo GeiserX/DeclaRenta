@@ -1677,6 +1677,11 @@ export class FxFifoEngine {
             trigger: "stock_sale",
             brokerSource,
             positionKey,
+            // The sale's own proceeds are held too: ranked as a round trip, a
+            // same-day rebuy in the sale's currency ran before they arrived,
+            // parked an earlier late cover's dollars and made the planner drop
+            // that cover (issue #446 review, cross-currency form).
+            ...(normalizeDate(d.acquireDate) < date ? { heldBefore: true as const } : {}),
           });
         }
         continue;

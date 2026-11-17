@@ -137,6 +137,54 @@ describe("«Tradicional con divisa»: a cross-currency sale keeps stock FIFO ord
   });
 });
 
+describe("a cross-currency sale's own proceeds fund a same-day rebuy in that currency (issue #446)", () => {
+  // AAA is bought in EUR, sold in USD and bought back in USD on 05-02. BBB is
+  // bought 03-01 with no dollars and funded 03-04 (a late cover at 0.92).
+  // The USD sale's 1000 must arrive before the USD rebuy: run after it, the
+  // rebuy parked the 03-04 funding, the planner dropped BBB's late cover and
+  // the funding stayed in the pool (−370 on an economic −320).
+  // EUR out − EUR in = 1600 − 920 − 1000 = −320. Stock as monodivisa: −200.
+  // FX: BBB's dollars come back at 0.92 + (0.85 − 0.90) = 0.87, the sale's at
+  // 0.97 + (0.85 − 0.97) = 0.85, and 2000 USD go out at 0.80:
+  // 1600 − 870 − 850 = −120.
+  const sc: Scenario = {
+    id: "XEUR-REBUY",
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "buy", d: "2024-02-01", sym: "AAA", qty: "10", px: "100", r: "0.93" },
+      { k: "buy", d: "2024-03-01", sym: "BBB", qty: "10", px: "100", r: "0.90" },
+      { k: "fund", d: "2024-03-04", usd: "1000", r: "0.92" },
+      { k: "sell", d: "2024-05-02", sym: "AAA", qty: "10", px: "100", r: "0.97" },
+      { k: "buy", d: "2024-05-02", sym: "AAA", qty: "10", px: "100", r: "0.97" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "BBB", qty: "10", px: "100", r: "0.85" },
+      { k: "conv", d: "2024-09-02", usd: "2000", r: "0.80" },
+    ],
+  };
+  const report = (o: typeof TRAD) => {
+    const { st, rates } = toStatement(sc);
+    const eurBuy = st.trades.find((t) => t.tradeDate === "2024-02-01")!;
+    eurBuy.currency = "EUR";
+    eurBuy.commissionCurrency = "EUR";
+    return generateTaxReport(st, rates, 2024, { ...o, fxTrace: true });
+  };
+
+  it("«Tradicional con divisa»: stock = monodivisa, FX −120, total −320, no untracked note", () => {
+    const r = report(TRAD);
+    const mono = report(MONO);
+    expect(f2(r.capitalGains.netGainLoss)).toBe(f2(mono.capitalGains.netGainLoss));
+    expect(f2(r.capitalGains.netGainLoss)).toBe("-200.00");
+    expect(f2(r.fxGains.netGainLoss)).toBe("-120.00");
+    expect(r.messages.map((m) => m.id)).not.toContain("report.fx_traditional_uncovered");
+  });
+
+  it("the default's total stays at −320", () => {
+    const r = report({});
+    expect(f2(r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss))).toBe("-320.00");
+  });
+});
+
 // ── Seeded property test: random closed cycles ───────────────────────────────
 // Late funding (0 to 6 days after an unfunded buy), same-day rotations and
 // rebuys of held positions, plain sales and conversions; no loss sales are
