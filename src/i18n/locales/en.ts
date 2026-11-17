@@ -863,7 +863,7 @@ const en: TranslationKeys = {
   "report.fx_method_consistency.hint":
     "Do not mix methods across tax years: if you filed one year with another criterion (or another tool), the carried currency basis may be counted twice or left out. For currency acquired before your report's period, include the earlier years in the broker export.",
   "report.fx_deferred_no_conversion":
-    "You did not convert currency to euros this tax year, so there is no exchange-rate gain to declare (0 in boxes 1633/1637). The exchange difference while you hold the currency is deferred until you actually convert it to euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+    "You did not convert currency to euros this tax year, so there is no exchange-rate gain to declare (no currency amount is added to boxes 1633/1637). The exchange difference while you hold the currency is deferred until you actually convert it to euros (Art. 14.2.e LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
     "Your broker (e.g. IBKR) may show a «realized forex gain» even if you did not convert to euros: it uses the US tax criterion, not the Spanish one. With the «DGT criterion (multi-currency)», the currency gain is only declared when you convert it to euros or to another currency.",
   "report.fx_traditional_method":
@@ -877,7 +877,7 @@ const en: TranslationKeys = {
   "report.fx_traditional_no_conversion":
     "You did not convert currency this year. The change in {{ccy}} while you held the shares is already in their gain or loss. The change while you hold the {{ccy}} in cash will be declared when you convert it.",
   "report.fx_traditional_no_conversion.hint":
-    "With this method, boxes 1633/1637 only include currency that leaves your account: conversions to euros or to another currency, fees, interest paid and currency lost in losing sales.",
+    "With this method, currency is only added to boxes 1633/1637 when it leaves your account: conversions to euros or to another currency, fees, interest paid and currency lost in losing sales.",
   "report.fx_traditional_lost_dollars":
     "In {{n}} losing sale(s) you got back fewer {{ccy}} than you invested. Those lost {{ccy}} leave your account. Their exchange difference, from when you bought them to when you bought the shares ({{amount}} €), is declared this year in boxes 1633/1637.",
   "report.fx_traditional_lost_dollars.hint":

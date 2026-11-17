@@ -470,7 +470,7 @@ function traditionalFxMessages(input: {
       id: "report.fx_traditional_no_conversion",
       severity: "info",
       message: `No has cambiado divisa este año. La variación del ${ccy} mientras tenías las acciones ya está en su ganancia o pérdida. La variación mientras tienes los ${ccy} en efectivo se declarará cuando los cambies.`,
-      hint: "Con este método, las casillas 1633/1637 solo recogen la divisa que sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
+      hint: "Con este método, la divisa solo se suma a las casillas 1633/1637 cuando sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
       context: { ccy },
     });
   }
@@ -996,7 +996,7 @@ export function generateTaxReport(
         id: "report.fx_deferred_no_conversion",
         severity: "info",
         message:
-          "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+          "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (no se suma ningún importe de divisa a las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
         hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Con el «Criterio DGT (multidivisa)», la ganancia de divisa solo se declara al cambiarla a euros o a otra divisa.",
       });
     }

@@ -865,7 +865,7 @@ const ca: TranslationKeys = {
   "report.fx_method_consistency.hint":
     "No barregis mètodes entre exercicis: si un any vas declarar amb un altre criteri (o amb una altra eina), la base de divisa arrossegada es pot duplicar o ometre. Per a la divisa adquirida abans del període del teu informe, inclou els anys anteriors a l'exportació del bróker.",
   "report.fx_deferred_no_conversion":
-    "No has convertit divisa a euros aquest exercici, de manera que no hi ha guany per tipus de canvi a declarar (0 a les caselles 1633/1637). La diferència de canvi mentre mantens la moneda queda diferida fins que la converteixis efectivament a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+    "No has convertit divisa a euros aquest exercici, de manera que no hi ha guany per tipus de canvi a declarar (no s'afegeix cap import de divisa a les caselles 1633/1637). La diferència de canvi mentre mantens la moneda queda diferida fins que la converteixis efectivament a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
     "El teu bróker (p. ex. IBKR) pot mostrar un «realized forex gain» encara que no hagis passat a euros: fa servir el criteri fiscal dels EUA, no l'espanyol. Amb el «Criteri DGT (multidivisa)», el guany de divisa només es declara en canviar-la a euros o a una altra divisa.",
   "report.fx_traditional_method":
@@ -879,7 +879,7 @@ const ca: TranslationKeys = {
   "report.fx_traditional_no_conversion":
     "Aquest any no has canviat divisa. La variació del {{ccy}} mentre tenies les accions ja és al seu guany o pèrdua. La variació mentre tens els {{ccy}} en efectiu es declararà quan els canviïs.",
   "report.fx_traditional_no_conversion.hint":
-    "Amb aquest mètode, les caselles 1633/1637 només recullen la divisa que surt del teu compte: canvis a euros o a una altra divisa, comissions, interessos pagats i divisa perduda en vendes amb pèrdues.",
+    "Amb aquest mètode, la divisa només s'afegeix a les caselles 1633/1637 quan surt del teu compte: canvis a euros o a una altra divisa, comissions, interessos pagats i divisa perduda en vendes amb pèrdues.",
   "report.fx_traditional_lost_dollars":
     "En {{n}} venda(es) amb pèrdues vas recuperar menys {{ccy}} dels que vas invertir. Aquests {{ccy}} perduts surten del teu compte. La seva diferència de canvi, des que els vas comprar fins que vas comprar les accions ({{amount}} €), es declara aquest any a les caselles 1633/1637.",
   "report.fx_traditional_lost_dollars.hint":

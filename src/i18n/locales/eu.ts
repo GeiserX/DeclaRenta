@@ -867,7 +867,7 @@ const eu: TranslationKeys = {
   "report.fx_method_consistency.hint":
     "Ez nahastu metodoak ekitaldien artean: urte batean beste irizpide batekin (edo beste tresna batekin) aitortu bazenuen, eramandako dibisa-oinarria bikoiztu edo kanpoan gera daiteke. Zure txostenaren aldia baino lehen eskuratutako dibisarako, sartu aurreko urteak brokerraren esportazioan.",
   "report.fx_deferred_no_conversion":
-    "Ekitaldi honetan ez duzu dibisarik euro bihurtu, beraz, ez dago kanbio-tasagatiko irabazirik aitortzeko (0 1633/1637 laukietan). Moneta mantentzen duzun bitarteko kanbio-diferentzia atzeratuta geratzen da, benetan euro bihurtu arte (14.2.e art. LIRPF; DGT V0152-26).",
+    "Ekitaldi honetan ez duzu dibisarik euro bihurtu, beraz, ez dago kanbio-tasagatiko irabazirik aitortzeko (ez zaie dibisa-zenbatekorik gehitzen 1633/1637 laukiei). Moneta mantentzen duzun bitarteko kanbio-diferentzia atzeratuta geratzen da, benetan euro bihurtu arte (14.2.e art. LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
     "Zure brokerrak (adib. IBKR) «realized forex gain» bat erakuts dezake euro bihurtu ez baduzu ere: AEBko zerga-irizpidea erabiltzen du, ez Espainiakoa. «DGTren irizpidea (multidibisa)» metodoarekin, dibisa-irabazia euro edo beste dibisa batera bihurtzean bakarrik aitortzen da.",
   "report.fx_traditional_method":
@@ -881,7 +881,7 @@ const eu: TranslationKeys = {
   "report.fx_traditional_no_conversion":
     "Aurten ez duzu dibisarik bihurtu. Akzioak zenituen bitartean {{ccy}}-k izandako aldaketa haien irabazian edo galeran dago jada. {{ccy}} eskudirutan dituzun bitarteko aldaketa bihurtzen dituzunean aitortuko da.",
   "report.fx_traditional_no_conversion.hint":
-    "Metodo honekin, 1633/1637 laukiek zure kontutik irteten den dibisa bakarrik jasotzen dute: euro edo beste dibisa batera bihurketak, komisioak, ordaindutako interesak eta galerak dituzten salmentetan galdutako dibisa.",
+    "Metodo honekin, dibisa zure kontutik irteten denean bakarrik gehitzen zaie 1633/1637 laukiei: euro edo beste dibisa batera bihurketak, komisioak, ordaindutako interesak eta galerak dituzten salmentetan galdutako dibisa.",
   "report.fx_traditional_lost_dollars":
     "Galerak dituzten {{n}} salmentatan inbertitu zenituen baino {{ccy}} gutxiago berreskuratu zenituen. Galdutako {{ccy}} horiek zure kontutik irteten dira. Haien kanbio-diferentzia, erosi zenituenetik akzioak erosi zenituen arte ({{amount}} €), aurten aitortzen da 1633/1637 laukietan.",
   "report.fx_traditional_lost_dollars.hint":

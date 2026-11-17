@@ -194,6 +194,7 @@ describe("es locale = engine text, byte for byte", () => {
       ...TRAD_IDS.filter((id) => id !== "report.fx_traditional_orphan"),
       "report.competitor_reconciliation",
       "report.monodivisa_conversions_skipped",
+      "report.fx_deferred_no_conversion",
     ];
     for (const id of check) {
       const m = seen.get(id);

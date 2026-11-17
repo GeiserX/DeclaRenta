@@ -902,7 +902,7 @@ const es = {
   "report.fx_method_consistency.hint":
     "No mezcles métodos entre ejercicios: si un año declaraste con otro criterio (o con otra herramienta), la base de divisa arrastrada puede duplicarse u omitirse. Para divisa adquirida antes del periodo de tu informe, incluye los años anteriores en la exportación del bróker.",
   "report.fx_deferred_no_conversion":
-    "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+    "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (no se suma ningún importe de divisa a las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
     "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Con el «Criterio DGT (multidivisa)», la ganancia de divisa solo se declara al cambiarla a euros o a otra divisa.",
   "report.fx_traditional_method":
@@ -916,7 +916,7 @@ const es = {
   "report.fx_traditional_no_conversion":
     "No has cambiado divisa este año. La variación del {{ccy}} mientras tenías las acciones ya está en su ganancia o pérdida. La variación mientras tienes los {{ccy}} en efectivo se declarará cuando los cambies.",
   "report.fx_traditional_no_conversion.hint":
-    "Con este método, las casillas 1633/1637 solo recogen la divisa que sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
+    "Con este método, la divisa solo se suma a las casillas 1633/1637 cuando sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
   "report.fx_traditional_lost_dollars":
     "En {{n}} venta(s) con pérdidas recuperaste menos {{ccy}} de los que invertiste. Esos {{ccy}} perdidos salen de tu cuenta. Su diferencia de cambio, desde que los compraste hasta que compraste las acciones ({{amount}} €), se declara este año en las casillas 1633/1637.",
   "report.fx_traditional_lost_dollars.hint":
