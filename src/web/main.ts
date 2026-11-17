@@ -65,7 +65,7 @@ import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
-import { pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
+import { holdingsYears, pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
@@ -284,8 +284,13 @@ let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
 /** Per model, the brokers whose export has no year-end holdings (named in 720/721/D-6). */
 let detectedMissingHoldings: MissingHoldings = { m720: [], m721: [], d6: [] };
-/** Years detected from uploaded data (sorted descending, latest first) */
+/**
+ * Years the user can pick (sorted descending, latest first): years with trades
+ * or cash movements, plus years whose 31 December holdings were uploaded.
+ */
 let detectedYears: number[] = [];
+/** Years with trades or cash movements only (no holdings-only years): a report of such a year is a real snapshot. */
+let activityYears: number[] = [];
 /** The active year for processing (last closed year in the data by default, changeable via dropdown) */
 let activeYear: number | null = null;
 /** Profile settings the latest processFiles run computed with. */
@@ -501,6 +506,7 @@ function resetDownstream(): void {
   activeYear = null;
   shownResultsYear = null;
   detectedYears = [];
+  activityYears = [];
   // Drop any processFiles run still in flight: it was built from the old list.
   processRunToken++;
   initSection720();
@@ -710,6 +716,11 @@ async function parseFiles(): Promise<void> {
     };
     for (const tr of merged.trades) addYear(tr.tradeDate);
     for (const ct of merged.cashTransactions) addYear(ct.dateTime);
+    activityYears = [...yearSet].sort((a, b) => b - a);
+    // A file with only year-end holdings (no trades, no cash rows) still gives
+    // its year: 720/721/D-6 read the year from the profile, which only the
+    // results year select sets now that the profile form has no year (#434).
+    for (const y of holdingsYears(mergedStatement)) yearSet.add(y);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
     if (!activeYear) {
       // Open on the last closed year (the one a Renta is filed for), not the
@@ -1009,7 +1020,7 @@ async function processFiles(): Promise<void> {
     lastRunContext = { merged, rates: allRates, year, options };
 
     // Persist for year comparison, with the method when it applies.
-    persistReport(report, currentBrokers, uploadCurrencies.length > 0 ? method : undefined, detectedYears.includes(year));
+    persistReport(report, currentBrokers, uploadCurrencies.length > 0 ? method : undefined, activityYears.includes(year));
 
     unlockStep(3);
     clearWizardError();
