@@ -695,7 +695,7 @@ describe("FxFifoEngine", () => {
   // Issue #436: a broker correction books the original withholding, its positive
   // reversal and the corrected one (IBKR keeps the original dateTime/settleDate
   // on all three). The FX lot must hold the NET FCY received, so withholdings net
-  // with their sign per (currency, date) and no withholding row opens its own lot.
+  // with their sign per (broker, currency, date) and no withholding row opens its own lot.
   describe("issue #436 — withholding corrections net with their sign", () => {
     const D = "20250315";
     const row = (type: CashTransaction["type"], date: string, amount: string, currency = "USD"): CashTransaction => ({
@@ -815,6 +815,32 @@ describe("FxFifoEngine", () => {
     it("pins: a negative dividend row still opens a positive lot (sign-blind income, not #436)", () => {
       const events = FxFifoEngine.extractCashFxEvents([div(D, "10"), div(D, "-10"), div(D, "11")], rateMap);
       expect(total(events)).toBe("31");
+    });
+
+    // The key carries the broker: a withholding never nets into another broker's
+    // same-day lot, so each lot holds its own broker's net dollars and the FX rows
+    // label the right buy broker. Before the broker was in the key this gave
+    // 4 Degiro + 10 IBKR (and 1.75 + 0.75 Degiro + 10 + 1.50 IBKR on main).
+    it("withholdings net only within their own broker on a shared (currency, date)", () => {
+      const at = (r: CashTransaction, brokerSource: string): CashTransaction => ({ ...r, brokerSource });
+      const events = FxFifoEngine.extractCashFxEvents([
+        at(div(D, "5.00"), "Degiro"), at(wht(D, "-0.75"), "Degiro"), at(wht(D, "0.75"), "Degiro"),
+        at(div(D, "10.00"), "Interactive Brokers"), at(wht(D, "-1.50"), "Interactive Brokers"),
+        at(wht(D, "1.50"), "Interactive Brokers"), at(wht(D, "-1.00"), "Interactive Brokers"),
+      ], rateMap);
+      expect(events.map((e) => [e.brokerSource, e.quantity.toString()])).toEqual([
+        ["Degiro", "5"], ["Interactive Brokers", "9"],
+      ]);
+    });
+
+    it("a refund at one broker opens its own lot, not joined to another broker's dividend", () => {
+      const at = (r: CashTransaction, brokerSource: string): CashTransaction => ({ ...r, brokerSource });
+      const events = FxFifoEngine.extractCashFxEvents([
+        at(div(D, "10"), "Degiro"), at(wht(D, "1.50"), "Interactive Brokers"),
+      ], rateMap);
+      expect(events.map((e) => [e.brokerSource, e.quantity.toString()])).toEqual([
+        ["Degiro", "10"], ["Interactive Brokers", "1.5"],
+      ]);
     });
   });
 
