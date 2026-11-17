@@ -618,9 +618,13 @@ export function generateTaxReport(
   //    keeps the FX engine on in its own mode (see FxFifoEngine.unparkTraditional).
   const traditionalFx = options?.traditionalFx === true && options.skipFx !== true;
   const traditionalCost = options?.skipFx === true || traditionalFx;
-  const fifoEngine = new FifoEngine(
-    traditionalFx ? { traditionalCostBasis: true, markLotCurrency: true } : { traditionalCostBasis: traditionalCost },
-  );
+  // markLotCurrency whenever the FX engine runs: a lot sold in another currency
+  // than it was bought in releases its own currency's parked principal (#434,
+  // #441). Monodivisa computes no currency and keeps its disposals' shape.
+  const fifoEngine = new FifoEngine({
+    traditionalCostBasis: traditionalCost,
+    ...(options?.skipFx === true ? {} : { markLotCurrency: true }),
+  });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
   // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
   // see it too, or the bought-out shares still count as held (V3282-18 total exit).

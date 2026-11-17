@@ -1594,18 +1594,19 @@ export class FxFifoEngine {
     // own conversion events — including them here would double-count).
     const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
     for (const d of disposals) {
-      // «Tradicional con divisa»: shares bought in one currency and sold in
-      // another (same ISIN, another listing; the stock FIFO matches by ISIN).
-      // The stock line runs from the buy-date rate of the lot's currency to the
-      // sale value, so: the lot's currency left inside the shares and never
-      // comes back (its parked principal is released, each covered slice books
-      // its drift up to the share purchase, `stock_sale_cross`), and the sale's
-      // currency, when foreign, is new at the sale rate (no principal of its
-      // own). A trap: the `currency === "EUR"` skip below left a USD lot sold in
-      // EUR parked forever, and a EUR lot sold in USD unparked the USD
-      // principal of the same ISIN (review r5939472090). The default keeps its
-      // path (FifoEngine marks the lot's currency only in this mode).
-      if (traditionalFx && d.acquireCurrency !== undefined && d.acquireCurrency !== d.currency) {
+      // Shares bought in one currency and sold in another (same ISIN, another
+      // listing; the stock FIFO matches by ISIN). Issue #434 for «Tradicional
+      // con divisa», issue #441 for the default; `FifoEngine({ markLotCurrency })`
+      // writes `acquireCurrency` whenever the FX engine runs. Both stock lines
+      // run from the buy-date rate of the lot's currency to the sale value, so:
+      // the lot's currency left inside the shares and never comes back (its
+      // parked principal is released, each covered slice books its drift up to
+      // the share purchase, `stock_sale_cross`, see releaseCrossCurrency), and
+      // the sale's currency, when foreign, is new at the sale rate (no principal
+      // of its own). A trap: the `currency === "EUR"` skip below left a USD lot
+      // sold in EUR parked forever, and a EUR lot sold in USD unparked the USD
+      // principal of the same ISIN (review r5939472090, issue #441).
+      if (d.acquireCurrency !== undefined && d.acquireCurrency !== d.currency) {
         if (!SECURITY_CATEGORIES.has(d.assetCategory) || d.isShort) continue;
         const date = normalizeDate(d.sellDate);
         const positionKey = FxFifoEngine.positionKey(d);
@@ -1618,7 +1619,9 @@ export class FxFifoEngine {
             quantity: new Decimal(0),
             costFcy: d.costBasisFcy,
             proceedsFcy: new Decimal(0),
-            // Unused: nothing comes back in this currency (the rows use r_b).
+            // Nothing comes back in this currency. The rate of the stock line's
+            // cost (r_b): the default's rows use it, «Tradicional con divisa»'s
+            // use each slice's own buy rate.
             ecbRate: d.acquireEcbRate,
             trigger: "stock_sale",
             brokerSource,
@@ -1626,7 +1629,8 @@ export class FxFifoEngine {
             crossCurrency: true,
           });
         }
-        if (d.currency !== "EUR" && isEcbResolvable(d.currency)) {
+        // The default skips a sale with no positive proceeds, as below.
+        if (d.currency !== "EUR" && isEcbResolvable(d.currency) && (traditionalFx || d.proceedsFcy.greaterThan(0))) {
           events.push({
             kind: "stock_sell",
             date,
@@ -2307,6 +2311,10 @@ export class FxFifoEngine {
    * covers — the keying refinement is invisible to it.)
    */
   private unparkAndReadd(event: FxEvent): void {
+    if (event.crossCurrency) {
+      this.releaseCrossCurrency(event);
+      return;
+    }
     if (this.traditionalFx) {
       this.unparkTraditional(event);
       return;
@@ -2516,19 +2524,14 @@ export class FxFifoEngine {
         if (discarded.greaterThan(EPS)) {
           // Lost principal. A covered slice books its drift as a lost-dollar row
           // (skipped when zero); an untracked one has no drift to book.
-          const cross = event.crossCurrency === true;
-          const booked =
-            p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate, cross ? "cross" : "lost");
-          if (booked && !cross) lostRows++;
-          else if (!booked) {
+          const booked = p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate, "lost");
+          if (booked) lostRows++;
+          else {
             this.record("discard", event, {
               quantityFcy: discarded,
               rate: p.rate,
-              note: cross
-                ? p.rate === null
-                  ? "acciones vendidas en otra moneda, divisa sin origen rastreado: sin diferencia de cambio"
-                  : "acciones vendidas en otra moneda: diferencia de cambio 0 (fila omitida)"
-                : p.rate === null
+              note:
+                p.rate === null
                   ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
                   : "principal perdido en la venta: diferencia de cambio 0 (fila omitida)",
             });
@@ -2584,6 +2587,50 @@ export class FxFifoEngine {
     if (lostRows > 0) this.tradStats.lostDollarSales.push({ date: event.date, currency: ccy });
     if (guardRows > 0) this.tradStats.guardSales.push({ date: event.date, currency: ccy });
     if (uncoveredQty.greaterThan(EPS)) this.tradStats.uncovered.push({ date: event.date, currency: ccy, qty: uncoveredQty });
+  }
+
+  /**
+   * Shares bought in this currency and sold in ANOTHER one (the same ISIN on
+   * another listing, or a EUR option exercise delivering them; issue #434 for
+   * «Tradicional con divisa», issue #441 for the default). Nothing comes back
+   * in this currency: the position's parked principal is released and each
+   * covered slice books its drift from buying the currency to buying the
+   * shares, `x × (r_b − r_lot)`, as a `stock_sale_cross` row, gain or loss
+   * alike. Both methods value that sale's cost at the lot's own buy-date rate
+   * `r_b` (the gain has no single currency, so V2422-20's "compute it in the
+   * currency" cannot apply), so the dollars left inside the shares at `r_b`
+   * and this row is their whole currency result; the default's loss-sale zero
+   * rule does not apply, because nothing is discarded at the sale rate. `r_b`
+   * is the slice's own buy rate in «Tradicional con divisa» and the disposal's
+   * `acquireEcbRate` (the rate of the stock line's cost) in the default. A trap:
+   * skipping the EUR sale left the dollars parked forever (100 declared on an
+   * economic 200). An untracked slice or a zero drift books nothing (`discard`).
+   */
+  private releaseCrossCurrency(event: FxEvent): void {
+    const EPS = FxFifoEngine.EPS;
+    const ccy = event.currency;
+    let need = event.costFcy ?? new Decimal(0);
+    const park = this.parked.get(FxFifoEngine.parkKey(ccy, event.positionKey));
+    while (park && need.greaterThan(EPS) && park.length > 0) {
+      const p = park[0]!;
+      const x = Decimal.min(need, p.q);
+      p.q = p.q.minus(x);
+      need = need.minus(x);
+      if (p.q.lessThan(EPS)) park.shift();
+      if (!x.greaterThan(EPS)) continue;
+      const booked = p.rate !== null && this.bookLostDollars(event, x, p, p.buyRate ?? event.ecbRate, "cross");
+      if (!booked) {
+        this.record("discard", event, {
+          quantityFcy: x,
+          rate: p.rate,
+          note:
+            p.rate === null
+              ? "acciones vendidas en otra moneda, divisa sin origen rastreado: sin diferencia de cambio"
+              : "acciones vendidas en otra moneda: diferencia de cambio 0 (fila omitida)",
+        });
+      }
+      this.accumulate("discard", ccy, x);
+    }
   }
 
   /**

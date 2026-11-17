@@ -159,8 +159,9 @@ export interface FifoDisposal {
   currency: string;
   /**
    * Currency of the consumed lot when it differs from the sale's (a position
-   * bought on one listing and sold on another). Written only under
-   * «Tradicional con divisa» (`FifoEngine({ markLotCurrency: true })`).
+   * bought on one listing and sold on another, or a crypto permuta). Written
+   * whenever the FX engine runs (`FifoEngine({ markLotCurrency: true })`), never
+   * in monodivisa.
    */
   acquireCurrency?: string;
   /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */
