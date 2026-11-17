@@ -388,3 +388,60 @@ describe("issue #438 — the warning values a refund the way the dividend's year
     expect(warnings(generateTaxReport(merged(j2025), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "0.40" }]);
   });
 });
+
+describe("issue #438 — the warning states what the earlier year loses when a late refund moves another one", () => {
+  const warnings = (r: TaxSummary) => r.messages.filter((x) => x.id === MSG_ID).map((x) => x.context);
+  /** What the 2025 rows take off 2024's 0588: 2024 filed with its own file, minus 2024 recomputed with both. */
+  const drop = (y2024: ReturnType<typeof statement>, y2025: ReturnType<typeof statement>, rates: EcbRateMap) =>
+    generateTaxReport(merged(y2024), rates, 2024)
+      .doubleTaxation.deduction.minus(generateTaxReport(merged(y2024, y2025), rates, 2024).doubleTaxation.deduction)
+      .toFixed(2);
+
+  it("a late refund that pushes an earlier refund to another dividend: the warning is the whole drop", () => {
+    // USD is 0.90 up to 2024-03-03 and 0.80 after. Dividends on 3 and 10 March
+    // 2024 withheld 1.00 each; a 1.00 refund dated 8 March goes to 10 March
+    // (nearest), so 2024 was filed with 0.90 (3 March). The 2025 file posts a
+    // 1.00 refund dated 16 March 2024: it reaches only 10 March, so the 8 March
+    // refund moves to 3 March and 2024's withholding falls from 0.90 to 0.
+    const rates = rateMap(2023, 2025);
+    for (const [day] of rates) if (day > "2024-03-03") rates.set(day, new Map([["USD", "0.80"]]));
+    const y2024 = statement(
+      [
+        cash("Dividends", "10.00", "20240303"),
+        cash("Withholding Tax", "-1.00", "20240303"),
+        cash("Dividends", "10.00", "20240310"),
+        cash("Withholding Tax", "-1.00", "20240310"),
+        cash("Withholding Tax", "1.00", "20240308"),
+      ],
+      "20240101",
+      "20241231",
+    );
+    const y2025 = statement([cash("Withholding Tax", "1.00", "20240316", "20250120")]);
+    expect(drop(y2024, y2025, rates)).toBe("0.90");
+    expect(warnings(generateTaxReport(merged(y2024, y2025), rates, 2025))).toEqual([{ year: "2024", reportYear: "2025", amount: "0.90" }]);
+  });
+
+  it("a late refund that pushes a filed refund onto this year's dividend: no drop in 2024, no warning", () => {
+    // 2024: a 27 December dividend withheld 1.00, refunded by a 1.00 row dated
+    // 30 December (2024 filed 0). 2025: a 3 January dividend withheld 1.00 and
+    // a 1.00 refund dated 26 December 2024, posted 2025, which reaches only
+    // 27 December. The 30 December refund moves to 3 January: 2024 stays 0,
+    // and 2025's own 0588 loses the moved refund. Warning about 2024 too would
+    // count the same refund twice.
+    const rates = rateMap(2023, 2025);
+    const y2024 = statement(
+      [cash("Dividends", "10.00", "20241227"), cash("Withholding Tax", "-1.00", "20241227"), cash("Withholding Tax", "1.00", "20241230")],
+      "20240101",
+      "20241231",
+    );
+    const y2025 = statement([
+      cash("Dividends", "10.00", "20250103"),
+      cash("Withholding Tax", "-1.00", "20250103"),
+      cash("Withholding Tax", "1.00", "20241226", "20250120"),
+    ]);
+    expect(drop(y2024, y2025, rates)).toBe("0.00");
+    const r = generateTaxReport(merged(y2024, y2025), rates, 2025);
+    expect(r.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+    expect(warnings(r)).toEqual([]);
+  });
+});

@@ -24,7 +24,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { detectWashSales } from "../engine/wash-sale.js";
-import { calculateDividends, matchWithholdings, withholdingCountry } from "../engine/dividends.js";
+import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
 import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
@@ -99,24 +99,24 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
  * Withholding corrections in this year's rows for dividends of earlier years
  * (issue #438), as the net EUR refund per earlier year, oldest first. This
  * year's rows are the ones posted in `year`: the broker's posting date
- * (`reportDate`, IBKR) when the export has it, else the row's own date. A part
- * of such a row counts for an earlier year Y when:
- *   - the matcher gives it to a dividend of Y posted before `year` (filed with
- *     Y's statement), e.g. a January refund of a late-December dividend;
- *   - it joins no dividend and is dated in Y (IBKR dates a late correction on
- *     its dividend's day, and Y's file was not uploaded);
- *   - it joins no dividend and is dated in the first 7 days of `year`: only a
- *     dividend of late December (Y = year − 1) can be in its reach.
- * A part given to a dividend posted in `year` is that dividend's own
- * withholding: it was never filed, so it never offsets a refund. The matcher
- * runs on the RAW rows: collapseCorrections would cancel a late reversal
- * against the original row of a merged earlier-year file. A part joined to a
- * dividend is valued as that dividend's withholding is (its rate on the
- * dividend's date when in the dividend's currency, else its own date's rate),
- * so the stated drop is what the recalculated year loses; an unjoined part at
- * its own date's rate. A part with no rate is left out. The country is the
- * dividend's withholding country (the row's own when unjoined): a Spanish one
- * went to casilla 0597, any other to 0588. Years whose net raises the
+ * (`reportDate`, IBKR) when the export has it, else the row's own date.
+ *
+ * For a dividend posted before `year` (filed with its year's statement) the
+ * drop is its withholding as filed (the matcher on the rows posted before
+ * `year`) minus its withholding with this year's rows too (the rows posted up
+ * to `year`), each valued as `calculateDividends` values it. Comparing whole
+ * withholdings, not this year's parts, counts a filed refund that a late one
+ * pushes to another dividend: it leaves its dividend, so that dividend's drop
+ * shows, and when it lands on a dividend posted in `year` it lowers that
+ * year's own boxes and never the earlier one's. A part of this year's row
+ * that joins no dividend counts at its own date's rate for the year it is
+ * dated in, or for `year − 1` when dated in the first 7 days of `year` (only a
+ * late-December dividend is in its reach). The matcher runs on the RAW rows:
+ * collapseCorrections would cancel a late reversal against the original row of
+ * a merged earlier-year file. A dividend with a part that has no rate, before
+ * or after, is left out, as is an unjoined part with no rate. The country is
+ * the dividend's withholding country (the row's own when unjoined): a Spanish
+ * one went to casilla 0597, any other to 0588. Years whose net raises the
  * withholding (≤ 0) are dropped.
  */
 function priorYearWithholdingRefunds(
@@ -127,34 +127,45 @@ function priorYearWithholdingRefunds(
 ): { year: number; spanish: boolean; amount: Decimal }[] {
   const yearOf = (date: string) => Number(normalizeDate(date).slice(0, 4));
   const postedYear = (t: CashTransaction) => yearOf(t.reportDate || t.dateTime);
-  const { dividends, withholdings, pair, parts } = matchWithholdings(cashTransactions);
+  const lookup = (date: string, currency: string) => lookupIncomeRate(date, currency, resolvedRateMap, manualRates);
   const byYear = new Map<string, { year: number; spanish: boolean; amount: Decimal }>();
-  const add = (earlierYear: number, country: string, valuedOn: CashTransaction, amount: Decimal) => {
-    const rate = lookupIncomeRate(normalizeDate(valuedOn.dateTime), valuedOn.currency, resolvedRateMap, manualRates);
-    if (rate === null) return;
+  const add = (earlierYear: number, country: string, amountEur: Decimal) => {
     const spanish = country === "ES";
     const key = `${earlierYear}|${spanish}`;
     const prev = byYear.get(key)?.amount ?? new Decimal(0);
-    byYear.set(key, { year: earlierYear, spanish, amount: prev.plus(amount.mul(rate)) });
+    byYear.set(key, { year: earlierYear, spanish, amount: prev.plus(amountEur) });
   };
-  const matched = withholdings.map(() => new Decimal(0));
-  parts.forEach((divParts, divIndex) => {
-    const div = dividends[divIndex]!;
-    const filed = postedYear(div) < year;
-    const country = withholdingCountry(div, pair[divIndex]! >= 0 ? withholdings[pair[divIndex]!] : undefined);
-    for (const { index, amount } of divParts) {
-      const w = withholdings[index]!;
-      matched[index] = matched[index]!.plus(amount);
-      if (filed && postedYear(w) === year) add(yearOf(div.dateTime), country, w.currency === div.currency ? div : w, amount);
-    }
+
+  const filed = matchWithholdings(cashTransactions.filter((t) => postedYear(t) < year));
+  const now = matchWithholdings(cashTransactions.filter((t) => postedYear(t) <= year));
+  const nowIndex = new Map(now.dividends.map((div, divIndex) => [div, divIndex]));
+  const value = (match: WithholdingMatch, divIndex: number) => {
+    const div = match.dividends[divIndex]!;
+    const rate = lookup(normalizeDate(div.dateTime), div.currency);
+    const eur = rate === null ? null : withholdingEur(match, divIndex, rate, lookup);
+    const pair = match.pair[divIndex]!;
+    return eur === null ? null : { eur, country: withholdingCountry(div, pair >= 0 ? match.withholdings[pair] : undefined) };
+  };
+  // Every dividend of the filed run was posted before `year`, and the rows
+  // posted before `year` are in both runs, so it is in the new run too.
+  filed.dividends.forEach((div, divIndex) => {
+    const before = value(filed, divIndex);
+    const after = value(now, nowIndex.get(div)!);
+    if (!before || !after) return;
+    add(yearOf(div.dateTime), before.country, before.eur);
+    add(yearOf(div.dateTime), after.country, after.eur.negated());
   });
-  withholdings.forEach((w, index) => {
+
+  const matched = now.withholdings.map(() => new Decimal(0));
+  for (const divParts of now.parts) for (const { index, amount } of divParts) matched[index] = matched[index]!.plus(amount);
+  now.withholdings.forEach((w, index) => {
     if (postedYear(w) !== year) return;
     const unmatched = new Decimal(w.amount).minus(matched[index]!);
     if (unmatched.isZero()) return;
     const date = normalizeDate(w.dateTime);
-    if (yearOf(date) < year) add(yearOf(date), withholdingCountry(w), w, unmatched);
-    else if (date <= `${year}-01-07`) add(year - 1, withholdingCountry(w), w, unmatched);
+    const earlierYear = yearOf(date) < year ? yearOf(date) : date <= `${year}-01-07` ? year - 1 : null;
+    const rate = earlierYear === null ? null : lookup(date, w.currency);
+    if (earlierYear !== null && rate !== null) add(earlierYear, withholdingCountry(w), unmatched.mul(rate));
   });
   return [...byYear.values()]
     .filter(({ amount }) => amount.greaterThan(0))

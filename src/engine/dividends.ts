@@ -309,16 +309,43 @@ export function matchWithholdings(cashTransactions: CashTransaction[]): Withhold
 }
 
 /**
+ * A dividend's withholding in EUR: the net of the parts `matchWithholdings`
+ * gave it, each row at the dividend's rate (`divRate`) when it is in the
+ * dividend's currency, else at its own rate on its own date (an EUR
+ * withholding is 1:1, never multiplied by the USD rate). Null when a part has
+ * no rate. A refund never takes more than the dividend withheld in its
+ * currency, so the net is only positive when one currency's rates differ by
+ * date (an own-date rate); that counts as no tax, never as negative tax.
+ */
+export function withholdingEur(
+  match: WithholdingMatch,
+  divIndex: number,
+  divRate: Decimal,
+  lookup: (date: string, currency: string) => Decimal | null,
+): Decimal | null {
+  const div = match.dividends[divIndex]!;
+  let netEur = new Decimal(0);
+  for (const { index, amount } of match.parts[divIndex]!) {
+    const w = match.withholdings[index]!;
+    const rate = w.currency === div.currency ? divRate : lookup(normalizeDate(w.dateTime), w.currency);
+    if (rate === null) return null;
+    netEur = netEur.plus(amount.mul(rate));
+  }
+  return netEur.isNegative() ? netEur.negated() : new Decimal(0);
+}
+
+/**
  * Process IBKR cash transactions to extract dividends with withholdings.
  * Each dividend's withholding is the net of the parts `matchWithholdings`
- * gives it, valued in EUR.
+ * gives it, valued in EUR by `withholdingEur`.
  */
 export function calculateDividends(
   cashTransactions: CashTransaction[],
   rateMap: EcbRateMap,
   options?: DividendValuationOptions,
 ): DividendEntry[] {
-  const { dividends, withholdings, pair, parts } = matchWithholdings(cashTransactions);
+  const match = matchWithholdings(cashTransactions);
+  const { dividends, withholdings, pair } = match;
 
   const lookup = (date: string, currency: string): Decimal | null =>
     options?.lookupRate ? options.lookupRate(date, currency) : getEcbRate(rateMap, date, currency);
@@ -328,26 +355,13 @@ export function calculateDividends(
     const ecbRate = lookup(normalizeDate(div.dateTime), div.currency);
     const grossAmount = new Decimal(div.amount);
     const matching = pair[divIndex]! >= 0 ? withholdings[pair[divIndex]!] : undefined;
-    // Each withholding row is valued in ITS OWN currency: the dividend's rate
-    // when the currencies match (unchanged), else its own rate on its own date
-    // (an EUR withholding is 1:1, never multiplied by the USD rate).
-    const partRates = parts[divIndex]!.map(({ index }) => {
-      const w = withholdings[index]!;
-      return w.currency === div.currency ? ecbRate : lookup(normalizeDate(w.dateTime), w.currency);
-    });
-    if (ecbRate === null || partRates.some((r) => r === null)) {
+    const withholdingTaxEur = ecbRate === null ? null : withholdingEur(match, divIndex, ecbRate, lookup);
+    if (ecbRate === null || withholdingTaxEur === null) {
       // No rate: skip the dividend. Its withholdings stay matched so they
       // can't pair with another dividend.
       options?.onUnvalued?.(div);
       return;
     }
-
-    // Net tax paid, in EUR: withheld rows are negative, refunds positive. A
-    // refund never takes more than the dividend withheld in its currency, so
-    // the net is only positive when one currency's rates differ by date (an
-    // own-date rate); that counts as no tax, never as negative tax.
-    const netEur = parts[divIndex]!.reduce((sum, p, i) => sum.plus(p.amount.mul(partRates[i]!)), new Decimal(0));
-    const withholdingTaxEur = netEur.isNegative() ? netEur.negated() : new Decimal(0);
 
     const country = withholdingCountry(div, matching);
 
