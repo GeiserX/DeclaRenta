@@ -206,6 +206,8 @@ interface CoverPass {
   trial?: { pick: Set<FxEvent>; refGross: Map<FxEvent, Decimal>; fails: (date: string) => boolean; bounded: boolean };
   /** Buys of the trial that lost dollars and took their own late cover. */
   joined: Set<FxEvent>;
+  /** Same-day covers (`currency|date`) the trial's chain switched on. */
+  joinedSame: Set<string>;
   /**
    * Latest year the trial changes: its buys' year and the dates of what they
    * took, counting only buys up to the horizon (a later buy that lost its
@@ -719,6 +721,7 @@ export class FxFifoEngine {
         left: new Map(),
         ...(trial ? { trial } : {}),
         joined: new Set(),
+        joinedSame: new Set(),
         horizon: year,
         stopped: false,
       };
@@ -819,6 +822,7 @@ export class FxFifoEngine {
       const c = pass(tEnabled, tSame, { pick: picked, refGross, fails, bounded }, year);
       if (c.stopped) return null;
       for (const b of c.joined) tEnabled.add(b);
+      for (const k of c.joinedSame) tSame.add(k);
       return { enabled: tEnabled, same: tSame, out: outcome(), horizon: c.horizon };
     };
 
@@ -2379,11 +2383,24 @@ export class FxFifoEngine {
       return lot;
     };
 
+    // The proceeds first pay back what an intraday round trip's buy borrowed (#447).
+    let repay = Decimal.min(this.borrowedIn(park, cost, event.date), readd);
+
     if (park) {
       while (need.greaterThan(EPS) && park.length > 0) {
         const p = park[0]!;
         const x = Decimal.min(need, p.q);
-        const give = Decimal.min(x, readd.minus(placed));
+        if (this.borrowedOn(p, event.date)) {
+          const back = Decimal.min(x, repay);
+          repay = repay.minus(back);
+          placed = placed.plus(back);
+          p.q = p.q.minus(x);
+          need = need.minus(x);
+          if (p.q.lessThan(EPS)) park.shift();
+          this.repayBorrowed(event, p, back, x.minus(back));
+          continue;
+        }
+        const give = Decimal.min(x, readd.minus(placed).minus(repay));
         let reAddedLot: FxLot | undefined;
         if (give.greaterThan(EPS)) {
           const reAddRate = p.rate === null ? saleRate : p.rate;
@@ -2464,7 +2481,63 @@ export class FxFifoEngine {
       this.accumulate("profit", event.currency, profit);
     }
 
-    if (this.sameDayOn.has(`${event.currency}|${event.date}`)) for (const lot of covers) this.sameDayCover(lot, event);
+    if (this.sameDayCoverOn(event)) for (const lot of covers) this.sameDayCover(lot, event);
+  }
+
+  /**
+   * An untracked slice a buy parked on `date`, the date of the sale that
+   * returns it: the currency an intraday round trip borrowed (issue #447).
+   */
+  private borrowedOn(p: ParkedSlice, date: string): boolean {
+    return p.rate === null && this.nullOfSlice.get(p)?.date === date;
+  }
+
+  /** The borrowed part (see {@link borrowedOn}) of the first `cost` units of `park`. */
+  private borrowedIn(park: ParkedSlice[] | undefined, cost: Decimal, date: string): Decimal {
+    let need = cost;
+    let sum = new Decimal(0);
+    for (const p of park ?? []) {
+      if (!need.greaterThan(FxFifoEngine.EPS)) break;
+      const x = Decimal.min(need, p.q);
+      if (this.borrowedOn(p, date)) sum = sum.plus(x);
+      need = need.minus(x);
+    }
+    return sum;
+  }
+
+  /**
+   * Intraday round trip with no currency of its own (issue #447, both methods
+   * that run the FX engine): its buy found the pool short and parked the rest
+   * `null`, so the account went below zero for the day. Its sale pays that
+   * back first: `back` units leave the books with no FX and no pool lot, and
+   * stop counting as untracked principal (step 4 of `processWithCovers`). A
+   * trap: re-adding them at the sale rate, as for an untracked opening
+   * balance, put dollars that never existed in the pool. A conversion then
+   * spent them before a later-dated late cover (−120 on an economic −40),
+   * and their transient `null` made step 4 drop that late cover (−90).
+   * `lost` units the proceeds do not reach stay untracked and are discarded,
+   * as any `null` principal lost in a sale.
+   */
+  private repayBorrowed(event: FxEvent, p: ParkedSlice, back: Decimal, lost: Decimal): void {
+    const EPS = FxFifoEngine.EPS;
+    if (back.greaterThan(EPS)) {
+      const np = this.nullOfSlice.get(p);
+      if (np) np.qty = np.qty.minus(back);
+      this.record("discard", event, {
+        quantityFcy: back,
+        rate: null,
+        note: "compraventa del mismo día sin divisa: la venta devuelve la divisa que faltó a la compra, que no entra en el saldo",
+      });
+      this.accumulate("discard", event.currency, back);
+    }
+    if (lost.greaterThan(EPS)) {
+      this.record("discard", event, {
+        quantityFcy: lost,
+        rate: null,
+        note: "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio",
+      });
+      this.accumulate("discard", event.currency, lost);
+    }
   }
 
   /**
@@ -2528,11 +2601,24 @@ export class FxFifoEngine {
       return lot;
     };
 
+    // The proceeds first pay back what an intraday round trip's buy borrowed (#447).
+    let repay = Decimal.min(this.borrowedIn(park, cost, event.date), readdCap);
+
     if (park) {
       while (need.greaterThan(EPS) && park.length > 0) {
         const p = park[0]!;
         const x = Decimal.min(need, p.q);
-        const give = Decimal.min(x, readdCap.minus(placed));
+        if (this.borrowedOn(p, event.date)) {
+          const back = Decimal.min(x, repay);
+          repay = repay.minus(back);
+          placed = placed.plus(back);
+          p.q = p.q.minus(x);
+          need = need.minus(x);
+          if (p.q.lessThan(EPS)) park.shift();
+          this.repayBorrowed(event, p, back, x.minus(back));
+          continue;
+        }
+        const give = Decimal.min(x, readdCap.minus(placed).minus(repay));
         const discarded = x.minus(give);
         p.q = p.q.minus(x);
         need = need.minus(x);
@@ -2634,7 +2720,7 @@ export class FxFifoEngine {
       });
     }
 
-    if (this.sameDayOn.has(`${ccy}|${event.date}`)) for (const lot of covers) this.sameDayCover(lot, event);
+    if (this.sameDayCoverOn(event)) for (const lot of covers) this.sameDayCover(lot, event);
 
     if (lostRows > 0) this.tradStats.lostDollarSales.push({ date: event.date, currency: ccy });
     if (guardRows > 0) this.tradStats.guardSales.push({ date: event.date, currency: ccy });
@@ -2737,6 +2823,31 @@ export class FxFifoEngine {
             : "divisa perdida en la venta: diferencia de cambio desde su compra hasta la compra de las acciones",
     });
     return true;
+  }
+
+  /**
+   * Whether the lots `sale` returns run the same-day cover: an accepted one,
+   * or, in a trial, a buy of that currency and date the trial left with more
+   * `null` than the accepted pass (only up to the horizon in a bounded trial).
+   * That is the chain of step 3 for the same-day cover, as `takeLateCover` is
+   * for the late one (issue #447, a trap: an intraday round trip whose last
+   * buy lost its dollars to an earlier late cover kept them `null` while its
+   * own sale returned as many to the pool, so step 4 dropped that late cover).
+   */
+  private sameDayCoverOn(sale: FxEvent): boolean {
+    const key = `${sale.currency}|${sale.date}`;
+    if (this.sameDayOn.has(key)) return true;
+    const c = this.cover;
+    const t = c?.trial;
+    if (!c || !t || (t.bounded && sale.date.slice(0, 4) > c.horizon)) return false;
+    const chain = this.nullParks.some(
+      (p) =>
+        p.currency === sale.currency &&
+        p.date === sale.date &&
+        p.gross.greaterThan((t.refGross.get(p.event) ?? new Decimal(0)).plus(FxFifoEngine.EPS)),
+    );
+    if (chain) c.joinedSame.add(key);
+    return chain;
   }
 
   /**
