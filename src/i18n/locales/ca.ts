@@ -83,6 +83,7 @@ const ca: TranslationKeys = {
   "fx.trigger.commission": "Comissió",
   "fx.trigger.stock_purchase": "Compra de valors",
   "fx.trigger.stock_sale": "Divisa perduda en una venda amb pèrdues",
+  "fx.trigger.stock_sale_guard": "Variació de la divisa fins a la compra de les accions",
 
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
@@ -258,7 +259,7 @@ const ca: TranslationKeys = {
   "method.tradicional_divisa.sub": "Compra i venda al seu tipus, i la teva divisa per FIFO",
   "method.tradicional_divisa.text": "Les accions es valoren al tipus del BCE del dia de compra i del dia de venda. La divisa tributa només quan surt del teu compte: quan la canvies a euros o a una altra divisa, quan pagues comissions o quan la perds en una venda amb pèrdues. El que ja vas declarar dins de les accions no es torna a comptar.",
   "method.tradicional_divisa.basis": "Valoració d'accions: criteri de la DGT per a participacions de fons en divisa (V2324-10, V0775-21), aplicat a accions. Divisa: es declara quan la canvies (V2466-08) o quan la perds en una venda amb pèrdues (V0775-21, V2324-10).",
-  "method.tradicional_divisa.risk": "Hisenda aplica a les accions el «Criteri DGT», també en una consulta de 2025 (V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri. En un cicle complet (euros → divisa → accions → divisa → euros) el total és el mateix. Canvia en quin any i en quina casella surt cada part.",
+  "method.tradicional_divisa.risk": "Hisenda aplica a les accions el «Criteri DGT (multidivisa)» (V1740-17). El 2025 va rebutjar aquest mateix càlcul per a un pis comprat i venut en dòlars (V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri. Sense vendes amb pèrdues, el total d'un cicle complet és el mateix; canvia en quin any i en quina casella surt cada part.",
   "method.monodivisa.sub": "Només compra i venda al seu tipus",
   "method.monodivisa.text": "Valora la compra al tipus del dia de compra i la venda al del dia de venda. No calcula cap resultat de divisa, ni en els teus canvis a euros ni en els automàtics del bróker.",
   "method.monodivisa.basis": "Base legal: art. 35.1 LIRPF, sense la divisa de l'art. 14.2.e. Si canvies divisa a euros, pot distorsionar el resultat.",
@@ -675,7 +676,7 @@ const ca: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
-    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros o a una altra divisa (p. ex. USD→GBP) —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que la converteixes efectivament, a euros o a una altra divisa (Art. 14.2.e LIRPF). Amb «Tradicional sense divisa (monodivisa)» aquesta secció no s'aplica. Amb «Tradicional amb divisa», la divisa també surt quan la perds en una venda amb pèrdues.",
+    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros o a una altra divisa (p. ex. USD→GBP) —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Amb el «Criteri DGT (multidivisa)», mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que la converteixes efectivament, a euros o a una altra divisa (Art. 14.2.e LIRPF). Amb «Tradicional sense divisa (monodivisa)» aquesta secció no s'aplica. Amb «Tradicional amb divisa», la variació del tipus de canvi mentre tens les accions ja va dins del seu guany o pèrdua (caselles 0328/0331). Només queda diferida la variació mentre tens la divisa en efectiu. La divisa també surt quan pagues comissions o la perds en una venda amb pèrdues.",
   "guide_rw.dividends_note":
     "Els dividends de brokers estrangers no porten retenció espanyola. La retenció estrangera (withholding tax) NO es posa aquí: es dedueix apart a la casella 0588 (doble imposició).",
   "guide_rw.interest_note":
@@ -866,15 +867,15 @@ const ca: TranslationKeys = {
   "report.fx_deferred_no_conversion":
     "No has convertit divisa a euros aquest exercici, de manera que no hi ha guany per tipus de canvi a declarar (0 a les caselles 1633/1637). La diferència de canvi mentre mantens la moneda queda diferida fins que la converteixis efectivament a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
-    "El teu bróker (p. ex. IBKR) pot mostrar un «realized forex gain» encara que no hagis passat a euros: fa servir el criteri fiscal dels EUA, no l'espanyol. Amb el criteri de DeclaRenta, el guany de divisa només es declara en convertir a euros.",
+    "El teu bróker (p. ex. IBKR) pot mostrar un «realized forex gain» encara que no hagis passat a euros: fa servir el criteri fiscal dels EUA, no l'espanyol. Amb el «Criteri DGT (multidivisa)», el guany de divisa només es declara en canviar-la a euros o a una altra divisa.",
   "report.fx_traditional_method":
     "Mètode «Tradicional amb divisa». Les accions en divisa es valoren al tipus del BCE del dia de compra (cost) i del dia de venda (venda). La divisa tributa per FIFO quan surt del teu compte: en canviar-la a euros o a una altra divisa, en pagar comissions o interessos, o en perdre-la en una venda amb pèrdues. La divisa que et retorna una venda costa el que et va costar, més el guany o la pèrdua ja declarats en aquesta venda. Així cada variació de la divisa es declara una sola vegada.",
   "report.fx_traditional_method.hint":
-    "La DGT valora així les participacions de fons en divisa (V2324-10, V0775-21). Per a accions, Hisenda calcula el guany en divisa i el passa a euros al tipus del dia de la venda (V1740-17, V2422-20, V0152-26): és el «Criteri DGT (multidivisa)». En els dos mètodes, la divisa que canvies tributa en canviar-la (V2466-08). La divisa perduda en una venda amb pèrdues tributa l'any de la venda, com en els fons (V0775-21, V2324-10). Autodeclaro descriu la mateixa valoració d'accions, amb tipus del seu bróker, però no publica com calcula la divisa. Fes servir el mateix mètode cada any.",
+    "La DGT valora així les participacions de fons en divisa (V2324-10, V0775-21). Per a accions, Hisenda calcula el guany en divisa i el passa a euros al tipus del dia de la venda (V1740-17, V2422-20, V0152-26): és el «Criteri DGT (multidivisa)». En els dos mètodes, la divisa que canvies tributa en canviar-la (V2466-08). La divisa perduda en una venda amb pèrdues tributa l'any de la venda, com en els fons (V0775-21, V2324-10). Autodeclaro descriu la mateixa valoració d'accions, amb els tipus de canvi de l'extracte del teu bróker, però no publica com calcula la divisa. Fes servir el mateix mètode cada any.",
   "report.fx_traditional_risk":
-    "Hisenda aplica a les accions el «Criteri DGT (multidivisa)» (V1740-17, V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri.",
+    "Hisenda aplica a les accions el «Criteri DGT (multidivisa)» (V1740-17). El 2025 va rebutjar aquest mateix càlcul per a un pis en dòlars (V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri.",
   "report.fx_traditional_risk.hint":
-    "En un cicle complet (euros → divisa → accions → divisa → euros) el total és el mateix en els dos mètodes. Canvia en quin any i en quina casella surt cada part, i també pot canviar la deducció per doble imposició (casella 0588). Cap consulta de la DGT avala aquest mètode per a accions. Si Hisenda recalcula, pot cobrar interessos de demora per l'impost que aquest mètode porta a un any posterior.",
+    "Si en el cicle complet (euros → divisa → accions → divisa → euros) no hi ha vendes amb pèrdues, els dos mètodes donen el mateix total. Canvia en quin any i en quina casella surt cada part, i també pot canviar la deducció per doble imposició (casella 0588). Amb vendes amb pèrdues, aquest mètode declara també la divisa perduda i el total és diferent. Cap consulta de la DGT avala aquest mètode per a accions. Si Hisenda recalcula, pot cobrar interessos de demora per l'impost que aquest mètode porta a un any posterior.",
   "report.fx_traditional_no_conversion":
     "Aquest any no has canviat divisa. La variació del {{ccy}} mentre tenies les accions ja és al seu guany o pèrdua. La variació mentre tens els {{ccy}} en efectiu es declararà quan els canviïs.",
   "report.fx_traditional_no_conversion.hint":
@@ -882,7 +883,11 @@ const ca: TranslationKeys = {
   "report.fx_traditional_lost_dollars":
     "En {{n}} venda(es) amb pèrdues vas recuperar menys {{ccy}} dels que vas invertir. Aquests {{ccy}} perduts surten del teu compte. La seva diferència de canvi, des que els vas comprar fins que vas comprar les accions ({{amount}} €), es declara aquest any a les caselles 1633/1637.",
   "report.fx_traditional_lost_dollars.hint":
-    "El «Criteri DGT (multidivisa)» no declara res en aquest cas, perquè aquests {{ccy}} no es van canviar mai a euros. Aquest mètode sí que ho declara, com la DGT en els fons en divisa (V0775-21, V2324-10): la variació de la divisa abans de la compra tributa l'any de la venda. L'ordre FIFO decideix quins {{ccy}} es van perdre. Ho veuràs al detall de les caselles 1633/1637 com a «Venda de valors».",
+    "El «Criteri DGT (multidivisa)» no declara res en aquest cas, perquè aquests {{ccy}} no es van canviar mai a euros. Aquest mètode sí que ho declara, com la DGT en els fons en divisa (V0775-21, V2324-10): la variació de la divisa abans de la compra tributa l'any de la venda. L'ordre FIFO decideix quins {{ccy}} es van perdre. Ho veuràs al detall de les caselles 1633/1637 com a «Divisa perduda en una venda amb pèrdues».",
+  "report.fx_traditional_guard":
+    "En {{n}} venda(es), la caiguda del {{ccy}} des de la compra de les accions supera el que et va costar aquesta divisa. La seva diferència de canvi fins a la compra de les accions ({{amount}} €) es declara aquest any a les caselles 1633/1637, i aquests {{ccy}} tornen al tipus del dia de la venda.",
+  "report.fx_traditional_guard.hint":
+    "Passa quan el tipus de canvi es mou molt (més o menys el doble) entre la compra de la divisa i la venda de les accions. Sense aquesta regla, aquests {{ccy}} tindrien un cost negatiu. Ho veuràs al detall de les caselles 1633/1637 com a «Variació de la divisa fins a la compra de les accions».",
   "report.fx_traditional_inflight":
     "Aquest any has canviat {{qty}} {{ccy}} que vénen de vendes d'accions de {{years}}. Aquest mètode dona per fet que la variació del {{ccy}} mentre tenies aquestes accions ({{amount}} €) ja es va declarar dins del guany o la pèrdua d'aquell any.",
   "report.fx_traditional_inflight.hint":

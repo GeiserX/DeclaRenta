@@ -50,6 +50,7 @@ export const METHOD_NOTE_IDS: ReadonlySet<string> = new Set([
   "report.fx_traditional_method",
   "report.fx_traditional_no_conversion",
   "report.fx_traditional_lost_dollars",
+  "report.fx_traditional_guard",
   "report.fx_traditional_uncovered",
 ]);
 

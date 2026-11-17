@@ -23,6 +23,7 @@ const TRAD_IDS = [
   "fx_traditional_risk",
   "fx_traditional_no_conversion",
   "fx_traditional_lost_dollars",
+  "fx_traditional_guard",
   "fx_traditional_inflight",
   "fx_traditional_uncovered",
   "fx_traditional_orphan",
@@ -111,6 +112,24 @@ describe("messages per method", () => {
     expect(ctx(run(sc("f"), TRAD).get(2024)!.report.messages, "lost_dollars")).toEqual({ n: "1", ccy: "USD", amount: "20.00" });
   });
 
+  it("negative-cost guard (t): its own note and trigger, never counted as lost dollars", () => {
+    // t: 1000 USD bought at 0.50, shares bought at 1.20, sold for 1100 USD at 0.60.
+    // The sale returned more dollars than it spent, so nothing was lost.
+    const r = run(sc("t"), TRAD).get(2024)!.report;
+    expect(ctx(r.messages, "lost_dollars")).toBeUndefined();
+    expect(ctx(r.messages, "guard")).toEqual({ n: "1", ccy: "USD", amount: "700.00" });
+    expect(r.messages.find((m) => m.id === "report.fx_traditional_guard")?.severity).toBe("info");
+    const rows = r.fxGains.disposals.filter((d) => d.trigger.startsWith("stock_sale"));
+    expect(rows.map((d) => d.trigger)).toEqual(["stock_sale_guard"]);
+    expect(ctx(run(sc("t"), { ...TRAD, titulares: 2 }).get(2024)!.report.messages, "guard")).toEqual({ n: "1", ccy: "USD", amount: "350.00" });
+  });
+
+  it("a losing sale (f) books lost dollars and no guard row", () => {
+    const r = run(sc("f"), TRAD).get(2024)!.report;
+    expect(ctx(r.messages, "guard")).toBeUndefined();
+    expect(r.fxGains.disposals.some((d) => d.trigger === "stock_sale_guard")).toBe(false);
+  });
+
   it("no conversion this year (h2 2024): the sale's dollars wait in cash", () => {
     const ms = run(sc("h2"), TRAD).get(2024)!.report.messages;
     expect(ctx(ms, "no_conversion")).toEqual({ ccy: "USD" });
@@ -166,7 +185,7 @@ describe("es locale = engine text, byte for byte", () => {
     const take = (ms: TaxMessage[]) => {
       for (const m of ms) if (!seen.has(m.id)) seen.set(m.id, m);
     };
-    for (const id of ["a", "f", "g", "h2", "r"]) for (const v of run(sc(id), TRAD).values()) take(v.report.messages);
+    for (const id of ["a", "f", "g", "h2", "r", "t"]) for (const v of run(sc(id), TRAD).values()) take(v.report.messages);
     for (const id of ["a", "h2"]) {
       for (const v of run(sc(id), {}).values()) take(v.report.messages);
       for (const v of run(sc(id), MONO).values()) take(v.report.messages);

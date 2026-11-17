@@ -83,6 +83,7 @@ const eu: TranslationKeys = {
   "fx.trigger.commission": "Komisioa",
   "fx.trigger.stock_purchase": "Balore-erosketa",
   "fx.trigger.stock_sale": "Galerak dituen salmenta batean galdutako dibisa",
+  "fx.trigger.stock_sale_guard": "Dibisaren aldaketa akzioak erosi arte",
 
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
@@ -259,7 +260,7 @@ const eu: TranslationKeys = {
   "method.tradicional_divisa.sub": "Erosketa eta salmenta bakoitza bere tasan, eta zure dibisa FIFO bidez",
   "method.tradicional_divisa.text": "Akzioak erosketa-eguneko eta salmenta-eguneko EBZren tasan balioesten dira. Dibisak zure kontutik irteten denean bakarrik tributatzen du: eurotara edo beste dibisa batera aldatzen duzunean, komisioak ordaintzean edo galerak dituen salmenta batean galtzen duzunean. Akzioen barruan aitortu duzuna ez da berriro zenbatzen.",
   "method.tradicional_divisa.basis": "Akzioen balioespena: DGTren irizpidea dibisako funts-partaidetzetarako (V2324-10, V0775-21), akzioei aplikatua. Dibisa: aldatzen duzunean aitortzen da (V2466-08), edo galerak dituen salmenta batean galtzen duzunean (V0775-21, V2324-10).",
-  "method.tradicional_divisa.risk": "Ogasunak «DGT irizpidea» aplikatzen die akzioei, baita 2025eko kontsulta batean ere (V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake. Ziklo oso batean (euroak → dibisa → akzioak → dibisa → euroak) guztizkoa berdina da. Zati bakoitza zein urtetan eta zein laukitan ateratzen den aldatzen da.",
+  "method.tradicional_divisa.risk": "Ogasunak «DGTren irizpidea (multidibisa)» aplikatzen die akzioei (V1740-17). 2025ean kalkulu bera baztertu zuen dolarretan erosi eta saldutako pisu baterako (V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake. Galerak dituen salmentarik gabe, ziklo oso baten guztizkoa berdina da; zati bakoitza zein urtetan eta zein laukitan ateratzen den aldatzen da.",
   "method.monodivisa.sub": "Erosketa eta salmenta bakarrik, bakoitza bere tasan",
   "method.monodivisa.text": "Erosketa erosketa-eguneko tasan eta salmenta salmenta-eguneko tasan balioesten ditu. Ez du dibisa-emaitzarik batere kalkulatzen, ez zure euro-aldaketetan, ez artekariaren aldaketa automatikoetan.",
   "method.monodivisa.basis": "Lege-oinarria: PFEZLren 35.1 art., 14.2.e art.-ko dibisarik gabe. Dibisa eurotara aldatzen baduzu, emaitza distortsiona dezake.",
@@ -675,7 +676,7 @@ const eu: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note":
-    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro edo beste dibisa batera bihurtzen duzunean agertzen dira (adib. USD→GBP) —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. Dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da benetan bihurtu arte, euro edo beste dibisa batera (Art. 14.2.e LIRPF). «Tradizionala dibisarik gabe (monodibisa)» metodoarekin atal hau ez da aplikagarria. «Tradizionala dibisarekin» metodoarekin, dibisa galerak dituen salmenta batean galtzen duzunean ere ateratzen da.",
+    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro edo beste dibisa batera bihurtzen duzunean agertzen dira (adib. USD→GBP) —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. «DGTren irizpidea (multidibisa)» metodoarekin, dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da benetan bihurtu arte, euro edo beste dibisa batera (Art. 14.2.e LIRPF). «Tradizionala dibisarik gabe (monodibisa)» metodoarekin atal hau ez da aplikagarria. «Tradizionala dibisarekin» metodoarekin, akzioak dauzkazun bitarteko kanbio-tasaren aldaketa haien irabazi edo galeraren barruan doa jada (0328/0331 laukiak). Dibisa eskudirutan daukazun bitarteko aldaketa bakarrik geratzen da atzeratuta. Dibisa komisioak ordaintzen dituzunean edo galerak dituen salmenta batean galtzen duzunean ere ateratzen da.",
   "guide_rw.dividends_note":
     "Atzerriko broker-en dibidenduek ez dute Espainiako atxikipenik. Atzerriko atxikipena (withholding tax) EZ da hemen jartzen: 0588 gelaxkan kentzen da bereizita (zergapetze bikoitza).",
   "guide_rw.interest_note":
@@ -868,15 +869,15 @@ const eu: TranslationKeys = {
   "report.fx_deferred_no_conversion":
     "Ekitaldi honetan ez duzu dibisarik euro bihurtu, beraz, ez dago kanbio-tasagatiko irabazirik aitortzeko (0 1633/1637 laukietan). Moneta mantentzen duzun bitarteko kanbio-diferentzia atzeratuta geratzen da, benetan euro bihurtu arte (14.2.e art. LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
-    "Zure brokerrak (adib. IBKR) «realized forex gain» bat erakuts dezake euro bihurtu ez baduzu ere: AEBko zerga-irizpidea erabiltzen du, ez Espainiakoa. DeclaRentaren irizpidearekin, dibisa-irabazia euro bihurtzean bakarrik aitortzen da.",
+    "Zure brokerrak (adib. IBKR) «realized forex gain» bat erakuts dezake euro bihurtu ez baduzu ere: AEBko zerga-irizpidea erabiltzen du, ez Espainiakoa. «DGTren irizpidea (multidibisa)» metodoarekin, dibisa-irabazia euro edo beste dibisa batera bihurtzean bakarrik aitortzen da.",
   "report.fx_traditional_method":
     "«Tradizionala dibisarekin» metodoa. Dibisako akzioak EBZren erosketa-eguneko tasan (kostua) eta salmenta-eguneko tasan (salmenta) balioesten dira. Dibisak FIFO bidez tributatzen du zure kontutik irteten denean: euro edo beste dibisa bat bihurtzean, komisioak edo interesak ordaintzean, edo galerak dituen salmenta batean galtzean. Salmenta batek itzultzen dizun dibisak kostatu zitzaizuna balio du, gehi salmenta horretan aitortutako irabazia edo galera. Horrela, dibisaren aldaketa bakoitza behin bakarrik aitortzen da.",
   "report.fx_traditional_method.hint":
-    "DGTk horrela balioesten ditu dibisako inbertsio-funtsen partaidetzak (V2324-10, V0775-21). Akzioetarako, Ogasunak irabazia dibisan kalkulatzen du eta salmenta-eguneko tasan pasatzen du eurotara (V1740-17, V2422-20, V0152-26): hori da «DGTren irizpidea (multidibisa)». Bi metodoetan, bihurtzen duzun dibisak bihurtzean tributatzen du (V2466-08). Galerak dituen salmenta batean galdutako dibisak salmentaren urtean tributatzen du, funtsetan bezala (V0775-21, V2324-10). Autodeclarok akzioen balioespen bera deskribatzen du, bere brokerraren tasekin, baina ez du argitaratzen nola kalkulatzen duen dibisa. Erabili metodo bera urtero.",
+    "DGTk horrela balioesten ditu dibisako inbertsio-funtsen partaidetzak (V2324-10, V0775-21). Akzioetarako, Ogasunak irabazia dibisan kalkulatzen du eta salmenta-eguneko tasan pasatzen du eurotara (V1740-17, V2422-20, V0152-26): hori da «DGTren irizpidea (multidibisa)». Bi metodoetan, bihurtzen duzun dibisak bihurtzean tributatzen du (V2466-08). Galerak dituen salmenta batean galdutako dibisak salmentaren urtean tributatzen du, funtsetan bezala (V0775-21, V2324-10). Autodeclarok akzioen balioespen bera deskribatzen du, zure brokerraren kontu-estraktuko kanbio-tasekin, baina ez du argitaratzen nola kalkulatzen duen dibisa. Erabili metodo bera urtero.",
   "report.fx_traditional_risk":
-    "Ogasunak «DGTren irizpidea (multidibisa)» aplikatzen die akzioei (V1740-17, V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake.",
+    "Ogasunak «DGTren irizpidea (multidibisa)» aplikatzen die akzioei (V1740-17). 2025ean kalkulu bera baztertu zuen dolarretan erositako pisu baterako (V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake.",
   "report.fx_traditional_risk.hint":
-    "Ziklo oso batean (euroak → dibisa → akzioak → dibisa → euroak) guztizkoa bera da bi metodoetan. Aldatzen dena da zati bakoitza zein urtetan eta zein laukitan ateratzen den, eta nazioarteko zergapetze bikoitzagatiko kenkaria (0588 laukia) ere alda daiteke. DGTren kontsultarik ez dago metodo hau akzioetarako babesten duenik. Ogasunak berriro kalkulatzen badu, berandutze-interesak kobra ditzake metodo honek geroko urte batera eramaten duen zergagatik.",
+    "Ziklo osoan (euroak → dibisa → akzioak → dibisa → euroak) galerak dituen salmentarik ez badago, bi metodoek guztizko bera ematen dute. Aldatzen dena da zati bakoitza zein urtetan eta zein laukitan ateratzen den, eta nazioarteko zergapetze bikoitzagatiko kenkaria (0588 laukia) ere alda daiteke. Galerak dituzten salmentekin, metodo honek galdutako dibisa ere aitortzen du eta guztizkoa desberdina da. DGTren kontsultarik ez dago metodo hau akzioetarako babesten duenik. Ogasunak berriro kalkulatzen badu, berandutze-interesak kobra ditzake metodo honek geroko urte batera eramaten duen zergagatik.",
   "report.fx_traditional_no_conversion":
     "Aurten ez duzu dibisarik bihurtu. Akzioak zenituen bitartean {{ccy}}-k izandako aldaketa haien irabazian edo galeran dago jada. {{ccy}} eskudirutan dituzun bitarteko aldaketa bihurtzen dituzunean aitortuko da.",
   "report.fx_traditional_no_conversion.hint":
@@ -884,7 +885,11 @@ const eu: TranslationKeys = {
   "report.fx_traditional_lost_dollars":
     "Galerak dituzten {{n}} salmentatan inbertitu zenituen baino {{ccy}} gutxiago berreskuratu zenituen. Galdutako {{ccy}} horiek zure kontutik irteten dira. Haien kanbio-diferentzia, erosi zenituenetik akzioak erosi zenituen arte ({{amount}} €), aurten aitortzen da 1633/1637 laukietan.",
   "report.fx_traditional_lost_dollars.hint":
-    "«DGTren irizpidea (multidibisa)» metodoak ez du ezer aitortzen kasu honetan, {{ccy}} horiek ez zirelako inoiz euro bihurtu. Metodo honek aitortu egiten du, DGTk dibisako funtsetan egiten duen bezala (V0775-21, V2324-10): erosketaren aurreko dibisaren aldaketak salmentaren urtean tributatzen du. FIFO ordenak erabakitzen du zein {{ccy}} galdu ziren. 1633/1637 laukien xehetasunean ikusiko duzu, «Balore-salmenta» gisa.",
+    "«DGTren irizpidea (multidibisa)» metodoak ez du ezer aitortzen kasu honetan, {{ccy}} horiek ez zirelako inoiz euro bihurtu. Metodo honek aitortu egiten du, DGTk dibisako funtsetan egiten duen bezala (V0775-21, V2324-10): erosketaren aurreko dibisaren aldaketak salmentaren urtean tributatzen du. FIFO ordenak erabakitzen du zein {{ccy}} galdu ziren. 1633/1637 laukien xehetasunean ikusiko duzu, «Galerak dituen salmenta batean galdutako dibisa» gisa.",
+  "report.fx_traditional_guard":
+    "{{n}} salmentatan, akzioak erosi zirenetik {{ccy}} dibisaren jaitsiera dibisa horrek kostatu zizuna baino handiagoa da. Haren kanbio-diferentzia akzioak erosi arte ({{amount}} €) aurten aitortzen da 1633/1637 laukietan, eta {{ccy}} horiek salmenta-eguneko tasan itzultzen dira.",
+  "report.fx_traditional_guard.hint":
+    "Kanbio-tasa asko mugitzen denean gertatzen da (gutxi gorabehera bikoitza) dibisa erosten denetik akzioak saltzen diren arte. Arau hau gabe, {{ccy}} horiek kostu negatiboa izango lukete. 1633/1637 laukien xehetasunean ikusiko duzu, «Dibisaren aldaketa akzioak erosi arte» gisa.",
   "report.fx_traditional_inflight":
     "Aurten {{years}} urteko akzio-salmentetatik datozen {{qty}} {{ccy}} bihurtu dituzu. Metodo honek ematen du akzio horiek zenituen bitartean {{ccy}}-k izandako aldaketa ({{amount}} €) urte hartako irabazian edo galeran aitortu zela jada.",
   "report.fx_traditional_inflight.hint":

@@ -517,7 +517,10 @@ export interface FxShift {
  *
  * Under «Tradicional con divisa» (issue #434) a `stock_sale` DISPOSAL also
  * exists: the "lost-dollar" row of a losing sale (currency spent on shares that
- * did not come back), booked at the sale.
+ * did not come back), booked at the sale. A `stock_sale_guard` DISPOSAL is the
+ * negative-cost guard of the same mode: the currency did come back, but its
+ * fall since the share purchase exceeds its cost, so its drift up to the
+ * purchase is booked at the sale and it returns at the sale rate.
  *
  * `stock_purchase` / `stock_sale` label the divisa-side effect of a
  * foreign-currency SECURITY trade under the carry-basis-defer model (issue #230
@@ -529,7 +532,14 @@ export interface FxShift {
  * buy-side consumption produced phantom prior-year-lot gains) and re-added here
  * for the parked-basis encoding, which never emits a disposal on a buy.
  */
-export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_purchase" | "stock_sale";
+export type FxTrigger =
+  | "conversion"
+  | "dividend"
+  | "interest"
+  | "commission"
+  | "stock_purchase"
+  | "stock_sale"
+  | "stock_sale_guard";
 
 /**
  * Movement kinds recorded in the FX-FIFO trace ({@link FxTraceEvent}).

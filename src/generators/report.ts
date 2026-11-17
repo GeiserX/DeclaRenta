@@ -420,6 +420,8 @@ const fmt2 = (d: Decimal): string => d.toFixed(2);
  *  - `fx_traditional_no_conversion` (info): no conversion this year, with
  *    foreign-currency sales.
  *  - `fx_traditional_lost_dollars` (info): the year has lost-dollar rows.
+ *  - `fx_traditional_guard` (info): the year has negative-cost guard rows
+ *    (the currency came back, but its fall exceeds its cost).
  *  - `fx_traditional_inflight` (warning, |amount| ≥ 1 €): currency converted
  *    this year carries drift a stock sale of an EARLIER year declared; off by
  *    that amount if that year was filed with the default method.
@@ -448,14 +450,14 @@ function traditionalFxMessages(input: {
       severity: "info",
       message:
         "Método «Tradicional con divisa». Las acciones en divisa se valoran al tipo del BCE del día de compra (coste) y del día de venta (venta). La divisa tributa por FIFO cuando sale de tu cuenta: al cambiarla a euros o a otra divisa, al pagar comisiones o intereses, o al perderla en una venta con pérdidas. La divisa que te devuelve una venta cuesta lo que te costó, más la ganancia o pérdida ya declarada en esa venta. Así cada variación de la divisa se declara una sola vez.",
-      hint: "La DGT valora así las participaciones de fondos en divisa (V2324-10, V0775-21). Para acciones, Hacienda calcula la ganancia en divisa y la pasa a euros al tipo del día de la venta (V1740-17, V2422-20, V0152-26): es el «Criterio DGT (multidivisa)». En los dos métodos, la divisa que cambias tributa al cambiarla (V2466-08). La divisa perdida en una venta con pérdidas tributa el año de la venta, como en los fondos (V0775-21, V2324-10). Autodeclaro describe la misma valoración de acciones, con tipos de su bróker, pero no publica cómo calcula la divisa. Usa el mismo método todos los años.",
+      hint: "La DGT valora así las participaciones de fondos en divisa (V2324-10, V0775-21). Para acciones, Hacienda calcula la ganancia en divisa y la pasa a euros al tipo del día de la venta (V1740-17, V2422-20, V0152-26): es el «Criterio DGT (multidivisa)». En los dos métodos, la divisa que cambias tributa al cambiarla (V2466-08). La divisa perdida en una venta con pérdidas tributa el año de la venta, como en los fondos (V0775-21, V2324-10). Autodeclaro describe la misma valoración de acciones, con los tipos de cambio del extracto de tu bróker, pero no publica cómo calcula la divisa. Usa el mismo método todos los años.",
     },
     {
       id: "report.fx_traditional_risk",
       severity: "warning",
       message:
-        "Hacienda aplica a las acciones el «Criterio DGT (multidivisa)» (V1740-17, V1615-25). Si revisa tu declaración, puede recalcularla con ese criterio.",
-      hint: "En un ciclo completo (euros → divisa → acciones → divisa → euros) el total es el mismo en los dos métodos. Cambia en qué año y en qué casilla sale cada parte, y también puede cambiar la deducción por doble imposición (casilla 0588). Ninguna consulta de la DGT respalda este método para acciones. Si Hacienda recalcula, puede cobrar intereses de demora por el impuesto que este método lleva a un año posterior.",
+        "Hacienda aplica a las acciones el «Criterio DGT (multidivisa)» (V1740-17). En 2025 rechazó este mismo cálculo para un piso en dólares (V1615-25). Si revisa tu declaración, puede recalcularla con ese criterio.",
+      hint: "Si en el ciclo completo (euros → divisa → acciones → divisa → euros) no hay ventas con pérdidas, los dos métodos dan el mismo total. Cambia en qué año y en qué casilla sale cada parte, y también puede cambiar la deducción por doble imposición (casilla 0588). Con ventas con pérdidas, este método declara también la divisa perdida y el total es distinto. Ninguna consulta de la DGT respalda este método para acciones. Si Hacienda recalcula, puede cobrar intereses de demora por el impuesto que este método lleva a un año posterior.",
     },
   ];
 
@@ -481,7 +483,22 @@ function traditionalFxMessages(input: {
       id: "report.fx_traditional_lost_dollars",
       severity: "info",
       message: `En ${n} venta(s) con pérdidas recuperaste menos ${ccy} de los que invertiste. Esos ${ccy} perdidos salen de tu cuenta. Su diferencia de cambio, desde que los compraste hasta que compraste las acciones (${amount} €), se declara este año en las casillas 1633/1637.`,
-      hint: `El «Criterio DGT (multidivisa)» no declara nada en este caso, porque esos ${ccy} nunca se cambiaron a euros. Este método sí lo declara, como la DGT en los fondos en divisa (V0775-21, V2324-10): la variación de la divisa antes de la compra tributa el año de la venta. El orden FIFO decide qué ${ccy} se perdieron. Lo verás en el detalle de las casillas 1633/1637 como «Venta de valores».`,
+      hint: `El «Criterio DGT (multidivisa)» no declara nada en este caso, porque esos ${ccy} nunca se cambiaron a euros. Este método sí lo declara, como la DGT en los fondos en divisa (V0775-21, V2324-10): la variación de la divisa antes de la compra tributa el año de la venta. El orden FIFO decide qué ${ccy} se perdieron. Lo verás en el detalle de las casillas 1633/1637 como «Divisa perdida en una venta con pérdidas».`,
+      context: { n, ccy, amount },
+    });
+  }
+
+  // Negative-cost guard rows: the currency came back, so they are not lost dollars.
+  const guardRows = fxDisposals.filter((d) => d.trigger === "stock_sale_guard");
+  if (guardRows.length > 0) {
+    const ccy = uniq(guardRows.map((d) => d.currency));
+    const n = String(stats.guardSales.filter((x) => x.date.startsWith(yearStr)).length);
+    const amount = fmt2(guardRows.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)));
+    out.push({
+      id: "report.fx_traditional_guard",
+      severity: "info",
+      message: `En ${n} venta(s), la caída del ${ccy} desde la compra de las acciones supera lo que te costó esa divisa. Su diferencia de cambio hasta la compra de las acciones (${amount} €) se declara este año en las casillas 1633/1637, y esos ${ccy} vuelven al tipo del día de la venta.`,
+      hint: `Pasa cuando el tipo de cambio se mueve mucho (más o menos el doble) entre la compra de la divisa y la venta de las acciones. Sin esta regla, esos ${ccy} tendrían un coste negativo. Lo verás en el detalle de las casillas 1633/1637 como «Variación de la divisa hasta la compra de las acciones».`,
       context: { n, ccy, amount },
     });
   }
@@ -979,7 +996,7 @@ export function generateTaxReport(
         severity: "info",
         message:
           "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
-        hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Bajo el criterio de DeclaRenta solo se declara la ganancia de divisa al convertir a euros.",
+        hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Con el «Criterio DGT (multidivisa)», la ganancia de divisa solo se declara al cambiarla a euros o a otra divisa.",
       });
     }
   }

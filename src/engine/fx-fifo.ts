@@ -152,6 +152,8 @@ export interface TraditionalParkedAtYearEnd {
 export interface TraditionalFxStats {
   /** One entry per losing sale that booked at least one lost-dollar row. */
   lostDollarSales: { date: string; currency: string }[];
+  /** One entry per sale that booked at least one negative-cost guard row. */
+  guardSales: { date: string; currency: string }[];
   /** Untracked (`null`) principal re-added at a sale, one entry per sale. */
   uncovered: { date: string; currency: string; qty: Decimal }[];
   /** `${year}|${currency}` → shifts of earlier years consumed by that year's disposals. */
@@ -378,6 +380,7 @@ export class FxFifoEngine {
   /** «Tradicional con divisa» run state (see {@link getTraditionalStats}). */
   private tradStats: TraditionalFxStats = {
     lostDollarSales: [],
+    guardSales: [],
     uncovered: [],
     inflight: new Map(),
     parkedAtCheckpoint: [],
@@ -680,7 +683,7 @@ export class FxFifoEngine {
   private runEvents(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
     this.fxMissing.clear();
     this.parked.clear();
-    this.tradStats = { lostDollarSales: [], uncovered: [], inflight: new Map(), parkedAtCheckpoint: [] };
+    this.tradStats = { lostDollarSales: [], guardSales: [], uncovered: [], inflight: new Map(), parkedAtCheckpoint: [] };
     this.nullParks = [];
     this.trace = [];
     this.traceSeq = 0;
@@ -1993,8 +1996,9 @@ export class FxFifoEngine {
    *  - a `null` (untracked) slice comes back at `r_s`, dated at the sale;
    *  - the profit `P − C` comes back at `r_s`, dated at the sale.
    * Guard (row 8): when `r_lot + r_s − r_b < 0` (about a 2× swing), the slice's
-   * own drift `x × (r_b − r_lot)` is booked now as a lost-dollar row and the
-   * slice comes back at `r_s`. A lot never gets a negative cost.
+   * own drift `x × (r_b − r_lot)` is booked now as a guard row (trigger
+   * `stock_sale_guard`, same figures as a lost-dollar row) and the slice comes
+   * back at `r_s`. A lot never gets a negative cost.
    *
    * LOST DOLLARS (row 6, departs ON PURPOSE from the default's loss-sale rule
    * "zero in the casillas", agreed in #230 for the default only). On a loss,
@@ -2024,6 +2028,7 @@ export class FxFifoEngine {
     const readdCap = Decimal.min(cost, proc);
     let placed = new Decimal(0);
     let lostRows = 0;
+    let guardRows = 0;
     let uncoveredQty = new Decimal(0);
     const park = this.parked.get(FxFifoEngine.parkKey(ccy, event.positionKey));
     // Every lot this sale returns first covers `null` slices parked the same day.
@@ -2058,7 +2063,7 @@ export class FxFifoEngine {
             const shifted = p.rate.plus(shift);
             if (shifted.lessThan(0)) {
               // Guard (row 8): book the slice's own drift now, re-add at r_s.
-              if (this.bookLostDollars(event, give, p, buyRate)) lostRows++;
+              if (this.bookLostDollars(event, give, p, buyRate, true)) guardRows++;
               lot = readd(ccy, event.date, give, saleRate, p.brokerSource, shifts);
               note = `guarda de coste negativo: diferencia hasta la compra declarada ahora; re-añadido al tipo de venta ${saleRate.toString()} €/${ccy}`;
             } else {
@@ -2129,6 +2134,7 @@ export class FxFifoEngine {
     if (this.coversOn && !this.coversOff.has(ccy)) for (const lot of covers) this.sameDayCover(lot, event);
 
     if (lostRows > 0) this.tradStats.lostDollarSales.push({ date: event.date, currency: ccy });
+    if (guardRows > 0) this.tradStats.guardSales.push({ date: event.date, currency: ccy });
     if (uncoveredQty.greaterThan(EPS)) this.tradStats.uncovered.push({ date: event.date, currency: ccy, qty: uncoveredQty });
   }
 
@@ -2136,8 +2142,10 @@ export class FxFifoEngine {
    * One lost-dollar row (spec row 6 / guard row 8): `q` units of a covered
    * parked slice leave the account at the sale. Proceeds `q × r_b`, cost
    * `q × r_lot`. Returns false (and books nothing) when the gain is zero.
+   * A guard row (`guard`) has the same figures, but the currency came back, so
+   * it carries its own trigger (`stock_sale_guard`) and its own message.
    */
-  private bookLostDollars(event: FxEvent, q: Decimal, p: ParkedSlice, buyRate: Decimal): boolean {
+  private bookLostDollars(event: FxEvent, q: Decimal, p: ParkedSlice, buyRate: Decimal, guard = false): boolean {
     const rate = p.rate!;
     const proceedsEur = q.mul(buyRate);
     const costBasisEur = q.mul(rate);
@@ -2153,7 +2161,7 @@ export class FxFifoEngine {
       proceedsEur,
       costBasisEur,
       gainLossEur,
-      trigger: "stock_sale",
+      trigger: guard ? "stock_sale_guard" : "stock_sale",
       holdingPeriodDays: daysBetween(acquireDate, event.date),
       lotId: "PARKED",
       ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
@@ -2167,7 +2175,9 @@ export class FxFifoEngine {
       proceedsEur,
       gainLossEur,
       lotAcquireDate: acquireDate,
-      note: "divisa perdida en la venta: diferencia de cambio desde su compra hasta la compra de las acciones",
+      note: guard
+        ? "guarda de coste negativo: diferencia de cambio desde la compra de la divisa hasta la compra de las acciones"
+        : "divisa perdida en la venta: diferencia de cambio desde su compra hasta la compra de las acciones",
     });
     return true;
   }

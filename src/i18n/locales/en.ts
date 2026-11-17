@@ -82,6 +82,7 @@ const en: TranslationKeys = {
   "fx.trigger.commission": "Commission",
   "fx.trigger.stock_purchase": "Securities purchase",
   "fx.trigger.stock_sale": "Currency lost in a losing sale",
+  "fx.trigger.stock_sale_guard": "Currency change up to the share purchase",
 
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
@@ -258,7 +259,7 @@ const en: TranslationKeys = {
   "method.tradicional_divisa.sub": "Buy and sale at their own rates, and your currency by FIFO",
   "method.tradicional_divisa.text": "Shares are valued at the ECB rate of the purchase date and of the sale date. Currency is taxed only when it leaves your account: when you convert it to euros or to another currency, pay fees, or lose it in a losing sale. What you already declared inside the shares is not counted again.",
   "method.tradicional_divisa.basis": "Share valuation: the DGT criterion for foreign-currency fund units (V2324-10, V0775-21), applied to shares. Currency: declared when you convert it (V2466-08) or lose it in a losing sale (V0775-21, V2324-10).",
-  "method.tradicional_divisa.risk": "The tax authority applies the «DGT criterion» to shares, also in a 2025 ruling (V1615-25). If it reviews your return, it may recompute it with that criterion. Over a full cycle (euros → currency → shares → currency → euros) the total is the same. What changes is the year and the box where each part appears.",
+  "method.tradicional_divisa.risk": "The tax authority applies the «DGT criterion (multi-currency)» to shares (V1740-17). In 2025 it rejected this same calculation for a flat bought and sold in dollars (V1615-25). If it reviews your return, it may recompute it with that criterion. With no losing sales, the total of a full cycle is the same; what changes is the year and the box where each part appears.",
   "method.monodivisa.sub": "Only buy and sale at their own rates",
   "method.monodivisa.text": "Values the purchase at the purchase-date rate and the sale at the sale-date rate. Computes no currency result at all, neither for your conversions to euros nor for the broker's automatic ones.",
   "method.monodivisa.basis": "Legal basis: Art. 35.1 LIRPF, without the currency rule of Art. 14.2.e. If you convert currency to euros, it can distort the result.",
@@ -673,7 +674,7 @@ const en: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
-    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. While you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). With «Traditional without currency (single-currency)» this section does not apply. With «Traditional with currency», currency also counts when you lose it in a losing sale.",
+    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. With the «DGT criterion (multi-currency)», while you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). With «Traditional without currency (single-currency)» this section does not apply. With «Traditional with currency», the exchange-rate change while you hold the shares is already inside their gain or loss (boxes 0328/0331). Only the change while you hold the currency in cash stays deferred. The currency also counts when you pay fees or lose it in a losing sale.",
   "guide_rw.dividends_note":
     "Dividends from foreign brokers have no Spanish withholding. Foreign withholding tax is NOT entered here: it is deducted separately in box 0588 (double taxation).",
   "guide_rw.interest_note":
@@ -864,15 +865,15 @@ const en: TranslationKeys = {
   "report.fx_deferred_no_conversion":
     "You did not convert currency to euros this tax year, so there is no exchange-rate gain to declare (0 in boxes 1633/1637). The exchange difference while you hold the currency is deferred until you actually convert it to euros (Art. 14.2.e LIRPF; DGT V0152-26).",
   "report.fx_deferred_no_conversion.hint":
-    "Your broker (e.g. IBKR) may show a «realized forex gain» even if you did not convert to euros: it uses the US tax criterion, not the Spanish one. Under DeclaRenta's criterion, the currency gain is only declared when you convert to euros.",
+    "Your broker (e.g. IBKR) may show a «realized forex gain» even if you did not convert to euros: it uses the US tax criterion, not the Spanish one. With the «DGT criterion (multi-currency)», the currency gain is only declared when you convert it to euros or to another currency.",
   "report.fx_traditional_method":
     "«Traditional with currency» method. Shares in a foreign currency are valued at the ECB rate of the buy date (cost) and of the sale date (sale). The currency is taxed FIFO when it leaves your account: when you convert it to euros or to another currency, pay fees or interest, or lose it in a losing sale. The currency a sale gives back costs what it cost you, plus the gain or loss already declared on that sale. So each change in the currency is declared only once.",
   "report.fx_traditional_method.hint":
-    "The DGT values units of investment funds in a foreign currency this way (V2324-10, V0775-21). For shares, the tax agency computes the gain in the foreign currency and converts it to euros at the sale-date rate (V1740-17, V2422-20, V0152-26): that is the «DGT criterion (multi-currency)». In both methods, the currency you convert is taxed when you convert it (V2466-08). Currency lost in a losing sale is taxed in the year of the sale, as with funds (V0775-21, V2324-10). Autodeclaro describes the same share valuation, with its broker's rates, but does not publish how it computes the currency. Use the same method every year.",
+    "The DGT values units of investment funds in a foreign currency this way (V2324-10, V0775-21). For shares, the tax agency computes the gain in the foreign currency and converts it to euros at the sale-date rate (V1740-17, V2422-20, V0152-26): that is the «DGT criterion (multi-currency)». In both methods, the currency you convert is taxed when you convert it (V2466-08). Currency lost in a losing sale is taxed in the year of the sale, as with funds (V0775-21, V2324-10). Autodeclaro describes the same share valuation, with the exchange rates from your broker's statement, but does not publish how it computes the currency. Use the same method every year.",
   "report.fx_traditional_risk":
-    "The tax agency applies the «DGT criterion (multi-currency)» to shares (V1740-17, V1615-25). If it reviews your return, it can recompute it with that criterion.",
+    "The tax agency applies the «DGT criterion (multi-currency)» to shares (V1740-17). In 2025 it rejected this same calculation for a flat bought in dollars (V1615-25). If it reviews your return, it can recompute it with that criterion.",
   "report.fx_traditional_risk.hint":
-    "Over a full cycle (euros → currency → shares → currency → euros) the total is the same in both methods. What changes is the year and the box where each part appears, and the double-taxation deduction (box 0588) can change too. No DGT ruling backs this method for shares. If the tax agency recomputes, it can charge late-payment interest on the tax this method moves to a later year.",
+    "If the full cycle (euros → currency → shares → currency → euros) has no losing sales, both methods give the same total. What changes is the year and the box where each part appears, and the double-taxation deduction (box 0588) can change too. With losing sales, this method also declares the lost currency and the total is different. No DGT ruling backs this method for shares. If the tax agency recomputes, it can charge late-payment interest on the tax this method moves to a later year.",
   "report.fx_traditional_no_conversion":
     "You did not convert currency this year. The change in {{ccy}} while you held the shares is already in their gain or loss. The change while you hold the {{ccy}} in cash will be declared when you convert it.",
   "report.fx_traditional_no_conversion.hint":
@@ -880,7 +881,11 @@ const en: TranslationKeys = {
   "report.fx_traditional_lost_dollars":
     "In {{n}} losing sale(s) you got back fewer {{ccy}} than you invested. Those lost {{ccy}} leave your account. Their exchange difference, from when you bought them to when you bought the shares ({{amount}} €), is declared this year in boxes 1633/1637.",
   "report.fx_traditional_lost_dollars.hint":
-    "The «DGT criterion (multi-currency)» declares nothing in this case, because those {{ccy}} were never converted to euros. This method does declare it, as the DGT does for funds in a foreign currency (V0775-21, V2324-10): the change in the currency before the purchase is taxed in the year of the sale. FIFO order decides which {{ccy}} were lost. You will see it in the detail of boxes 1633/1637 as «Securities sale».",
+    "The «DGT criterion (multi-currency)» declares nothing in this case, because those {{ccy}} were never converted to euros. This method does declare it, as the DGT does for funds in a foreign currency (V0775-21, V2324-10): the change in the currency before the purchase is taxed in the year of the sale. FIFO order decides which {{ccy}} were lost. You will see it in the detail of boxes 1633/1637 as «Currency lost in a losing sale».",
+  "report.fx_traditional_guard":
+    "In {{n}} sale(s), the fall of the {{ccy}} since the share purchase is larger than what that currency cost you. Its exchange difference up to the share purchase ({{amount}} €) is declared this year in boxes 1633/1637, and those {{ccy}} come back at the sale-date rate.",
+  "report.fx_traditional_guard.hint":
+    "This happens when the exchange rate moves a lot (about double) between buying the currency and selling the shares. Without this rule, those {{ccy}} would have a negative cost. You will see it in the detail of boxes 1633/1637 as «Currency change up to the share purchase».",
   "report.fx_traditional_inflight":
     "This year you converted {{qty}} {{ccy}} that come from share sales in {{years}}. This method assumes that the change in {{ccy}} while you held those shares ({{amount}} €) was already declared in that year's gain or loss.",
   "report.fx_traditional_inflight.hint":

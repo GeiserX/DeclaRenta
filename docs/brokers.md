@@ -122,7 +122,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Compras, ventas, dividendos, distribuciones (ETFs monetarios), intereses y retenciones fiscales.
 
-**Limitaciones:** Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); DeclaRenta las calcula por defecto (salvo que actives el modo monodivisa en tu perfil fiscal).
+**Limitaciones:** Lightyear no incluye posiciones abiertas en el CSV. Para Modelo 720/D-6 se necesita información adicional. Las conversiones de divisa (FX) generan ganancias o pérdidas patrimoniales sujetas a tributación (DGT V2324-10, Art. 33.1 LIRPF); DeclaRenta las calcula salvo que elijas «Tradicional sin divisa (monodivisa)» en el paso «Revisar y elegir método».
 
 ### Freedom24
 
