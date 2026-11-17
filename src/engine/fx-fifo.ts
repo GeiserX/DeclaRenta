@@ -480,36 +480,18 @@ export class FxFifoEngine {
   }
 
   /**
-   * Same-day processing phase (CRITICAL ordering). Generalizes the original
-   * 2-phase "acquisitions before disposals" sort to 4 phases so the carry-basis
-   * stock events interleave correctly when they fall on the same date:
-   *
-   *   (0) pool ACQUISITIONS — positive non-stock (conversion-in / dividend /
-   *       interest received). FCY must be in the pool before a buy can spend it.
-   *   (1) STOCK_BUY — park/consume. Removes spent FCY from the pool and parks it.
-   *   (2) STOCK_SELL — re-add. A same-day sell of a just-bought position needs the
-   *       buy's parked principal already present (1 < 2).
-   *   (3) DISPOSALS — negative non-stock (conversion-out / fee / interest paid). A
-   *       same-day conversion must see the sell's re-added proceeds (2 < 3).
-   *
-   * EQUIVALENCE TO THE OLD SORT: with NO stock events, only phases 0 and 3 occur,
-   * and 0 < 3 reproduces "positive (acquire) before negative (dispose)" exactly —
-   * so CASH-only / dividend-only / interest-only flows are byte-identical. Verified
-   * by the existing fx-fifo / cash / conversion suites staying green.
+   * Event order of every method that runs the FX engine (rule R0: issue #434
+   * for «Tradicional con divisa», issue #437 for the default). Every producer
+   * dates its events on the TRADE date. Order: date, then on one date
+   *   (0) pool ACQUISITIONS (conversion-in, dividend, interest received): the
+   *       currency is in the pool before a buy spends it;
+   *   (1) STOCK LEGS, in {@link orderSameDayStockLegs} order;
+   *   (3) DISPOSALS (conversion-out, fee, interest paid): a same-day conversion
+   *       sees what a sale returned.
+   * Stable otherwise. With no stock events only phases 0 and 3 occur, which is
+   * the original "acquisitions before disposals" sort.
    */
-  private static phaseOf(event: FxEvent): number {
-    if (event.kind === "stock_buy") return 1;
-    if (event.kind === "stock_sell") return 2;
-    return event.quantity.greaterThan(0) ? 0 : 3;
-  }
-
-  /**
-   * «Tradicional con divisa» event order (rule R0 plus the same-day rule, issue
-   * #434). Every producer already dates its events on the TRADE date in this
-   * mode. Order: date, then acquisitions < stock legs < disposals, and inside one
-   * date's stock legs {@link orderSameDayStockLegs}. Stable otherwise.
-   */
-  private static sortTraditional(events: FxEvent[]): FxEvent[] {
+  private static sortEvents(events: FxEvent[]): FxEvent[] {
     const phase = (e: FxEvent): number => (e.kind ? 1 : e.quantity.greaterThan(0) ? 0 : 3);
     const out = [...events].sort((a, b) => a.date.localeCompare(b.date) || phase(a) - phase(b));
     let i = 0;
@@ -527,9 +509,11 @@ export class FxFifoEngine {
   }
 
   /**
-   * Same-day stock legs under «Tradicional con divisa» (critic G1, a trap: a
-   * same-day rotation, sell A and buy B, booked +175 on 400 when the buy ran
-   * first and parked "uncovered" while A's dollars stayed in the pool).
+   * Same-day stock legs (critic G1 for «Tradicional con divisa», issue #437 for
+   * the default; a trap: a same-day rotation, sell A and buy B, booked +175 on
+   * 400 in that mode when the buy ran first and parked "uncovered" while A's
+   * dollars stayed in the pool; in the default the same order left those
+   * dollars in the pool as phantom dollars).
    * All trades of one date settle together, so the time of day never decides
    * which currency paid for what. The order is by rank:
    *  (0) a sale of a position NOT bought that day frees its currency first;
@@ -587,7 +571,7 @@ export class FxFifoEngine {
    *
    * Carry-basis-defer model (issue #230 follow-up). The full event set is the
    * concatenation of conversion, dividend/interest, stock-buy and stock-sell
-   * producers, processed in (date, phase) order — see {@link phaseOf}. Only the
+   * producers, processed in trade-date order — see {@link sortEvents}. Only the
    * acquire/dispose (signed-quantity) events emit FxDisposals; stock buys/sells
    * move principal between the spendable pool and the parked FIFO and realize
    * nothing (the divisa gain defers to the conversion that consumes the pool).
@@ -988,14 +972,7 @@ export class FxFifoEngine {
     this.accProfit.clear();
     this.accPhantom.clear();
     this.accCurrencies.clear();
-    const sorted = this.traditionalFx
-      ? FxFifoEngine.sortTraditional(events)
-      : [...events].sort((a, b) => {
-          const cmp = a.date.localeCompare(b.date);
-          if (cmp !== 0) return cmp;
-          // Same date: 4-phase rank (acquire < stock_buy < stock_sell < dispose).
-          return FxFifoEngine.phaseOf(a) - FxFifoEngine.phaseOf(b);
-        });
+    const sorted = FxFifoEngine.sortEvents(events);
 
     // «Tradicional con divisa»: snapshot the parked principal at the declared
     // year end, before the first later event (orphan detector, report.ts).
@@ -1167,12 +1144,7 @@ export class FxFifoEngine {
    * The missing-prior-year-lot floor in consumeLots still forces gain = 0 when no
    * lot exists, so processing AFx can never fabricate a phantom gain.
    */
-  static extractFxEvents(
-    trades: Trade[],
-    rateMap: EcbRateMap,
-    trackAutoConvert = true,
-    options?: { traditionalFx?: boolean },
-  ): FxEvent[] {
+  static extractFxEvents(trades: Trade[], rateMap: EcbRateMap, trackAutoConvert = true): FxEvent[] {
     const events: FxEvent[] = [];
 
     for (const trade of trades) {
@@ -1189,14 +1161,14 @@ export class FxFifoEngine {
       // either way, so processing AFx can never fabricate a phantom gain.
       if (!trackAutoConvert && FxFifoEngine.isFxconv(trade)) continue;
 
-      // «Tradicional con divisa» (rule R0, issue #434): every FX event is dated,
-      // valued, ordered and assigned to a tax year on its TRADE date. A trap:
-      // with settlement dating a same-day "convert, then buy a US stock" (stock
-      // T+1, FX T+2) parked the buy "uncovered" and booked the drift twice. The
-      // default keeps the settlement date (byte-identical figures).
-      const date = normalizeDate(
-        options?.traditionalFx ? trade.tradeDate || trade.settlementDate : trade.settlementDate || trade.tradeDate,
-      );
+      // Rule R0 (issue #434 for «Tradicional con divisa», issue #437 for the
+      // default): every FX event is dated, valued, ordered and assigned to a tax
+      // year on its TRADE date, the date the stock FIFO uses for a sale. A trap:
+      // with settlement dating, a same-day "convert, then buy a US stock" (stock
+      // T+1, FX T+2) ran the buy before its own funding; it parked "uncovered"
+      // and the funding lot stayed in the pool as dollars that no longer
+      // existed, later consumed as real lots (−100 on an economic 0).
+      const date = normalizeDate(trade.tradeDate || trade.settlementDate);
       const ecbRate = getEcbRate(rateMap, date, trade.currency);
 
       const quoteIsTarget = FxFifoEngine.isCurrencyQuote(trade);
@@ -1326,21 +1298,15 @@ export class FxFifoEngine {
    * Dividends/interest received in FCY create acquisition lots;
    * withholding tax and fees paid in FCY consume lots.
    */
-  static extractCashFxEvents(
-    cashTransactions: CashTransaction[],
-    rateMap: EcbRateMap,
-    options?: { traditionalFx?: boolean },
-  ): FxEvent[] {
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
     const events: FxEvent[] = [];
-    // R0 (issue #434): «Tradicional con divisa» dates every FX event on its
-    // trade date and never reads settlement, so a cash row goes on `dateTime`
-    // (a fee charged on 31 December that settles on 2 January belongs to the
-    // earlier year). Every key below (income lot, withholding netting, refund)
-    // uses this one date, so a withholding still nets into the income it was
-    // taken from. The default keeps settlement dating.
-    const cashDate = options?.traditionalFx
-      ? (tx: CashTransaction): string => normalizeDate(tx.dateTime || tx.settleDate)
-      : (tx: CashTransaction): string => normalizeDate(tx.settleDate || tx.dateTime);
+    // R0 (issues #434, #437): every FX event is dated on its trade date and
+    // settlement is never read, so a cash row goes on `dateTime` (a fee charged
+    // on 31 December that settles on 2 January belongs to the earlier year), the
+    // date its income is valued on (0029). Every key below (income lot,
+    // withholding netting, refund) uses this one date, so a withholding still
+    // nets into the income it was taken from.
+    const cashDate = (tx: CashTransaction): string => normalizeDate(tx.dateTime || tx.settleDate);
 
     // Withholding tax (retención en origen) on a foreign-currency dividend/interest
     // is a PAGO A CUENTA: it is deducted at source, the withheld FCY never enters
@@ -1398,7 +1364,7 @@ export class FxFifoEngine {
      * AND stricter than the income path's matcher in dividends.ts (ISIN, same currency
      * first, ≤7-day window). Coarser is safe for FX because lots are fungible per currency
      * (the net-per-currency total is what matters, not which issuer). Stricter on the
-     * date means a withholding booked on a DIFFERENT settle-date than its dividend
+     * date means a withholding booked on a DIFFERENT date than its dividend
      * isn't matched here → it's an orphan, dropped, and the lot stays gross. That is
      * conservative (no phantom disposal; the extra FCY only ever yields real drift on
      * currency actually received) and immaterial — accepted deliberately.
@@ -1555,8 +1521,9 @@ export class FxFifoEngine {
    * it is neither a buy nor a sell of held dollars here.
    *
    * Concatenated into the SAME `processEvents` call as the conversion, dividend/
-   * interest, and stock-buy events; the 4-phase + date sort guarantees the buy
-   * parks before this sell re-adds and before a conversion consumes the result.
+   * interest, and stock-buy events; the trade-date sort ({@link sortEvents})
+   * guarantees the buy parks before this sell re-adds and before a conversion
+   * consumes the result.
    */
   static extractStockProceedsFxEvents(
     disposals: FifoDisposal[],
@@ -1638,13 +1605,11 @@ export class FxFifoEngine {
       // commission exceeds the gross): its lost principal books its lost-dollar
       // rows. The default skips both, as before.
       if (!traditionalFx && !d.proceedsFcy.greaterThan(0)) continue;
-      const sellDate = normalizeDate(d.sellDate);
       events.push({
         kind: "stock_sell",
-        // Dated on the sale's cash settlement, like the buy's park, so a same-day
-        // round trip parks before it unparks. The rate stays the trade-date one.
-        // «Tradicional con divisa» dates it on the trade date (rule R0).
-        date: traditionalFx ? sellDate : normalizeDate(d.settlementDate || d.sellDate),
+        // Dated on the sale's trade date, like the buy's park (rule R0), so the
+        // parked principal and the stock FIFO run in the same trade order.
+        date: normalizeDate(d.sellDate),
         currency: d.currency,
         quantity: new Decimal(0), // unused for stock_sell (amounts are in costFcy/proceedsFcy)
         costFcy: d.costBasisFcy, // principal that was parked at the matching buy
@@ -1694,12 +1659,7 @@ export class FxFifoEngine {
    * `isShort` guard on the sell side (`extractStockProceedsFxEvents` skips short
    * closes). Uses `trade.tradeDate` for the rate, exactly like `addLot`.
    */
-  static extractStockPurchaseFxEvents(
-    trades: Trade[],
-    rateMap: EcbRateMap,
-    trackAutoConvert = true,
-    options?: { traditionalFx?: boolean },
-  ): FxEvent[] {
+  static extractStockPurchaseFxEvents(trades: Trade[], rateMap: EcbRateMap, trackAutoConvert = true): FxEvent[] {
     const events: FxEvent[] = [];
     const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
     for (const trade of trades) {
@@ -1717,21 +1677,13 @@ export class FxFifoEngine {
       // openCloseIndicator "O" (or, for some exports, absent) → not skipped.
       if (trade.openCloseIndicator === "C" || trade.openCloseIndicator === "C;O") continue;
 
-      // The FCY actually LEAVES the account on the cash settlement date, so the
-      // park event must be DATED there (matching how CASH conversions date on
-      // settlementDate||tradeDate, extractFxEvents above). Otherwise, with normal
-      // T+2 stock settlement, a manual funding conversion that settles AFTER the
-      // stock trade date would sort after the buy in processEvents → the buy parks
-      // `rate: null` (uncovered) and silently degrades to full-proceeds even though
-      // the account IS tracked. The RATE math, however, mirrors fifo.ts addLot's
-      // costInFcy exactly — including the commission cross-rate — which keys on the
-      // TRADE date, so costFcy stays byte-equal to the disposal's costBasisFcy the
-      // matching sell unparks. So: rate lookups on tradeDate, event dated on settle.
-      // «Tradicional con divisa» dates the park on the TRADE date (rule R0), like
-      // its conversions, so the order follows the order the trades were made.
-      const cashDate = normalizeDate(
-        options?.traditionalFx ? trade.tradeDate || trade.settlementDate : trade.settlementDate || trade.tradeDate,
-      );
+      // Dated on the TRADE date (rule R0), like the conversions, so a same-day
+      // "convert, then buy" parks the dollars it was funded with, whatever the
+      // two settlement cycles are (stock T+1, FX T+2). The rate math mirrors
+      // fifo.ts addLot's costInFcy exactly, commission cross-rate included, so
+      // costFcy stays byte-equal to the disposal's costBasisFcy the matching
+      // sell unparks.
+      const cashDate = normalizeDate(trade.tradeDate || trade.settlementDate);
       const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
       // costFcy = the FCY cash outflow, MIRRORING fifo.ts addLot's costInFcy:
       // quantity × tradePrice × multiplier + taxes + commission (homogenized to

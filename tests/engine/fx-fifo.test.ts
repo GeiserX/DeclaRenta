@@ -287,13 +287,13 @@ describe("FxFifoEngine", () => {
       ]);
       const trades = [
         // Buy 1000 GBP with EUR
-        makeTrade({ tradeID: "1", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-1176", tradeMoney: "-1000", settlementDate: "20250110" }),
+        makeTrade({ tradeID: "1", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-1176", tradeMoney: "-1000", tradeDate: "20250110", settlementDate: "20250110" }),
         // Swap those 1000 GBP for 1270 USD
-        makeTrade({ tradeID: "2", symbol: "GBP.USD", description: "GBP.USD", currency: "USD", commission: "0", buySell: "SELL", quantity: "-1000", tradeMoney: "-1270", settlementDate: "20250315" }),
+        makeTrade({ tradeID: "2", symbol: "GBP.USD", description: "GBP.USD", currency: "USD", commission: "0", buySell: "SELL", quantity: "-1000", tradeMoney: "-1270", tradeDate: "20250315", settlementDate: "20250315" }),
         // Buy 500 GBP with EUR
-        makeTrade({ tradeID: "3", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-590", tradeMoney: "-500", settlementDate: "20250615" }),
+        makeTrade({ tradeID: "3", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "SELL", quantity: "-590", tradeMoney: "-500", tradeDate: "20250615", settlementDate: "20250615" }),
         // Convert 500 GBP back to EUR
-        makeTrade({ tradeID: "4", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "BUY", quantity: "550", tradeMoney: "500", settlementDate: "20250901" }),
+        makeTrade({ tradeID: "4", symbol: "EUR.GBP", description: "EUR.GBP", currency: "GBP", commission: "0", buySell: "BUY", quantity: "550", tradeMoney: "500", tradeDate: "20250901", settlementDate: "20250901" }),
       ];
 
       const engine = new FxFifoEngine();
