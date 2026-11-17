@@ -26,7 +26,6 @@ const ca: TranslationKeys = {
   "upload.chip_group_label": "Selecció manual de broker",
 
   "config.title": "Configura",
-  "config.year_label": "Exercici fiscal:",
   "config.process_btn": "Processar",
   "config.processing": "Processant...",
 
@@ -50,7 +49,6 @@ const ca: TranslationKeys = {
   "results.newer_years_notice": "Es mostra {{year}}; les teves dades també cobreixen {{years}}.",
   "results.year_mismatch":
     "El fitxer conté dades dels exercicis {{available}}, però l'exercici seleccionat és {{year}}. Selecciona un altre any al desplegable superior.",
-  "results.settings_used": "Configuració del càlcul: monodivisa {{monodivisa}}, titulars {{titulares}}, autoconversions {{autoconvert}}",
   "results.setting_yes": "sí",
   "results.setting_no": "no",
 
@@ -94,6 +92,7 @@ const ca: TranslationKeys = {
   "casilla.other_acquisition_value": "Valor d'adquisició (altres elements: opcions/cripto/fons/divisa)",
   "casilla.fx_transmission_value": "Valor de transmissió FX (moneda estrangera)",
   "casilla.fx_acquisition_value": "Valor d'adquisició FX (moneda estrangera)",
+  "casilla.fx_cost_split": "{{fx}} € de cost de la divisa i {{shift}} € de variació ja declarada en l'acció",
   "casilla.fx_net_gain_loss": "Guany/Pèrdua net FX (moneda estrangera)",
   "casilla.net_gain_loss": "Guany/Pèrdua net (transmissions)",
   "casilla.gross_dividends": "Dividends bruts",
@@ -253,16 +252,13 @@ const ca: TranslationKeys = {
   "profile.go_to_profile": "Anar al perfil",
 
   // FX method (#434): review step, results header, comparison
-  "method.multidivisa.name": "Criteri DGT (multidivisa)",
   "method.multidivisa.sub": "El guany es calcula en la divisa de l'acció",
   "method.multidivisa.text": "Calcula el guany de cada acció en la seva divisa i el passa a euros al tipus del dia de la venda. La divisa que tens guarda el que et va costar en euros. La seva diferència de canvi surt quan la canvies a euros o a una altra divisa.",
   "method.multidivisa.basis": "Base legal: criteri d'Hisenda per a accions (DGT V1740-17, V2422-20, V0282-22).",
-  "method.tradicional_divisa.name": "Tradicional amb divisa",
   "method.tradicional_divisa.sub": "Compra i venda al seu tipus, i la teva divisa per FIFO",
   "method.tradicional_divisa.text": "Les accions es valoren al tipus del BCE del dia de compra i del dia de venda. La divisa tributa només quan surt del teu compte: quan la canvies a euros o a una altra divisa, quan pagues comissions o quan la perds en una venda amb pèrdues. El que ja vas declarar dins de les accions no es torna a comptar.",
   "method.tradicional_divisa.basis": "Valoració d'accions: criteri de la DGT per a participacions de fons en divisa (V2324-10, V0775-21), aplicat a accions. Divisa: es declara quan la canvies (V2466-08) o quan la perds en una venda amb pèrdues (V0775-21, V2324-10).",
   "method.tradicional_divisa.risk": "Hisenda aplica a les accions el «Criteri DGT», també en una consulta de 2025 (V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri. En un cicle complet (euros → divisa → accions → divisa → euros) el total és el mateix. Canvia en quin any i en quina casella surt cada part.",
-  "method.monodivisa.name": "Tradicional sense divisa (monodivisa)",
   "method.monodivisa.sub": "Només compra i venda al seu tipus",
   "method.monodivisa.text": "Valora la compra al tipus del dia de compra i la venda al del dia de venda. No calcula cap resultat de divisa, ni en els teus canvis a euros ni en els automàtics del bróker.",
   "method.monodivisa.basis": "Base legal: art. 35.1 LIRPF, sense la divisa de l'art. 14.2.e. Si canvies divisa a euros, pot distorsionar el resultat.",
@@ -854,7 +850,7 @@ const ca: TranslationKeys = {
   "report.titularidad_compartida":
     "Els imports mostrats estan dividits entre {{titulares}} titulars (la part que correspon a cada contribuent). Aquest informe reflecteix la declaració d'UN sol titular: cadascun dels {{titulares}} titulars ha de presentar la seva pròpia declaració amb aquesta mateixa part. No declaris el total en una sola declaració ni sumis les parts de diversos titulars a la teva.",
   "report.titularidad_compartida.hint":
-    "El repartiment a parts iguals ({{titulares}} × {{percent}} %) pressuposa titularitat per igual. Si els percentatges de titularitat són diferents (p. ex. 70/30), ajusta els imports manualment. En comptes de guanys la atribució és 50/50 (Art. 11.3 LIRPF). Pots canviar el nombre de titulars al teu perfil fiscal.",
+    "El repartiment a parts iguals ({{titulares}} × {{percent}} %) pressuposa titularitat per igual. Si els percentatges de titularitat són diferents (p. ex. 70/30), ajusta els imports manualment. En comptes de guanys la atribució és 50/50 (Art. 11.3 LIRPF). Pots canviar el nombre de titulars al pas «Revisar i triar mètode» (a la línia d'ordres, --titulares).",
   "report.competitor_reconciliation":
     "Si una altra eina mostra un import diferent, pot ser perquè no calcula els guanys per tipus de canvi (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":

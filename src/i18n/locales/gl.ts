@@ -26,7 +26,6 @@ const gl: TranslationKeys = {
   "upload.chip_group_label": "Selección manual de broker",
 
   "config.title": "Configura",
-  "config.year_label": "Exercicio fiscal:",
   "config.process_btn": "Procesar",
   "config.processing": "Procesando...",
 
@@ -50,7 +49,6 @@ const gl: TranslationKeys = {
   "results.newer_years_notice": "Amosando {{year}}; os teus datos tamén cobren {{years}}.",
   "results.year_mismatch":
     "O ficheiro contén datos dos exercicios {{available}}, pero o exercicio seleccionado é {{year}}. Selecciona outro ano no despregable superior.",
-  "results.settings_used": "Axustes do cálculo: monodivisa {{monodivisa}}, titulares {{titulares}}, autoconversións {{autoconvert}}",
   "results.setting_yes": "si",
   "results.setting_no": "non",
 
@@ -94,6 +92,7 @@ const gl: TranslationKeys = {
   "casilla.other_acquisition_value": "Valor de adquisición (outros elementos: opcións/cripto/fondos/divisa)",
   "casilla.fx_transmission_value": "Valor de transmisión FX (moeda estranxeira)",
   "casilla.fx_acquisition_value": "Valor de adquisición FX (moeda estranxeira)",
+  "casilla.fx_cost_split": "{{fx}} € de custo da divisa e {{shift}} € de variación xa declarada na acción",
   "casilla.fx_net_gain_loss": "Ganancia/Perda neta FX (moeda estranxeira)",
   "casilla.net_gain_loss": "Ganancia/Perda neta (transmisións)",
   "casilla.gross_dividends": "Dividendos brutos",
@@ -253,16 +252,13 @@ const gl: TranslationKeys = {
   "profile.go_to_profile": "Ir ao perfil",
 
   // FX method (#434): review step, results header, comparison
-  "method.multidivisa.name": "Criterio DGT (multidivisa)",
   "method.multidivisa.sub": "A ganancia calcúlase na divisa da acción",
   "method.multidivisa.text": "Calcula a ganancia de cada acción na súa divisa e pásaa a euros ao tipo do día da venda. A divisa que tes garda o que che custou en euros. A súa diferenza de cambio sae cando a cambias a euros ou a outra divisa.",
   "method.multidivisa.basis": "Base legal: criterio de Facenda para accións (DGT V1740-17, V2422-20, V0282-22).",
-  "method.tradicional_divisa.name": "Tradicional con divisa",
   "method.tradicional_divisa.sub": "Compra e venda ao seu tipo, e a túa divisa por FIFO",
   "method.tradicional_divisa.text": "As accións valóranse ao tipo do BCE do día de compra e do día de venda. A divisa tributa só cando sae da túa conta: ao cambiala a euros ou a outra divisa, ao pagar comisións ou cando a perdes nunha venda con perdas. O que xa declaraches dentro das accións non se volve contar.",
   "method.tradicional_divisa.basis": "Valoración de accións: criterio da DGT para participacións de fondos en divisa (V2324-10, V0775-21), aplicado a accións. Divisa: declárase ao cambiala (V2466-08) ou ao perdela nunha venda con perdas (V0775-21, V2324-10).",
   "method.tradicional_divisa.risk": "Facenda aplica ás accións o «Criterio DGT», tamén nunha consulta de 2025 (V1615-25). Se revisa a túa declaración, pode recalculala con el. Nun ciclo completo (euros → divisa → accións → divisa → euros) o total é o mesmo. Cambia en que ano e en que casilla sae cada parte.",
-  "method.monodivisa.name": "Tradicional sen divisa (monodivisa)",
   "method.monodivisa.sub": "Só compra e venda ao seu tipo",
   "method.monodivisa.text": "Valora a compra ao tipo do día de compra e a venda ao do día de venda. Non calcula ningún resultado de divisa, nin nos teus cambios a euros nin nos automáticos do bróker.",
   "method.monodivisa.basis": "Base legal: art. 35.1 LIRPF, sen a divisa do art. 14.2.e. Se cambias divisa a euros, pode distorsionar o resultado.",
@@ -854,7 +850,7 @@ const gl: TranslationKeys = {
   "report.titularidad_compartida":
     "Os importes amosados están divididos entre {{titulares}} titulares (a parte que corresponde a cada contribuínte). Este informe reflicte a declaración dun SÓ titular: cada un dos {{titulares}} titulares debe presentar a súa propia declaración con esta mesma parte. Non declares o total nunha soa declaración nin sumes as partes de varios titulares na túa.",
   "report.titularidad_compartida.hint":
-    "O reparto a partes iguais ({{titulares}} × {{percent}} %) presupón titularidade por igual. Se as porcentaxes de titularidade son distintas (p. ex. 70/30), axusta os importes manualmente. En contas de gananciais a atribución é 50/50 (Art. 11.3 LIRPF). Podes cambiar o número de titulares no teu perfil fiscal.",
+    "O reparto a partes iguais ({{titulares}} × {{percent}} %) presupón titularidade por igual. Se as porcentaxes de titularidade son distintas (p. ex. 70/30), axusta os importes manualmente. En contas de gananciais a atribución é 50/50 (Art. 11.3 LIRPF). Podes cambiar o número de titulares no paso «Revisar e escoller método» (na liña de comandos, --titulares).",
   "report.competitor_reconciliation":
     "Se outra ferramenta amosa un importe distinto, pode deberse a que non calcula as ganancias por tipo de cambio (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":

@@ -450,4 +450,41 @@ describe("method-aware notes (#434)", () => {
     renderCasillaCards(container, report);
     expect(container.querySelector(".msg-info summary")?.textContent).toContain(t("messages.info_title", { count: "1" }));
   });
+  it("the 1637 currency table shows the two parts of a shifted cost (spec §6), and only then", () => {
+    const row = (lotId: string, declaredShiftEur?: Decimal) => ({
+      currency: "USD",
+      disposeDate: "2025-11-03",
+      acquireDate: "2025-01-10",
+      quantity: new Decimal(1000),
+      proceedsEur: new Decimal(860),
+      costBasisEur: new Decimal(905.5),
+      gainLossEur: new Decimal(-45.5),
+      trigger: "conversion" as const,
+      holdingPeriodDays: 297,
+      lotId,
+      ...(declaredShiftEur ? { declaredShiftEur } : {}),
+    });
+    const fxGains: TaxSummary["fxGains"] = {
+      transmissionValue: new Decimal(1720),
+      acquisitionValue: new Decimal(1811),
+      netGainLoss: new Decimal(-91),
+      disposals: [row("shifted", new Decimal(-14.25)), row("plain")],
+    };
+    const report = makeSummaryWithDisposals([], fxGains);
+    report.settings = { monodivisa: false, traditionalFx: true, trackAutoConvert: true, titulares: 1 };
+    const container = document.createElement("div");
+    renderCasillaCards(container, report);
+    const detailOf = (concept: string) => {
+      const card = [...container.querySelectorAll<HTMLElement>(".casilla-card")]
+        .find((c) => c.querySelector(".casilla-concept")?.textContent === t(concept as never))!;
+      card.querySelector<HTMLElement>(".casilla-trigger")!.click();
+      return card.querySelector<HTMLElement>(".casilla-detail")!;
+    };
+    const acq = detailOf("casilla.other_acquisition_value");
+    const splits = [...acq.querySelectorAll(".fx-cost-split")].map((e) => e.textContent);
+    // 905,50 total = 919,75 of currency cost + (−14,25) already declared in the share.
+    expect(splits).toEqual([t("casilla.fx_cost_split", { fx: "919,75", shift: "-14,25" })]);
+    // The transmission side (1633) never shows the split.
+    expect(detailOf("casilla.other_transmission_value").querySelector(".fx-cost-split")).toBeNull();
+  });
 });

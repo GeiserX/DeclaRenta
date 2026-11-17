@@ -25,7 +25,6 @@ const en: TranslationKeys = {
   "upload.chip_group_label": "Manual broker selection",
 
   "config.title": "Configure",
-  "config.year_label": "Tax year:",
   "config.process_btn": "Process",
   "config.processing": "Processing...",
 
@@ -49,7 +48,6 @@ const en: TranslationKeys = {
   "results.newer_years_notice": "Showing {{year}}; your data also covers {{years}}.",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
-  "results.settings_used": "Calculation settings: single-currency {{monodivisa}}, holders {{titulares}}, auto-conversions {{autoconvert}}",
   "results.setting_yes": "yes",
   "results.setting_no": "no",
 
@@ -93,6 +91,7 @@ const en: TranslationKeys = {
   "casilla.other_acquisition_value": "Acquisition value (other elements: options/crypto/funds/FX)",
   "casilla.fx_transmission_value": "FX transmission value (foreign currency)",
   "casilla.fx_acquisition_value": "FX acquisition value (foreign currency)",
+  "casilla.fx_cost_split": "{{fx}} € currency cost and {{shift}} € of drift already declared in the share",
   "casilla.fx_net_gain_loss": "FX net gain/loss (foreign currency)",
   "casilla.net_gain_loss": "Net gain/loss (asset disposals)",
   "casilla.gross_dividends": "Gross dividends",
@@ -253,16 +252,13 @@ const en: TranslationKeys = {
   "profile.go_to_profile": "Go to profile",
 
   // FX method (#434): review step, results header, comparison
-  "method.multidivisa.name": "DGT criterion (multi-currency)",
   "method.multidivisa.sub": "The gain is computed in the share's currency",
   "method.multidivisa.text": "Computes each share's gain in its currency and converts it to euros at the sale-date rate. The currency you hold keeps what it cost you in euros. Its exchange difference appears when you convert it to euros or to another currency.",
   "method.multidivisa.basis": "Legal basis: the tax authority's criterion for shares (DGT V1740-17, V2422-20, V0282-22).",
-  "method.tradicional_divisa.name": "Traditional with currency",
   "method.tradicional_divisa.sub": "Buy and sale at their own rates, and your currency by FIFO",
   "method.tradicional_divisa.text": "Shares are valued at the ECB rate of the purchase date and of the sale date. Currency is taxed only when it leaves your account: when you convert it to euros or to another currency, pay fees, or lose it in a losing sale. What you already declared inside the shares is not counted again.",
   "method.tradicional_divisa.basis": "Share valuation: the DGT criterion for foreign-currency fund units (V2324-10, V0775-21), applied to shares. Currency: declared when you convert it (V2466-08) or lose it in a losing sale (V0775-21, V2324-10).",
   "method.tradicional_divisa.risk": "The tax authority applies the «DGT criterion» to shares, also in a 2025 ruling (V1615-25). If it reviews your return, it may recompute it with that criterion. Over a full cycle (euros → currency → shares → currency → euros) the total is the same. What changes is the year and the box where each part appears.",
-  "method.monodivisa.name": "Traditional without currency (single-currency)",
   "method.monodivisa.sub": "Only buy and sale at their own rates",
   "method.monodivisa.text": "Values the purchase at the purchase-date rate and the sale at the sale-date rate. Computes no currency result at all, neither for your conversions to euros nor for the broker's automatic ones.",
   "method.monodivisa.basis": "Legal basis: Art. 35.1 LIRPF, without the currency rule of Art. 14.2.e. If you convert currency to euros, it can distort the result.",
@@ -852,7 +848,7 @@ const en: TranslationKeys = {
   "report.titularidad_compartida":
     "The amounts shown are split between {{titulares}} holders (the share corresponding to each taxpayer). This report reflects the return of a SINGLE holder: each of the {{titulares}} holders must file their own return with this same share. Do not declare the total in a single return, nor add several holders' shares into yours.",
   "report.titularidad_compartida.hint":
-    "The equal split ({{titulares}} × {{percent}} %) assumes equal ownership. If the ownership percentages differ (e.g. 70/30), adjust the amounts manually. For community-property accounts the attribution is 50/50 (Art. 11.3 LIRPF). You can change the number of holders in your fiscal profile.",
+    "The equal split ({{titulares}} × {{percent}} %) assumes equal ownership. If the ownership percentages differ (e.g. 70/30), adjust the amounts manually. For community-property accounts the attribution is 50/50 (Art. 11.3 LIRPF). You can change the number of holders at the «Review and choose method» step (on the command line, --titulares).",
   "report.competitor_reconciliation":
     "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":

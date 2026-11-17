@@ -1964,6 +1964,13 @@ footer a:hover {
   padding: 0.3rem 0.5rem;
 }
 
+/* «Tradicional con divisa»: the two parts of a 1637 currency cost, under the total. */
+.detail-table .fx-cost-split {
+  display: block;
+  min-width: 12rem;
+  color: var(--muted);
+}
+
 .detail-table tfoot td {
   font-weight: 600;
   border-top: 1px solid var(--border);

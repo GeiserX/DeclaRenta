@@ -254,7 +254,7 @@ describe("the FX method of each year (#434)", () => {
       { ...stored(2024, { interestEarned: 10 }), fxMethod: "multidivisa" },
       { ...stored(2025, { interestEarned: 20 }), fxMethod: "multidivisa" },
     );
-    expect(tags(c)).toEqual([t("method.multidivisa.name"), t("method.multidivisa.name")]);
+    expect(tags(c)).toEqual([t("report.fx_method_name.multidivisa"), t("report.fx_method_name.multidivisa")]);
     expect(c.querySelector(".method-mismatch")).toBeNull();
   });
 
@@ -264,7 +264,7 @@ describe("the FX method of each year (#434)", () => {
       { ...stored(2024, { interestEarned: 20 }), fxMethod: "tradicional-divisa" },
       { ...stored(2025, { interestEarned: 40 }), fxMethod: "multidivisa" },
     );
-    expect(tags(c)).toEqual([t("method.multidivisa.name"), t("method.tradicional_divisa.name"), t("method.multidivisa.name")]);
+    expect(tags(c)).toEqual([t("report.fx_method_name.multidivisa"), t("report.fx_method_name.tradicional-divisa"), t("report.fx_method_name.multidivisa")]);
     expect(c.querySelector(".method-mismatch")?.textContent).toBe(t("compare.method_mismatch"));
     const span = c.querySelector(".method-mismatch-row td")!.getAttribute("colspan");
     expect(Number(span)).toBe(c.querySelectorAll("thead th").length);
@@ -276,7 +276,7 @@ describe("the FX method of each year (#434)", () => {
       { ...stored(2025, { interestEarned: 20 }), fxMethod: "monodivisa" },
     );
     // Newest year first, as the table columns.
-    expect(tags(c)).toEqual([t("method.monodivisa.name"), t("method.unknown")]);
+    expect(tags(c)).toEqual([t("report.fx_method_name.monodivisa"), t("method.unknown")]);
     expect(c.querySelector(".method-tag-unknown")).not.toBeNull();
     expect(c.querySelector(".method-mismatch")).toBeNull();
   });

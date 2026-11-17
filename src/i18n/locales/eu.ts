@@ -26,7 +26,6 @@ const eu: TranslationKeys = {
   "upload.chip_group_label": "Broker eskuzko hautapena",
 
   "config.title": "Konfiguratu",
-  "config.year_label": "Ekitaldi fiskala:",
   "config.process_btn": "Prozesatu",
   "config.processing": "Prozesatzen...",
 
@@ -50,7 +49,6 @@ const eu: TranslationKeys = {
   "results.newer_years_notice": "{{year}} erakusten da; zure datuek {{years}} ere hartzen dute.",
   "results.year_mismatch":
     "Fitxategiak {{available}} ekitaldietako datuak ditu, baina hautatutako ekitaldia {{year}} da. Hautatu beste urte bat goiko zerrendan.",
-  "results.settings_used": "Kalkuluaren ezarpenak: monodibisa {{monodivisa}}, titularrak {{titulares}}, auto-bihurketak {{autoconvert}}",
   "results.setting_yes": "bai",
   "results.setting_no": "ez",
 
@@ -94,6 +92,7 @@ const eu: TranslationKeys = {
   "casilla.other_acquisition_value": "Eskuratze-balioa (beste elementuak: opzioak/kripto/funtsak/dibisa)",
   "casilla.fx_transmission_value": "FX transmisio-balioa (atzerriko moneta)",
   "casilla.fx_acquisition_value": "FX eskuratze-balioa (atzerriko moneta)",
+  "casilla.fx_cost_split": "{{fx}} € dibisaren kostua eta {{shift}} € akzioan lehendik aitortutako aldaketa",
   "casilla.fx_net_gain_loss": "FX irabazi/galera garbia (atzerriko moneta)",
   "casilla.net_gain_loss": "Irabazi/Galera garbia (transmisioak)",
   "casilla.gross_dividends": "Dibidendu gordinak",
@@ -254,16 +253,13 @@ const eu: TranslationKeys = {
   "profile.go_to_profile": "Profilara joan",
 
   // FX method (#434): review step, results header, comparison
-  "method.multidivisa.name": "DGT irizpidea (multidibisa)",
   "method.multidivisa.sub": "Irabazia akzioaren dibisan kalkulatzen da",
   "method.multidivisa.text": "Akzio bakoitzaren irabazia bere dibisan kalkulatzen du, eta salmenta-eguneko tasan eurotara pasatzen du. Daukazun dibisak eurotan zenbat kostatu zitzaizun gordetzen du. Haren kanbio-diferentzia eurotara edo beste dibisa batera aldatzen duzunean ateratzen da.",
   "method.multidivisa.basis": "Lege-oinarria: Ogasunaren irizpidea akzioetarako (DGT V1740-17, V2422-20, V0282-22).",
-  "method.tradicional_divisa.name": "Tradizionala dibisarekin",
   "method.tradicional_divisa.sub": "Erosketa eta salmenta bakoitza bere tasan, eta zure dibisa FIFO bidez",
   "method.tradicional_divisa.text": "Akzioak erosketa-eguneko eta salmenta-eguneko EBZren tasan balioesten dira. Dibisak zure kontutik irteten denean bakarrik tributatzen du: eurotara edo beste dibisa batera aldatzen duzunean, komisioak ordaintzean edo galerak dituen salmenta batean galtzen duzunean. Akzioen barruan aitortu duzuna ez da berriro zenbatzen.",
   "method.tradicional_divisa.basis": "Akzioen balioespena: DGTren irizpidea dibisako funts-partaidetzetarako (V2324-10, V0775-21), akzioei aplikatua. Dibisa: aldatzen duzunean aitortzen da (V2466-08), edo galerak dituen salmenta batean galtzen duzunean (V0775-21, V2324-10).",
   "method.tradicional_divisa.risk": "Ogasunak «DGT irizpidea» aplikatzen die akzioei, baita 2025eko kontsulta batean ere (V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake. Ziklo oso batean (euroak → dibisa → akzioak → dibisa → euroak) guztizkoa berdina da. Zati bakoitza zein urtetan eta zein laukitan ateratzen den aldatzen da.",
-  "method.monodivisa.name": "Tradizionala dibisarik gabe (monodibisa)",
   "method.monodivisa.sub": "Erosketa eta salmenta bakarrik, bakoitza bere tasan",
   "method.monodivisa.text": "Erosketa erosketa-eguneko tasan eta salmenta salmenta-eguneko tasan balioesten ditu. Ez du dibisa-emaitzarik batere kalkulatzen, ez zure euro-aldaketetan, ez artekariaren aldaketa automatikoetan.",
   "method.monodivisa.basis": "Lege-oinarria: PFEZLren 35.1 art., 14.2.e art.-ko dibisarik gabe. Dibisa eurotara aldatzen baduzu, emaitza distortsiona dezake.",
@@ -856,7 +852,7 @@ const eu: TranslationKeys = {
   "report.titularidad_compartida":
     "Erakutsitako zenbatekoak {{titulares}} titularren artean banatuta daude (zergadun bakoitzari dagokion zatia). Txosten honek titular BAKAR baten aitorpena islatzen du: {{titulares}} titularretako bakoitzak bere aitorpena aurkeztu behar du zati berberarekin. Ez ezazu zenbatekoa osoa aitorpen bakar batean deklaratu, ezta hainbat titularren zatiak zurean batu ere.",
   "report.titularidad_compartida.hint":
-    "Zati berdinetako banaketak ({{titulares}} × {{percent}} %) titulartasun berdina suposatzen du. Titulartasun-ehunekoak desberdinak badira (adib. 70/30), doitu zenbatekoak eskuz. Irabazpidezko kontuetan esleipena 50/50 da (11.3 art. LIRPF). Titular kopurua zure zerga-profilean alda dezakezu.",
+    "Zati berdinetako banaketak ({{titulares}} × {{percent}} %) titulartasun berdina suposatzen du. Titulartasun-ehunekoak desberdinak badira (adib. 70/30), doitu zenbatekoak eskuz. Irabazpidezko kontuetan esleipena 50/50 da (11.3 art. LIRPF). Titular kopurua «Berrikusi eta metodoa aukeratu» urratsean alda dezakezu (komando-lerroan, --titulares).",
   "report.competitor_reconciliation":
     "Beste tresna batek zenbateko desberdina erakusten badu, baliteke kanbio-tasagatiko irabaziak ez kalkulatzea izatea (33.1 art. LIRPF).",
   "report.competitor_reconciliation.hint":

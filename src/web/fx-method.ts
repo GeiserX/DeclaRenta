@@ -14,6 +14,7 @@ import type { FxMethod } from "../types/tax.js";
 import { isFiat } from "../engine/ecb.js";
 import { t, type TranslationKey } from "../i18n/index.js";
 import { esc } from "./esc.js";
+import { FX_METHOD_NAME_KEY } from "../generators/report-settings.js";
 
 /** The three methods, in the order the cards show them. The first is the default. */
 export const FX_METHODS: readonly FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
@@ -24,17 +25,18 @@ export function isFxMethod(value: unknown): value is FxMethod {
   return typeof value === "string" && (FX_METHODS as readonly string[]).includes(value);
 }
 
-type MethodPart = "name" | "sub" | "text" | "basis";
+type MethodPart = "sub" | "text" | "basis";
 
 function key(m: FxMethod, part: MethodPart | "risk"): TranslationKey {
   return `method.${m.replace("-", "_")}.${part}` as TranslationKey;
 }
 
+/** The method's name: the same key the engine messages and the exports use. */
 export function methodName(m: FxMethod): string {
-  return t(key(m, "name"));
+  return t(FX_METHOD_NAME_KEY[m]);
 }
 
-export function methodText(m: FxMethod, part: Exclude<MethodPart, "name">): string {
+export function methodText(m: FxMethod, part: MethodPart): string {
   return t(key(m, part));
 }
 

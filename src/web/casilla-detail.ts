@@ -287,6 +287,18 @@ function fxTriggerLabel(trigger: string): string {
 }
 
 /**
+ * The 1637 amount of one FX row. Under «Tradicional con divisa», currency a
+ * sale returned costs what it cost plus the drift the stock line already
+ * declared (`declaredShiftEur`); the cell shows both parts under the total.
+ */
+function fxAcquisitionCell(d: FxDisposal): string {
+  const shift = d.declaredShiftEur;
+  if (!shift || shift.toDecimalPlaces(2).isZero()) return fmtEur(d.costBasisEur);
+  const split = t("casilla.fx_cost_split", { fx: fmtEur(d.costBasisEur.minus(shift)), shift: fmtEur(shift) });
+  return `${fmtEur(d.costBasisEur)}<span class="fx-cost-split">${esc(split)}</span>`;
+}
+
+/**
  * Render a detail table of FX disposals for casilla 1633/1637 drill-down.
  * `mode` selects the EUR amount: transmission (1633) shows proceedsEur,
  * acquisition (1637) shows costBasisEur — matching the parent casilla.
@@ -310,7 +322,7 @@ function renderFxDisposalsDetail(
           <td>${esc(formatDate(d.disposeDate))}</td>
           <td>${esc(formatDate(d.acquireDate))}</td>
           <td>${fmtEur(d.quantity)}</td>
-          <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
+          <td>${mode === "acquisition" ? fxAcquisitionCell(d) : fmtEur(d.proceedsEur)}</td>
           <td>${esc(fxTriggerLabel(d.trigger))}</td>
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
