@@ -1397,7 +1397,11 @@ export class FxFifoEngine {
     // that never existed on a +10 / −10 / +10 dividend. Like a withholding,
     // a reversal first nets into the income of its (broker, currency, date),
     // so a correction never consumes an older lot at another rate; what no
-    // income absorbs leaves the pool after the loop, like a fee.
+    // income absorbs leaves the pool after the loop, like a fee. The
+    // withholding nets first and the reversal takes what is left (a trap: the
+    // other order let a reversal larger than the day's other income empty it,
+    // the withholding found nothing and was dropped, and 0.75 USD that never
+    // existed stayed in the pool).
     const INCOME_IN = new Set(["Dividends", "Payment In Lieu Of Dividends", "Broker Interest Received", "Bond Interest Received"]);
     const isReversal = (tx: CashTransaction): boolean => INCOME_IN.has(tx.type) && new Decimal(tx.amount).lessThan(0);
     const revByKey = new Map<string, Decimal>(); // > 0: reversed quantity still to take out
@@ -1458,9 +1462,9 @@ export class FxFifoEngine {
       if (isReversal(tx)) continue;
 
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
-        // Net the same-(broker,currency,date) reversal and withholding into the dividend lot.
-        const afterReversal = consumeReversal(tx.brokerSource, tx.currency, date, amount);
-        const net = consumeWithholding(tx.brokerSource, tx.currency, date, afterReversal);
+        // Net the same-(broker,currency,date) withholding, then the reversal, into the dividend lot.
+        const afterWithholding = consumeWithholding(tx.brokerSource, tx.currency, date, amount);
+        const net = consumeReversal(tx.brokerSource, tx.currency, date, afterWithholding);
         // `greaterThan(0)`, not `isPositive()` — decimal.js treats +0 as positive,
         // and a zero-quantity event would make addLot compute 0/0 = NaN.
         if (net.greaterThan(0)) {
@@ -1473,8 +1477,8 @@ export class FxFifoEngine {
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
         // Interest can also carry withholding (e.g. "WITHHOLDING ON CREDIT INT");
         // net it the same way — a withholding is a pago a cuenta whatever the income.
-        const afterReversal = consumeReversal(tx.brokerSource, tx.currency, date, amount);
-        const net = consumeWithholding(tx.brokerSource, tx.currency, date, afterReversal);
+        const afterWithholding = consumeWithholding(tx.brokerSource, tx.currency, date, amount);
+        const net = consumeReversal(tx.brokerSource, tx.currency, date, afterWithholding);
         if (net.greaterThan(0)) {
           events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
         }

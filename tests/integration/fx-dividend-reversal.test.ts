@@ -126,6 +126,58 @@ describe.each(METHODS)("an income row that stays negative after collapsing, %s (
   });
 });
 
+describe.each(METHODS)("a reversal larger than the day's other income that has withholding, %s (issue #439)", (_name, options) => {
+  it("the withholding nets first, so no phantom currency stays in the pool", () => {
+    // 1 Feb: AAA dividend +10. 1 Mar: AAA reversal −10, BBB dividend +5 with
+    // −0.75 withheld. 4.25 USD are really held and converted in October; a
+    // later fund-and-convert pair at one rate is worth exactly 0. A trap: the
+    // reversal netted first, emptied BBB's +5, the withholding found nothing
+    // and was dropped, and 0.75 USD that never existed stayed in the pool
+    // (the later pair booked −0.15 on them).
+    const sc: Scenario = {
+      id: "DIV-REV-WHT",
+      years: [2024],
+      closed: false,
+      ev: [
+        { k: "fee", d: "2024-02-01", usd: "0", r: "0.90" },
+        { k: "fee", d: "2024-03-01", usd: "0", r: "0.85" },
+        { k: "conv", d: "2024-10-01", usd: "4.25", r: "1.00" },
+        { k: "fund", d: "2024-11-01", usd: "100", r: "0.70" },
+        { k: "conv", d: "2024-11-04", usd: "100", r: "0.70" },
+      ],
+    };
+    const { st, rates } = toStatement(sc);
+    const cash = (id: string, d: string, isin: string, amount: string, type: CashTransaction["type"]): CashTransaction => ({
+      transactionID: id,
+      accountId: "U1",
+      symbol: isin.slice(-3),
+      description: type,
+      isin,
+      currency: "USD",
+      dateTime: d,
+      settleDate: d,
+      amount,
+      fxRateToBase: "1",
+      type,
+    });
+    st.cashTransactions.push(
+      cash("a", "20240201", "US0000000AA1", "10", "Dividends"),
+      cash("b", "20240301", "US0000000AA1", "-10", "Dividends"),
+      cash("c", "20240301", "US0000000BB2", "5", "Dividends"),
+      cash("d", "20240301", "US0000000BB2", "-0.75", "Withholding Tax"),
+    );
+    const r = generateTaxReport(st, rates, 2024, { ...options, fxTrace: true });
+    const trace = r.fxTrace ?? [];
+    expect(f2(new Decimal(trace[trace.length - 1]?.poolBalanceFcy ?? "0"))).toBe("0.00");
+    expect(r.fxGains.disposals.map((d) => [d.trigger, d.disposeDate, f2(d.quantity), f2(d.gainLossEur)])).toEqual([
+      ["dividend", "2024-03-01", "5.75", "-0.29"],
+      ["conversion", "2024-10-01", "4.25", "0.43"],
+      ["conversion", "2024-11-04", "100.00", "0.00"],
+    ]);
+    expect(r.messages.map((m) => m.id)).not.toContain("fx.missing_prior_lots");
+  });
+});
+
 describe("income and interest rows keep their sign in the FX producer (issue #439)", () => {
   const rates: EcbRateMap = new Map([["2024-03-05", new Map([["USD", "0.85"]])]]);
   const row = (type: CashTransaction["type"], amount: string): CashTransaction => ({
@@ -154,6 +206,10 @@ describe("income and interest rows keep their sign in the FX producer (issue #43
 
   it("a reversal and a withholding both net into the dividend", () => {
     expect(ev([row("Dividends", "10"), row("Dividends", "-4"), row("Withholding Tax", "-1.50")])).toEqual([["dividend", "4.5"]]);
+  });
+
+  it("a reversal larger than the dividend leaves net of the withholding (withholding first)", () => {
+    expect(ev([row("Dividends", "5"), row("Dividends", "-10"), row("Withholding Tax", "-0.75")])).toEqual([["dividend", "-5.75"]]);
   });
 
   it("a refund of interest paid brings currency in; interest paid takes it out", () => {
