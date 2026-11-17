@@ -84,7 +84,7 @@ const ca: TranslationKeys = {
   "fx.trigger.interest": "Interessos",
   "fx.trigger.commission": "Comissió",
   "fx.trigger.stock_purchase": "Compra de valors",
-  "fx.trigger.stock_sale": "Venda de valors",
+  "fx.trigger.stock_sale": "Divisa perduda en una venda amb pèrdues",
 
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",
@@ -168,7 +168,7 @@ const ca: TranslationKeys = {
 
   // Wizard steps
   "wizard.step1": "Pujar fitxers",
-  "wizard.step2": "Revisar dades",
+  "wizard.step2": "Revisar i triar mètode",
   "wizard.step3": "Resultats",
   "wizard.next": "Següent",
   "wizard.back": "Enrere",
@@ -230,7 +230,6 @@ const ca: TranslationKeys = {
   "profile.title": "Perfil fiscal",
   "profile.description": "Aquestes dades s'utilitzen per generar els fitxers dels models 720 i D-6. Només es desen en aquest navegador, mai en un servidor.",
   "profile.section_personal": "Dades personals",
-  "profile.section_declaration": "Configuració de la declaració",
   "profile.nif_label": "NIF/NIE:",
   "profile.nif_placeholder": "12345678Z",
   "profile.nif_invalid": "El NIF/NIE no és vàlid: revisa els dígits i la lletra de control.",
@@ -241,23 +240,74 @@ const ca: TranslationKeys = {
   "profile.ccaa_label": "Comunitat Autònoma:",
   "profile.phone_label": "Telèfon:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Mètode tradicional (monodivisa, cost al tipus de compra)",
-  "profile.monodivisa_detail":
-    "Valora cada acció en moneda estrangera com el mètode tradicional i eines com Autodeclaro o Taxdown: la compra al tipus de canvi del dia de compra i la venda al del dia de venda (Art. 35.1). L'efecte divisa queda dins del guany de l'acció. A més, apaga tot el càlcul de divisa: no calcula cap resultat de divisa (caselles 1633/1637), tampoc en les conversions USD→EUR que facis tu ni en les automàtiques del bróker. Si converteixes divisa, fes servir el mode per defecte, que sí que les calcula. Nota: en una actualització recent aquest mode valora el cost al tipus de la data de compra; el guany de valors en moneda estrangera pot diferir de xifres desades en versions anteriors — revisa-la si ja vas presentar amb una versió prèvia.",
-  "profile.monodivisa_warning":
-    "⚠ Aquest mode pot distorsionar els guanys patrimonials declarats (infraestimar o sobreestimar). El mode complet (per defecte) és més rigorós segons l'Art. 33.1 LIRPF (DGT V2422-20).",
-  "profile.track_autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
-  "profile.track_autoconvert_detail":
+  "review.autoconvert_label": "Processar les autoconversions del bróker (AFx/FXCONV)",
+  "review.autoconvert_detail":
     "Activat per defecte. Interactive Brokers no reconverteix a euros en vendre una acció, així que el saldo en divisa és real i convertir-lo després genera un guany o pèrdua patrimonial (art. 33.1 LIRPF). Desactiva-ho només si el teu bróker fa un round-trip complet EUR↔divisa i vols ignorar l'efecte de la divisa.",
-  "profile.titulares_label": "Nombre de titulars:",
-  "profile.titulares_detail":
+  "review.titulares_label": "Nombre de titulars:",
+  "review.titulares_detail":
     "Si el compte té diversos titulars (p. ex. compte conjunt o de guanys), DeclaRenta divideix tots els imports a parts iguals per mostrar la part que correspon a cada contribuent (Art. 11.3 LIRPF). Cada titular presenta la seva declaració individual per la seva part.",
   "profile.saved": "Perfil desat",
-  "profile.save_btn": "Desar perfil",
   "profile.clear_btn": "Esborrar les meves dades d'aquest navegador",
   "profile.clear_confirm": "Vols esborrar d'aquest navegador el teu perfil fiscal, els informes desats i els valors introduïts a mà?",
   "profile.incomplete_banner": "Completa el teu perfil fiscal per generar els models 720 i D-6.",
   "profile.go_to_profile": "Anar al perfil",
+
+  // FX method (#434): review step, results header, comparison
+  "method.multidivisa.name": "Criteri DGT (multidivisa)",
+  "method.multidivisa.sub": "El guany es calcula en la divisa de l'acció",
+  "method.multidivisa.text": "Calcula el guany de cada acció en la seva divisa i el passa a euros al tipus del dia de la venda. La divisa que tens guarda el que et va costar en euros. La seva diferència de canvi surt quan la canvies a euros o a una altra divisa.",
+  "method.multidivisa.basis": "Base legal: criteri d'Hisenda per a accions (DGT V1740-17, V2422-20, V0282-22).",
+  "method.tradicional_divisa.name": "Tradicional amb divisa",
+  "method.tradicional_divisa.sub": "Compra i venda al seu tipus, i la teva divisa per FIFO",
+  "method.tradicional_divisa.text": "Les accions es valoren al tipus del BCE del dia de compra i del dia de venda. La divisa tributa només quan surt del teu compte: quan la canvies a euros o a una altra divisa, quan pagues comissions o quan la perds en una venda amb pèrdues. El que ja vas declarar dins de les accions no es torna a comptar.",
+  "method.tradicional_divisa.basis": "Valoració d'accions: criteri de la DGT per a participacions de fons en divisa (V2324-10, V0775-21), aplicat a accions. Divisa: es declara quan la canvies (V2466-08) o quan la perds en una venda amb pèrdues (V0775-21, V2324-10).",
+  "method.tradicional_divisa.risk": "Hisenda aplica a les accions el «Criteri DGT», també en una consulta de 2025 (V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri. En un cicle complet (euros → divisa → accions → divisa → euros) el total és el mateix. Canvia en quin any i en quina casella surt cada part.",
+  "method.monodivisa.name": "Tradicional sense divisa (monodivisa)",
+  "method.monodivisa.sub": "Només compra i venda al seu tipus",
+  "method.monodivisa.text": "Valora la compra al tipus del dia de compra i la venda al del dia de venda. No calcula cap resultat de divisa, ni en els teus canvis a euros ni en els automàtics del bróker.",
+  "method.monodivisa.basis": "Base legal: art. 35.1 LIRPF, sense la divisa de l'art. 14.2.e. Si canvies divisa a euros, pot distorsionar el resultat.",
+  "method.monodivisa.risk": "Aquest mètode no declara el resultat dels teus canvis de divisa a euros. Fes-lo servir només si no canvies divisa.",
+  "method.unknown": "desconegut",
+  "review.method_title": "Com calculem les teves accions en divisa?",
+  "review.method_lead": "Tens operacions en {{currencies}}. El mètode canvia les xifres de la teva renda. Tria'n un i mantén-lo tots els anys.",
+  "review.method_recommended": "Recomanat",
+  "review.method_last_year": "El {{year}} vas calcular amb «{{method}}».",
+  "review.method_last_year_switch": "El {{year}} vas calcular amb «{{method}}». Si canvies de mètode i encara tens divisa d'aleshores, part del resultat pot sortir dues vegades o perdre's. Fes servir el mateix mètode tots els anys.",
+  "review.other_settings": "Altres ajustos del càlcul",
+  "review.autoconvert_off_mono": "No s'aplica amb «Tradicional sense divisa (monodivisa)», perquè aquest mètode no calcula divisa.",
+  "review.calculate": "Calcular",
+  "review.calculate_with": "Calcular amb «{{method}}»",
+  "review.show_details": "Veure el detall",
+  "results.method_chip": "Mètode: {{method}}",
+  "results.method_change": "Canviar",
+  "results.method_change_aria": "Canviar el mètode de càlcul",
+  "results.titulares_one": "1 titular",
+  "results.titulares_many": "{{count}} titulars",
+  "results.autoconvert_chip": "Autoconversions: {{value}}",
+  "results.how_title": "Com s'ha calculat",
+  "results.split_shares": "Accions",
+  "results.split_shares_sub": "caselles 0328 i 0331",
+  "results.split_securities": "Accions i altres valors",
+  "results.split_securities_sub": "caselles 0328 i 0331, i part de 1633 i 1637",
+  "results.split_fx": "Divisa",
+  "results.split_fx_sub": "inclosa a 1633 i 1637",
+  "results.split_fx_off": "no es calcula amb aquest mètode",
+  "results.split_total": "Total",
+  "results.split_total_sub": "a la base de l'estalvi · quota estimada {{tax}} €",
+  "results.compare_title": "Comparar amb els altres mètodes (per quadrar amb una altra eina)",
+  "results.compare_in_use": "En ús",
+  "results.compare_tax": "Quota estimada",
+  "results.compare_note": "Només informatiu. Per canviar de mètode, torna a «Revisar i triar mètode».",
+  "results.compare_loading": "Calculant…",
+  "results.compare_error": "No s'ha pogut calcular la comparació.",
+  "casilla.acquisition_buy_rate_note_fx": "El valor d'adquisició es mostra al tipus de canvi del BCE de la data de COMPRA, com demana el mètode «Tradicional amb divisa». Transmissió − adquisició és el guany o la pèrdua de l'acció en euros. El resultat de la divisa va a part, a les caselles 1633 i 1637.",
+  "casilla.acquisition_buy_rate_note_mono": "El valor d'adquisició es mostra al tipus de canvi del BCE de la data de COMPRA, com demana el mètode «Tradicional sense divisa (monodivisa)». Transmissió − adquisició és el guany o la pèrdua de l'acció en euros. Aquest mètode no calcula cap resultat de divisa.",
+  "casilla.no_other_elements_fx_below": "Sense altres elements. El resultat de divisa és a sota.",
+  "compare.method": "Mètode",
+  "compare.method_mismatch": "Aquests anys fan servir mètodes diferents. Si canvies de mètode i encara tens divisa d'un any anterior, part del resultat pot sortir dues vegades o perdre's.",
+  "profile.autosave": "Els canvis es desen sols en aquest navegador.",
+  "profile.method_moved": "El mètode de divisa, els titulars i les autoconversions es trien ara al Model 100, al pas «Revisar i triar mètode».",
+  "profile.go_to_renta": "Anar al Model 100",
 
   "guide.title": "Com obtenir l'informe?",
   "guide.tip_fifo": "Inclou tot l'històric — DeclaRenta necessita operacions anteriors per al càlcul FIFO correcte.",
@@ -629,7 +679,7 @@ const ca: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Si tens moltes operacions, pots consolidar-les en una sola línia per tipus d'actiu usant les dates genèriques 01/01 i 31/12. Renta Web accepta imports agregats.",
   "guide_rw.fx_note":
-    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros o a una altra divisa (p. ex. USD→GBP) —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que la converteixes efectivament, a euros o a una altra divisa (Art. 14.2.e LIRPF). Si uses mode monodivisa, aquesta secció no aplica.",
+    "Els guanys per tipus de canvi es declaren a part dels guanys de valors. Apareixen quan converteixes divisa a euros o a una altra divisa (p. ex. USD→GBP) —incloses les conversions automàtiques del teu bróker (p. ex. AFx/FXCONV a IBKR)—, no només en les conversions manuals. Mentre mantens la divisa (p. ex. compres i vens accions en USD sense passar a euros), la diferència de canvi queda diferida fins que la converteixes efectivament, a euros o a una altra divisa (Art. 14.2.e LIRPF). Amb «Tradicional sense divisa (monodivisa)» aquesta secció no s'aplica. Amb «Tradicional amb divisa», la divisa també surt quan la perds en una venda amb pèrdues.",
   "guide_rw.dividends_note":
     "Els dividends de brokers estrangers no porten retenció espanyola. La retenció estrangera (withholding tax) NO es posa aquí: es dedueix apart a la casella 0588 (doble imposició).",
   "guide_rw.interest_note":
@@ -639,8 +689,7 @@ const ca: TranslationKeys = {
   "guide_rw.blocked_losses_title": "Pèrdues bloquejades (anti-churning)",
   "guide_rw.blocked_losses_hint":
     "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web. Aquestes pèrdues es difereixen a l'exercici següent perquè es va recomprar el mateix valor en els 2 mesos posteriors (cotitzats) o 1 any (no cotitzats). L'import se suma a l'adquisició de la nova posició.",
-  "guide_rw.closing_tip":
-    "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina (Autodeclaro, Taxdown) mostra un import diferent en guanys patrimonials, pot ser perquè valora d'una altra manera les accions en divisa — activa el mode monodivisa al teu perfil per comparar. Aquest mode valora les accions com aquestes eines, però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR; si converteixes divisa, el mode per defecte és el que el calcula.",
+  "guide_rw.closing_tip": "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina mostra un import diferent en guanys patrimonials, potser fa servir un altre mètode per a les accions en divisa. Als resultats del Model 100, obre «Comparar amb els altres mètodes» per veure les xifres dels tres. Per canviar de mètode, torna al pas «Revisar i triar mètode». Fes servir el mateix mètode tots els anys.",
 
   // PDF report
   "pdf.subtitle": "Informe fiscal — Exercici",

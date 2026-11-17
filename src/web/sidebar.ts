@@ -52,6 +52,7 @@ function handleHash(): void {
 
 /** Navigate to a section, showing/hiding panels */
 export function navigateToSection(section: Section): void {
+  const previous = SECTIONS.find((s) => document.getElementById(`section-${s}`)?.hidden === false);
   for (const s of SECTIONS) {
     const el = document.getElementById(`section-${s}`);
     if (el) {
@@ -72,6 +73,12 @@ export function navigateToSection(section: Section): void {
     if (isActive) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
+
+  // Open another section at its top, not at the scroll offset of the last one.
+  if (previous !== undefined && previous !== section) {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
 
   if (location.hash !== `#${section}`) {
     history.replaceState(null, "", `#${section}`);

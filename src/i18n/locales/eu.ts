@@ -84,7 +84,7 @@ const eu: TranslationKeys = {
   "fx.trigger.interest": "Interesak",
   "fx.trigger.commission": "Komisioa",
   "fx.trigger.stock_purchase": "Balore-erosketa",
-  "fx.trigger.stock_sale": "Balore-salmenta",
+  "fx.trigger.stock_sale": "Galerak dituen salmenta batean galdutako dibisa",
 
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
@@ -169,7 +169,7 @@ const eu: TranslationKeys = {
 
   // Wizard steps
   "wizard.step1": "Fitxategiak igo",
-  "wizard.step2": "Datuak berrikusi",
+  "wizard.step2": "Berrikusi eta metodoa aukeratu",
   "wizard.step3": "Emaitzak",
   "wizard.next": "Hurrengoa",
   "wizard.back": "Atzera",
@@ -231,7 +231,6 @@ const eu: TranslationKeys = {
   "profile.title": "Profil fiskala",
   "profile.description": "Datu hauek 720 eta D-6 ereduen fitxategiak sortzeko erabiltzen dira. Nabigatzaile honetan bakarrik gordetzen dira, inoiz ez zerbitzari batean.",
   "profile.section_personal": "Datu pertsonalak",
-  "profile.section_declaration": "Aitorpenaren konfigurazioa",
   "profile.nif_label": "NIF/NIE:",
   "profile.nif_placeholder": "12345678Z",
   "profile.nif_invalid": "NIF/NIE hau ez da baliozkoa: egiaztatu digituak eta kontrol-letra.",
@@ -242,23 +241,74 @@ const eu: TranslationKeys = {
   "profile.ccaa_label": "Autonomia Erkidegoa:",
   "profile.phone_label": "Telefonoa:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Metodo tradizionala (monodibisa, kostua erosketa-eguneko tasan)",
-  "profile.monodivisa_detail":
-    "Atzerriko monetako akzio bakoitza metodo tradizionalak eta Autodeclaro edo Taxdown bezalako tresnek bezala balioesten du: erosketa erosketa-eguneko kanbio-tasan eta salmenta salmenta-egunekoan (35.1 art.). Dibisaren eragina akzioaren irabaziaren barruan geratzen da. Gainera, dibisaren kalkulu osoa itzaltzen du: ez du dibisa-emaitzarik batere kalkulatzen (1633/1637 laukitxoak), ezta zuk egindako USD→EUR bihurketetan edo brokerraren bihurketa automatikoetan ere. Dibisa bihurtzen baduzu, erabili modu lehenetsia, horiek kalkulatzen baititu. Oharra: azken eguneratze batean modu honek kostua erosketa-eguneko tasarekin balioesten du; atzerriko monetako baloreen irabazia aurreko bertsioetan gordetako zifrekin alde egin dezake — berrikus ezazu aurreko bertsio batekin aurkeztu bazenuen.",
-  "profile.monodivisa_warning":
-    "⚠ Modu honek adierazitako ondare-irabaziak distortsionatu ditzake (gutxietsi edo gehiegietsi). Modu osoa (lehenetsita) zorrotzagoa da 33.1 Art. LIRPF (DGT V2422-20) arabera.",
-  "profile.track_autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
-  "profile.track_autoconvert_detail":
+  "review.autoconvert_label": "Prozesatu artekariaren auto-bihurketak (AFx/FXCONV)",
+  "review.autoconvert_detail":
     "Lehenetsita aktibatuta. Interactive Brokersek ez du eurotara berriz bihurtzen akzio bat saltzean, beraz dibisa-saldoa erreala da eta gero bihurtzeak ondare-irabazi edo -galera sortzen du (LIRPF 33.1 art.). Desaktibatu soilik zure artekariak EUR↔dibisa round-trip osoa egiten badu eta dibisaren eragina alde batera utzi nahi baduzu.",
-  "profile.titulares_label": "Titular kopurua:",
-  "profile.titulares_detail":
+  "review.titulares_label": "Titular kopurua:",
+  "review.titulares_detail":
     "Kontuak hainbat titular baditu (adib. kontu bateratua edo irabazpidezkoa), DeclaRentak zenbateko guztiak zati berdinetan banatzen ditu zergadun bakoitzari dagokion partea erakusteko (LIRPF 11.3 art.). Titular bakoitzak bere aitorpen indibiduala aurkezten du bere partearengatik.",
   "profile.saved": "Profila gordeta",
-  "profile.save_btn": "Profila gorde",
   "profile.clear_btn": "Ezabatu nire datuak nabigatzaile honetatik",
   "profile.clear_confirm": "Nabigatzaile honetatik ezabatu zure profil fiskala, gordetako txostenak eta eskuz sartutako balioak?",
   "profile.incomplete_banner": "Osatu zure profil fiskala 720 eta D-6 ereduak sortzeko.",
   "profile.go_to_profile": "Profilara joan",
+
+  // FX method (#434): review step, results header, comparison
+  "method.multidivisa.name": "DGT irizpidea (multidibisa)",
+  "method.multidivisa.sub": "Irabazia akzioaren dibisan kalkulatzen da",
+  "method.multidivisa.text": "Akzio bakoitzaren irabazia bere dibisan kalkulatzen du, eta salmenta-eguneko tasan eurotara pasatzen du. Daukazun dibisak eurotan zenbat kostatu zitzaizun gordetzen du. Haren kanbio-diferentzia eurotara edo beste dibisa batera aldatzen duzunean ateratzen da.",
+  "method.multidivisa.basis": "Lege-oinarria: Ogasunaren irizpidea akzioetarako (DGT V1740-17, V2422-20, V0282-22).",
+  "method.tradicional_divisa.name": "Tradizionala dibisarekin",
+  "method.tradicional_divisa.sub": "Erosketa eta salmenta bakoitza bere tasan, eta zure dibisa FIFO bidez",
+  "method.tradicional_divisa.text": "Akzioak erosketa-eguneko eta salmenta-eguneko EBZren tasan balioesten dira. Dibisak zure kontutik irteten denean bakarrik tributatzen du: eurotara edo beste dibisa batera aldatzen duzunean, komisioak ordaintzean edo galerak dituen salmenta batean galtzen duzunean. Akzioen barruan aitortu duzuna ez da berriro zenbatzen.",
+  "method.tradicional_divisa.basis": "Akzioen balioespena: DGTren irizpidea dibisako funts-partaidetzetarako (V2324-10, V0775-21), akzioei aplikatua. Dibisa: aldatzen duzunean aitortzen da (V2466-08), edo galerak dituen salmenta batean galtzen duzunean (V0775-21, V2324-10).",
+  "method.tradicional_divisa.risk": "Ogasunak «DGT irizpidea» aplikatzen die akzioei, baita 2025eko kontsulta batean ere (V1615-25). Zure aitorpena berrikusten badu, irizpide horrekin berriro kalkula dezake. Ziklo oso batean (euroak → dibisa → akzioak → dibisa → euroak) guztizkoa berdina da. Zati bakoitza zein urtetan eta zein laukitan ateratzen den aldatzen da.",
+  "method.monodivisa.name": "Tradizionala dibisarik gabe (monodibisa)",
+  "method.monodivisa.sub": "Erosketa eta salmenta bakarrik, bakoitza bere tasan",
+  "method.monodivisa.text": "Erosketa erosketa-eguneko tasan eta salmenta salmenta-eguneko tasan balioesten ditu. Ez du dibisa-emaitzarik batere kalkulatzen, ez zure euro-aldaketetan, ez artekariaren aldaketa automatikoetan.",
+  "method.monodivisa.basis": "Lege-oinarria: PFEZLren 35.1 art., 14.2.e art.-ko dibisarik gabe. Dibisa eurotara aldatzen baduzu, emaitza distortsiona dezake.",
+  "method.monodivisa.risk": "Metodo honek ez du zure dibisa-aldaketen emaitza aitortzen. Erabili dibisarik aldatzen ez baduzu bakarrik.",
+  "method.unknown": "ezezaguna",
+  "review.method_title": "Nola kalkulatu zure dibisako akzioak?",
+  "review.method_lead": "Eragiketak dituzu dibisa hauetan: {{currencies}}. Metodoak zure errentaren zifrak aldatzen ditu. Aukeratu bat eta mantendu urte guztietan.",
+  "review.method_recommended": "Gomendatua",
+  "review.method_last_year": "{{year}}. urtean «{{method}}» erabili zenuen.",
+  "review.method_last_year_switch": "{{year}}. urtean «{{method}}» erabili zenuen. Metodoz aldatzen baduzu eta orduko dibisa oraindik baduzu, emaitzaren zati bat bi aldiz atera edo gal daiteke. Erabili metodo bera urte guztietan.",
+  "review.other_settings": "Kalkuluaren beste ezarpen batzuk",
+  "review.autoconvert_off_mono": "Ez da aplikatzen «Tradizionala dibisarik gabe (monodibisa)» metodoarekin, metodo horrek ez baitu dibisarik kalkulatzen.",
+  "review.calculate": "Kalkulatu",
+  "review.calculate_with": "Kalkulatu «{{method}}» metodoarekin",
+  "review.show_details": "Xehetasunak ikusi",
+  "results.method_chip": "Metodoa: {{method}}",
+  "results.method_change": "Aldatu",
+  "results.method_change_aria": "Kalkulu-metodoa aldatu",
+  "results.titulares_one": "Titular 1",
+  "results.titulares_many": "{{count}} titular",
+  "results.autoconvert_chip": "Auto-bihurketak: {{value}}",
+  "results.how_title": "Nola kalkulatu den",
+  "results.split_shares": "Akzioak",
+  "results.split_shares_sub": "0328 eta 0331 laukiak",
+  "results.split_securities": "Akzioak eta beste balore batzuk",
+  "results.split_securities_sub": "0328 eta 0331 laukiak, eta 1633 eta 1637 laukien zati bat",
+  "results.split_fx": "Dibisa",
+  "results.split_fx_sub": "1633 eta 1637 laukietan sartuta",
+  "results.split_fx_off": "ez da kalkulatzen metodo honekin",
+  "results.split_total": "Guztira",
+  "results.split_total_sub": "aurrezki-oinarrira · kuota estimatua {{tax}} €",
+  "results.compare_title": "Beste metodoekin alderatu (beste tresna batekin bat etortzeko)",
+  "results.compare_in_use": "Erabiltzen",
+  "results.compare_tax": "Kuota estimatua",
+  "results.compare_note": "Informazio gisa bakarrik. Metodoa aldatzeko, itzuli «Berrikusi eta metodoa aukeratu» urratsera.",
+  "results.compare_loading": "Kalkulatzen…",
+  "results.compare_error": "Ezin izan da alderaketa kalkulatu.",
+  "casilla.acquisition_buy_rate_note_fx": "Eskuratze-balioa EROSKETA-eguneko EBZren kanbio-tasan erakusten da, «Tradizionala dibisarekin» metodoak eskatzen duen bezala. Eskualdatzea − eskuratzea akzioaren irabazia edo galera da eurotan. Dibisaren emaitza aparte doa, 1633 eta 1637 laukietan.",
+  "casilla.acquisition_buy_rate_note_mono": "Eskuratze-balioa EROSKETA-eguneko EBZren kanbio-tasan erakusten da, «Tradizionala dibisarik gabe (monodibisa)» metodoak eskatzen duen bezala. Eskualdatzea − eskuratzea akzioaren irabazia edo galera da eurotan. Metodo honek ez du dibisa-emaitzarik kalkulatzen.",
+  "casilla.no_other_elements_fx_below": "Ez dago beste elementurik. Dibisaren emaitza behean dago.",
+  "compare.method": "Metodoa",
+  "compare.method_mismatch": "Urte hauek metodo desberdinak erabiltzen dituzte. Metodoz aldatzen baduzu eta aurreko urte bateko dibisa oraindik baduzu, emaitzaren zati bat bi aldiz atera edo gal daiteke.",
+  "profile.autosave": "Aldaketak automatikoki gordetzen dira nabigatzaile honetan.",
+  "profile.method_moved": "Dibisa-metodoa, titularrak eta auto-bihurketak 100 Ereduan aukeratzen dira orain, «Berrikusi eta metodoa aukeratu» urratsean.",
+  "profile.go_to_renta": "100 Eredura joan",
 
   "guide.title": "Nola lortu txostena?",
   "guide.tip_fifo": "Historial osoa sartu — DeclaRentak aurreko eragiketak behar ditu FIFO kalkulu zuzenera.",
@@ -629,7 +679,7 @@ const eu: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "Eragiketa asko badituzu, lerro bakarrean konsolidatu ditzakezu aktibo mota bakoitzeko 01/01 eta 31/12 data generikoak erabiliz. Renta Web-ek zenbateko agregatuak onartzen ditu.",
   "guide_rw.fx_note":
-    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro edo beste dibisa batera bihurtzen duzunean agertzen dira (adib. USD→GBP) —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. Dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da benetan bihurtu arte, euro edo beste dibisa batera (Art. 14.2.e LIRPF). Monodibisa modua erabiltzen baduzu, atal hau ez da aplikagarria.",
+    "Kanbio-tasagatiko irabaziak balore irabazietatik bereizita aitortzen dira. Dibisa euro edo beste dibisa batera bihurtzen duzunean agertzen dira (adib. USD→GBP) —zure brokerraren bihurketa automatikoak barne (adib. AFx/FXCONV IBKR-n)—, eta ez eskuzko bihurketetan soilik. Dibisa daukazun bitartean (adib. USD akzioak erosi eta saldu euro bihurtu gabe), kanbio-diferentzia atzeratuta geratzen da benetan bihurtu arte, euro edo beste dibisa batera (Art. 14.2.e LIRPF). «Tradizionala dibisarik gabe (monodibisa)» metodoarekin atal hau ez da aplikagarria. «Tradizionala dibisarekin» metodoarekin, dibisa galerak dituen salmenta batean galtzen duzunean ere ateratzen da.",
   "guide_rw.dividends_note":
     "Atzerriko broker-en dibidenduek ez dute Espainiako atxikipenik. Atzerriko atxikipena (withholding tax) EZ da hemen jartzen: 0588 gelaxkan kentzen da bereizita (zergapetze bikoitza).",
   "guide_rw.interest_note":
@@ -639,8 +689,7 @@ const eu: TranslationKeys = {
   "guide_rw.blocked_losses_title": "Blokeatutako galerak (anti-churning)",
   "guide_rw.blocked_losses_hint":
     "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egozteko ondare galerak»</strong> gelaxka Renta Web-en. Galera hauek hurrengo ekitaldira atzeratzen dira balio bera 2 hilabetetan (kotizatuak) edo urtebetean (kotizatu gabeak) berrerosi zelako. Zenbatekoa posizio berriaren eskuraketa kostuari gehitzen zaio.",
-  "guide_rw.closing_tip":
-    "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek (Autodeclaro, Taxdown) ondare irabazietan zenbateko desberdina erakusten badu, dibisako akzioak beste modu batera balioesten dituelako izan daiteke — aktibatu monodibisa modua zure profilean konparatzeko. Modu horrek tresna horiek bezala balioesten ditu akzioak, baina ez du dibisa-emaitzarik batere kalkulatzen, ezta USD→EUR bihurketetan ere; dibisa bihurtzen baduzu, modu lehenetsiak kalkulatzen du.",
+  "guide_rw.closing_tip": "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek ondare irabazietan zenbateko desberdina erakusten badu, baliteke dibisako akzioetarako beste metodo bat erabiltzea. 100 Ereduko emaitzetan, ireki «Beste metodoekin alderatu» hiru metodoen zifrak ikusteko. Metodoa aldatzeko, itzuli «Berrikusi eta metodoa aukeratu» urratsera. Erabili metodo bera urte guztietan.",
 
   // PDF report
   "pdf.subtitle": "Zerga txostena — Ekitaldia",

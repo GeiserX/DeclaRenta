@@ -5,16 +5,19 @@
  * Reports are persisted via the storage module.
  */
 
-import type { TaxSummary } from "../types/tax.js";
+import type { FxMethod, TaxSummary } from "../types/tax.js";
 import { t } from "../i18n/index.js";
+import { methodName } from "./fx-method.js";
 import { saveReport, loadAllReports, clearAllReports, type StoredReport } from "./storage.js";
 import { fmtEur } from "./format.js";
 import { esc } from "./esc.js";
 
 /**
  * Convert a TaxSummary into a StoredReport and save to localStorage.
+ * `fxMethod` is the method the report was computed with, or undefined when the
+ * upload has no foreign currency and the method does not apply.
  */
-export function persistReport(report: TaxSummary, brokers: string[]): void {
+export function persistReport(report: TaxSummary, brokers: string[], fxMethod?: FxMethod): void {
   // Don't persist empty reports (e.g. wrong year selected with no matching data).
   // A year with only interest, FX or base-general rewards is not empty, and must
   // replace any earlier snapshot of that year.
@@ -36,6 +39,7 @@ export function persistReport(report: TaxSummary, brokers: string[]): void {
     processedAt: new Date().toISOString(),
     brokers,
     tradesCount: report.capitalGains.disposals.length,
+    ...(fxMethod ? { fxMethod } : {}),
     casillas: {
       transmissionValue: report.capitalGains.transmissionValue.toNumber(),
       acquisitionValue: report.capitalGains.acquisitionValue.toNumber(),
@@ -156,6 +160,18 @@ export function renderYearComparison(container: HTMLElement): void {
     return `<tr><td class="row-label">${label}</td>${cells}${emptyVars}</tr>`;
   };
 
+  // The method each year was computed with. Years saved before the method was
+  // stored show «desconocido»; only two known, different methods warn.
+  const methodCells = sorted
+    .map((r) => `<td><span class="method-tag${r.fxMethod ? "" : " method-tag-unknown"}">${esc(r.fxMethod ? methodName(r.fxMethod) : t("method.unknown"))}</span></td>`)
+    .join("");
+  const methodEmptyVars = sorted.slice(0, -1).map(() => "<td>—</td>").join("");
+  const methodRow = `<tr class="method-row"><td class="row-label">${t("compare.method")}</td>${methodCells}${methodEmptyVars}</tr>`;
+  const knownMethods = new Set(sorted.map((r) => r.fxMethod).filter((m) => m !== undefined));
+  const mismatchRow = knownMethods.size > 1
+    ? `<tr class="method-mismatch-row"><td colspan="${sorted.length * 2}"><p class="method-mismatch" role="note">${esc(t("compare.method_mismatch"))}</p></td></tr>`
+    : "";
+
   const statsRows = [
     statsRow(t("review.trades_count"), (r) => String(r.stats.disposalsCount)),
     statsRow(t("review.dividends_count"), (r) => String(r.stats.dividendsCount)),
@@ -178,6 +194,8 @@ export function renderYearComparison(container: HTMLElement): void {
             </tr>
           </thead>
           <tbody>
+            ${methodRow}
+            ${mismatchRow}
             ${rows}
             <tr class="stats-divider"><td colspan="${sorted.length * 2}"></td></tr>
             ${statsRows}

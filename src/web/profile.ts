@@ -1,13 +1,18 @@
 /**
- * Fiscal profile form for DeclaRenta.
+ * Fiscal profile for DeclaRenta.
  *
- * Collects NIF, name, surname, CCAA, phone, and tax year.
- * Persists to localStorage. Used by Modelo 720 and D-6 generators.
+ * The form collects personal data only: NIF, name, surname, CCAA and phone,
+ * used by the Modelo 720 and D-6 generators. The stored profile also keeps the
+ * settings chosen elsewhere: the year (from the data and the results year
+ * select), and the FX method, titulares and auto-conversions (chosen on the
+ * Modelo 100 review step). Persists to localStorage.
  */
 
+import type { FxMethod } from "../types/tax.js";
 import { t } from "../i18n/index.js";
 import { esc } from "./esc.js";
 import { clearLocalData } from "./storage.js";
+import { DEFAULT_FX_METHOD, isFxMethod } from "./fx-method.js";
 
 const PROFILE_KEY = "declarenta_profile";
 
@@ -18,7 +23,12 @@ export interface FiscalProfile {
   ccaa: string;
   telefono: string;
   year: number;
-  monodivisa: boolean;
+  /**
+   * How foreign-currency shares and currency are valued (#434). Stored next to
+   * the old `monodivisa` boolean, which saveProfile still writes as a mirror
+   * (`fxMethod === "monodivisa"`) so an older cached app version reads it.
+   */
+  fxMethod: FxMethod;
   /** Procesar autoconversiones del bróker (AFx/FXCONV). Default true (rigor máximo). false = opt-out (se ignoran). */
   trackAutoConvert: boolean;
   /** Número de titulares de la cuenta. 1 = individual. >1 reparte los importes a partes iguales por contribuyente (Art. 11.3 LIRPF). */
@@ -39,7 +49,7 @@ const DEFAULT_PROFILE: FiscalProfile = {
   ccaa: "",
   telefono: "",
   year: new Date().getFullYear() - 1,
-  monodivisa: false,
+  fxMethod: DEFAULT_FX_METHOD,
   trackAutoConvert: true,
   titulares: 1,
 };
@@ -59,7 +69,10 @@ export function getProfile(): FiscalProfile {
       if (typeof parsed.ccaa === "string") profile.ccaa = parsed.ccaa;
       if (typeof parsed.telefono === "string") profile.telefono = parsed.telefono;
       if (typeof parsed.year === "number" && Number.isInteger(parsed.year)) profile.year = parsed.year;
-      if (typeof parsed.monodivisa === "boolean") profile.monodivisa = parsed.monodivisa;
+      // A known method wins. Otherwise migrate the old boolean: true was the
+      // monodivisa method, anything else the default.
+      if (isFxMethod(parsed.fxMethod)) profile.fxMethod = parsed.fxMethod;
+      else if (parsed.monodivisa === true) profile.fxMethod = "monodivisa";
       if (typeof parsed.trackAutoConvert === "boolean") profile.trackAutoConvert = parsed.trackAutoConvert;
       if (typeof parsed.titulares === "number" && Number.isInteger(parsed.titulares) && parsed.titulares >= 1) {
         profile.titulares = parsed.titulares;
@@ -72,13 +85,12 @@ export function getProfile(): FiscalProfile {
 
 /**
  * Save the fiscal profile to localStorage and announce it with a
- * `profilechange` event on `document`, so the results can recalculate when a
- * setting that changes the figures (monodivisa, titulares, auto-conversions)
- * is edited.
+ * `profilechange` event on `document`. The stored JSON also carries the old
+ * `monodivisa` boolean, mirrored from `fxMethod`, for older app versions.
  */
 export function saveProfile(profile: FiscalProfile): void {
   try {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...profile, monodivisa: profile.fxMethod === "monodivisa" }));
   } catch { /* localStorage full */ }
   if (typeof document !== "undefined") {
     document.dispatchEvent(new CustomEvent<FiscalProfile>("profilechange", { detail: profile }));
@@ -125,26 +137,6 @@ export function initProfile(): void {
     (c) => `<option value="${esc(c)}"${c === profile.ccaa ? " selected" : ""}>${esc(c)}</option>`,
   ).join("");
 
-  // A year set from the data (e.g. the results year selector) can fall outside
-  // the default choices. Include it so re-saving the form doesn't silently
-  // replace it with the first option.
-  const currentYear = new Date().getFullYear();
-  const yearChoices = [currentYear - 1, currentYear, currentYear - 2];
-  if (!yearChoices.includes(profile.year)) yearChoices.push(profile.year);
-  yearChoices.sort((a, b) => b - a);
-  const yearOptions = yearChoices.map(
-    (y) => `<option value="${y}"${y === profile.year ? " selected" : ""}>${y}</option>`,
-  ).join("");
-
-  // Common case is 1–4 titulares. If a profile was saved with a higher count
-  // (e.g. via the CLI --titulares flag, which accepts any N), include that value
-  // too so re-saving the form doesn't silently reset it to 1 and lose data.
-  const titularesChoices = [1, 2, 3, 4];
-  if (profile.titulares > 4) titularesChoices.push(profile.titulares);
-  const titularesOptions = titularesChoices.map(
-    (n) => `<option value="${n}"${n === profile.titulares ? " selected" : ""}>${n}</option>`,
-  ).join("");
-
   container.innerHTML = `
     <form class="profile-form" id="profile-form" autocomplete="on">
       <fieldset class="profile-group">
@@ -177,59 +169,25 @@ export function initProfile(): void {
         </div>
       </fieldset>
 
-      <fieldset class="profile-group">
-        <legend class="profile-group-title">${t("profile.section_declaration")}</legend>
-        <div class="profile-grid">
-          <label>
-            <span>${t("config.year_label")}</span>
-            <select id="profile-year">
-              ${yearOptions}
-            </select>
-          </label>
-          <label>
-            <span>${t("profile.titulares_label")}</span>
-            <select id="profile-titulares" aria-describedby="titulares-detail">
-              ${titularesOptions}
-            </select>
-          </label>
-        </div>
-        <p class="field-detail" id="titulares-detail">${t("profile.titulares_detail")}</p>
-        <div class="monodivisa-callout">
-          <label class="monodivisa-toggle">
-            <input type="checkbox" id="profile-monodivisa" aria-describedby="monodivisa-detail monodivisa-warning" ${profile.monodivisa ? "checked" : ""} />
-            <span class="monodivisa-label"><strong>${t("profile.monodivisa_label")}</strong></span>
-          </label>
-          <p class="monodivisa-detail" id="monodivisa-detail">${t("profile.monodivisa_detail")}</p>
-          <p class="monodivisa-warning" id="monodivisa-warning" role="alert" aria-live="polite" ${profile.monodivisa ? "" : 'hidden'}>${t("profile.monodivisa_warning")}</p>
-        </div>
-        <div class="monodivisa-callout">
-          <label class="monodivisa-toggle">
-            <input type="checkbox" id="profile-track-autoconvert" aria-describedby="track-autoconvert-detail" ${profile.trackAutoConvert ? "checked" : ""} />
-            <span class="monodivisa-label"><strong>${t("profile.track_autoconvert_label")}</strong></span>
-          </label>
-          <p class="monodivisa-detail" id="track-autoconvert-detail">${t("profile.track_autoconvert_detail")}</p>
-        </div>
-      </fieldset>
+      <p class="profile-moved-note">${esc(t("profile.method_moved"))} <a href="#renta" class="profile-moved-link">${esc(t("profile.go_to_renta"))}</a></p>
 
       <div class="profile-actions">
-        <button type="submit" class="btn-primary" id="profile-save-btn">${t("profile.save_btn")}</button>
-        <p class="profile-saved-msg" id="profile-saved-msg">${t("profile.saved")}</p>
+        <p class="profile-save-status" id="profile-save-status" role="status" aria-live="polite">${esc(t("profile.autosave"))}</p>
         <button type="button" class="btn-small btn-danger" id="profile-clear-btn">${t("profile.clear_btn")}</button>
       </div>
     </form>
   `;
 
+  // The form holds the personal data only; the other stored settings (year,
+  // method, titulares, auto-conversions) are read back so an edit keeps them.
   function collectProfile(): FiscalProfile {
     return {
+      ...getProfile(),
       nif: (document.getElementById("profile-nif") as HTMLInputElement).value.trim().toUpperCase(),
       apellidos: (document.getElementById("profile-surname") as HTMLInputElement).value.trim(),
       nombre: (document.getElementById("profile-name") as HTMLInputElement).value.trim(),
       ccaa: (document.getElementById("profile-ccaa") as HTMLSelectElement).value,
       telefono: (document.getElementById("profile-phone") as HTMLInputElement).value.trim(),
-      year: parseInt((document.getElementById("profile-year") as HTMLSelectElement).value, 10),
-      monodivisa: (document.getElementById("profile-monodivisa") as HTMLInputElement).checked,
-      trackAutoConvert: (document.getElementById("profile-track-autoconvert") as HTMLInputElement).checked,
-      titulares: parseInt((document.getElementById("profile-titulares") as HTMLSelectElement).value, 10) || 1,
     };
   }
 
@@ -251,15 +209,10 @@ export function initProfile(): void {
     if (validateNif(nifInput.value)) checkNif();
   });
 
-  // Toggle warning visibility when monodivisa checkbox changes
-  document.getElementById("profile-monodivisa")!.addEventListener("change", () => {
-    const checked = (document.getElementById("profile-monodivisa") as HTMLInputElement).checked;
-    (document.getElementById("monodivisa-warning") as HTMLElement).hidden = !checked;
-  });
-
-  // Auto-save on any input change
+  // Auto-save on any input change, and say so in the status line.
   document.getElementById("profile-form")!.addEventListener("input", () => {
     saveProfile(collectProfile());
+    showSavedStatus();
   });
 
   // Delete everything stored in this browser, then reload so no screen keeps
@@ -270,21 +223,20 @@ export function initProfile(): void {
     location.reload();
   });
 
-  // Explicit save button
+  // Enter in a field submits the form: everything is already saved, so only
+  // check the NIF and confirm.
   document.getElementById("profile-form")!.addEventListener("submit", (e) => {
     e.preventDefault();
     saveProfile(collectProfile());
     checkNif();
-    showSavedMessage();
+    showSavedStatus();
   });
 }
 
-let savedTimeout: ReturnType<typeof setTimeout> | null = null;
-
-function showSavedMessage(): void {
-  const msg = document.getElementById("profile-saved-msg");
-  if (!msg) return;
-  msg.classList.add("visible");
-  if (savedTimeout) clearTimeout(savedTimeout);
-  savedTimeout = setTimeout(() => msg.classList.remove("visible"), 2000);
+/** Swap the status line to «Perfil guardado» after an edit. */
+function showSavedStatus(): void {
+  const status = document.getElementById("profile-save-status");
+  if (!status) return;
+  status.textContent = t("profile.saved");
+  status.classList.add("saved");
 }
