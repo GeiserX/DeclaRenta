@@ -342,6 +342,10 @@ onStepChange((_from: WizardStep, to: WizardStep) => {
   if (to === 2 && !mergedStatement) {
     // Parse files when entering step 2
     void parseFiles();
+  } else if (to === 2 && lastReview) {
+    // The results year may have changed since the review was drawn, and with it
+    // the previous saved year whose method the picker names. Draw it again.
+    renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
   }
   if (to === 3 && !currentReport) {
     // Process when entering step 3
