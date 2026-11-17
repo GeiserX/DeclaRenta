@@ -17,7 +17,14 @@
  *    pool, because the trial never switched on that day's same-day cover; the
  *    planner then dropped the late cover (IRT-CHAIN: −230 on an economic
  *    −180). The trial's chain now takes the same-day cover too, as it takes
- *    the late cover.
+ *    the late cover;
+ *  - a loss round trip's sale owes what it could not pay back. Discarding
+ *    that debt at once let a later round trip of the day put its whole
+ *    profit in the pool, so the upload order of two round trips decided the
+ *    FX (IRT-PAIR-LOSSFIRST: −90 in «Tradicional con divisa» and −46 in the
+ *    default, −40 with the profit trip listed first). The next currency of
+ *    that day that a sale returns now pays the debt first; only what is
+ *    still owed at the day's end is untracked.
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -171,6 +178,122 @@ describe("an intraday round trip sold at a loss, partly without dollars (issue #
       expect(messages(run(sc, opts))).not.toContain("fx.conservation_mismatch");
     });
   }
+});
+
+describe("two round trips with no dollars on one day, the loss one first (issue #447)", () => {
+  // The day starts with no dollars. CCC is bought for 1000 and sold for 800,
+  // then BBB is bought for 1000 and sold for 1300 (0.95): the account ends
+  // the day at +100. CCC's sale pays back 800 of its 1000 and owes 200;
+  // BBB's profit pays those 200 first, and only 100 enter the pool, as when
+  // the profit trip is listed first.
+  const loss: Ev[] = [
+    { k: "buy", d: "2024-04-01", sym: "CCC", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2024-04-01", sym: "CCC", qty: "10", px: "80", r: "0.95" },
+  ];
+  const gain: Ev[] = [
+    { k: "buy", d: "2024-04-01", sym: "BBB", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2024-04-01", sym: "BBB", qty: "10", px: "130", r: "0.95" },
+  ];
+  /** IRT with its round trip replaced by the two trips, in `trips` order. */
+  const pair = (id: string, trips: Ev[]): Scenario => ({
+    id,
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+      { k: "fund", d: "2024-03-04", usd: "1000", r: "0.92" },
+      ...trips,
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "conv", d: "2024-09-02", usd: "1100", r: "0.80" },
+    ],
+  });
+  /** No late cover: the day, then 1000 funded at 0.80 and 1100 converted at 0.85. */
+  const rtl = (id: string, trips: Ev[]): Scenario => ({
+    id,
+    years: [2024],
+    closed: true,
+    ev: [...trips, { k: "fund", d: "2024-05-01", usd: "1000", r: "0.80" }, { k: "conv", d: "2024-06-03", usd: "1100", r: "0.85" }],
+  });
+
+  for (const [name, opts] of METHODS) {
+    it(`${name}: after a late-covered buy, −40 in either order (IRT-PAIR)`, () => {
+      for (const sc of [pair("IRT-PAIR-LOSSFIRST", [...loss, ...gain]), pair("IRT-PAIR-GAINFIRST", [...gain, ...loss])]) {
+        const per = run(sc, opts);
+        expect(f2(economic(sc))).toBe("-40.00");
+        expect(f2(lifetime(per))).toBe("-40.00");
+        expect(messages(per)).not.toContain("report.fx_traditional_uncovered");
+      }
+    });
+
+    it(`${name}: with no late cover, 135 in either order (RTL), and the pool ends empty`, () => {
+      for (const sc of [rtl("RTL-FIRST", [...loss, ...gain]), rtl("RTL-SECOND", [...gain, ...loss])]) {
+        const per = run(sc, { ...opts, fxTrace: true });
+        expect(f2(economic(sc))).toBe("135.00");
+        expect(f2(lifetime(per))).toBe("135.00");
+        expect(per.get(2024)!.report.fxTrace!.at(-1)!.poolBalanceFcy).toBe("0");
+        expect(messages(per)).not.toContain("fx.conservation_mismatch");
+      }
+    });
+  }
+
+  it("the trace: BBB's profit pays CCC's 200 before 100 enter the pool", () => {
+    const per = run(rtl("RTL-FIRST", [...loss, ...gain]), { ...TRAD, fxTrace: true });
+    const day = (per.get(2024)!.report.fxTrace ?? []).filter((t) => t.date === "2024-04-01");
+    expect(day.map((t) => [t.kind, t.positionKey, t.rate, t.quantityFcy, t.poolBalanceFcy])).toEqual([
+      ["park", "US0000000CC3", null, "1000", "0"],
+      ["discard", "US0000000CC3", null, "800", "0"],
+      ["park", ISIN_B, null, "1000", "0"],
+      ["discard", ISIN_B, null, "1000", "0"],
+      ["profit", ISIN_B, "0.95", "300", "300"],
+      ["discard", "US0000000CC3", "0.95", "200", "100"],
+    ]);
+    expect(day[5]!.note).toMatch(/una venta posterior de ese día paga la que perdió esta venta/);
+  });
+
+  it("«Tradicional con divisa»: a debt paid with dollars that cost more books their drift as lost dollars", () => {
+    // 237 USD at 0.80. On 04-01 (0.85) BBB is bought for 896 and sold for
+    // 496: it pays back 496 of its 659 borrowed and owes 163. CCC is bought
+    // for 440, covered late by the 04-08 conversion at 1.20, and 5 of its 8
+    // shares are sold for 610: the 275 it returns at 1.20 pay BBB's 163
+    // first. Had they been in the account before BBB, BBB would have lost
+    // them: 163 × (0.85 − 1.20) = −57.05 (a reduced generator case; without
+    // that row −228.55).
+    const sc: Scenario = {
+      id: "DEBT-LATE",
+      years: [2024],
+      closed: true,
+      ev: [
+        { k: "fund", d: "2024-03-01", usd: "237", r: "0.80" },
+        { k: "buy", d: "2024-04-01", sym: "BBB", qty: "8", px: "112", r: "0.85" },
+        { k: "sell", d: "2024-04-01", sym: "BBB", qty: "8", px: "62", r: "0.85" },
+        { k: "buy", d: "2024-04-01", sym: "CCC", qty: "8", px: "55", r: "0.85" },
+        { k: "sell", d: "2024-04-01", sym: "CCC", qty: "5", px: "122", r: "0.85" },
+        { k: "fund", d: "2024-04-08", usd: "881", r: "1.20" },
+        { k: "sell", d: "2024-04-10", sym: "CCC", qty: "3", px: "60", r: "1.00" },
+        { k: "conv", d: "2024-05-01", usd: "1068", r: "0.90" },
+      ],
+    };
+    const per = run(sc, { ...TRAD, fxTrace: true });
+    expect(f2(economic(sc))).toBe("-285.60");
+    expect(f2(lifetime(per))).toBe("-285.60");
+    const lost = (per.get(2024)!.report.fxTrace ?? []).filter((t) => t.kind === "dispose" && t.trigger === "stock_sale");
+    expect(lost.map((t) => [t.positionKey, t.quantityFcy, t.gainLossEur])).toContainEqual([ISIN_B, "163", "-57.05"]);
+  });
+
+  it("what is still owed at the day's end is untracked, and «Tradicional con divisa» says so", () => {
+    // Only the loss trip: the account ends the day at −200, so those dollars
+    // came from somewhere the upload does not show.
+    const sc = rtl("RTL-ALONE", loss);
+    const trad = run(sc, { ...TRAD, fxTrace: true });
+    expect(messages(trad)).toContain("report.fx_traditional_uncovered");
+    const tradRow = trad.get(2024)!.report.fxTrace!.filter((t) => t.kind === "discard").at(-1)!;
+    expect([tradRow.quantityFcy, tradRow.note]).toEqual(["200", "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"]);
+    // The default keeps its own wording for untracked principal lost in a sale.
+    const dflt = run(sc, { fxTrace: true });
+    const dfltRow = dflt.get(2024)!.report.fxTrace!.filter((t) => t.kind === "discard").at(-1)!;
+    expect([dfltRow.quantityFcy, dfltRow.note]).toEqual(["200", "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)"]);
+    expect(messages(dflt)).not.toContain("fx.conservation_mismatch");
+  });
 });
 
 describe("an intraday round trip with dollars the upload does not show (issue #447)", () => {
@@ -376,4 +499,126 @@ describe("random closed cycles with intraday round trips and late funding (issue
     }
     expect(bad).toEqual([]);
   });
+});
+
+// Seeded random closed cycles with up to two intraday round trips on one day
+// (in either order, sold at a gain or a loss, part sometimes kept overnight,
+// a sale sometimes spanning held shares), unfunded buys with late funding 0
+// to 7 days later, conversions and fundings, starting in December. Before the
+// same-day debt, 9 of these 400 cycles missed in «Tradicional con divisa» (58
+// of 2000 in a longer run; none with one round trip a day).
+
+/** One closed cycle with 1 or 2 intraday round trips on its round-trip days. */
+function pairCycle(seed: number, noLoss: boolean): Scenario {
+  let st = (seed * 2654435761 + 12345) >>> 0;
+  const rand = () => (st = (Math.imul(st, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+  const ri = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
+  const rate = () => (0.8 + ri(0, 40) / 100).toFixed(2);
+  const at = (n: number): string => {
+    const t = new Date("2024-12-01T00:00:00Z");
+    t.setUTCDate(t.getUTCDate() + n);
+    return t.toISOString().slice(0, 10);
+  };
+  const syms = ["AAA", "BBB", "CCC"];
+  const ev: Ev[] = [];
+  const held: Record<string, number> = { AAA: 0, BBB: 0, CCC: 0 };
+  let usd = 0;
+  let d = 0;
+  const fundLater = (r: string): number => {
+    if (usd >= 0) return 0;
+    const lag = ri(0, 7);
+    ev.push({ k: "fund", d: at(d + lag), usd: String(-usd), r: lag === 0 ? r : rate() });
+    usd = 0;
+    return Math.max(lag, 1);
+  };
+  for (let i = 0; i < 18; i++) {
+    d += ri(1, 10);
+    const r = rate();
+    const x = rand();
+    const sym = syms[ri(0, 2)]!;
+    if (x < 0.3) {
+      const px = noLoss ? ri(40, 100) : ri(40, 120);
+      const q = ri(3, 12);
+      ev.push({ k: "buy", d: at(d), sym, qty: String(q), px: String(px), r });
+      held[sym]! += q;
+      usd -= q * px;
+      d += fundLater(r);
+    } else if (x < 0.55) {
+      const used = new Set<string>();
+      for (let k = ri(1, 2); k > 0; k--) {
+        const s = syms.filter((y) => !used.has(y))[ri(0, 2 - used.size)]!;
+        used.add(s);
+        const q = ri(2, 10);
+        const pb = noLoss ? ri(50, 100) : ri(50, 120);
+        const ps = noLoss ? ri(101, 150) : ri(30, 150);
+        const sq = rand() < 0.7 ? q : ri(1, q);
+        const sellQ = held[s]! > 0 && rand() < 0.3 ? sq + ri(1, held[s]!) : sq;
+        ev.push({ k: "buy", d: at(d), sym: s, qty: String(q), px: String(pb), r });
+        ev.push({ k: "sell", d: at(d), sym: s, qty: String(sellQ), px: String(ps), r });
+        usd += sellQ * ps - q * pb;
+        held[s]! += q - sellQ;
+      }
+      d += fundLater(r);
+    } else if (x < 0.7 && held[sym]! > 0) {
+      const q = rand() < 0.5 ? held[sym]! : ri(1, held[sym]!);
+      const px = noLoss ? ri(101, 160) : ri(30, 160);
+      ev.push({ k: "sell", d: at(d), sym, qty: String(q), px: String(px), r });
+      usd += q * px;
+      held[sym]! -= q;
+    } else if (x < 0.82 && usd > 50) {
+      const amt = ri(1, Math.floor(usd));
+      ev.push({ k: "conv", d: at(d), usd: String(amt), r });
+      usd -= amt;
+    } else if (x < 0.9) {
+      const amt = ri(100, 1500);
+      ev.push({ k: "fund", d: at(d), usd: String(amt), r });
+      usd += amt;
+    }
+  }
+  for (const s of syms) {
+    if (held[s]! > 0) {
+      d += ri(1, 4);
+      const px = noLoss ? ri(101, 160) : ri(40, 120);
+      ev.push({ k: "sell", d: at(d), sym: s, qty: String(held[s]), px: String(px), r: rate() });
+      usd += held[s]! * px;
+      held[s] = 0;
+    }
+  }
+  d += 3;
+  if (usd > 0) ev.push({ k: "conv", d: at(d), usd: String(usd), r: rate() });
+  if (usd < 0) ev.push({ k: "fund", d: at(d + 1), usd: String(-usd), r: rate() });
+  // A stable sort, then one ECB rate per date, as real data has.
+  const out = [...ev].sort((a, b) => a.d.localeCompare(b.d));
+  const byDate = new Map<string, string>();
+  for (const e of out) {
+    if (!byDate.has(e.d)) byDate.set(e.d, e.r);
+    e.r = byDate.get(e.d)!;
+  }
+  const years = [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort();
+  return { id: `P${seed}${noLoss ? "N" : ""}`, years, closed: true, ev: out };
+}
+
+describe("random closed cycles with two round trips on one day (issue #447)", () => {
+  const N = 400;
+  const withLoss = Array.from({ length: N }, (_, i) => pairCycle(i + 1, false));
+  const noLoss = Array.from({ length: N }, (_, i) => pairCycle(i + 1, true));
+
+  it("the generator covers the case: many cycles have two round trips on one day, one at a loss", () => {
+    const two = withLoss.filter((s) => {
+      const days = new Map<string, Set<string>>();
+      for (const e of s.ev) if (e.k === "buy" && s.ev.some((x) => x.k === "sell" && x.d === e.d && x.sym === e.sym)) days.set(e.d, (days.get(e.d) ?? new Set()).add(e.sym));
+      return [...days.values()].some((x) => x.size > 1);
+    });
+    expect(two.length).toBeGreaterThan(N / 4);
+  });
+
+  it("«Tradicional con divisa»: stock + FX of every cycle equal EUR out − EUR in", () => {
+    expect(misses(withLoss, TRAD)).toEqual([]);
+  });
+
+  for (const [name, opts] of METHODS) {
+    it(`${name}, no loss sales: stock + FX of every cycle equal EUR out − EUR in`, () => {
+      expect(misses(noLoss, opts)).toEqual([]);
+    });
+  }
 });
