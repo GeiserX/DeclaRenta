@@ -140,7 +140,7 @@ afterAll(() => {
 describe("results follow the profile settings", () => {
   it("shows the settings used in the Results header", () => {
     expect(generateTaxReport).toHaveBeenCalledTimes(1);
-    expect(settingsText()).toBe("Ajustes del cálculo: monodivisa no, titulares 1, autoconversiones sí");
+    expect(settingsText()).toBe("Ajustes del cálculo: método Criterio DGT (multidivisa), titulares 1, autoconversiones sí");
   });
 
   it("does not recalculate when only the NIF is edited", async () => {
@@ -158,7 +158,7 @@ describe("results follow the profile settings", () => {
     await waitForRecalc(before);
     await waitFor(() => document.querySelector("#wizard-step-3 .processing-overlay") === null || null, "overlay removed");
     expect(lastOptions().skipFx).toBe(true);
-    expect(settingsText()).toContain("monodivisa sí");
+    expect(settingsText()).toContain("método Tradicional sin divisa (monodivisa)");
   });
 
   it("recalculates when the number of titulares changes", async () => {
@@ -183,6 +183,6 @@ describe("results follow the profile settings", () => {
     await waitForRecalc(before);
     await new Promise((r) => setTimeout(r, 100));
     expect(generateTaxReport).toHaveBeenCalledTimes(before + 1);
-    expect(settingsText()).toBe("Ajustes del cálculo: monodivisa no, titulares 2, autoconversiones no");
+    expect(settingsText()).toBe("Ajustes del cálculo: método Criterio DGT (multidivisa), titulares 2, autoconversiones no");
   });
 });

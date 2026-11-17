@@ -67,10 +67,10 @@ describe("localizeMessage / localizeHint", () => {
       const m: LocalizableMessage = {
         id: "report.competitor_reconciliation",
         message: "irrelevant",
-        hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
+        hint: "Puedes comparar con otro método en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method). «Tradicional con divisa» valora las acciones al tipo del día de compra y al del día de venta, y también calcula tu divisa. «Tradicional sin divisa (monodivisa)» valora las acciones igual, pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR.",
       };
       expect(localizeHint(m)).toBe(
-        "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
+        "You can compare with another method in the «Review and choose method» step (on the command line, --fx-method). «Traditional with currency» values shares at the buy-date rate and the sale-date rate, and also computes your currency. «Traditional without currency (single-currency)» values shares the same way, but computes no currency result at all, not even for USD→EUR conversions.",
       );
     });
   });
@@ -79,8 +79,8 @@ describe("localizeMessage / localizeHint", () => {
     const m: LocalizableMessage = {
       id: "report.monodivisa_conversions_skipped",
       message:
-        "El modo monodivisa ha dejado sin calcular 42 conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
-      hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+        "El método «Tradicional sin divisa (monodivisa)» ha dejado sin calcular 42 conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este método no calcula ningún resultado de divisa (casillas 1633/1637).",
+      hint: "Si has convertido divisa (por ejemplo, de USD a EUR), elige «Tradicional con divisa» en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method tradicional-divisa). Valora las acciones igual y sí calcula tus conversiones. El «Criterio DGT (multidivisa)» también las calcula.",
       context: { count: "42" },
     };
 

@@ -12,10 +12,12 @@ import type {
   TaxSummary,
   TaxMessage,
   FifoDisposal,
+  Lot,
   FxDisposal,
   DividendEntry,
   ManualRateQuote,
   FxTraceEvent,
+  FxMethod,
   ManualOpeningLot,
 } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -80,6 +82,7 @@ function splitFxDisposal(d: FxDisposal, n: number): FxDisposal {
     proceedsEur: d.proceedsEur.div(n),
     costBasisEur: d.costBasisEur.div(n),
     gainLossEur: d.gainLossEur.div(n),
+    ...(d.declaredShiftEur !== undefined ? { declaredShiftEur: d.declaredShiftEur.div(n) } : {}),
   };
 }
 
@@ -324,7 +327,19 @@ function resolveManualOpeningLots(
 }
 
 export interface ReportOptions {
+  /**
+   * «Tradicional sin divisa (monodivisa)»: the whole FX engine is off and the
+   * stock cost goes at the buy-date rate. Wins over `traditionalFx`.
+   */
   skipFx?: boolean;
+  /**
+   * «Tradicional con divisa» (issue #434): the stock line of monodivisa (cost at
+   * the buy-date rate, proceeds at the sale-date rate) PLUS the currency tracked
+   * FIFO and taxed when it leaves the account. Currency a sale returns costs
+   * what it cost plus the drift the stock line already declared. Every FX event
+   * is dated on its trade date. Ignored when `skipFx` is set.
+   */
+  traditionalFx?: boolean;
   /**
    * Track broker auto-conversions (IBKR AFx / FXCONV) as ordinary currency
    * conversions. DEFAULT true (issue #239): IBKR does NOT round-trip FCY→EUR on a
@@ -366,6 +381,164 @@ export interface ReportOptions {
    * normally and can be split across multiple dates/prices.
    */
   manualOpeningLots?: ManualOpeningLot[];
+}
+
+/** The engine options for one of the three {@link FxMethod}s. */
+export function reportOptionsForMethod(method: FxMethod): { skipFx: boolean; traditionalFx: boolean } {
+  return { skipFx: method === "monodivisa", traditionalFx: method === "tradicional-divisa" };
+}
+
+/** Spanish name of each method, as the engine's own messages print it. */
+const FX_METHOD_NAME_ES: Record<FxMethod, string> = {
+  multidivisa: "Criterio DGT (multidivisa)",
+  "tradicional-divisa": "Tradicional con divisa",
+  monodivisa: "Tradicional sin divisa (monodivisa)",
+};
+
+/** Hint of `report.competitor_reconciliation` (default method). */
+const COMPETITOR_RECONCILIATION_HINT =
+  "Puedes comparar con otro método en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method). «Tradicional con divisa» valora las acciones al tipo del día de compra y al del día de venta, y también calcula tu divisa. «Tradicional sin divisa (monodivisa)» valora las acciones igual, pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR.";
+
+/** Message of `report.fx_method_consistency` (default method). */
+const FX_METHOD_CONSISTENCY_MESSAGE =
+  "DeclaRenta calcula con el «Criterio DGT (multidivisa)»: la ganancia de divisa se difiere hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Hay otros dos métodos: «Tradicional con divisa» y «Tradicional sin divisa (monodivisa)».";
+
+/** Hint of `report.monodivisa_conversions_skipped`. */
+const MONODIVISA_CONVERSIONS_SKIPPED_HINT =
+  "Si has convertido divisa (por ejemplo, de USD a EUR), elige «Tradicional con divisa» en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method tradicional-divisa). Valora las acciones igual y sí calcula tus conversiones. El «Criterio DGT (multidivisa)» también las calcula.";
+
+/** Amount or quantity in a message context: two decimals, as the other messages. */
+const fmt2 = (d: Decimal): string => d.toFixed(2);
+
+/**
+ * The messages of «Tradicional con divisa» (issue #434). Each Spanish text here
+ * is byte-identical to the `es` locale key of the same id with the same context
+ * (tests/generators/report-traditional-fx.test.ts checks it).
+ *  - `fx_traditional_method` (info, always): what the method does and its basis.
+ *  - `fx_traditional_risk` (warning, always): Hacienda applies the default
+ *    method to shares and can recompute.
+ *  - `fx_traditional_no_conversion` (info): no conversion this year, with
+ *    foreign-currency sales.
+ *  - `fx_traditional_lost_dollars` (info): the year has lost-dollar rows.
+ *  - `fx_traditional_inflight` (warning, |amount| ≥ 1 €): currency converted
+ *    this year carries drift a stock sale of an EARLIER year declared; off by
+ *    that amount if that year was filed with the default method.
+ *  - `fx_traditional_uncovered` (info): a sale this year returned principal
+ *    with no EUR origin in the upload (deposits, older years). An acquisition
+ *    within 7 calendar days AFTER the buy covers it instead (late-cover rule,
+ *    FxFifoEngine.LATE_COVER_DAYS).
+ *  - `fx_traditional_orphan` (warning): principal still parked under a position
+ *    with no shares at the year end (ISIN change, merger, spin-off): its drift
+ *    before the purchase is never declared.
+ */
+function traditionalFxMessages(input: {
+  stats: ReturnType<FxFifoEngine["getTraditionalStats"]>;
+  yearStr: string;
+  titulares: number;
+  fxDisposals: FxDisposal[];
+  disposals: FifoDisposal[];
+  yearEndLots: Map<string, Lot[]>;
+}): TaxMessage[] {
+  const { stats, yearStr, titulares, fxDisposals, disposals, yearEndLots } = input;
+  const perTitular = (d: Decimal): Decimal => (titulares > 1 ? d.div(titulares) : d);
+  const uniq = (xs: string[]): string => [...new Set(xs)].sort().join(", ");
+  const out: TaxMessage[] = [
+    {
+      id: "report.fx_traditional_method",
+      severity: "info",
+      message:
+        "Método «Tradicional con divisa». Las acciones en divisa se valoran al tipo del BCE del día de compra (coste) y del día de venta (venta). La divisa tributa por FIFO cuando sale de tu cuenta: al cambiarla a euros o a otra divisa, al pagar comisiones o intereses, o al perderla en una venta con pérdidas. La divisa que te devuelve una venta cuesta lo que te costó, más la ganancia o pérdida ya declarada en esa venta. Así cada variación de la divisa se declara una sola vez.",
+      hint: "La DGT valora así las participaciones de fondos en divisa (V2324-10, V0775-21). Para acciones, Hacienda calcula la ganancia en divisa y la pasa a euros al tipo del día de la venta (V1740-17, V2422-20, V0152-26): es el «Criterio DGT (multidivisa)». En los dos métodos, la divisa que cambias tributa al cambiarla (V2466-08). La divisa perdida en una venta con pérdidas tributa el año de la venta, como en los fondos (V0775-21, V2324-10). Autodeclaro describe la misma valoración de acciones, con tipos de su bróker, pero no publica cómo calcula la divisa. Usa el mismo método todos los años.",
+    },
+    {
+      id: "report.fx_traditional_risk",
+      severity: "warning",
+      message:
+        "Hacienda aplica a las acciones el «Criterio DGT (multidivisa)» (V1740-17, V1615-25). Si revisa tu declaración, puede recalcularla con ese criterio.",
+      hint: "En un ciclo completo (euros → divisa → acciones → divisa → euros) el total es el mismo en los dos métodos. Cambia en qué año y en qué casilla sale cada parte, y también puede cambiar la deducción por doble imposición (casilla 0588). Ninguna consulta de la DGT respalda este método para acciones. Si Hacienda recalcula, puede cobrar intereses de demora por el impuesto que este método lleva a un año posterior.",
+    },
+  ];
+
+  const FX_ASSET_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
+  const fcySales = disposals.filter((d) => d.currency !== "EUR" && FX_ASSET_CATEGORIES.has(d.assetCategory));
+  if (fcySales.length > 0 && !fxDisposals.some((d) => d.trigger === "conversion")) {
+    const ccy = uniq(fcySales.map((d) => d.currency));
+    out.push({
+      id: "report.fx_traditional_no_conversion",
+      severity: "info",
+      message: `No has cambiado divisa este año. La variación del ${ccy} mientras tenías las acciones ya está en su ganancia o pérdida. La variación mientras tienes los ${ccy} en efectivo se declarará cuando los cambies.`,
+      hint: "Con este método, las casillas 1633/1637 solo recogen la divisa que sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
+      context: { ccy },
+    });
+  }
+
+  const lostRows = fxDisposals.filter((d) => d.trigger === "stock_sale");
+  if (lostRows.length > 0) {
+    const ccy = uniq(lostRows.map((d) => d.currency));
+    const n = String(stats.lostDollarSales.filter((x) => x.date.startsWith(yearStr)).length);
+    const amount = fmt2(lostRows.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)));
+    out.push({
+      id: "report.fx_traditional_lost_dollars",
+      severity: "info",
+      message: `En ${n} venta(s) con pérdidas recuperaste menos ${ccy} de los que invertiste. Esos ${ccy} perdidos salen de tu cuenta. Su diferencia de cambio, desde que los compraste hasta que compraste las acciones (${amount} €), se declara este año en las casillas 1633/1637.`,
+      hint: `El «Criterio DGT (multidivisa)» no declara nada en este caso, porque esos ${ccy} nunca se cambiaron a euros. Este método sí lo declara, como la DGT en los fondos en divisa (V0775-21, V2324-10): la variación de la divisa antes de la compra tributa el año de la venta. El orden FIFO decide qué ${ccy} se perdieron. Lo verás en el detalle de las casillas 1633/1637 como «Venta de valores».`,
+      context: { n, ccy, amount },
+    });
+  }
+
+  for (const [key, v] of [...stats.inflight].sort(([a], [b]) => a.localeCompare(b))) {
+    if (!key.startsWith(`${yearStr}|`)) continue;
+    const amountDec = perTitular(v.amount);
+    if (amountDec.abs().lessThan(1)) continue;
+    const ccy = key.slice(yearStr.length + 1);
+    const qty = fmt2(perTitular(v.qty));
+    const years = [...v.years].sort((a, b) => a - b).join(", ");
+    const amount = fmt2(amountDec);
+    out.push({
+      id: "report.fx_traditional_inflight",
+      severity: "warning",
+      message: `Has cambiado este año ${qty} ${ccy} que vienen de ventas de acciones de ${years}. Este método da por hecho que la variación del ${ccy} mientras tenías esas acciones (${amount} €) ya se declaró dentro de la ganancia o pérdida de aquel año.`,
+      hint: "Así es si aquel año usaste «Tradicional con divisa» o «Tradicional sin divisa (monodivisa)». Si usaste el «Criterio DGT (multidivisa)», tu resultado de divisa de este año está desviado en esa cantidad. Usa el mismo método que entonces.",
+      context: { qty, ccy, years, amount },
+    });
+  }
+
+  const uncovered = new Map<string, Decimal>();
+  for (const u of stats.uncovered) {
+    if (!u.date.startsWith(yearStr)) continue;
+    uncovered.set(u.currency, (uncovered.get(u.currency) ?? new Decimal(0)).plus(u.qty));
+  }
+  for (const [ccy, q] of [...uncovered].sort(([a], [b]) => a.localeCompare(b))) {
+    const qty = fmt2(perTitular(q));
+    out.push({
+      id: "report.fx_traditional_uncovered",
+      severity: "info",
+      message: `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores o años que no has subido). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`,
+      hint: `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.`,
+      context: { qty, ccy },
+    });
+  }
+
+  // Orphan detector: keyed like FxFifoEngine.positionKey (isin || symbol).
+  const held = new Set<string>();
+  for (const lots of yearEndLots.values()) {
+    for (const l of lots) if (l.quantity.greaterThan(0)) held.add(l.isin || l.symbol);
+  }
+  for (const p of stats.parkedAtCheckpoint) {
+    if (held.has(p.positionKey)) continue;
+    const amountDec = perTitular(p.undeclaredEur);
+    if (fmt2(amountDec.abs()) === "0.00") continue; // no drift left undeclared
+    const qty = fmt2(perTitular(p.qty));
+    const amount = fmt2(amountDec);
+    out.push({
+      id: "report.fx_traditional_orphan",
+      severity: "warning",
+      message: `La diferencia de cambio de ${qty} ${p.currency} invertidos en ${p.positionKey} no se ha podido asignar a ninguna venta (posible cambio de ISIN, fusión o escisión). Revísala a mano.`,
+      hint: `Esos ${p.currency} se usaron para comprar ${p.positionKey}. A 31 de diciembre ya no tienes esas acciones y ninguna venta los ha recuperado. Su variación desde que compraste los ${p.currency} hasta que compraste las acciones (${amount} €) no se ha declarado.`,
+      context: { qty, ccy: p.currency, security: p.positionKey, amount },
+    });
+  }
+  return out;
 }
 
 /**
@@ -419,7 +592,11 @@ export function generateTaxReport(
   //    converted at the ACQUISITION-date rate (Art. 35.1), embedding the buy→sale
   //    FX drift in the stock line since the FX engine is off. Default (rigorous):
   //    same-fiat cost at the sale-date rate (V2422-20), drift to the FX engine.
-  const fifoEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
+  //    «Tradicional con divisa» (traditionalFx) shares monodivisa's stock line and
+  //    keeps the FX engine on in its own mode (see FxFifoEngine.unparkTraditional).
+  const traditionalFx = options?.traditionalFx === true && options.skipFx !== true;
+  const traditionalCost = options?.skipFx === true || traditionalFx;
+  const fifoEngine = new FifoEngine({ traditionalCostBasis: traditionalCost });
   fifoEngine.processTrades(resolvedTrades, resolvedRateMap, statement.corporateActions, statement.optionExercises);
   // A cash buyout is a sale booked inside FIFO from a TC row; anti-churning must
   // see it too, or the bought-out shares still count as held (V3282-18 total exit).
@@ -438,7 +615,7 @@ export function generateTaxReport(
     actionsToYearEnd.length < statement.corporateActions.length ||
     (exercisesToYearEnd?.length ?? 0) < (statement.optionExercises?.length ?? 0)
   ) {
-    const yearEndEngine = new FifoEngine({ traditionalCostBasis: options?.skipFx });
+    const yearEndEngine = new FifoEngine({ traditionalCostBasis: traditionalCost });
     yearEndEngine.processTrades(tradesToYearEnd, resolvedRateMap, actionsToYearEnd, exercisesToYearEnd);
     yearEndLots = yearEndEngine.getRemainingLots();
   }
@@ -599,14 +776,18 @@ export function generateTaxReport(
   let fxAcquisitionValue = new Decimal(0);
   let fxMessagesList: TaxMessage[] = [];
   let fxTrace: FxTraceEvent[] | undefined;
+  let traditionalStats: ReturnType<FxFifoEngine["getTraditionalStats"]> | undefined;
 
   if (!options?.skipFx) {
-    const fxEngine = new FxFifoEngine();
+    // «Tradicional con divisa» runs the same producers and engine in its own
+    // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
+    const fxEngine = traditionalFx ? new FxFifoEngine({ traditionalFx: true }) : new FxFifoEngine();
+    const tradOpts = traditionalFx ? { traditionalFx: true } : undefined;
     if (options?.fxTrace) fxEngine.enableTrace();
     // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
     // (trackAutoConvert === false) restores the historical skip (issue #239).
     const trackAutoConvert = options?.trackAutoConvert !== false;
-    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
+    const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert, tradOpts);
     const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
     // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
@@ -622,16 +803,25 @@ export function generateTaxReport(
       statement.trades,
       rateMap,
       trackAutoConvert,
+      tradOpts,
     );
     const manualOpeningLotFxEvents = FxFifoEngine.extractManualOpeningLotFxEvents(usableManualOpeningLots, rateMap);
-    const stockProceedsFxEvents = FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
-    const allFxDisposals = fxEngine.processEvents([
+    const stockProceedsFxEvents = traditionalFx
+      ? FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true, trades: statement.trades })
+      : FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
+    const allFxEvents = [
       ...tradeFxEvents,
       ...cashFxEvents,
       ...stockPurchaseFxEvents,
       ...manualOpeningLotFxEvents,
       ...stockProceedsFxEvents,
-    ]);
+    ];
+    // «Tradicional con divisa» replays every year in the upload (no stored state)
+    // and snapshots the parked principal at this year's end for the orphan check.
+    const allFxDisposals = traditionalFx
+      ? fxEngine.processEvents(allFxEvents, { checkpointDate: yearEnd })
+      : fxEngine.processEvents(allFxEvents);
+    if (traditionalFx) traditionalStats = fxEngine.getTraditionalStats();
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
@@ -743,13 +933,24 @@ export function generateTaxReport(
   }
 
   // Reconciliation hint: explain why other tools may show different amounts (only when FX gains exist)
-  if (!options?.skipFx && fxDisposals.length > 0) {
+  if (traditionalFx) {
+    allMessages.push(
+      ...traditionalFxMessages({
+        stats: traditionalStats!,
+        yearStr,
+        titulares,
+        fxDisposals,
+        disposals,
+        yearEndLots,
+      }),
+    );
+  } else if (!options?.skipFx && fxDisposals.length > 0) {
     allMessages.push({
       id: "report.competitor_reconciliation",
       severity: "info",
       message:
         "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
-      hint: "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
+      hint: COMPETITOR_RECONCILIATION_HINT,
     });
     // Method-consistency warning: the FX gain on a foreign currency is realized
     // here only when the currency is converted to euros (defer / carry-basis,
@@ -758,8 +959,7 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.fx_method_consistency",
       severity: "info",
-      message:
-        "DeclaRenta calcula la ganancia de divisa difiriéndola hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Existe otro método admitido que la realiza en cada compra de valores en divisa.",
+      message: FX_METHOD_CONSISTENCY_MESSAGE,
       hint: "No mezcles métodos entre ejercicios: si un año declaraste con otro criterio (o con otra herramienta), la base de divisa arrastrada puede duplicarse u omitirse. Para divisa adquirida antes del periodo de tu informe, incluye los años anteriores en la exportación del bróker.",
     });
   } else if (!options?.skipFx && fxDisposals.length === 0) {
@@ -800,8 +1000,8 @@ export function generateTaxReport(
       allMessages.push({
         id: "report.monodivisa_conversions_skipped",
         severity: "info",
-        message: `El modo monodivisa ha dejado sin calcular ${skippedConversions} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).`,
-        hint: "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+        message: `El método «${FX_METHOD_NAME_ES.monodivisa}» ha dejado sin calcular ${skippedConversions} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este método no calcula ningún resultado de divisa (casillas 1633/1637).`,
+        hint: MONODIVISA_CONVERSIONS_SKIPPED_HINT,
         context: { count: String(skippedConversions) },
       });
     }
@@ -840,6 +1040,8 @@ export function generateTaxReport(
     year,
     settings: {
       monodivisa: options?.skipFx === true,
+      // Written only when on, so default and monodivisa settings stay as before.
+      ...(traditionalFx ? { traditionalFx: true as const } : {}),
       trackAutoConvert: options?.trackAutoConvert !== false,
       titulares,
     },

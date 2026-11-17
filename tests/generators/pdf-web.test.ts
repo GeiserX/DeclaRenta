@@ -399,14 +399,23 @@ describe("generatePdfWebReport settings line", () => {
     );
     const text = new TextDecoder().decode(await blob.arrayBuffer());
     expect(text).toContain(
-      "results.settings_used[monodivisa=results.setting_yes;titulares=3;autoconvert=results.setting_no]",
+      "report.settings_line[method=report.fx_method_name.monodivisa;titulares=3;autoconvert=results.setting_no]",
     );
+  });
+
+  it("names «Tradicional con divisa» in the settings line", async () => {
+    const blob = await generatePdfWebReport(
+      makeReport({ settings: { monodivisa: false, traditionalFx: true, trackAutoConvert: true, titulares: 1 } }),
+      tp,
+    );
+    const text = new TextDecoder().decode(await blob.arrayBuffer());
+    expect(text).toContain("report.settings_line[method=report.fx_method_name.tradicional-divisa;titulares=1;autoconvert=results.setting_yes]");
   });
 
   it("prints no settings line for a report without settings", async () => {
     const blob = await generatePdfWebReport(makeReport(), tp);
     const text = new TextDecoder().decode(await blob.arrayBuffer());
-    expect(text).not.toContain("results.settings_used");
+    expect(text).not.toContain("report.settings_line");
   });
 });
 

@@ -46,7 +46,9 @@ export { calculateDoubleTaxation } from "./engine/double-taxation.js";
 export { applyLossCarryforward } from "./engine/loss-carryforward.js";
 
 // Generators
-export { generateTaxReport } from "./generators/report.js";
+export { generateTaxReport, reportOptionsForMethod } from "./generators/report.js";
+export { fxMethodOf } from "./types/tax.js";
+export type { FxMethod } from "./types/tax.js";
 export { computeCasillaBlocksWithFx } from "./generators/casillas.js";
 export { generateModelo720, checkModelo720Thresholds } from "./generators/modelo720.js";
 export { generateModelo721 } from "./generators/modelo721.js";

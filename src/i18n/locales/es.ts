@@ -846,11 +846,55 @@ const es = {
   "report.competitor_reconciliation":
     "Si otra herramienta muestra un importe distinto, puede deberse a que no calcula las ganancias por tipo de cambio (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Puedes activar el modo monodivisa en tu perfil fiscal para comparar: valora las acciones igual que Autodeclaro o Taxdown (compra al tipo del día de compra, venta al del día de venta), pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR. Si conviertes divisa, el modo por defecto es el que lo calcula.",
+    "Puedes comparar con otro método en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method). «Tradicional con divisa» valora las acciones al tipo del día de compra y al del día de venta, y también calcula tu divisa. «Tradicional sin divisa (monodivisa)» valora las acciones igual, pero no calcula ningún resultado de divisa, tampoco en las conversiones USD→EUR.",
   "report.monodivisa_conversions_skipped":
-    "El modo monodivisa ha dejado sin calcular {{count}} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este modo no calcula ningún resultado de divisa (casillas 1633/1637).",
+    "El método «Tradicional sin divisa (monodivisa)» ha dejado sin calcular {{count}} conversión(es) de divisa de este ejercicio (manuales o automáticas del bróker). Este método no calcula ningún resultado de divisa (casillas 1633/1637).",
   "report.monodivisa_conversions_skipped.hint":
-    "El modo por defecto sí calcula las conversiones de divisa. Si has convertido divisa (por ejemplo, de USD a EUR), desactiva el modo monodivisa en tu perfil fiscal para incluir su resultado.",
+    "Si has convertido divisa (por ejemplo, de USD a EUR), elige «Tradicional con divisa» en el paso «Revisar y elegir método» (en la línea de comandos, --fx-method tradicional-divisa). Valora las acciones igual y sí calcula tus conversiones. El «Criterio DGT (multidivisa)» también las calcula.",
+  "report.fx_method_consistency":
+    "DeclaRenta calcula con el «Criterio DGT (multidivisa)»: la ganancia de divisa se difiere hasta que conviertes la moneda extranjera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Hay otros dos métodos: «Tradicional con divisa» y «Tradicional sin divisa (monodivisa)».",
+  "report.fx_method_consistency.hint":
+    "No mezcles métodos entre ejercicios: si un año declaraste con otro criterio (o con otra herramienta), la base de divisa arrastrada puede duplicarse u omitirse. Para divisa adquirida antes del periodo de tu informe, incluye los años anteriores en la exportación del bróker.",
+  "report.fx_deferred_no_conversion":
+    "No has convertido divisa a euros este ejercicio, por lo que no hay ganancia por tipo de cambio que declarar (0 en las casillas 1633/1637). La diferencia de cambio mientras mantienes la moneda queda diferida hasta que la conviertas efectivamente a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+  "report.fx_deferred_no_conversion.hint":
+    "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Bajo el criterio de DeclaRenta solo se declara la ganancia de divisa al convertir a euros.",
+  "report.fx_traditional_method":
+    "Método «Tradicional con divisa». Las acciones en divisa se valoran al tipo del BCE del día de compra (coste) y del día de venta (venta). La divisa tributa por FIFO cuando sale de tu cuenta: al cambiarla a euros o a otra divisa, al pagar comisiones o intereses, o al perderla en una venta con pérdidas. La divisa que te devuelve una venta cuesta lo que te costó, más la ganancia o pérdida ya declarada en esa venta. Así cada variación de la divisa se declara una sola vez.",
+  "report.fx_traditional_method.hint":
+    "La DGT valora así las participaciones de fondos en divisa (V2324-10, V0775-21). Para acciones, Hacienda calcula la ganancia en divisa y la pasa a euros al tipo del día de la venta (V1740-17, V2422-20, V0152-26): es el «Criterio DGT (multidivisa)». En los dos métodos, la divisa que cambias tributa al cambiarla (V2466-08). La divisa perdida en una venta con pérdidas tributa el año de la venta, como en los fondos (V0775-21, V2324-10). Autodeclaro describe la misma valoración de acciones, con tipos de su bróker, pero no publica cómo calcula la divisa. Usa el mismo método todos los años.",
+  "report.fx_traditional_risk":
+    "Hacienda aplica a las acciones el «Criterio DGT (multidivisa)» (V1740-17, V1615-25). Si revisa tu declaración, puede recalcularla con ese criterio.",
+  "report.fx_traditional_risk.hint":
+    "En un ciclo completo (euros → divisa → acciones → divisa → euros) el total es el mismo en los dos métodos. Cambia en qué año y en qué casilla sale cada parte, y también puede cambiar la deducción por doble imposición (casilla 0588). Ninguna consulta de la DGT respalda este método para acciones. Si Hacienda recalcula, puede cobrar intereses de demora por el impuesto que este método lleva a un año posterior.",
+  "report.fx_traditional_no_conversion":
+    "No has cambiado divisa este año. La variación del {{ccy}} mientras tenías las acciones ya está en su ganancia o pérdida. La variación mientras tienes los {{ccy}} en efectivo se declarará cuando los cambies.",
+  "report.fx_traditional_no_conversion.hint":
+    "Con este método, las casillas 1633/1637 solo recogen la divisa que sale de tu cuenta: cambios a euros o a otra divisa, comisiones, intereses pagados y divisa perdida en ventas con pérdidas.",
+  "report.fx_traditional_lost_dollars":
+    "En {{n}} venta(s) con pérdidas recuperaste menos {{ccy}} de los que invertiste. Esos {{ccy}} perdidos salen de tu cuenta. Su diferencia de cambio, desde que los compraste hasta que compraste las acciones ({{amount}} €), se declara este año en las casillas 1633/1637.",
+  "report.fx_traditional_lost_dollars.hint":
+    "El «Criterio DGT (multidivisa)» no declara nada en este caso, porque esos {{ccy}} nunca se cambiaron a euros. Este método sí lo declara, como la DGT en los fondos en divisa (V0775-21, V2324-10): la variación de la divisa antes de la compra tributa el año de la venta. El orden FIFO decide qué {{ccy}} se perdieron. Lo verás en el detalle de las casillas 1633/1637 como «Venta de valores».",
+  "report.fx_traditional_inflight":
+    "Has cambiado este año {{qty}} {{ccy}} que vienen de ventas de acciones de {{years}}. Este método da por hecho que la variación del {{ccy}} mientras tenías esas acciones ({{amount}} €) ya se declaró dentro de la ganancia o pérdida de aquel año.",
+  "report.fx_traditional_inflight.hint":
+    "Así es si aquel año usaste «Tradicional con divisa» o «Tradicional sin divisa (monodivisa)». Si usaste el «Criterio DGT (multidivisa)», tu resultado de divisa de este año está desviado en esa cantidad. Usa el mismo método que entonces.",
+  "report.fx_traditional_uncovered":
+    "{{qty}} {{ccy}} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores o años que no has subido). Se toman al tipo del día de compra, sin diferencia de cambio anterior.",
+  "report.fx_traditional_uncovered.hint":
+    "Si cambiaste euros a {{ccy}} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.",
+  "report.fx_traditional_orphan":
+    "La diferencia de cambio de {{qty}} {{ccy}} invertidos en {{security}} no se ha podido asignar a ninguna venta (posible cambio de ISIN, fusión o escisión). Revísala a mano.",
+  "report.fx_traditional_orphan.hint":
+    "Esos {{ccy}} se usaron para comprar {{security}}. A 31 de diciembre ya no tienes esas acciones y ninguna venta los ha recuperado. Su variación desde que compraste los {{ccy}} hasta que compraste las acciones ({{amount}} €) no se ha declarado.",
+  "report.fx_method_name.multidivisa":
+    "Criterio DGT (multidivisa)",
+  "report.fx_method_name.tradicional-divisa":
+    "Tradicional con divisa",
+  "report.fx_method_name.monodivisa":
+    "Tradicional sin divisa (monodivisa)",
+  "report.settings_line":
+    "Ajustes del cálculo: método {{method}}, titulares {{titulares}}, autoconversiones {{autoconvert}}",
   "report.non_finite_total":
     "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
   "report.non_finite_total.hint":

@@ -115,14 +115,21 @@ export class FifoEngine {
   private splitRatios: Map<string, { num: Decimal; den: Decimal }> = new Map();
   private nextLotId = 1;
   /**
-   * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
-   * basis is converted at the ACQUISITION-date rate (Art. 35.1 "importe real por
-   * el que la adquisición se hubiese efectuado"), embedding the buy→sale FX drift
-   * in the stock line — what some advisors do. When false (rigorous
-   * default), a same-fiat security uses the sale-date rate (DGT V2422-20) and the
-   * drift is realized separately by the FX engine. Driven by `skipFx` (monodivisa)
-   * in report.ts; the two states are coherent (never traditional-cost WITH the FX
-   * engine on, which would double-count the drift). See disposalEur().
+   * Traditional cost basis. When true, a foreign-currency security's cost basis
+   * is converted at the ACQUISITION-date rate (Art. 35.1 "importe real por el que
+   * la adquisición se hubiese efectuado"), embedding the buy→sale FX drift in the
+   * stock line. When false (the default «Criterio DGT (multidivisa)»), a
+   * same-fiat security uses the sale-date rate (DGT V2422-20) and the drift is
+   * realized separately by the FX engine. See disposalEur().
+   * report.ts sets it for the two traditional methods, and there are three
+   * coherent states:
+   *  - default: sale-date cost + FX engine (drift taxed when the currency leaves).
+   *  - «Tradicional sin divisa (monodivisa)» (`skipFx`): buy-date cost, FX engine off.
+   *  - «Tradicional con divisa» (`traditionalFx`): buy-date cost + the FX engine
+   *    in its traditional mode, which re-adds a sale's principal at
+   *    `r_lot + r_s − r_b` so the drift already in this stock line is not
+   *    counted twice (FxFifoEngine, issue #434).
+   * Never traditional cost with the DEFAULT FX engine: that double-counts the drift.
    */
   private traditionalCostBasis: boolean;
 

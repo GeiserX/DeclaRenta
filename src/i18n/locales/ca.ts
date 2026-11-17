@@ -809,11 +809,55 @@ const ca: TranslationKeys = {
   "report.competitor_reconciliation":
     "Si una altra eina mostra un import diferent, pot ser perquè no calcula els guanys per tipus de canvi (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "Pots activar el mode monodivisa al teu perfil fiscal per comparar: valora les accions igual que Autodeclaro o Taxdown (compra al tipus del dia de compra, venda al del dia de venda), però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR. Si converteixes divisa, el mode per defecte és el que el calcula.",
+    "Pots comparar amb un altre mètode al pas «Revisar i triar mètode» (a la línia d'ordres, --fx-method). «Tradicional amb divisa» valora les accions al tipus del dia de compra i al del dia de venda, i també calcula la teva divisa. «Tradicional sense divisa (monodivisa)» valora les accions igual, però no calcula cap resultat de divisa, tampoc en les conversions USD→EUR.",
   "report.monodivisa_conversions_skipped":
-    "El mode monodivisa ha deixat sense calcular {{count}} conversió(ns) de divisa d'aquest exercici (manuals o automàtiques del bróker). Aquest mode no calcula cap resultat de divisa (caselles 1633/1637).",
+    "El mètode «Tradicional sense divisa (monodivisa)» ha deixat sense calcular {{count}} conversió(ns) de divisa d'aquest exercici (manuals o automàtiques del bróker). Aquest mètode no calcula cap resultat de divisa (caselles 1633/1637).",
   "report.monodivisa_conversions_skipped.hint":
-    "El mode per defecte sí que calcula les conversions de divisa. Si has convertit divisa (per exemple, d'USD a EUR), desactiva el mode monodivisa al teu perfil fiscal per incloure'n el resultat.",
+    "Si has convertit divisa (per exemple, d'USD a EUR), tria «Tradicional amb divisa» al pas «Revisar i triar mètode» (a la línia d'ordres, --fx-method tradicional-divisa). Valora les accions igual i sí que calcula les teves conversions. El «Criteri DGT (multidivisa)» també les calcula.",
+  "report.fx_method_consistency":
+    "DeclaRenta calcula amb el «Criteri DGT (multidivisa)»: el guany de divisa es difereix fins que converteixes la moneda estrangera a euros (Art. 14.2.e LIRPF; DGT V0152-26). Hi ha dos mètodes més: «Tradicional amb divisa» i «Tradicional sense divisa (monodivisa)».",
+  "report.fx_method_consistency.hint":
+    "No barregis mètodes entre exercicis: si un any vas declarar amb un altre criteri (o amb una altra eina), la base de divisa arrossegada es pot duplicar o ometre. Per a la divisa adquirida abans del període del teu informe, inclou els anys anteriors a l'exportació del bróker.",
+  "report.fx_deferred_no_conversion":
+    "No has convertit divisa a euros aquest exercici, de manera que no hi ha guany per tipus de canvi a declarar (0 a les caselles 1633/1637). La diferència de canvi mentre mantens la moneda queda diferida fins que la converteixis efectivament a euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+  "report.fx_deferred_no_conversion.hint":
+    "El teu bróker (p. ex. IBKR) pot mostrar un «realized forex gain» encara que no hagis passat a euros: fa servir el criteri fiscal dels EUA, no l'espanyol. Amb el criteri de DeclaRenta, el guany de divisa només es declara en convertir a euros.",
+  "report.fx_traditional_method":
+    "Mètode «Tradicional amb divisa». Les accions en divisa es valoren al tipus del BCE del dia de compra (cost) i del dia de venda (venda). La divisa tributa per FIFO quan surt del teu compte: en canviar-la a euros o a una altra divisa, en pagar comissions o interessos, o en perdre-la en una venda amb pèrdues. La divisa que et retorna una venda costa el que et va costar, més el guany o la pèrdua ja declarats en aquesta venda. Així cada variació de la divisa es declara una sola vegada.",
+  "report.fx_traditional_method.hint":
+    "La DGT valora així les participacions de fons en divisa (V2324-10, V0775-21). Per a accions, Hisenda calcula el guany en divisa i el passa a euros al tipus del dia de la venda (V1740-17, V2422-20, V0152-26): és el «Criteri DGT (multidivisa)». En els dos mètodes, la divisa que canvies tributa en canviar-la (V2466-08). La divisa perduda en una venda amb pèrdues tributa l'any de la venda, com en els fons (V0775-21, V2324-10). Autodeclaro descriu la mateixa valoració d'accions, amb tipus del seu bróker, però no publica com calcula la divisa. Fes servir el mateix mètode cada any.",
+  "report.fx_traditional_risk":
+    "Hisenda aplica a les accions el «Criteri DGT (multidivisa)» (V1740-17, V1615-25). Si revisa la teva declaració, la pot recalcular amb aquest criteri.",
+  "report.fx_traditional_risk.hint":
+    "En un cicle complet (euros → divisa → accions → divisa → euros) el total és el mateix en els dos mètodes. Canvia en quin any i en quina casella surt cada part, i també pot canviar la deducció per doble imposició (casella 0588). Cap consulta de la DGT avala aquest mètode per a accions. Si Hisenda recalcula, pot cobrar interessos de demora per l'impost que aquest mètode porta a un any posterior.",
+  "report.fx_traditional_no_conversion":
+    "Aquest any no has canviat divisa. La variació del {{ccy}} mentre tenies les accions ja és al seu guany o pèrdua. La variació mentre tens els {{ccy}} en efectiu es declararà quan els canviïs.",
+  "report.fx_traditional_no_conversion.hint":
+    "Amb aquest mètode, les caselles 1633/1637 només recullen la divisa que surt del teu compte: canvis a euros o a una altra divisa, comissions, interessos pagats i divisa perduda en vendes amb pèrdues.",
+  "report.fx_traditional_lost_dollars":
+    "En {{n}} venda(es) amb pèrdues vas recuperar menys {{ccy}} dels que vas invertir. Aquests {{ccy}} perduts surten del teu compte. La seva diferència de canvi, des que els vas comprar fins que vas comprar les accions ({{amount}} €), es declara aquest any a les caselles 1633/1637.",
+  "report.fx_traditional_lost_dollars.hint":
+    "El «Criteri DGT (multidivisa)» no declara res en aquest cas, perquè aquests {{ccy}} no es van canviar mai a euros. Aquest mètode sí que ho declara, com la DGT en els fons en divisa (V0775-21, V2324-10): la variació de la divisa abans de la compra tributa l'any de la venda. L'ordre FIFO decideix quins {{ccy}} es van perdre. Ho veuràs al detall de les caselles 1633/1637 com a «Venda de valors».",
+  "report.fx_traditional_inflight":
+    "Aquest any has canviat {{qty}} {{ccy}} que vénen de vendes d'accions de {{years}}. Aquest mètode dona per fet que la variació del {{ccy}} mentre tenies aquestes accions ({{amount}} €) ja es va declarar dins del guany o la pèrdua d'aquell any.",
+  "report.fx_traditional_inflight.hint":
+    "És així si aquell any vas fer servir «Tradicional amb divisa» o «Tradicional sense divisa (monodivisa)». Si vas fer servir el «Criteri DGT (multidivisa)», el teu resultat de divisa d'aquest any està desviat en aquesta quantitat. Fes servir el mateix mètode que llavors.",
+  "report.fx_traditional_uncovered":
+    "{{qty}} {{ccy}} usats en compres d'accions no tenen origen en euros als teus fitxers (dipòsits, saldos anteriors o anys que no has pujat). Es prenen al tipus del dia de compra, sense diferència de canvi anterior.",
+  "report.fx_traditional_uncovered.hint":
+    "Si vas canviar euros a {{ccy}} fins a 7 dies després de la compra, es fa servir el tipus d'aquest canvi. Si en coneixes l'origen, puja també els anys anteriors.",
+  "report.fx_traditional_orphan":
+    "La diferència de canvi de {{qty}} {{ccy}} invertits en {{security}} no s'ha pogut assignar a cap venda (possible canvi d'ISIN, fusió o escissió). Revisa-la a mà.",
+  "report.fx_traditional_orphan.hint":
+    "Aquests {{ccy}} es van fer servir per comprar {{security}}. A 31 de desembre ja no tens aquestes accions i cap venda no els ha recuperat. La seva variació des que vas comprar els {{ccy}} fins que vas comprar les accions ({{amount}} €) no s'ha declarat.",
+  "report.fx_method_name.multidivisa":
+    "Criteri DGT (multidivisa)",
+  "report.fx_method_name.tradicional-divisa":
+    "Tradicional amb divisa",
+  "report.fx_method_name.monodivisa":
+    "Tradicional sense divisa (monodivisa)",
+  "report.settings_line":
+    "Configuració del càlcul: mètode {{method}}, titulars {{titulares}}, autoconversions {{autoconvert}}",
   "report.non_finite_total":
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":
