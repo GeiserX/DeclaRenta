@@ -107,6 +107,29 @@ describe("profile form year", () => {
     expect(document.getElementById("profile-save-status")!.textContent).toBe("Perfil guardado");
   });
 
+  it("«Ir a Modelo 100» opens the review step once files are loaded, the upload step before", async () => {
+    vi.resetModules();
+    const { initProfile } = await import("../../src/web/profile.js");
+    const wizard = await import("../../src/web/wizard.js");
+    const panels = [1, 2, 3].map((i) => `<div id="wizard-step-${i}"></div>`).join("");
+    document.body.innerHTML = `<div id="profile-form-container"></div>${panels}`;
+    initProfile();
+    const link = () => document.querySelector<HTMLAnchorElement>(".profile-moved-link")!;
+    const shown = () => [1, 2, 3].filter((i) => !document.getElementById(`wizard-step-${i}`)!.hidden);
+
+    // No files yet: the link leaves the wizard on the upload step.
+    wizard.goToStep(1);
+    link().click();
+    expect(shown()).toEqual([1]);
+
+    // Results on screen: the link goes back to «Revisar y elegir método».
+    wizard.goToStep(2);
+    wizard.goToStep(3);
+    expect(shown()).toEqual([3]);
+    link().click();
+    expect(shown()).toEqual([2]);
+  });
+
   it("the form follows the year taken from an uploaded file", async () => {
     const indexHtml = readFileSync(resolve(__dirname, "../../src/web/index.html"), "utf-8");
     document.documentElement.innerHTML = new DOMParser().parseFromString(indexHtml, "text/html").documentElement.innerHTML;

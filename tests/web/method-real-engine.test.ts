@@ -18,7 +18,7 @@ import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import { renderHowCalculated, renderResultsSplit, renderMethodCompare, bindMethodCompare } from "../../src/web/method-summary.js";
 import { renderCasillaCards } from "../../src/web/casilla-detail.js";
-import { localizeMessage } from "../../src/i18n/index.js";
+import { localizeMessage, localizeHint, t } from "../../src/i18n/index.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { FxMethod, TaxSummary } from "../../src/types/tax.js";
 import { ECB_USD_2025_JAN_SEP } from "../integration/ecb-usd-2025.js";
@@ -42,6 +42,16 @@ describe("results page on the real engine, cycle fixture", () => {
     const root = document.createElement("div");
     root.innerHTML = renderResultsSplit(report, "tradicional-divisa");
     expect([...root.querySelectorAll(".split-value")].map(text)).toEqual(["+240,38 €", "−57,36 €", "+183,02 €"]);
+  });
+
+  it("with no foreign currency (method null) the strip has no «Divisa» cell", () => {
+    const report = run("multidivisa");
+    const root = document.createElement("div");
+    root.innerHTML = renderResultsSplit(report, null);
+    expect(root.querySelectorAll(".split-cell")).toHaveLength(2);
+    expect(text(root)).not.toContain(t("results.split_fx_sub"));
+    expect(text(root)).not.toContain(t("results.split_fx"));
+    expect(root.querySelector(".results-split-two")).not.toBeNull();
   });
 
   it("the comparison box shows the three real results", async () => {
@@ -75,7 +85,13 @@ describe("results page on the real engine, cycle fixture", () => {
     how.innerHTML = renderHowCalculated(report, "tradicional-divisa");
     const method = report.messages.find((m) => m.id === "report.fx_traditional_method")!;
     expect(method.severity).toBe("info");
-    expect(text(how.querySelector(".how-notes"))).toContain(localizeMessage(method));
+    // The method note replaces the card text and basis: the box says it once.
+    const box = text(how.querySelector(".how-calculated"));
+    expect(box).toContain(localizeMessage(method));
+    expect(box.split(localizeMessage(method)).length).toBe(2);
+    expect(text(how.querySelector(".how-basis"))).toBe(localizeHint(method));
+    expect(box).not.toContain(t("method.tradicional_divisa.text"));
+    expect(text(how.querySelector(".how-notes"))).not.toContain(localizeMessage(method));
 
     const cards = document.createElement("div");
     renderCasillaCards(cards, report);

@@ -258,7 +258,7 @@ describe("the FX method of each year (#434)", () => {
     expect(c.querySelector(".method-mismatch")).toBeNull();
   });
 
-  it("warns when two years used different methods, across the whole table", () => {
+  it("warns when two years used different methods, above the table", () => {
     const c = render(
       { ...stored(2023, { interestEarned: 10 }), fxMethod: "multidivisa" },
       { ...stored(2024, { interestEarned: 20 }), fxMethod: "tradicional-divisa" },
@@ -266,8 +266,11 @@ describe("the FX method of each year (#434)", () => {
     );
     expect(tags(c)).toEqual([t("report.fx_method_name.multidivisa"), t("report.fx_method_name.tradicional-divisa"), t("report.fx_method_name.multidivisa")]);
     expect(c.querySelector(".method-mismatch")?.textContent).toBe(t("compare.method_mismatch"));
-    const span = c.querySelector(".method-mismatch-row td")!.getAttribute("colspan");
-    expect(Number(span)).toBe(c.querySelectorAll("thead th").length);
+    // Outside the sideways-scrolling table, so a phone reads it in full.
+    const note = c.querySelector(".method-mismatch")!;
+    expect(note.closest(".table-wrapper")).toBeNull();
+    expect(note.closest("table")).toBeNull();
+    expect(note.getAttribute("role")).toBe("note");
   });
 
   it("shows «desconocido» for a year saved before the method was stored, and does not warn about it", () => {

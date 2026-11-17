@@ -13,6 +13,7 @@ import { t } from "../i18n/index.js";
 import { esc } from "./esc.js";
 import { clearLocalData } from "./storage.js";
 import { DEFAULT_FX_METHOD, isFxMethod } from "./fx-method.js";
+import { goToStep, reachedStep } from "./wizard.js";
 
 const PROFILE_KEY = "declarenta_profile";
 
@@ -213,6 +214,12 @@ export function initProfile(): void {
   document.getElementById("profile-form")!.addEventListener("input", () => {
     saveProfile(collectProfile());
     showSavedStatus();
+  });
+
+  // The note names the review step, so the link opens it once files are loaded
+  // (otherwise Modelo 100 opens on the upload step).
+  document.querySelector(".profile-moved-link")?.addEventListener("click", () => {
+    if (reachedStep() >= 2) goToStep(2);
   });
 
   // Delete everything stored in this browser, then reload so no screen keeps

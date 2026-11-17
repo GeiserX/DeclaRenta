@@ -91,8 +91,15 @@ export function renderSettingsChips(report: TaxSummary, method: FxMethod | null)
  * the traditional method among them) stay in the amber list under the casillas.
  */
 export function renderHowCalculated(report: TaxSummary, method: FxMethod | null): string {
-  const notes = report.messages.filter(isMethodNote);
-  if (!method && notes.length === 0) return "";
+  const all = report.messages.filter(isMethodNote);
+  if (!method && all.length === 0) return "";
+  // «Tradicional con divisa» has its own method note: it says what the card
+  // text and basis say, at more length. It takes their place instead of
+  // following them, so the box says the method once.
+  const own = method === "tradicional-divisa" ? all.find((m) => m.id === "report.fx_traditional_method") : undefined;
+  const notes = own ? all.filter((m) => m !== own) : all;
+  const intro = own ? localizeMessage(own) : method ? methodText(method, "text") : "";
+  const basis = own ? (localizeHint(own) ?? methodText("tradicional-divisa", "basis")) : method ? methodText(method, "basis") : "";
   const notesHtml = notes.length > 0
     ? `<ul class="how-notes">${notes.map((m) => {
         const hint = localizeHint(m);
@@ -101,9 +108,9 @@ export function renderHowCalculated(report: TaxSummary, method: FxMethod | null)
     : "";
   return `
     <section class="how-calculated" aria-labelledby="how-calculated-title">
-      <p><strong id="how-calculated-title">${esc(t("results.how_title"))}.</strong>${method ? `
-        ${esc(methodText(method, "text"))}
-        <span class="how-basis">${esc(methodText(method, "basis"))}</span>` : ""}</p>
+      <p><strong id="how-calculated-title">${esc(t("results.how_title"))}.</strong>${intro ? `
+        ${esc(intro)}
+        <span class="how-basis">${esc(basis)}</span>` : ""}</p>
       ${notesHtml}
     </section>`;
 }
@@ -112,7 +119,11 @@ export function renderHowCalculated(report: TaxSummary, method: FxMethod | null)
 // «Acciones / Divisa / Total» strip
 // ---------------------------------------------------------------------------
 
-export function renderResultsSplit(report: TaxSummary, method: FxMethod): string {
+/**
+ * `method` is null when the upload has no foreign currency: no method applies
+ * and there are no 1633/1637 rows, so the strip leaves the «Divisa» cell out.
+ */
+export function renderResultsSplit(report: TaxSummary, method: FxMethod | null): string {
   const totals = methodTotals(report);
   const securitiesLabel = totals.hasOtherElements ? t("results.split_securities") : t("results.split_shares");
   const securitiesSub = totals.hasOtherElements ? t("results.split_securities_sub") : t("results.split_shares_sub");
@@ -123,9 +134,9 @@ export function renderResultsSplit(report: TaxSummary, method: FxMethod): string
       <dd class="split-value ${signClass(value)}">${signed(value)} €</dd>
       <dd class="split-sub">${esc(sub)}</dd>
     </div>`;
-  return `<dl class="results-split" id="results-split">
+  return `<dl class="results-split${method ? "" : " results-split-two"}" id="results-split">
     ${cell(securitiesLabel, totals.securities, securitiesSub)}
-    ${cell(t("results.split_fx"), totals.fx, fxSub)}
+    ${method ? cell(t("results.split_fx"), totals.fx, fxSub) : ""}
     ${cell(t("results.split_total"), totals.total, t("results.split_total_sub", { tax: fmtEur(totals.tax) }))}
   </dl>`;
 }

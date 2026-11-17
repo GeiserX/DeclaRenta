@@ -168,8 +168,10 @@ export function renderYearComparison(container: HTMLElement): void {
   const methodEmptyVars = sorted.slice(0, -1).map(() => "<td>—</td>").join("");
   const methodRow = `<tr class="method-row"><td class="row-label">${t("compare.method")}</td>${methodCells}${methodEmptyVars}</tr>`;
   const knownMethods = new Set(sorted.map((r) => r.fxMethod).filter((m) => m !== undefined));
-  const mismatchRow = knownMethods.size > 1
-    ? `<tr class="method-mismatch-row"><td colspan="${sorted.length * 2}"><p class="method-mismatch" role="note">${esc(t("compare.method_mismatch"))}</p></td></tr>`
+  // Outside the scrolling table, so it wraps to the card width and a phone
+  // reads it without scrolling sideways.
+  const mismatchNote = knownMethods.size > 1
+    ? `<p class="method-mismatch" role="note">${esc(t("compare.method_mismatch"))}</p>`
     : "";
 
   const statsRows = [
@@ -184,6 +186,7 @@ export function renderYearComparison(container: HTMLElement): void {
         <h3>${t("compare.title")}</h3>
         <button id="clear-history-btn" class="btn-small btn-danger">${t("compare.clear_history")}</button>
       </div>
+      ${mismatchNote}
       <div class="table-wrapper">
         <table class="compare-table">
           <thead>
@@ -195,7 +198,6 @@ export function renderYearComparison(container: HTMLElement): void {
           </thead>
           <tbody>
             ${methodRow}
-            ${mismatchRow}
             ${rows}
             <tr class="stats-divider"><td colspan="${sorted.length * 2}"></td></tr>
             ${statsRows}

@@ -3553,8 +3553,9 @@ footer a:hover {
     box-shadow 0.15s;
 }
 
-.method-card:hover {
-  border-color: var(--accent);
+/* Hover stays grey: the accent border and ring mark the selected card only. */
+.method-card:not(.selected):hover {
+  border-color: var(--muted);
 }
 
 .method-card.selected {
@@ -3736,11 +3737,11 @@ footer a:hover {
 
 .method-chip-change {
   width: auto;
-  padding: 0;
-  margin: 0;
+  padding: 1px 6px;
+  margin: 0 0 0 2px;
   background: none;
   border: 0;
-  border-radius: 0;
+  border-radius: 4px;
   color: #fff;
   font: inherit;
   font-weight: 700;
@@ -3749,8 +3750,9 @@ footer a:hover {
   cursor: pointer;
 }
 
-.method-chip-change:hover {
-  background: none;
+.method-chip-change:hover,
+.method-chip-change:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
   text-decoration-thickness: 2px;
 }
 
@@ -3800,6 +3802,11 @@ footer a:hover {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   margin: 0 0 var(--space-4);
+}
+
+/* No foreign currency: no «Divisa» cell. */
+.results-split.results-split-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .split-cell {
@@ -3918,12 +3925,8 @@ footer a:hover {
   border-color: var(--border);
 }
 
-.method-mismatch-row td {
-  padding: var(--space-2) 0.75rem;
-}
-
 .method-mismatch {
-  margin: 0;
+  margin: 0 0 var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
@@ -3945,12 +3948,20 @@ footer a:hover {
     grid-template-columns: 1fr 1fr;
   }
 
-  .results-split .split-cell:last-child {
+  .results-split:not(.results-split-two) .split-cell:last-child {
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 520px) {
+  /* «Cambiar» in the results header: a 44 px tap target on a phone. */
+  .method-chip-change {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+  }
+
   /* The summary wraps; separators would start a line, so gaps alone separate. */
   .review-summary > span + span::before {
     content: none;

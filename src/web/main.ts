@@ -1279,7 +1279,7 @@ function renderResults(report: TaxSummary) {
   }
 
   // «Acciones / Divisa / Total», then the closed comparison with the other methods.
-  resultsSummaryDiv.innerHTML = renderResultsSplit(report, method ?? DEFAULT_FX_METHOD) + (method ? renderMethodCompare() : "");
+  resultsSummaryDiv.innerHTML = renderResultsSplit(report, method) + (method ? renderMethodCompare() : "");
   const ctx = lastRunContext;
   if (method && ctx) {
     bindMethodCompare(resultsSummaryDiv, { method, report }, (m) =>
