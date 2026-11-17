@@ -241,6 +241,31 @@ describe("the FX method of each year (#434)", () => {
   }
   const tags = (c: HTMLElement) => [...c.querySelectorAll(".method-row .method-tag")].map((el) => el.textContent);
 
+  it("an empty re-run of a saved year with activity replaces it with zeros and the new method", () => {
+    // A year with only FX conversions, saved with the default method, then
+    // re-run with monodivisa: the report is empty, but the year had activity.
+    persistReport(fxOnly(2024, 100), ["IBKR"], "multidivisa");
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", true);
+    const reports = loadAllReports();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.fxMethod).toBe("monodivisa");
+    expect(reports[0]!.casillas.fxNetGainLoss).toBe(0);
+    expect(reports[0]!.stats.fxDisposalsCount).toBe(0);
+  });
+
+  it("an empty report for a year with no activity keeps the saved figures (wrong year selected)", () => {
+    persistReport(fxOnly(2024, 100), ["IBKR"], "multidivisa");
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", false);
+    const reports = loadAllReports();
+    expect(reports[0]!.fxMethod).toBe("multidivisa");
+    expect(reports[0]!.casillas.fxNetGainLoss).toBe(100);
+  });
+
+  it("an empty report for a year never saved adds no row, even with activity", () => {
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", true);
+    expect(loadAllReports()).toEqual([]);
+  });
+
   it("persistReport stores the method only when one applies", () => {
     persistReport(interestOnly(2024, 40), ["IBKR"], "monodivisa");
     persistReport(interestOnly(2025, 40), ["IBKR"]);

@@ -1009,7 +1009,7 @@ async function processFiles(): Promise<void> {
     lastRunContext = { merged, rates: allRates, year, options };
 
     // Persist for year comparison, with the method when it applies.
-    persistReport(report, currentBrokers, uploadCurrencies.length > 0 ? method : undefined);
+    persistReport(report, currentBrokers, uploadCurrencies.length > 0 ? method : undefined, detectedYears.includes(year));
 
     unlockStep(3);
     clearWizardError();

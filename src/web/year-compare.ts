@@ -16,11 +16,14 @@ import { esc } from "./esc.js";
  * Convert a TaxSummary into a StoredReport and save to localStorage.
  * `fxMethod` is the method the report was computed with, or undefined when the
  * upload has no foreign currency and the method does not apply.
+ * `yearHasActivity` says the upload has operations dated in the report's year.
  */
-export function persistReport(report: TaxSummary, brokers: string[], fxMethod?: FxMethod): void {
+export function persistReport(report: TaxSummary, brokers: string[], fxMethod?: FxMethod, yearHasActivity = false): void {
   // Don't persist empty reports (e.g. wrong year selected with no matching data).
   // A year with only interest, FX or base-general rewards is not empty, and must
-  // replace any earlier snapshot of that year.
+  // replace any earlier snapshot of that year. An empty report for a year with
+  // activity (a year of only FX conversions re-run with monodivisa) replaces a
+  // saved snapshot with zeros and the new method, but adds no new row.
   const isEmpty =
     report.capitalGains.disposals.length === 0 &&
     report.dividends.entries.length === 0 &&
@@ -28,7 +31,7 @@ export function persistReport(report: TaxSummary, brokers: string[], fxMethod?: 
     report.interest.paid.isZero() &&
     report.fxGains.disposals.length === 0 &&
     report.generalGains.entries.length === 0;
-  if (isEmpty) return;
+  if (isEmpty && !(yearHasActivity && loadAllReports().some((r) => r.year === report.year))) return;
 
   const currencies = new Set<string>();
   for (const d of report.capitalGains.disposals) currencies.add(d.currency);
