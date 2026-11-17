@@ -13,7 +13,7 @@
 import Decimal from "decimal.js";
 import type { FxMethod, TaxSummary } from "../types/tax.js";
 import { calculateSavingsTax } from "../engine/tax-brackets.js";
-import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
+import { computeTaxableBase } from "../engine/taxable-base.js";
 import { combinedNetGainLoss, computeCasillaBlocks, computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { t, localizeMessage, localizeHint } from "../i18n/index.js";
 import { esc } from "./esc.js";
@@ -38,8 +38,8 @@ export interface MethodTotals {
 export function methodTotals(report: TaxSummary): MethodTotals {
   const total = combinedNetGainLoss(computeCasillaBlocksWithFx(report));
   const fx = report.fxGains.netGainLoss;
-  const { taxableBase } = computeTaxableBaseBreakdown(report);
-  const gross = calculateSavingsTax(new Decimal(taxableBase), report.year);
+  // The exact Decimal base: a Number round trip moves the tax by a cent.
+  const gross = calculateSavingsTax(computeTaxableBase(report), report.year);
   const tax = Decimal.max(0, gross.minus(report.doubleTaxation.deduction));
   const hasOtherElements = computeCasillaBlocks(report.capitalGains.disposals).otherElements.count > 0;
   return { securities: total.minus(fx), fx, total, tax, hasOtherElements };
