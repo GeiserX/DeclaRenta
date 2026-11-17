@@ -189,3 +189,40 @@ describe("default: a USD position delivered by a EUR option exercise (issue #441
     expect(v.report.fxGains.disposals.map((d) => d.trigger)).toEqual(["stock_sale_cross"]);
   });
 });
+
+describe("default: a cross-currency sale keeps stock FIFO order beside a same-day rebuy (PR #445 review)", () => {
+  // Two 1000 USD lots of AAA: funded at 0.80 and 0.70, bought at 0.90 and 1.00.
+  // On one day the first lot is sold in EUR, the second in USD, and AAA is
+  // bought back in USD. The stock FIFO gives the EUR sale lot 1, so its
+  // currency drift is 1000 × (0.90 − 0.80) = 100, and the 0.70 dollars of
+  // lot 2 come back for the rebuy.
+  const sc: Scenario = {
+    id: "XHELD",
+    years: [2024],
+    closed: false,
+    ev: [
+      { k: "fund", d: "2024-02-01", usd: "1000", r: "0.80" },
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+      { k: "fund", d: "2024-04-01", usd: "1000", r: "0.70" },
+      { k: "buy", d: "2024-05-02", sym: "AAA", qty: "10", px: "100", r: "1.00" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "buy", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+    ],
+  };
+
+  it("releases lot 1's slice (cost 800, not 700) and parks the rebuy at 0.70", () => {
+    const { st, rates } = toStatement(sc);
+    // Only the first sale of the day is on the EUR listing.
+    const eurSale = st.trades.find((t) => t.tradeDate === "2024-06-03" && t.buySell === "SELL")!;
+    eurSale.currency = "EUR";
+    eurSale.commissionCurrency = "EUR";
+    const v = figures(st, rates);
+    expect(v.report.fxGains.disposals.map((d) => [d.trigger, f2(d.proceedsEur), f2(d.costBasisEur)])).toEqual([
+      ["stock_sale_cross", "900.00", "800.00"],
+    ]);
+    const trace = v.report.fxTrace ?? [];
+    const rebuy = trace.filter((t) => t.date === "2024-06-03" && t.kind === "park");
+    expect(rebuy.map((t) => [f2(new Decimal(t.quantityFcy)), t.rate])).toEqual([["1000.00", "0.7"]]);
+  });
+});

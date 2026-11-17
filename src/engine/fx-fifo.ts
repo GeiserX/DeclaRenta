@@ -1654,6 +1654,13 @@ export class FxFifoEngine {
             brokerSource,
             positionKey,
             crossCurrency: true,
+            // Default only: like an ordinary sale of shares bought on an earlier
+            // day, it runs before a same-day rebuy and keeps the stock FIFO's
+            // sale order, so it releases its own lot's slice (a trap: ranked as
+            // a round trip it ran after a same-day USD sale and rebuy of the
+            // same position and released the next lot's slice, 200 on an
+            // economic 100, PR #445 review).
+            ...(!traditionalFx && normalizeDate(d.acquireDate) < date ? { heldBefore: true as const } : {}),
           });
         }
         // The default skips a sale with no positive proceeds, as below.
