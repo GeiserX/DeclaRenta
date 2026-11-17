@@ -22,5 +22,5 @@ export function formatReportSettings(settings: ReportSettings, t: Translate): st
 
 /** True when two settings would produce different figures. */
 export function reportSettingsDiffer(a: ReportSettings, b: ReportSettings): boolean {
-  return a.monodivisa !== b.monodivisa || a.trackAutoConvert !== b.trackAutoConvert || a.titulares !== b.titulares;
+  return a.monodivisa !== b.monodivisa || (a.traditionalFx === true) !== (b.traditionalFx === true) || a.trackAutoConvert !== b.trackAutoConvert || a.titulares !== b.titulares;
 }

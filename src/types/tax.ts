@@ -292,13 +292,30 @@ export interface GeneralGainEntry {
  * The profile settings a report was computed with. They change the figures, so
  * the Results header and the CSV/PDF exports print them next to the numbers.
  */
+/**
+ * How foreign-currency shares and currency are valued (#434).
+ * - `multidivisa`: «Criterio DGT (multidivisa)», the default.
+ * - `tradicional-divisa`: «Tradicional con divisa».
+ * - `monodivisa`: «Tradicional sin divisa (monodivisa)».
+ */
+export type FxMethod = "multidivisa" | "tradicional-divisa" | "monodivisa";
+
 export interface ReportSettings {
   /** Monodivisa mode: the FX engine is off (`ReportOptions.skipFx`). */
   monodivisa: boolean;
+  /** «Tradicional con divisa» (`ReportOptions.traditionalFx`). Written only when on. */
+  traditionalFx?: true;
   /** Broker auto-conversions (AFx/FXCONV) are processed (`ReportOptions.trackAutoConvert`). */
   trackAutoConvert: boolean;
   /** Number of account holders the amounts are split between. */
   titulares: number;
+}
+
+/** The method a report was computed with, read from its settings echo. */
+export function fxMethodOf(settings: ReportSettings): FxMethod {
+  if (settings.monodivisa) return "monodivisa";
+  if (settings.traditionalFx === true) return "tradicional-divisa";
+  return "multidivisa";
 }
 
 /** Aggregated results for Modelo 100 casillas */

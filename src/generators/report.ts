@@ -9,6 +9,7 @@
 import Decimal from "decimal.js";
 import type { CashTransaction, FlexStatement, Trade } from "../types/ibkr.js";
 import type {
+  FxMethod,
   TaxSummary,
   TaxMessage,
   FifoDisposal,
@@ -325,6 +326,8 @@ function resolveManualOpeningLots(
 
 export interface ReportOptions {
   skipFx?: boolean;
+  /** «Tradicional con divisa» (#434). `skipFx` wins when both are set. */
+  traditionalFx?: boolean;
   /**
    * Track broker auto-conversions (IBKR AFx / FXCONV) as ordinary currency
    * conversions. DEFAULT true (issue #239): IBKR does NOT round-trip FCY→EUR on a
@@ -366,6 +369,11 @@ export interface ReportOptions {
    * normally and can be split across multiple dates/prices.
    */
   manualOpeningLots?: ManualOpeningLot[];
+}
+
+/** The engine switches for each FX method. */
+export function reportOptionsForMethod(m: FxMethod): { skipFx: boolean; traditionalFx: boolean } {
+  return { skipFx: m === "monodivisa", traditionalFx: m === "tradicional-divisa" };
 }
 
 /**
@@ -840,6 +848,7 @@ export function generateTaxReport(
     year,
     settings: {
       monodivisa: options?.skipFx === true,
+      ...(options?.traditionalFx === true && options.skipFx !== true ? { traditionalFx: true as const } : {}),
       trackAutoConvert: options?.trackAutoConvert !== false,
       titulares,
     },
