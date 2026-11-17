@@ -19,10 +19,10 @@ import {
   computeCasillaBlocksWithFx,
   combinedNetGainLoss,
 } from "../../src/generators/casillas.js";
-import { renderDividendsDetail, renderDoubleTaxDetail, renderCasillaCards } from "../../src/web/casilla-detail.js";
+import { renderDividendsDetail, renderDoubleTaxDetail, renderCasillaCards, isMethodNote } from "../../src/web/casilla-detail.js";
 import { t } from "../../src/i18n/index.js";
 import Decimal from "decimal.js";
-import type { TaxSummary, FifoDisposal, DividendEntry } from "../../src/types/tax.js";
+import type { TaxSummary, FifoDisposal, DividendEntry, ReportSettings, TaxMessage } from "../../src/types/tax.js";
 
 function makeDividend(overrides: Partial<DividendEntry> = {}): DividendEntry {
   return {
@@ -414,5 +414,40 @@ describe("renderDoubleTaxDetail (Casilla 0588 card)", () => {
     expect(html).toContain("200,00");
     const footer = html.slice(html.indexOf("<tfoot>"), html.indexOf("</tfoot>"));
     expect(footer).toContain("1.200,00");
+  });
+});
+
+describe("method-aware notes (#434)", () => {
+  function acquisitionNote(settings: ReportSettings | undefined): string {
+    const report = makeSummaryWithDisposals([makeDisposal({})]);
+    if (settings) report.settings = settings;
+    const container = document.createElement("div");
+    renderCasillaCards(container, report);
+    const card = [...container.querySelectorAll<HTMLElement>(".casilla-card")]
+      .find((c) => c.querySelector(".casilla-concept")?.textContent === t("casilla.listed_acquisition_value"))!;
+    card.querySelector<HTMLElement>(".casilla-trigger")!.click();
+    return card.querySelector(".casilla-detail .detail-note")!.textContent;
+  }
+
+  it("the 0331 note follows the method the report was computed with", () => {
+    expect(acquisitionNote(undefined)).toBe(t("casilla.acquisition_sale_rate_note"));
+    expect(acquisitionNote({ monodivisa: false, trackAutoConvert: true, titulares: 1 })).toBe(t("casilla.acquisition_sale_rate_note"));
+    expect(acquisitionNote({ monodivisa: false, traditionalFx: true, trackAutoConvert: true, titulares: 1 })).toBe(t("casilla.acquisition_buy_rate_note_fx"));
+    expect(acquisitionNote({ monodivisa: true, trackAutoConvert: false, titulares: 1 })).toBe(t("casilla.acquisition_buy_rate_note_mono"));
+  });
+
+  it("keeps method notes out of the info list below the casillas; other notes stay", () => {
+    const methodNote: TaxMessage = { id: "report.fx_method_consistency", severity: "info", message: "method note" };
+    const otherNote: TaxMessage = { id: "report.no_ecb_rate_weekend", severity: "info", message: "other note" };
+    expect(isMethodNote(methodNote)).toBe(true);
+    expect(isMethodNote(otherNote)).toBe(false);
+    // A warning with a method id is never moved out of the amber list.
+    expect(isMethodNote({ ...methodNote, severity: "warning" })).toBe(false);
+
+    const report = makeSummaryWithDisposals([makeDisposal({})]);
+    report.messages = [methodNote, otherNote];
+    const container = document.createElement("div");
+    renderCasillaCards(container, report);
+    expect(container.querySelector(".msg-info summary")?.textContent).toContain(t("messages.info_title", { count: "1" }));
   });
 });

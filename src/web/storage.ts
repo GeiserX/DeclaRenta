@@ -5,6 +5,9 @@
  * compare results across multiple tax years.
  */
 
+import type { FxMethod } from "../types/tax.js";
+import { isFxMethod } from "./fx-method.js";
+
 const STORAGE_KEY = "declarenta_reports";
 
 /** Serializable version of a report for localStorage */
@@ -13,6 +16,13 @@ export interface StoredReport {
   processedAt: string;
   brokers: string[];
   tradesCount: number;
+  /**
+   * The FX method the year was computed with (#434). Absent for years saved
+   * before the method was stored, and for years with no foreign currency,
+   * where the method does not apply: the year comparison shows «desconocido»
+   * for those and never guesses.
+   */
+  fxMethod?: FxMethod;
   /** Casilla values as plain numbers (Decimal → number for serialization) */
   casillas: {
     transmissionValue: number;
@@ -75,8 +85,9 @@ export function loadAllReports(): StoredReport[] {
 
 /**
  * Rebuild a stored record in the current schema. saveReport writes every stored
- * year back through here, so a casillas field missing below is erased from all
- * earlier years on the next save: add every new field.
+ * year back through here, so a field missing below is erased from all earlier
+ * years on the next save: add every new field (casillas, stats and top-level,
+ * like fxMethod).
  */
 export function migrateReport(r: Record<string, unknown>): StoredReport {
   const c = (r.casillas ?? {}) as Record<string, unknown>;
@@ -86,6 +97,7 @@ export function migrateReport(r: Record<string, unknown>): StoredReport {
     processedAt: typeof r.processedAt === "string" ? r.processedAt : "",
     brokers: Array.isArray(r.brokers) ? (r.brokers as string[]) : [],
     tradesCount: Number(r.tradesCount ?? 0),
+    ...(isFxMethod(r.fxMethod) ? { fxMethod: r.fxMethod } : {}),
     casillas: {
       transmissionValue: Number(c.transmissionValue ?? 0),
       acquisitionValue: Number(c.acquisitionValue ?? 0),

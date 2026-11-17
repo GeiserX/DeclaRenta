@@ -2,9 +2,10 @@
 /**
  * The fiscal profile form and the 720 / D-6 files it feeds.
  *
- * The year dropdown only lists three default years. A year set from the data
- * (or the results year selector) can fall outside them; the form must still
- * show it, or the next keystroke in any field saves the first option instead.
+ * The form holds the personal data only. The year (set from the data or the
+ * results year selector) and the Modelo 100 settings (FX method, titulares,
+ * auto-conversions, chosen on the review step) live in the same stored
+ * profile, so an edit in the form must keep them as they are.
  *
  * The 720 and D-6 files must carry the year their section was rendered with,
  * the one on screen, not whatever the profile says at click time.
@@ -52,9 +53,9 @@ function profile(overrides: Partial<FiscalProfile> = {}): FiscalProfile {
     ccaa: "Madrid",
     telefono: "",
     year: OLD_YEAR,
-    monodivisa: false,
-    trackAutoConvert: true,
-    titulares: 1,
+    fxMethod: "tradicional-divisa",
+    trackAutoConvert: false,
+    titulares: 2,
     ...overrides,
   };
 }
@@ -88,17 +89,22 @@ afterEach(() => {
 });
 
 describe("profile form year", () => {
-  it("shows a saved year outside the default options and keeps it when another field is edited", async () => {
+  it("keeps the year and the Modelo 100 settings when a personal field is edited", async () => {
     const { initProfile, saveProfile, getProfile } = await import("../../src/web/profile.js");
     document.body.innerHTML = `<div id="profile-form-container"></div>`;
     saveProfile(profile());
 
     initProfile();
-    expect((document.getElementById("profile-year") as HTMLSelectElement).value).toBe(String(OLD_YEAR));
+    // The settings moved to the review step: the form has no control for them.
+    for (const id of ["profile-year", "profile-titulares", "profile-monodivisa", "profile-track-autoconvert", "profile-save-btn"]) {
+      expect(document.getElementById(id), id).toBeNull();
+    }
+    expect(document.querySelector(".profile-moved-link")?.getAttribute("href")).toBe("#renta");
 
     typeInto("profile-name", "Juana");
-    expect(getProfile().nombre).toBe("Juana");
-    expect(getProfile().year).toBe(OLD_YEAR);
+    expect(getProfile()).toEqual(profile({ nombre: "Juana" }));
+    // The auto-save says it saved.
+    expect(document.getElementById("profile-save-status")!.textContent).toBe("Perfil guardado");
   });
 
   it("the form follows the year taken from an uploaded file", async () => {
@@ -135,7 +141,6 @@ describe("profile form year", () => {
     await waitFor(() => document.querySelector("#review-content .review-grid"), "review grid");
 
     expect(getProfile().year).toBe(OLD_YEAR);
-    expect((document.getElementById("profile-year") as HTMLSelectElement).value).toBe(String(OLD_YEAR));
     typeInto("profile-name", "Juana");
     expect(getProfile().year).toBe(OLD_YEAR);
   });

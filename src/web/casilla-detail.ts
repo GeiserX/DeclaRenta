@@ -6,7 +6,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { TaxSummary, FifoDisposal, FxDisposal, DividendEntry, InterestEntry, GeneralGainEntry } from "../types/tax.js";
+import { fxMethodOf, type FxMethod, type TaxSummary, type FifoDisposal, type FxDisposal, type DividendEntry, type InterestEntry, type GeneralGainEntry, type TaxMessage } from "../types/tax.js";
 import { t, localizeMessage, localizeHint, isTranslationKey } from "../i18n/index.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { esc } from "./esc.js";
@@ -32,6 +32,42 @@ interface CasillaConfig {
   visible?: (r: TaxSummary, blocks: CasillaBlocks) => boolean;
 }
 
+/** The FX method a report was computed with; reports without settings used the default. */
+export function reportFxMethod(r: TaxSummary): FxMethod {
+  return r.settings ? fxMethodOf(r.settings) : "multidivisa";
+}
+
+/**
+ * Info messages about the FX method itself. They are shown in the open «Cómo
+ * se ha calculado» box above the casillas (see method-summary.ts), so the
+ * collapsed info list below the casillas leaves them out.
+ */
+export const METHOD_NOTE_IDS: ReadonlySet<string> = new Set([
+  "report.competitor_reconciliation",
+  "report.fx_method_consistency",
+  "report.fx_deferred_no_conversion",
+  "report.monodivisa_conversions_skipped",
+  "report.fx_traditional_method",
+  "report.fx_traditional_no_conversion",
+  "report.fx_traditional_lost_dollars",
+  "report.fx_traditional_uncovered",
+]);
+
+export function isMethodNote(m: TaxMessage): boolean {
+  return m.severity === "info" && METHOD_NOTE_IDS.has(m.id);
+}
+
+/**
+ * The note under the acquisition drill-downs (0331/1637). The default values
+ * the acquisition at the sale-date rate; both traditional methods value it at
+ * the buy-date rate.
+ */
+function acquisitionRateNote(method: FxMethod): string {
+  if (method === "tradicional-divisa") return t("casilla.acquisition_buy_rate_note_fx");
+  if (method === "monodivisa") return t("casilla.acquisition_buy_rate_note_mono");
+  return t("casilla.acquisition_sale_rate_note");
+}
+
 /** Disposals belonging to the "otros elementos" block (everything not a listed share). */
 function otherElementDisposals(r: TaxSummary): FifoDisposal[] {
   return r.capitalGains.disposals.filter((d) => !isListedShare(d));
@@ -51,19 +87,22 @@ function renderDisposalsDetail(
   disposals: FifoDisposal[],
   label: string,
   mode: "transmission" | "acquisition" = "transmission",
+  method: FxMethod = "multidivisa",
+  emptyText: string = t("casilla.no_operations"),
 ): string {
-  if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
+  if (disposals.length === 0) return `<p class="muted">${esc(emptyText)}</p>`;
   const dateHeader = mode === "acquisition" ? t("table.buy_date") : t("table.sell_date");
-  // The acquisition value (0331/1637) is shown at the SALE-date ECB rate so that
-  // transmisión − adquisición equals the gain exactly (DGT V2422-20). For a
-  // foreign-currency holding this differs from the historical buy-date EUR cost,
-  // and from acquisition figures saved in earlier app versions / prior snapshots.
+  // Under the default the acquisition value (0331/1637) is shown at the
+  // SALE-date ECB rate so that transmisión − adquisición equals the gain exactly
+  // (DGT V2422-20); it differs from the historical buy-date EUR cost. Both
+  // traditional methods value it at the BUY-date rate, so the note follows the
+  // method the report was computed with.
   const note = mode === "acquisition"
-    ? `<p class="detail-note">${esc(t("casilla.acquisition_sale_rate_note"))}</p>`
+    ? `<p class="detail-note">${esc(acquisitionRateNote(method))}</p>`
     : "";
   return `
     <p class="detail-label">${esc(label)} (${disposals.length})</p>
-    <table class="detail-table">
+    <div class="detail-table-wrap"><table class="detail-table">
       <thead><tr>
         <th>ISIN</th><th>${t("table.symbol")}</th><th>${dateHeader}</th>
         <th>${t("table.units")}</th><th>EUR</th>
@@ -77,7 +116,7 @@ function renderDisposalsDetail(
           <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
-    </table>
+    </table></div>
     ${note}`;
 }
 
@@ -260,7 +299,7 @@ function renderFxDisposalsDetail(
   if (disposals.length === 0) return `<p class="muted">${t("casilla.no_operations")}</p>`;
   return `
     <p class="detail-label">${esc(label)} (${disposals.length})</p>
-    <table class="detail-table">
+    <div class="detail-table-wrap"><table class="detail-table">
       <thead><tr>
         <th>${t("table.currency")}</th><th>${t("table.sell_date")}</th><th>${t("table.buy_date")}</th>
         <th>${t("table.units")}</th><th>EUR</th><th>${t("table.fx_origin")}</th><th>${t("table.fx_lot")}</th>
@@ -276,7 +315,12 @@ function renderFxDisposalsDetail(
           <td>${esc(d.lotId)}</td>
         </tr>`).join("")}
       </tbody>
-    </table>`;
+    </table></div>`;
+}
+
+/** The "Sin operaciones" text of the 1633/1637 securities part, which says FX rows follow when they do. */
+function otherElementsEmptyText(r: TaxSummary): string {
+  return r.fxGains.disposals.length > 0 ? t("casilla.no_other_elements_fx_below") : t("casilla.no_operations");
 }
 
 const CASILLAS: CasillaConfig[] = [
@@ -294,7 +338,7 @@ const CASILLAS: CasillaConfig[] = [
     i18nKey: "casilla.listed_acquisition_value",
     getValue: (_r, blocks) => fmtEur(blocks.listedShares.acquisitionValue),
     getClass: () => "",
-    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_acquisition_value"), "acquisition"),
+    getDetail: (r) => renderDisposalsDetail(listedShareDisposals(r), t("casilla.listed_acquisition_value"), "acquisition", reportFxMethod(r)),
     visible: (_r, blocks) => blocks.listedShares.count > 0,
   },
   // Otros elementos patrimoniales: opciones/cripto/fondos (Art. 37.1.m) + divisa
@@ -305,7 +349,7 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (_r, blocks) => fmtEur(blocks.otherElements.transmissionValue),
     getClass: () => "",
     getDetail: (r) =>
-      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_transmission_value")) +
+      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_transmission_value"), "transmission", reportFxMethod(r), otherElementsEmptyText(r)) +
       renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_transmission_value")),
     visible: (_r, blocks) => blocks.otherElements.count > 0,
   },
@@ -315,7 +359,7 @@ const CASILLAS: CasillaConfig[] = [
     getValue: (_r, blocks) => fmtEur(blocks.otherElements.acquisitionValue),
     getClass: () => "",
     getDetail: (r) =>
-      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_acquisition_value"), "acquisition") +
+      renderDisposalsDetail(otherElementDisposals(r), t("casilla.other_acquisition_value"), "acquisition", reportFxMethod(r), otherElementsEmptyText(r)) +
       renderFxDisposalsDetail(r.fxGains.disposals, t("casilla.fx_acquisition_value"), "acquisition"),
     visible: (_r, blocks) => blocks.otherElements.count > 0,
   },
@@ -432,7 +476,7 @@ export function renderCasillaCards(container: HTMLElement, report: TaxSummary): 
   const msgs = report.messages;
   const errors = msgs.filter((m) => m.severity === "error");
   const warns = msgs.filter((m) => m.severity === "warning");
-  const infos = msgs.filter((m) => m.severity === "info");
+  const infos = msgs.filter((m) => m.severity === "info" && !isMethodNote(m));
 
   let messagesHtml = "";
 
