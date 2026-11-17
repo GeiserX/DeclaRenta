@@ -811,7 +811,9 @@ export function generateTaxReport(
     // (trackAutoConvert === false) restores the historical skip (issue #239).
     const trackAutoConvert = options?.trackAutoConvert !== false;
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
-    const cashFxEvents = FxFifoEngine.extractCashFxEvents(statement.cashTransactions, rateMap);
+    // The collapsed rows, the ones the income path reads (issue #439): a
+    // reversed and re-credited dividend opens one lot, not three.
+    const cashFxEvents = FxFifoEngine.extractCashFxEvents(allCashTransactions, rateMap);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
     // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
     // stock SELL re-adds that principal at its carried basis plus the profit at the

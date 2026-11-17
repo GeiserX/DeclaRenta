@@ -816,12 +816,12 @@ describe("FxFifoEngine", () => {
       expect(total(events)).toBe("9");
     });
 
-    // NOT covered (pinned, separate from #436): a NEGATIVE Dividends row (an
-    // IBKR "- REVERSAL" or a DEGIRO storno) still goes through abs() and opens a
-    // positive lot. This test documents today's behaviour so a fix is a visible change.
-    it("pins: a negative dividend row still opens a positive lot (sign-blind income, not #436)", () => {
+    // A NEGATIVE Dividends row (an IBKR "- REVERSAL" or a DEGIRO storno) keeps
+    // its sign (issue #439): it nets into the same key's income, so 10 − 10 + 11
+    // is 11 USD received. It went through abs() and opened a positive lot (31).
+    it("a negative dividend row nets with its sign into the same key's income (issue #439)", () => {
       const events = FxFifoEngine.extractCashFxEvents([div(D, "10"), div(D, "-10"), div(D, "11")], rateMap);
-      expect(total(events)).toBe("31");
+      expect(total(events)).toBe("11");
     });
 
     // The key carries the broker: a withholding never nets into another broker's

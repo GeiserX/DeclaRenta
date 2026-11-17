@@ -1297,6 +1297,11 @@ export class FxFifoEngine {
    *
    * Dividends/interest received in FCY create acquisition lots;
    * withholding tax and fees paid in FCY consume lots.
+   *
+   * Pass the rows AFTER `collapseCorrections` (report.ts does), the same rows
+   * the income path reads (issue #439): a reversal and its re-credit cancel
+   * there. An income row that stays negative takes currency out with its sign
+   * (see `revByKey` below).
    */
   static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
     const events: FxEvent[] = [];
@@ -1383,6 +1388,36 @@ export class FxFifoEngine {
       return gross.minus(applied);
     };
 
+    // Income reversals (issue #439). A broker reverses a dividend or an interest
+    // credit with a negative row of the same type; the income path (0029/0027)
+    // sums it with its sign. Exact same-day pairs are already gone (the caller
+    // passes collapsed rows); a reversal left over (another day, another
+    // amount) takes currency out of the account. A trap: taking the absolute
+    // value of every dividend row opened a lot for the reversal too, 20 USD
+    // that never existed on a +10 / −10 / +10 dividend. Like a withholding,
+    // a reversal first nets into the income of its (broker, currency, date),
+    // so a correction never consumes an older lot at another rate; what no
+    // income absorbs leaves the pool after the loop, like a fee.
+    const INCOME_IN = new Set(["Dividends", "Payment In Lieu Of Dividends", "Broker Interest Received", "Bond Interest Received"]);
+    const isReversal = (tx: CashTransaction): boolean => INCOME_IN.has(tx.type) && new Decimal(tx.amount).lessThan(0);
+    const revByKey = new Map<string, Decimal>(); // > 0: reversed quantity still to take out
+    const revRowByKey = new Map<string, CashTransaction>();
+    for (const tx of cashTransactions) {
+      if (tx.currency === "EUR" || tx.brokerConvertedToBase || !isReversal(tx)) continue;
+      const key = whtKey(tx.brokerSource, tx.currency, cashDate(tx));
+      revByKey.set(key, (revByKey.get(key) ?? new Decimal(0)).minus(tx.amount));
+      if (!revRowByKey.has(key)) revRowByKey.set(key, tx);
+    }
+    /** Take the pending reversal of its key out of an income inflow. */
+    const consumeReversal = (brokerSource: string | undefined, currency: string, date: string, gross: Decimal): Decimal => {
+      const key = whtKey(brokerSource, currency, date);
+      const pending = revByKey.get(key);
+      if (!pending || !pending.greaterThan(0)) return gross;
+      const applied = Decimal.min(pending, gross);
+      revByKey.set(key, pending.minus(applied));
+      return gross.minus(applied);
+    };
+
     const convertedKeys = new Set<string>();
     for (const tx of cashTransactions) {
       if (tx.currency === "EUR") continue;
@@ -1419,9 +1454,13 @@ export class FxFifoEngine {
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
       if (ecbRate === null) continue;
 
+      // A reversal of an income credit: taken out with its sign (revByKey above).
+      if (isReversal(tx)) continue;
+
       if (tx.type === "Dividends" || tx.type === "Payment In Lieu Of Dividends") {
-        // Net the same-(broker,currency,date) withholding into the dividend lot.
-        const net = consumeWithholding(tx.brokerSource, tx.currency, date, amount.abs());
+        // Net the same-(broker,currency,date) reversal and withholding into the dividend lot.
+        const afterReversal = consumeReversal(tx.brokerSource, tx.currency, date, amount);
+        const net = consumeWithholding(tx.brokerSource, tx.currency, date, afterReversal);
         // `greaterThan(0)`, not `isPositive()` — decimal.js treats +0 as positive,
         // and a zero-quantity event would make addLot compute 0/0 = NaN.
         if (net.greaterThan(0)) {
@@ -1434,12 +1473,15 @@ export class FxFifoEngine {
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
         // Interest can also carry withholding (e.g. "WITHHOLDING ON CREDIT INT");
         // net it the same way — a withholding is a pago a cuenta whatever the income.
-        const net = consumeWithholding(tx.brokerSource, tx.currency, date, amount.abs());
+        const afterReversal = consumeReversal(tx.brokerSource, tx.currency, date, amount);
+        const net = consumeWithholding(tx.brokerSource, tx.currency, date, afterReversal);
         if (net.greaterThan(0)) {
           events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
         }
       } else if (tx.type === "Broker Interest Paid" || tx.type === "Bond Interest Paid") {
-        events.push({ date, currency: tx.currency, quantity: amount.abs().negated(), ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
+        // With its sign, like a fee (issue #439): a refund of interest paid
+        // (a positive row) brings currency in, it does not take it out.
+        events.push({ date, currency: tx.currency, quantity: amount, ecbRate, trigger: "interest", brokerSource: tx.brokerSource });
       } else if (tx.type === "Other Fees" || tx.type === "Commission Adjustments") {
         if (amount.lessThan(0)) {
           events.push({
@@ -1467,6 +1509,20 @@ export class FxFifoEngine {
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
       if (ecbRate === null) continue;
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
+    }
+
+    // A reversal no income absorbed (issue #439): the currency leaves the
+    // account on its date, consuming pool lots like a fee (a disposal with the
+    // income's trigger; no lot → the usual missing-lots floor, gain 0).
+    for (const [key, pending] of revByKey) {
+      if (!pending.greaterThan(0)) continue;
+      const tx = revRowByKey.get(key)!;
+      if (!isEcbResolvable(tx.currency)) continue;
+      const date = cashDate(tx);
+      const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
+      if (ecbRate === null) continue;
+      const trigger = tx.type.includes("Interest") ? "interest" : "dividend";
+      events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger, brokerSource: tx.brokerSource });
     }
 
     return events;
