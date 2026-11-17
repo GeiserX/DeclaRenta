@@ -259,7 +259,7 @@ const gl: TranslationKeys = {
   "method.tradicional_divisa.sub": "Compra e venda ao seu tipo, e a túa divisa por FIFO",
   "method.tradicional_divisa.text": "As accións valóranse ao tipo do BCE do día de compra e do día de venda. A divisa tributa só cando sae da túa conta: ao cambiala a euros ou a outra divisa, ao pagar comisións ou cando a perdes nunha venda con perdas. O que xa declaraches dentro das accións non se volve contar.",
   "method.tradicional_divisa.basis": "Valoración de accións: criterio da DGT para participacións de fondos en divisa (V2324-10, V0775-21), aplicado a accións. Divisa: declárase ao cambiala (V2466-08) ou ao perdela nunha venda con perdas (V0775-21, V2324-10).",
-  "method.tradicional_divisa.risk": "Facenda aplica ás accións o «Criterio DGT (multidivisa)» (V1740-17). En 2025 rexeitou este mesmo cálculo para un piso comprado e vendido en dólares (V1615-25). Se revisa a túa declaración, pode recalculala con ese criterio. Sen vendas con perdas, o total dun ciclo completo é o mesmo; cambia en que ano e en que casilla sae cada parte.",
+  "method.tradicional_divisa.risk": "Facenda aplica ás accións o «Criterio DGT (multidivisa)» (V1740-17). En 2025 rexeitou este mesmo cálculo para un piso comprado e vendido en dólares (V1615-25). Se revisa a túa declaración, pode recalculala con ese criterio. Sen vendas con perdas, o total dun ciclo completo adoita ser case o mesmo; cambia en que ano e en que casilla sae cada parte.",
   "method.monodivisa.sub": "Só compra e venda ao seu tipo",
   "method.monodivisa.text": "Valora a compra ao tipo do día de compra e a venda ao do día de venda. Non calcula ningún resultado de divisa, nin nos teus cambios a euros nin nos automáticos do bróker.",
   "method.monodivisa.basis": "Base legal: art. 35.1 LIRPF, sen a divisa do art. 14.2.e. Se cambias divisa a euros, pode distorsionar o resultado.",
@@ -875,7 +875,7 @@ const gl: TranslationKeys = {
   "report.fx_traditional_risk":
     "Facenda aplica ás accións o «Criterio DGT (multidivisa)» (V1740-17). En 2025 rexeitou este mesmo cálculo para un piso en dólares (V1615-25). Se revisa a túa declaración, pode recalculala con ese criterio.",
   "report.fx_traditional_risk.hint":
-    "Se no ciclo completo (euros → divisa → accións → divisa → euros) non hai vendas con perdas, os dous métodos dan o mesmo total. Cambia en que ano e en que casilla sae cada parte, e tamén pode cambiar a dedución por dobre imposición (casilla 0588). Con vendas con perdas, este método declara tamén a divisa perdida e o total é distinto. Ningunha consulta da DGT avala este método para accións. Se Facenda recalcula, pode cobrar xuros de demora polo imposto que este método leva a un ano posterior.",
+    "Se no ciclo completo (euros → divisa → accións → divisa → euros) non hai vendas con perdas, os dous métodos adoitan dar case o mesmo total. Cambia en que ano e en que casilla sae cada parte, e tamén pode cambiar a dedución por dobre imposición (casilla 0588). Con vendas con perdas, este método declara tamén a divisa perdida e o total é distinto. Ningunha consulta da DGT avala este método para accións. Se Facenda recalcula, pode cobrar xuros de demora polo imposto que este método leva a un ano posterior.",
   "report.fx_traditional_no_conversion":
     "Este ano non cambiaches divisa. A variación do {{ccy}} mentres tiñas as accións xa está na súa ganancia ou perda. A variación mentres tes os {{ccy}} en efectivo declararase cando os cambies.",
   "report.fx_traditional_no_conversion.hint":
