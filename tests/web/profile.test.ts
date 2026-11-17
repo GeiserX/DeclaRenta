@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { validateNif, getProfile, saveProfile, isProfileComplete } from "../../src/web/profile.js";
+import { validateNif, getProfile, saveProfile, isProfileComplete, type FiscalProfile } from "../../src/web/profile.js";
 
 beforeEach(() => {
   const store: Record<string, string> = {};
@@ -89,14 +89,14 @@ describe("getProfile / saveProfile", () => {
   });
 
   it("should round-trip via saveProfile then getProfile", () => {
-    const data = {
+    const data: FiscalProfile = {
       nif: "12345678Z",
       apellidos: "Garcia",
       nombre: "Juan",
       ccaa: "Madrid",
       telefono: "600123456",
       year: 2025,
-      monodivisa: false,
+      fxMethod: "multidivisa",
       titulares: 1,
       trackAutoConvert: true,
     };
@@ -104,32 +104,54 @@ describe("getProfile / saveProfile", () => {
     expect(getProfile()).toEqual(data);
   });
 
-  it("should round-trip monodivisa: true via saveProfile then getProfile", () => {
-    const data = {
-      nif: "12345678Z",
-      apellidos: "Garcia",
-      nombre: "Juan",
-      ccaa: "Madrid",
-      telefono: "600123456",
-      year: 2025,
-      monodivisa: true,
-      titulares: 1,
-      trackAutoConvert: true,
-    };
-    saveProfile(data);
-    expect(getProfile()).toEqual(data);
-    expect(getProfile().monodivisa).toBe(true);
+  it.each(["multidivisa", "tradicional-divisa", "monodivisa"] as const)(
+    "should round-trip fxMethod %s and write the old monodivisa boolean as a mirror",
+    (fxMethod) => {
+      const data: FiscalProfile = {
+        nif: "12345678Z", apellidos: "Garcia", nombre: "Juan", ccaa: "Madrid",
+        telefono: "600123456", year: 2025, fxMethod, titulares: 1, trackAutoConvert: true,
+      };
+      saveProfile(data);
+      expect(getProfile()).toEqual(data);
+      // An older cached app version reads only the boolean: it must say
+      // monodivisa exactly when the method is monodivisa.
+      const stored = JSON.parse(localStorage.getItem("declarenta_profile")!) as Record<string, unknown>;
+      expect(stored.fxMethod).toBe(fxMethod);
+      expect(stored.monodivisa).toBe(fxMethod === "monodivisa");
+    },
+  );
+
+  it("should migrate an old profile with monodivisa: true to the monodivisa method", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ nif: "12345678Z", year: 2025, monodivisa: true }));
+    expect(getProfile().fxMethod).toBe("monodivisa");
+  });
+
+  it("should migrate an old profile with monodivisa: false to the default method", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ nif: "12345678Z", year: 2025, monodivisa: false }));
+    expect(getProfile().fxMethod).toBe("multidivisa");
+  });
+
+  it("should prefer a known fxMethod over the old boolean", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ fxMethod: "tradicional-divisa", monodivisa: false }));
+    expect(getProfile().fxMethod).toBe("tradicional-divisa");
+  });
+
+  it("should fall back to the boolean, then the default, for an unknown fxMethod", () => {
+    localStorage.setItem("declarenta_profile", JSON.stringify({ fxMethod: "fund-method", monodivisa: true }));
+    expect(getProfile().fxMethod).toBe("monodivisa");
+    localStorage.setItem("declarenta_profile", JSON.stringify({ fxMethod: 3 }));
+    expect(getProfile().fxMethod).toBe("multidivisa");
   });
 
   it("should round-trip trackAutoConvert: false (the AFx opt-out) and default to true for pre-existing profiles", () => {
-    const data = {
+    const data: FiscalProfile = {
       nif: "12345678Z",
       apellidos: "Garcia",
       nombre: "Juan",
       ccaa: "Madrid",
       telefono: "600123456",
       year: 2025,
-      monodivisa: false,
+      fxMethod: "multidivisa",
       titulares: 1,
       trackAutoConvert: false,
     };
@@ -150,13 +172,13 @@ describe("getProfile / saveProfile", () => {
     expect(profile.year).toBe(new Date().getFullYear() - 1);
   });
 
-  it("should default monodivisa to false for pre-existing profiles without the key", () => {
+  it("should default to the multidivisa method for pre-existing profiles without either key", () => {
     localStorage.setItem("declarenta_profile", JSON.stringify({
       nif: "12345678Z", apellidos: "Garcia", nombre: "Juan",
       ccaa: "Madrid", telefono: "600123456", year: 2024,
     }));
     const profile = getProfile();
-    expect(profile.monodivisa).toBe(false);
+    expect(profile.fxMethod).toBe("multidivisa");
   });
 
   it("should return defaults when stored JSON is corrupted", () => {
