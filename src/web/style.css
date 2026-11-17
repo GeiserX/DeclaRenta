@@ -3480,13 +3480,8 @@ footer a:hover {
   color: var(--muted);
 }
 
-.review-summary > span + span::before {
-  content: "·";
-  margin-right: var(--space-3);
-  color: var(--border);
-}
-
 .review-summary-broker {
+  flex-basis: 100%;
   color: var(--text);
   font-weight: 600;
 }
@@ -3515,7 +3510,7 @@ footer a:hover {
 /* Method cards: a native radio group, the whole card is the hit area */
 .method-picker {
   border: 0;
-  margin: 0 0 var(--space-5);
+  margin: var(--space-5) 0 var(--space-5);
   padding: 0;
   min-width: 0;
 }
@@ -4063,4 +4058,36 @@ footer a:hover {
   .method-compare-table .method-paren {
     display: none;
   }
+}
+
+/* Data checks on the review step (duplicates, missing years, very old data). */
+.validation-banner {
+  margin: var(--space-4) 0 0;
+}
+.validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.validation-list > li {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-left: 3px solid var(--warning-text);
+}
+.validation-list > li.validation-error {
+  color: var(--danger-text);
+  border-color: var(--danger);
+  border-left-color: var(--danger-text);
+}
+.validation-list > li.validation-info {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--border);
+  border-left-color: var(--accent);
 }
