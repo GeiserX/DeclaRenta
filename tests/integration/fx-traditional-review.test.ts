@@ -241,3 +241,51 @@ describe("negative-cost guard (review r4598114603, r4598114654)", () => {
     expect(rows.map((t) => t.trigger)).toEqual(["stock_sale_guard"]);
   });
 });
+
+describe("same-day cover in buy order (review r4600330140)", () => {
+  // Empty pool on 2024-06-03. AAA (round trip, listed first): buy 200 untracked,
+  // the old AAA returns 50, which covers 50 of it. BBB: buy 100 untracked, the
+  // old BBB returns 200. Those 200 must cover AAA's 150 first (its buy ran
+  // first that day), then 50 of BBB's 100. BBB's queue is older than AAA's, so
+  // the parked map lists it first: covering in map order left AAA with 50
+  // untracked instead of BBB, and moved 0.50 of FX from 2025 into 2024.
+  const sc: Scenario = {
+    id: "SDO",
+    years: [2023, 2024, 2025],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2023-01-02", usd: "250", r: "0.90" },
+      { k: "buy", d: "2023-01-03", sym: "BBB", qty: "2", px: "100", r: "0.91" },
+      { k: "buy", d: "2023-01-04", sym: "AAA", qty: "1", px: "50", r: "0.92" },
+      { k: "buy", d: "2024-06-03", sym: "AAA", qty: "4", px: "50", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "1", px: "50", r: "0.85" },
+      { k: "buy", d: "2024-06-03", sym: "BBB", qty: "1", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "BBB", qty: "2", px: "100", r: "0.85" },
+      // The 50 USD the day spent beyond what it had: no EUR origin (economic only).
+      { k: "dep", d: "2024-06-03", usd: "50", r: "0.85" },
+      { k: "sell", d: "2024-09-02", sym: "AAA", qty: "4", px: "50", r: "0.86" },
+      { k: "conv", d: "2024-12-02", usd: "200", r: "0.80" },
+      { k: "sell", d: "2025-03-03", sym: "BBB", qty: "1", px: "100", r: "0.83" },
+      { k: "conv", d: "2025-06-02", usd: "100", r: "0.82" },
+    ],
+  };
+
+  it("covers AAA's 150 before BBB's 100, so BBB keeps the 50 untracked", () => {
+    const trace = run(sc, { ...TRAD, fxTrace: true }).get(2024)!.report.fxTrace ?? [];
+    const same = trace.filter((t) => t.kind === "park" && t.note?.startsWith("cobertura del mismo día"));
+    expect(same.map((t) => [t.positionKey, f2(new Decimal(t.quantityFcy))])).toEqual([
+      [ISIN_A, "50.00"],
+      [ISIN_A, "150.00"],
+      [ISIN_B, "50.00"],
+    ]);
+  });
+
+  it("books the FX of each year by that allocation", () => {
+    const per = run(sc, TRAD);
+    // 2024: AAA's 50 at 0.83 + 0.01 and 150 at 0.84 + 0.01, converted at 0.80.
+    expect(f2(per.get(2024)!.fx)).toBe("-9.50");
+    // 2025: BBB's 50 at 0.84 − 0.02 and 50 untracked at 0.83, converted at 0.82.
+    expect(f2(per.get(2025)!.fx)).toBe("-0.50");
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+  });
+});

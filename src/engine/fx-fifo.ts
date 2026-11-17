@@ -171,6 +171,8 @@ interface NullPark {
   qty: Decimal;
   /** Untracked quantity when the buy ran (before same-day covers). */
   gross: Decimal;
+  /** Order the buy parked in, within the pass (same-day covers go oldest first). */
+  seq: number;
 }
 
 /** «Tradicional con divisa»: the late covers of one pass (see `processTraditional`). */
@@ -2169,7 +2171,7 @@ export class FxFifoEngine {
       const slice: ParkedSlice = { q: remaining, rate: null, acquireDate: null, ...this.traditionalTags(event, undefined) };
       park.push(slice);
       if (this.traditionalFx) {
-        const np: NullPark = { event, currency: event.currency, date: event.date, qty: remaining, gross: remaining };
+        const np: NullPark = { event, currency: event.currency, date: event.date, qty: remaining, gross: remaining, seq: this.nullParks.length };
         this.nullParks.push(np);
         this.nullOfSlice.set(slice, np);
       }
@@ -2549,48 +2551,58 @@ export class FxFifoEngine {
   /**
    * Same-day cover (see {@link processTraditional}): `lot`, returned by a sale,
    * covers the `null` slices of its currency parked on the sale's date, oldest
-   * first. A covered slice takes the lot's cost, date and shifts and keeps its
-   * `buyRate`. The covered quantity leaves the pool (it paid for the shares)
-   * and the phantom acquire the `null` park counted is taken back, so the
-   * conservation check still balances.
+   * first: in the order their buys ran, across every position (a trap: walking
+   * the parked map covered the position whose queue was created first, so an
+   * older position's later buy took the dollars before an earlier buy of a
+   * newer position, and FX moved between years). A covered slice takes the
+   * lot's cost, date and shifts and keeps its `buyRate`. The covered quantity
+   * leaves the pool (it paid for the shares) and the phantom acquire the
+   * `null` park counted is taken back, so the conservation check still
+   * balances.
    */
   private sameDayCover(lot: FxLot, event: FxEvent): void {
     const EPS = FxFifoEngine.EPS;
     const prefix = `${event.currency}|`;
+    // The day's `null` slices of this currency, in the order their buys parked.
+    const open: { key: string; slices: ParkedSlice[]; slice: ParkedSlice; seq: number }[] = [];
     for (const [key, slices] of this.parked) {
       if (key !== event.currency && !key.startsWith(prefix)) continue;
-      for (let i = 0; i < slices.length && lot.quantity.greaterThan(EPS); i++) {
-        const slice = slices[i]!;
+      for (const slice of slices) {
         if (slice.rate !== null || slice.parkDate !== event.date) continue;
-        const x = Decimal.min(slice.q, lot.quantity);
-        const covered: ParkedSlice = {
-          q: x,
-          rate: lot.costPerUnit,
-          acquireDate: lot.acquireDate,
-          ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
-          ...(slice.buyRate !== undefined ? { buyRate: slice.buyRate } : {}),
-          ...(lot.shifts !== undefined ? { shifts: lot.shifts } : {}),
-          parkDate: slice.parkDate,
-        };
-        if (x.greaterThanOrEqualTo(slice.q.minus(EPS))) slices[i] = covered;
-        else {
-          slice.q = slice.q.minus(x);
-          slices.splice(i, 0, covered);
-          i++;
-        }
-        const np = this.nullOfSlice.get(slice);
-        if (np) np.qty = np.qty.minus(x);
-        lot.quantity = lot.quantity.minus(x);
-        lot.costInEur = lot.costInEur.minus(x.mul(lot.costPerUnit));
-        this.record("park", { ...event, positionKey: key === event.currency ? undefined : key.slice(prefix.length) }, {
-          quantityFcy: x,
-          rate: lot.costPerUnit,
-          lotId: lot.id,
-          lotAcquireDate: lot.acquireDate,
-          note: "cobertura del mismo día: compra sin origen cubierta con la divisa de una venta de ese día",
-        });
-        this.accumulate("phantom", event.currency, x.negated());
+        open.push({ key, slices, slice, seq: this.nullOfSlice.get(slice)?.seq ?? Number.MAX_SAFE_INTEGER });
       }
+    }
+    open.sort((a, b) => a.seq - b.seq);
+    for (const { key, slices, slice } of open) {
+      if (!lot.quantity.greaterThan(EPS)) break;
+      const i = slices.indexOf(slice);
+      const x = Decimal.min(slice.q, lot.quantity);
+      const covered: ParkedSlice = {
+        q: x,
+        rate: lot.costPerUnit,
+        acquireDate: lot.acquireDate,
+        ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
+        ...(slice.buyRate !== undefined ? { buyRate: slice.buyRate } : {}),
+        ...(lot.shifts !== undefined ? { shifts: lot.shifts } : {}),
+        parkDate: slice.parkDate,
+      };
+      if (x.greaterThanOrEqualTo(slice.q.minus(EPS))) slices[i] = covered;
+      else {
+        slice.q = slice.q.minus(x);
+        slices.splice(i, 0, covered);
+      }
+      const np = this.nullOfSlice.get(slice);
+      if (np) np.qty = np.qty.minus(x);
+      lot.quantity = lot.quantity.minus(x);
+      lot.costInEur = lot.costInEur.minus(x.mul(lot.costPerUnit));
+      this.record("park", { ...event, positionKey: key === event.currency ? undefined : key.slice(prefix.length) }, {
+        quantityFcy: x,
+        rate: lot.costPerUnit,
+        lotId: lot.id,
+        lotAcquireDate: lot.acquireDate,
+        note: "cobertura del mismo día: compra sin origen cubierta con la divisa de una venta de ese día",
+      });
+      this.accumulate("phantom", event.currency, x.negated());
     }
     if (!lot.quantity.greaterThan(EPS)) {
       const pool = this.lots.get(event.currency)!;
