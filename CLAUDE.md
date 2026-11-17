@@ -390,10 +390,16 @@ When adding a new section (like 721), follow this checklist:
 
 ```bash
 npm test          # Run all tests
-npm run typecheck # TypeScript strict check
+npm run typecheck # TypeScript strict check (src/)
+npm run typecheck:tests # TypeScript strict check of src/ plus tests/ (CI runs it)
 npm run dev       # Vite dev server for web UI
 npm run cli -- convert --input test.xml --year 2025
 ```
+
+### Test typecheck covered no test file (Hard Trace — issue #442)
+- `tsconfig.test.json` extends `tsconfig.json`, whose `exclude` lists `tests`. An inherited `exclude` beats the child's `include`, so `npm run typecheck:tests` checked no test file and stayed green over 195 hidden errors (one, `openCloseIndicator: ""`, reached #435).
+- **Fix**: `tsconfig.test.json` restates its own `exclude`. `tests/typecheck-tests-config.test.ts` reads the config the way tsc does and fails if any test file falls out of it.
+- **Fixtures must use the real types**: rate maps are `Map<date, Map<ccy, string>>` (strings, never `Decimal`); a `FifoDisposal` carries every required field (`gainLossFcy`, `proceedsFcy`, `costBasisFcy`, `blockedLossEur`, `reintegratedLossEur`); `capitalGains` carries `reintegratedLosses`; index access on parser output needs `!` (`noUncheckedIndexedAccess`). Never widen a production type to make a test compile. A test that feeds invalid input on purpose uses a targeted `@ts-expect-error` with a comment saying why.
 
 ## License
 

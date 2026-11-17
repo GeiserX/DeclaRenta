@@ -13,7 +13,8 @@ npm test              # Ejecuta la suite de tests
 npm run dev           # Servidor web de desarrollo
 npm run build         # Build completo (lib + web)
 npm run lint          # ESLint
-npm run typecheck     # TypeScript
+npm run typecheck     # TypeScript (src/)
+npm run typecheck:tests  # TypeScript de src/ y tests/ (lo ejecuta la CI)
 node dist/cli.js convert --input test.xml --year 2025
 ```
 
