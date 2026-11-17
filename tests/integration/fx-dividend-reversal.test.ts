@@ -178,6 +178,26 @@ describe.each(METHODS)("a reversal larger than the day's other income that has w
   });
 });
 
+describe.each(METHODS)("a converted reversal at another broker, %s (PR #445 review)", (_name, options) => {
+  it("does not cancel a genuine USD credit at another broker in the FX pool", () => {
+    // Broker A credits 10 USD (kept in USD); broker B reverses a dividend it
+    // had converted to EUR, same ISIN, date and amount. A's dollars are real
+    // and stay in the pool; B's row never held dollars.
+    const sc: Scenario = {
+      id: "DIV-XBROKER",
+      years: [2024],
+      closed: false,
+      ev: [{ k: "div", d: "2024-03-01", usd: "10", r: "0.90" }],
+    };
+    const { st, rates } = toStatement(sc);
+    const a = st.cashTransactions[0]!;
+    a.brokerSource = "ibkr";
+    st.cashTransactions.push({ ...a, transactionID: "b", amount: "-10", brokerSource: "tr", brokerConvertedToBase: true });
+    const r = generateTaxReport(st, rates, 2024, { ...options, fxTrace: true });
+    expect(r.fxTrace!.map((t) => [t.kind, t.quantityFcy])).toEqual([["acquire", "10"]]);
+  });
+});
+
 describe("income and interest rows keep their sign in the FX producer (issue #439)", () => {
   const rates: EcbRateMap = new Map([["2024-03-05", new Map([["USD", "0.85"]])]]);
   const row = (type: CashTransaction["type"], amount: string): CashTransaction => ({
