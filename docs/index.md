@@ -60,7 +60,7 @@ Un asistente de tres pasos: subes los ficheros, revisas lo que ha detectado y ob
 <figcaption>Subida de ficheros</figcaption>
 </figure>
 <figure markdown>
-![El paso Revisar datos en un móvil: IBKR, Degiro, Trading 212, Scalable Capital y Freedom24, 27 operaciones y 10 dividendos](images/screenshots/revisar-mobile.png)
+![El paso Revisar y elegir método en un móvil: IBKR, Degiro, Trading 212, Scalable Capital y Freedom24, 27 operaciones y 10 dividendos](images/screenshots/revisar-mobile.png)
 <figcaption>Revisión de los datos</figcaption>
 </figure>
 <figure markdown>
@@ -69,9 +69,9 @@ Un asistente de tres pasos: subes los ficheros, revisas lo que ha detectado y ob
 </figure>
 </div>
 
-Antes de los resultados, el paso [Revisar datos](getting-started.md#tu-primera-declaracion) muestra por broker cuántas operaciones, dividendos y divisas ha leído, para que compruebes que cuadra con tu informe antes de calcular nada.
+Antes de los resultados, el paso [Revisar y elegir método](getting-started.md#tu-primera-declaracion) muestra por broker cuántas operaciones, dividendos y divisas ha leído, para que compruebes que cuadra con tu informe antes de calcular nada. Si tienes operaciones en divisa, ahí eliges también el método.
 
-![El paso Revisar datos: tarjetas con los brokers detectados, las operaciones, los dividendos, el rango de fechas y las divisas, y la tabla de ficheros](images/screenshots/revisar.png)
+![El paso Revisar y elegir método: tarjetas con los brokers detectados, las operaciones, los dividendos, el rango de fechas y las divisas, y la tabla de ficheros](images/screenshots/revisar.png)
 
 ## Qué calcula
 

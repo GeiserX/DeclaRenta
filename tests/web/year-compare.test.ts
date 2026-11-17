@@ -231,3 +231,81 @@ describe("renderYearComparison", () => {
     expect(t("compare.net_gain_loss")).not.toBe("compare.net_gain_loss");
   });
 });
+
+describe("the FX method of each year (#434)", () => {
+  function render(...reports: StoredReport[]): HTMLElement {
+    for (const r of reports) saveReport(r);
+    const container = document.createElement("div");
+    renderYearComparison(container);
+    return container;
+  }
+  const tags = (c: HTMLElement) => [...c.querySelectorAll(".method-row .method-tag")].map((el) => el.textContent);
+
+  it("an empty re-run of a saved year with activity replaces it with zeros and the new method", () => {
+    // A year with only FX conversions, saved with the default method, then
+    // re-run with monodivisa: the report is empty, but the year had activity.
+    persistReport(fxOnly(2024, 100), ["IBKR"], "multidivisa");
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", true);
+    const reports = loadAllReports();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]!.fxMethod).toBe("monodivisa");
+    expect(reports[0]!.casillas.fxNetGainLoss).toBe(0);
+    expect(reports[0]!.stats.fxDisposalsCount).toBe(0);
+  });
+
+  it("an empty report for a year with no activity keeps the saved figures (wrong year selected)", () => {
+    persistReport(fxOnly(2024, 100), ["IBKR"], "multidivisa");
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", false);
+    const reports = loadAllReports();
+    expect(reports[0]!.fxMethod).toBe("multidivisa");
+    expect(reports[0]!.casillas.fxNetGainLoss).toBe(100);
+  });
+
+  it("an empty report for a year never saved adds no row, even with activity", () => {
+    persistReport(emptySummary(2024), ["IBKR"], "monodivisa", true);
+    expect(loadAllReports()).toEqual([]);
+  });
+
+  it("persistReport stores the method only when one applies", () => {
+    persistReport(interestOnly(2024, 40), ["IBKR"], "monodivisa");
+    persistReport(interestOnly(2025, 40), ["IBKR"]);
+    const loaded = loadAllReports();
+    expect(loaded.find((r) => r.year === 2024)!.fxMethod).toBe("monodivisa");
+    expect(loaded.find((r) => r.year === 2025)!.fxMethod).toBeUndefined();
+  });
+
+  it("shows the same method in every year with no warning (control)", () => {
+    const c = render(
+      { ...stored(2024, { interestEarned: 10 }), fxMethod: "multidivisa" },
+      { ...stored(2025, { interestEarned: 20 }), fxMethod: "multidivisa" },
+    );
+    expect(tags(c)).toEqual([t("report.fx_method_name.multidivisa"), t("report.fx_method_name.multidivisa")]);
+    expect(c.querySelector(".method-mismatch")).toBeNull();
+  });
+
+  it("warns when two years used different methods, above the table", () => {
+    const c = render(
+      { ...stored(2023, { interestEarned: 10 }), fxMethod: "multidivisa" },
+      { ...stored(2024, { interestEarned: 20 }), fxMethod: "tradicional-divisa" },
+      { ...stored(2025, { interestEarned: 40 }), fxMethod: "multidivisa" },
+    );
+    expect(tags(c)).toEqual([t("report.fx_method_name.multidivisa"), t("report.fx_method_name.tradicional-divisa"), t("report.fx_method_name.multidivisa")]);
+    expect(c.querySelector(".method-mismatch")?.textContent).toBe(t("compare.method_mismatch"));
+    // Outside the sideways-scrolling table, so a phone reads it in full.
+    const note = c.querySelector(".method-mismatch")!;
+    expect(note.closest(".table-wrapper")).toBeNull();
+    expect(note.closest("table")).toBeNull();
+    expect(note.getAttribute("role")).toBe("note");
+  });
+
+  it("shows «desconocido» for a year saved before the method was stored, and does not warn about it", () => {
+    const c = render(
+      stored(2024, { interestEarned: 10 }),
+      { ...stored(2025, { interestEarned: 20 }), fxMethod: "monodivisa" },
+    );
+    // Newest year first, as the table columns.
+    expect(tags(c)).toEqual([t("report.fx_method_name.monodivisa"), t("method.unknown")]);
+    expect(c.querySelector(".method-tag-unknown")).not.toBeNull();
+    expect(c.querySelector(".method-mismatch")).toBeNull();
+  });
+});

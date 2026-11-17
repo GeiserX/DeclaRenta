@@ -8,13 +8,13 @@
 import { detectBroker, getBroker } from "../parsers/index.js";
 import { detectXlsxBroker, parseXlsxExport } from "../parsers/xlsx.js";
 import type { Statement } from "../types/broker.js";
-import type { ReportSettings, TaxSummary } from "../types/tax.js";
+import { fxMethodOf, type FxMethod, type ReportSettings, type TaxSummary } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { buildEcbRateMap } from "../engine/ecb-orchestrator.js";
 import { computeTaxableBaseBreakdown } from "../engine/taxable-base.js";
-import { generateTaxReport } from "../generators/report.js";
+import { generateTaxReport, reportOptionsForMethod, type ReportOptions } from "../generators/report.js";
 import { csvDownload } from "./csv-download.js";
-import { formatReportSettings, reportSettingsDiffer } from "../generators/report-settings.js";
+import { reportSettingsDiffer } from "../generators/report-settings.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
 import { serializeFxTrace } from "../generators/fx-trace.js";
 import { normalizeDate } from "../engine/dates.js";
@@ -28,6 +28,22 @@ import {
 } from "./charts.js";
 import { renderCasillaCards } from "./casilla-detail.js";
 import { persistReport, renderYearComparison } from "./year-compare.js";
+import { loadAllReports } from "./storage.js";
+import {
+  DEFAULT_FX_METHOD,
+  bindMethodPicker,
+  foreignCurrencies,
+  methodName,
+  renderMethodPicker,
+  type LastYearMethod,
+} from "./fx-method.js";
+import {
+  bindMethodCompare,
+  renderHowCalculated,
+  renderMethodCompare,
+  renderResultsSplit,
+  renderSettingsChips,
+} from "./method-summary.js";
 import { initWizard, goToStep, onStepChange, unlockStep, type WizardStep } from "./wizard.js";
 import { initSidebar, updateBadge } from "./sidebar.js";
 import { initProfile, getProfile, saveProfile, type FiscalProfile } from "./profile.js";
@@ -49,7 +65,7 @@ import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
-import { pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
+import { holdingsYears, pickDefaultYear, renderNewerYearsNotice } from "./year-default.js";
 import { renderOperationsAnnex } from "./operations-annex.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
@@ -163,16 +179,6 @@ langSelect.addEventListener("change", () => {
   });
 });
 
-// Recalculate when a profile setting that changes the figures is edited
-// (monodivisa, titulares, auto-conversions) while results are on screen. The
-// other fields (NIF, name, phone...) do not change the Modelo 100 figures, so
-// typing them never re-runs the engine.
-document.addEventListener("profilechange", (e) => {
-  if (!currentReport || !mergedStatement || !lastRunSettings) return;
-  const next = settingsFromProfile((e as CustomEvent<FiscalProfile>).detail);
-  if (reportSettingsDiffer(lastRunSettings, next)) rerunWithOverlay();
-});
-
 /**
  * Re-run the report from the Results step with the same processing overlay the
  * wizard shows, so the old figures are covered until the new ones are drawn.
@@ -198,6 +204,7 @@ document.addEventListener("localechange", () => {
   initProfile();
   renderDetectionStatus();
   if (lastReview) renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
+  updateNextLabel();
 });
 
 updateStaticText();
@@ -266,6 +273,7 @@ const opsSearch = document.getElementById("ops-search") as HTMLInputElement;
 const opsFilter = document.getElementById("ops-filter") as HTMLSelectElement;
 const reviewContent = document.getElementById("review-content")!;
 const yearCompareDiv = document.getElementById("year-compare")!;
+const resultsSummaryDiv = document.getElementById("results-summary")!;
 
 let currentReport: TaxSummary | null = null;
 let currentBrokers: string[] = [];
@@ -276,15 +284,43 @@ let mergedStatement: Statement | null = null;
 let detectedBrokers: string[] = [];
 /** Per model, the brokers whose export has no year-end holdings (named in 720/721/D-6). */
 let detectedMissingHoldings: MissingHoldings = { m720: [], m721: [], d6: [] };
-/** Years detected from uploaded data (sorted descending, latest first) */
+/**
+ * Years the user can pick (sorted descending, latest first): years with trades
+ * or cash movements, plus years whose 31 December holdings were uploaded.
+ */
 let detectedYears: number[] = [];
+/** Years with trades or cash movements only (no holdings-only years): a report of such a year is a real snapshot. */
+let activityYears: number[] = [];
 /** The active year for processing (last closed year in the data by default, changeable via dropdown) */
 let activeYear: number | null = null;
 /** Profile settings the latest processFiles run computed with. */
 let lastRunSettings: ReportSettings | null = null;
+/** Foreign fiat currencies in the upload. Empty: the FX method does not apply. */
+let uploadCurrencies: string[] = [];
+/**
+ * What the latest processFiles run computed from, so the comparison box can
+ * run the same upload with another method when it is opened.
+ */
+let lastRunContext: {
+  merged: Statement;
+  rates: EcbRateMap;
+  year: number;
+  options: ReportOptions;
+} | null = null;
+
+/** The method a run uses: the saved one, or the default when the upload has no foreign currency. */
+function effectiveMethod(p: FiscalProfile): FxMethod {
+  return uploadCurrencies.length > 0 ? p.fxMethod : DEFAULT_FX_METHOD;
+}
 
 function settingsFromProfile(p: FiscalProfile): ReportSettings {
-  return { monodivisa: p.monodivisa, trackAutoConvert: p.trackAutoConvert, titulares: p.titulares };
+  const method = effectiveMethod(p);
+  return {
+    monodivisa: method === "monodivisa",
+    ...(method === "tradicional-divisa" ? { traditionalFx: true as const } : {}),
+    trackAutoConvert: p.trackAutoConvert,
+    titulares: p.titulares,
+  };
 }
 /**
  * The year of the results currently rendered on the Results step, or null when
@@ -311,12 +347,37 @@ onStepChange((_from: WizardStep, to: WizardStep) => {
   if (to === 2 && !mergedStatement) {
     // Parse files when entering step 2
     void parseFiles();
+  } else if (to === 2 && lastReview) {
+    // The results year may have changed since the review was drawn, and with it
+    // the previous saved year whose method the picker names. Draw it again.
+    renderReview(lastReview.merged, lastReview.brokers, lastReview.perFileBrokers);
   }
   if (to === 3 && !currentReport) {
     // Process when entering step 3
     void processFiles();
+  } else if (to === 3 && lastRunSettings && reportSettingsDiffer(lastRunSettings, settingsFromProfile(getProfile()))) {
+    // A setting was changed on step 2 and the user went to the results through
+    // the step indicator, not «Calcular»: recompute them.
+    rerunWithOverlay();
   }
+  updateNextLabel();
 });
+
+/**
+ * The main button reads «Calcular con «método»» on the review step, so the
+ * user sees which method the figures will use, and «Siguiente» elsewhere.
+ */
+function updateNextLabel(): void {
+  const btn = document.getElementById("wizard-next");
+  if (!btn) return;
+  if (getCurrentWizardStep() === 2 && lastReview) {
+    btn.textContent = uploadCurrencies.length > 0
+      ? t("review.calculate_with", { method: methodName(getProfile().fxMethod) })
+      : t("review.calculate");
+  } else {
+    btn.textContent = t("wizard.next");
+  }
+}
 
 // Override next button to trigger processing on step 2
 const wizardNext = document.getElementById("wizard-next")!;
@@ -440,9 +501,12 @@ function resetDownstream(): void {
   mergedStatement = null;
   lastReview = null;
   currentReport = null;
+  uploadCurrencies = [];
+  lastRunContext = null;
   activeYear = null;
   shownResultsYear = null;
   detectedYears = [];
+  activityYears = [];
   // Drop any processFiles run still in flight: it was built from the old list.
   processRunToken++;
   initSection720();
@@ -637,6 +701,7 @@ async function parseFiles(): Promise<void> {
     }
 
     mergedStatement = finalizeMergedStatement(merged);
+    uploadCurrencies = foreignCurrencies(mergedStatement);
     detectedBrokers = [...new Set(brokerNames)];
     detectedMissingHoldings = findMissingHoldings(parsedExports);
 
@@ -651,6 +716,11 @@ async function parseFiles(): Promise<void> {
     };
     for (const tr of merged.trades) addYear(tr.tradeDate);
     for (const ct of merged.cashTransactions) addYear(ct.dateTime);
+    activityYears = [...yearSet].sort((a, b) => b - a);
+    // A file with only year-end holdings (no trades, no cash rows) still gives
+    // its year: 720/721/D-6 read the year from the profile, which only the
+    // results year select sets now that the profile form has no year (#434).
+    for (const y of holdingsYears(mergedStatement)) yearSet.add(y);
     detectedYears = [...yearSet].sort((a, b) => b - a); // descending
     if (!activeYear) {
       // Open on the last closed year (the one a Renta is filed for), not the
@@ -698,6 +768,19 @@ function clearWizardError(): void {
   document.querySelectorAll(".wizard-error").forEach((el) => el.remove());
 }
 
+/**
+ * The method of the latest saved year before `year`, when it was stored. Shown
+ * next to the method cards so the user keeps the same method every year.
+ */
+function lastYearMethod(year: number | null): LastYearMethod | null {
+  if (year === null) return null;
+  let best: LastYearMethod | null = null;
+  for (const r of loadAllReports()) {
+    if (r.year < year && r.fxMethod && (!best || r.year > best.year)) best = { year: r.year, method: r.fxMethod };
+  }
+  return best;
+}
+
 function renderReview(merged: Statement, brokers: string[], perFileBrokers: string[]): void {
   lastReview = { merged, brokers, perFileBrokers };
   const tradeCount = merged.trades.length;
@@ -705,59 +788,124 @@ function renderReview(merged: Statement, brokers: string[], perFileBrokers: stri
     (c) => c.type === "Dividends" || c.type === "Payment In Lieu Of Dividends",
   ).length;
 
-  const currencies = new Set<string>();
-  for (const tr of merged.trades) currencies.add(tr.currency);
-  currencies.delete("EUR");
+  // Every trade currency is listed (crypto quotes too); those with an ECB rate (stablecoins too) ask for a method.
+  const tradeCurrencies = new Set<string>();
+  for (const tr of merged.trades) tradeCurrencies.add(tr.currency);
+  tradeCurrencies.delete("EUR");
+  const currencies = uploadCurrencies;
 
   const dates = merged.trades.map((tr) => normalizeDate(tr.tradeDate)).sort();
   const dateRange = dates.length > 0 ? `${esc(formatDate(dates[0]!))} — ${esc(formatDate(dates[dates.length - 1]!))}` : "—";
+  const currencyList = tradeCurrencies.size > 0 ? esc([...tradeCurrencies].join(", ")) : "EUR";
 
-  reviewContent.innerHTML = `
-    <div class="review-grid">
-      <div class="review-card">
-        <div class="review-label">${t("review.broker")}</div>
-        <div class="review-value accent">${esc(brokers.join(", "))}</div>
-      </div>
-      <div class="review-card">
-        <div class="review-label">${t("review.trades_count")}</div>
-        <div class="review-value">${tradeCount}</div>
-      </div>
-      <div class="review-card">
-        <div class="review-label">${t("review.dividends_count")}</div>
-        <div class="review-value">${divCount}</div>
-      </div>
-      <div class="review-card">
-        <div class="review-label">${t("review.date_range")}</div>
-        <div class="review-value" style="font-size:1rem">${dateRange}</div>
-      </div>
-      <div class="review-card">
-        <div class="review-label">${t("review.currencies")}</div>
-        <div class="review-value" style="font-size:1rem">${currencies.size > 0 ? esc([...currencies].join(", ")) : "EUR"}</div>
-      </div>
-    </div>
-    <div class="review-files">
-      <table>
-        <thead><tr><th>${t("review.file")}</th><th>${t("review.broker")}</th></tr></thead>
-        <tbody>${pendingFiles
-          .map(
-            (f, i) => `
-          <tr><td>${esc(f.name)}</td><td>${esc(perFileBrokers[i] ?? "—")}</td></tr>
-        `,
-          )
-          .join("")}</tbody>
-      </table>
-    </div>
-  `;
+  const profile = getProfile();
+  const lastYear = lastYearMethod(activeYear);
 
-  if (tradeCount === 0 && divCount === 0) {
-    reviewContent.innerHTML += `<p class="warning">${t("review.no_data")}</p>`;
-  }
+  // One summary line keeps the method cards and the button near the top; the
+  // cards and the file table open from «Ver detalle».
+  const summary = `
+    <p class="review-summary">
+      <span class="review-summary-broker">${esc(brokers.join(", "))}</span>
+      <span>${esc(t("results.operations_count", { count: String(tradeCount) }))}</span>
+      <span>${esc(t("results.dividends_count", { count: String(divCount) }))}</span>
+      <span>${dateRange}</span>
+      <span>${esc(t("review.currencies"))}: <strong>${currencyList}</strong></span>
+    </p>
+    <details class="review-details">
+      <summary>${esc(t("review.show_details"))}</summary>
+      <div class="review-grid">
+        <div class="review-card">
+          <div class="review-label">${t("review.broker")}</div>
+          <div class="review-value accent">${esc(brokers.join(", "))}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">${t("review.trades_count")}</div>
+          <div class="review-value">${tradeCount}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">${t("review.dividends_count")}</div>
+          <div class="review-value">${divCount}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">${t("review.date_range")}</div>
+          <div class="review-value review-value-sm">${dateRange}</div>
+        </div>
+        <div class="review-card">
+          <div class="review-label">${t("review.currencies")}</div>
+          <div class="review-value review-value-sm">${currencyList}</div>
+        </div>
+      </div>
+      <div class="review-files table-wrapper">
+        <table>
+          <thead><tr><th>${t("review.file")}</th><th>${t("review.broker")}</th></tr></thead>
+          <tbody>${pendingFiles
+            .map(
+              (f, i) => `
+            <tr><td>${esc(f.name)}</td><td>${esc(perFileBrokers[i] ?? "—")}</td></tr>
+          `,
+            )
+            .join("")}</tbody>
+        </table>
+      </div>
+    </details>`;
 
-  // Validation warnings
+  const noData = tradeCount === 0 && divCount === 0 ? `<p class="warning">${t("review.no_data")}</p>` : "";
   const validationIssues = validateStatement(merged, activeYear, brokers);
-  if (validationIssues.length > 0) {
-    reviewContent.insertAdjacentHTML("beforeend", renderValidationIssues(validationIssues));
-  }
+  const issuesHtml = validationIssues.length > 0 ? renderValidationIssues(validationIssues) : "";
+
+  // The method only matters with foreign currency; an all-EUR upload uses the
+  // default without asking.
+  const picker = currencies.length > 0 ? renderMethodPicker(profile.fxMethod, currencies, lastYear) : "";
+
+  // Common case is 1–4 titulares. A higher count (e.g. saved through the CLI
+  // --titulares flag, which accepts any N) stays selectable.
+  const titularesChoices = [1, 2, 3, 4];
+  if (profile.titulares > 4) titularesChoices.push(profile.titulares);
+  const titularesOptions = titularesChoices
+    .map((n) => `<option value="${n}"${n === profile.titulares ? " selected" : ""}>${n}</option>`)
+    .join("");
+  const monodivisa = profile.fxMethod === "monodivisa";
+  const autoconvert = currencies.length > 0
+    ? `<label class="review-check">
+        <input type="checkbox" id="review-track-autoconvert" aria-describedby="review-autoconvert-detail"${profile.trackAutoConvert ? " checked" : ""}${monodivisa ? " disabled" : ""} />
+        <span>${esc(t("review.autoconvert_label"))}</span>
+      </label>
+      <p class="field-detail" id="review-autoconvert-detail">${esc(monodivisa ? t("review.autoconvert_off_mono") : t("review.autoconvert_detail"))}</p>`
+    : "";
+  const settings = `
+    <fieldset class="review-settings">
+      <legend class="review-settings-title">${esc(t("review.other_settings"))}</legend>
+      <label class="review-setting">
+        <span>${esc(t("review.titulares_label"))}</span>
+        <select id="review-titulares" aria-describedby="review-titulares-detail">${titularesOptions}</select>
+      </label>
+      <p class="field-detail" id="review-titulares-detail">${esc(t("review.titulares_detail"))}</p>
+      ${autoconvert}
+    </fieldset>`;
+
+  reviewContent.innerHTML = summary + noData + issuesHtml + picker + settings;
+
+  bindMethodPicker(reviewContent, lastYear, (m) => {
+    const p = getProfile();
+    p.fxMethod = m;
+    saveProfile(p);
+    const box = document.getElementById("review-track-autoconvert") as HTMLInputElement | null;
+    const detail = document.getElementById("review-autoconvert-detail");
+    if (box) box.disabled = m === "monodivisa";
+    if (detail) detail.textContent = m === "monodivisa" ? t("review.autoconvert_off_mono") : t("review.autoconvert_detail");
+    updateNextLabel();
+  });
+  document.getElementById("review-titulares")?.addEventListener("change", (e) => {
+    const p = getProfile();
+    p.titulares = parseInt((e.target as HTMLSelectElement).value, 10) || 1;
+    saveProfile(p);
+  });
+  document.getElementById("review-track-autoconvert")?.addEventListener("change", (e) => {
+    const p = getProfile();
+    p.trackAutoConvert = (e.target as HTMLInputElement).checked;
+    saveProfile(p);
+  });
+  updateNextLabel();
 }
 
 // ---------------------------------------------------------------------------
@@ -813,6 +961,7 @@ async function processFiles(): Promise<void> {
   // Read the settings when the run starts, so a change made while it awaits the
   // ECB fetch is seen as a change and starts a newer run.
   const profileForReport = getProfile();
+  const method = effectiveMethod(profileForReport);
   lastRunSettings = settingsFromProfile(profileForReport);
 
   try {
@@ -853,21 +1002,25 @@ async function processFiles(): Promise<void> {
     await new Promise<void>((r) => setTimeout(r, 0));
     if (isStale()) return; // superseded during the paint yield — discard this run
 
-    const report = generateTaxReport(merged, allRates, year, {
-      skipFx: profileForReport.monodivisa,
+    const options: ReportOptions = {
+      ...reportOptionsForMethod(method),
       trackAutoConvert: profileForReport.trackAutoConvert,
       titulares: profileForReport.titulares,
       manualRates: getManualRates(),
+      manualOpeningLots,
+    };
+    const report = generateTaxReport(merged, allRates, year, {
+      ...options,
       // Opt-in FX-FIFO movement trace, captured in the SAME run only in hidden
       // diagnostic mode. False by default → zero cost, normal path unchanged.
       fxTrace: isDebugMode(),
-      manualOpeningLots,
     });
     currentReport = report;
     currentBrokers = detectedBrokers;
+    lastRunContext = { merged, rates: allRates, year, options };
 
-    // Persist for year comparison
-    persistReport(report, currentBrokers);
+    // Persist for year comparison, with the method when it applies.
+    persistReport(report, currentBrokers, uploadCurrencies.length > 0 ? method : undefined, activityYears.includes(year));
 
     unlockStep(3);
     clearWizardError();
@@ -1047,6 +1200,12 @@ opsFilter.addEventListener("change", () => renderOperationsTable());
 // ---------------------------------------------------------------------------
 
 function renderResults(report: TaxSummary) {
+  // The method chip, the «Cómo se ha calculado» text and the comparison apply
+  // only to an upload with foreign currency.
+  const method: FxMethod | null = uploadCurrencies.length > 0
+    ? (report.settings ? fxMethodOf(report.settings) : DEFAULT_FX_METHOD)
+    : null;
+
   // Year header bar with selector + mismatch warning
   const yearHeader = document.getElementById("results-year-header");
   if (yearHeader) {
@@ -1066,7 +1225,7 @@ function renderResults(report: TaxSummary) {
       <span class="section-year">${t("section.year_label")}
         <select id="results-year-select" class="year-select" aria-label="${esc(t("section.year_label"))}">${yearOptions}</select>
       </span>
-      ${report.settings ? `<span class="section-settings" id="results-settings">${esc(formatReportSettings(report.settings, t))}</span>` : ""}
+      ${renderSettingsChips(report, method)}
     </div>`;
 
     hdrHtml += renderNewerYearsNotice(detectedYears, year);
@@ -1076,7 +1235,14 @@ function renderResults(report: TaxSummary) {
         <span>${t("results.year_mismatch", { year: String(year), available: detectedYears.join(", ") })}</span>
       </div>`;
     }
+    hdrHtml += renderHowCalculated(report, method);
     yearHeader.innerHTML = hdrHtml;
+
+    // «Cambiar» goes back to the review step, with focus on the chosen card.
+    document.getElementById("results-method-change")?.addEventListener("click", () => {
+      goToStep(2);
+      document.querySelector<HTMLInputElement>("#method-picker input:checked")?.focus();
+    });
 
     // Bind year selector — change active year and re-process
     document.getElementById("results-year-select")?.addEventListener("change", (e) => {
@@ -1125,6 +1291,15 @@ function renderResults(report: TaxSummary) {
         void processFiles();
       });
     }
+  }
+
+  // «Acciones / Divisa / Total», then the closed comparison with the other methods.
+  resultsSummaryDiv.innerHTML = renderResultsSplit(report, method) + (method ? renderMethodCompare() : "");
+  const ctx = lastRunContext;
+  if (method && ctx) {
+    bindMethodCompare(resultsSummaryDiv, { method, report }, (m) =>
+      generateTaxReport(ctx.merged, ctx.rates, ctx.year, { ...ctx.options, ...reportOptionsForMethod(m) }),
+    );
   }
 
   // Expandable casilla cards (replaces old table)

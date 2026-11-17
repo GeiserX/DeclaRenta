@@ -4,7 +4,9 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { newerYears, pickDefaultYear, renderNewerYearsNotice } from "../../src/web/year-default.js";
+import { holdingsYears, newerYears, pickDefaultYear, renderNewerYearsNotice } from "../../src/web/year-default.js";
+import { createEmptyStatement, mergeStatement } from "../../src/parsers/merge.js";
+import type { OpenPosition } from "../../src/types/ibkr.js";
 import { setLocale } from "../../src/i18n/index.js";
 
 const MAY_2026 = new Date(2026, 4, 15);
@@ -74,5 +76,37 @@ describe("renderNewerYearsNotice", () => {
   it("is translated", async () => {
     await setLocale("en");
     expect(renderNewerYearsNotice([2026, 2025], 2025)).toContain("Showing 2025; your data also covers 2026.");
+  });
+});
+
+describe("holdingsYears", () => {
+  const pos = { accountId: "U1", symbol: "X", description: "X", isin: "IE00B4L5Y983", currency: "EUR", assetCategory: "STK",
+    quantity: "1", costBasisMoney: "1", costBasisPrice: "1", markPrice: "1", positionValue: "1", fifoPnlUnrealized: "0", fxRateToBase: "1" } as OpenPosition;
+  const file = (toDate: string, positions: OpenPosition[] = [pos]) => {
+    const s = createEmptyStatement();
+    s.toDate = toDate;
+    s.openPositions = positions;
+    return s;
+  };
+  const merged = (...files: ReturnType<typeof file>[]) => {
+    const m = createEmptyStatement();
+    for (const f of files) mergeStatement(m, f, "IBKR");
+    return m;
+  };
+
+  it("gives the year of each file holding something at a year end", () => {
+    expect(holdingsYears(merged(file("20241231"), file("2023-12-31"))).sort()).toEqual([2023, 2024]);
+  });
+
+  it("takes the last weekday as the year end (31/12/2023 was a Sunday)", () => {
+    expect(holdingsYears(merged(file("20231229")))).toEqual([2023]);
+  });
+
+  it("gives nothing for a file ending on another day, or holding nothing", () => {
+    expect(holdingsYears(merged(file("20250315"), file("20241231", [])))).toEqual([]);
+  });
+
+  it("reads an unmerged statement too", () => {
+    expect(holdingsYears(file("20241231"))).toEqual([2024]);
   });
 });

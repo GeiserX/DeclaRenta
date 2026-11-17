@@ -14,7 +14,7 @@ La web es un asistente de tres pasos.
 
 ![El paso Subir ficheros con los seis ficheros de ejemplo: cada fichero con su broker detectado, Interactive Brokers, Degiro, Trading 212, Scalable Capital y Freedom24](images/screenshots/subir.png)
 
-**Revisar datos.** DeclaRenta muestra un resumen de lo que ha leído: brokers, número de operaciones y dividendos, rango de fechas y divisas, y una tabla con cada fichero. Comprueba que cuadra con tu informe antes de continuar.
+**Revisar y elegir método.** DeclaRenta muestra un resumen de lo que ha leído: brokers, número de operaciones y dividendos, rango de fechas y divisas, y una tabla con cada fichero. Comprueba que cuadra con tu informe antes de continuar. Si tienes operaciones en divisa, elige aquí el método: «Criterio DGT (multidivisa)» (recomendado), «Tradicional con divisa» o «Tradicional sin divisa (monodivisa)». Ver [Los tres métodos](casillas.md#los-tres-metodos-para-acciones-en-divisa).
 
 **Resultados.** DeclaRenta descarga los tipos de cambio del BCE que necesita y calcula el ejercicio.
 

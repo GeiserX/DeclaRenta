@@ -875,7 +875,8 @@ describe("generateTaxReport", () => {
       expect(msg!.severity).toBe("info");
       expect(msg!.context).toEqual({ count: "2" });
       expect(msg!.message).toContain("2 conversión(es) de divisa");
-      expect(msg!.hint).toContain("modo por defecto");
+      // The hint names the method that keeps conversions (#434).
+      expect(msg!.hint).toContain("«Tradicional con divisa»");
       expect(report.messages.filter((m) => m.id === "report.monodivisa_conversions_skipped")).toHaveLength(1);
       // The notice changes no figure: the FX block stays zero.
       expect(report.fxGains.transmissionValue.toString()).toBe("0");

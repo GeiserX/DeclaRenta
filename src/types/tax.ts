@@ -90,8 +90,11 @@ export interface Lot {
    */
   costInFcy: Decimal;
   currency: string;
-  /** ECB rate at acquisition — informational only (audit column); never used to
-   *  compute the gain, which converts the FCY difference at the disposal date. */
+  /** ECB rate at acquisition. Under the default method («Criterio DGT
+   *  (multidivisa)») it is informational only (audit column): the gain converts
+   *  the FCY difference at the disposal date. Under both traditional methods
+   *  («Tradicional con divisa» and «Tradicional sin divisa (monodivisa)»,
+   *  `FifoEngine.traditionalCostBasis`) it IS the rate of the cost (0331). */
   ecbRate: Decimal;
   /** True for short lots (opened via SELL+O) */
   isShort?: boolean;
@@ -154,6 +157,12 @@ export interface FifoDisposal {
   holdingPeriodDays: number;
   /** Original currency of the trade */
   currency: string;
+  /**
+   * Currency of the consumed lot when it differs from the sale's (a position
+   * bought on one listing and sold on another). Written only under
+   * «Tradicional con divisa» (`FifoEngine({ markLotCurrency: true })`).
+   */
+  acquireCurrency?: string;
   /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */
   sellEcbRate: Decimal;
   /** ECB rate (EUR per 1 FCY) at acquisition — informational/audit only. */
@@ -289,16 +298,45 @@ export interface GeneralGainEntry {
 }
 
 /**
+ * The three ways DeclaRenta can treat foreign-currency shares and the currency
+ * itself (issue #434). Neutral stored values, independent of the label shown:
+ *  - `"multidivisa"`: «Criterio DGT (multidivisa)», the default and recommended
+ *    method. Stock gain in the share currency at the sale-date rate (V2422-20),
+ *    currency tracked FIFO with carry-basis, FX realized at conversion.
+ *  - `"tradicional-divisa"`: «Tradicional con divisa». Stock cost at the
+ *    buy-date rate and proceeds at the sale-date rate (as monodivisa), plus the
+ *    currency tracked FIFO, taxed when it leaves the account
+ *    (`ReportOptions.traditionalFx`).
+ *  - `"monodivisa"`: «Tradicional sin divisa (monodivisa)». Same stock line, FX
+ *    engine off (`ReportOptions.skipFx`).
+ */
+export type FxMethod = "multidivisa" | "tradicional-divisa" | "monodivisa";
+
+/**
  * The profile settings a report was computed with. They change the figures, so
  * the Results header and the CSV/PDF exports print them next to the numbers.
  */
 export interface ReportSettings {
   /** Monodivisa mode: the FX engine is off (`ReportOptions.skipFx`). */
   monodivisa: boolean;
+  /**
+   * «Tradicional con divisa» (`ReportOptions.traditionalFx`, issue #434).
+   * Written ONLY when on, so the settings of a default or monodivisa report stay
+   * deep-equal to what they were before the field existed. Never set together
+   * with `monodivisa` (skipFx wins). Read it through {@link fxMethodOf}.
+   */
+  traditionalFx?: true;
   /** Broker auto-conversions (AFx/FXCONV) are processed (`ReportOptions.trackAutoConvert`). */
   trackAutoConvert: boolean;
   /** Number of account holders the amounts are split between. */
   titulares: number;
+}
+
+/** The {@link FxMethod} a report was computed with, from its settings echo. */
+export function fxMethodOf(settings: Pick<ReportSettings, "monodivisa" | "traditionalFx">): FxMethod {
+  if (settings.monodivisa) return "monodivisa";
+  if (settings.traditionalFx === true) return "tradicional-divisa";
+  return "multidivisa";
 }
 
 /** Aggregated results for Modelo 100 casillas */
@@ -458,10 +496,40 @@ export interface FxLot {
   costInEur: Decimal;
   /** Broker the currency came from (conversion, dividend, sale proceeds), for audit traceability */
   brokerSource?: string;
+  /**
+   * «Tradicional con divisa» only (issue #434): the parts of `costPerUnit` that
+   * are drift already declared inside a stock gain or loss, one entry per sale
+   * that shifted this currency. Never written by the default method.
+   */
+  shifts?: FxShift[];
+}
+
+/**
+ * «Tradicional con divisa» (issue #434): currency returned by a foreign-stock
+ * sale costs what it cost plus the drift `r_sale − r_buy` the traditional stock
+ * line already declared. One entry records that per-unit shift and the tax year
+ * of the sale that declared it, so the cost can be shown in two parts and the
+ * `fx_traditional_inflight` warning can size a method switch between years.
+ */
+export interface FxShift {
+  /** Tax year of the stock sale whose gain or loss already holds this drift. */
+  year: number;
+  /** EUR per unit of currency (`r_sale − r_buy`, may be negative). */
+  perUnit: Decimal;
 }
 
 /**
  * What triggered an FX event (acquisition or disposal of foreign currency).
+ *
+ * Under «Tradicional con divisa» (issue #434) a `stock_sale` DISPOSAL also
+ * exists: the "lost-dollar" row of a losing sale (currency spent on shares that
+ * did not come back), booked at the sale. A `stock_sale_guard` DISPOSAL is the
+ * negative-cost guard of the same mode: the currency did come back, but its
+ * fall since the share purchase exceeds its cost, so its drift up to the
+ * purchase is booked at the sale and it returns at the sale rate. A
+ * `stock_sale_cross` DISPOSAL is the same drift for shares bought in this
+ * currency and sold in another one: the currency left inside the shares and
+ * never comes back.
  *
  * `stock_purchase` / `stock_sale` label the divisa-side effect of a
  * foreign-currency SECURITY trade under the carry-basis-defer model (issue #230
@@ -473,7 +541,15 @@ export interface FxLot {
  * buy-side consumption produced phantom prior-year-lot gains) and re-added here
  * for the parked-basis encoding, which never emits a disposal on a buy.
  */
-export type FxTrigger = "conversion" | "dividend" | "interest" | "commission" | "stock_purchase" | "stock_sale";
+export type FxTrigger =
+  | "conversion"
+  | "dividend"
+  | "interest"
+  | "commission"
+  | "stock_purchase"
+  | "stock_sale"
+  | "stock_sale_guard"
+  | "stock_sale_cross";
 
 /**
  * Movement kinds recorded in the FX-FIFO trace ({@link FxTraceEvent}).
@@ -572,6 +648,13 @@ export interface FxDisposal {
    * broker, so it can differ from `brokerSource`. Absent for a missing-lots floor.
    */
   acquireBrokerSource?: string;
+  /**
+   * «Tradicional con divisa» only (issue #434): the part of `costBasisEur` that
+   * is drift already declared inside a stock gain or loss (Σ quantity × shift).
+   * `costBasisEur − declaredShiftEur` is what the currency itself cost. Absent
+   * when zero and under every other method.
+   */
+  declaredShiftEur?: Decimal;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */

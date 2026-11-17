@@ -71,6 +71,17 @@ export function savingsBalances(report: TaxableBaseReport): { gains: Decimal; in
 }
 
 /**
+ * The clamped savings base, exact: the two {@link savingsBalances} after the
+ * same-year 25% cross-offset, each clamped at zero, summed. Money math (a tax
+ * estimate) reads this Decimal; only presentation converts it to Number.
+ */
+export function computeTaxableBase(report: TaxableBaseReport): Decimal {
+  const { gains, income } = savingsBalances(report);
+  const offset = offsetCurrentYearLosses(gains, income);
+  return Decimal.max(0, offset.gains).plus(Decimal.max(0, offset.income));
+}
+
+/**
  * Compute the displayed taxable-base breakdown and clamped total for the tax
  * estimate chart.
  *
@@ -88,9 +99,7 @@ export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableB
   const interest = report.interest.earned;
   const blockedLosses = report.capitalGains.blockedLosses;
 
-  const { gains, income } = savingsBalances(report);
-  const offset = offsetCurrentYearLosses(gains, income);
-  const clamped = Decimal.max(0, offset.gains).plus(Decimal.max(0, offset.income));
+  const clamped = computeTaxableBase(report);
 
   return {
     breakdown: {

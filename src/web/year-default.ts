@@ -10,6 +10,29 @@
  */
 
 import { t } from "../i18n/index.js";
+import { isYearEndDate } from "../engine/dates.js";
+import type { Statement } from "../types/broker.js";
+
+/**
+ * Years whose 31 December holdings the upload carries: each file with open
+ * positions or cash balances whose period ends on a year end (31 December, or
+ * the last weekday before it). Modelo 720, 721 and D-6 declare those holdings,
+ * so their year must be selectable even when the file has no trades or cash
+ * movements. A file that ends on another day gives no year: its holdings are
+ * not any year's year-end holdings.
+ */
+export function holdingsYears(statement: Pick<Statement, "toDate" | "openPositions" | "cashBalances" | "holdingsBySource">): number[] {
+  const sources = statement.holdingsBySource ?? [
+    { toDate: statement.toDate, openPositions: statement.openPositions, cashBalances: statement.cashBalances ?? [] },
+  ];
+  const years = new Set<number>();
+  for (const s of sources) {
+    if (!s.toDate || (s.openPositions.length === 0 && s.cashBalances.length === 0)) continue;
+    const y = parseInt(s.toDate.slice(0, 4), 10);
+    if (Number.isFinite(y) && y >= 1900 && y < 3000 && isYearEndDate(s.toDate, y)) years.add(y);
+  }
+  return [...years];
+}
 
 /**
  * Pick the year to open on. `detectedYears` may be in any order.

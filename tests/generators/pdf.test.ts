@@ -573,7 +573,15 @@ describe("PDF Report Generator settings line", () => {
   it("prints the settings the figures were computed with", async () => {
     const spy = vi.spyOn(PDFDocument.prototype, "text");
     await generatePdfReport(makeReport({ settings: { monodivisa: true, trackAutoConvert: false, titulares: 2 } }));
-    expect(rendered(spy)).toContain("Ajustes del cálculo: monodivisa sí, titulares 2, autoconversiones no");
+    expect(rendered(spy)).toContain("Ajustes del cálculo: método Tradicional sin divisa (monodivisa), titulares 2, autoconversiones no");
+  });
+
+  it("prints the method name of «Tradicional con divisa» and of the default", async () => {
+    const spy = vi.spyOn(PDFDocument.prototype, "text");
+    await generatePdfReport(makeReport({ settings: { monodivisa: false, traditionalFx: true, trackAutoConvert: true, titulares: 1 } }));
+    await generatePdfReport(makeReport({ settings: { monodivisa: false, trackAutoConvert: true, titulares: 1 } }));
+    expect(rendered(spy)).toContain("Ajustes del cálculo: método Tradicional con divisa, titulares 1, autoconversiones sí");
+    expect(rendered(spy)).toContain("Ajustes del cálculo: método Criterio DGT (multidivisa), titulares 1, autoconversiones sí");
   });
 
   it("prints no settings line for a report without settings", async () => {

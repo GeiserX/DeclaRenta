@@ -51,6 +51,8 @@ Opciones adicionales del comando `convert`:
 - `--output fichero.json` — Guardar resultado en un fichero en vez de stdout.
 - `--format pdf|csv|json` — Formato de salida (por defecto JSON).
 - `--broker ibkr|degiro|flatex|scalable|etoro|revolut|lightyear|freedom24|coinbase|binance|kraken|traderepublic|trading212` — Forzar broker si la auto-detección falla.
+- `--fx-method multidivisa|tradicional-divisa|monodivisa` — Método para acciones en divisa. `multidivisa` (por defecto, recomendado) es el «Criterio DGT (multidivisa)». `tradicional-divisa` es «Tradicional con divisa»: acciones al tipo del día de compra y de venta, y la divisa tributa por FIFO cuando sale de la cuenta. `monodivisa` es «Tradicional sin divisa (monodivisa)»: la misma valoración de acciones, sin ningún resultado de divisa. Ver [Los tres métodos](casillas.md#los-tres-metodos-para-acciones-en-divisa).
+- `--monodivisa` — Alias de `--fx-method monodivisa`. Con `--fx-method` de otro valor, la CLI sale con código 1.
 - `--prior-losses fichero.json` — Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF). El formato está en [Compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas).
 
 ## Interfaz web

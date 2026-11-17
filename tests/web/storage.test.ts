@@ -96,6 +96,26 @@ describe("storage round-trip", () => {
   });
 });
 
+describe("the FX method of a saved year (#434)", () => {
+  it("keeps a known method through save and load", () => {
+    saveReport({ ...makeStored(2024), fxMethod: "tradicional-divisa" });
+    saveReport(makeStored(2025));
+    const loaded = loadAllReports();
+    expect(loaded.find((r) => r.year === 2024)!.fxMethod).toBe("tradicional-divisa");
+    expect(loaded.find((r) => r.year === 2025)!.fxMethod).toBeUndefined();
+  });
+
+  it.each(["multidivisa", "tradicional-divisa", "monodivisa"] as const)("migrateReport copies %s", (m) => {
+    expect(migrateReport({ ...makeStored(2024), fxMethod: m }).fxMethod).toBe(m);
+  });
+
+  it("drops a value that is not a method, and a record saved before the method existed has none", () => {
+    expect(migrateReport({ ...makeStored(2024), fxMethod: "fifo" }).fxMethod).toBeUndefined();
+    expect(migrateReport({ ...makeStored(2024), fxMethod: true }).fxMethod).toBeUndefined();
+    expect("fxMethod" in migrateReport(makeStored(2023) as unknown as Record<string, unknown>)).toBe(false);
+  });
+});
+
 /**
  * The profile form auto-saves NIF, name and phone on every keystroke, so the
  * app must offer a way to delete everything it stored in this browser. The

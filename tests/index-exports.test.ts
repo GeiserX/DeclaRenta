@@ -26,6 +26,8 @@ describe("library entry exports", () => {
     "deriveEcbNeeds",
     "computeCasillaBlocksWithFx",
     "buildManualRateMap",
+    "reportOptionsForMethod",
+    "fxMethodOf",
   ])("exports %s", (name) => {
     expect(typeof (lib as Record<string, unknown>)[name]).toBe("function");
   });

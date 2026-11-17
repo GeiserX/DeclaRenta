@@ -155,6 +155,20 @@
   --topbar-bg: linear-gradient(180deg, #161b26 0%, #111620 100%);
 }
 
+/* Spacing and radius scale (same in both themes). Used by the components the
+   #434 refresh touched; the rest of the sheet keeps its own values for now. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -866,6 +880,20 @@ button:hover {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
+/* Buttons styled as plain content (the casilla card trigger, the copy icon,
+   the header chip link) must not pick up the filled-button hover above: it
+   painted the whole casilla row blue on hover. */
+.casilla-trigger:hover,
+.casilla-copy:hover,
+.method-chip-change:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.casilla-trigger:hover {
+  background: none;
+}
+
 button:active {
   transform: translateY(0);
 }
@@ -1071,15 +1099,16 @@ details {
   margin-top: 1rem;
 }
 
+/* Neutral by default; only the warnings list (.msg-warning) is amber. */
 details summary {
   cursor: pointer;
-  color: var(--warning-text);
-  font-size: 0.85rem;
+  color: var(--text);
+  font-size: 0.875rem;
 }
 
 details ul {
   margin: 0.5rem 0 0 1.5rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--muted);
 }
 
@@ -1645,7 +1674,7 @@ footer a:hover {
 }
 
 .processing-text {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 0.95rem;
   letter-spacing: 0.02em;
 }
@@ -1935,6 +1964,13 @@ footer a:hover {
   padding: 0.3rem 0.5rem;
 }
 
+/* «Tradicional con divisa»: the two parts of a 1637 currency cost, under the total. */
+.detail-table .fx-cost-split {
+  display: block;
+  min-width: 12rem;
+  color: var(--muted);
+}
+
 .detail-table tfoot td {
   font-weight: 600;
   border-top: 1px solid var(--border);
@@ -1944,7 +1980,7 @@ footer a:hover {
 .detail-note {
   margin: 0.75rem 0 0;
   padding: 0.6rem 0.75rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--muted);
   background: var(--surface, rgba(127, 127, 127, 0.08));
@@ -2023,7 +2059,7 @@ footer a:hover {
 }
 
 .profile-form label span {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--muted);
 }
@@ -2043,7 +2079,7 @@ footer a:hover {
 }
 
 .field-detail {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted);
   line-height: 1.5;
   margin: 0.75rem 0 0;
@@ -2055,56 +2091,31 @@ footer a:hover {
   gap: 1rem;
 }
 
-.profile-saved-msg {
-  color: var(--success-text);
-  font-size: 0.85rem;
+.profile-save-status {
   margin: 0;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.profile-saved-msg.visible {
-  opacity: 1;
-}
-
-/* Monodivisa callout */
-.monodivisa-callout {
-  background: color-mix(in srgb, var(--warning) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
-  border-left: 4px solid var(--warning);
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-top: 1rem;
-}
-.profile-form label.monodivisa-toggle {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-.monodivisa-toggle input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--warning);
-  flex-shrink: 0;
-}
-.monodivisa-label {
-  font-size: 0.9rem;
-  color: var(--text);
-}
-.monodivisa-detail {
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   color: var(--muted);
-  margin: 8px 0 0;
-  line-height: 1.5;
 }
-.monodivisa-warning {
-  font-size: 0.78rem;
-  color: var(--warning-text);
-  margin: 8px 0 0;
+
+.profile-save-status.saved {
+  color: var(--success-text);
+}
+
+.profile-moved-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.875rem;
   line-height: 1.5;
-  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.profile-moved-link {
+  color: var(--accent-text);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Banner / alert */
@@ -2305,6 +2316,8 @@ footer a:hover {
 /* Section header bar */
 .section-header-bar {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   justify-content: space-between;
   align-items: center;
   padding: 0.85rem 1.25rem;
@@ -2322,10 +2335,10 @@ footer a:hover {
 }
 
 .section-header-bar .section-settings {
-  font-size: 0.9rem;
-  opacity: 0.9;
-  margin-left: 1rem;
-  text-align: right;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: 0.875rem;
 }
 
 .year-select {
@@ -2974,6 +2987,24 @@ footer a:hover {
     display: none;
   }
 
+  /* Phones still name the current step, under its circle, without moving
+     the circle out of line with the others. */
+  .wizard-progress {
+    margin-bottom: 2.75rem;
+  }
+
+  .wizard-indicator {
+    position: relative;
+  }
+
+  .wizard-indicator.active .wizard-step-label {
+    display: block;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   .wizard-connector {
     margin-bottom: 0;
   }
@@ -3297,9 +3328,9 @@ footer a:hover {
 /* Three-tier message system */
 .msg-section {
   margin-top: 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
@@ -3333,6 +3364,7 @@ footer a:hover {
 
 .msg-section summary {
   cursor: pointer;
+  color: inherit;
 }
 
 .msg-icon {
@@ -3342,7 +3374,7 @@ footer a:hover {
 .msg-hint {
   display: block;
   margin-top: 0.25rem;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-style: italic;
 }
 
@@ -3372,11 +3404,11 @@ footer a:hover {
 .msg-info {
   background: rgba(99, 102, 241, 0.06);
   border: 1px solid rgba(99, 102, 241, 0.2);
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
 }
 
 .msg-info .msg-hint {
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
 }
 
 /* Light theme overrides — explicit */
@@ -3432,4 +3464,630 @@ footer a:hover {
   :root:not([data-theme="dark"]) .msg-info .msg-hint {
     color: #4b5563;
   }
+}
+
+/* ------------------------------------------------------------------------- */
+/* FX method (#434): review step, results header, split, comparison           */
+/* ------------------------------------------------------------------------- */
+
+/* Review step: one summary line, details on demand */
+.review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.review-summary-broker {
+  flex-basis: 100%;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.review-summary strong {
+  color: var(--text);
+}
+
+.review-details {
+  margin: 0 0 var(--space-5);
+}
+
+.review-details > summary {
+  color: var(--accent-text);
+  font-size: 0.875rem;
+}
+
+.review-details[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
+.review-value-sm {
+  font-size: 1rem;
+}
+
+/* Method cards: a native radio group, the whole card is the hit area */
+.method-picker {
+  border: 0;
+  margin: var(--space-5) 0 var(--space-5);
+  padding: 0;
+  min-width: 0;
+}
+
+.method-picker-title {
+  padding: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.method-picker-lead {
+  margin: var(--space-1) 0 var(--space-4);
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.method-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.method-card {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) 48px;
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+/* Hover stays grey: the accent border and ring mark the selected card only. */
+.method-card:not(.selected):hover {
+  border-color: var(--muted);
+}
+
+.method-card.selected {
+  border-color: var(--accent);
+  background: linear-gradient(0deg, var(--accent-subtle), var(--accent-subtle)), var(--surface-raised);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.method-card input[type="radio"] {
+  position: absolute;
+  left: var(--space-4);
+  top: 19px;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.method-card:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.method-card-body,
+.method-card-desc {
+  display: block;
+}
+
+.method-card-name {
+  display: block;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.method-card-sub {
+  display: block;
+  margin: 2px 0 var(--space-3);
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.method-card-text {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.method-card-basis {
+  display: block;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.method-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  vertical-align: 2px;
+  white-space: nowrap;
+  color: var(--success-text);
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.method-badge-use {
+  color: #fff;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+}
+
+.method-notes:empty {
+  display: none;
+}
+
+.method-notes > p {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Amber only for risk: the traditional-method note and a method change */
+.method-risk,
+.method-last-year.method-last-year-switch,
+.method-mismatch {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-left: 3px solid var(--warning-text);
+}
+
+.method-last-year {
+  color: var(--text);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+/* Other settings of the calculation */
+.review-settings {
+  border: 0;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  min-width: 0;
+}
+
+.review-settings-title {
+  padding: 0;
+  margin-bottom: var(--space-3);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.review-setting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.review-setting select {
+  padding: 0.35rem 0.75rem;
+}
+
+.review-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.review-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.review-check:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.review-settings .field-detail {
+  margin-top: var(--space-2);
+}
+
+/* Results header chips */
+.header-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.method-chip {
+  white-space: normal;
+}
+
+.method-chip-change {
+  width: auto;
+  padding: 1px 6px;
+  margin: 0 0 0 2px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.method-chip-change:hover,
+.method-chip-change:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  text-decoration-thickness: 2px;
+}
+
+.method-chip-change:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* «Cómo se ha calculado»: open, info style */
+.how-calculated {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.how-calculated p {
+  margin: 0;
+}
+
+.how-basis {
+  color: var(--muted);
+}
+
+.how-notes {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.25rem;
+  color: var(--text);
+}
+
+.how-notes li {
+  margin-top: var(--space-2);
+}
+
+.how-notes .msg-hint {
+  color: var(--muted);
+  font-style: normal;
+}
+
+/* «Acciones / Divisa / Total» */
+.results-split {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+/* No foreign currency: no «Divisa» cell. */
+.results-split.results-split-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-cell {
+  padding: 14px var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.split-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.split-value {
+  margin: 2px 0 0;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.split-sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* Comparison with the other methods: closed, neutral, read-only */
+.method-compare {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.method-compare > summary {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.method-compare-body {
+  margin-top: var(--space-3);
+}
+
+.method-compare-wrap {
+  max-height: none;
+  box-shadow: none;
+}
+
+.method-compare-table {
+  font-size: 0.875rem;
+}
+
+.method-compare-table th,
+.method-compare-table td {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.method-compare-table thead th {
+  white-space: normal;
+  vertical-align: bottom;
+  background: none;
+}
+
+.method-compare-table tbody th {
+  text-align: left;
+  color: var(--muted);
+  background: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.method-compare-table td {
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+}
+
+.method-compare-table .cur {
+  background: var(--accent-subtle);
+  box-shadow:
+    inset 1.5px 0 0 var(--accent),
+    inset -1.5px 0 0 var(--accent);
+}
+
+.method-compare-table tr.total td {
+  font-weight: 700;
+}
+
+.method-compare-note {
+  margin: var(--space-3) 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* Year comparison: method per year */
+.method-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--tag-bg);
+  border: 1px solid var(--tag-border);
+}
+
+.method-tag-unknown {
+  color: var(--muted);
+  background: none;
+  border-color: var(--border);
+}
+
+.method-mismatch {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  white-space: normal;
+}
+
+/* Wide drill-down tables scroll sideways inside the card on a phone */
+.detail-table-wrap {
+  overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  .method-cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .results-split {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .results-split:not(.results-split-two) .split-cell:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  /* «Cambiar» in the results header: a 44 px tap target on a phone. */
+  .method-chip-change {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+  }
+
+  /* The summary wraps; separators would start a line, so gaps alone separate. */
+  .review-summary > span + span::before {
+    content: none;
+  }
+
+  /* The main button can carry a long method name: it takes the full width,
+     above «Atrás». */
+  .wizard-nav {
+    flex-direction: column-reverse;
+    gap: var(--space-3);
+  }
+
+  #wizard-next {
+    margin-left: 0;
+  }
+
+  /* The casilla row becomes two lines: code and label, then amount and caret,
+     so the caret stays next to the amount instead of wrapping alone. */
+  .casilla-trigger {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--space-2);
+    row-gap: var(--space-1);
+    align-items: center;
+  }
+
+  .casilla-code {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .casilla-concept {
+    grid-column: 2 / -1;
+    grid-row: 1;
+  }
+
+  .casilla-trigger:not(:has(.casilla-code)) .casilla-concept {
+    grid-column: 1 / -1;
+  }
+
+  .casilla-value {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    width: auto;
+    text-align: right;
+  }
+
+  .casilla-toggle {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .split-value {
+    font-size: 1.15rem;
+  }
+
+  /* 44 px touch targets */
+  .header-chip,
+  .year-select,
+  .review-setting select,
+  .method-compare > summary,
+  .review-details > summary {
+    min-height: 44px;
+  }
+
+  .method-compare > summary,
+  .review-details > summary {
+    padding: 0.65rem 0;
+  }
+
+  /* Four columns fit 390 px: headers and row labels wrap, numbers shrink. */
+  .method-compare {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .method-compare-table {
+    font-size: 0.8rem;
+  }
+
+  .method-compare-table th,
+  .method-compare-table td {
+    padding: 0.4rem 0.3rem;
+  }
+
+  .method-compare-table td {
+    font-size: 0.75rem;
+  }
+
+  .method-compare-table tbody th,
+  .method-compare-table thead th {
+    white-space: normal;
+    font-size: 0.8rem;
+  }
+
+  .method-compare-table .method-badge {
+    margin-left: 0;
+  }
+
+  .method-compare-table .method-paren {
+    display: none;
+  }
+}
+
+/* Data checks on the review step (duplicates, missing years, very old data). */
+.validation-banner {
+  margin: var(--space-4) 0 0;
+}
+.validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.validation-list > li {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-left: 3px solid var(--warning-text);
+}
+.validation-list > li.validation-error {
+  color: var(--danger-text);
+  border-color: var(--danger);
+  border-left-color: var(--danger-text);
+}
+.validation-list > li.validation-info {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--border);
+  border-left-color: var(--accent);
 }

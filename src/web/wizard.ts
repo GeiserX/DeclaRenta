@@ -36,6 +36,11 @@ export function goToStep(step: WizardStep): void {
   for (const cb of listeners) cb(from, step);
 }
 
+/** The furthest step reached so far (a step at or below it is reachable). */
+export function reachedStep(): WizardStep {
+  return maxReachedStep;
+}
+
 /** Go to next step */
 export function nextStep(): void {
   if (currentStep < TOTAL_STEPS) {

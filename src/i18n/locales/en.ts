@@ -25,7 +25,6 @@ const en: TranslationKeys = {
   "upload.chip_group_label": "Manual broker selection",
 
   "config.title": "Configure",
-  "config.year_label": "Tax year:",
   "config.process_btn": "Process",
   "config.processing": "Processing...",
 
@@ -49,7 +48,6 @@ const en: TranslationKeys = {
   "results.newer_years_notice": "Showing {{year}}; your data also covers {{years}}.",
   "results.year_mismatch":
     "The file contains data for tax years {{available}}, but the selected year is {{year}}. Select another year from the dropdown above.",
-  "results.settings_used": "Calculation settings: single-currency {{monodivisa}}, holders {{titulares}}, auto-conversions {{autoconvert}}",
   "results.setting_yes": "yes",
   "results.setting_no": "no",
 
@@ -83,7 +81,9 @@ const en: TranslationKeys = {
   "fx.trigger.interest": "Interest",
   "fx.trigger.commission": "Commission",
   "fx.trigger.stock_purchase": "Securities purchase",
-  "fx.trigger.stock_sale": "Securities sale",
+  "fx.trigger.stock_sale": "Currency lost in a losing sale",
+  "fx.trigger.stock_sale_guard": "Currency change up to the share purchase",
+  "fx.trigger.stock_sale_cross": "Currency invested in shares sold in another currency",
 
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
@@ -93,6 +93,7 @@ const en: TranslationKeys = {
   "casilla.other_acquisition_value": "Acquisition value (other elements: options/crypto/funds/FX)",
   "casilla.fx_transmission_value": "FX transmission value (foreign currency)",
   "casilla.fx_acquisition_value": "FX acquisition value (foreign currency)",
+  "casilla.fx_cost_split": "{{fx}} € currency cost and {{shift}} € of drift already declared in the share",
   "casilla.fx_net_gain_loss": "FX net gain/loss (foreign currency)",
   "casilla.net_gain_loss": "Net gain/loss (asset disposals)",
   "casilla.gross_dividends": "Gross dividends",
@@ -166,7 +167,7 @@ const en: TranslationKeys = {
 
   // Wizard steps
   "wizard.step1": "Upload files",
-  "wizard.step2": "Review data",
+  "wizard.step2": "Review and choose method",
   "wizard.step3": "Results",
   "wizard.next": "Next",
   "wizard.back": "Back",
@@ -230,7 +231,6 @@ const en: TranslationKeys = {
   "profile.title": "Tax profile",
   "profile.description": "This data is used to generate the Modelo 720 and D-6 files. It is stored only in this browser, never on a server.",
   "profile.section_personal": "Personal details",
-  "profile.section_declaration": "Declaration settings",
   "profile.nif_label": "NIF/NIE:",
   "profile.nif_placeholder": "12345678Z",
   "profile.nif_invalid": "This NIF/NIE is not valid: check the digits and the control letter.",
@@ -241,23 +241,71 @@ const en: TranslationKeys = {
   "profile.ccaa_label": "Autonomous Community:",
   "profile.phone_label": "Phone:",
   "profile.phone_placeholder": "600123456",
-  "profile.monodivisa_label": "Traditional method (single-currency, cost at the buy-date rate)",
-  "profile.monodivisa_detail":
-    "Values each foreign-currency share the way the traditional method and tools such as Autodeclaro or Taxdown do: the buy at the buy-date exchange rate and the sale at the sale-date rate (Art. 35.1). The currency effect stays inside the share's gain. It also switches off the whole currency calculation: no currency result is computed at all (casillas 1633/1637), not even for USD→EUR conversions you make yourself or your broker's automatic conversions. If you convert currency, use the default mode, which computes them. Note: in a recent update this mode values the cost at the buy-date rate; the gain on foreign-currency holdings may differ from figures saved in earlier versions — re-check it if you already filed with a previous version.",
-  "profile.monodivisa_warning":
-    "⚠ This mode may distort reported capital gains (understate or overstate). The full mode (default) is more rigorous per Art. 33.1 LIRPF (DGT V2422-20).",
-  "profile.track_autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
-  "profile.track_autoconvert_detail":
+  "review.autoconvert_label": "Process broker auto-conversions (AFx/FXCONV)",
+  "review.autoconvert_detail":
     "On by default. Interactive Brokers does not convert back to euros when you sell a stock, so the currency balance is real and converting it later produces a capital gain or loss (Art. 33.1 LIRPF). Turn it off only if your broker does a full EUR↔currency round-trip and you want to ignore the currency effect.",
-  "profile.titulares_label": "Number of account holders:",
-  "profile.titulares_detail":
+  "review.titulares_label": "Number of account holders:",
+  "review.titulares_detail":
     "If the account has several holders (e.g. a joint or community-property account), DeclaRenta divides every amount equally to show each taxpayer's share (Art. 11.3 LIRPF). Each holder files their own individual return for their share.",
   "profile.saved": "Profile saved",
-  "profile.save_btn": "Save profile",
   "profile.clear_btn": "Delete my data from this browser",
   "profile.clear_confirm": "Delete your fiscal profile, saved reports and manually entered values from this browser?",
   "profile.incomplete_banner": "Complete your tax profile to generate Modelo 720 and D-6 files.",
   "profile.go_to_profile": "Go to profile",
+
+  // FX method (#434): review step, results header, comparison
+  "method.multidivisa.sub": "The gain is computed in the share's currency",
+  "method.multidivisa.text": "Computes each share's gain in its currency and converts it to euros at the sale-date rate. The currency you hold keeps what it cost you in euros. Its exchange difference appears when you convert it to euros or to another currency.",
+  "method.multidivisa.basis": "Legal basis: the tax authority's criterion for shares (DGT V1740-17, V2422-20, V0282-22).",
+  "method.tradicional_divisa.sub": "Buy and sale at their own rates, and your currency by FIFO",
+  "method.tradicional_divisa.text": "Shares are valued at the ECB rate of the purchase date and of the sale date. Currency is taxed only when it leaves your account: when you convert it to euros or to another currency, pay fees, or lose it in a losing sale. What you already declared inside the shares is not counted again.",
+  "method.tradicional_divisa.basis": "Share valuation: the DGT criterion for foreign-currency fund units (V2324-10, V0775-21), applied to shares. Currency: declared when you convert it (V2466-08) or lose it in a losing sale (V0775-21, V2324-10).",
+  "method.tradicional_divisa.risk": "The tax authority applies the «DGT criterion (multi-currency)» to shares (V1740-17). In 2025 it rejected this same calculation for a flat bought and sold in dollars (V1615-25). If it reviews your return, it may recompute it with that criterion. With no losing sales, the total of a full cycle is usually almost the same; what changes is the year and the box where each part appears.",
+  "method.monodivisa.sub": "Only buy and sale at their own rates",
+  "method.monodivisa.text": "Values the purchase at the purchase-date rate and the sale at the sale-date rate. Computes no currency result at all, neither for your conversions to euros nor for the broker's automatic ones.",
+  "method.monodivisa.basis": "Legal basis: Art. 35.1 LIRPF, without the currency rule of Art. 14.2.e. If you convert currency to euros, it can distort the result.",
+  "method.monodivisa.risk": "This method does not declare the result of your currency conversions to euros. Use it only if you do not convert currency.",
+  "method.unknown": "unknown",
+  "review.method_title": "How should we compute your foreign-currency shares?",
+  "review.method_lead": "You have operations in {{currencies}}. The method changes the figures of your return. Choose one and keep it every year.",
+  "review.method_recommended": "Recommended",
+  "review.method_last_year": "In {{year}} you used «{{method}}».",
+  "review.method_last_year_switch": "In {{year}} you used «{{method}}». If you switch methods while you still hold currency from then, part of the result may be counted twice or lost. Use the same method every year.",
+  "review.other_settings": "Other calculation settings",
+  "review.autoconvert_off_mono": "Does not apply with «Traditional without currency (single-currency)», because that method computes no currency.",
+  "review.calculate": "Calculate",
+  "review.calculate_with": "Calculate with «{{method}}»",
+  "review.show_details": "Show details",
+  "results.method_chip": "Method: {{method}}",
+  "results.method_change": "Change",
+  "results.method_change_aria": "Change the calculation method",
+  "results.titulares_one": "1 holder",
+  "results.titulares_many": "{{count}} holders",
+  "results.autoconvert_chip": "Auto-conversions: {{value}}",
+  "results.how_title": "How it was calculated",
+  "results.split_shares": "Shares",
+  "results.split_shares_sub": "boxes 0328 and 0331",
+  "results.split_securities": "Shares and other assets",
+  "results.split_securities_sub": "boxes 0328 and 0331, and part of 1633 and 1637",
+  "results.split_fx": "Currency",
+  "results.split_fx_sub": "included in 1633 and 1637",
+  "results.split_fx_off": "not computed with this method",
+  "results.split_total": "Total",
+  "results.split_total_sub": "to the savings base · estimated tax {{tax}} €",
+  "results.compare_title": "Compare with the other methods (to match another tool)",
+  "results.compare_in_use": "In use",
+  "results.compare_tax": "Estimated tax",
+  "results.compare_note": "For information only. To change the method, go back to «Review and choose method».",
+  "results.compare_loading": "Calculating…",
+  "results.compare_error": "The comparison could not be calculated.",
+  "casilla.acquisition_buy_rate_note_fx": "The acquisition value is shown at the ECB exchange rate of the PURCHASE date, as the «Traditional with currency» method requires. Transmission − acquisition is the share's gain or loss in euros. The currency result is separate, in boxes 1633 and 1637.",
+  "casilla.acquisition_buy_rate_note_mono": "The acquisition value is shown at the ECB exchange rate of the PURCHASE date, as the «Traditional without currency (single-currency)» method requires. Transmission − acquisition is the share's gain or loss in euros. This method computes no currency result.",
+  "casilla.no_other_elements_fx_below": "No other assets. The currency result is below.",
+  "compare.method": "Method",
+  "compare.method_mismatch": "These years use different methods. If you switch methods while you still hold currency from an earlier year, part of the result may be counted twice or lost.",
+  "profile.autosave": "Changes are saved automatically in this browser.",
+  "profile.method_moved": "The currency method, the account holders and the auto-conversions are now chosen in Modelo 100, at the «Review and choose method» step.",
+  "profile.go_to_renta": "Go to Modelo 100",
 
   // Broker guides
   "guide.title": "How to get the report?",
@@ -627,7 +675,7 @@ const en: TranslationKeys = {
   "guide_rw.capital_gains_note":
     "If you have many operations, you can consolidate them in one line per asset type using generic dates 01/01 and 31/12. Renta Web accepts aggregated amounts.",
   "guide_rw.fx_note":
-    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. While you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). If using single-currency mode, this section does not apply.",
+    "FX gains are declared separately from securities gains. They appear when you convert foreign currency to euros or to another currency (e.g. USD→GBP) — including your broker's automatic conversions (e.g. AFx/FXCONV in IBKR) — not only manual conversions. With the «DGT criterion (multi-currency)», while you hold the currency (e.g. buying and selling stocks in USD without converting to euros), the exchange difference stays deferred until you actually convert it, to euros or to another currency (Art. 14.2.e LIRPF). With «Traditional without currency (single-currency)» this section does not apply. With «Traditional with currency», the exchange-rate change while you hold the shares is already inside their gain or loss (boxes 0328/0331). Only the change while you hold the currency in cash stays deferred. The currency also counts when you pay fees or lose it in a losing sale.",
   "guide_rw.dividends_note":
     "Dividends from foreign brokers have no Spanish withholding. Foreign withholding tax is NOT entered here: it is deducted separately in box 0588 (double taxation).",
   "guide_rw.interest_note":
@@ -637,8 +685,7 @@ const en: TranslationKeys = {
   "guide_rw.blocked_losses_title": "Blocked losses (anti-churning)",
   "guide_rw.blocked_losses_hint":
     'If DeclaRenta shows blocked losses, tick the <strong>"Non-attributable capital losses"</strong> box in Renta Web. These losses are deferred to the next year because the same security was repurchased within 2 months (listed) or 1 year (unlisted). The amount is added to the acquisition cost of the new position.',
-  "guide_rw.closing_tip":
-    'After entering all data, use the "Verify declaration" button in Renta Web to check for errors. If another tool (Autodeclaro, Taxdown) shows a different capital gains amount, it may be because it values foreign-currency shares differently — enable single-currency mode in your profile to compare. That mode values shares like those tools, but computes no currency result at all, not even for USD→EUR conversions; if you convert currency, the default mode is the one that computes it.',
+  "guide_rw.closing_tip": "After entering all data, use the \"Verify declaration\" button in Renta Web to check for errors. If another tool shows a different capital gains amount, it may use another method for foreign-currency shares. In the Modelo 100 results, open «Compare with the other methods» to see the figures of all three. To change the method, go back to the «Review and choose method» step. Use the same method every year.",
 
   // PDF report
   "pdf.subtitle": "Tax report — Year",
@@ -803,15 +850,63 @@ const en: TranslationKeys = {
   "report.titularidad_compartida":
     "The amounts shown are split between {{titulares}} holders (the share corresponding to each taxpayer). This report reflects the return of a SINGLE holder: each of the {{titulares}} holders must file their own return with this same share. Do not declare the total in a single return, nor add several holders' shares into yours.",
   "report.titularidad_compartida.hint":
-    "The equal split ({{titulares}} × {{percent}} %) assumes equal ownership. If the ownership percentages differ (e.g. 70/30), adjust the amounts manually. For community-property accounts the attribution is 50/50 (Art. 11.3 LIRPF). You can change the number of holders in your fiscal profile.",
+    "The equal split ({{titulares}} × {{percent}} %) assumes equal ownership. If the ownership percentages differ (e.g. 70/30), adjust the amounts manually. For community-property accounts the attribution is 50/50 (Art. 11.3 LIRPF). You can change the number of holders at the «Review and choose method» step (on the command line, --titulares).",
   "report.competitor_reconciliation":
     "If another tool shows a different amount, it may be because it does not calculate foreign-exchange gains (Art. 33.1 LIRPF).",
   "report.competitor_reconciliation.hint":
-    "You can enable single-currency mode in your fiscal profile to compare: it values shares the same way as Autodeclaro or Taxdown (buy at the buy-date rate, sale at the sale-date rate), but computes no currency result at all, not even for USD→EUR conversions. If you convert currency, the default mode is the one that computes it.",
+    "You can compare with another method in the «Review and choose method» step (on the command line, --fx-method). «Traditional with currency» values shares at the buy-date rate and the sale-date rate, and also computes your currency. «Traditional without currency (single-currency)» values shares the same way, but computes no currency result at all, not even for USD→EUR conversions.",
   "report.monodivisa_conversions_skipped":
-    "Single-currency mode left {{count}} currency conversion(s) from this tax year uncalculated (manual or automatic broker conversions). This mode computes no currency result at all (boxes 1633/1637).",
+    "The «Traditional without currency (single-currency)» method left {{count}} currency conversion(s) from this tax year uncalculated (manual or automatic broker conversions). This method computes no currency result at all (boxes 1633/1637).",
   "report.monodivisa_conversions_skipped.hint":
-    "The default mode does calculate currency conversions. If you converted currency (for example, from USD to EUR), turn off single-currency mode in your fiscal profile to include their result.",
+    "If you converted currency (for example, from USD to EUR), choose «Traditional with currency» in the «Review and choose method» step (on the command line, --fx-method tradicional-divisa). It values shares the same way and does compute your conversions. The «DGT criterion (multi-currency)» computes them too.",
+  "report.fx_method_consistency":
+    "DeclaRenta computes with the «DGT criterion (multi-currency)»: the currency gain is deferred until you convert the foreign currency to euros (Art. 14.2.e LIRPF; DGT V0152-26). There are two other methods: «Traditional with currency» and «Traditional without currency (single-currency)».",
+  "report.fx_method_consistency.hint":
+    "Do not mix methods across tax years: if you filed one year with another criterion (or another tool), the carried currency basis may be counted twice or left out. For currency acquired before your report's period, include the earlier years in the broker export.",
+  "report.fx_deferred_no_conversion":
+    "You did not convert currency to euros this tax year, so there is no exchange-rate gain to declare (no currency amount is added to boxes 1633/1637). The exchange difference while you hold the currency is deferred until you actually convert it to euros (Art. 14.2.e LIRPF; DGT V0152-26).",
+  "report.fx_deferred_no_conversion.hint":
+    "Your broker (e.g. IBKR) may show a «realized forex gain» even if you did not convert to euros: it uses the US tax criterion, not the Spanish one. With the «DGT criterion (multi-currency)», the currency gain is only declared when you convert it to euros or to another currency.",
+  "report.fx_traditional_method":
+    "«Traditional with currency» method. Shares in a foreign currency are valued at the ECB rate of the buy date (cost) and of the sale date (sale). The currency is taxed FIFO when it leaves your account: when you convert it to euros or to another currency, pay fees or interest, or lose it in a losing sale. A sale gives back the currency you invested and, if you made a profit, the profit. The invested currency costs what it cost you, plus the rate change between buying and selling the shares, which is already in the result of that sale. The profit enters at the sale-date rate. The invested currency you do not get back is taxed on its own, at that sale. So each change in the currency is declared only once.",
+  "report.fx_traditional_method.hint":
+    "The DGT values units of investment funds in a foreign currency this way (V2324-10, V0775-21). For shares, the tax agency computes the gain in the foreign currency and converts it to euros at the sale-date rate (V1740-17, V2422-20, V0152-26): that is the «DGT criterion (multi-currency)». In both methods, the currency you convert is taxed when you convert it (V2466-08). Currency lost in a losing sale is taxed in the year of the sale, as with funds (V0775-21, V2324-10). Autodeclaro describes the same share valuation, with the exchange rates from your broker's statement, but does not publish how it computes the currency. Use the same method every year.",
+  "report.fx_traditional_risk":
+    "The tax agency applies the «DGT criterion (multi-currency)» to shares (V1740-17). In 2025 it rejected this same calculation for a flat bought in dollars (V1615-25). If it reviews your return, it can recompute it with that criterion.",
+  "report.fx_traditional_risk.hint":
+    "If the full cycle (euros → currency → shares → currency → euros) has no losing sales, both methods usually give almost the same total. What changes is the year and the box where each part appears, and the double-taxation deduction (box 0588) can change too. With losing sales, this method also declares the lost currency and the total is different. No DGT ruling backs this method for shares. If the tax agency recomputes, it can charge late-payment interest on the tax this method moves to a later year.",
+  "report.fx_traditional_no_conversion":
+    "You did not convert currency this year. The change in {{ccy}} while you held the shares is already in their gain or loss. The change while you hold the {{ccy}} in cash will be declared when you convert it.",
+  "report.fx_traditional_no_conversion.hint":
+    "With this method, currency is only added to boxes 1633/1637 when it leaves your account: conversions to euros or to another currency, fees, interest paid and currency lost in losing sales.",
+  "report.fx_traditional_lost_dollars":
+    "In {{n}} losing sale(s) you got back fewer {{ccy}} than you invested. Those lost {{ccy}} leave your account. Their exchange difference, from when you bought them to when you bought the shares ({{amount}} €), is declared this year in boxes 1633/1637.",
+  "report.fx_traditional_lost_dollars.hint":
+    "The «DGT criterion (multi-currency)» declares nothing in this case, because those {{ccy}} were never converted to euros. This method does declare it, as the DGT does for funds in a foreign currency (V0775-21, V2324-10): the change in the currency before the purchase is taxed in the year of the sale. FIFO order decides which {{ccy}} were lost. You will see it in the detail of boxes 1633/1637 as «Currency lost in a losing sale».",
+  "report.fx_traditional_guard":
+    "In {{n}} sale(s), the fall of the {{ccy}} since the share purchase is larger than what that currency cost you. Its exchange difference up to the share purchase ({{amount}} €) is declared this year in boxes 1633/1637, and those {{ccy}} come back at the sale-date rate.",
+  "report.fx_traditional_guard.hint":
+    "This happens when the exchange rate moves a lot (about double) between buying the currency and selling the shares. Without this rule, those {{ccy}} would have a negative cost. You will see it in the detail of boxes 1633/1637 as «Currency change up to the share purchase».",
+  "report.fx_traditional_inflight":
+    "This year you converted {{qty}} {{ccy}} that come from share sales in {{years}}. This method assumes that the change in {{ccy}} while you held those shares ({{amount}} €) was already declared in that year's gain or loss.",
+  "report.fx_traditional_inflight.hint":
+    "That holds if that year you used «Traditional with currency» or «Traditional without currency (single-currency)». If you used the «DGT criterion (multi-currency)», this year's currency result is off by that amount. Use the same method as then.",
+  "report.fx_traditional_uncovered":
+    "{{qty}} {{ccy}} used to buy shares have no euro origin in your files (deposits, earlier balances or years you have not uploaded). They are taken at the buy-date rate, with no earlier exchange difference.",
+  "report.fx_traditional_uncovered.hint":
+    "If you converted euros to {{ccy}} up to 7 days after the purchase, the rate of that conversion is used. If you know where they came from, upload the earlier years too.",
+  "report.fx_traditional_orphan":
+    "The exchange difference of {{qty}} {{ccy}} invested in {{security}} could not be assigned to any sale (possible ISIN change, merger or spin-off). Review it by hand.",
+  "report.fx_traditional_orphan.hint":
+    "Those {{ccy}} were used to buy {{security}}. At 31 December you no longer hold those shares and no sale has brought them back. Their change from when you bought the {{ccy}} to when you bought the shares ({{amount}} €) has not been declared.",
+  "report.fx_method_name.multidivisa":
+    "DGT criterion (multi-currency)",
+  "report.fx_method_name.tradicional-divisa":
+    "Traditional with currency",
+  "report.fx_method_name.monodivisa":
+    "Traditional without currency (single-currency)",
+  "report.settings_line":
+    "Calculation settings: method {{method}}, holders {{titulares}}, auto-conversions {{autoconvert}}",
   "report.non_finite_total":
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":

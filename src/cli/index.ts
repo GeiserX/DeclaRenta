@@ -21,7 +21,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
-import { generateTaxReport } from "../generators/report.js";
+import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
 import {
   checkModelo720Thresholds,
   findModelo720Omissions,
@@ -39,7 +39,7 @@ import { formatReport } from "./format-report.js";
 import { computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { applyLossCarryforward } from "../engine/loss-carryforward.js";
 import { savingsBalances } from "../engine/taxable-base.js";
-import type { LossCarryforward } from "../types/tax.js";
+import type { FxMethod, LossCarryforward } from "../types/tax.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 
 declare const __PACKAGE_VERSION__: string | undefined;
@@ -190,6 +190,29 @@ async function parseAndMerge(
 // Command: convert
 // ---------------------------------------------------------------------------
 
+const FX_METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
+const FX_METHOD_NAMES: Record<FxMethod, string> = {
+  multidivisa: "Criterio DGT (multidivisa)",
+  "tradicional-divisa": "Tradicional con divisa",
+  monodivisa: "Tradicional sin divisa (monodivisa)",
+};
+
+/**
+ * The method of a convert run. `--monodivisa` is an alias of `--fx-method
+ * monodivisa`; with an explicit `--fx-method` of another value the pair
+ * conflicts, and the CLI stops with exit code 1 (as on every other error).
+ */
+function resolveFxMethod(fxMethod: FxMethod, monodivisa: boolean, cmd: Command): FxMethod {
+  if (!monodivisa) return fxMethod;
+  const explicit = cmd.getOptionValueSource("fxMethod") === "cli";
+  if (explicit && fxMethod !== "monodivisa") {
+    throw new Error(
+      `--monodivisa y --fx-method ${fxMethod} se contradicen. Usa solo uno: --fx-method monodivisa equivale a --monodivisa.`,
+    );
+  }
+  return "monodivisa";
+}
+
 program
   .command("convert")
   .description(`Convert broker reports to Modelo 100 casilla values. Supports: ${BROKER_NAMES}`)
@@ -199,9 +222,17 @@ program
   .addOption(new Option("-f, --format <format>", "Output format").choices(["json", "csv", "pdf"]).default("json"))
   .option("-b, --broker <name>", `Broker name. Auto-detected if omitted. Available: ${BROKER_NAMES}`)
   .option("--prior-losses <file>", "JSON file with prior year losses for carryforward (Art. 49 LIRPF)")
+  .addOption(
+    new Option(
+      "--fx-method <method>",
+      "Método para acciones en divisa. multidivisa = «Criterio DGT (multidivisa)», el recomendado: ganancia en divisa al tipo del día de venta, y la divisa tributa al cambiarla. tradicional-divisa = «Tradicional con divisa»: compra al tipo del día de compra y venta al del día de venta (Art. 35.1), y tu divisa tributa por FIFO cuando sale de la cuenta. monodivisa = «Tradicional sin divisa (monodivisa)»: la misma valoración de acciones, sin ningún resultado de divisa. Usa el mismo método todos los años",
+    )
+      .choices(FX_METHODS)
+      .default("multidivisa"),
+  )
   .option(
     "--monodivisa",
-    "Método tradicional: valora las acciones como Autodeclaro/Taxdown o un asesor (compra al tipo del día de COMPRA, venta al del día de venta; Art. 35.1), con el efecto divisa dentro de la línea de la acción. Apaga TODO el motor de divisa: no calcula ningún resultado de divisa, tampoco en conversiones USD→EUR propias ni en las automáticas del bróker. Si conviertes divisa, usa el modo por defecto",
+    "Alias de --fx-method monodivisa («Tradicional sin divisa (monodivisa)»): compra al tipo del día de compra y venta al del día de venta (Art. 35.1). No calcula ningún resultado de divisa, tampoco en tus conversiones USD→EUR ni en las automáticas del bróker. Si conviertes divisa, usa --fx-method tradicional-divisa o el método por defecto",
   )
   .option(
     "--skip-auto-convert",
@@ -229,15 +260,18 @@ program
       format: string;
       broker?: string;
       priorLosses?: string;
+      fxMethod: FxMethod;
       monodivisa?: boolean;
       skipAutoConvert?: boolean;
       titulares?: number;
       cryptoRates?: string;
       fxTrace?: string | boolean;
       fxTraceFormat?: string;
-    }) => {
+    }, cmd: Command) => {
       try {
+        const fxMethod = resolveFxMethod(opts.fxMethod, opts.monodivisa === true, cmd);
         console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
+        console.error(`  Método: ${FX_METHOD_NAMES[fxMethod]}`);
 
         // 1. Parse and merge
         const { merged, brokerNames } = await parseAndMerge(opts.input, opts.broker);
@@ -284,7 +318,7 @@ program
 
         // 3. Generate tax report
         const report = generateTaxReport(merged, allRates, opts.year, {
-          skipFx: opts.monodivisa,
+          ...reportOptionsForMethod(fxMethod),
           trackAutoConvert: !opts.skipAutoConvert,
           titulares: opts.titulares,
           manualRates,

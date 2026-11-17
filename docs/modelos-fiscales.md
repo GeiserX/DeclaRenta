@@ -139,14 +139,16 @@ La regla anti-churning no se aplica a futuros.
 
 ### Forex (CASH) — Art. 33.1 LIRPF
 
-Las operaciones de compraventa de divisas tributan como ganancias y pérdidas patrimoniales (DGT V2324-10, Art. 33.1 LIRPF). DeclaRenta implementa un **motor FX FIFO independiente** que genera dos eventos fiscales al operar en divisa extranjera:
+Las operaciones de compraventa de divisas tributan como ganancias y pérdidas patrimoniales (Art. 33.1 LIRPF, imputadas al cobro o pago según el Art. 14.2.e). DeclaRenta implementa un **motor FX FIFO independiente** que genera dos eventos fiscales al operar en divisa extranjera:
 
 1. **Ganancia/pérdida del valor** (acciones cotizadas → casillas 0328/0331; resto de elementos → 1633/1637): calculada sobre el precio del activo × tipo ECB en cada fecha.
 2. **Ganancia/pérdida FX** (casillas 1633/1637): diferencia entre el tipo de cambio al adquirir la divisa y el tipo al disponer de ella.
 
 Cada adquisición de divisa extranjera (conversión EUR→USD, dividendo o interés cobrado en USD) crea un lote en la cola FIFO de esa divisa. Cada conversión de esa divisa (por ejemplo, USD→EUR) consume lotes por orden cronológico y realiza una ganancia o pérdida de divisa, igual que los intereses y comisiones que pagas en USD. Comprar acciones en USD no realiza nada. Los dólares gastados quedan apartados con su coste de origen y vuelven a la cola cuando vendes las acciones, junto con el beneficio de la venta al tipo de ese día.
 
-Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker» en el perfil fiscal, o con `--skip-auto-convert` en la CLI.
+Las conversiones automáticas del broker (AFx/FXCONV de IBKR) se procesan por defecto como cualquier otra conversión, porque IBKR no convierte a euros al vender y la divisa que tienes es real. Si tu broker sí la convierte en el acto, puedes excluirlas desmarcando «Procesar autoconversiones del bróker (AFx/FXCONV)» en el paso «Revisar y elegir método», o con `--skip-auto-convert` en la CLI.
+
+Esto describe el método por defecto, el «Criterio DGT (multidivisa)». Hay otros dos métodos: «Tradicional con divisa» (acciones al tipo del día de compra y de venta, y la divisa tributa por FIFO cuando sale de la cuenta) y «Tradicional sin divisa (monodivisa)» (la misma valoración de acciones, sin ningún resultado de divisa). La comparación casilla por casilla está en [Los tres métodos](casillas.md#los-tres-metodos-para-acciones-en-divisa).
 
 La regla anti-churning no se aplica a operaciones forex.
 

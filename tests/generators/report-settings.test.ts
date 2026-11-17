@@ -26,6 +26,11 @@ describe("generateTaxReport settings", () => {
     const report = generateTaxReport(createEmptyStatement(), new Map(), 2025, { titulares: Number.NaN });
     expect(report.settings?.titulares).toBe(1);
   });
+
+  it("records traditionalFx only for «Tradicional con divisa»", () => {
+    const report = generateTaxReport(createEmptyStatement(), new Map(), 2025, { traditionalFx: true });
+    expect(report.settings).toEqual({ ...BASE, traditionalFx: true });
+  });
 });
 
 describe("formatReportSettings", () => {
@@ -36,21 +41,29 @@ describe("formatReportSettings", () => {
   it("reads in Spanish", async () => {
     await setLocale("es");
     expect(formatReportSettings({ monodivisa: true, trackAutoConvert: true, titulares: 2 }, t)).toBe(
-      "Ajustes del cálculo: monodivisa sí, titulares 2, autoconversiones sí",
+      "Ajustes del cálculo: método Tradicional sin divisa (monodivisa), titulares 2, autoconversiones sí",
+    );
+    expect(formatReportSettings({ ...BASE, traditionalFx: true }, t)).toBe(
+      "Ajustes del cálculo: método Tradicional con divisa, titulares 1, autoconversiones sí",
+    );
+    expect(formatReportSettings(BASE, t)).toBe(
+      "Ajustes del cálculo: método Criterio DGT (multidivisa), titulares 1, autoconversiones sí",
     );
   });
 
   it("follows the active locale", async () => {
     await setLocale("en");
     expect(formatReportSettings({ monodivisa: false, trackAutoConvert: false, titulares: 1 }, t)).toBe(
-      "Calculation settings: single-currency no, holders 1, auto-conversions no",
+      "Calculation settings: method DGT criterion (multi-currency), holders 1, auto-conversions no",
     );
   });
 
   it("fills every placeholder in all five locales", async () => {
     for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {
       await setLocale(locale);
-      expect(formatReportSettings({ monodivisa: true, trackAutoConvert: false, titulares: 3 }, t)).not.toMatch(/\{\{|results\./);
+      for (const s of [{ ...BASE }, { ...BASE, traditionalFx: true as const }, { ...BASE, monodivisa: true }]) {
+        expect(formatReportSettings({ ...s, trackAutoConvert: false, titulares: 3 }, t)).not.toMatch(/\{\{|results\.|report\./);
+      }
     }
   });
 });
@@ -64,5 +77,11 @@ describe("reportSettingsDiffer", () => {
     expect(reportSettingsDiffer(BASE, { ...BASE, monodivisa: true })).toBe(true);
     expect(reportSettingsDiffer(BASE, { ...BASE, trackAutoConvert: false })).toBe(true);
     expect(reportSettingsDiffer(BASE, { ...BASE, titulares: 2 })).toBe(true);
+    expect(reportSettingsDiffer(BASE, { ...BASE, traditionalFx: true })).toBe(true);
+  });
+
+  it("compares the method, so a stray traditionalFx under monodivisa is still monodivisa", () => {
+    const mono = { ...BASE, monodivisa: true };
+    expect(reportSettingsDiffer(mono, { ...mono, traditionalFx: true })).toBe(false);
   });
 });

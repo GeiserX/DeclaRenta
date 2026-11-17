@@ -115,19 +115,35 @@ export class FifoEngine {
   private splitRatios: Map<string, { num: Decimal; den: Decimal }> = new Map();
   private nextLotId = 1;
   /**
-   * Monodivisa (traditional) mode. When true, a foreign-currency security's cost
-   * basis is converted at the ACQUISITION-date rate (Art. 35.1 "importe real por
-   * el que la adquisición se hubiese efectuado"), embedding the buy→sale FX drift
-   * in the stock line — what some advisors do. When false (rigorous
-   * default), a same-fiat security uses the sale-date rate (DGT V2422-20) and the
-   * drift is realized separately by the FX engine. Driven by `skipFx` (monodivisa)
-   * in report.ts; the two states are coherent (never traditional-cost WITH the FX
-   * engine on, which would double-count the drift). See disposalEur().
+   * Traditional cost basis. When true, a foreign-currency security's cost basis
+   * is converted at the ACQUISITION-date rate (Art. 35.1 "importe real por el que
+   * la adquisición se hubiese efectuado"), embedding the buy→sale FX drift in the
+   * stock line. When false (the default «Criterio DGT (multidivisa)»), a
+   * same-fiat security uses the sale-date rate (DGT V2422-20) and the drift is
+   * realized separately by the FX engine. See disposalEur().
+   * report.ts sets it for the two traditional methods, and there are three
+   * coherent states:
+   *  - default: sale-date cost + FX engine (drift taxed when the currency leaves).
+   *  - «Tradicional sin divisa (monodivisa)» (`skipFx`): buy-date cost, FX engine off.
+   *  - «Tradicional con divisa» (`traditionalFx`): buy-date cost + the FX engine
+   *    in its traditional mode, which re-adds a sale's principal at
+   *    `r_lot + r_s − r_b` so the drift already in this stock line is not
+   *    counted twice (FxFifoEngine, issue #434).
+   * Never traditional cost with the DEFAULT FX engine: that double-counts the drift.
    */
   private traditionalCostBasis: boolean;
+  /**
+   * «Tradicional con divisa» only: a disposal that consumes a lot bought in
+   * another currency than the sale's (same ISIN, another listing) carries the
+   * lot's currency in `acquireCurrency`, so the FX engine releases the right
+   * parked principal. Off by default, so default and monodivisa disposals keep
+   * their exact shape.
+   */
+  private markLotCurrency: boolean;
 
-  constructor(options?: { traditionalCostBasis?: boolean }) {
+  constructor(options?: { traditionalCostBasis?: boolean; markLotCurrency?: boolean }) {
     this.traditionalCostBasis = options?.traditionalCostBasis ?? false;
+    this.markLotCurrency = options?.markLotCurrency ?? false;
   }
   /** Warnings for issues that don't block execution */
   warnings: string[] = [];
@@ -946,6 +962,7 @@ export class FifoEngine {
       acquireEcbRate: Decimal;
       optionFields?: Partial<FifoDisposal>;
       acquireBrokerSource?: string;
+      acquireCurrency?: string;
     }): FifoDisposal => ({
       isin: trade.isin,
       symbol: trade.symbol,
@@ -970,6 +987,7 @@ export class FifoEngine {
       reintegratedLossEur: new Decimal(0), // Set later by detectWashSales
       brokerSource: trade.brokerSource,
       acquireBrokerSource: parts.acquireBrokerSource,
+      ...(parts.acquireCurrency !== undefined ? { acquireCurrency: parts.acquireCurrency } : {}),
       ...(parts.optionFields ?? {}),
     });
 
@@ -1060,6 +1078,7 @@ export class FifoEngine {
           holdingPeriodDays: holdingDays,
           acquireEcbRate: lot.ecbRate,
           acquireBrokerSource: lot.brokerSource,
+          ...(this.markLotCurrency && lot.currency !== trade.currency ? { acquireCurrency: lot.currency } : {}),
           optionFields:
             trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP"
               ? {
@@ -1792,6 +1811,10 @@ export class FifoEngine {
         underlyingIsin: ex.underlyingIsin,
         brokerSource: ex.brokerSource,
         acquireBrokerSource: lot.brokerSource,
+        // «Tradicional con divisa»: shares bought in another currency than the
+        // option's (a EUR option delivering USD-bought shares) release the lot
+        // currency's parked principal, as a cross-currency sale does (consumeLots).
+        ...(this.markLotCurrency && lot.currency !== ex.currency ? { acquireCurrency: lot.currency } : {}),
       });
 
       lot.quantity = lot.quantity.minus(consumed);

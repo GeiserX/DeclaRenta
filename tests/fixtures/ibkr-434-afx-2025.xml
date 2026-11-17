@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="R434" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U7654321" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades>
+        <Trade tradeID="1" accountId="U7654321" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+               tradeDate="20250116" settlementDate="20250120" quantity="-1800" tradePrice="1.1111" tradeMoney="-2000"
+               proceeds="2000" cost="0" fifoPnlRealized="0" fxRateToBase="0.90" buySell="SELL" openCloseIndicator=""
+               exchange="IDEALFX" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" notes="AFx" />
+        <Trade tradeID="2" accountId="U7654321" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="USD"
+               tradeDate="20250116" settlementDate="20250120" quantity="10" tradePrice="200.00" tradeMoney="2000.00"
+               proceeds="-2000.00" cost="2000.00" fifoPnlRealized="0" fxRateToBase="0.97" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="0" taxes="0" />
+        <Trade tradeID="3" accountId="U7654321" symbol="GLOBEX" description="GLOBEX INC" isin="US0000000002" assetCategory="STK" currency="USD"
+               tradeDate="20250203" settlementDate="20250205" quantity="5" tradePrice="100.00" tradeMoney="500.00"
+               proceeds="-500.00" cost="501.00" fifoPnlRealized="0" fxRateToBase="0.97" buySell="BUY" openCloseIndicator="O"
+               exchange="NYSE" ibCommissionCurrency="USD" ibCommission="-1.00" taxes="0" />
+        <Trade tradeID="4" accountId="U7654321" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+               tradeDate="20250203" settlementDate="20250205" quantity="-485" tradePrice="1.0330" tradeMoney="-501"
+               proceeds="501" cost="0" fifoPnlRealized="0" fxRateToBase="0.97" buySell="SELL" openCloseIndicator=""
+               exchange="IDEALFX" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" notes="AFx" />
+        <Trade tradeID="5" accountId="U7654321" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="USD"
+               tradeDate="20250610" settlementDate="20250612" quantity="-10" tradePrice="250.00" tradeMoney="-2500.00"
+               proceeds="2500.00" cost="-2000.00" fifoPnlRealized="500" fxRateToBase="0.88" buySell="SELL" openCloseIndicator="C"
+               exchange="NASDAQ" ibCommissionCurrency="USD" ibCommission="0" taxes="0" />
+        <Trade tradeID="6" accountId="U7654321" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD"
+               tradeDate="20250610" settlementDate="20250612" quantity="2130" tradePrice="1.1737" tradeMoney="2500"
+               proceeds="-2500" cost="0" fifoPnlRealized="0" fxRateToBase="0.85" buySell="BUY" openCloseIndicator=""
+               exchange="IDEALFX" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" notes="AFx" />
+      </Trades>
+      <CashTransactions>
+        <CashTransaction transactionID="20" accountId="U7654321" symbol="GLOBEX" description="GLOBEX(US0000000002) Cash Dividend USD 1.00"
+               isin="US0000000002" currency="USD" dateTime="20250615" settleDate="20250615" amount="5.00" fxRateToBase="0.87" type="Dividends" />
+        <CashTransaction transactionID="21" accountId="U7654321" symbol="GLOBEX" description="GLOBEX(US0000000002) US Tax"
+               isin="US0000000002" currency="USD" dateTime="20250615" settleDate="20250615" amount="-0.75" fxRateToBase="0.87" type="Withholding Tax" />
+      </CashTransactions>
+      <CorporateActions />
+      <OpenPositions>
+        <OpenPosition accountId="U7654321" symbol="GLOBEX" description="GLOBEX INC" isin="US0000000002" currency="USD" assetCategory="STK"
+               quantity="5" position="5" costBasisMoney="501" costBasisPrice="100.2" markPrice="120" positionValue="600" fifoPnlUnrealized="99" fxRateToBase="0.85" reportDate="20251231" />
+      </OpenPositions>
+      <SecuritiesInfo>
+        <SecurityInfo symbol="ACME" description="ACME CORP" isin="US0000000001" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" />
+        <SecurityInfo symbol="GLOBEX" description="GLOBEX INC" isin="US0000000002" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" />
+      </SecuritiesInfo>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>
