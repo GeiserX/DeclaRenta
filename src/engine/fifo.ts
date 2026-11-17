@@ -133,11 +133,11 @@ export class FifoEngine {
    */
   private traditionalCostBasis: boolean;
   /**
-   * «Tradicional con divisa» only: a disposal that consumes a lot bought in
-   * another currency than the sale's (same ISIN, another listing) carries the
-   * lot's currency in `acquireCurrency`, so the FX engine releases the right
-   * parked principal. Off by default, so default and monodivisa disposals keep
-   * their exact shape.
+   * Set whenever the FX engine runs (the default and «Tradicional con divisa»;
+   * issues #434, #441): a disposal that consumes a lot bought in another
+   * currency than the sale's (same ISIN, another listing) carries the lot's
+   * currency in `acquireCurrency`, so the FX engine releases the right parked
+   * principal. Off in monodivisa, whose disposals keep their exact shape.
    */
   private markLotCurrency: boolean;
 
@@ -1811,9 +1811,9 @@ export class FifoEngine {
         underlyingIsin: ex.underlyingIsin,
         brokerSource: ex.brokerSource,
         acquireBrokerSource: lot.brokerSource,
-        // «Tradicional con divisa»: shares bought in another currency than the
-        // option's (a EUR option delivering USD-bought shares) release the lot
-        // currency's parked principal, as a cross-currency sale does (consumeLots).
+        // Shares bought in another currency than the option's (a EUR option
+        // delivering USD-bought shares) release the lot currency's parked
+        // principal, as a cross-currency sale does (consumeLots).
         ...(this.markLotCurrency && lot.currency !== ex.currency ? { acquireCurrency: lot.currency } : {}),
       });
 

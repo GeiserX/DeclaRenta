@@ -99,43 +99,55 @@ describe("late cover: the conversion covers the earlier unfunded buy first (G2, 
 });
 
 describe("covers never leave new uncovered principal (review r4598114581, rollback)", () => {
-  // 2024-06-03, empty pool: buy more AAA and sell the old AAA (a round trip,
-  // first), then buy BBB. Plain pass: the new AAA parks untracked and BBB takes
-  // the dollars the old AAA returned. The same-day cover would hand those
-  // dollars to the new AAA and leave BBB untracked instead: it is dropped.
+  // 2024-06-03, 500 USD in the pool: buy 20 AAA (1000 USD: 500 tracked, 500
+  // untracked), sell 10 of them (an intraday round trip, first), then buy BBB
+  // for 500. Plain pass: the sale returns AAA's 500 tracked dollars and BBB
+  // takes them; AAA keeps 500 untracked. The same-day cover would hand those
+  // dollars back to AAA's untracked 500 and leave BBB untracked instead: it is
+  // dropped. The day spends 500 USD the upload never shows (`dep`, valued at
+  // the day's rate for the economic total only).
+  // Until #446 this case sold an AAA held since 2023 and bought it back; that
+  // sale now runs before every buy of its day (see the next describe), so the
+  // intraday round trip is what can still reach the same-day cover.
   const sdr = [
-    { k: "buy", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
-    { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
-    { k: "buy", d: "2024-06-03", sym: "BBB", qty: "10", px: "100", r: "0.85" },
-    { k: "sell", d: "2024-09-02", sym: "AAA", qty: "10", px: "110", r: "0.86" },
-    { k: "sell", d: "2024-09-02", sym: "BBB", qty: "10", px: "110", r: "0.86" },
+    { k: "fund", d: "2024-02-01", usd: "500", r: "0.90" },
+    { k: "buy", d: "2024-06-03", sym: "AAA", qty: "20", px: "50", r: "0.85" },
+    { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "50", r: "0.85" },
+    { k: "buy", d: "2024-06-03", sym: "BBB", qty: "5", px: "100", r: "0.85" },
+    { k: "dep", d: "2024-06-03", usd: "500", r: "0.85" },
+    { k: "sell", d: "2024-09-02", sym: "AAA", qty: "10", px: "55", r: "0.86" },
+    { k: "sell", d: "2024-09-02", sym: "BBB", qty: "5", px: "110", r: "0.86" },
   ] as const satisfies Scenario["ev"];
   const sc: Scenario = {
     id: "SDR",
-    years: [2023, 2024],
+    years: [2024],
     closed: true,
-    ev: [
-      { k: "fund", d: "2023-02-01", usd: "1000", r: "0.90" },
-      { k: "buy", d: "2023-03-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
-      ...sdr,
-      { k: "conv", d: "2024-12-02", usd: "2200", r: "0.80" },
-    ],
+    ev: [...sdr, { k: "conv", d: "2024-12-02", usd: "1100", r: "0.80" }],
   };
 
   it("BBB keeps the dollars it took without the cover", () => {
-    const v = run(sc, { ...TRAD, fxTrace: true }).get(2024)!;
+    const per = run(sc, { ...TRAD, fxTrace: true });
+    const v = per.get(2024)!;
     const parks = (v.report.fxTrace ?? []).filter((t) => t.kind === "park" && t.date === "2024-06-03");
-    expect(parks.filter((t) => t.positionKey === ISIN_B).every((t) => t.rate !== null), "BBB covered").toBe(true);
+    expect(parks.map((t) => [t.positionKey, t.rate, t.quantityFcy])).toEqual([
+      [ISIN_A, "0.9", "500"],
+      [ISIN_A, null, "500"],
+      [ISIN_B, "0.9", "500"],
+    ]);
     expect(parks.some((t) => t.note?.startsWith("cobertura del mismo día"))).toBe(false);
     expect(v.report.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+    // Stock (monodivisa's): AAA 0 + 10 × (55 × 0.86 − 50 × 0.85), BBB 5 × (110
+    // × 0.86 − 100 × 0.85). FX: AAA's untracked 500 back at 0.86, BBB's 500 at
+    // 0.90 + (0.86 − 0.85), both profits at 0.86, converted at 0.80.
+    expect([f2(v.stock), f2(v.fx)]).toEqual([f2(run(sc, MONO).get(2024)!.stock), "-91.00"]);
+    expect(f2(v.stock)).toBe("96.00");
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
   });
 
   it("a dropped 2024 cover leaves a 2023 late cover alone (L9)", () => {
     // 2023: CCC bought with no dollars, funded 2 days later: a late cover.
     // 2024: the same-day case above. Only the 2024 cover goes.
     const y2023: Scenario["ev"] = [
-      { k: "fund", d: "2023-02-01", usd: "1000", r: "0.90" },
-      { k: "buy", d: "2023-03-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
       { k: "buy", d: "2023-05-02", sym: "CCC", qty: "10", px: "100", r: "0.97" },
       { k: "fund", d: "2023-05-04", usd: "1000", r: "0.99" },
       { k: "sell", d: "2023-08-01", sym: "CCC", qty: "10", px: "100", r: "0.92" },
@@ -145,7 +157,7 @@ describe("covers never leave new uncovered principal (review r4598114581, rollba
       id: "L9",
       years: [2023, 2024],
       closed: true,
-      ev: [...y2023, ...sdr, { k: "conv", d: "2024-12-02", usd: "1200", r: "0.80" }],
+      ev: [...y2023, ...sdr, { k: "conv", d: "2024-12-02", usd: "1100", r: "0.80" }],
     };
     const per = run(both, TRAD);
     const alone = run({ id: "L9-2023", years: [2023], closed: true, ev: y2023 }, TRAD).get(2023)!;
@@ -153,10 +165,65 @@ describe("covers never leave new uncovered principal (review r4598114581, rollba
     expect([f2(alone.stock), f2(alone.fx)]).toEqual(["-50.00", "-10.00"]);
     expect([f2(per.get(2023)!.stock), f2(per.get(2023)!.fx)]).toEqual(["-50.00", "-10.00"]);
     expect(per.get(2023)!.report.messages.some((m) => m.id === "report.fx_traditional_uncovered")).toBe(false);
-    // 2024 keeps the untracked 1000 the same-day case has anyway (+10 on 0).
-    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["92.00", "-22.00"]);
-    expect(f2(lifetime(per))).toBe("10.00");
-    expect(f2(economic(both))).toBe("0.00");
+    // 2024 is the same-day case alone: the dropped cover changes nothing there.
+    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["96.00", "-91.00"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(both)));
+  });
+});
+
+describe("a held position sold and bought back the same day: the sale runs first (issue #446)", () => {
+  // AAA held since 2023 (1000 USD at 0.90, shares at 0.95). On 2024-06-03,
+  // with an empty pool, more AAA is bought, the old AAA is sold, and BBB is
+  // bought, in that upload order. The sale of the old shares runs before every
+  // buy of its day and returns 1000 USD at 0.90 + (0.85 − 0.95) = 0.80; the
+  // AAA rebuy (a round trip, before a plain buy) takes them, and BBB, the last
+  // buy of the day, parks the 1000 USD the day never had. Before #446 the
+  // rebuy ran first and parked untracked, BBB took the old AAA's dollars, and
+  // a same-day cover was tried and dropped; both allocations leave 1000 USD
+  // untracked and give the same figures, because both positions are bought
+  // and sold on the same days at the same rates.
+  const sc: Scenario = {
+    id: "SDR-HELD",
+    years: [2023, 2024],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2023-02-01", usd: "1000", r: "0.90" },
+      { k: "buy", d: "2023-03-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "buy", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "buy", d: "2024-06-03", sym: "BBB", qty: "10", px: "100", r: "0.85" },
+      { k: "dep", d: "2024-06-03", usd: "1000", r: "0.85" },
+      { k: "sell", d: "2024-09-02", sym: "AAA", qty: "10", px: "110", r: "0.86" },
+      { k: "sell", d: "2024-09-02", sym: "BBB", qty: "10", px: "110", r: "0.86" },
+      { k: "conv", d: "2024-12-02", usd: "2200", r: "0.80" },
+    ],
+  };
+
+  it("the rebuy takes the sale's dollars and BBB parks the untracked 1000", () => {
+    const v = run(sc, { ...TRAD, fxTrace: true }).get(2024)!;
+    const day = (v.report.fxTrace ?? []).filter((t) => t.date === "2024-06-03");
+    expect(day.map((t) => [t.kind, t.positionKey, t.rate, t.quantityFcy])).toEqual([
+      ["unpark", ISIN_A, "0.8", "1000"],
+      ["park", ISIN_A, "0.8", "1000"],
+      ["park", ISIN_B, null, "1000"],
+    ]);
+    expect(v.report.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+  });
+
+  it("books stock + FX = EUR out − EUR in, with monodivisa's stock line", () => {
+    const per = run(sc, TRAD);
+    const v = per.get(2024)!;
+    // Stock: old AAA 1000 × (0.85 − 0.95) = −100; new AAA and BBB each
+    // 1100 × 0.86 − 1000 × 0.85 = 96.
+    expect([f2(v.stock), f2(v.s0328), f2(v.s0331)]).toEqual(
+      (["stock", "s0328", "s0331"] as const).map((k) => f2(run(sc, MONO).get(2024)![k])),
+    );
+    expect(f2(v.stock)).toBe("92.00");
+    // FX: AAA's 1000 back at 0.80 + (0.86 − 0.85) = 0.81, BBB's untracked 1000
+    // at 0.86, both profits at 0.86; 2200 converted at 0.80: 1760 − 1842.
+    expect(f2(v.fx)).toBe("-82.00");
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+    expect(f2(economic(sc))).toBe("10.00");
   });
 });
 
@@ -242,13 +309,16 @@ describe("negative-cost guard (review r4598114603, r4598114654)", () => {
   });
 });
 
-describe("same-day cover in buy order (review r4600330140)", () => {
-  // Empty pool on 2024-06-03. AAA (round trip, listed first): buy 200 untracked,
-  // the old AAA returns 50, which covers 50 of it. BBB: buy 100 untracked, the
-  // old BBB returns 200. Those 200 must cover AAA's 150 first (its buy ran
-  // first that day), then 50 of BBB's 100. BBB's queue is older than AAA's, so
-  // the parked map lists it first: covering in map order left AAA with 50
-  // untracked instead of BBB, and moved 0.50 of FX from 2025 into 2024.
+describe("held sales fund the day's buys in buy order (review r4600330140, issue #446)", () => {
+  // Empty pool on 2024-06-03. AAA (listed first): buy 200, sell the old AAA
+  // (50). BBB: buy 100, sell the old BBB (200). Both sales are of shares held
+  // since 2023, so they run first and return 250 USD: AAA's 50 at
+  // 0.90 + (0.85 − 0.92) = 0.83 and BBB's 200 at 0.90 + (0.85 − 0.91) = 0.84.
+  // Then the buys take them in the order they ran: AAA's 200 (50 at 0.83, 150
+  // at 0.84), then BBB's 100 (50 at 0.84, 50 untracked). Until #446 the buys
+  // ran first, parked untracked, and the same-day cover gave the same
+  // allocation (covering in parked-map order instead left AAA with the 50
+  // untracked and moved 0.50 of FX from 2025 into 2024).
   const sc: Scenario = {
     id: "SDO",
     years: [2023, 2024, 2025],
@@ -270,13 +340,16 @@ describe("same-day cover in buy order (review r4600330140)", () => {
     ],
   };
 
-  it("covers AAA's 150 before BBB's 100, so BBB keeps the 50 untracked", () => {
+  it("AAA's buy takes 50 + 150 before BBB's, so BBB keeps the 50 untracked", () => {
     const trace = run(sc, { ...TRAD, fxTrace: true }).get(2024)!.report.fxTrace ?? [];
-    const same = trace.filter((t) => t.kind === "park" && t.note?.startsWith("cobertura del mismo día"));
-    expect(same.map((t) => [t.positionKey, f2(new Decimal(t.quantityFcy))])).toEqual([
-      [ISIN_A, "50.00"],
-      [ISIN_A, "150.00"],
-      [ISIN_B, "50.00"],
+    const day = trace.filter((t) => t.date === "2024-06-03");
+    expect(day.map((t) => [t.kind, t.positionKey, t.rate, f2(new Decimal(t.quantityFcy))])).toEqual([
+      ["unpark", ISIN_A, "0.83", "50.00"],
+      ["unpark", ISIN_B, "0.84", "200.00"],
+      ["park", ISIN_A, "0.83", "50.00"],
+      ["park", ISIN_A, "0.84", "150.00"],
+      ["park", ISIN_B, "0.84", "50.00"],
+      ["park", ISIN_B, null, "50.00"],
     ]);
   });
 
@@ -286,6 +359,64 @@ describe("same-day cover in buy order (review r4600330140)", () => {
     expect(f2(per.get(2024)!.fx)).toBe("-9.50");
     // 2025: BBB's 50 at 0.84 − 0.02 and 50 untracked at 0.83, converted at 0.82.
     expect(f2(per.get(2025)!.fx)).toBe("-0.50");
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+  });
+});
+
+describe("same-day cover in buy order (review r4600330140)", () => {
+  // Since #446 a same-day cover can only follow an intraday round trip: a sale
+  // of shares bought that same day. BBB's parked queue is the older one (BBB
+  // was bought and sold in 2023), so the parked map lists it first. On
+  // 2024-06-03, with 100 USD in the pool: AAA buys 300 (100 tracked at 0.70,
+  // 200 untracked) and sells a third for 140; that sale covers 140 of AAA's
+  // untracked 200. BBB buys 400 (untracked) and sells half for 240; the first
+  // 200 pay back what the sold half borrowed that day (#447), and the 40 of
+  // profit cover 40 of AAA's last 60 first (its buy ran first that day), so
+  // BBB keeps its other 200 untracked and sells them in 2025, and AAA sells
+  // its last 20 untracked in 2024. Covering in map order gave the 40 to BBB
+  // and left AAA with 60 untracked. Before #447 the sale also put the 200 it
+  // paid back in the pool as dollars bought at 0.85, and they covered AAA's
+  // 20 and 140 of BBB's.
+  const sc: Scenario = {
+    id: "SDO-INTRADAY",
+    years: [2023, 2024, 2025],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2023-01-02", usd: "100", r: "0.90" },
+      { k: "buy", d: "2023-01-03", sym: "BBB", qty: "1", px: "100", r: "0.91" },
+      { k: "sell", d: "2023-02-01", sym: "BBB", qty: "1", px: "100", r: "0.93" },
+      { k: "conv", d: "2023-03-01", usd: "100", r: "0.95" },
+      { k: "fund", d: "2024-02-01", usd: "100", r: "0.70" },
+      { k: "buy", d: "2024-06-03", sym: "AAA", qty: "3", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "1", px: "140", r: "0.85" },
+      { k: "buy", d: "2024-06-03", sym: "BBB", qty: "4", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-06-03", sym: "BBB", qty: "2", px: "120", r: "0.85" },
+      // The 220 USD the day spent beyond what it had (economic only).
+      { k: "dep", d: "2024-06-03", usd: "220", r: "0.85" },
+      { k: "sell", d: "2024-09-02", sym: "AAA", qty: "2", px: "100", r: "0.86" },
+      { k: "conv", d: "2024-12-02", usd: "200", r: "0.80" },
+      { k: "sell", d: "2025-03-03", sym: "BBB", qty: "2", px: "100", r: "0.83" },
+      { k: "conv", d: "2025-06-02", usd: "200", r: "0.82" },
+    ],
+  };
+
+  it("covers AAA's untracked slice before BBB's, after BBB pays back what it borrowed", () => {
+    const per = run(sc, { ...TRAD, fxTrace: true });
+    const trace = per.get(2024)!.report.fxTrace ?? [];
+    const same = trace.filter((t) => t.kind === "park" && t.note?.startsWith("cobertura del mismo día"));
+    expect(same.map((t) => [t.positionKey, t.rate, t.quantityFcy])).toEqual([
+      [ISIN_A, "0.7", "100"],
+      [ISIN_A, "0.85", "40"],
+      [ISIN_A, "0.85", "40"],
+    ]);
+    const repaid = trace.filter((t) => t.kind === "discard" && t.note?.startsWith("compraventa del mismo día"));
+    expect(repaid.map((t) => [t.date, t.positionKey, t.quantityFcy])).toEqual([["2024-06-03", ISIN_B, "200"]]);
+    // The untracked principal later sales re-add at their own rate: AAA's 20, BBB's 200.
+    const later = (per.get(2025)!.report.fxTrace ?? []).filter((t) => t.kind === "unpark" && t.date > "2024-06-03");
+    expect(later.filter((t) => t.note?.startsWith("uncovered")).map((t) => [t.date, t.positionKey, t.quantityFcy])).toEqual([
+      ["2024-09-02", ISIN_A, "20"],
+      ["2025-03-03", ISIN_B, "200"],
+    ]);
     expect(f2(lifetime(per))).toBe(f2(economic(sc)));
   });
 });

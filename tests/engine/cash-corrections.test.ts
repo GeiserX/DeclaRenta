@@ -95,6 +95,29 @@ describe("collapseCorrections", () => {
     expect(out).toHaveLength(6); // no key matches → nothing cancels
   });
 
+  it("does not pair across brokers or across converted and unconverted rows (PR #445 review)", () => {
+    // A genuine USD credit at one broker is not a reversal of a broker-converted
+    // row at another; the FX path keeps the first and skips the second.
+    const usd = { currency: "USD", isin: "US0378331005" };
+    const txs: CashTransaction[] = [
+      makeCashTx({ ...usd, transactionID: "a", amount: "10", brokerSource: "ibkr" }),
+      makeCashTx({ ...usd, transactionID: "b", amount: "-10", brokerSource: "degiro" }), // other broker
+      makeCashTx({ ...usd, transactionID: "c", amount: "10", brokerSource: "tr" }),
+      makeCashTx({ ...usd, transactionID: "d", amount: "-10", brokerSource: "tr", brokerConvertedToBase: true }), // converted
+    ];
+    expect(collapseCorrections(txs)).toBe(txs);
+  });
+
+  it("still cancels a pair at one broker with the same conversion status", () => {
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "a", amount: "10", brokerSource: "tr", brokerConvertedToBase: true }),
+      makeCashTx({ transactionID: "b", amount: "-10", brokerSource: "tr", brokerConvertedToBase: true }),
+      makeCashTx({ transactionID: "c", amount: "10", brokerSource: "ibkr" }),
+      makeCashTx({ transactionID: "d", amount: "-10", brokerSource: "ibkr" }),
+    ];
+    expect(collapseCorrections(txs)).toEqual([]);
+  });
+
   it("preserves order and keeps the EARLIEST of identical survivors", () => {
     const txs: CashTransaction[] = [
       makeCashTx({ transactionID: "keep-before", amount: "50" }),

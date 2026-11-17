@@ -226,10 +226,9 @@ describe("a USD position delivered by a EUR option exercise", () => {
     expect(ex[0]!.acquireCurrency).toBeUndefined();
   });
 
-  it("the default and monodivisa never mark it", () => {
+  it("monodivisa never marks it; the default does, since it runs the FX engine (issue #441)", () => {
     const { st, rates } = build();
-    for (const o of [{}, MONO]) {
-      expect(exerciseRows(figures(st, rates, o).report).every((d) => d.acquireCurrency === undefined)).toBe(true);
-    }
+    expect(exerciseRows(figures(st, rates, MONO).report).every((d) => d.acquireCurrency === undefined)).toBe(true);
+    expect(exerciseRows(figures(st, rates, {}).report).map((d) => d.acquireCurrency)).toEqual(["USD"]);
   });
 });

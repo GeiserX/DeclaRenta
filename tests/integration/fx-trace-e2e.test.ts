@@ -36,8 +36,8 @@ import type { FxTraceEvent, FxTraceKind } from "../../src/types/tax.js";
 // Every EUR figure and every trace kind/ordering below was VERIFIED against the
 // real engine output (not guessed); each expected value is pinned with
 // .toFixed(2). The engine emits the trace in (date, phase) order — pool
-// acquisitions → stock-buys/park → stock-sells/unpark+profit → disposals/conv —
-// see FxFifoEngine.phaseOf in src/engine/fx-fifo.ts.
+// acquisitions → stock legs (a same-day round trip parks, then unparks) →
+// disposals/conv — see FxFifoEngine.sortEvents in src/engine/fx-fifo.ts.
 // ===========================================================================
 
 /** Build an in-memory ECB rate map (date → currency → "EUR per 1 FCY"). */
@@ -300,7 +300,7 @@ describe("fx-trace e2e #2: golden ledger — round-trip trace reconciles to the 
     expect(tail.length).toBeGreaterThan(0);
     expect(tail.every((k) => k === "dispose")).toBe(true);
     // The relative order acquire < park < unpark < profit < dispose is the
-    // phaseOf() contract — assert each kind appears and is ordered.
+    // sortEvents() contract — assert each kind appears and is ordered.
     const expectedPrefix: FxTraceKind[] = ["acquire", "park", "unpark", "profit", "dispose"];
     expect(kinds.slice(0, 5)).toEqual(expectedPrefix);
   });

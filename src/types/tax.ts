@@ -119,8 +119,8 @@ export interface FifoDisposal {
   description: string;
   sellDate: string;
   /**
-   * Cash settlement date of the sale, when the trade carries one. The FX engine
-   * dates the sale's unpark here, on the same axis as the buy's park.
+   * Cash settlement date of the sale, when the trade carries one. Audit only:
+   * the FX engine dates every event on its trade date (rule R0, issue #437).
    */
   settlementDate?: string;
   acquireDate: string;
@@ -159,8 +159,9 @@ export interface FifoDisposal {
   currency: string;
   /**
    * Currency of the consumed lot when it differs from the sale's (a position
-   * bought on one listing and sold on another). Written only under
-   * «Tradicional con divisa» (`FifoEngine({ markLotCurrency: true })`).
+   * bought on one listing and sold on another, or a crypto permuta). Written
+   * whenever the FX engine runs (`FifoEngine({ markLotCurrency: true })`), never
+   * in monodivisa.
    */
   acquireCurrency?: string;
   /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */
@@ -558,6 +559,9 @@ export type FxTrigger =
  *  - `park`     — a stock BUY parked principal (carried basis, or `null` rate = uncovered).
  *  - `unpark`   — a stock SELL re-added parked principal to the pool at its carried basis.
  *  - `discard`  — a LOSS sell dropped principal that didn't return (no FX, never converted).
+ *                 Also (issue #447) the untracked principal a sale of shares bought that same
+ *                 day pays back, on a winning sale too, and later currency of that day paying
+ *                 what such a sale still owed (note `compraventa del mismo día sin divisa`).
  *  - `profit`   — a stock SELL's trading profit re-added to the pool at the sale rate.
  */
 export type FxTraceKind = "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit";

@@ -604,14 +604,24 @@ describe("IBKR fixtures with real 2025 ECB rates", () => {
     return [f2(r.capitalGains.netGainLoss), f2(r.fxGains.netGainLoss)];
   };
 
+  // The default's total (stock + FX) equals the other methods' since issue #437
+  // (trade-date dating). With settlement dating it was 217.55 on the AFx file
+  // (−219.93 FX) and 169.89 on the cycle file (−267.59 FX).
+  const total = (f: string, o: object) => {
+    const r = generateTaxReport(load(f), rates, 2025, o);
+    return r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss).toString();
+  };
+
   it("ibkr-434-afx-2025.xml: broker AFx account → exactly the monodivisa figures", () => {
-    expect(fig("ibkr-434-afx-2025.xml", {})).toEqual(["437.48", "-219.93"]);
+    expect(fig("ibkr-434-afx-2025.xml", {})).toEqual(["437.48", "-197.11"]);
+    expect(total("ibkr-434-afx-2025.xml", {})).toBe(total("ibkr-434-afx-2025.xml", MONO));
     expect(fig("ibkr-434-afx-2025.xml", MONO)).toEqual(["240.38", "0.00"]);
     expect(fig("ibkr-434-afx-2025.xml", TRAD)).toEqual(["240.38", "0.00"]);
   });
 
   it("ibkr-434-cycle-2025.xml: manual conversions → 240.38 / −57.36 (total = EUR out − EUR in)", () => {
-    expect(fig("ibkr-434-cycle-2025.xml", {})).toEqual(["437.48", "-267.59"]);
+    expect(fig("ibkr-434-cycle-2025.xml", {})).toEqual(["437.48", "-254.46"]);
+    expect(total("ibkr-434-cycle-2025.xml", {})).toBe(total("ibkr-434-cycle-2025.xml", TRAD));
     expect(fig("ibkr-434-cycle-2025.xml", MONO)).toEqual(["240.38", "0.00"]);
     expect(fig("ibkr-434-cycle-2025.xml", TRAD)).toEqual(["240.38", "-57.36"]);
   });
