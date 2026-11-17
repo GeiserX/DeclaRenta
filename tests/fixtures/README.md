@@ -11,6 +11,7 @@ Anonymized sample files for broker parser tests. All data is fake (dummy ISINs, 
 | `degiro-transactions-sample.csv` | Degiro | CSV (19-col Spanish) | 13 rows: USD+EUR buys/sells, FX rates, zero-price rights row |
 | `degiro-account-sample.csv` | Degiro | CSV (12-col Spanish) | Dividends, withholdings, STT, cash sweep |
 | `two-broker-ibkr.xml` + `two-broker-degiro.csv` | Interactive Brokers + Degiro | XML + CSV | Uploaded together: three EUR sales, one at Degiro using shares bought at Interactive Brokers (broker columns in the results table, the annex and the PDFs) |
+| `ibkr-withholding-correction-only.xml` | Interactive Brokers | XML (Flex Query, shaped like a real export, dummy security and account) | A "last 30 days" cash query holding only withholding corrections (+0.66 / −0.53 USD on three past dates, no dividend): pins one 0.13 USD lot per date (issue #436) |
 | `binance-sample.csv` | Binance | CSV (Trade History) | 2 BTC trades (buy+sell), 1 ETH buy |
 | `binance-tx-sample.csv` | Binance | CSV (Transaction History) | Deposit, Convert pair, Strategy Sold+Revenue, Buy+Spend |
 | `coinbase-sample.csv` | Coinbase | CSV (v1) | 1 BTC buy, 1 BTC sell, 1 ETH staking income |
