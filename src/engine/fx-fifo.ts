@@ -184,12 +184,17 @@ interface CoverPass {
   /**
    * A trial: the buys it adds, each buy's gross `null` in the accepted pass,
    * and `fails(date)`, asked before the first event of each date, true once
-   * the trial has certainly failed (the pass then stops).
+   * the trial has certainly failed (the pass then stops). A `bounded` trial's
+   * chain takes in no buy past its horizon.
    */
-  trial?: { pick: Set<FxEvent>; refGross: Map<FxEvent, Decimal>; fails: (date: string) => boolean };
+  trial?: { pick: Set<FxEvent>; refGross: Map<FxEvent, Decimal>; fails: (date: string) => boolean; bounded: boolean };
   /** Buys of the trial that lost dollars and took their own late cover. */
   joined: Set<FxEvent>;
-  /** Latest year the trial changes: its buys' year and the dates of what they took. */
+  /**
+   * Latest year the trial changes: its buys' year and the dates of what they
+   * took, counting only buys up to the horizon (a later buy that lost its
+   * dollars is a cover of its own year).
+   */
   horizon: string;
   /** The trial failed before the last event: the pass stopped there. */
   stopped: boolean;
@@ -585,6 +590,9 @@ export class FxFifoEngine {
   /** Days a later EUR→currency conversion may cover an "uncovered" stock buy (critic G2). */
   static readonly LATE_COVER_DAYS = 7;
 
+  /** Tests only: judge every late or same-day cover alone, never in batches. */
+  static coversAlone = false;
+
   /**
    * «Tradicional con divisa» covers of an "uncovered" (`null`) stock buy.
    *
@@ -618,23 +626,33 @@ export class FxFifoEngine {
    *     chain (a trap: one pass per link, capped at 25, left a weekly chain
    *     past week 25 untracked and took seconds for 300 buys).
    *  4. A cover never leaves new uncovered principal: no buy may park more
-   *     `null`, and no disposal may find fewer lots, than without it. When the
-   *     buy really used dollars the upload does not show (an opening balance,
-   *     spec row 17), the later acquisition is new money, and covering with it
-   *     makes a later disposal find no lot (a trap: +150 and a false
-   *     missing-lots note). A cover is judged up to the end of the latest year
-   *     it changes: the year of its buys and of the acquisitions they take (a
-   *     trap: a December buy covered by a January conversion was judged only
-   *     up to 31 December, and the next year got +150 and a false missing-lots
-   *     note). Covers are judged one year at a time, oldest first: all the
-   *     year's covers at once; when that fails, the oldest half, halving after
-   *     each failure and doubling after each success, down to one cover (with
-   *     the chain of buys it leaves without dollars). A failing cover is
-   *     dropped alone; the others stay. So a year's result
-   *     never changes because of a later year's data, unless one of its covers
-   *     takes an acquisition of that later year (a trap: dropping every cover
-   *     of the currency let a 2024 same-day case undo a 2023 cover, −54 on an
-   *     economic 0).
+   *     `null`, and no disposal may find fewer lots, than without it, over all
+   *     the data. When the buy really used dollars the upload does not show
+   *     (an opening balance, spec row 17), the later acquisition is new money,
+   *     and covering with it makes a later disposal find no lot (a trap: +150
+   *     and a false missing-lots note), in any later year (a trap: judged only
+   *     up to the end of its own years, a December cover left a conversion of
+   *     the next year without a lot, −30 instead of −80, Z1). A cover's own
+   *     years (its horizon) are the year of its buys and of the acquisitions
+   *     they take. One exception: a cover that holds up to the end of its
+   *     horizon and fails only in a later year F stays when dropping it would
+   *     change the figures of a year from its horizon to F − 1, because those
+   *     years were filed with it (Z2: a December sale and conversion, and a
+   *     conversion of the next year that finds no lot). Year F then shows the
+   *     missing-lots or untracked note. The kept cover takes its own chain
+   *     only: a buy after its horizon it leaves without dollars keeps them
+   *     lost, and is a cover of its own year. So a filed year never changes
+   *     because of a later year's data, unless one of its covers takes an
+   *     acquisition of that later year. Covers are judged one year at a time,
+   *     oldest first: all the year's covers at once; when that fails, the
+   *     oldest half, halving after each failure and doubling after each
+   *     success, down to one cover (with the chain of buys it leaves without
+   *     dollars). A batch must hold over all the data. A cover only ever takes
+   *     dollars away from what comes after it, so each cover of a kept batch
+   *     holds alone too, and only a single cover gets the exception: batches
+   *     change no result. A failing cover is dropped alone; the others stay (a
+   *     trap: dropping every cover of the currency let a 2024 same-day case
+   *     undo a 2023 cover, −54 on an economic 0).
    * Older `null` slices keep the untracked-origin path (spec row 17).
    */
   private processTraditional(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
@@ -695,10 +713,12 @@ export class FxFifoEngine {
     interface Outcome {
       nulls: Map<FxEvent, NullPark>;
       short: { currency: string; date: string; qty: Decimal }[];
+      disposals: FxDisposal[];
     }
     const outcome = (): Outcome => ({
       nulls: new Map(this.nullParks.map((p) => [p.event, { ...p }])),
       short: [...this.shortfalls],
+      disposals: this.disposals.slice(start.disposals),
     });
     const nullOf = (o: Outcome, buy: FxEvent): Decimal => o.nulls.get(buy)?.qty ?? new Decimal(0);
 
@@ -744,11 +764,14 @@ export class FxFifoEngine {
     };
 
     // One trial: the accepted covers plus `pick`, in one pass (steps 2 and 3).
-    // A buy the trial leaves with more `null` than the accepted pass, up to
-    // the trial's latest year, takes its own late cover when it runs. Null
-    // when the trial fails before its last event.
+    // A buy the trial leaves with more `null` than the accepted pass takes its
+    // own late cover when it runs (`bounded`: only up to the horizon). Null
+    // when the trial fails before its last event: a batch at its first
+    // failure, a single cover at its first failure up to its own years (one
+    // after them may still keep it, step 4).
     type Trial = { enabled: Set<FxEvent>; same: Set<string>; out: Outcome; horizon: string };
-    const trial = (pick: Unit[], year: string): Trial | null => {
+    const trial = (pick: Unit[], year: string, bounded = false): Trial | null => {
+      const batch = pick.length > 1;
       const tEnabled = new Set(enabled);
       const tSame = new Set(same);
       const picked = new Set<FxEvent>();
@@ -760,12 +783,12 @@ export class FxFifoEngine {
       }
       const refGross = new Map([...ref.nulls].map(([e, p]) => [e, p.gross]));
       // Step 4 as the pass runs: a buy of an earlier date (its same-day covers
-      // done) with more `null` up to the horizon fails the trial; past the
-      // horizon's year end the verdict is final.
+      // done) with more `null` (up to the horizon, for a single cover) fails
+      // the trial; past the horizon's year end that verdict is final.
       let seen = 0;
       let judged = false;
       const fails = (date: string): boolean => {
-        const horizon = this.cover?.horizon ?? year;
+        const horizon = batch ? "9999" : (this.cover?.horizon ?? year);
         const end = `${horizon}-12-31`;
         for (; seen < this.nullParks.length; seen++) {
           const p = this.nullParks[seen]!;
@@ -775,14 +798,15 @@ export class FxFifoEngine {
         judged = true;
         return !holds(outcome(), horizon);
       };
-      const c = pass(tEnabled, tSame, { pick: picked, refGross, fails }, year);
+      const c = pass(tEnabled, tSame, { pick: picked, refGross, fails, bounded }, year);
       if (c.stopped) return null;
       for (const b of c.joined) tEnabled.add(b);
       return { enabled: tEnabled, same: tSame, out: outcome(), horizon: c.horizon };
     };
 
-    // Step 4, up to the end of `year`: no buy more `null`, no currency more missing lots.
-    const holds = (o: Outcome, year: string): boolean => {
+    // Step 4, up to the end of `year` (all the data by default): no buy more
+    // `null`, no currency more missing lots.
+    const holds = (o: Outcome, year = "9999"): boolean => {
       const end = `${year}-12-31`;
       for (const p of o.nulls.values()) {
         if (p.date <= end && p.qty.greaterThan(nullOf(ref, p.event).plus(EPS))) return false;
@@ -799,16 +823,52 @@ export class FxFifoEngine {
       return true;
     };
 
+    // FX transmission and acquisition values per year, `from` to `to`, as filed.
+    const figures = (o: Outcome, from: string, to: string): string => {
+      const per = new Map<string, { p: Decimal; c: Decimal }>();
+      for (const d of o.disposals) {
+        const y = d.disposeDate.slice(0, 4);
+        if (y < from || y > to) continue;
+        const v = per.get(y) ?? { p: new Decimal(0), c: new Decimal(0) };
+        per.set(y, { p: v.p.plus(d.proceedsEur), c: v.c.plus(d.costBasisEur) });
+      }
+      return [...per]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([y, v]) => `${y}:${v.p.toFixed(2)}:${v.c.toFixed(2)}`)
+        .join("|");
+    };
+    const lastYear = Number(events.reduce((m, e) => (e.date > m ? e.date : m), "").slice(0, 4));
+    // Step 4's exception: a single cover that holds up to the end of its own
+    // years (`horizon`) and fails only in a later year F stays when dropping
+    // it would change the figures of a year from its horizon to F − 1. Those
+    // years were filed with the cover; a later year's data never changes them.
+    const keepsFiled = (t: Trial): boolean => {
+      if (!holds(t.out, t.horizon)) return false;
+      let f = Number(t.horizon) + 1;
+      while (f < lastYear && holds(t.out, String(f))) f++;
+      const to = String(f - 1);
+      return figures(t.out, t.horizon, to) !== figures(ref, t.horizon, to);
+    };
+
     // Per year, how many of its oldest covers the next trial takes: all at
-    // first, half after a failure, twice as many after a success.
+    // first, half after a failure, twice as many after a success. A batch
+    // must hold over all the data, so (a cover only ever takes dollars away
+    // from what comes after it) each of its covers would hold alone too.
     const size = new Map<string, number>();
     for (let next = units(); next.length > 0; next = units()) {
       const year = next[0]!.date.slice(0, 4);
       const all = next.filter((u) => u.date.startsWith(year));
-      const n = size.get(year);
+      const n = FxFifoEngine.coversAlone ? 1 : size.get(year);
       const pick = n === undefined ? all : all.slice(0, n);
-      const t = trial(pick, year);
-      if (t && holds(t.out, t.horizon)) {
+      let t = trial(pick, year);
+      if (t && !holds(t.out)) {
+        // Step 4's exception, for a single cover only: its own chain, without
+        // the later buys it left without dollars (they are covers of their
+        // own year, judged there).
+        const own = pick.length === 1 && holds(t.out, t.horizon) ? trial(pick, year, true) : null;
+        t = own && (holds(own.out) || keepsFiled(own)) ? own : null;
+      }
+      if (t) {
         enabled = t.enabled;
         same = t.same;
         ref = t.out;
@@ -844,7 +904,7 @@ export class FxFifoEngine {
   /**
    * Late cover of a stock buy that found the pool `remaining` short (see
    * {@link processTraditional}). A covered buy, or in a trial a buy left with
-   * more `null` than the accepted pass up to the trial's latest year, takes
+   * more `null` than the accepted pass (up to the horizon in a bounded trial), takes
    * the acquisitions of its currency dated 1 to {@link LATE_COVER_DAYS} days
    * after it, oldest first, up to `remaining`: each part goes into the pool on
    * the buy's date. A conversion split in two keeps its rate: `realEurAmount`
@@ -857,13 +917,14 @@ export class FxFifoEngine {
     const EPS = FxFifoEngine.EPS;
     const list = c.byCcy.get(event.currency);
     if (!list) return false;
-    const year = event.date.slice(0, 4);
     // Part of the trial's chain: a picked buy, or one with more `null` than
-    // the accepted pass, up to the trial's latest year.
+    // the accepted pass. Only a buy up to the horizon extends it.
+    const own = event.date.slice(0, 4) <= c.horizon;
     const chain =
       c.trial !== undefined &&
-      year <= c.horizon &&
+      (own || !c.trial.bounded) &&
       (c.trial.pick.has(event) || remaining.greaterThan((c.trial.refGross.get(event) ?? new Decimal(0)).plus(EPS)));
+    const widens = chain && own;
     if (!c.enabled.has(event) && !chain) return false;
     let need = remaining;
     let added = false;
@@ -877,7 +938,7 @@ export class FxFifoEngine {
       this.movedFrom.set(part, acq.date);
       c.left.set(acq, cap.minus(x));
       need = need.minus(x);
-      if (chain && acq.date.slice(0, 4) > c.horizon) c.horizon = acq.date.slice(0, 4);
+      if (widens && acq.date.slice(0, 4) > c.horizon) c.horizon = acq.date.slice(0, 4);
       this.addLot(part);
       added = true;
     }
