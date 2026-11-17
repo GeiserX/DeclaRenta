@@ -1261,10 +1261,11 @@ export class FxFifoEngine {
       // floor (gain = 0) rather than a fabricated gain.
       if (d.isShort) continue;
       if (!isEcbResolvable(d.currency)) continue; // genuine fiat FCY only
-      // «Tradicional con divisa» lets a long sale at 0 through (worthless or
-      // delisted with a zero sale, spec row 7): its lost principal books its
-      // lost-dollar rows. The default skips it, as before.
-      if (traditionalFx ? d.proceedsFcy.lessThan(0) : !d.proceedsFcy.greaterThan(0)) continue;
+      // «Tradicional con divisa» lets every long sale through, at 0 too
+      // (worthless or delisted with a zero sale, spec row 7) or below 0 (the
+      // commission exceeds the gross): its lost principal books its lost-dollar
+      // rows. The default skips both, as before.
+      if (!traditionalFx && !d.proceedsFcy.greaterThan(0)) continue;
       const sellDate = normalizeDate(d.sellDate);
       events.push({
         kind: "stock_sell",
@@ -2050,6 +2051,11 @@ export class FxFifoEngine {
    * 2), so broker-AFx accounts do not inflate 1633/1637 with rows that net to 0.
    * A `null` tail books nothing.
    *
+   * NEGATIVE PROCEEDS (the commission exceeds the gross): nothing comes back,
+   * so the whole principal is lost as above, and the extra `|proceedsFcy|` the
+   * sale took from the account consumes pool lots like a fee (trigger
+   * `commission`).
+   *
    * Emits no disposal on a gain. Conservation accumulators move exactly as in
    * the default path (unpark / discard / profit / phantom).
    */
@@ -2062,7 +2068,7 @@ export class FxFifoEngine {
     const ccy = event.currency;
 
     let need = cost;
-    const readdCap = Decimal.min(cost, proc);
+    const readdCap = Decimal.max(Decimal.min(cost, proc), 0);
     let placed = new Decimal(0);
     let lostRows = 0;
     let guardRows = 0;
@@ -2166,6 +2172,18 @@ export class FxFifoEngine {
         lotAcquireDate: profitLot?.acquireDate,
       });
       this.accumulate("profit", ccy, profit);
+    }
+
+    // Negative proceeds: the commission above the gross left the account too.
+    if (proc.lessThan(EPS.negated())) {
+      this.consumeLots({
+        date: event.date,
+        currency: ccy,
+        quantity: proc,
+        ecbRate: saleRate,
+        trigger: "commission",
+        ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
+      });
     }
 
     if (this.coversOn && !this.coversOff.has(ccy)) for (const lot of covers) this.sameDayCover(lot, event);

@@ -10,7 +10,8 @@
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { run, lifetime, economic, TRAD, type Scenario } from "./fx-traditional-harness.js";
+import { generateTaxReport } from "../../src/generators/report.js";
+import { run, lifetime, economic, toStatement, TRAD, MONO, type Scenario } from "./fx-traditional-harness.js";
 
 const f2 = (d: Decimal) => d.toFixed(2);
 const ISIN_A = "US0000000AA1";
@@ -85,5 +86,50 @@ describe("covers never leave new uncovered principal (review r4598114581, rollba
     expect(parks.filter((t) => t.positionKey === ISIN_B).every((t) => t.rate !== null), "BBB covered").toBe(true);
     expect(parks.some((t) => t.note?.startsWith("cobertura del mismo día"))).toBe(false);
     expect(v.report.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+  });
+});
+
+describe("a sale whose commission exceeds its gross (review r4598114592)", () => {
+  // Fund 1001 USD, buy 1000 USD of AAA, sell it at 0 paying a 1 USD commission:
+  // net proceeds −1 USD. Every dollar leaves the account.
+  const sc: Scenario = {
+    id: "NEGP",
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2024-02-01", usd: "1001", r: "0.90" },
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "0", r: "0.85" },
+    ],
+  };
+  const withCommission = (options: Parameters<typeof generateTaxReport>[3]) => {
+    const { st, rates } = toStatement(sc);
+    const sell = st.trades.find((t) => t.buySell === "SELL" && t.symbol === "AAA")!;
+    sell.commission = "-1";
+    return generateTaxReport(st, rates, 2024, options);
+  };
+
+  it("books the principal as lost dollars and the extra dollar as a fee", () => {
+    const r = withCommission({ ...TRAD, fxTrace: true });
+    const lost = r.fxGains.disposals.filter((d) => d.trigger === "stock_sale");
+    // 1000 USD bought at 0.90, shares bought at 0.95: 50 € of drift.
+    expect(lost.map((d) => [d.quantity.toString(), f2(d.gainLossEur)])).toEqual([["1000", "50.00"]]);
+    const fee = r.fxGains.disposals.filter((d) => d.trigger === "commission");
+    // 1 USD bought at 0.90, paid at 0.85.
+    expect(fee.map((d) => [d.quantity.toString(), f2(d.gainLossEur)])).toEqual([["1", "-0.05"]]);
+    // Nothing stays parked and the pool is empty: the cycle closes.
+    const last = (r.fxTrace ?? []).at(-1)!;
+    expect([last.poolBalanceFcy, last.parkedBalanceFcy]).toEqual(["0", "0"]);
+    // Stock −1 × 0.85 − 1000 × 0.95, FX 50 − 0.05: total = −1001 × 0.90.
+    expect(f2(r.capitalGains.netGainLoss.plus(r.fxGains.netGainLoss))).toBe("-900.90");
+    expect(r.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+    expect(r.messages.some((m) => m.id === "fx.missing_prior_lots")).toBe(false);
+  });
+
+  it("default and monodivisa ignore the sale, as before", () => {
+    const d = withCommission({ fxTrace: true });
+    expect(d.fxGains.disposals).toEqual([]);
+    expect((d.fxTrace ?? []).some((t) => t.trigger === "stock_sale")).toBe(false);
+    expect(withCommission(MONO).fxGains.disposals).toEqual([]);
   });
 });
