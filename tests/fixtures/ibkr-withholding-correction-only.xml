@@ -1,0 +1,14 @@
+<FlexQueryResponse queryName="cash tx, last 30 days" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="2022-12-26" toDate="2023-01-24" period="Last30CalendarDays" whenGenerated="2023-01-25;04:22:11">
+<CashTransactions>
+<CashTransaction reportDate="2023-01-24" dateTime="2022-12-01;12:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="0.66" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+<CashTransaction reportDate="2023-01-24" dateTime="2022-12-01;12:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="-0.53" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+<CashTransaction reportDate="2023-01-24" dateTime="2022-04-01;11:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="0.66" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+<CashTransaction reportDate="2023-01-24" dateTime="2022-04-01;11:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="-0.53" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+<CashTransaction reportDate="2023-01-24" dateTime="2022-04-30;10:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="0.66" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+<CashTransaction reportDate="2023-01-24" dateTime="2022-04-30;10:20:00" symbol="BBN" listingExchange="NYSE" type="Withholding Tax" amount="-0.53" currency="USD" description="BBN(US09248X1000) CASH DIVIDEND USD 0.1229 PER SHARE - US TAX" />
+</CashTransactions>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>

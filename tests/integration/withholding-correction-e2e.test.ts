@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
 import { ibkrParser } from "../../src/parsers/ibkr.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import { generateTaxReport } from "../../src/generators/report.js";
@@ -109,5 +110,33 @@ describe("issue #436 — IBKR withholding correction, end to end", () => {
 
   it("the FX conservation check stays silent", () => {
     expect(corrected.messages.some((m) => m.id === "fx.conservation_mismatch")).toBe(false);
+  });
+});
+
+// A real IBKR Flex export shape (account anonymised): a "last 30 days" cash
+// query whose only rows are withholding corrections, +0.66 and −0.53 USD on
+// three past dividend dates, with no dividend row in the file. The dollars
+// really received are 0.13 per date. Before #436 each +0.66 opened its own
+// lot and the −0.53 was dropped as an orphan, so the pool held 0.66 per date.
+describe("issue #436 — a real IBKR correction-only export", () => {
+  const xml = readFileSync(new URL("../fixtures/ibkr-withholding-correction-only.xml", import.meta.url), "utf-8");
+  const stmt = finalizeMergedStatement(mergeStatement(createEmptyStatement(), ibkrParser.parse(xml), ibkrParser.name));
+  const rates: EcbRateMap = new Map();
+  for (let t = Date.UTC(2022, 0, 1); t <= Date.UTC(2022, 11, 31); t += 86400000) {
+    rates.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "0.92"]]));
+  }
+
+  it("parses the six withholding rows, three of them positive", () => {
+    const wht = stmt.cashTransactions.filter((t) => t.type === "Withholding Tax");
+    expect(wht).toHaveLength(6);
+    expect(wht.filter((t) => Number(t.amount) > 0)).toHaveLength(3);
+  });
+
+  it("opens one 0.13 USD lot per correction date, the net dollars received", () => {
+    const r = generateTaxReport(stmt, rates, 2022, { fxTrace: true });
+    const lots = (r.fxTrace ?? []).filter((t) => t.kind === "acquire");
+    expect(lots.map((l) => [l.date, Number(l.quantityFcy)]).sort()).toEqual([
+      ["2022-04-01", 0.13], ["2022-04-30", 0.13], ["2022-12-01", 0.13],
+    ]);
   });
 });
