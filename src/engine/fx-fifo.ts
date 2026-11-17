@@ -119,10 +119,9 @@ export interface FxEvent {
    */
   crossCurrency?: true;
   /**
-   * Default stock sell only: the shares sold were bought BEFORE the sale's
-   * date, so the sale frees principal parked on an earlier day. It runs before
-   * a same-day rebuy of the same position (see
-   * {@link FxFifoEngine.orderSameDayStockLegs}).
+   * Stock sell only: the shares sold were bought BEFORE the sale's date, so the
+   * sale frees principal parked on an earlier day. It runs before a same-day
+   * rebuy of the same position (see {@link FxFifoEngine.orderSameDayStockLegs}).
    */
   heldBefore?: true;
 }
@@ -523,18 +522,20 @@ export class FxFifoEngine {
    * dollars in the pool as phantom dollars).
    * All trades of one date settle together, so the time of day never decides
    * which currency paid for what. The order is by rank:
-   *  (0) a sale of a position NOT bought that day frees its currency first; in
-   *      the default, so does a sale of shares bought on an EARLIER day
-   *      (`heldBefore`), even when the position is bought again that day (a
-   *      trap: hold AAA, sell it and buy it back the same day with no other
+   *  (0) a sale of a position NOT bought that day frees its currency first; so
+   *      does a sale of shares bought on an EARLIER day (`heldBefore`), even
+   *      when the position is bought again that day (a trap in the default,
+   *      #437: hold AAA, sell it and buy it back the same day with no other
    *      dollars; the rebuy ran first as a round trip, found the pool empty and
    *      parked "uncovered", and the sale put the old principal back in the
-   *      pool, where it stayed after it was spent: −50 on an economic 200. Of
-   *      200 random closed cycles with late funding, rotations and rebuys, 22
-   *      stayed off with the covers alone and none with this rank as well.
-   *      «Tradicional con divisa» keeps the round-trip order: its same-day
-   *      cover settles the plain case, and its tests pin which slices stay
-   *      untracked);
+   *      pool, where it stayed after it was spent: −50 on an economic 200. A
+   *      trap in «Tradicional con divisa», #446: its same-day cover settled the
+   *      plain case, but the rebuy's transient "uncovered" park, or the later
+   *      conversion it took as a late cover, made the planner drop an earlier
+   *      late cover, and that funding stayed in the pool: −320 on an economic
+   *      −270. Of 200 random closed cycles with late funding, rotations and
+   *      rebuys, 22 missed in the default and 26 in that mode without this
+   *      rank, none with it);
    *  (1) then each same-day round trip, one position after the other in the
    *      order the upload lists them, its buys before its sales, as the stock
    *      FIFO does, so the currency one round trip returns pays the next one;
@@ -1654,13 +1655,13 @@ export class FxFifoEngine {
             brokerSource,
             positionKey,
             crossCurrency: true,
-            // Default only: like an ordinary sale of shares bought on an earlier
-            // day, it runs before a same-day rebuy and keeps the stock FIFO's
-            // sale order, so it releases its own lot's slice (a trap: ranked as
-            // a round trip it ran after a same-day USD sale and rebuy of the
-            // same position and released the next lot's slice, 200 on an
-            // economic 100, PR #445 review).
-            ...(!traditionalFx && normalizeDate(d.acquireDate) < date ? { heldBefore: true as const } : {}),
+            // Like an ordinary sale of shares bought on an earlier day, it runs
+            // before a same-day rebuy and keeps the stock FIFO's sale order, so
+            // it releases its own lot's slice (a trap: ranked as a round trip it
+            // ran after a same-day USD sale and rebuy of the same position and
+            // released the next lot's slice, 200 on an economic 100 in the
+            // default, PR #445 review; issue #446 for «Tradicional con divisa»).
+            ...(normalizeDate(d.acquireDate) < date ? { heldBefore: true as const } : {}),
           });
         }
         // The default skips a sale with no positive proceeds, as below.
@@ -1717,8 +1718,10 @@ export class FxFifoEngine {
         // isin/symbol but parked nothing (no backing BUY) → no match under this
         // key → it falls through to the safe sale-rate re-add (full-proceeds).
         positionKey: FxFifoEngine.positionKey(d),
-        // Default only: shares bought before the sale's date (issue #437).
-        ...(!traditionalFx && normalizeDate(d.acquireDate) < normalizeDate(d.sellDate) ? { heldBefore: true as const } : {}),
+        // Shares bought before the sale's date: the sale runs before a
+        // same-day rebuy (issue #437 for the default, #446 for «Tradicional con
+        // divisa»).
+        ...(normalizeDate(d.acquireDate) < normalizeDate(d.sellDate) ? { heldBefore: true as const } : {}),
       });
     }
     return events;
