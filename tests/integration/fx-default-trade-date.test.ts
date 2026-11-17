@@ -115,3 +115,122 @@ describe("default method: same-day order of stock legs (issue #437)", () => {
     ]);
   });
 });
+
+describe("default method: a buy funded after its trade date (issue #437, late cover)", () => {
+  // Buy 1000 USD of AAA on Monday with no dollars in the pool, then convert
+  // the EUR a few days later. Sell at the buy price and convert back; then a
+  // fund-and-convert pair at one rate, worth exactly 0. Economic: −70.
+  // A trap: with trade dating and no late cover, the buy parked "uncovered"
+  // and the funding lot stayed in the pool as dollars already spent; the
+  // later pair consumed them as real lots (−220). The old settlement dating
+  // hid the case only when the funding settled by the stock's settlement
+  // date (a T+0 conversion the next day). Like «Tradicional con divisa», an
+  // acquisition 1 to 7 days after the buy now covers it.
+  const ev = (fundDate: string): Scenario["ev"] => [
+    { k: "buy", d: "2024-03-04", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+    { k: "fund", d: fundDate, usd: "1000", r: "0.92" },
+    { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+    { k: "conv", d: "2024-06-03", usd: "1000", r: "0.85" },
+    { k: "fund", d: "2024-09-02", usd: "1000", r: "0.70" },
+    { k: "conv", d: "2024-10-01", usd: "1000", r: "0.70" },
+  ];
+  const cases: [string, string, Record<string, string>][] = [
+    ["stock T+1, a T+0 conversion the next day", "2024-03-05", { "2024-03-04": "2024-03-05", "2024-03-05": "2024-03-05" }],
+    ["stock T+2, a T+0 conversion the next day", "2024-03-05", { "2024-03-04": "2024-03-06", "2024-03-05": "2024-03-05" }],
+    ["a conversion 4 days later", "2024-03-08", {}],
+  ];
+
+  it.each(cases)("%s: the funding covers the buy and nothing phantom is left", (_name, fundDate, settleMap) => {
+    const sc: Scenario = { id: "LATEFUND", years: [2024], closed: true, settle: settleMap, ev: ev(fundDate) };
+    const per = run(sc, { fxTrace: true });
+    expect(f2(economic(sc))).toBe("-70.00");
+    expect(f2(lifetime(per))).toBe("-70.00");
+    expect(lastPool(per, 2024)).toBe("0.00");
+    const trace = per.get(2024)!.report.fxTrace!;
+    expect(trace.filter((t) => t.kind === "park").map((t) => [t.date, t.rate, t.quantityFcy])).toEqual([["2024-03-04", "0.92", "1000"]]);
+    expect(trace.some((t) => t.kind === "acquire" && (t.note ?? "").startsWith("cobertura tardía"))).toBe(true);
+  });
+
+  it("a funding that is new money does not cover a buy paid with dollars the upload never shows", () => {
+    // The buy used 1000 USD held before the upload. The funding two days later
+    // is new money, converted in May while the shares are still open: taking
+    // it as the buy's funding would leave that conversion with no lot, so the
+    // cover is refused (as in «Tradicional con divisa») and no note fires.
+    const sc: Scenario = {
+      id: "LATEFUND-OPENING",
+      years: [2024],
+      closed: false,
+      ev: [
+        { k: "buy", d: "2024-03-04", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+        { k: "fund", d: "2024-03-06", usd: "1000", r: "0.92" },
+        { k: "conv", d: "2024-05-02", usd: "1000", r: "0.88" },
+      ],
+    };
+    const r = run(sc, { fxTrace: true }).get(2024)!.report;
+    expect(r.fxGains.disposals.map((d) => [d.acquireDate, f2(d.gainLossEur)])).toEqual([["2024-03-06", "-40.00"]]);
+    expect(r.messages.map((m) => m.id)).not.toContain("fx.missing_prior_lots");
+    expect(r.fxTrace!.filter((t) => t.kind === "park").map((t) => t.rate)).toEqual([null]);
+  });
+});
+
+describe("default method: a same-day sale and rebuy of a held position (issue #437)", () => {
+  // Hold AAA, sell it and buy it back the same day with the proceeds (no other
+  // dollars), sell again, convert. Then a fund-and-convert pair at one rate.
+  // A trap: the day's legs ran as a round trip (buy first), so the rebuy found
+  // an empty pool and parked "uncovered" while the sale put the old principal
+  // back in the pool, where it stayed after it was spent (−50 on an economic
+  // 200). A sale of shares bought on an earlier day now frees its dollars
+  // before the rebuy, which takes them.
+  const sc: Scenario = {
+    id: "REBUY",
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2024-02-01", usd: "1000", r: "0.80" },
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "buy", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+      { k: "sell", d: "2024-09-02", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "conv", d: "2024-10-01", usd: "1000", r: "1.00" },
+      { k: "fund", d: "2024-11-04", usd: "1000", r: "0.70" },
+      { k: "conv", d: "2024-12-02", usd: "1000", r: "0.70" },
+    ],
+  };
+
+  it("the closed cycle equals EUR out − EUR in and the pool ends empty", () => {
+    const per = run(sc, { fxTrace: true });
+    expect(f2(economic(sc))).toBe("200.00");
+    expect(f2(lifetime(per))).toBe("200.00");
+    expect(lastPool(per, 2024)).toBe("0.00");
+    const june = per.get(2024)!.report.fxTrace!.filter((t) => t.date === "2024-06-03");
+    expect(june.map((t) => [t.kind, t.rate, t.quantityFcy])).toEqual([
+      ["unpark", "0.8", "1000"],
+      ["park", "0.8", "1000"],
+    ]);
+  });
+
+  it("a sale of shares bought that same day still runs after their buy", () => {
+    // Buy 10 AAA and sell them the same day (an intraday round trip), with the
+    // dollars already in the pool: the buy parks them before the sale returns
+    // them, so nothing is untracked.
+    const sc2: Scenario = {
+      id: "INTRADAY",
+      years: [2024],
+      closed: true,
+      ev: [
+        { k: "fund", d: "2024-02-01", usd: "1000", r: "0.80" },
+        { k: "buy", d: "2024-06-03", sym: "AAA", qty: "10", px: "100", r: "0.85" },
+        { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "110", r: "0.85" },
+        { k: "conv", d: "2024-10-01", usd: "1100", r: "1.00" },
+      ],
+    };
+    const per = run(sc2, { fxTrace: true });
+    expect(f2(lifetime(per))).toBe(f2(economic(sc2)));
+    const june = per.get(2024)!.report.fxTrace!.filter((t) => t.date === "2024-06-03");
+    expect(june.map((t) => [t.kind, t.rate, t.quantityFcy])).toEqual([
+      ["park", "0.8", "1000"],
+      ["unpark", "0.8", "1000"],
+      ["profit", "0.85", "100"],
+    ]);
+  });
+});

@@ -118,6 +118,13 @@ export interface FxEvent {
    * purchase as a `stock_sale_cross` row.
    */
   crossCurrency?: true;
+  /**
+   * Default stock sell only: the shares sold were bought BEFORE the sale's
+   * date, so the sale frees principal parked on an earlier day. It runs before
+   * a same-day rebuy of the same position (see
+   * {@link FxFifoEngine.orderSameDayStockLegs}).
+   */
+  heldBefore?: true;
 }
 
 /**
@@ -170,7 +177,7 @@ export interface TraditionalFxStats {
   parkedAtCheckpoint: TraditionalParkedAtYearEnd[];
 }
 
-/** «Tradicional con divisa»: a stock buy's principal parked with no tracked origin. */
+/** A stock buy's principal parked with no tracked origin (late and same-day covers). */
 interface NullPark {
   event: FxEvent;
   currency: string;
@@ -183,7 +190,7 @@ interface NullPark {
   seq: number;
 }
 
-/** «Tradicional con divisa»: the late covers of one pass (see `processTraditional`). */
+/** The late covers of one pass (see `processWithCovers`). */
 interface CoverPass {
   /** Buys that take every acquisition of their window they need. */
   enabled: Set<FxEvent>;
@@ -433,17 +440,17 @@ export class FxFifoEngine {
     inflight: new Map(),
     parkedAtCheckpoint: [],
   };
-  /** «Tradicional con divisa»: every `null` park of the current pass, net of same-day covers. */
+  /** Every `null` park of the current pass, net of same-day covers. */
   private nullParks: NullPark[] = [];
-  /** «Tradicional con divisa»: the `null` park each untracked parked slice of the current pass belongs to. */
+  /** The `null` park each untracked parked slice of the current pass belongs to. */
   private nullOfSlice: Map<ParkedSlice, NullPark> = new Map();
-  /** «Tradicional con divisa»: every disposal shortfall of the current pass (missing lots). */
+  /** Every disposal shortfall of the current pass (missing lots). */
   private shortfalls: { currency: string; date: string; qty: Decimal }[] = [];
-  /** «Tradicional con divisa»: late-cover parts of an acquisition → that acquisition's own date. */
+  /** Late-cover parts of an acquisition → that acquisition's own date. */
   private movedFrom: Map<FxEvent, string> = new Map();
-  /** «Tradicional con divisa»: same-day covers run only for these `currency|date` keys. */
+  /** Same-day covers run only for these `currency|date` keys. */
   private sameDayOn: Set<string> = new Set();
-  /** «Tradicional con divisa»: the late covers of the current pass. */
+  /** The late covers of the current pass. */
   private cover: CoverPass | undefined;
 
   /**
@@ -516,7 +523,18 @@ export class FxFifoEngine {
    * dollars in the pool as phantom dollars).
    * All trades of one date settle together, so the time of day never decides
    * which currency paid for what. The order is by rank:
-   *  (0) a sale of a position NOT bought that day frees its currency first;
+   *  (0) a sale of a position NOT bought that day frees its currency first; in
+   *      the default, so does a sale of shares bought on an EARLIER day
+   *      (`heldBefore`), even when the position is bought again that day (a
+   *      trap: hold AAA, sell it and buy it back the same day with no other
+   *      dollars; the rebuy ran first as a round trip, found the pool empty and
+   *      parked "uncovered", and the sale put the old principal back in the
+   *      pool, where it stayed after it was spent: −50 on an economic 200. Of
+   *      200 random closed cycles with late funding, rotations and rebuys, 22
+   *      stayed off with the covers alone and none with this rank as well.
+   *      «Tradicional con divisa» keeps the round-trip order: its same-day
+   *      cover settles the plain case, and its tests pin which slices stay
+   *      untracked);
    *  (1) then each same-day round trip, one position after the other in the
    *      order the upload lists them, its buys before its sales, as the stock
    *      FIFO does, so the currency one round trip returns pays the next one;
@@ -535,7 +553,7 @@ export class FxFifoEngine {
       if (!firstSeen.has(id(e))) firstSeen.set(id(e), idx);
     });
     const roundTrip = (e: FxEvent): boolean => bought.has(id(e)) && sold.has(id(e));
-    const rank = (e: FxEvent): number => (roundTrip(e) ? 1 : e.kind === "stock_sell" ? 0 : 3);
+    const rank = (e: FxEvent): number => (e.heldBefore ? 0 : roundTrip(e) ? 1 : e.kind === "stock_sell" ? 0 : 3);
     const group = (e: FxEvent): number => (roundTrip(e) ? firstSeen.get(id(e))! : 0);
     const leg = (e: FxEvent): number => (e.kind === "stock_buy" ? 0 : 1);
     return run
@@ -577,8 +595,7 @@ export class FxFifoEngine {
    * nothing (the divisa gain defers to the conversion that consumes the pool).
    */
   processEvents(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
-    if (!this.traditionalFx) return this.runEvents(events, options);
-    return this.processTraditional(events, options);
+    return this.processWithCovers(events, options);
   }
 
   /** Days a later EUR→currency conversion may cover an "uncovered" stock buy (critic G2). */
@@ -588,7 +605,13 @@ export class FxFifoEngine {
   static coversAlone = false;
 
   /**
-   * «Tradicional con divisa» covers of an "uncovered" (`null`) stock buy.
+   * Covers of an "uncovered" (`null`) stock buy, in every method that runs the
+   * FX engine (issue #434 for «Tradicional con divisa», issue #437 for the
+   * default: with trade dating, a buy funded the next day by a conversion that
+   * settled first parked `null` and left the funding lot in the pool, −220 on
+   * an economic −70, and a same-day sale and rebuy of a held position left the
+   * sale's dollars there, −50 on an economic 200; the old settlement dating had
+   * hidden the first case only).
    *
    * Late cover (critic G2, a trap: "buy first, fund later" parked the buy
    * `null`, its sale re-added it at `r_s`, and the later funding lot stayed in
@@ -649,7 +672,7 @@ export class FxFifoEngine {
    *     undo a 2023 cover, −54 on an economic 0).
    * Older `null` slices keep the untracked-origin path (spec row 17).
    */
-  private processTraditional(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
+  private processWithCovers(events: FxEvent[], options?: { checkpointDate?: string }): FxDisposal[] {
     const EPS = FxFifoEngine.EPS;
     const start = {
       lots: FxFifoEngine.cloneLots(this.lots),
@@ -897,7 +920,7 @@ export class FxFifoEngine {
 
   /**
    * Late cover of a stock buy that found the pool `remaining` short (see
-   * {@link processTraditional}). A covered buy, or in a trial a buy left with
+   * {@link processWithCovers}). A covered buy, or in a trial a buy left with
    * more `null` than the accepted pass (up to the horizon in a bounded trial), takes
    * the acquisitions of its currency dated 1 to {@link LATE_COVER_DAYS} days
    * after it, oldest first, up to `remaining`: each part goes into the pool on
@@ -1687,6 +1710,8 @@ export class FxFifoEngine {
         // isin/symbol but parked nothing (no backing BUY) → no match under this
         // key → it falls through to the safe sale-rate re-add (full-proceeds).
         positionKey: FxFifoEngine.positionKey(d),
+        // Default only: shares bought before the sale's date (issue #437).
+        ...(!traditionalFx && normalizeDate(d.acquireDate) < normalizeDate(d.sellDate) ? { heldBefore: true as const } : {}),
       });
     }
     return events;
@@ -1874,7 +1899,7 @@ export class FxFifoEngine {
     const costPerUnit = totalCost.div(event.quantity);
 
     // A late-cover part runs on its buy's date but keeps the conversion's date.
-    const movedFrom = this.traditionalFx ? this.movedFrom.get(event) : undefined;
+    const movedFrom = this.movedFrom.get(event);
     const lot: FxLot = {
       id: `FX-${this.nextLotId++}`,
       currency: event.currency,
@@ -1942,7 +1967,7 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      if (this.traditionalFx) this.shortfalls.push({ currency: event.currency, date: event.date, qty: remaining });
+      this.shortfalls.push({ currency: event.currency, date: event.date, qty: remaining });
       const effRate = FxFifoEngine.effectiveRate(event);
       const proceedsEur = remaining.mul(effRate);
       const netProceeds = event.commissionEur ? proceedsEur.minus(event.commissionEur) : proceedsEur;
@@ -2036,7 +2061,7 @@ export class FxFifoEngine {
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
       this.fxMissing.set(event.currency, entry);
-      if (this.traditionalFx) this.shortfalls.push({ currency: event.currency, date: event.date, qty: remaining });
+      this.shortfalls.push({ currency: event.currency, date: event.date, qty: remaining });
       let proceedsEur = remaining.mul(effRate);
       if (event.commissionEur) {
         const proportion = remaining.div(totalQty);
@@ -2246,7 +2271,7 @@ export class FxFifoEngine {
       }
     };
     takePool();
-    // «Tradicional con divisa»: a late cover adds parts to the empty pool.
+    // A late cover adds parts to the empty pool.
     if (remaining.greaterThan(EPS) && this.cover && this.takeLateCover(event, remaining)) takePool();
 
     // Shortfall: the pool had no (more) tracked dollars → park uncovered (no
@@ -2255,11 +2280,9 @@ export class FxFifoEngine {
     if (remaining.greaterThan(EPS)) {
       const slice: ParkedSlice = { q: remaining, rate: null, acquireDate: null, ...this.traditionalTags(event, undefined) };
       park.push(slice);
-      if (this.traditionalFx) {
-        const np: NullPark = { event, currency: event.currency, date: event.date, qty: remaining, gross: remaining, seq: this.nullParks.length };
-        this.nullParks.push(np);
-        this.nullOfSlice.set(slice, np);
-      }
+      const np: NullPark = { event, currency: event.currency, date: event.date, qty: remaining, gross: remaining, seq: this.nullParks.length };
+      this.nullParks.push(np);
+      this.nullOfSlice.set(slice, np);
       this.record("park", event, {
         quantityFcy: remaining,
         rate: null,
@@ -2332,6 +2355,14 @@ export class FxFifoEngine {
     const readd = Decimal.min(cost, proc);
     let placed = new Decimal(0);
     const park = this.parked.get(FxFifoEngine.parkKey(event.currency, event.positionKey));
+    // Every lot this sale returns first covers `null` slices parked the same
+    // day (same-day cover, see processWithCovers), as in «Tradicional con divisa».
+    const covers: FxLot[] = [];
+    const pushPoolLot = (c: string, d: string, q: Decimal, r: Decimal, b?: string): FxLot | undefined => {
+      const lot = this.pushPoolLot(c, d, q, r, b);
+      if (lot) covers.push(lot);
+      return lot;
+    };
 
     if (park) {
       while (need.greaterThan(EPS) && park.length > 0) {
@@ -2348,7 +2379,7 @@ export class FxFifoEngine {
           // Same for the broker: a carried slice keeps the broker its dollars
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
-          reAddedLot = this.pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
+          reAddedLot = pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -2388,7 +2419,7 @@ export class FxFifoEngine {
     // branch that makes a sell-without-tracked-buy equal the full-proceeds model.
     if (need.greaterThan(EPS) && placed.lessThan(readd.minus(EPS))) {
       const g = Decimal.min(need, readd.minus(placed));
-      const unparkLot = this.pushPoolLot(event.currency, event.date, g, saleRate, event.brokerSource);
+      const unparkLot = pushPoolLot(event.currency, event.date, g, saleRate, event.brokerSource);
       placed = placed.plus(g);
       this.record("unpark", event, {
         quantityFcy: g,
@@ -2408,7 +2439,7 @@ export class FxFifoEngine {
     // Profit (proceeds beyond principal) = fresh dollars at the sale rate.
     const profit = proc.minus(placed);
     if (profit.greaterThan(EPS)) {
-      const profitLot = this.pushPoolLot(event.currency, event.date, profit, saleRate, event.brokerSource);
+      const profitLot = pushPoolLot(event.currency, event.date, profit, saleRate, event.brokerSource);
       this.record("profit", event, {
         quantityFcy: profit,
         rate: saleRate,
@@ -2417,6 +2448,8 @@ export class FxFifoEngine {
       });
       this.accumulate("profit", event.currency, profit);
     }
+
+    if (this.sameDayOn.has(`${event.currency}|${event.date}`)) for (const lot of covers) this.sameDayCover(lot, event);
   }
 
   /**
@@ -2692,7 +2725,7 @@ export class FxFifoEngine {
   }
 
   /**
-   * Same-day cover (see {@link processTraditional}): `lot`, returned by a sale,
+   * Same-day cover (see {@link processWithCovers}): `lot`, returned by a sale,
    * covers the `null` slices of its currency parked on the sale's date, oldest
    * first: in the order their buys ran, across every position (a trap: walking
    * the parked map covered the position whose queue was created first, so an
@@ -2711,7 +2744,8 @@ export class FxFifoEngine {
     for (const [key, slices] of this.parked) {
       if (key !== event.currency && !key.startsWith(prefix)) continue;
       for (const slice of slices) {
-        if (slice.rate !== null || slice.parkDate !== event.date) continue;
+        // The buy's date from its `null` park (the default writes no `parkDate`).
+        if (slice.rate !== null || this.nullOfSlice.get(slice)?.date !== event.date) continue;
         open.push({ key, slices, slice, seq: this.nullOfSlice.get(slice)?.seq ?? Number.MAX_SAFE_INTEGER });
       }
     }
@@ -2727,7 +2761,7 @@ export class FxFifoEngine {
         ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
         ...(slice.buyRate !== undefined ? { buyRate: slice.buyRate } : {}),
         ...(lot.shifts !== undefined ? { shifts: lot.shifts } : {}),
-        parkDate: slice.parkDate,
+        ...(slice.parkDate !== undefined ? { parkDate: slice.parkDate } : {}),
       };
       if (x.greaterThanOrEqualTo(slice.q.minus(EPS))) slices[i] = covered;
       else {
