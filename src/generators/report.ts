@@ -187,7 +187,7 @@ function priorYearWithholdingRefunds(
     .sort((a, b) => a.year - b.year || Number(a.spanish) - Number(b.spanish));
 }
 
-/** Divide an interest amount (already abs-valued EUR) by the number of titulares. */
+/** Divide an interest amount in EUR by the number of titulares. */
 function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
   return n <= 1 ? amountEur : amountEur.div(n);
 }
@@ -828,8 +828,13 @@ export function generateTaxReport(
     })
     .map((t) => {
       const { amountEur: rawEur, rate } = valueIncomeEur(t, resolvedRateMap, manualRates)!;
-      const amountEur = splitInterestAmount(rawEur, titulares);
       const isEarned = t.type === "Crypto Reward Income" || t.type.includes("Received");
+      // Each row counts with its direction: a receipt (+) adds to the interest
+      // earned and a charge (−) to the interest paid; a negative received row (a
+      // reversal) lowers the earned and a positive paid row (a refund) lowers the
+      // paid. Same-day opposite rows at two brokers so net instead of adding up.
+      const direction = new Decimal(t.amount).isNegative() === isEarned ? -1 : 1;
+      const amountEur = splitInterestAmount(rawEur, titulares).mul(direction);
 
       if (isEarned) {
         interestEarned = interestEarned.plus(amountEur);
