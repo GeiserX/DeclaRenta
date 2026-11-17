@@ -886,8 +886,11 @@ export function generateTaxReport(
   //    inflows, and (issue #230, carry-basis-defer model) foreign-stock BUYS and
   //    SELLS. A stock BUY silently CONSUMES the FCY it spends from the pool and
   //    PARKS the carried basis; a stock SELL re-adds that principal at its carried
-  //    basis plus the profit at the sale rate. Neither a buy nor a sell emits an
-  //    FX disposal — only a real FCY→EUR conversion realizes the deferred gain.
+  //    basis plus the profit at the sale rate. In the default, neither a buy nor
+  //    a sale in the lot's own currency emits an FX disposal — only a real
+  //    FCY→EUR conversion realizes the deferred gain; a sale in another currency
+  //    than its lot books `stock_sale_cross` (#441), and «Tradicional con
+  //    divisa» books lost dollars (`stock_sale`).
   //    FXCONV/AFx broker auto-conversions are PROCESSED by default (#239 — IBKR
   //    does not round-trip FCY→EUR on a sale, so an auto-converted balance is real
   //    held divisa); the opt-out (trackAutoConvert === false) restores the
