@@ -845,6 +845,10 @@ const ca: TranslationKeys = {
     "Hi ha {{count}} dividend(s) en {{currencies}} que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.dividend_unvalued.hint":
     "El BCE no publica cap tipus de canvi oficial per a aquesta divisa a la data de cobrament. Calcula l'import en euros a aquesta data, suma'l a mà a la casella 0029 i tingues en compte la seva retenció en la deducció per doble imposició internacional (casella 0588).",
+  "report.withholding_corrected_prior_year":
+    "Aquest fitxer porta correccions de retencions en origen de {{year}} anotades l'any {{reportYear}}: la retenció de {{year}} baixa {{amount}} €. Si vas presentar la declaració de {{year}} amb la retenció original, la casella 0588 d'aquell any pot haver sortit alta.",
+  "report.withholding_corrected_prior_year.hint":
+    "La deducció per doble imposició internacional (casella 0588, art. 80 LIRPF) només admet l'impost pagat de debò a l'estranger. Puja el fitxer de {{year}} juntament amb aquest i calcula {{year}}: DeclaRenta suma la correcció a la retenció del seu dividend. Si la casella 0588 baixa respecte de la que vas presentar, pot caldre una declaració complementària de {{year}}. Les caselles de {{reportYear}} no canvien.",
   "report.crypto_general_gain_unvalued":
     "Hi ha {{count}} guany(s) patrimonial(s) en criptomoneda (p. ex. airdrops o comissions de referits) que no s'han pogut valorar automàticament i no s'inclouen en els imports calculats.",
   "report.crypto_general_gain_unvalued.hint":

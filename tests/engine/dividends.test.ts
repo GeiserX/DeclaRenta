@@ -595,3 +595,149 @@ describe("calculateDividends", () => {
     });
   });
 });
+
+// Issue #438: a dividend's withholding can arrive as several rows, a partial
+// refund (−1.50 then +0.50) or a reversal on another date (−1.50, +1.50, −1.00).
+// collapseCorrections cancels only exact same-date pairs, and the matcher used
+// to take ONE row per dividend and its absolute value, so 0588 came out 1.50
+// instead of 1.00. Every withholding row of the dividend now counts with its sign.
+describe("withholding corrections (issue #438)", () => {
+  const rates = makeRateMap({
+    "2025-03-10": { USD: "0.90" },
+    "2025-03-12": { USD: "0.80" },
+    "2025-06-10": { USD: "0.95" },
+  });
+  const div = (id: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime: "20250310", amount: "10", type: "Dividends", ...extra });
+  const wht = (id: string, amount: string, extra: Partial<CashTransaction> = {}) =>
+    makeCashTx({ transactionID: id, dateTime: "20250310", amount, type: "Withholding Tax", ...extra });
+
+  it("a partial refund on a later date lowers the withholding: 1.50 − 0.50 = 1.00 USD", () => {
+    const entries = calculateDividends([div("d"), wht("w1", "-1.50"), wht("w2", "0.50", { dateTime: "20250312" })], rates);
+    expect(entries).toHaveLength(1);
+    // Valued at the dividend's rate, like a same-currency withholding always was.
+    expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("0.9000");
+  });
+
+  it("a reversal and a new withholding on another date: −1.50 / +1.50 / −1.00 = 1.00 USD", () => {
+    const entries = calculateDividends(
+      [div("d"), wht("w1", "-1.50"), wht("w2", "1.50", { dateTime: "20250312" }), wht("w3", "-1.00", { dateTime: "20250312" })],
+      rates,
+    );
+    expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("0.9000");
+  });
+
+  it("the order of the rows in the file does not matter", () => {
+    const rows = [div("d"), wht("w1", "-1.50"), wht("w2", "1.50", { dateTime: "20250312" }), wht("w3", "-1.00", { dateTime: "20250312" })];
+    for (const order of [[0, 1, 2, 3], [2, 3, 1, 0], [3, 2, 0, 1], [1, 2, 0, 3]]) {
+      const entries = calculateDividends(order.map((i) => rows[i]!), rates);
+      expect(entries[0]!.withholdingTaxEur.toFixed(4), order.join(",")).toBe("0.9000");
+    }
+  });
+
+  it("a positive row is never a dividend's withholding on its own (no absolute value)", () => {
+    // Only the refund is in the data (the original withholding sits in a file
+    // that was not uploaded): this dividend paid no tax we can see.
+    const entries = calculateDividends([div("d"), wht("w", "0.50")], rates);
+    expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("0.0000");
+  });
+
+  it("two dividends of one ISIN on one day keep their own withholdings and every correction counts once", () => {
+    // Ordinary 10.00 and special 5.00 the same day; the special one's −0.75
+    // is corrected to −0.50 (+0.75 / −0.50) two days later.
+    const entries = calculateDividends(
+      [
+        div("d1"),
+        div("d2", { amount: "5" }),
+        wht("w1", "-1.50"),
+        wht("w2", "-0.75"),
+        wht("w3", "0.75", { dateTime: "20250312" }),
+        wht("w4", "-0.50", { dateTime: "20250312" }),
+      ],
+      rates,
+    );
+    expect(entries).toHaveLength(2);
+    const total = entries.reduce((s, e) => s.plus(e.withholdingTaxEur), new Decimal(0));
+    expect(total.toFixed(4)).toBe("1.8000"); // (1.50 + 0.50) × 0.90
+    for (const e of entries) expect(e.withholdingTaxEur.greaterThanOrEqualTo(0)).toBe(true);
+  });
+
+  it("a correction of one ISIN never moves to another ISIN's dividend", () => {
+    const entries = calculateDividends(
+      [
+        div("d-aapl"),
+        wht("w-aapl", "-1.50"),
+        div("d-msft", { isin: "US5949181045", symbol: "MSFT" }),
+        wht("w-msft", "-1.50", { isin: "US5949181045", symbol: "MSFT" }),
+        wht("w-msft-refund", "0.50", { isin: "US5949181045", symbol: "MSFT", dateTime: "20250312" }),
+      ],
+      rates,
+    );
+    expect(entries.map((e) => [e.symbol, e.withholdingTaxEur.toFixed(4)])).toEqual([
+      ["AAPL", "1.3500"],
+      ["MSFT", "0.9000"],
+    ]);
+  });
+
+  it("a correction joins the dividend it is dated near, not a later one of the same ISIN", () => {
+    const entries = calculateDividends(
+      [
+        div("d-mar"),
+        wht("w-mar", "-1.50"),
+        div("d-jun", { dateTime: "20250610" }),
+        wht("w-jun", "-1.50", { dateTime: "20250610" }),
+        wht("w-mar-refund", "0.50", { dateTime: "20250312" }),
+      ],
+      rates,
+    );
+    expect(entries.map((e) => [e.payDate, e.withholdingTaxEur.toFixed(4)])).toEqual([
+      ["2025-03-10", "0.9000"],
+      ["2025-06-10", "1.4250"],
+    ]);
+  });
+
+  it("an extra withholding row of the same dividend is added, not dropped", () => {
+    // Two withholding rows for one payment (e.g. split by the broker).
+    const entries = calculateDividends([div("d"), wht("w1", "-1.00"), wht("w2", "-0.50")], rates);
+    expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("1.3500");
+  });
+
+  it("Trade Republic (#432): an EUR refund of an EUR withholding nets on the USD dividend at 1:1", () => {
+    const tr = calculateDividends(
+      [
+        div("d", { isin: "US0000001001" }),
+        wht("w", "-1.35", { isin: "US0000001001", currency: "EUR" }),
+        wht("r", "0.35", { isin: "US0000001001", currency: "EUR", dateTime: "20250312" }),
+      ],
+      rates,
+    );
+    expect(tr[0]!.grossAmountEur.toFixed(4)).toBe("9.0000");
+    expect(tr[0]!.withholdingTaxEur.toFixed(4)).toBe("1.0000");
+  });
+
+  it("a refund listed first never takes a withholding's place as a dividend's pair", () => {
+    // Two payments of one ISIN a week apart, the refund of the second one
+    // first in the file. Were the refund a pair, the first dividend would take
+    // it (and lose its own −1.00 to the second one): 0.00 and 2.50, not 1.00 and 1.00.
+    const r = makeRateMap({ "2025-03-03": { USD: "1" }, "2025-03-08": { USD: "1" }, "2025-03-10": { USD: "1" } });
+    const entries = calculateDividends(
+      [
+        wht("refund-b", "0.50", { dateTime: "20250308" }),
+        wht("w-a", "-1.00", { dateTime: "20250303" }),
+        wht("w-b", "-1.50", { dateTime: "20250310" }),
+        div("a", { dateTime: "20250303" }),
+        div("b", { dateTime: "20250310" }),
+      ],
+      r,
+    );
+    expect(entries.map((e) => [e.payDate, e.withholdingTaxEur.toFixed(2)])).toEqual([
+      ["2025-03-03", "1.00"],
+      ["2025-03-10", "1.00"],
+    ]);
+  });
+
+  it("a withholding outside every dividend's 7-day window stays unpaired", () => {
+    const entries = calculateDividends([div("d"), wht("w", "-1.50"), wht("late", "0.50", { dateTime: "20250320" })], rates);
+    expect(entries[0]!.withholdingTaxEur.toFixed(4)).toBe("1.3500");
+  });
+});

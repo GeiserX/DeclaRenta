@@ -172,6 +172,13 @@ export interface CashTransaction {
    * entered the account (IBKR multi-currency cash).
    */
   brokerConvertedToBase?: boolean;
+  /**
+   * The day the broker posted the row, when the export says so (IBKR
+   * `reportDate`). A withholding correction keeps its dividend's date in
+   * `dateTime` but can be posted in a later year; the report then warns that
+   * the earlier year's Casilla 0588 may be too high (issue #438).
+   */
+  reportDate?: string;
 }
 
 export type CashTransactionType =

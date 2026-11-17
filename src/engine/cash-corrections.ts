@@ -11,9 +11,11 @@
  *   • Gross income (Casilla 0029) double-counts the duplicate (only partially
  *     self-correcting, because the reversal carries `type:"Dividends"` and is
  *     summed with its sign — fragile, and wrong if the pair straddles a filter).
- *   • Withholding is computed per matched entry as `.abs()` (dividends.ts), so a
- *     −€19 original, a −€19 duplicate and a +€19 reversal all become +€19 and
- *     ADD to €57 instead of netting to the real €19.
+ *   • Withholding was computed per matched entry as `.abs()` (dividends.ts), so
+ *     a −€19 original, a −€19 duplicate and a +€19 reversal all became +€19 and
+ *     ADDED to €57 instead of netting to the real €19. Since issue #438
+ *     dividends.ts sums every withholding row of a dividend with its sign, so
+ *     corrections this pass leaves (partial, or on another date) net there too.
  *
  * The fix is to cancel exact reversal pairs at the SOURCE, before any consumer
  * runs. A reversal is, by construction, an opposite-sign line of identical

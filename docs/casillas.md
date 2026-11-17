@@ -79,6 +79,7 @@ Las notas de arriba describen el método por defecto. Puedes elegir otro en el p
 - El tipo medio del ahorro es la cuota que dan los tramos del ahorro sobre toda tu base del ahorro, dividida entre esa base. Si la base es cero o negativa, se aplican los tramos al bruto de cada país.
 - La retención extranjera solo cuenta hasta el 15% del bruto, el límite de la mayoría de los convenios con España. Lo retenido de más (por ejemplo, el 30% de EE.UU. sin W-8BEN) no se deduce aquí, se reclama en el país de origen.
 - La deducción está limitada al impuesto que España hubiera cobrado sobre esa misma renta.
+- La retención de cada dividendo es la suma, con su signo, de todas sus filas de retención: si el bróker la corrige (devolución parcial, o anulación y nueva retención en otra fecha), cuenta lo retenido al final. Por ejemplo, −1,50 USD y luego +0,50 USD es una retención de 1,00 USD. Ver [Correcciones de la retención](modelos-fiscales.md#correcciones-de-la-retencion).
 
 ## Tramos del ahorro (ejercicio 2025)
 

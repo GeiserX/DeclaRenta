@@ -133,7 +133,10 @@ describe("calculateDividends with collapsed corrections (Giovanni's full DEGIRO 
     expect(totalGross.toFixed(2)).toBe("100.00");
   });
 
-  it("WITHOUT collapsing, the same input triples the withholding (pins the bug it fixes)", () => {
+  // Before issue #438 the matcher took one row per dividend and its absolute
+  // value, so this input gave 57.00 (3 × |19|). It now sums every row of a
+  // dividend with its sign, so even uncollapsed the total is the real 19.00.
+  it("WITHOUT collapsing, the matcher alone nets the reversal too (issue #438; was 57.00)", () => {
     const rates = makeRateMap({ "2025-06-10": { EUR: "1" } });
     const raw: CashTransaction[] = [
       makeCashTx({ transactionID: "d1", amount: "100", type: "Dividends" }),
@@ -145,6 +148,6 @@ describe("calculateDividends with collapsed corrections (Giovanni's full DEGIRO 
     ];
     const entries = calculateDividends(raw, rates); // no collapse
     const total = entries.reduce((s, e) => s.plus(e.withholdingTaxEur), entries[0]!.withholdingTaxEur.minus(entries[0]!.withholdingTaxEur));
-    expect(total.toFixed(2)).toBe("57.00"); // the bug: 3 × |19|, abs destroys the reversal's sign
+    expect(total.toFixed(2)).toBe("19.00");
   });
 });

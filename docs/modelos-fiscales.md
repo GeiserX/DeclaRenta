@@ -72,6 +72,12 @@ Los tramos del ahorro que usa el cálculo están en [Casillas del Modelo 100](ca
 
 DeclaRenta agrupa los dividendos por país de retención y calcula la deducción permitida para cada uno. En el detalle de la casilla 0588 verás, por país, el rendimiento bruto, el impuesto pagado y la deducción máxima, y debajo el total de rendimientos extranjeros. Ese bruto por país es lo que pide Renta Web como rendimiento obtenido en el extranjero; no uses la casilla 0029, que también incluye los dividendos españoles y los de países sin retención.
 
+### Correcciones de la retención
+
+A veces el bróker corrige una retención después de cobrarla: devuelve una parte (−1,50 USD y, días después, +0,50 USD) o la anula y vuelve a retener otra cantidad en otra fecha (−1,50, +1,50, −1,00). La deducción solo admite el impuesto pagado de verdad, así que DeclaRenta suma con su signo todas las filas de retención de cada dividendo, del mismo valor y a menos de 7 días de él. En los dos ejemplos la retención es de 1,00 USD. Cada fila se valora en su propia divisa, al tipo del BCE del día del dividendo si está en la misma divisa, o al de su propia fecha si no.
+
+IBKR fecha estas correcciones el día del dividendo, aunque las anote más tarde, a veces en el extracto del año siguiente. Si el fichero del año que calculas trae correcciones de un año anterior que bajan la retención, verás un aviso con el importe. La casilla 0588 de aquel año pudo salir alta: sube los ficheros de aquel año junto con este, calcula aquel año y, si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria.
+
 ### W-8BEN y convenios de doble imposición
 
 El formulario **W-8BEN** es un certificado que presentas ante brokers estadounidenses para acogerte al convenio de doble imposición entre España y EE.UU. Con él firmado, la retención sobre dividendos de EE.UU. se reduce del 30% al 15%. Es fundamental firmarlo para maximizar la deducción por doble imposición.

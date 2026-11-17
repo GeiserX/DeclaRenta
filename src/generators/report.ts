@@ -95,6 +95,34 @@ function splitDividend(d: DividendEntry, n: number): DividendEntry {
   };
 }
 
+/**
+ * Withholding corrections posted in `year` for dividends of earlier years
+ * (issue #438), as the net EUR refund per earlier year, oldest first. Only rows
+ * that carry the broker's posting date (`reportDate`, IBKR) count: without it a
+ * merged multi-year upload cannot tell a late correction from an ordinary row.
+ * Each row is valued in its own currency on its own date; a row with no rate is
+ * left out. Years whose late rows raise the withholding (net ≤ 0) are dropped.
+ */
+function lateWithholdingRefunds(
+  cashTransactions: CashTransaction[],
+  year: number,
+  resolvedRateMap: EcbRateMap,
+  manualRates: EcbRateMap | undefined,
+): [number, Decimal][] {
+  const byYear = new Map<number, Decimal>();
+  for (const t of cashTransactions) {
+    if (t.type !== "Withholding Tax" || !t.reportDate) continue;
+    if (Number(normalizeDate(t.reportDate).slice(0, 4)) !== year) continue;
+    const date = normalizeDate(t.dateTime);
+    const rowYear = Number(date.slice(0, 4));
+    if (!(rowYear < year)) continue;
+    const rate = lookupIncomeRate(date, t.currency, resolvedRateMap, manualRates);
+    if (rate === null) continue;
+    byYear.set(rowYear, (byYear.get(rowYear) ?? new Decimal(0)).plus(new Decimal(t.amount).mul(rate)));
+  }
+  return [...byYear].filter(([, net]) => net.greaterThan(0)).sort(([a], [b]) => a - b);
+}
+
 /** Divide an interest amount (already abs-valued EUR) by the number of titulares. */
 function splitInterestAmount(amountEur: Decimal, n: number): Decimal {
   return n <= 1 ? amountEur : amountEur.div(n);
@@ -682,9 +710,10 @@ export function generateTaxReport(
   // Collapse broker correction/reversal pairs (duplicate credit + its opposite-
   // sign storno) BEFORE the dividend/interest engines run, so a duplicated-then-
   // reversed payment nets to its real value in BOTH the gross (0029) and the
-  // withholding — instead of the reversal being .abs()'d into an addition
-  // (dividends.ts) that triples the retención. Only exact opposite-sign pairs
-  // cancel; a file with no reversals is unchanged.
+  // withholding. Only exact opposite-sign pairs cancel; a file with no
+  // reversals is unchanged. Corrections it leaves (a partial refund, a reversal
+  // on another date) still net in dividends.ts, which sums every withholding
+  // row of a dividend with its sign (issue #438).
   // A withholding can be booked days away from its dividend, so a late-December
   // dividend may have its withholding in January (and the other way round).
   // Match over every cash row in the statement, then keep the dividends paid in
@@ -931,6 +960,23 @@ export function generateTaxReport(
       message: divMsg,
       hint: "El BCE no publica un tipo de cambio oficial para esa divisa en la fecha de cobro. Calcula el importe en euros a esa fecha, súmalo a mano a la casilla 0029 y ten en cuenta su retención en la deducción por doble imposición internacional (casilla 0588).",
       context: { count: String(count), currencies },
+    });
+  }
+
+  // A withholding correction posted in this year for a dividend of an earlier
+  // year (issue #438): IBKR keeps the dividend's date in dateTime and posts the
+  // rows later (reportDate). That year's 0588 was computed with the original
+  // withholding; when the correction lowers it, the user may owe a
+  // complementaria. Read from the RAW rows: collapseCorrections would cancel the
+  // late reversal against the original row of a merged earlier-year file.
+  for (const [lateYear, netRefundEur] of lateWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
+    const ctx = { year: String(lateYear), reportYear: yearStr, amount: fmt2(splitInterestAmount(netRefundEur, titulares)) };
+    allMessages.push({
+      id: "report.withholding_corrected_prior_year",
+      severity: "warning",
+      message: `Este fichero trae correcciones de retenciones en origen de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0588 de ese año pudo salir alta.`,
+      hint: `La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
+      context: ctx,
     });
   }
 

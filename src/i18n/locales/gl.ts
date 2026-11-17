@@ -845,6 +845,10 @@ const gl: TranslationKeys = {
     "Hai {{count}} dividendo(s) en {{currencies}} que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.dividend_unvalued.hint":
     "O BCE non publica un tipo de cambio oficial para esa divisa na data de cobramento. Calcula o importe en euros nesa data, súmao a man á casilla 0029 e ten en conta a súa retención na dedución por dobre imposición internacional (casilla 0588).",
+  "report.withholding_corrected_prior_year":
+    "Este ficheiro trae correccións de retencións na orixe de {{year}} anotadas en {{reportYear}}: a retención de {{year}} baixa {{amount}} €. Se presentaches {{year}} coa retención orixinal, a casilla 0588 dese ano puido saír alta.",
+  "report.withholding_corrected_prior_year.hint":
+    "A dedución por dobre imposición internacional (casilla 0588, art. 80 LIRPF) só admite o imposto pagado de verdade no estranxeiro. Sube o ficheiro de {{year}} xunto con este e calcula {{year}}: DeclaRenta suma a corrección á retención do seu dividendo. Se a casilla 0588 baixa respecto da que presentaches, pode facer falta unha declaración complementaria de {{year}}. As casillas de {{reportYear}} non cambian.",
   "report.crypto_general_gain_unvalued":
     "Hai {{count}} ganancia(s) patrimonial(is) en criptomoeda (p. ex. airdrops ou comisións de referidos) que non se puideron valorar automaticamente e non se inclúen nos importes calculados.",
   "report.crypto_general_gain_unvalued.hint":
