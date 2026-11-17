@@ -38,7 +38,8 @@ import { normalizeDate } from "./dates.js";
 /**
  * Cancel exact opposite-sign reversal pairs in a cash-transaction stream.
  *
- * Groups by `(type, isin, currency, normalized date, |amount|)`. Within each
+ * Groups by `(type, security, currency, normalized date, |amount|)`, where the
+ * security is the ISIN, or the symbol when the row has no ISIN. Within each
  * group, cancels `min(#positive, #negative)` pairs (a reversal annihilates one
  * same-magnitude movement of the opposite sign), preserving the original order
  * of every surviving row (the dividend matcher relies on index order for its
@@ -53,7 +54,10 @@ export function collapseCorrections(transactions: CashTransaction[]): CashTransa
   transactions.forEach((tx, index) => {
     const amount = new Decimal(tx.amount);
     if (amount.isZero()) return; // a zero line can't be (or cancel) a reversal
-    const key = `${tx.type}|${tx.isin}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}`;
+    // The security is its ISIN, or its symbol when the row has none: two rows
+    // with no ISIN of different symbols are not a reversal of each other.
+    const security = tx.isin ? `isin:${tx.isin}` : `symbol:${tx.symbol}`;
+    const key = `${tx.type}|${security}|${tx.currency}|${normalizeDate(tx.dateTime)}|${amount.abs().toString()}`;
     const group = groups.get(key) ?? { positives: [], negatives: [] };
     if (amount.isPositive()) group.positives.push(index);
     else group.negatives.push(index);

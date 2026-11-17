@@ -39,6 +39,39 @@ function makeRateMap(rates: Record<string, Record<string, string>>): EcbRateMap 
 }
 
 describe("collapseCorrections", () => {
+  it("rows with no ISIN cancel only within one symbol (a withholding of AAA is not reversed by a refund of BBB)", () => {
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "a", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "b", isin: "", symbol: "BBB", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    expect(collapseCorrections(txs)).toBe(txs);
+  });
+
+  it("rows with no ISIN and the same symbol still cancel", () => {
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "a1", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "a2", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "a3", isin: "", symbol: "AAA", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    expect(collapseCorrections(txs).map((t) => t.transactionID)).toEqual(["a1"]);
+  });
+
+  it("with no ISIN, AAA keeps its withholding after collapsing next to BBB's refund", () => {
+    const rates = makeRateMap({ "2025-06-10": { EUR: "1" } });
+    const txs: CashTransaction[] = [
+      makeCashTx({ transactionID: "da", isin: "", symbol: "AAA", amount: "10" }),
+      makeCashTx({ transactionID: "wa", isin: "", symbol: "AAA", amount: "-1.50", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "db", isin: "", symbol: "BBB", amount: "10" }),
+      makeCashTx({ transactionID: "wb", isin: "", symbol: "BBB", amount: "-3.00", type: "Withholding Tax" }),
+      makeCashTx({ transactionID: "rb", isin: "", symbol: "BBB", amount: "1.50", type: "Withholding Tax" }),
+    ];
+    const entries = calculateDividends(collapseCorrections(txs), rates);
+    expect(entries.map((e) => [e.symbol, e.withholdingTaxEur.toFixed(2)])).toEqual([
+      ["AAA", "1.50"],
+      ["BBB", "1.50"],
+    ]);
+  });
+
   it("cancels an exact opposite-sign reversal pair (duplicate dividend + storno)", () => {
     const txs: CashTransaction[] = [
       makeCashTx({ transactionID: "d1", amount: "100" }), // real
