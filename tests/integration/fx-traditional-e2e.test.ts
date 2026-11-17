@@ -150,6 +150,107 @@ describe("same-day rotation (critic G1)", () => {
   });
 });
 
+describe("same-day order ignores trade times (review)", () => {
+  // Fund 2000 at 0.90, buy AAA; then one day: an intraday round trip on BBB that
+  // needs margin, the sale of AAA that pays for it, and a buy of CCC.
+  const day = (timed: boolean): Scenario => ({
+    id: timed ? "S3d" : "S3d-untimed",
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "fund", d: "2024-02-01", usd: "2000", r: "0.90" },
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+      {
+        k: "buy",
+        d: "2024-05-02",
+        sym: "BBB",
+        qty: "10",
+        px: "100",
+        r: "0.85",
+        ...(timed ? { time: "09:30:00" } : {}),
+      },
+      {
+        k: "sell",
+        d: "2024-05-02",
+        sym: "BBB",
+        qty: "10",
+        px: "102",
+        r: "0.85",
+        ...(timed ? { time: "11:00:00" } : {}),
+      },
+      {
+        k: "sell",
+        d: "2024-05-02",
+        sym: "AAA",
+        qty: "20",
+        px: "125",
+        r: "0.85",
+        ...(timed ? { time: "14:00:00" } : {}),
+      },
+      {
+        k: "buy",
+        d: "2024-05-02",
+        sym: "CCC",
+        qty: "25",
+        px: "100",
+        r: "0.85",
+        ...(timed ? { time: "15:00:00" } : {}),
+      },
+      { k: "sell", d: "2024-08-01", sym: "CCC", qty: "25", px: "110", r: "0.92" },
+      { k: "conv", d: "2024-10-01", usd: "2770", r: "0.80" },
+    ],
+  });
+
+  for (const timed of [true, false]) {
+    it(`a margin round trip before the sale that funds it: ${timed ? "timed" : "untimed"} gives the economic 416`, () => {
+      const sc = day(timed);
+      const per = run(sc, TRAD);
+      expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["647.00", "-231.00"]);
+      expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+      expect(per.get(2024)!.report.messages.some((m) => m.id === "report.fx_traditional_uncovered")).toBe(false);
+    });
+  }
+
+  for (const timed of [true, false]) {
+    it(`no phantom dollars are left for the next year (${timed ? "timed" : "untimed"})`, () => {
+      const sc: Scenario = {
+        id: timed ? "S3h" : "S3i",
+        years: [2024, 2025],
+        closed: true,
+        ev: [
+          ...day(timed).ev.filter((e) => !("sym" in e && e.sym === "CCC") && e.k !== "conv"),
+          { k: "conv", d: "2024-10-01", usd: "2520", r: "0.80" },
+          { k: "fund", d: "2025-02-03", usd: "1000", r: "0.70" },
+          { k: "conv", d: "2025-05-02", usd: "1000", r: "0.75" },
+        ],
+      };
+      const per = run(sc, TRAD);
+      expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["242.00", "-26.00"]);
+      expect([f2(per.get(2025)!.stock), f2(per.get(2025)!.fx)]).toEqual(["0.00", "50.00"]);
+      expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+    });
+  }
+
+  it("hold AAA, buy more AAA and sell the old AAA on one day with an empty pool: the sale covers the buy", () => {
+    const sc: Scenario = {
+      id: "S3j",
+      years: [2024],
+      closed: true,
+      ev: [
+        { k: "fund", d: "2024-02-01", usd: "2000", r: "0.90" },
+        { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+        { k: "buy", d: "2024-05-02", sym: "AAA", qty: "10", px: "120", r: "0.85" },
+        { k: "sell", d: "2024-05-02", sym: "AAA", qty: "20", px: "120", r: "0.85" },
+        { k: "sell", d: "2024-08-01", sym: "AAA", qty: "10", px: "110", r: "0.92" },
+        { k: "conv", d: "2024-10-01", usd: "2300", r: "0.80" },
+      ],
+    };
+    const per = run(sc, TRAD);
+    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["132.00", "-92.00"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+  });
+});
+
 describe("buy first, fund later (critic G2, 7-day late-cover window)", () => {
   const mg = SCENARIOS.find((s) => s.id === "MG")!;
   const withFunding = (date: string): Scenario => ({
@@ -169,6 +270,120 @@ describe("buy first, fund later (critic G2, 7-day late-cover window)", () => {
     // The 2000 funding dollars stay in the pool; the sale re-adds the buy's 2000 at r_s.
     expect(f2(per.get(2024)!.stock)).toBe("225.00");
     expect(r.messages.find((m) => m.id === "report.fx_traditional_uncovered")?.context).toEqual({ qty: "2000.00", ccy: "USD" });
+  });
+
+  it("a sale before the funding: the funding still covers the whole buy (S5c)", () => {
+    const sc: Scenario = {
+      id: "S5c",
+      years: [2024],
+      closed: true,
+      ev: [
+        { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+        { k: "sell", d: "2024-03-04", sym: "AAA", qty: "10", px: "105", r: "0.93" },
+        { k: "fund", d: "2024-03-05", usd: "2000", r: "0.96" },
+        { k: "sell", d: "2024-06-03", sym: "AAA", qty: "10", px: "125", r: "0.85" },
+        { k: "conv", d: "2024-09-02", usd: "2300", r: "0.80" },
+      ],
+    };
+    const per = run(sc, TRAD);
+    // As if the 2000 USD had arrived before the buy: −80 = 2300 × 0.80 − 2000 × 0.96.
+    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["139.00", "-219.00"]);
+    expect(f2(lifetime(per))).toBe("-80.00");
+    expect(per.get(2024)!.report.messages.some((m) => m.id === "report.fx_traditional_uncovered")).toBe(false);
+  });
+
+  it("S5c over two years (S5g): the second year gets no phantom dollars", () => {
+    const sc: Scenario = {
+      id: "S5g",
+      years: [2024, 2025],
+      closed: true,
+      ev: [
+        { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+        { k: "sell", d: "2024-03-04", sym: "AAA", qty: "10", px: "105", r: "0.93" },
+        { k: "fund", d: "2024-03-05", usd: "2000", r: "0.96" },
+        { k: "conv", d: "2024-09-02", usd: "1050", r: "0.80" },
+        { k: "sell", d: "2025-06-03", sym: "AAA", qty: "10", px: "125", r: "0.85" },
+        { k: "conv", d: "2025-09-02", usd: "1250", r: "0.90" },
+      ],
+    };
+    const per = run(sc, TRAD);
+    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["26.50", "-146.50"]);
+    expect([f2(per.get(2025)!.stock), f2(per.get(2025)!.fx)]).toEqual(["112.50", "52.50"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+  });
+
+  // An old USD balance with no history pays for the buy (row 17, taken at r_b);
+  // an unrelated EUR→USD comes a few days later. It must not cover the buy.
+  const oldBalance = (fundDate: string): Scenario => ({
+    id: "S5d",
+    years: [2024],
+    closed: true,
+    ev: [
+      { k: "dep", d: "2024-01-02", usd: "2000", r: "0.95" },
+      { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+      { k: "fund", d: fundDate, usd: "1000", r: "0.90" },
+      { k: "sell", d: "2024-06-03", sym: "AAA", qty: "20", px: "125", r: "0.85" },
+      { k: "conv", d: "2024-09-02", usd: "3500", r: "0.80" },
+    ],
+  });
+
+  for (const [label, date] of [
+    ["inside the window (S5d)", "2024-03-04"],
+    ["outside the window (S5e, control)", "2024-03-09"],
+  ] as const) {
+    it(`an unrelated conversion ${label} after a buy paid from an untracked balance stays in the pool`, () => {
+      const sc = oldBalance(date);
+      const per = run(sc, TRAD);
+      const r = per.get(2024)!.report;
+      expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["225.00", "-225.00"]);
+      expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+      expect(r.messages.some((m) => m.id === "fx.missing_prior_lots")).toBe(false);
+      expect(r.messages.find((m) => m.id === "report.fx_traditional_uncovered")?.context).toEqual({
+        qty: "2000.00",
+        ccy: "USD",
+      });
+    });
+  }
+
+  it("a dividend after a half-untracked buy does not cover it (S10b)", () => {
+    const sc: Scenario = {
+      id: "S10b",
+      years: [2024],
+      closed: true,
+      ev: [
+        { k: "fund", d: "2024-02-01", usd: "1000", r: "0.90" },
+        { k: "dep", d: "2024-02-02", usd: "1000", r: "0.95" },
+        { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+        { k: "div", d: "2024-03-04", usd: "50", r: "0.93" },
+        { k: "sell", d: "2024-06-03", sym: "AAA", qty: "20", px: "125", r: "0.85" },
+        { k: "conv", d: "2024-09-02", usd: "2550", r: "0.80" },
+      ],
+    };
+    const per = run(sc, TRAD);
+    expect([f2(per.get(2024)!.stock), f2(per.get(2024)!.fx)]).toEqual(["225.00", "-81.50"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
+    expect(per.get(2024)!.report.messages.some((m) => m.id === "fx.missing_prior_lots")).toBe(false);
+  });
+
+  it("a reinvested dividend paid 2 days after the DRIP buy still covers it", () => {
+    const sc: Scenario = {
+      id: "S7b",
+      years: [2024, 2025],
+      closed: true,
+      ev: [
+        { k: "fund", d: "2024-02-01", usd: "2000", r: "0.90" },
+        { k: "buy", d: "2024-03-01", sym: "AAA", qty: "20", px: "100", r: "0.95" },
+        { k: "buy", d: "2024-04-02", sym: "AAA", qty: "1", px: "85", r: "0.92" },
+        { k: "div", d: "2024-04-04", usd: "100", r: "0.93" },
+        { k: "sell", d: "2024-08-01", sym: "AAA", qty: "10", px: "110", r: "0.88" },
+        { k: "sell", d: "2025-02-03", sym: "AAA", qty: "11", px: "80", r: "0.91" },
+        { k: "conv", d: "2025-03-03", usd: "1980", r: "0.85" },
+      ],
+      wht: [{ d: "2024-04-04", usd: "15" }],
+    };
+    const per = run(sc, TRAD);
+    expect([f2(per.get(2025)!.stock), f2(per.get(2025)!.fx)]).toEqual(["-227.40", "13.35"]);
+    expect(f2(lifetime(per))).toBe(f2(economic(sc)));
   });
 
   it("a buy from a USD deposit 30 days earlier stays untracked (row 17)", () => {
