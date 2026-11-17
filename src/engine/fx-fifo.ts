@@ -724,19 +724,28 @@ export class FxFifoEngine {
     // regardless; the only effect is a marginally-gross FX lot. Surfacing it would
     // add anxiety for nothing. If a diagnostic is ever wanted, aggregate it in
     // report.ts after processEvents, not here.
-    const whtByKey = new Map<string, Decimal>();
+    //
+    // The sum is SIGNED (issue #436): a broker correction books the original
+    // withholding, its positive reversal and the corrected one, and a refund is a
+    // positive row. Each nets against the others on its key, so the lot holds the
+    // net FCY received: 10 − 1.50 + 1.50 − 1.00 opens ONE 9.00 lot, not 7.50 + 1.50.
+    // A key left with a net refund and no income to absorb it (a correction posted
+    // in a later file, dated on the original day) opens one lot after the loop.
+    const whtByKey = new Map<string, Decimal>(); // > 0 withheld, < 0 refunded (net)
+    const refundRowByKey = new Map<string, CashTransaction>();
     for (const tx of cashTransactions) {
       if (tx.type !== "Withholding Tax" || tx.currency === "EUR") continue;
       const amt = new Decimal(tx.amount);
-      if (!amt.isNegative()) continue; // a positive WHT (refund) is FCY received, not a deduction
       const key = `${tx.currency}|${normalizeDate(tx.settleDate || tx.dateTime)}`;
-      whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).plus(amt.abs()));
+      whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).minus(amt));
+      if (amt.greaterThan(0) && !refundRowByKey.has(key)) refundRowByKey.set(key, tx);
     }
     /**
      * Reduce an income inflow by any withholding pending for its (currency,date),
      * returning the NET FCY received. STATEFUL: it draws down the shared `whtByKey`
      * bucket, so two same-(currency,date) incomes split one withholding total rather
      * than each netting it in full; order within a key doesn't change the total netted.
+     * A net REFUND on the key (pending < 0) is added to the first inflow instead.
      * NOTE: this keys on the EXACT same-date (currency,date), deliberately coarser
      * AND stricter than the income path's matcher in dividends.ts (ISIN, same currency
      * first, ≤7-day window). Coarser is safe for FX because lots are fungible per currency
@@ -750,6 +759,11 @@ export class FxFifoEngine {
       const key = `${currency}|${date}`;
       const pending = whtByKey.get(key);
       if (!pending || pending.isZero()) return gross;
+      if (pending.isNegative()) {
+        // Net refund on this key: it is FCY received, so it joins this inflow's lot.
+        whtByKey.set(key, new Decimal(0));
+        return gross.minus(pending);
+      }
       const applied = Decimal.min(pending, gross);
       whtByKey.set(key, pending.minus(applied));
       return gross.minus(applied);
@@ -793,12 +807,9 @@ export class FxFifoEngine {
           events.push({ date, currency: tx.currency, quantity: net, ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
         }
       } else if (tx.type === "Withholding Tax") {
-        // Netted into its income inflow above (or dropped if orphan). Never a
-        // disposal. A positive-amount WHT (a refund) IS currency received → acquire.
-        // Defensive: not observed in current broker exports, but symmetric and cheap.
-        if (amount.greaterThan(0)) {
-          events.push({ date, currency: tx.currency, quantity: amount, ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
-        }
+        // Netted into its income inflow above with its sign (or dropped if an
+        // orphan deduction). Never a disposal, and no lot of its own: a net
+        // refund left on its key is emitted once after this loop (issue #436).
       } else if (tx.type === "Broker Interest Received" || tx.type === "Bond Interest Received") {
         // Interest can also carry withholding (e.g. "WITHHOLDING ON CREDIT INT");
         // net it the same way — a withholding is a pago a cuenta whatever the income.
@@ -822,6 +833,19 @@ export class FxFifoEngine {
           events.push({ date, currency: tx.currency, quantity: amount.abs(), ecbRate, trigger: "commission", brokerSource: tx.brokerSource });
         }
       }
+    }
+
+    // A net refund no income absorbed (issue #436): FCY received, one acquire lot
+    // on its key date, under the same guards a cash row passes above. A leftover
+    // net deduction (pending > 0) is an orphan and stays dropped, never a disposal.
+    for (const [key, pending] of whtByKey) {
+      if (!pending.isNegative()) continue;
+      const tx = refundRowByKey.get(key)!; // pending < 0 needs at least one positive row
+      if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) continue;
+      const date = normalizeDate(tx.settleDate || tx.dateTime);
+      const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
+      if (ecbRate === null) continue;
+      events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
     }
 
     return events;

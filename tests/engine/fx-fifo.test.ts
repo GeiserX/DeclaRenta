@@ -692,6 +692,132 @@ describe("FxFifoEngine", () => {
     });
   });
 
+  // Issue #436: a broker correction books the original withholding, its positive
+  // reversal and the corrected one (IBKR keeps the original dateTime/settleDate
+  // on all three). The FX lot must hold the NET FCY received, so withholdings net
+  // with their sign per (currency, date) and no withholding row opens its own lot.
+  describe("issue #436 — withholding corrections net with their sign", () => {
+    const D = "20250315";
+    const row = (type: CashTransaction["type"], date: string, amount: string, currency = "USD"): CashTransaction => ({
+      transactionID: `${type}-${date}-${amount}`, accountId: "U1", symbol: "AAPL", description: type,
+      isin: "US0378331005", currency, dateTime: date, settleDate: date, amount, fxRateToBase: "0.92", type,
+    });
+    const div = (date: string, amount: string, currency = "USD") => row("Dividends", date, amount, currency);
+    const wht = (date: string, amount: string, currency = "USD") => row("Withholding Tax", date, amount, currency);
+    const total = (events: FxEvent[]) => events.reduce((s, e) => s.plus(e.quantity), new Decimal(0)).toString();
+
+    it("the issue's case: 10 − 1.50 + 1.50 − 1.00 opens ONE 9.00 lot (was 7.50 + 1.50)", () => {
+      const events = FxFifoEngine.extractCashFxEvents(
+        [div(D, "10.00"), wht(D, "-1.50"), wht(D, "1.50"), wht(D, "-1.00")], rateMap,
+      );
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("9");
+      expect(events[0]!.date).toBe("2025-03-15");
+      expect(events[0]!.trigger).toBe("dividend");
+    });
+
+    it("row order does not matter (reversal first, dividend last)", () => {
+      const events = FxFifoEngine.extractCashFxEvents(
+        [wht(D, "1.50"), wht(D, "-1.50"), wht(D, "-1.00"), div(D, "10.00")], rateMap,
+      );
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("9");
+    });
+
+    it("a later file with only the correction rows (dated D) opens one 0.50 lot at D (was 1.50)", () => {
+      const events = FxFifoEngine.extractCashFxEvents([wht(D, "1.50"), wht(D, "-1.00")], rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("0.5");
+      expect(events[0]!.date).toBe("2025-03-15");
+      expect(events[0]!.ecbRate.toString()).toBe("0.92");
+      expect(events[0]!.trigger).toBe("dividend");
+    });
+
+    it("a partial refund on the dividend's key nets into its lot: 10 − 3 + 1.50 = 8.50", () => {
+      const events = FxFifoEngine.extractCashFxEvents([div(D, "10"), wht(D, "-3"), wht(D, "1.50")], rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("8.5");
+    });
+
+    it("a net refund on a key with income is added to that income's lot", () => {
+      const events = FxFifoEngine.extractCashFxEvents([div(D, "10"), wht(D, "2"), wht(D, "-0.50")], rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("11.5");
+    });
+
+    it("a net-deduction orphan (no income on its key) opens no event and never a disposal", () => {
+      const events = FxFifoEngine.extractCashFxEvents([wht(D, "-1.50"), wht(D, "1.00")], rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("an exact reversal with no income nets to zero: no event, no zero-quantity lot", () => {
+      const events = FxFifoEngine.extractCashFxEvents([wht(D, "-1.50"), wht(D, "1.50")], rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    it("several incomes on one key with a net refund: total = signed net, no zero or negative lot", () => {
+      const events = FxFifoEngine.extractCashFxEvents([
+        div(D, "100"), wht(D, "-15"),
+        row("Broker Interest Received", D, "50"),
+        wht(D, "15"), wht(D, "3"), wht(D, "-1"),
+        { ...div(D, "200"), isin: "US5949181045", symbol: "MSFT" }, wht(D, "-30"),
+      ], rateMap);
+      expect(total(events)).toBe("322"); // 350 gross − 15 + 15 + 3 − 1 − 30
+      expect(events.every((e) => e.quantity.greaterThan(0))).toBe(true);
+    });
+
+    it("interest with a reversed withholding opens one 9.00 interest lot", () => {
+      const events = FxFifoEngine.extractCashFxEvents([
+        row("Broker Interest Received", D, "10"), wht(D, "-1.50"), wht(D, "1.50"), wht(D, "-1.00"),
+      ], rateMap);
+      expect(events).toHaveLength(1);
+      expect(events[0]!.quantity.toString()).toBe("9");
+      expect(events[0]!.trigger).toBe("interest");
+    });
+
+    it("never mixes currencies, and ignores EUR withholding rows", () => {
+      const gbpRates: EcbRateMap = new Map([["2025-03-15", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.18")]])]]);
+      const events = FxFifoEngine.extractCashFxEvents([
+        div(D, "10"), wht(D, "-1.50"),
+        wht(D, "2", "GBP"), // a GBP refund with no GBP income: its own GBP lot
+        wht(D, "5", "EUR"), // EUR is not foreign currency: no lot, no netting
+      ], gbpRates);
+      expect(events).toHaveLength(2);
+      const usd = events.find((e) => e.currency === "USD")!;
+      const gbp = events.find((e) => e.currency === "GBP")!;
+      expect(usd.quantity.toString()).toBe("8.5");
+      expect(gbp.quantity.toString()).toBe("2");
+      expect(gbp.ecbRate.toString()).toBe("1.18");
+    });
+
+    it("a refund on a broker-converted row opens no lot (Trade Republic, issue #96)", () => {
+      const events = FxFifoEngine.extractCashFxEvents([{ ...wht(D, "1.50"), brokerConvertedToBase: true }], rateMap);
+      expect(events).toHaveLength(0);
+    });
+
+    // NOT covered (pinned): the key is (currency, settleDate||dateTime). Correction
+    // rows booked on ANOTHER date than the dividend stay on their own key: the pool
+    // total is right (8.50 + 0.50 = 9.00), but the 0.50 lot carries that date's
+    // ECB rate. IBKR keeps the original dates on correction rows, so this needs a
+    // broker that re-dates them. Keying by ISIN or a wider window is out of scope.
+    it("pins: corrections on another date keep their own lot, total still the signed net", () => {
+      const later = "20250601";
+      const events = FxFifoEngine.extractCashFxEvents(
+        [div(D, "10"), wht(D, "-1.50"), wht(later, "1.50"), wht(later, "-1.00")], rateMap,
+      );
+      expect(events.map((e) => [e.date, e.quantity.toString()])).toEqual([["2025-03-15", "8.5"], ["2025-06-01", "0.5"]]);
+      expect(total(events)).toBe("9");
+    });
+
+    // NOT covered (pinned, separate from #436): a NEGATIVE Dividends row (an
+    // IBKR "- REVERSAL" or a DEGIRO storno) still goes through abs() and opens a
+    // positive lot. This test documents today's behaviour so a fix is a visible change.
+    it("pins: a negative dividend row still opens a positive lot (sign-blind income, not #436)", () => {
+      const events = FxFifoEngine.extractCashFxEvents([div(D, "10"), div(D, "-10"), div(D, "11")], rateMap);
+      expect(total(events)).toBe("31");
+    });
+  });
+
   describe("lotId traceability", () => {
     it("should assign unique lot IDs and reference them in disposals", () => {
       const engine = new FxFifoEngine();

@@ -276,7 +276,9 @@ describe("FxFifoEngine extractors carry the source row's broker", () => {
     const events = FxFifoEngine.extractCashFxEvents(
       [
         tx("Dividends", "100", "D1"),
-        tx("Withholding Tax", "5", "D2"),
+        // A refund on a day with no income opens its own lot (issue #436); on the
+        // dividend's day it would net into the D1 lot instead.
+        { ...tx("Withholding Tax", "5", "D2"), dateTime: "2025-03-17", settleDate: "2025-03-17" },
         tx("Broker Interest Received", "10", "D3"),
         tx("Broker Interest Paid", "-3", "D4"),
         tx("Other Fees", "-2", "D5"),
