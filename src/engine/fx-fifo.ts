@@ -110,6 +110,14 @@ export interface FxEvent {
    * DIFFERENT same-currency position's parked basis. Absent for acquire/dispose.
    */
   positionKey?: string;
+  /**
+   * «Tradicional con divisa» stock sell only: the release of the principal of
+   * shares bought in this currency and sold in ANOTHER one (see
+   * {@link FxFifoEngine.extractStockProceedsFxEvents}). Nothing comes back in
+   * this currency; each covered slice books its drift up to the share
+   * purchase as a `stock_sale_cross` row.
+   */
+  crossCurrency?: true;
 }
 
 /**
@@ -1550,6 +1558,54 @@ export class FxFifoEngine {
     // own conversion events — including them here would double-count).
     const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
     for (const d of disposals) {
+      // «Tradicional con divisa»: shares bought in one currency and sold in
+      // another (same ISIN, another listing; the stock FIFO matches by ISIN).
+      // The stock line runs from the buy-date rate of the lot's currency to the
+      // sale value, so: the lot's currency left inside the shares and never
+      // comes back (its parked principal is released, each covered slice books
+      // its drift up to the share purchase, `stock_sale_cross`), and the sale's
+      // currency, when foreign, is new at the sale rate (no principal of its
+      // own). A trap: the `currency === "EUR"` skip below left a USD lot sold in
+      // EUR parked forever, and a EUR lot sold in USD unparked the USD
+      // principal of the same ISIN (review r5939472090). The default keeps its
+      // path (FifoEngine marks the lot's currency only in this mode).
+      if (traditionalFx && d.acquireCurrency !== undefined && d.acquireCurrency !== d.currency) {
+        if (!SECURITY_CATEGORIES.has(d.assetCategory) || d.isShort) continue;
+        const date = normalizeDate(d.sellDate);
+        const positionKey = FxFifoEngine.positionKey(d);
+        const brokerSource = d.brokerSource;
+        if (d.acquireCurrency !== "EUR" && isEcbResolvable(d.acquireCurrency)) {
+          events.push({
+            kind: "stock_sell",
+            date,
+            currency: d.acquireCurrency,
+            quantity: new Decimal(0),
+            costFcy: d.costBasisFcy,
+            proceedsFcy: new Decimal(0),
+            // Unused: nothing comes back in this currency (the rows use r_b).
+            ecbRate: d.acquireEcbRate,
+            trigger: "stock_sale",
+            brokerSource,
+            positionKey,
+            crossCurrency: true,
+          });
+        }
+        if (d.currency !== "EUR" && isEcbResolvable(d.currency)) {
+          events.push({
+            kind: "stock_sell",
+            date,
+            currency: d.currency,
+            quantity: new Decimal(0),
+            costFcy: new Decimal(0),
+            proceedsFcy: d.proceedsFcy,
+            ecbRate: d.sellEcbRate,
+            trigger: "stock_sale",
+            brokerSource,
+            positionKey,
+          });
+        }
+        continue;
+      }
       if (d.currency === "EUR") continue;
       if (!SECURITY_CATEGORIES.has(d.assetCategory)) continue; // exclude crypto permutas, options/FOP, CASH conversions
       // A SHORT close (BUY+C covering a SELL+O) must NOT seed a sell here. Its
@@ -2417,7 +2473,7 @@ export class FxFifoEngine {
               // Guard (row 8): book the slice's own drift now, re-add at r_s.
               // The guard row already reports p.shifts (they are in r_lot, its
               // cost); r_s = r_b + shift holds only this sale's shift.
-              if (this.bookLostDollars(event, give, p, buyRate, true)) guardRows++;
+              if (this.bookLostDollars(event, give, p, buyRate, "guard")) guardRows++;
               lot = readd(ccy, event.date, give, saleRate, p.brokerSource, shift.isZero() ? undefined : [{ year: saleYear, perUnit: shift }]);
               note = `guarda de coste negativo: diferencia hasta la compra declarada ahora; re-añadido al tipo de venta ${saleRate.toString()} €/${ccy}`;
             } else {
@@ -2439,14 +2495,19 @@ export class FxFifoEngine {
         if (discarded.greaterThan(EPS)) {
           // Lost principal. A covered slice books its drift as a lost-dollar row
           // (skipped when zero); an untracked one has no drift to book.
-          const booked = p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate);
-          if (booked) lostRows++;
-          else {
+          const cross = event.crossCurrency === true;
+          const booked =
+            p.rate !== null && this.bookLostDollars(event, discarded, p, p.buyRate ?? saleRate, cross ? "cross" : "lost");
+          if (booked && !cross) lostRows++;
+          else if (!booked) {
             this.record("discard", event, {
               quantityFcy: discarded,
               rate: p.rate,
-              note:
-                p.rate === null
+              note: cross
+                ? p.rate === null
+                  ? "acciones vendidas en otra moneda, divisa sin origen rastreado: sin diferencia de cambio"
+                  : "acciones vendidas en otra moneda: diferencia de cambio 0 (fila omitida)"
+                : p.rate === null
                   ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
                   : "principal perdido en la venta: diferencia de cambio 0 (fila omitida)",
             });
@@ -2511,7 +2572,14 @@ export class FxFifoEngine {
    * A guard row (`guard`) has the same figures, but the currency came back, so
    * it carries its own trigger (`stock_sale_guard`) and its own message.
    */
-  private bookLostDollars(event: FxEvent, q: Decimal, p: ParkedSlice, buyRate: Decimal, guard = false): boolean {
+  private bookLostDollars(
+    event: FxEvent,
+    q: Decimal,
+    p: ParkedSlice,
+    buyRate: Decimal,
+    kind: "lost" | "guard" | "cross" = "lost",
+  ): boolean {
+    const trigger = kind === "guard" ? "stock_sale_guard" : kind === "cross" ? "stock_sale_cross" : "stock_sale";
     const rate = p.rate!;
     const proceedsEur = q.mul(buyRate);
     const costBasisEur = q.mul(rate);
@@ -2527,23 +2595,26 @@ export class FxFifoEngine {
       proceedsEur,
       costBasisEur,
       gainLossEur,
-      trigger: guard ? "stock_sale_guard" : "stock_sale",
+      trigger,
       holdingPeriodDays: daysBetween(acquireDate, event.date),
       lotId: "PARKED",
       ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
       ...(p.brokerSource !== undefined ? { acquireBrokerSource: p.brokerSource } : {}),
       ...(declaredShiftEur !== undefined ? { declaredShiftEur } : {}),
     });
-    this.record("dispose", guard ? { ...event, trigger: "stock_sale_guard" } : event, {
+    this.record("dispose", kind === "lost" ? event : { ...event, trigger }, {
       quantityFcy: q,
       rate: buyRate,
       costBasisEur,
       proceedsEur,
       gainLossEur,
       lotAcquireDate: acquireDate,
-      note: guard
-        ? "guarda de coste negativo: diferencia de cambio desde la compra de la divisa hasta la compra de las acciones"
-        : "divisa perdida en la venta: diferencia de cambio desde su compra hasta la compra de las acciones",
+      note:
+        kind === "guard"
+          ? "guarda de coste negativo: diferencia de cambio desde la compra de la divisa hasta la compra de las acciones"
+          : kind === "cross"
+            ? "acciones vendidas en otra moneda: diferencia de cambio desde la compra de la divisa hasta la compra de las acciones"
+            : "divisa perdida en la venta: diferencia de cambio desde su compra hasta la compra de las acciones",
     });
     return true;
   }

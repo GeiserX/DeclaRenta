@@ -84,6 +84,7 @@ const eu: TranslationKeys = {
   "fx.trigger.stock_purchase": "Balore-erosketa",
   "fx.trigger.stock_sale": "Galerak dituen salmenta batean galdutako dibisa",
   "fx.trigger.stock_sale_guard": "Dibisaren aldaketa akzioak erosi arte",
+  "fx.trigger.stock_sale_cross": "Beste moneta batean saldutako akzioetan inbertitutako dibisa",
 
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",

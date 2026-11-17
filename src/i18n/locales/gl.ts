@@ -84,6 +84,7 @@ const gl: TranslationKeys = {
   "fx.trigger.stock_purchase": "Compra de valores",
   "fx.trigger.stock_sale": "Divisa perdida nunha venda con perdas",
   "fx.trigger.stock_sale_guard": "Variación da divisa ata a compra das accións",
+  "fx.trigger.stock_sale_cross": "Divisa investida en accións vendidas noutra moeda",
 
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",

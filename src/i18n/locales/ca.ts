@@ -84,6 +84,7 @@ const ca: TranslationKeys = {
   "fx.trigger.stock_purchase": "Compra de valors",
   "fx.trigger.stock_sale": "Divisa perduda en una venda amb pèrdues",
   "fx.trigger.stock_sale_guard": "Variació de la divisa fins a la compra de les accions",
+  "fx.trigger.stock_sale_cross": "Divisa invertida en accions venudes en una altra moneda",
 
   "casilla.listed_transmission_value": "Valor de transmissió (accions negociades)",
   "casilla.listed_acquisition_value": "Valor d'adquisició (accions negociades)",

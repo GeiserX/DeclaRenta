@@ -157,6 +157,12 @@ export interface FifoDisposal {
   holdingPeriodDays: number;
   /** Original currency of the trade */
   currency: string;
+  /**
+   * Currency of the consumed lot when it differs from the sale's (a position
+   * bought on one listing and sold on another). Written only under
+   * «Tradicional con divisa» (`FifoEngine({ markLotCurrency: true })`).
+   */
+  acquireCurrency?: string;
   /** ECB rate (EUR per 1 FCY) at the sale — used to convert the FCY gain. */
   sellEcbRate: Decimal;
   /** ECB rate (EUR per 1 FCY) at acquisition — informational/audit only. */
@@ -520,7 +526,10 @@ export interface FxShift {
  * did not come back), booked at the sale. A `stock_sale_guard` DISPOSAL is the
  * negative-cost guard of the same mode: the currency did come back, but its
  * fall since the share purchase exceeds its cost, so its drift up to the
- * purchase is booked at the sale and it returns at the sale rate.
+ * purchase is booked at the sale and it returns at the sale rate. A
+ * `stock_sale_cross` DISPOSAL is the same drift for shares bought in this
+ * currency and sold in another one: the currency left inside the shares and
+ * never comes back.
  *
  * `stock_purchase` / `stock_sale` label the divisa-side effect of a
  * foreign-currency SECURITY trade under the carry-basis-defer model (issue #230
@@ -539,7 +548,8 @@ export type FxTrigger =
   | "commission"
   | "stock_purchase"
   | "stock_sale"
-  | "stock_sale_guard";
+  | "stock_sale_guard"
+  | "stock_sale_cross";
 
 /**
  * Movement kinds recorded in the FX-FIFO trace ({@link FxTraceEvent}).

@@ -132,9 +132,18 @@ export class FifoEngine {
    * Never traditional cost with the DEFAULT FX engine: that double-counts the drift.
    */
   private traditionalCostBasis: boolean;
+  /**
+   * «Tradicional con divisa» only: a disposal that consumes a lot bought in
+   * another currency than the sale's (same ISIN, another listing) carries the
+   * lot's currency in `acquireCurrency`, so the FX engine releases the right
+   * parked principal. Off by default, so default and monodivisa disposals keep
+   * their exact shape.
+   */
+  private markLotCurrency: boolean;
 
-  constructor(options?: { traditionalCostBasis?: boolean }) {
+  constructor(options?: { traditionalCostBasis?: boolean; markLotCurrency?: boolean }) {
     this.traditionalCostBasis = options?.traditionalCostBasis ?? false;
+    this.markLotCurrency = options?.markLotCurrency ?? false;
   }
   /** Warnings for issues that don't block execution */
   warnings: string[] = [];
@@ -953,6 +962,7 @@ export class FifoEngine {
       acquireEcbRate: Decimal;
       optionFields?: Partial<FifoDisposal>;
       acquireBrokerSource?: string;
+      acquireCurrency?: string;
     }): FifoDisposal => ({
       isin: trade.isin,
       symbol: trade.symbol,
@@ -977,6 +987,7 @@ export class FifoEngine {
       reintegratedLossEur: new Decimal(0), // Set later by detectWashSales
       brokerSource: trade.brokerSource,
       acquireBrokerSource: parts.acquireBrokerSource,
+      ...(parts.acquireCurrency !== undefined ? { acquireCurrency: parts.acquireCurrency } : {}),
       ...(parts.optionFields ?? {}),
     });
 
@@ -1067,6 +1078,7 @@ export class FifoEngine {
           holdingPeriodDays: holdingDays,
           acquireEcbRate: lot.ecbRate,
           acquireBrokerSource: lot.brokerSource,
+          ...(this.markLotCurrency && lot.currency !== trade.currency ? { acquireCurrency: lot.currency } : {}),
           optionFields:
             trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP"
               ? {

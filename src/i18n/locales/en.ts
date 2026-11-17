@@ -83,6 +83,7 @@ const en: TranslationKeys = {
   "fx.trigger.stock_purchase": "Securities purchase",
   "fx.trigger.stock_sale": "Currency lost in a losing sale",
   "fx.trigger.stock_sale_guard": "Currency change up to the share purchase",
+  "fx.trigger.stock_sale_cross": "Currency invested in shares sold in another currency",
 
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",

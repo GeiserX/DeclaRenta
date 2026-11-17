@@ -86,6 +86,7 @@ const es = {
   "fx.trigger.stock_purchase": "Compra de valores",
   "fx.trigger.stock_sale": "Divisa perdida en una venta con pérdidas",
   "fx.trigger.stock_sale_guard": "Variación de la divisa hasta la compra de las acciones",
+  "fx.trigger.stock_sale_cross": "Divisa invertida en acciones vendidas en otra moneda",
 
   // Casillas
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
