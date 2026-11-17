@@ -429,8 +429,9 @@ const fmt2 = (d: Decimal): string => d.toFixed(2);
  *    with no EUR origin in the upload (deposits, older years). An acquisition
  *    1 to 7 calendar days AFTER the buy covers it instead, first, even when it
  *    paid a later buy (that buy then takes its own late funding), unless
- *    covering makes a disposal of that year find no lot or leaves another buy
- *    untracked (late-cover rule, FxFifoEngine.LATE_COVER_DAYS).
+ *    covering makes a disposal find no lot or leaves another buy untracked, up
+ *    to the end of the latest year the cover touches (the buy's year or the
+ *    acquisition's) (late-cover rule, FxFifoEngine.LATE_COVER_DAYS).
  *  - `fx_traditional_orphan` (warning): principal still parked under a position
  *    with no shares at the year end (ISIN change, merger, spin-off): its drift
  *    before the purchase is never declared.
