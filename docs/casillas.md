@@ -32,6 +32,24 @@
 - No existe umbral mínimo (de minimis) — toda conversión es declarable.
 - La regla anti-churning (Art. 33.5.f/g) NO se aplica a divisas.
 
+### Los tres métodos para acciones en divisa
+
+Las notas de arriba describen el método por defecto. Puedes elegir otro en el paso «Revisar y elegir método», o con `--fx-method` en la CLI. Usa el mismo método todos los años.
+
+| | «Criterio DGT (multidivisa)» (por defecto, recomendado) | «Tradicional con divisa» | «Tradicional sin divisa (monodivisa)» |
+|---|---|---|---|
+| **0331** de una acción en divisa | Al tipo del día de **venta** (V2422-20) | Al tipo del día de **compra** (Art. 35.1) | Al tipo del día de **compra** (Art. 35.1) |
+| **0328 − 0331** | Ganancia en divisa pasada a euros al tipo de la venta | Incluye la variación de la divisa entre la compra y la venta | Igual que «Tradicional con divisa» |
+| **1633/1637** | Cuando conviertes la divisa a euros, pagas comisiones o intereses en divisa | Cuando la divisa **sale de tu cuenta**: conversiones, comisiones, intereses pagados y divisa perdida en una venta con pérdidas | Nunca: no calcula ningún resultado de divisa |
+| Coste de la divisa que devuelve una venta | Su coste de origen | Su coste de origen **más** la variación ya declarada en la acción | — |
+| Venta con pérdidas sin conversión | 1633/1637 = 0 | Fila de divisa perdida en 1633/1637 ese año | 1633/1637 = 0 |
+
+- En un ciclo completo (euros → divisa → acciones → divisa → euros), los tres métodos dan casi el mismo total; «Tradicional sin divisa» se salta tus conversiones. Lo que cambia es en qué año y en qué casilla sale cada parte, y la deducción por doble imposición (casilla 0588) puede cambiar.
+- «Tradicional con divisa» da en 0328/0331 exactamente las cifras de «Tradicional sin divisa» en todos los años. En 1633/1637, el coste de la divisa que devuelve una venta tiene dos partes: lo que te costó la divisa y la variación que ya declaraste en la acción. Así cada variación se declara una sola vez.
+- «Tradicional con divisa» fecha cada movimiento de divisa en su **fecha de operación** (no en la de liquidación). Dentro de un mismo día, una venta libera su divisa antes de una compra de otro valor. Si cambias euros a divisa **hasta 7 días naturales después** de comprar las acciones, esa compra usa el tipo de ese cambio.
+- Hacienda aplica a las acciones el «Criterio DGT (multidivisa)» (V1740-17, V1615-25). Ninguna consulta de la DGT respalda «Tradicional con divisa» para acciones: la DGT valora así las participaciones de **fondos** en divisa (V2324-10, V0775-21).
+- Límites conocidos de «Tradicional con divisa»: un cambio de ISIN, una fusión o una escisión dejan la divisa aparcada en el valor antiguo (el informe avisa con `fx_traditional_orphan`); un dividendo en acciones (scrip) no aparca divisa; una baja de cotización sin venta no libera nada. Las opciones, las posiciones cortas y los tipos de movimiento de efectivo desconocidos quedan fuera de este método.
+
 !!! warning
 
     **Fondos y ETFs:** DeclaRenta clasifica los fondos y ETFs (categoría FUND) y los bonos (BOND) en este bloque «otros elementos» (1633/1637). Si tu fondo/ETF *cotiza* en un mercado regulado, técnicamente correspondería al bloque de acciones negociadas (0328/0331). Los informes de los brokers no indican de forma fiable si un fondo cotiza o no, por lo que se aplica este criterio uniforme. **El impuesto a pagar es idéntico** (ambos bloques tributan en la base del ahorro al mismo tipo); solo cambia la casilla en la que se anota. Si lo prefieres, puedes mover manualmente en Renta Web las ventas de ETFs cotizados a las casillas 0328/0331.

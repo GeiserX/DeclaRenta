@@ -17,7 +17,7 @@ El modo diagnóstico se activa de dos formas:
 2. Sube tus ficheros y genera el informe.
 3. Pulsa **«Descargar traza de cálculo FX (diagnóstico)»** → se descarga `declarenta_fxtrace_<año>.csv`.
 
-> En modo monodivisa, o si no hay movimientos de divisa, el botón avisa de que «no hay movimientos FX que trazar».
+> Con el método «Tradicional sin divisa (monodivisa)», o si no hay movimientos de divisa, el botón avisa de que «no hay movimientos FX que trazar».
 
 ## En la CLI
 
@@ -65,8 +65,18 @@ Tipos de movimiento (`kind`):
 | `kind` | Qué representa |
 |---|---|
 | `acquire` | Entra divisa al *pool* (conversión EUR→divisa, dividendo o interés recibido) |
-| `dispose` | Sale divisa y se **realiza** la ganancia/pérdida FX (conversión divisa→EUR) |
+| `dispose` | Sale divisa y se **realiza** la ganancia/pérdida FX (conversión divisa→EUR). Con «Tradicional con divisa», también la divisa perdida en una venta con pérdidas (`trigger` = `stock_sale`) |
 | `park` | Una compra de valor en divisa consume divisa del *pool* y aparca su coste de adquisición |
-| `unpark` | Una venta re-añade al *pool* el principal aparcado, a su coste original |
-| `discard` | Principal perdido en una venta con minusvalía (esa divisa nunca se convirtió a EUR) |
+| `unpark` | Una venta re-añade al *pool* el principal aparcado, a su coste original. Con «Tradicional con divisa», a su coste original más la variación ya declarada en la acción (ver abajo) |
+| `discard` | Principal perdido en una venta con minusvalía (esa divisa nunca se convirtió a EUR). Con «Tradicional con divisa», solo el que no tiene variación que declarar (sin origen rastreado o con ganancia 0) |
 | `profit` | El beneficio de una venta entra como divisa nueva, al tipo de la fecha de venta |
+
+## Con el método «Tradicional con divisa»
+
+La traza usa los mismos tipos de movimiento, con estas diferencias:
+
+- **Fechas.** Cada movimiento de divisa va en su **fecha de operación**: conversiones, compras y ventas de valores. Los dividendos, intereses y comisiones mantienen su propia fecha. Dentro de un mismo día, primero entra la divisa, después van las compras y ventas de valores y al final sale la divisa. Entre las compras y ventas del día, una venta de un valor que no se compró ese día va antes que la compra de otro valor. Si todas tienen hora, van por hora.
+- **`unpark` con coste desplazado.** La divisa que devuelve una venta cuesta lo que costó más la variación ya declarada en la acción. La nota lo dice en dos partes, por ejemplo `coste = 0.9 €/USD (coste de la divisa) + -0.1 €/USD (variación ya declarada en la acción)`. La segunda parte es tipo de venta − tipo de compra de las acciones. En la conversión que consume ese lote, el `dispose` lleva en `costBasisEur` las dos partes juntas.
+- **Divisa perdida.** En una venta con pérdidas, la divisa que no vuelve sale de tu cuenta. Una fila `dispose` con `trigger` = `stock_sale` declara su variación desde que compraste la divisa hasta que compraste las acciones: transmisión = cantidad × tipo del día de compra de las acciones, adquisición = cantidad × coste del lote. Las filas con ganancia 0 no se escriben. Esto se aparta a propósito de la regla del método por defecto (venta con pérdidas = 0 en 1633/1637). La DGT trata así los fondos en divisa: la variación entre la compra de la divisa y la del fondo se imputa en el año del reembolso (V0775-21 3º, V2324-10).
+- **Cobertura tardía (7 días).** Si compras acciones sin divisa en la cuenta y cambias euros a esa divisa **hasta 7 días naturales después**, ese cambio cubre la compra. Una fila `park` con la nota `cobertura` mueve la divisa nueva al principal aparcado, con el tipo de ese cambio. Una venta del mismo día también cubre una compra de ese día. Una compra que nadie cubre conserva el camino de «sin origen rastreado» (el informe avisa con `fx_traditional_uncovered`).
+- **Coste negativo.** Si el coste desplazado quedaría por debajo de 0, la variación hasta la compra se declara en la venta (fila `dispose` con `trigger` = `stock_sale`) y la divisa vuelve al tipo de la venta. La nota dice `guarda de coste negativo`.
