@@ -988,8 +988,9 @@ export function generateTaxReport(
     });
   } else if (!options?.skipFx && fxDisposals.length === 0) {
     // Never-converted case: the user holds (and trades with) a foreign currency
-    // but made NO FCY→EUR conversion this year, so there is correctly 0 in
-    // casillas 1633/1637. Only surface this when there are foreign-currency
+    // but made NO FCY→EUR conversion this year, so no currency amount is added
+    // to casillas 1633/1637 (options, crypto or funds may still fill them).
+    // Only surface this when there are foreign-currency
     // SECURITIES disposals (STK/FUND/BOND, non-EUR) — i.e. the user genuinely
     // holds divisa — so it never fires on pure-EUR or crypto-only files. Heads
     // off the most common "why doesn't my number match IBKR?" question.
