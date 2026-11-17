@@ -369,10 +369,14 @@ describe("same-day cover in buy order (review r4600330140)", () => {
   // was bought and sold in 2023), so the parked map lists it first. On
   // 2024-06-03, with 100 USD in the pool: AAA buys 300 (100 tracked at 0.70,
   // 200 untracked) and sells a third for 140; that sale covers 140 of AAA's
-  // untracked 200. BBB buys 400 (untracked) and sells half for 240; those 240
-  // cover AAA's last 60 first (its buy ran first that day), then 180 of BBB's
-  // 200, so BBB keeps 20 untracked and sells them in 2025. Covering in map
-  // order left AAA with the 20 instead, sold in 2024.
+  // untracked 200. BBB buys 400 (untracked) and sells half for 240; the first
+  // 200 pay back what the sold half borrowed that day (#447), and the 40 of
+  // profit cover 40 of AAA's last 60 first (its buy ran first that day), so
+  // BBB keeps its other 200 untracked and sells them in 2025, and AAA sells
+  // its last 20 untracked in 2024. Covering in map order gave the 40 to BBB
+  // and left AAA with 60 untracked. Before #447 the sale also put the 200 it
+  // paid back in the pool as dollars bought at 0.85, and they covered AAA's
+  // 20 and 140 of BBB's.
   const sc: Scenario = {
     id: "SDO-INTRADAY",
     years: [2023, 2024, 2025],
@@ -396,21 +400,22 @@ describe("same-day cover in buy order (review r4600330140)", () => {
     ],
   };
 
-  it("covers AAA's last 60 before BBB, so BBB keeps the 20 untracked", () => {
+  it("covers AAA's untracked slice before BBB's, after BBB pays back what it borrowed", () => {
     const per = run(sc, { ...TRAD, fxTrace: true });
     const trace = per.get(2024)!.report.fxTrace ?? [];
     const same = trace.filter((t) => t.kind === "park" && t.note?.startsWith("cobertura del mismo día"));
     expect(same.map((t) => [t.positionKey, t.rate, t.quantityFcy])).toEqual([
       [ISIN_A, "0.7", "100"],
       [ISIN_A, "0.85", "40"],
-      [ISIN_A, "0.85", "60"],
-      [ISIN_B, "0.85", "140"],
-      [ISIN_B, "0.85", "40"],
+      [ISIN_A, "0.85", "40"],
     ]);
-    // The only untracked principal a later sale re-adds at its own rate is BBB's 20.
+    const repaid = trace.filter((t) => t.kind === "discard" && t.note?.startsWith("compraventa del mismo día"));
+    expect(repaid.map((t) => [t.date, t.positionKey, t.quantityFcy])).toEqual([["2024-06-03", ISIN_B, "200"]]);
+    // The untracked principal later sales re-add at their own rate: AAA's 20, BBB's 200.
     const later = (per.get(2025)!.report.fxTrace ?? []).filter((t) => t.kind === "unpark" && t.date > "2024-06-03");
     expect(later.filter((t) => t.note?.startsWith("uncovered")).map((t) => [t.date, t.positionKey, t.quantityFcy])).toEqual([
-      ["2025-03-03", ISIN_B, "20"],
+      ["2024-09-02", ISIN_A, "20"],
+      ["2025-03-03", ISIN_B, "200"],
     ]);
     expect(f2(lifetime(per))).toBe(f2(economic(sc)));
   });

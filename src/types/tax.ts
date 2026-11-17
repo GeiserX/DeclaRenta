@@ -559,6 +559,9 @@ export type FxTrigger =
  *  - `park`     — a stock BUY parked principal (carried basis, or `null` rate = uncovered).
  *  - `unpark`   — a stock SELL re-added parked principal to the pool at its carried basis.
  *  - `discard`  — a LOSS sell dropped principal that didn't return (no FX, never converted).
+ *                 Also (issue #447) the untracked principal a sale of shares bought that same
+ *                 day pays back, on a winning sale too, and later currency of that day paying
+ *                 what such a sale still owed (note `compraventa del mismo día sin divisa`).
  *  - `profit`   — a stock SELL's trading profit re-added to the pool at the sale rate.
  */
 export type FxTraceKind = "acquire" | "dispose" | "park" | "unpark" | "discard" | "profit";
