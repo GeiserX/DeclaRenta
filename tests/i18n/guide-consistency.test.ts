@@ -75,5 +75,87 @@ describe("Renta Web guide consistency", () => {
       expect(locale["casilla.reintegrated_losses"], name).not.toMatch(salesWithoutRebuy);
     }
   });
-});
 
+  it("says only the shares no rebuy covers are definitive, and a sale that closes the position releases everything only with no rebuy (#455 follow-up)", () => {
+    const closeNeedsNoRebuy = {
+      es: /cierra la posición y ninguna recompra en su plazo la cubre/,
+      en: /closes the position and no repurchase in its window covers it/,
+      ca: /tanca la posició i cap recompra en el seu termini no la cobreix/,
+      eu: /posizioa ixten badu eta epean inolako berrerosketak estaltzen ez badu/,
+      gl: /pecha a posición e ningunha recompra no seu prazo a cobre/,
+    };
+    const onlyUncoveredShares = {
+      es: /solo cuentan las acciones no recompradas/,
+      en: /only the shares not bought back count/,
+      ca: /només compten les accions no recomprades/,
+      eu: /berrerosi gabeko akzioek bakarrik balio dute/,
+      gl: /só contan as accións non recompradas/,
+    };
+    const wholeSaleRule = {
+      es: /sin recomprar/,
+      en: /without buying it back/,
+      ca: /sense recomprar/,
+      eu: /berrerosi gabe saltzen/,
+      gl: /sen recomprar/,
+    };
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      expect(locale["annex.wash_released_hint"], name).toMatch(closeNeedsNoRebuy[name]);
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(onlyUncoveredShares[name]);
+      // The hint on every blocked sale says the same (it used to read as a
+      // whole-sale rule: "once you sell … without buying it back").
+      expect(locale["annex.wash_hint"], name).toMatch(onlyUncoveredShares[name]);
+      expect(locale["annex.wash_hint"], name).not.toMatch(wholeSaleRule[name]);
+    }
+  });
+
+  it("corrects a filed year with an «autoliquidación rectificativa» from 2024 on, and keeps complementaria for 2023 and earlier (#455 follow-up)", () => {
+    // AEAT, Manual práctico de Renta 2025: the rectificativa is the only way to
+    // correct an IRPF return from tax year 2024 on, in both directions; the old
+    // complementaria / solicitud de rectificación stay for 2023 and earlier.
+    const complementaria = /complementaria|complementària|osagarria/;
+    for (const [name, locale] of Object.entries(locales)) {
+      const text = locale["guide_rw.blocked_losses_hint"];
+      expect(text, name).toMatch(/rectificativa/);
+      expect(text, name).toContain("2024");
+      const at2023 = text.indexOf("2023");
+      expect(at2023, name).toBeGreaterThan(-1);
+      // Every complementaria is the 2023-and-earlier one.
+      for (const m of text.matchAll(new RegExp(complementaria, "g"))) {
+        const before = text.slice(0, m.index);
+        expect(before.lastIndexOf("2023"), name).toBeGreaterThan(before.lastIndexOf("2024"));
+      }
+    }
+  });
+
+  it("the docs say the same: partial release, total exit only with no rebuy, the unlisted window, and the right correction procedure (#455 follow-up)", () => {
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const casillas = doc("casillas.md");
+    const faq = doc("faq.md");
+    const modelos = doc("modelos-fiscales.md");
+    const design = doc("design/antichurning-proportional.md");
+    const faqAnswer = faq.slice(faq.indexOf("### ¿Qué hago con las pérdidas bloqueadas"), faq.indexOf("### ¿Puedo exportar"));
+    // The statute's test (not "if unlisted": a NYSE-only share is listed, yet
+    // falls under letter g), and the engine's ISIN heuristic said as a limit.
+    expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación en un mercado regulado de la UE, art\. 33\.5\.g/);
+    expect(faqAnswer).toMatch(/#452/);
+    expect(faqAnswer).not.toMatch(/si el valor no cotiza/);
+    // A window still open at filing time is corrected with a rectificativa.
+    expect(casillas).toMatch(/30 de junio del año siguiente[^.]*autoliquidación rectificativa/);
+    expect(faqAnswer).toMatch(/solo son definitivas las acciones no recompradas/);
+    expect(casillas).toMatch(/solo son definitivas las acciones que ninguna recompra/);
+    for (const [name, text] of Object.entries({ casillas, faq, modelos })) {
+      // The old whole-sale wording: a sale "with no rebuy in its window".
+      expect(text, name).not.toMatch(/\((una venta )?sin recompra en su plazo\)/);
+      expect(text, name).not.toMatch(/presenta una (autoliquidación )?complementaria de aquel año/);
+      // A sale that empties the position releases everything only with no rebuy.
+      for (const m of text.matchAll(/posición a cero[^.]*\./g)) expect(m[0], name).toMatch(/ninguna recompra/);
+    }
+    // The #451 migration note (the dividend-withholding note in modelos-fiscales.md is another topic).
+    for (const [name, text] of Object.entries({ casillas, faqAnswer })) {
+      expect(text, name).toMatch(/complementaria si es 2023 o anterior|2023 y anteriores: autoliquidación complementaria/);
+      expect(text, name).toMatch(/rectificativa si es 2024 o posterior|2024 y posteriores: autoliquidación rectificativa/);
+    }
+    expect(design).toMatch(/autoliquidación rectificativa/);
+    expect(design).not.toMatch(/or must file an «autoliquidación\s+complementaria» for the earlier year/);
+  });
+});

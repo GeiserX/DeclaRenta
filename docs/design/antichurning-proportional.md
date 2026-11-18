@@ -25,8 +25,9 @@ securities within **±2 calendar months** (listed, letter f) / **±1 year**
    medida que se transmitan los valores o participaciones que permanezcan en el
    patrimonio del contribuyente"* — the blocked loss is a **pending loss**. It is
    **NOT** added to the repurchased lot's cost basis. It is released only by a
-   later **«transmisión definitiva»** of homogeneous shares: a sale, gain or loss,
-   with no unused homogeneous repurchase in its own window (see "Release" below).
+   later **«transmisión definitiva»** of homogeneous shares: the shares of a
+   later sale, gain or loss, that no unused homogeneous repurchase in that sale's
+   window absorbs. The absorbed shares keep it deferred (see "Release" below).
 4. **Per-lot ("por paquetes")** proration base (V0913-08), matching our per-lot
    `FifoDisposal` granularity (one disposal per consumed FIFO lot).
 5. **Total-sale carve-out.** If, after the transmission, no homogeneous shares
@@ -102,6 +103,18 @@ unit:
    V0046-20: a definitive sale of old FIFO lots is enough. The absorbed shares
    keep the pending losses deferred (V3282-18: «no se produce ninguna
    transmisión definitiva de acciones a lo largo del ejercicio 2017»).
+   Only held shares are transmitted: a short cover (`isShort`) buys back shares
+   sold short, so it runs no definitive test (it uses no rebuy as a gain lot),
+   releases nothing and is no exit; its own loss still blocks. For the same
+   reason the shares a cover buys are no repurchase: they go straight back to
+   the lender and never stay in the patrimony («los valores … que permanezcan
+   en el patrimonio»). FIFO books no lot for them (`consumeShortLots`) and
+   `fx-fifo.ts` does not count a cover as a purchase. Only what a `C;O` buy (or
+   a `C` buy larger than the open short) leaves after the cover is a held lot
+   and a repurchase. Without this a cover buy blocked a loss that nothing could
+   release once the position stayed flat (Σ blocked ≠ Σ released). A zero-share
+   disposal (a 0-quantity SELL row FIFO books with no lots) is skipped. The
+   release keeps a cursor on the queue, so a sale of many lots walks it once.
 3. **Total exit.** A sale day whose sales no rebuy absorbed and that leaves no
    shares releases every loss still pending. V1760-23: «en el periodo impositivo
    que transmita de forma definitiva las 10 acciones que quedan en su poder …
@@ -111,7 +124,12 @@ unit:
    losses would never come back. The position must be zero both in the BUY/SELL
    trades and in FIFO (`remainingLots` plus the disposals' holding spans), so
    shares that came in without a BUY (scrip dividend, merger into a new ISIN,
-   spin-off, reward lots) still count as held.
+   spin-off, reward lots) still count as held. A holding span starts on the
+   date the shares entered the security: `entryDate`, which FIFO sets on
+   spin-off and merger lots and their disposals, else `acquireDate`. Those lots
+   keep the parent's tax `acquireDate` (Art. 37.1), which would otherwise make
+   them look held before the corporate action. The day must transmit held
+   shares: a day of short covers only is no exit.
 4. **Block (loss lots only).** `blockedLossEur = |gainLossEur| × absorbed/qty`,
    appended to the end of the queue. The absorbed shares that keep the old
    losses pending are the same ones that block this loss; they are not counted
@@ -178,6 +196,21 @@ transmission that releases them.
 - **Within a merged multi-file run** (`--input 2023 2024 2025`): fully handled —
   the single global pass blocks in the earlier year and releases in the year of
   the definitive transmission, by the same rule.
+- **Window past the loaded data**: the detector sees only the uploaded trades.
+  A sale of the report's year whose window ends after the last date the upload
+  covers (the statement end or the last trade of any security), and whose
+  result a later buy could change (a loss not fully blocked, or a release),
+  gets one shared warning, `report.antichurning_window_past_data` (5 locales).
+  BLOCK and RELEASE are treated the same: nothing is withheld, the user is
+  asked to add the next file. With several merged brokers, each broker's files
+  end on their own date (its last trade of any security, or its statement end
+  when later), and a security is covered up to the earliest end among the
+  brokers that trade it. The per-security last trade is not used: a final exit
+  never has a later trade of its own. From tax year 2024 on, a window that ends
+  after 30 June of the next year (the filing deadline) is still open when the
+  user files, so it gets `report.antichurning_window_open_at_filing` instead:
+  no "if you did not buy, the result is correct", and a buy before the window
+  ends means correcting the filed return with an autoliquidación rectificativa.
 - **Separate per-year filings**: the pending-loss queue is not persisted to disk in
   this change. Users file cross-year correctly by uploading adjacent years
   together (already supported). A `--prior-blocked-losses` JSON I/O analogous to
@@ -187,7 +220,8 @@ transmission that releases them.
 ## Known limitations (documented, accepted)
 
 - **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged; an
-  ISIN-bearing unlisted instrument still gets the 2-month window.
+  ISIN-bearing unlisted instrument, or one listed only outside an EU regulated
+  market, still gets the 2-month window (#452).
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
@@ -233,16 +267,26 @@ Up to 0.66.5 the engine released a pending loss as soon as the repurchased lot
 that carried it was sold, even when that sale was itself rebought inside its
 window. A year filed with 0.66.5 or earlier may therefore have deducted a loss
 too early. When a newer version releases that loss in a later year, the user
-must not deduct the part already deducted, or must file an «autoliquidación
-complementaria» for the earlier year. Verified case: the issue example filed for
-2025 with 0.66.5 deducted 20; the new engine releases 25 in 2026 instead of 5.
-The lifetime total does not change; only the year does. The new rule can also
-move a loss to an earlier year (V0046-20, the V1760-23 total exit); there the
-user can ask to rectify the earlier return to claim it. The in-app Renta Web
-guide (`guide_rw.blocked_losses_hint`) carries the short version in all five
-locales.
+must not deduct the part already deducted, or must correct the earlier year.
+Verified case: the issue example filed for 2025 with 0.66.5 deducted 20; the new
+engine releases 25 in 2026 instead of 5. The lifetime total does not change;
+only the year does. The new rule can also move a loss to an earlier year
+(V0046-20, the V1760-23 total exit); there the user can correct the earlier
+return to claim it. The procedure depends on the year: from 2024 on, an
+«autoliquidación rectificativa» in both directions; for 2023 and earlier, an
+«autoliquidación complementaria» to pay more or a «solicitud de rectificación»
+to claim. AEAT, Manual práctico de Renta 2025: «la aplicación efectiva de la
+autoliquidación rectificativa como sistema único para la corrección de
+autoliquidaciones, en sustitución del actual sistema dual de autoliquidación
+complementaria y solicitud de rectificación … desde el período impositivo
+2024», and the old procedure «se aplicará para la corrección de errores de
+autoliquidaciones de IRPF correspondientes a 2023 y ejercicios anteriores».
+The in-app Renta Web guide (`guide_rw.blocked_losses_hint`) carries the short
+version in all five locales.
 
 Pinned by `tests/integration/antichurning-definitive-e2e.test.ts` (one block per
 consulta, through `generateTaxReport`, plus a seeded property: over a position
-closed by a definitive sale, Σ blocked = Σ released) and the queue cases in
-`tests/engine/wash-sale.test.ts`.
+closed by a definitive sale, Σ blocked = Σ released, summed before rounding; the
+short-cover, zero-share, spin-off entry-date and window-past-data blocks) and
+the queue cases in `tests/engine/wash-sale.test.ts` (with the 10,000-lot cursor
+bound).

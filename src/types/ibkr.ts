@@ -43,6 +43,8 @@ export interface FlexStatement {
 export interface HoldingsSource {
   accountId: string;
   toDate: string;
+  /** The merged file's broker (`mergeStatement`'s `brokerName`), when given. */
+  brokerSource?: string;
   openPositions: OpenPosition[];
   cashBalances: CashBalance[];
 }
