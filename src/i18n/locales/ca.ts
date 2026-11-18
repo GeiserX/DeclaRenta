@@ -620,6 +620,7 @@ const ca: TranslationKeys = {
   "tax.breakdown_dividends": "Dividends",
   "tax.breakdown_interest": "Interessos",
   "tax.breakdown_blocked_losses": "Pèrdues bloquejades (diferides)",
+  "tax.breakdown_reintegrated_losses": "Pèrdues diferides que ara s'integren",
 
   // Sidebar - guide
   "sidebar.guia": "Guia Renta Web",

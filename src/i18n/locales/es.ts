@@ -653,6 +653,7 @@ const es = {
   "tax.breakdown_dividends": "Dividendos",
   "tax.breakdown_interest": "Intereses",
   "tax.breakdown_blocked_losses": "Pérdidas bloqueadas (diferidas)",
+  "tax.breakdown_reintegrated_losses": "Pérdidas diferidas que ahora se integran",
 
   // Sidebar - guide
   "sidebar.guia": "Guía Renta Web",

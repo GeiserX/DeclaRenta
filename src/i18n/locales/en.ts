@@ -618,6 +618,7 @@ const en: TranslationKeys = {
   "tax.breakdown_dividends": "Dividends",
   "tax.breakdown_interest": "Interest",
   "tax.breakdown_blocked_losses": "Blocked losses (deferred)",
+  "tax.breakdown_reintegrated_losses": "Deferred losses now deductible",
 
   // Sidebar - guide
   "sidebar.guia": "Renta Web Guide",

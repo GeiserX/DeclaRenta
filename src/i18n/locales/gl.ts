@@ -620,6 +620,7 @@ const gl: TranslationKeys = {
   "tax.breakdown_dividends": "Dividendos",
   "tax.breakdown_interest": "Xuros",
   "tax.breakdown_blocked_losses": "Perdas bloqueadas (diferidas)",
+  "tax.breakdown_reintegrated_losses": "Perdas diferidas que agora se integran",
 
   // Sidebar - guide
   "sidebar.guia": "Guía Renta Web",

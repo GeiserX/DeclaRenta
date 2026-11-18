@@ -46,7 +46,14 @@ function art49Math(v: {
   blockedLosses: number;
   reintegratedLosses?: number;
 }): {
-  breakdown: { capitalGains: number; fxGains: number; dividends: number; interest: number; blockedLosses: number };
+  breakdown: {
+    capitalGains: number;
+    fxGains: number;
+    dividends: number;
+    interest: number;
+    blockedLosses: number;
+    reintegratedLosses: number;
+  };
   taxableBase: number;
 } {
   const breakdown = {
@@ -55,6 +62,7 @@ function art49Math(v: {
     dividends: v.dividends,
     interest: v.interest,
     blockedLosses: v.blockedLosses,
+    reintegratedLosses: v.reintegratedLosses ?? 0,
   };
   let gains = v.capitalGains + v.blockedLosses - (v.reintegratedLosses ?? 0) + v.fxGains;
   let income = v.dividends + v.interest;
@@ -114,6 +122,19 @@ describe("computeTaxableBaseBreakdown", () => {
       expect(result.taxableBase).toBe(oracle.taxableBase);
     });
   }
+
+  it("shows the released deferred losses, so the lines add up to the base (#451)", () => {
+    // 100 of gains with 25 released: the card must explain the 75 base.
+    const result = computeTaxableBaseBreakdown(
+      makeReport({ capitalGains: 100, fxGains: 0, dividends: 0, interest: 0, blockedLosses: 0, reintegratedLosses: 25 }),
+    );
+    const b = result.breakdown;
+    expect(b.reintegratedLosses).toBe(25);
+    expect(b.capitalGains + b.fxGains + b.dividends + b.interest + b.blockedLosses - b.reintegratedLosses).toBe(result.taxableBase);
+    const html = renderTaxBracketCard("Estimación", 2025, result.taxableBase, 0, b);
+    expect(html).toContain("Pérdidas diferidas que ahora se integran");
+    expect(html).toContain("&minus;25,00 &euro;");
+  });
 
   it("clamps a negative total to exactly 0 (not -0)", () => {
     const result = computeTaxableBaseBreakdown(

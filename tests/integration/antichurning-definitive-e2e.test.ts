@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
+import { formatReport } from "../../src/cli/format-report.js";
 import type { FxMethod } from "../../src/types/tax.js";
 import type { CorporateAction, FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -122,6 +123,13 @@ describe("#451 issue example: a sale rebought in its own window keeps the earlie
     expect(r.reintegrated).toBe("25.00");
     expect(r.fiscal).toBe("-24.00");
     expect(r.disposals[0]!.washSaleReleasedFromDates).toEqual(["2025-10-01", "2025-10-10"]);
+  });
+
+  it("the CLI JSON names the amounts per operation: 2025 blocks 20 + 5, the 2026 sale releases 25", () => {
+    const ops2025 = formatReport(generateTaxReport(statement(withExit), rates(withExit), 2025)).operaciones;
+    expect(ops2025.map((o) => o.perdida_bloqueada_eur)).toEqual(["20.00", "5.00"]);
+    const ops2026 = formatReport(generateTaxReport(statement(withExit), rates(withExit), 2026)).operaciones;
+    expect(ops2026.map((o) => o.perdida_reintegrada_eur)).toEqual(["25.00"]);
   });
 
   it("the lifetime total is the raw result: 2025 + 2026 fiscal = −25 + 1", () => {

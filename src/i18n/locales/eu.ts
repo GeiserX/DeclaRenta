@@ -620,6 +620,7 @@ const eu: TranslationKeys = {
   "tax.breakdown_dividends": "Dibidenduak",
   "tax.breakdown_interest": "Interesak",
   "tax.breakdown_blocked_losses": "Blokeatutako galerak (atzeratuak)",
+  "tax.breakdown_reintegrated_losses": "Orain integratzen diren galera atzeratuak",
 
   // Sidebar - guide
   "sidebar.guia": "Renta Web Gida",
