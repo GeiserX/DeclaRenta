@@ -57,6 +57,9 @@ interface YearResult {
   fiscal: string;
   blocked: string;
   reintegrated: string;
+  /** Unrounded totals, for sums across years (round only the final sum). */
+  blockedEur: Decimal;
+  reintegratedEur: Decimal;
   disposals: FifoDisposal[];
 }
 
@@ -73,6 +76,8 @@ function year(
     fiscal: cg.netGainLoss.plus(cg.blockedLosses).minus(cg.reintegratedLosses).toFixed(2),
     blocked: cg.blockedLosses.toFixed(2),
     reintegrated: cg.reintegratedLosses.toFixed(2),
+    blockedEur: cg.blockedLosses,
+    reintegratedEur: cg.reintegratedLosses,
     disposals: cg.disposals,
   };
 }
@@ -554,6 +559,24 @@ function randomClosedPosition(seed: number): Op[] {
   return ops;
 }
 
+describe("lifetime totals are summed before rounding", () => {
+  it("a 1 EUR loss released a third a year sums to 1.00, not 3 × 0.33", () => {
+    // 3 shares lose 1 EUR and are rebought: 1 EUR pending on 3 shares. One
+    // definitive share a year releases 1/3 EUR each year.
+    const ops: Op[] = [
+      ["2023-01-02", "BUY", 3, 30], ["2023-03-01", "SELL", 3, 29], ["2023-03-05", "BUY", 3, 29],
+      ["2024-06-03", "SELL", 1, 10], ["2025-06-02", "SELL", 1, 10], ["2026-06-01", "SELL", 1, 10],
+    ];
+    const years = [2023, 2024, 2025, 2026].map((y) => year(ops, y));
+    const sum = (f: (r: YearResult) => Decimal) => years.reduce((s, r) => s.plus(f(r)), new Decimal(0));
+    expect(years.slice(1).map((r) => r.reintegrated)).toEqual(["0.33", "0.33", "0.33"]);
+    // Summing the rounded year strings loses a cent; the Decimal totals do not.
+    expect(sum((r) => new Decimal(r.reintegrated)).toFixed(2)).toBe("0.99");
+    expect(sum((r) => r.reintegratedEur).toFixed(2)).toBe("1.00");
+    expect(sum((r) => r.blockedEur).toFixed(2)).toBe("1.00");
+  });
+});
+
 describe("property: a closed position releases every blocked euro once", () => {
   it("Σ blocked = Σ reintegrated over all years, for 60 seeded random histories", () => {
     let churned = 0;
@@ -564,13 +587,207 @@ describe("property: a closed position releases every blocked euro once", () => {
       let released = new Decimal(0);
       for (const y of years) {
         const r = year(ops, y);
-        blocked = blocked.plus(r.blocked);
-        released = released.plus(r.reintegrated);
+        blocked = blocked.plus(r.blockedEur);
+        released = released.plus(r.reintegratedEur);
       }
       if (blocked.greaterThan(0)) churned++;
       expect(released.toFixed(2), `seed ${seed}: ${JSON.stringify(ops)}`).toBe(blocked.toFixed(2));
     }
     // The property is not vacuous: most histories do block something.
     expect(churned).toBeGreaterThan(30);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Follow-up to #455 (late review). Only a «transmisión definitiva» of HELD
+// shares releases a pending loss, and only a real one empties the position.
+// ---------------------------------------------------------------------------
+
+/** One trade with an explicit open/close flag (a short opens with SELL+O and closes with BUY+C). */
+function flagged(op: Op, n: number, oc: "O" | "C"): Trade {
+  return { ...trade(op, n, "EUR"), openCloseIndicator: oc };
+}
+
+function yearOf(trades: Trade[], y: number, method: FxMethod, corporateActions: CorporateAction[] = [], toDate = "20261231"): YearResult {
+  const st: FlexStatement = {
+    accountId: "U1", fromDate: "20070101", toDate, period: "Annual",
+    trades, cashTransactions: [], corporateActions, openPositions: [], securitiesInfo: [],
+  };
+  const map: EcbRateMap = new Map();
+  for (const t of trades) map.set(t.tradeDate, new Map([["USD", "1.10"]]));
+  const cg = generateTaxReport(st, map, y, reportOptionsForMethod(method)).capitalGains;
+  return {
+    fiscal: cg.netGainLoss.plus(cg.blockedLosses).minus(cg.reintegratedLosses).toFixed(2),
+    blocked: cg.blockedLosses.toFixed(2),
+    reintegrated: cg.reintegratedLosses.toFixed(2),
+    blockedEur: cg.blockedLosses,
+    reintegratedEur: cg.reintegratedLosses,
+    disposals: cg.disposals,
+  };
+}
+
+describe("a short cover is not a transmission of held shares: it releases no pending long loss", () => {
+  // The 03/03 loss is rebought on 10/03 (20 pending). The 02/05 long exit is
+  // absorbed by the 20/05 cover buy, so it is not definitive. The position is
+  // then flat, and the 20/05 cover closes a short, not held shares: the 20 stays
+  // pending until the 2026 long exit, which is definitive and releases it.
+  const trades: Trade[] = [
+    flagged(["2025-01-02", "BUY", 10, 100], 0, "O"),
+    flagged(["2025-03-03", "SELL", 10, 80], 1, "C"),
+    flagged(["2025-03-10", "BUY", 10, 80], 2, "O"),
+    flagged(["2025-05-02", "SELL", 10, 90], 3, "C"),
+    flagged(["2025-05-05", "SELL", 10, 95], 4, "O"),
+    flagged(["2025-05-20", "BUY", 10, 85], 5, "C"),
+    flagged(["2026-01-05", "BUY", 10, 90], 6, "O"),
+    flagged(["2026-06-01", "SELL", 10, 100], 7, "C"),
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] 2025 keeps the 20 pending (fiscal 20); 2026 releases it`, () => {
+      const r = year2025(method);
+      expect(r.disposals.some((d) => d.isShort === true && d.sellDate === "2025-05-20")).toBe(true);
+      expect(r.blocked).toBe("20.00");
+      expect(onDate(r, "2025-05-20", "reintegratedLossEur")).toBe("0.00");
+      expect(r.reintegrated).toBe("0.00");
+      expect(r.fiscal).toBe("20.00");
+      expect(yearOf(trades, 2026, method).reintegrated).toBe("20.00");
+    });
+  }
+
+  function year2025(method: FxMethod): YearResult {
+    return yearOf(trades, 2025, method);
+  }
+});
+
+describe("a zero-share sale is not a total exit", () => {
+  // The 01/12 sale closes the position at a loss of 20 and the 10/01 buy blocks
+  // it. A 0-share SELL row on 15/12 (FIFO books it with no lots) transmits
+  // nothing, so it must not release the pending 20.
+  const zeroSell: Trade = {
+    ...trade(["2025-12-15", "SELL", 1, 8], 3, "EUR"),
+    quantity: "0", tradeMoney: "0", proceeds: "0", cost: "0",
+  };
+  const trades: Trade[] = [
+    trade(buy("2025-06-02", 10), 0, "EUR"),
+    trade(sell("2025-12-01", 10, -20), 1, "EUR"),
+    trade(buy("2026-01-10", 10, 8), 2, "EUR"),
+    zeroSell,
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] 2025: 20 blocked, nothing released (fiscal 0)`, () => {
+      const r = yearOf(trades, 2025, method);
+      expect(r.disposals.some((d) => d.sellDate === "2025-12-15" && d.quantity.isZero())).toBe(true);
+      expect(r.blocked).toBe("20.00");
+      expect(r.reintegrated).toBe("0.00");
+      expect(r.fiscal).toBe("0.00");
+    });
+  }
+});
+
+describe("the total exit reads the date shares entered the security, not the spin-off's inherited acquisition date", () => {
+  // XYZ is bought, churned twice (200 pending on 100 held) and sold on 01/09
+  // with no rebuy: the position is empty, so the total exit releases all 200.
+  // The 01/12 spin-off brings XYZ shares carved from a 2024 parent purchase.
+  // Their tax acquisition date is the parent's (2024), but they entered XYZ on
+  // 01/12, after the sale, so they must not keep the position open on 01/09.
+  const PARENT = "US1111111111";
+  const ops: Op[] = [
+    ["2024-02-01", "BUY", 100, 1000, PARENT],
+    ["2025-01-10", "BUY", 100, 1000], ["2025-03-03", "SELL", 100, 900], ["2025-03-10", "BUY", 100, 900],
+    ["2025-04-22", "SELL", 100, 800], ["2025-04-25", "BUY", 100, 800], ["2025-09-01", "SELL", 100, 1000],
+  ];
+  const spinOff: CorporateAction = {
+    transactionID: "SO1", accountId: "U1", symbol: "XYZ", isin: ISIN,
+    description: `1111(${PARENT}) SPINOFF 1 FOR 1 XYZ(${ISIN})`,
+    currency: "EUR", reportDate: "20251201", dateTime: "20251201", quantity: "100", amount: "0", type: "SO", actionDescription: "",
+  };
+
+  for (const method of METHODS) {
+    it(`[${method}] spun-off shares still held at the end: 01/09 releases 200 (2025 fiscal 0)`, () => {
+      const r = year(ops, 2025, method, "EUR", [spinOff]);
+      expect(onDate(r, "2025-09-01", "reintegratedLossEur")).toBe("200.00");
+      expect(r.fiscal).toBe("0.00");
+    });
+
+    it(`[${method}] the spun-off shares sold in 2026: 01/09 still releases 200`, () => {
+      const withSale: Op[] = [...ops, ["2026-03-02", "SELL", 100, 600]];
+      const r = year(withSale, 2025, method, "EUR", [spinOff]);
+      expect(onDate(r, "2025-09-01", "reintegratedLossEur")).toBe("200.00");
+    });
+  }
+
+  it("a spin-off BEFORE the sale keeps the position open: 01/09 releases only its 100 definitive shares", () => {
+    const early: CorporateAction = { ...spinOff, reportDate: "20250801", dateTime: "20250801" };
+    const r = year(ops, 2025, "monodivisa", "EUR", [early]);
+    expect(onDate(r, "2025-09-01", "reintegratedLossEur")).toBe("100.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The detector sees only the uploaded trades. A sale whose repurchase window
+// runs past the last date the upload covers could still be blocked (a loss) or
+// turn non-definitive (a release) by a buy the upload does not show. BLOCK and
+// RELEASE share one warning; the figures are never withheld.
+// ---------------------------------------------------------------------------
+describe("a sale whose window runs past the loaded data gets one warning, for a block and for a release", () => {
+  const ID = "report.antichurning_window_past_data";
+  function messagesOf(trades: Trade[], y: number, method: FxMethod, toDate: string) {
+    const st: FlexStatement = {
+      accountId: "U1", fromDate: "", toDate, period: "",
+      trades, cashTransactions: [], corporateActions: [], openPositions: [], securitiesInfo: [],
+    };
+    const map: EcbRateMap = new Map();
+    for (const t of trades) map.set(t.tradeDate, new Map([["USD", "1.10"]]));
+    return generateTaxReport(st, map, y, reportOptionsForMethod(method));
+  }
+  const ops = (list: Op[]): Trade[] => list.map((o, i) => trade(o, i, "EUR"));
+
+  it("a December loss with nothing loaded after it: warned, the loss still deducted", () => {
+    const r = messagesOf(ops([buy("2025-06-02", 10), sell("2025-12-20", 10, -20)]), 2025, "monodivisa", "");
+    const m = r.messages.find((x) => x.id === ID);
+    expect(m?.severity).toBe("warning");
+    expect(m?.context).toEqual({ count: "1", year: "2025", lastDate: "20/12/2025", windowEnd: "20/02/2026" });
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+  });
+
+  for (const method of METHODS) {
+    it(`[${method}] a December release with nothing loaded after it: warned, the 20 still released`, () => {
+      const list: Op[] = [
+        buy("2025-01-02", 10), sell("2025-03-03", 10, -20), buy("2025-03-10", 10), sell("2025-12-01", 10, 10),
+      ];
+      const r = messagesOf(ops(list), 2025, method, "");
+      expect(r.capitalGains.reintegratedLosses.toFixed(2)).toBe("20.00");
+      // The 03/03 loss is fully blocked, so only the 01/12 release is open.
+      expect(r.messages.find((x) => x.id === ID)?.context).toEqual({
+        count: "1", year: "2025", lastDate: "01/12/2025", windowEnd: "01/02/2026",
+      });
+    });
+  }
+
+  it("no warning once the upload covers the window (statement end or a later trade of any security)", () => {
+    const list: Op[] = [buy("2025-06-02", 10), sell("2025-12-20", 10, -20)];
+    expect(messagesOf(ops(list), 2025, "monodivisa", "20260228").messages.some((x) => x.id === ID)).toBe(false);
+    const later: Op[] = [...list, ["2026-03-02", "BUY", 1, 50, "US0000000009"]];
+    expect(messagesOf(ops(later), 2025, "monodivisa", "").messages.some((x) => x.id === ID)).toBe(false);
+  });
+
+  it("no warning for a December gain with nothing pending, or a loss already fully blocked", () => {
+    const gain: Op[] = [buy("2025-06-02", 10), sell("2025-12-20", 10, 20)];
+    expect(messagesOf(ops(gain), 2025, "monodivisa", "").messages.some((x) => x.id === ID)).toBe(false);
+    const blocked: Op[] = [buy("2025-06-02", 10), sell("2025-12-01", 10, -20), buy("2025-12-10", 10, 8)];
+    const r = messagesOf(ops(blocked), 2025, "monodivisa", "");
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    expect(r.messages.some((x) => x.id === ID)).toBe(false);
+  });
+});
+
+describe("the window-past-data warning counts sales, not FIFO lots", () => {
+  it("one December loss sale of three lots is one sale", () => {
+    const list: Op[] = [buy("2025-02-03", 10), buy("2025-03-03", 10), buy("2025-04-01", 10), sell("2025-12-19", 30, -30)];
+    const st: FlexStatement = { ...statement(list), toDate: "" };
+    const r = generateTaxReport(st, rates(list), 2025, reportOptionsForMethod("monodivisa"));
+    expect(r.capitalGains.disposals).toHaveLength(3);
+    expect(r.messages.find((m) => m.id === "report.antichurning_window_past_data")?.context?.count).toBe("1");
   });
 });

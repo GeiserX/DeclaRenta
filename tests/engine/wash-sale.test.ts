@@ -986,3 +986,66 @@ describe("detectWashSales at scale (one heavily traded ISIN)", () => {
     expect(elapsedMs).toBeLessThan(2_000);
   });
 });
+
+describe("release cursor: a sale of many lots walks the pending queue once", () => {
+  it("10,000 one-share lots release 10,000 one-share pending losses in linear time", () => {
+    // One loss sale of 10,000 one-share lots, rebought: 10,000 pending entries.
+    // One later gain sale of 10,000 one-share lots with no rebuy: each lot
+    // releases one entry. Restarting every lot at the queue head walks the
+    // spent prefix again (about 50 million visits); the cursor makes it 10,000.
+    const N = 10_000;
+    const isin = "US0378331005";
+    const disposals: FifoDisposal[] = [];
+    for (let i = 0; i < N; i++) {
+      disposals.push(makeDisposal({
+        sellDate: "2025-03-03", acquireDate: "2025-01-10", quantity: new Decimal(1),
+        proceedsEur: new Decimal(9), costBasisEur: new Decimal(10), gainLossEur: new Decimal(-1),
+      }));
+    }
+    for (let i = 0; i < N; i++) {
+      disposals.push(makeDisposal({
+        sellDate: "2025-09-01", acquireDate: "2025-03-10", quantity: new Decimal(1),
+        proceedsEur: new Decimal(11), costBasisEur: new Decimal(10), gainLossEur: new Decimal(1),
+      }));
+    }
+    const trades = [
+      makeTrade(isin, "2025-01-10", "BUY", String(N)),
+      makeTrade(isin, "2025-03-03", "SELL", String(N)),
+      makeTrade(isin, "2025-03-10", "BUY", String(N)),
+      makeTrade(isin, "2025-09-01", "SELL", String(N)),
+    ];
+    const start = performance.now();
+    const result = detectWashSales(disposals, trades);
+    const elapsed = performance.now() - start;
+
+    const sum = (from: number, to: number, f: (d: FifoDisposal) => Decimal) =>
+      result.slice(from, to).reduce((s, d) => s.plus(f(d)), new Decimal(0));
+    expect(sum(0, N, (d) => d.blockedLossEur).toString()).toBe(String(N));
+    expect(sum(N, 2 * N, (d) => d.reintegratedLossEur).toString()).toBe(String(N));
+    expect(result.slice(N).every((d) => d.reintegratedLossEur.equals(1))).toBe(true);
+    expect(elapsed).toBeLessThan(5000);
+  }, 60_000);
+});
+
+describe("a short cover runs no definitive test", () => {
+  it("a gain cover uses no rebuy, so the later long sale keeps it and stays non-definitive", () => {
+    // 03/03 loss rebought 10/03: 20 pending. A short is opened 20/03 and covered
+    // 01/04 at a gain. If the cover sought rebuys as a gain lot it would take the
+    // 20/04 buy, and the 10/04 long sale would turn definitive and release 20.
+    const isin = "US0378331005";
+    const disposals = [
+      makeDisposal({ sellDate: "2025-03-03", acquireDate: "2025-01-02", gainLossEur: new Decimal(-20) }),
+      makeDisposal({ sellDate: "2025-04-01", acquireDate: "2025-03-20", gainLossEur: new Decimal(10), isShort: true }),
+      makeDisposal({ sellDate: "2025-04-10", acquireDate: "2025-03-10", gainLossEur: new Decimal(10) }),
+    ];
+    const trades = [
+      makeTrade(isin, "2025-01-02", "BUY"), makeTrade(isin, "2025-03-03", "SELL"), makeTrade(isin, "2025-03-10", "BUY"),
+      makeTrade(isin, "2025-03-20", "SELL"), makeTrade(isin, "2025-04-01", "BUY"), makeTrade(isin, "2025-04-10", "SELL"),
+      makeTrade(isin, "2025-04-20", "BUY"),
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toString()).toBe("20");
+    expect(result[1]!.reintegratedLossEur.toString()).toBe("0");
+    expect(result[2]!.reintegratedLossEur.toString()).toBe("0");
+  });
+});

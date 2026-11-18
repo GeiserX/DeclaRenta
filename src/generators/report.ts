@@ -23,7 +23,7 @@ import type {
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
-import { detectWashSales } from "../engine/wash-sale.js";
+import { detectWashSales, salesWithWindowPastData } from "../engine/wash-sale.js";
 import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
@@ -31,7 +31,7 @@ import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues, lookupValuationRate, isFiatPriced } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
-import { normalizeDate } from "../engine/dates.js";
+import { formatDateDmy, normalizeDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
@@ -1073,6 +1073,32 @@ export function generateTaxReport(
       message: ggMsg,
       hint: "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
       context: { count: String(unresolvableGeneralGains) },
+    });
+  }
+
+  // Anti-churning sees only the uploaded trades. A sale of this year whose
+  // repurchase window runs past the last date the upload covers could still be
+  // blocked (a loss) or turn non-definitive (a release) by a buy we cannot see.
+  // Both steps share this one warning; nothing is withheld.
+  const lastLoadedDate = [statement.toDate, ...washSaleTrades.map((tr) => tr.tradeDate)]
+    .filter((d): d is string => typeof d === "string" && d.trim() !== "")
+    .map((d) => normalizeDate(d.trim()).slice(0, 10))
+    .reduce((max, d) => (d > max ? d : max), "");
+  const uncoveredWindows = lastLoadedDate ? salesWithWindowPastData(disposals, lastLoadedDate) : [];
+  if (uncoveredWindows.length > 0) {
+    const windowEnd = uncoveredWindows.reduce((max, u) => (u.windowEnd > max ? u.windowEnd : max), "");
+    const ctx = {
+      count: String(uncoveredWindows.length),
+      year: yearStr,
+      lastDate: formatDateDmy(lastLoadedDate),
+      windowEnd: formatDateDmy(windowEnd),
+    };
+    allMessages.push({
+      id: "report.antichurning_window_past_data",
+      severity: "warning",
+      message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning (2 meses, o 1 año si el valor no cotiza) termina después de la última fecha de los ficheros subidos (${ctx.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
+      hint: `Si compraste el mismo valor después del ${ctx.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${ctx.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${ctx.windowEnd} junto a este y calcula de nuevo. Si no compraste, el cálculo ya es correcto.`,
+      context: ctx,
     });
   }
 
