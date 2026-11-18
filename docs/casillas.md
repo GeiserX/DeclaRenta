@@ -101,10 +101,12 @@ Las notas de arriba describen el método por defecto. Puedes elegir otro en el p
 
 Cuando el contribuyente vende valores con **pérdida** y adquiere valores **homogéneos** dentro de la ventana temporal, la pérdida **no computa de forma proporcional**: solo se bloquea la parte de la pérdida correspondiente a la **cantidad recomprada**; el resto se computa ahora.
 
-- **Art. 33.5.f LIRPF** — valores **cotizados**: ventana de **±2 meses** calendario (antes o después de la venta).
-- **Art. 33.5.g LIRPF** — valores **no cotizados**: ventana de **±1 año**.
+- **Art. 33.5.f LIRPF** — valores **admitidos a negociación en un mercado regulado de la UE o en un mercado de un tercer país declarado equivalente por la Comisión Europea**: ventana de **±2 meses** calendario (antes o después de la venta). NYSE y Nasdaq son mercados equivalentes (Decisión de Ejecución (UE) 2017/2320), así que una acción que solo cotiza en ellos también usa 2 meses (consulta vinculante DGT **V0778-25**).
+- **Art. 33.5.g LIRPF** — valores **no admitidos en ninguno de esos mercados** (acciones no cotizadas, valores que solo se negocian en OTC Markets, la mayoría de criptomonedas): ventana de **±1 año**.
 
-La pérdida bloqueada **se difiere, no se pierde**: «las pérdidas patrimoniales se integrarán a medida que se transmitan los valores o participaciones que permanezcan en el patrimonio del contribuyente». Queda **pendiente** hasta una **transmisión definitiva** del mismo valor. En cada venta posterior, con ganancia o con pérdida, solo son definitivas las acciones que ninguna recompra de valores homogéneos en sus 2 meses anteriores o posteriores (1 año si no cotiza) cubre. Cada una de esas acciones libera la pérdida pendiente de una acción, empezando por la más antigua; las acciones recompradas mantienen diferida la pérdida. Si la venta deja la posición a cero y ninguna recompra de su plazo la cubre, se libera todo lo pendiente (DGT **V3282-18**, **V2481-20**, **V0571-21**, **V1760-23**, **V0754-26**).
+DeclaRenta no sabe en qué mercado está admitido cada valor: aplica 2 meses a toda acción, fondo o bono con ISIN, y 1 año a las criptomonedas y a lo que no tiene ISIN. Si tu valor tiene ISIN pero no está admitido en ningún mercado regulado ni equivalente (por ejemplo, solo se negocia en OTC Markets), la ley da 1 año y DeclaRenta aplica 2 meses (issue #452).
+
+La pérdida bloqueada **se difiere, no se pierde**: «las pérdidas patrimoniales se integrarán a medida que se transmitan los valores o participaciones que permanezcan en el patrimonio del contribuyente». Queda **pendiente** hasta una **transmisión definitiva** del mismo valor. En cada venta posterior, con ganancia o con pérdida, solo son definitivas las acciones que ninguna recompra de valores homogéneos en sus 2 meses anteriores o posteriores (1 año en los valores del art. 33.5.g) cubre. Cada una de esas acciones libera la pérdida pendiente de una acción, empezando por la más antigua; las acciones recompradas mantienen diferida la pérdida. Si la venta deja la posición a cero y ninguna recompra de su plazo la cubre, se libera todo lo pendiente (DGT **V3282-18**, **V2481-20**, **V0571-21**, **V1760-23**, **V0754-26**).
 
 Solo se bloquea «la correspondiente a las acciones que se consideran recompradas», y una misma compra no puede bloquear varias pérdidas (lectura proporcional «por paquetes»): DGT **V0913-08**, **V2481-20** y **V3282-18**.
 
@@ -121,7 +123,7 @@ La ventana se calcula en meses naturales (no en días). Si vendes el 15 de marzo
 
 - Ventana anterior: desde el 15 de enero.
 - Ventana posterior: hasta el 15 de mayo.
-- Si has recomprado valores homogéneos dentro de la ventana aplicable, la pérdida puede quedar **bloqueada**. Para no cotizados/cripto se usa la ventana de 1 año.
+- Si has recomprado valores homogéneos dentro de la ventana aplicable, la pérdida puede quedar **bloqueada**. Para los valores no admitidos en un mercado regulado ni equivalente (art. 33.5.g) y las criptomonedas se usa la ventana de 1 año.
 
 ### Qué hacer en Renta Web
 
@@ -140,7 +142,7 @@ En Renta Web esto **requiere acción**: no es automático. Por el importe bloque
 El motor de anti-churning recorre todas las operaciones en orden cronológico y, para cada valor homogéneo:
 
 1. Identifica las ventas con pérdida (`gainLossEur < 0`).
-2. Para cada día de venta, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para cotizados, 1 año para no cotizados/cripto), antes o después de la venta.
+2. Para cada día de venta, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para los valores con ISIN, 1 año para las criptomonedas y los valores sin ISIN), antes o después de la venta.
 3. Bloquea la pérdida de forma **proporcional**: `pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida`. La parte restante se computa ahora. Si una venta consume varios lotes FIFO, las acciones recompradas son las últimas adquiridas: la parte deducible es la de las acciones adquiridas en primer lugar (DGT **V0913-08**, **V1294-22**), y un lote con pérdida queda bloqueado antes que uno con ganancia.
 4. La pérdida bloqueada queda **pendiente** en una cola por valor, contada en acciones (no se suma al coste de ninguna compra).
 5. **Liberación:** en cada venta posterior del mismo valor, con ganancia o con pérdida, el motor descuenta las recompras de su plazo que ninguna venta anterior haya usado. Las acciones restantes son una transmisión definitiva y liberan, una por una, la pérdida pendiente más antigua. Si la venta deja la posición a cero y ninguna recompra de su plazo la cubre, se libera todo lo pendiente. El cierre de una posición corta (la compra que la cubre) no transmite acciones que tuvieras, así que no libera nada. La posición cuenta también las acciones que llegan sin compra (dividendo en acciones, fusión, escisión).
@@ -148,7 +150,7 @@ El motor de anti-churning recorre todas las operaciones en orden cronológico y,
 
 !!! warning
 
-    La regla anti-churning se aplica a **valores homogéneos**: acciones (STK), fondos (FUND), bonos (BOND) y **criptomonedas**. Las criptomonedas (y los valores no cotizados) se tratan como no cotizados y usan la **ventana de 1 año (±12 meses)** en lugar de los 2 meses de los valores cotizados. **No se aplica** a opciones (OPT), futuros (FUT), CFDs ni forex (CASH).
+    La regla anti-churning se aplica a **valores homogéneos**: acciones (STK), fondos (FUND), bonos (BOND) y **criptomonedas**. Las criptomonedas y los valores sin ISIN usan la **ventana de 1 año (±12 meses)**; las acciones, fondos y bonos con ISIN, la de 2 meses (también los que solo cotizan en NYSE o Nasdaq, mercados equivalentes según la DGT **V0778-25**). **No se aplica** a opciones (OPT), futuros (FUT), CFDs ni forex (CASH).
 
 ## Tipo de cambio
 
