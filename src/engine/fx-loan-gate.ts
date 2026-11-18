@@ -13,16 +13,32 @@
  *  - an IBKR CashReport row of that currency for every statement period, all
  *    of one account (no merged accounts), whose first period starts at a
  *    known, non-negative `startingCash`;
+ *  - every row of the upload that moves that currency is one the FX engine
+ *    reads, of that account and broker: a trade of a currency pair or a
+ *    stock, fund or bond trade (no option, future, short cover, or commission
+ *    paid in the currency for a trade in another one), a cash row of income,
+ *    withholding, interest or fees (no deposit, withdrawal or transfer), and
+ *    no corporate action with cash. A per-period net cannot prove the balance
+ *    along the way: a USD deposit and an equal withdrawal in one year net to
+ *    zero, the balance never went below zero, and the loan model invented a
+ *    loan (70 € in «Tradicional con divisa»). Likewise a second account with
+ *    no CashReport, merged with one that has it, ran the model on dollars the
+ *    upload cannot see;
  *  - each period's `startingCash` plus the movements the FX engine sees in
  *    that period (conversions, income, fees, interest, stock buys and sales)
  *    equals its `endingCash`, within {@link CASH_TOLERANCE}, and a period
- *    starts where the one before it ended. A deposit, a transfer, an option
- *    premium or any other movement the engine does not see breaks this;
+ *    starts where the one before it ended;
  *  - every event of the currency falls inside a period and comes from the
  *    broker of those rows;
  *  - no auto-conversion of the currency is skipped (`trackAutoConvert`).
  * Every other currency, and every file without such a CashReport, keeps the
  * untracked path unchanged.
+ *
+ * The answer must not depend on the FX method: the caller passes the stock
+ * sales as «Tradicional con divisa» reads them, every sale with its net
+ * proceeds, also at 0 or below (a commission larger than a worthless sale),
+ * which the default's own producer leaves out (a trap: the same upload ran
+ * the loan in one method and the untracked path in the other).
  *
  * The result maps each currency to its opening balance (the first period's
  * `startingCash`): currency the account held whose EUR cost the upload does
@@ -30,7 +46,7 @@
  */
 
 import Decimal from "decimal.js";
-import type { CashBalance, Trade } from "../types/ibkr.js";
+import type { CashBalance, CashTransaction, CorporateAction, Trade } from "../types/ibkr.js";
 import { FxFifoEngine, type FxEvent } from "./fx-fifo.js";
 import { normalizeDate } from "./dates.js";
 
@@ -93,11 +109,72 @@ function skippedAutoConvert(trades: Trade[]): Set<string> {
   return out;
 }
 
+/** Cash rows the FX engine reads (`extractCashFxEvents`); any other type moves currency it does not see. */
+const READ_CASH_TYPES: ReadonlySet<string> = new Set([
+  "Dividends",
+  "Payment In Lieu Of Dividends",
+  "Withholding Tax",
+  "Broker Interest Received",
+  "Bond Interest Received",
+  "Broker Interest Paid",
+  "Bond Interest Paid",
+  "Other Fees",
+  "Commission Adjustments",
+]);
+
+/** Asset categories whose trades the FX engine reads: currency pairs and long securities. */
+const SECURITY_CATEGORIES: ReadonlySet<string> = new Set(["STK", "FUND", "BOND"]);
+
+/**
+ * Whether every row of the upload that moves `ccy` is one the FX engine reads,
+ * from `account` and `broker` (see the module comment).
+ */
+function rowsReadable(
+  ccy: string,
+  account: string,
+  broker: string,
+  rows: { trades: Trade[]; cashTransactions: CashTransaction[]; corporateActions: CorporateAction[] },
+): boolean {
+  const ours = (r: { accountId: string; brokerSource?: string }): boolean => r.accountId === account && (r.brokerSource ?? "") === broker;
+  for (const t of rows.trades) {
+    const pair = t.assetCategory === "CASH" ? FxFifoEngine.pairCurrencies(t) : null;
+    const inPair = pair !== null && (pair.base === ccy || pair.quote === ccy);
+    const commission = t.commissionCurrency === ccy && !new Decimal(t.commission || "0").isZero();
+    if (t.currency !== ccy && !inPair && !commission) continue;
+    if (!ours(t)) return false;
+    if (t.assetCategory === "CASH") continue;
+    if (!SECURITY_CATEGORIES.has(t.assetCategory) || t.currency !== ccy) return false;
+    // A short cover: the buy producer skips it, so its cash is unseen. A
+    // short sale's own inflow is unseen too, and nothing the engine reads
+    // cancels it, so the reconciliation catches it (the parser writes "O"
+    // on a sale with no indicator, so the indicator cannot tell a short sale).
+    if (t.buySell === "BUY" && (t.openCloseIndicator === "C" || t.openCloseIndicator === "C;O")) return false;
+  }
+  for (const c of rows.cashTransactions) {
+    if (c.currency !== ccy) continue;
+    if (!ours(c) || c.brokerConvertedToBase || !READ_CASH_TYPES.has(c.type)) return false;
+  }
+  for (const a of rows.corporateActions) {
+    if (a.currency !== ccy) continue;
+    let amount: Decimal;
+    try {
+      amount = new Decimal(a.amount || "0");
+    } catch {
+      return false;
+    }
+    if (!amount.isZero()) return false;
+  }
+  return true;
+}
+
 /** See the module comment. */
 export function loanCurrencies(input: {
+  /** Every FX event, the stock sales as «Tradicional con divisa» reads them. */
   events: FxEvent[];
   cashBalances: CashBalance[];
   trades: Trade[];
+  cashTransactions: CashTransaction[];
+  corporateActions: CorporateAction[];
   trackAutoConvert: boolean;
 }): Map<string, Decimal> {
   const out = new Map<string, Decimal>();
@@ -140,6 +217,7 @@ export function loanCurrencies(input: {
     }
     if (!chained) continue;
     const broker = periods[0]!.brokerSource ?? "";
+    if (!rowsReadable(ccy, periods[0]!.accountId, broker, input)) continue;
     const flow = periods.map(() => new Decimal(0));
     let inside = true;
     for (const e of input.events) {

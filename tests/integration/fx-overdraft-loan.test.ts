@@ -417,6 +417,96 @@ describe("the gate: no proof of the account's cash, no loan", () => {
     expect(f2(lifetime(runUpload(st, rates, [2025], {})))).toBe("-145.00");
   });
 
+  // Account U2 really held 1000 USD at the start (no file shows it): it buys
+  // AAA for 1000, sells for 800 and buys 200 USD back. No dollar became euros,
+  // so the FX is 0. A trap: the gate checked one account over the CashReport
+  // rows only, so U1's CashReport (0 → 0) let U2's events through and booked
+  // 70 € (trad) or 30 € (default) of loan repayments that never happened.
+  it("a second account with no CashReport, merged with one that has it", () => {
+    const U2: LoanEv[] = [
+      { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "80", r: "0.90" },
+      { k: "fund", d: "2025-07-01", usd: "200", r: "0.80" },
+    ];
+    const fee: LoanEv[] = [{ k: "fee", d: "2025-01-15", usd: "0", r: "0.92" }];
+    const u1 = toXml({ id: "U1", ev: fee, opening: "0", account: "U1" });
+    const u1Bare = toXml({ id: "U1", ev: fee, account: "U1" }).xml;
+    const u2 = toXml({ id: "U2", ev: U2, account: "U2" });
+    const u2xml = u2.xml.replace(/(tradeID|transactionID)="(\d+)"/g, '$1="u2-$2"');
+    const rates = new Map([...u1.rates, ...u2.rates]);
+    for (const [, opts] of METHODS) {
+      const merged = runUpload(toUpload(u1.xml, u2xml), rates, [2025], opts);
+      expect(loanRows(merged)).toEqual([]);
+      expect(years(merged)).toEqual(years(runUpload(toUpload(u1Bare, u2xml), rates, [2025], opts)));
+      expect(f2(merged.get(2025)!.fx)).toBe("0.00");
+    }
+  });
+
+  // USD wired in and out (no EUR origin) in the same year: the period nets to
+  // the ending balance, but the balance never went below zero. A trap: the
+  // per-period sum let the gate through and the loan model invented a loan.
+  it("a USD deposit and an equal withdrawal in one period", () => {
+    const shapes: LoanEv[][] = [
+      [
+        { k: "dep", d: "2025-02-03", usd: "1000", r: "0.95" },
+        { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+        { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "80", r: "0.90" },
+        { k: "fund", d: "2025-07-01", usd: "200", r: "0.80" },
+        { k: "dep", d: "2025-12-01", usd: "-1000", r: "0.80" },
+      ],
+      [
+        { k: "dep", d: "2025-01-10", usd: "1000", r: "0.95" },
+        { k: "buy", d: "2025-01-15", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+        { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "110", r: "0.85" },
+        { k: "dep", d: "2025-07-01", usd: "-1000", r: "0.84" },
+        { k: "conv", d: "2025-08-01", usd: "100", r: "0.83" },
+      ],
+    ];
+    for (const [i, ev] of shapes.entries()) {
+      for (const [, opts] of METHODS) {
+        const per = runLoan(withReport(`DEP-WD${i}`, ev), opts);
+        expect(loanRows(per)).toEqual([]);
+        expect(years(per)).toEqual(years(runLoan({ id: `DEP-WD${i}-bare`, ev }, opts)));
+        expect(ids(per)).not.toContain("report.fx_loan_repayment");
+      }
+    }
+  });
+
+  // An option premium received and paid back in the same period nets to 0
+  // in the CashReport, but the FX engine never reads option trades.
+  it("an option trade in the currency", () => {
+    const opt = (id: string, side: "BUY" | "SELL", d: string, money: string) =>
+      `<Trade tradeID="${id}" accountId="U1" symbol="AAA 250620C00100000" description="AAA 20JUN25 100 C" isin="" assetCategory="OPT" currency="USD" tradeDate="${d}" settlementDate="${d}" quantity="${side === "SELL" ? "-1" : "1"}" tradePrice="1" tradeMoney="${money}" proceeds="${side === "SELL" ? money : `-${money}`}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "SELL" ? "O" : "C"}" exchange="CBOE" multiplier="100" ibCommissionCurrency="USD" ibCommission="0" taxes="0" />`;
+    const patch = (xml: string) => xml.replace("<Trades>", `<Trades>${opt("o1", "SELL", "20250310", "100")}${opt("o2", "BUY", "20250320", "100")}`);
+    const { xml, rates } = toXml(withReport("OPT", REPRO));
+    const bareXml = toXml({ id: "OPT", ev: REPRO }).xml;
+    expect(patch(xml)).not.toBe(xml);
+    for (const [, opts] of METHODS) {
+      const per = runUpload(toUpload(patch(xml)), rates, [2025], opts);
+      expect(loanRows(per)).toEqual([]);
+      expect(years(per)).toEqual(years(runUpload(toUpload(patch(bareXml)), rates, [2025], opts)));
+    }
+  });
+
+  // A worthless sale whose 5 USD commission exceeds its proceeds: the default's
+  // own producer drops a sale with proceeds ≤ 0, «Tradicional con divisa» keeps
+  // it. A trap: the gate summed each method's own events, so the same upload
+  // ran the loan in «Tradicional con divisa» and the untracked path in the default.
+  it("the same answer in both methods: a sale whose commission exceeds its proceeds", () => {
+    const ev: LoanEv[] = [
+      ...REPRO,
+      { k: "buy", d: "2025-05-05", sym: "ZZZ", qty: "1", px: "10", r: "0.82" },
+      { k: "sell", d: "2025-05-20", sym: "ZZZ", qty: "1", px: "0", r: "0.82" },
+    ];
+    const { xml, rates } = toXml(withReport("WORTHLESS", ev, { endingDelta: "-5" }));
+    const patched = xml.replace(/(<Trade [^>]*symbol="ZZZ"[^>]*buySell="SELL"[^>]*?)ibCommission="0"/, '$1ibCommission="-5"');
+    expect(patched).not.toBe(xml);
+    for (const [, opts] of METHODS) {
+      const per = runUpload(toUpload(patched), rates, [2025], opts);
+      expect(loanRows(per).length).toBeGreaterThan(0);
+    }
+  });
+
   it("AFx rows skipped by the opt-out: «Tradicional con divisa» stays 40", () => {
     const sc = withReport("AFX-SKIP", AFX);
     expect(f2(lifetime(runLoan(sc, { ...TRAD, trackAutoConvert: false })))).toBe("40.00");

@@ -943,13 +943,23 @@ export function generateTaxReport(
     // Issue #449: a currency whose cash the IBKR CashReport proves (every
     // statement's rows, also those `yearEndHoldings` left out of Modelo 720)
     // treats a balance below zero as a loan from the broker. Every other
-    // currency keeps the untracked path.
+    // currency keeps the untracked path. The gate reads the stock sales as
+    // «Tradicional con divisa» does (every sale, also with proceeds ≤ 0), so
+    // both methods reach the same answer on the same upload.
     const loan = loanCurrencies({
-      events: allFxEvents,
+      events: [
+        ...tradeFxEvents,
+        ...cashFxEvents,
+        ...stockPurchaseFxEvents,
+        ...manualOpeningLotFxEvents,
+        ...(traditionalFx ? stockProceedsFxEvents : FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true })),
+      ],
       cashBalances: statement.holdingsBySource
         ? statement.holdingsBySource.flatMap((s) => s.cashBalances)
         : (statement.cashBalances ?? []),
       trades: statement.trades,
+      cashTransactions: statement.cashTransactions,
+      corporateActions: statement.corporateActions,
       trackAutoConvert,
     });
     // «Tradicional con divisa» runs the same producers and engine in its own
