@@ -759,6 +759,7 @@ export function generateTaxReport(
     washSaleTrades,
     statement.corporateActions,
     fifoEngine.getSplitRatios(),
+    fifoEngine.getRemainingLots(),
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));

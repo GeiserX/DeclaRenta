@@ -544,8 +544,9 @@ describe("proportional blocking + reintegration", () => {
   it("shares the holdingAfter budget across same-day FIFO splits and releases from the surviving lot", () => {
     // One SELL trade can split into multiple FIFO disposals. The sale leaves only
     // 30 shares in the patrimony, so the two loss disposals may block 30 shares
-    // total, not 30 each. FIFO leaves the newest 2025-03-12 lot behind, so the
-    // deferred loss must attach there and release when that remainder is sold.
+    // total, not 30 each. The rebought shares are the newest sold (the 30 of the
+    // 2025-03-12 lot; V0913-08, V1294-22), and the definitive 2025-05-10 sale
+    // releases them.
     const disposals = [
       makeDisposal({
         isin: AAPL, symbol: "AAPL", acquireDate: "2025-03-11", sellDate: "2025-04-10",
@@ -570,8 +571,8 @@ describe("proportional blocking + reintegration", () => {
     const result = detectWashSales(disposals, trades);
     const totalBlocked = result.reduce((sum, disposal) => sum.plus(disposal.blockedLossEur), new Decimal(0));
     expect(totalBlocked.toFixed(2)).toBe("300.00");
-    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("300.00");
-    expect(result[1]!.blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[1]!.blockedLossEur.toFixed(2)).toBe("300.00");
     expect(result[2]!.reintegratedLossEur.toFixed(2)).toBe("300.00");
   });
 

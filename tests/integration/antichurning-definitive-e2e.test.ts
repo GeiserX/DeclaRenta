@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import type { FxMethod } from "../../src/types/tax.js";
-import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
+import type { CorporateAction, FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
 
@@ -17,16 +17,16 @@ import type { FifoDisposal } from "../../src/types/tax.js";
 // the one the consulta states.
 // ===========================================================================
 
-/** [date, side, quantity, total EUR amount of the trade] */
-type Op = [date: string, side: "BUY" | "SELL", qty: number, amount: number];
+/** [date, side, quantity, total EUR amount of the trade, optional ISIN] */
+type Op = [date: string, side: "BUY" | "SELL", qty: number, amount: number, isin?: string];
 
 const ISIN = "ES0000004511";
 
 function trade(op: Op, n: number, currency: string): Trade {
-  const [date, side, qty, amount] = op;
+  const [date, side, qty, amount, isin = ISIN] = op;
   const money = new Decimal(amount).toString();
   return {
-    tradeID: `t${n}`, accountId: "U1", symbol: "XYZ", description: "XYZ SA", isin: ISIN, assetCategory: "STK",
+    tradeID: `t${n}`, accountId: "U1", symbol: isin === ISIN ? "XYZ" : isin.slice(-4), description: "XYZ SA", isin, assetCategory: "STK",
     currency, tradeDate: date, settlementDate: date,
     quantity: String(side === "BUY" ? qty : -qty),
     tradePrice: new Decimal(amount).div(qty).toString(),
@@ -38,11 +38,11 @@ function trade(op: Op, n: number, currency: string): Trade {
   };
 }
 
-function statement(ops: Op[], currency = "EUR"): FlexStatement {
+function statement(ops: Op[], currency = "EUR", corporateActions: CorporateAction[] = []): FlexStatement {
   return {
     accountId: "U1", fromDate: "20070101", toDate: "20261231", period: "Annual",
     trades: ops.map((o, i) => trade(o, i, currency)),
-    cashTransactions: [], corporateActions: [], openPositions: [], securitiesInfo: [],
+    cashTransactions: [], corporateActions, openPositions: [], securitiesInfo: [],
   };
 }
 
@@ -59,8 +59,14 @@ interface YearResult {
   disposals: FifoDisposal[];
 }
 
-function year(ops: Op[], y: number, method: FxMethod = "monodivisa", currency = "EUR"): YearResult {
-  const report = generateTaxReport(statement(ops, currency), rates(ops), y, reportOptionsForMethod(method));
+function year(
+  ops: Op[],
+  y: number,
+  method: FxMethod = "monodivisa",
+  currency = "EUR",
+  corporateActions: CorporateAction[] = [],
+): YearResult {
+  const report = generateTaxReport(statement(ops, currency, corporateActions), rates(ops), y, reportOptionsForMethod(method));
   const cg = report.capitalGains;
   return {
     fiscal: cg.netGainLoss.plus(cg.blockedLosses).minus(cg.reintegratedLosses).toFixed(2),
@@ -150,15 +156,14 @@ describe("DGT V3282-18: rebought gain sales are not definitive (2017: 900)", () 
 // gain sales are not definitive. The DGT integrates neither loss in 2020
 // (fiscal 1,767) because of the 1,900 shares bought on 06/05.
 //
-// The engine gets the 23/04 sales right (not definitive) but releases part of
-// the losses on 29/04 (fiscal 1,079.44). The 22/04 loss is rebought the same day
-// (920 shares); the engine has no intraday times, skips same-day buys and takes
-// 905 of the 27/04 purchase instead (post-sale buys first). The 23/04 sales then
-// use 945 of the 06/05 purchase, and only 955 of it are left for the 1,880
-// shares sold on 29/04: 925 definitive shares release 672 + 313 × 45/905.
-// Taking pre-sale buys first would give 1,751.73 (20 shares still definitive,
-// as no strict budget reaches the DGT's 1,767), and breaks V1760-23 below. The
-// rebuy pick order is tracked apart from #451.
+// KNOWN GAP. The engine gets the 23/04 sales right (not definitive) but
+// releases 687.56 on 29/04 (fiscal 1,079.44). Most of it, 672.29, comes from
+// the same-day exclusion: the 22/04 loss is rebought the same day (920 shares),
+// but brokers give no intraday times, so the engine skips same-day buys and
+// takes 905 of the 27/04 purchase instead. The 23/04 sales then use 945 of the
+// 06/05 purchase, and only 955 of it are left for the 1,880 shares sold on
+// 29/04. Counting same-day buys would give 1,751.73; the last 15.27 is the
+// rebuy pick order (post-sale buys first). Both are tracked apart from #451.
 // ---------------------------------------------------------------------------
 describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
   // The 14/04 and 23/04 sales span several FIFO lots at different stated
@@ -177,10 +182,46 @@ describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
     expect(onDate(r, "2020-04-23", "reintegratedLossEur")).toBe("0.00");
   });
 
-  it("releases 925 definitive shares on 29/04 (engine 1,079.44; DGT 1,767, see above)", () => {
+  // Engine today: 29/04 releases 687.56, fiscal 1,079.44 (see above).
+  it.fails("known gap: the DGT releases nothing in 2020 (fiscal 1,767)", () => {
     const r = year(ops, 2020);
-    expect(onDate(r, "2020-04-29", "reintegratedLossEur")).toBe("687.56");
-    expect(r.fiscal).toBe("1079.44");
+    expect(onDate(r, "2020-04-29", "reintegratedLossEur")).toBe("0.00");
+    expect(r.fiscal).toBe("1767.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V0248-18 (05/02/2018): one loss sale (16/02) and three gain sales, each with
+// unused purchases in its window, taken in date order: 25/04 uses the 3,000 of
+// 31/03, 28/04 the 5,000 of 18/03 (2,000 needed), and 29/05 the 3,000 + 4,000
+// left. No sale of 2017 is definitive, so the 800 stays deferred (fiscal 900).
+//
+// KNOWN GAP, rebuy pick order only (no same-day buy is involved). The engine
+// takes post-sale buys first and pre-sale buys newest first: 16/02 takes
+// 18/03, 25/04 takes 28/05, and 28/04 takes 1,000 of 28/05 plus 1,000 of
+// 31/03. Only 2,000 are left for the 3,000 sold on 29/05, so 1,000 of them
+// count as definitive and release 400 (fiscal 500). Taking the earliest
+// unused buy first gives the DGT's answer. Tracked apart from #451.
+// ---------------------------------------------------------------------------
+describe("DGT V0248-18: gain sales use up rebuys in date order (2017: 900)", () => {
+  const ops: Op[] = [
+    buy("2016-10-07", 5000), buy("2017-02-15", 2000), sell("2017-02-16", 2000, -800),
+    buy("2017-03-18", 5000), buy("2017-03-31", 3000), sell("2017-04-25", 3000, 500),
+    sell("2017-04-28", 2000, 300), buy("2017-05-28", 4000), sell("2017-05-29", 3000, 100),
+  ];
+
+  it("blocks the 800 and releases nothing on the 25/04 and 28/04 gain sales", () => {
+    const r = year(ops, 2017);
+    expect(r.blocked).toBe("800.00");
+    expect(onDate(r, "2017-04-25", "reintegratedLossEur")).toBe("0.00");
+    expect(onDate(r, "2017-04-28", "reintegratedLossEur")).toBe("0.00");
+  });
+
+  // Engine today: 29/05 releases 400, fiscal 500 (see above).
+  it.fails("known gap: the DGT releases nothing in 2017 (fiscal 900)", () => {
+    const r = year(ops, 2017);
+    expect(r.reintegrated).toBe("0.00");
+    expect(r.fiscal).toBe("900.00");
   });
 });
 
@@ -239,6 +280,8 @@ describe("DGT V1760-23: definitive sales release by share count, and the total e
 // of 770 shares releases 190 + 195 + 200 + 185 of the 207 of 09/10, by date.
 // The consulta gives no buy dates or amounts: each sale here is rebought within
 // days by the same quantity, as the consulta states, and the last buy is 14/11.
+// The engine matches only this timing, with every rebuy after its sale; the
+// variant below, with the rebuys before the sales, is a known gap.
 // ---------------------------------------------------------------------------
 describe("DGT V0754-26: 2025 releases nothing; the 2026 definitive sale releases 770 shares oldest first", () => {
   const ops: Op[] = [
@@ -269,6 +312,37 @@ describe("DGT V0754-26: 2025 releases nothing; the 2026 definitive sale releases
 });
 
 // ---------------------------------------------------------------------------
+// V0754-26 with each rebuy a few days BEFORE its sale (the consulta allows
+// either: «en los dos meses anteriores o posteriores»; the last buy, 14/11,
+// still follows the last sale). The DGT answer is the same: nothing in 2025.
+//
+// KNOWN GAP, rebuy pick order. The engine takes post-sale buys first, so each
+// sale uses the NEXT sale's pre-sale rebuy, and the 06/11 sale finds only 30
+// shares left: 195 definitive shares release 385 in 2025 (fiscal −775), and
+// 2026 gives −1,331 instead of −942. Tracked apart from #451.
+// ---------------------------------------------------------------------------
+describe("DGT V0754-26, rebuys before the sales: 2025 releases nothing", () => {
+  const ops: Op[] = [
+    buy("2025-01-02", 1000),
+    buy("2025-07-28", 190), sell("2025-08-01", 190, -190),
+    buy("2025-08-25", 195), sell("2025-08-28", 195, -390),
+    buy("2025-09-08", 200), sell("2025-09-11", 200, -100),
+    buy("2025-10-06", 207), sell("2025-10-09", 207, -207),
+    buy("2025-10-14", 207), sell("2025-10-17", 207, -414),
+    sell("2025-11-06", 225, -225), buy("2025-11-14", 225),
+    sell("2026-02-11", 770, -77),
+  ];
+
+  // Engine today: 2025 releases 385 (fiscal −775); 2026 fiscal −1,331.
+  it.fails("known gap: 2025 releases nothing and 2026 gives −942, as with rebuys after the sales", () => {
+    const r2025 = year(ops, 2025);
+    expect(r2025.reintegrated).toBe("0.00");
+    expect(r2025.fiscal).toBe("0.00");
+    expect(year(ops, 2026).fiscal).toBe("-942.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // V0913-08 (07/05/2008): the 01/04 sale of 965 shares has 10 shares rebought, so
 // it is definitive for 955: it releases 955 pending shares of 15/02 and blocks
 // its own loss on 10 shares. The 10 shares are not used twice.
@@ -284,16 +358,14 @@ describe("DGT V0913-08: one rebuy keeps 10 shares of the old deferral and blocks
 
   it("15/02 blocks 995 of 1,005 shares; 01/04 releases 955 of them and blocks 10 of its own", () => {
     const r = year(ops, 2007);
-    // 15/02: 105 × 100 (first lot) + 890 × 150. The DGT puts the 10 deductible
-    // shares on the first-acquired lot (144,500); the engine absorbs the
-    // first-processed FIFO lot first (144,000). Same-sale lot attribution is a
-    // separate engine question, not the definitive test.
-    expect(onDate(r, "2007-02-15", "blockedLossEur")).toBe("144000.00");
-    // 01/04 releases 955 pending shares, oldest first: 105 × 100 + 850 × 150.
-    expect(onDate(r, "2007-04-01", "reintegratedLossEur")).toBe("138000.00");
-    // …and blocks its own loss on the 10 shares bought on 16/04 (10 × 40 here,
-    // 10 × 30 for the DGT, the same lot-attribution difference).
-    expect(onDate(r, "2007-04-01", "blockedLossEur")).toBe("400.00");
+    // 15/02: the 10 deductible shares are the first acquired, so the rebought
+    // 995 are the newest: 900 × 150 + 95 × 100 = 144,500, as the DGT computes.
+    expect(onDate(r, "2007-02-15", "blockedLossEur")).toBe("144500.00");
+    // 01/04 releases 955 pending shares, oldest first: 95 × 100 + 860 × 150.
+    expect(onDate(r, "2007-04-01", "reintegratedLossEur")).toBe("138500.00");
+    // …and blocks its own loss on the 10 shares bought on 16/04. The rebought
+    // shares are the newest sold, the 10 of 10/03 at 980: 10 × 30, as the DGT.
+    expect(onDate(r, "2007-04-01", "blockedLossEur")).toBe("300.00");
   });
 });
 
@@ -344,6 +416,93 @@ describe("a gain sale rebought in its window keeps the deferral", () => {
     const r = year(ops, 2025);
     expect(r.reintegrated).toBe("0.00");
     expect(r.fiscal).toBe("20.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One sale that spans an older GAIN lot and a newer LOSS lot, rebought in part.
+// Of the shares sold, the rebought ones are the last acquired (V0913-08,
+// V1294-22), so the loss lot stays blocked (V0279-25), and the gain lot's
+// definitive shares release the pending loss. A gain lot must never take the
+// rebuy that blocks a loss lot of the same sale.
+// ---------------------------------------------------------------------------
+describe("a rebought sale of an old gain lot and a new loss lot keeps the loss lot blocked", () => {
+  const ops: Op[] = [
+    buy("2024-01-02", 50, 30), ["2024-03-01", "SELL", 50, 1000], buy("2024-03-05", 50, 20),
+    buy("2024-03-10", 50, 40), ["2024-08-01", "SELL", 100, 2500], buy("2024-08-05", 50, 25),
+    ["2025-03-01", "SELL", 50, 1250],
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] 2024 blocks 500 + 750 and releases 500 (fiscal −250); 2025 releases the 750`, () => {
+      const r2024 = year(ops, 2024, method);
+      expect(onDate(r2024, "2024-08-01", "blockedLossEur")).toBe("750.00");
+      expect(onDate(r2024, "2024-08-01", "reintegratedLossEur")).toBe("500.00");
+      expect(r2024.fiscal).toBe("-250.00");
+      expect(year(ops, 2025, method).reintegrated).toBe("750.00");
+    });
+  }
+
+  it("a pending loss elsewhere does not let the gain lot take the rebuy (blocked 500 either way)", () => {
+    // Lot A gains 500, lot B loses 500, 100 rebought: B stays blocked.
+    const plain: Op[] = [
+      buy("2025-01-02", 100, 10), buy("2025-03-03", 100, 20),
+      ["2025-06-02", "SELL", 200, 3000], buy("2025-06-10", 100, 15),
+    ];
+    // The same, plus one share with a 10 loss pending from a 2024 churn.
+    const withPending: Op[] = [
+      buy("2024-06-03", 1, 30), ["2024-07-01", "SELL", 1, 20], buy("2024-07-05", 1, 20),
+      buy("2025-01-02", 100, 10), buy("2025-03-03", 100, 20),
+      ["2025-06-02", "SELL", 201, 3015], buy("2025-06-10", 100, 15),
+    ];
+    expect(year(plain, 2025).blocked).toBe("500.00");
+    const r = year(withPending, 2025);
+    expect(onDate(r, "2025-06-02", "blockedLossEur")).toBe("500.00");
+    // The 101 definitive shares release the one pending share (10).
+    expect(r.reintegrated).toBe("10.00");
+    expect(r.fiscal).toBe("485.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The total exit asks FIFO, not only the trades: shares that came in without a
+// BUY (a scrip dividend, a merger into a new ISIN) are still held, so selling
+// the traded shares is not a total exit and releases only its definitive shares.
+// ---------------------------------------------------------------------------
+describe("the total exit does not fire while FIFO still holds shares the trades do not show", () => {
+  it("scrip dividend: 10 scrip shares remain, so 100 definitive shares release only the first 100 (2025: 100)", () => {
+    const ops: Op[] = [
+      ["2025-01-10", "BUY", 100, 1000], ["2025-03-03", "SELL", 100, 900], ["2025-03-10", "BUY", 100, 900],
+      ["2025-04-22", "SELL", 100, 800], ["2025-04-25", "BUY", 100, 800], ["2025-09-01", "SELL", 100, 1000],
+    ];
+    const scrip: CorporateAction = {
+      transactionID: "SD1", accountId: "U1", symbol: "XYZ", isin: ISIN, description: `XYZ(${ISIN}) STOCK DIVIDEND`,
+      currency: "EUR", reportDate: "20250203", dateTime: "20250203", quantity: "10", amount: "100", type: "SD", actionDescription: "",
+    };
+    for (const method of METHODS) {
+      const r = year(ops, 2025, method, "EUR", [scrip]);
+      expect(onDate(r, "2025-09-01", "reintegratedLossEur")).toBe("100.00");
+      expect(r.reintegrated).toBe("100.00");
+    }
+  });
+
+  it("merger into a new ISIN: 100 merged shares remain, so the sale releases 100, not 200 (2025: 100)", () => {
+    const OLD = "US0000000001";
+    const NEW = "US0000000002";
+    const ops: Op[] = [
+      ["2025-01-10", "BUY", 200, 2000, OLD], ["2025-03-03", "SELL", 100, 900, NEW], ["2025-03-10", "BUY", 100, 900, NEW],
+      ["2025-04-22", "SELL", 100, 900, NEW], ["2025-04-25", "BUY", 100, 800, NEW], ["2025-09-01", "SELL", 100, 1000, NEW],
+    ];
+    const merger: CorporateAction = {
+      transactionID: "TC1", accountId: "U1", symbol: "0001", isin: OLD,
+      description: `0001(${OLD}) MERGED(Acquisition) 1 FOR 1 0002(${NEW})`,
+      currency: "EUR", reportDate: "20250203", dateTime: "20250203", quantity: "-200", amount: "0", type: "TC", actionDescription: "",
+    };
+    for (const method of METHODS) {
+      const r = year(ops, 2025, method, "EUR", [merger]);
+      expect(r.reintegrated).toBe("100.00");
+      expect(r.fiscal).toBe("0.00");
+    }
   });
 });
 
