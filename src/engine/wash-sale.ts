@@ -13,10 +13,13 @@
  * the loss on 70 is deductible now. One repurchased share absorbs one sold
  * share's loss, once (no double-counting — DGT V2481-20). The deferred loss is
  * NOT forfeited: it is released ("se integrarán a medida que se transmitan los
- * valores que permanezcan en el patrimonio del contribuyente") when the surviving
- * repurchased shares are themselves later sold — tracked here as
- * `reintegratedLossEur` on the disposal that sells them. See
- * docs/design/antichurning-proportional.md for the full contract and citations.
+ * valores que permanezcan en el patrimonio del contribuyente") on a later
+ * «transmisión definitiva» of homogeneous shares, one with no unused repurchase
+ * in its own window, gain or loss (DGT V3282-18, V1760-23). Pending losses form
+ * a per-security queue counted in shares; each definitive share releases the
+ * oldest pending share's loss, tracked as `reintegratedLossEur` on that
+ * disposal. See docs/design/antichurning-proportional.md for the full contract
+ * and citations.
  */
 
 import type { FifoDisposal } from "../types/tax.js";
@@ -57,7 +60,7 @@ export function addMonths(date: Date, months: number): Date {
 /** A homogeneous repurchase available to absorb a loss, with a consumable quantity. */
 interface BuyEvent {
   time: number;
-  /** Normalized YYYY-MM-DD of the buy — the key a future disposal matches to release the deferred loss. */
+  /** Normalized YYYY-MM-DD of the buy (display trail of the block). */
   date: string;
   /** Remaining repurchased quantity not yet used to block a loss (the consumable budget). */
   remainingQty: Decimal;
@@ -83,33 +86,39 @@ interface SplitConversion {
   den: Decimal;
 }
 
-/** A deferred loss attached to a repurchased lot, released as that lot is later sold. */
-interface DeferredLot {
-  /** Repurchased shares still carrying deferred loss. */
+/** A blocked loss waiting for a definitive transmission, counted in shares. */
+interface PendingLoss {
+  /** Shares of the loss sale still pending, in the share units of `time`. */
   qty: Decimal;
-  /** Deferred loss (EUR, positive) still attached to those shares. */
-  deferredEur: Decimal;
-  /** The deferred loss can release only on transmissions after the sale that created it. */
-  availableAfterTime: number;
+  /** Pending loss (EUR, positive) on those shares. */
+  eur: Decimal;
+  /** Sell time of the loss sale; only later transmissions can release it. */
+  time: number;
+  /** Normalized YYYY-MM-DD of the loss sale (display trail of the release). */
+  sellDate: string;
 }
 
 /**
- * Detect wash sales: compute PROPORTIONAL blocked losses and reintegrate
- * previously-deferred losses, in ONE chronological pass (Art. 33.5.f/g LIRPF).
+ * Detect wash sales: compute PROPORTIONAL blocked losses and release pending
+ * losses on definitive transmissions, in ONE chronological pass (Art. 33.5.f/g
+ * LIRPF).
  *
- * Per homogeneous key the pass maintains (a) a FIFO budget of in-window
- * repurchase quantities and (b) a ledger of deferred losses keyed by the
- * repurchase date. For each disposal in sell-date order:
- *  1. RELEASE — if it sells shares acquired on a date carrying a deferred loss,
- *     reintegrate that loss proportionally (`reintegratedLossEur`).
- *  2. BLOCK (losses only) — defer `|loss| × absorbed/qty` where `absorbed` is the
- *     in-window homogeneous repurchase quantity (a buy ON the sell date is the
- *     lot being sold, excluded), consuming that quantity from the budget and
- *     attaching the deferred loss to the consumed buys' dates.
+ * Per homogeneous key the pass keeps (a) a FIFO budget of in-window repurchase
+ * quantities and (b) a queue of pending losses, oldest first, counted in shares.
+ * For each disposal in sell-date order:
+ *  1. ABSORB — take the in-window repurchases not yet used (a buy ON the sell
+ *     date is the lot being sold, excluded): for a loss sale always, for a gain
+ *     sale only while losses are pending (it needs them for the definitive test).
+ *  2. RELEASE — the shares no rebuy absorbed are a «transmisión definitiva»;
+ *     each releases one pending share's loss, oldest first (`reintegratedLossEur`).
+ *  3. TOTAL EXIT — a definitive sale day that leaves no shares releases every
+ *     loss still pending.
+ *  4. BLOCK (losses only) — defer `|loss| × absorbed/qty` and append it to the
+ *     queue. The same absorbed shares keep the old losses pending.
  *
- * Passing the FULL (all-year) disposal+trade set makes reintegration work across
- * years in a merged multi-file run (the cross-year case). Single-year runs see
- * only blocking, exactly as before — but now proportional.
+ * Passing the FULL (all-year) disposal+trade set makes the release work across
+ * years in a merged multi-file run (the cross-year case). A single-year run sees
+ * only the losses pending inside that year.
  *
  * @param disposals - FIFO disposals to check (pass all years for cross-year reintegration)
  * @param allTrades - All trades for the period (homogeneous repurchases)
@@ -117,7 +126,8 @@ interface DeferredLot {
  * @param splitRatios - Ratio the FIFO engine applied per FS/RS transactionID
  *   (`FifoEngine.getSplitRatios()`); required for splits given only as shares
  *   added (Revolut), whose ratio depends on the holding at the split date
- * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, and `washSaleBlocked` set
+ * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, `washSaleBlocked`
+ *   and the display trails `washSaleRepurchaseDates` / `washSaleReleasedFromDates` set
  */
 export function detectWashSales(
   disposals: FifoDisposal[],
@@ -163,9 +173,11 @@ export function detectWashSales(
   }
   const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
 
-  // Deferred-loss ledger: key → (buy date → deferred lots). A loss blocked by a
-  // repurchase on date D is recoverable when shares acquired on D are later sold.
-  const deferredByAsset = new Map<string, Map<string, DeferredLot[]>>();
+  // Pending-loss queue per key, oldest first. A blocked loss does not belong to
+  // one lot: any later definitive transmission of homogeneous shares releases it.
+  // Entries are appended in sell-time order and released from the front, so the
+  // spent ones are a prefix that `head` skips.
+  const pendingByAsset = new Map<string, { entries: PendingLoss[]; head: number }>();
 
   // Process disposals oldest-first so a block is recorded before the later
   // disposal that releases it (stable sort by sell date; preserve input order
@@ -183,6 +195,7 @@ export function detectWashSales(
     reintegratedLossEur: new Decimal(0),
     washSaleBlocked: false,
     washSaleRepurchaseDates: undefined,
+    washSaleReleasedFromDates: undefined,
   }));
 
   const holdingAfterByAssetTime = new Map<string, Map<number, Decimal>>();
@@ -252,6 +265,21 @@ export function detectWashSales(
     perTime.set(sellTime, Decimal.max(current.minus(consumedQty), 0));
   };
 
+  // Same-day disposals of one key run back to back (sell-date order), and the
+  // total-exit release waits for the last of them: index of each key's last
+  // disposal per sell day.
+  const lastOfDay = new Map<string, number>();
+  for (const idx of order) {
+    const d = result[idx]!;
+    if (WASH_SALE_EXEMPT.has(d.assetCategory)) continue;
+    const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
+    if (!key) continue;
+    lastOfDay.set(`${key}|${parseDate(d.sellDate).getTime()}`, idx);
+  }
+  // Whether any disposal of a (key, sell day) had shares absorbed by a rebuy:
+  // such a sale is not wholly definitive, so it never releases the whole queue.
+  const absorbedOnDay = new Set<string>();
+
   for (const idx of order) {
     const disposal = result[idx]!;
     if (WASH_SALE_EXEMPT.has(disposal.assetCategory)) continue;
@@ -259,131 +287,145 @@ export function detectWashSales(
     if (!key) continue;
 
     const qty = disposal.quantity.abs();
-    const disposalSellDate = parseDate(disposal.sellDate);
-    const disposalSellTime = disposalSellDate.getTime();
+    const sellDate = parseDate(disposal.sellDate);
+    const sellTime = sellDate.getTime();
+    const dayKey = `${key}|${sellTime}`;
+    const isLoss = disposal.gainLossEur.lessThan(0);
 
-    // 1. RELEASE: this disposal sells shares acquired on a date that carries a
-    //    deferred loss → reintegrate proportionally to the quantity now sold.
-    const deferredLots = deferredByAsset.get(key);
-    if (deferredLots) {
-      const acquireDate = normalizeDay(disposal.acquireDate);
-      const lots = deferredLots.get(acquireDate);
-      if (lots) {
-        let remainingReleaseQty = qty;
-        for (const lot of lots) {
-          if (remainingReleaseQty.lessThanOrEqualTo(0)) break;
-          if (disposalSellTime <= lot.availableAfterTime) continue;
-          if (lot.qty.lessThanOrEqualTo(0)) continue;
-          const releaseConversion = splitFactorBetween(splitsByAsset, key, lot.availableAfterTime, disposalSellTime);
-          const lotQtyAtRelease = lot.qty.mul(releaseConversion.num).div(releaseConversion.den);
-          if (lotQtyAtRelease.lessThanOrEqualTo(0)) continue;
-          const releasedQty = Decimal.min(remainingReleaseQty, lotQtyAtRelease);
-          const releasedOriginalQty = releasedQty.mul(releaseConversion.den).div(releaseConversion.num);
-          const releasedEur = lot.qty.isZero()
-            ? new Decimal(0)
-            : lot.deferredEur.mul(releasedOriginalQty).div(lot.qty);
-          disposal.reintegratedLossEur = disposal.reintegratedLossEur.plus(releasedEur);
-          lot.qty = lot.qty.minus(releasedOriginalQty);
-          lot.deferredEur = lot.deferredEur.minus(releasedEur);
-          remainingReleaseQty = remainingReleaseQty.minus(releasedQty);
+    // Losses pending before this sale. A loss blocked by an earlier disposal of
+    // the same sale day is not yet pending for this one.
+    const queue = pendingByAsset.get(key);
+    const hasPending = queue !== undefined && queue.head < queue.entries.length && queue.entries[queue.head]!.time < sellTime;
+
+    // 1. ABSORB: the in-window homogeneous repurchases not yet used by an earlier
+    //    transmission. A loss sale needs them to block its own loss; any sale,
+    //    gain or loss, needs them for the definitive test of the pending losses
+    //    («con independencia de que determinen ganancias o pérdidas», V3282-18),
+    //    and a rebuy counted there is used up (V0248-18). A gain sale with no
+    //    pending loss has nothing to test and uses no rebuy.
+    let absorbed = new Decimal(0);
+    const consumed: { date: string; qty: Decimal }[] = [];
+    const buyEvents = buysByAsset.get(key);
+    if (buyEvents && (isLoss || hasPending)) {
+      const months = windowMonths(disposal.assetCategory, disposal.isin);
+      const windowStart = addMonths(sellDate, -months).getTime();
+      const windowEnd = addMonths(sellDate, months).getTime();
+
+      // Consume repurchase quantity from in-window buys, excluding any buy on the
+      // sell day (the lot being sold, not a repurchase). `absorbed` ≤ sold qty.
+      //
+      // Order matters. A POST-sale buy is a genuine surviving replacement, so it
+      // remains uncapped and is consumed first. A PRE-sale buy can only block the
+      // portion that still remains after this sale; if the sale fully exits the
+      // position, DGT V3282-18(1) allows the loss in full because no homogeneous
+      // shares remain in the patrimony. Same-day FIFO disposal splits share one
+      // holdingAfter budget so they cannot collectively block more pre-sale shares
+      // than remain after the full sale date.
+      let remainingToAbsorb = qty;
+      // buyEvents is sorted by time, so each pass walks only its slice of the
+      // window, found by binary search: (sellTime, windowEnd] forward for post-sale
+      // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
+      // outside both slices.
+      const consume = (from: number, to: number, step: 1 | -1, maxQty?: Decimal): Decimal => {
+        let remainingBudget = maxQty ?? qty;
+        for (let i = from; i !== to; i += step) {
+          const ev = buyEvents[i]!;
+          if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
+          if (remainingBudget.lessThanOrEqualTo(0)) break;
+          if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
+          const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
+          const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
+          if (availableAtSell.lessThanOrEqualTo(0)) continue;
+          const take = Decimal.min(availableAtSell, remainingToAbsorb, remainingBudget);
+          ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
+          remainingToAbsorb = remainingToAbsorb.minus(take);
+          remainingBudget = remainingBudget.minus(take);
+          consumed.push({ date: ev.date, qty: take });
         }
-        const remainingLots = lots.filter((lot) => lot.qty.greaterThan(0));
-        if (remainingLots.length > 0) {
-          deferredLots.set(acquireDate, remainingLots);
-        } else {
-          deferredLots.delete(acquireDate);
-        }
+        return (maxQty ?? qty).minus(remainingBudget);
+      };
+      // post-sale repurchases first (surviving replacements)
+      consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1);
+      // FIFO leaves the newest pre-sale lots behind after a partial sale, so take
+      // capped pre-sale repurchases newest-first, from the lots that survive.
+      const preSaleConsumed = consume(
+        firstIndexAtOrAfter(buyEvents, sellTime) - 1,
+        firstIndexAtOrAfter(buyEvents, windowStart) - 1,
+        -1,
+        remainingHoldingBudget(key, sellTime),
+      );
+      consumeHoldingBudget(key, sellTime, preSaleConsumed);
+      absorbed = qty.minus(remainingToAbsorb);
+    }
+    if (absorbed.greaterThan(0)) absorbedOnDay.add(dayKey);
+
+    // 2. RELEASE: the shares no rebuy absorbed are a «transmisión definitiva».
+    //    Each one releases one pending share, oldest pending loss first (V0571-21,
+    //    V0754-26), whichever lot FIFO sells (V0046-20). The absorbed shares keep
+    //    the pending losses deferred (V3282-18, V2481-20).
+    const releasedFrom = new Set<string>();
+    if (queue && hasPending) {
+      let toRelease = qty.minus(absorbed);
+      for (let i = queue.head; i < queue.entries.length; i++) {
+        const entry = queue.entries[i]!;
+        if (toRelease.lessThanOrEqualTo(0) || entry.time >= sellTime) break;
+        const conversion = splitFactorBetween(splitsByAsset, key, entry.time, sellTime);
+        const entryQtyAtSell = entry.qty.mul(conversion.num).div(conversion.den);
+        if (entryQtyAtSell.lessThanOrEqualTo(0)) continue;
+        const take = Decimal.min(toRelease, entryQtyAtSell);
+        const releasedEur = take.equals(entryQtyAtSell) ? entry.eur : entry.eur.mul(take).div(entryQtyAtSell);
+        disposal.reintegratedLossEur = disposal.reintegratedLossEur.plus(releasedEur);
+        entry.eur = entry.eur.minus(releasedEur);
+        entry.qty = take.equals(entryQtyAtSell) ? new Decimal(0) : entry.qty.minus(take.mul(conversion.den).div(conversion.num));
+        releasedFrom.add(entry.sellDate);
+        toRelease = toRelease.minus(take);
       }
     }
 
-    // 2. BLOCK: only loss disposals, proportional to the in-window repurchase qty.
-    if (disposal.gainLossEur.greaterThanOrEqualTo(0)) continue;
-
-    const sellDate = disposalSellDate;
-    const months = windowMonths(disposal.assetCategory, disposal.isin);
-    const windowStart = addMonths(sellDate, -months).getTime();
-    const windowEnd = addMonths(sellDate, months).getTime();
-    const sellTime = sellDate.getTime();
-
-    const buyEvents = buysByAsset.get(key);
-    if (!buyEvents) continue;
-
-    // Consume repurchase quantity from in-window buys, excluding any buy on the
-    // sell day (the lot being sold, not a repurchase). `absorbed` ≤ sold qty.
-    //
-    // Order matters. A POST-sale buy is a genuine surviving replacement, so it
-    // remains uncapped and is consumed first. A PRE-sale buy can only block the
-    // portion that still remains after this sale; if the sale fully exits the
-    // position, DGT V3282-18(1) allows the loss in full because no homogeneous
-    // shares remain in the patrimony. Same-day FIFO disposal splits share one
-    // holdingAfter budget so they cannot collectively block more pre-sale shares
-    // than remain after the full sale date.
-    let remainingToAbsorb = qty;
-    const consumed: { date: string; qty: Decimal }[] = [];
-    // buyEvents is sorted by time, so each pass walks only its slice of the
-    // window, found by binary search: (sellTime, windowEnd] forward for post-sale
-    // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
-    // outside both slices.
-    const consume = (from: number, to: number, step: 1 | -1, maxQty?: Decimal): Decimal => {
-      let remainingBudget = maxQty ?? qty;
-      for (let i = from; i !== to; i += step) {
-        const ev = buyEvents[i]!;
-        if (remainingToAbsorb.lessThanOrEqualTo(0)) break;
-        if (remainingBudget.lessThanOrEqualTo(0)) break;
-        if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
-        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
-        const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
-        if (availableAtSell.lessThanOrEqualTo(0)) continue;
-        const take = Decimal.min(availableAtSell, remainingToAbsorb, remainingBudget);
-        ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
-        remainingToAbsorb = remainingToAbsorb.minus(take);
-        remainingBudget = remainingBudget.minus(take);
-        consumed.push({ date: ev.date, qty: take });
+    // 3. TOTAL EXIT: a sale day that leaves no shares and whose sales no rebuy
+    //    absorbed is a definitive exit; it releases every loss still pending
+    //    («las pérdidas … que le resten por imputar», V1760-23). The queue can
+    //    hold more shares than the position, because a rebought sale both keeps
+    //    the old losses pending and adds its own.
+    if (
+      queue &&
+      hasPending &&
+      lastOfDay.get(dayKey) === idx &&
+      !absorbedOnDay.has(dayKey) &&
+      holdingAfter(key, sellTime).isZero()
+    ) {
+      for (let i = queue.head; i < queue.entries.length; i++) {
+        const entry = queue.entries[i]!;
+        if (entry.time >= sellTime) break;
+        disposal.reintegratedLossEur = disposal.reintegratedLossEur.plus(entry.eur);
+        entry.eur = new Decimal(0);
+        entry.qty = new Decimal(0);
+        releasedFrom.add(entry.sellDate);
       }
-      return (maxQty ?? qty).minus(remainingBudget);
-    };
-    // post-sale repurchases first (surviving replacements)
-    consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1);
-    // FIFO leaves the newest pre-sale lots behind after a partial sale, so attach
-    // capped pre-sale deferrals newest-first to the lots that actually survive.
-    const preSaleConsumed = consume(
-      firstIndexAtOrAfter(buyEvents, sellTime) - 1,
-      firstIndexAtOrAfter(buyEvents, windowStart) - 1,
-      -1,
-      remainingHoldingBudget(key, sellTime),
-    );
-    consumeHoldingBudget(key, sellTime, preSaleConsumed);
+    }
+    if (queue) {
+      while (queue.head < queue.entries.length && queue.entries[queue.head]!.qty.lessThanOrEqualTo(0)) queue.head++;
+    }
+    if (releasedFrom.size > 0) disposal.washSaleReleasedFromDates = [...releasedFrom].sort();
 
-    const absorbed = qty.minus(remainingToAbsorb);
-    if (absorbed.lessThanOrEqualTo(0)) continue;
-
-    // Proportional blocked loss: |loss| × absorbed / soldQty.
+    // 4. BLOCK (losses only): the absorbed shares defer their part of this loss,
+    //    `|loss| × absorbed / qty`, which joins the end of the pending queue. The
+    //    shares that keep the old losses pending are the same that block this one;
+    //    they are not counted twice (V0913-08).
+    if (!isLoss || absorbed.lessThanOrEqualTo(0)) continue;
     const lossAbs = disposal.gainLossEur.abs();
     const blocked = absorbed.greaterThanOrEqualTo(qty) ? lossAbs : lossAbs.mul(absorbed).div(qty);
     disposal.blockedLossEur = blocked;
     disposal.washSaleBlocked = blocked.greaterThan(0);
-    if (disposal.washSaleBlocked) {
-      // Display-only trail so the UI can say WHICH purchases blocked this loss.
-      disposal.washSaleRepurchaseDates = [...new Set(consumed.map((c) => c.date))].sort();
+    if (!disposal.washSaleBlocked) continue;
+    // Display-only trail so the UI can say WHICH purchases blocked this loss.
+    disposal.washSaleRepurchaseDates = [...new Set(consumed.map((c) => c.date))].sort();
+    let pending = pendingByAsset.get(key);
+    if (!pending) {
+      pending = { entries: [], head: 0 };
+      pendingByAsset.set(key, pending);
     }
-
-    // Attach the deferred loss to each consumed repurchase date, pro-rata to the
-    // quantity consumed there, so a later sale of those shares releases it.
-    let lots = deferredByAsset.get(key);
-    if (!lots) {
-      lots = new Map<string, DeferredLot[]>();
-      deferredByAsset.set(key, lots);
-    }
-    for (const c of consumed) {
-      const share = absorbed.isZero() ? new Decimal(0) : blocked.mul(c.qty).div(absorbed);
-      const existing = lots.get(c.date);
-      const deferredLot = { qty: c.qty, deferredEur: share, availableAfterTime: sellTime };
-      if (existing) {
-        existing.push(deferredLot);
-      } else {
-        lots.set(c.date, [deferredLot]);
-      }
-    }
+    pending.entries.push({ qty: absorbed, eur: blocked, time: sellTime, sellDate: normalizeDay(disposal.sellDate) });
   }
 
   return result;

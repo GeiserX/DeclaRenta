@@ -839,6 +839,80 @@ describe("proportional blocking + reintegration", () => {
   });
 });
 
+describe("definitive transmission: the pending-loss queue (#451)", () => {
+  const AAPL = "US0378331005";
+
+  it("a gain sale with no pending loss uses no rebuy, so the rebuy still blocks a later loss", () => {
+    // Hold 200 bought long ago. Sell 100 at a gain, buy 100, sell 100 at a loss. Nothing is
+    // pending at the gain sale, so it has no definitive test to run and the
+    // 02-15 buy stays available: it blocks the 03-01 loss, as before #451.
+    const disposals = [
+      makeDisposal({ isin: AAPL, acquireDate: "2024-11-04", sellDate: "2025-02-01", quantity: new Decimal(100), gainLossEur: new Decimal(300) }),
+      makeDisposal({ isin: AAPL, acquireDate: "2024-11-04", sellDate: "2025-03-01", quantity: new Decimal(100), gainLossEur: new Decimal(-500) }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2024-11-04", "BUY", "200"), // outside both windows
+      makeTrade(AAPL, "2025-02-01", "SELL", "100"),
+      makeTrade(AAPL, "2025-02-15", "BUY", "100"),
+      makeTrade(AAPL, "2025-03-01", "SELL", "100"),
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[1]!.blockedLossEur.toFixed(2)).toBe("500.00");
+  });
+
+  it("a total exit partly rebought releases only its definitive shares; the next definitive exit releases the rest", () => {
+    // 10 shares carry a pending €100. Selling all 10 with 4 rebought afterwards
+    // is definitive for 6 shares (€60) and, being rebought, not a total exit.
+    // Selling those 4 later with no rebuy releases the last €40.
+    const disposals = [
+      makeDisposal({ isin: AAPL, acquireDate: "2025-01-02", sellDate: "2025-02-01", quantity: new Decimal(10), gainLossEur: new Decimal(-100) }),
+      makeDisposal({ isin: AAPL, acquireDate: "2025-02-10", sellDate: "2025-06-01", quantity: new Decimal(10), gainLossEur: new Decimal(20) }),
+      makeDisposal({ isin: AAPL, acquireDate: "2025-06-20", sellDate: "2025-12-01", quantity: new Decimal(4), gainLossEur: new Decimal(8) }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-01-02", "BUY", "10"),
+      makeTrade(AAPL, "2025-02-01", "SELL", "10"),
+      makeTrade(AAPL, "2025-02-10", "BUY", "10"),
+      makeTrade(AAPL, "2025-06-01", "SELL", "10"),
+      makeTrade(AAPL, "2025-06-20", "BUY", "4"),
+      makeTrade(AAPL, "2025-12-01", "SELL", "4"),
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("100.00");
+    expect(result[1]!.reintegratedLossEur.toFixed(2)).toBe("60.00");
+    expect(result[1]!.washSaleReleasedFromDates).toEqual(["2025-02-01"]);
+    expect(result[2]!.reintegratedLossEur.toFixed(2)).toBe("40.00");
+  });
+
+  it("documented limit: a same-day rebuy does not stop the release (no intraday times; V0571-21 says it should)", () => {
+    // The DGT treats a buy on the sale day as a rebuy (V0571-21, 11/08/2020), so
+    // the 06-01 sale would not be definitive. Brokers give no intraday order, so
+    // the engine skips same-day buys for blocking and for the definitive test.
+    const disposals = [
+      makeDisposal({ isin: AAPL, acquireDate: "2025-01-02", sellDate: "2025-02-01", quantity: new Decimal(10), gainLossEur: new Decimal(-100) }),
+      makeDisposal({ isin: AAPL, acquireDate: "2025-02-10", sellDate: "2025-06-01", quantity: new Decimal(10), gainLossEur: new Decimal(20) }),
+    ];
+    const trades = [
+      makeTrade(AAPL, "2025-01-02", "BUY", "10"),
+      makeTrade(AAPL, "2025-02-01", "SELL", "10"),
+      makeTrade(AAPL, "2025-02-10", "BUY", "10"),
+      makeTrade(AAPL, "2025-06-01", "SELL", "10"),
+      makeTrade(AAPL, "2025-06-01", "BUY", "10"),
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[1]!.reintegratedLossEur.toFixed(2)).toBe("100.00");
+  });
+
+  it("leaves the release trail unset when a sale releases nothing", () => {
+    const result = detectWashSales(
+      [makeDisposal({ sellDate: "2025-06-15", gainLossEur: new Decimal(50), washSaleReleasedFromDates: ["2025-01-01"] })],
+      [makeTrade(AAPL, "2025-06-15", "SELL")],
+    );
+    expect(result[0]!.reintegratedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[0]!.washSaleReleasedFromDates).toBeUndefined();
+  });
+});
+
 describe("washSaleRepurchaseDates (display trail)", () => {
   const AAPL = "US0378331005";
 
