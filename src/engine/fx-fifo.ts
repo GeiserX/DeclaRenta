@@ -188,11 +188,13 @@ export interface LoanRepayment {
   qty: Decimal;
   debtPartEur: Decimal;
   /**
-   * Whether a `loan_repayment` row in 1633/1637 holds this part (its
-   * `loanDebtPartEur`). False when no row does: the default repaying a loan
-   * with the shares' own currency at the loan's rate (the debt's change is in
-   * the stock line), or a repayment with gain 0. The report then cannot name
-   * the box value to adjust (`report.fx_loan_repayment_manual`).
+   * Whether 1633/1637 hold this part (its `loanDebtPartEur`): a
+   * `loan_repayment` row, or a gain-0 `discard` whose debt part and paying
+   * currency's part cancel inside the boxes. False when the debt's change is
+   * outside them: the default repaying a loan with the borrowed principal the
+   * shares' sale returns at the loan's rate (the change is in the stock line),
+   * or the default's same-day cover. The report then cannot name the box
+   * value to adjust (`report.fx_loan_repayment_manual`).
    */
   inBoxes: boolean;
 }
@@ -497,6 +499,8 @@ export class FxFifoEngine {
   private debts: SameDayDebt[] = [];
   /** The loan each borrowed parked slice belongs to (issue #449). */
   private loanOfSlice: Map<ParkedSlice, SameDayDebt> = new Map();
+  /** Pool lots the default re-added from a borrowed slice: the loan's own principal back (see {@link bookRepayment}). */
+  private loanPrincipal: WeakSet<FxLot> = new WeakSet();
   /** Opening balance not spent yet, per loan currency (see {@link takeOpening}). */
   private opening: Map<string, Decimal> = new Map();
   /** Every loan repayment of the run (see {@link getLoanRepayments}). */
@@ -1047,6 +1051,7 @@ export class FxFifoEngine {
     this.nullOfSlice = new Map();
     this.debts = [];
     this.loanOfSlice = new Map();
+    this.loanPrincipal = new WeakSet();
     this.opening = new Map(this.loan);
     this.loanRepayments = [];
     this.lostSales = new Set();
@@ -2656,6 +2661,7 @@ export class FxFifoEngine {
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
           reAddedLot = pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
+          if (reAddedLot && this.loanOfSlice.has(p)) this.loanPrincipal.add(reAddedLot);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -3522,7 +3528,12 @@ export class FxFifoEngine {
     const costBasisEur = rest.mul(lot.costPerUnit);
     const gainLossEur = proceedsEur.minus(costBasisEur);
     const booked = (this.traditionalFx || !sameDay) && !gainLossEur.isZero();
-    note(rest, booked);
+    // A gain-0 row still holds both parts in 1633/1637, the debt's and the
+    // paying currency's, unless the default repays with the loan's own
+    // principal back from the shares: the stock line holds that change. A
+    // trap, review: counting every gain-0 row as outside sent a funded lot
+    // that cost the loan's rate by coincidence to the `_manual` note.
+    note(rest, booked || ((this.traditionalFx || !sameDay) && !this.loanPrincipal.has(lot)));
     if (booked) {
       const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, rest, lot.shifts) : undefined;
       this.disposals.push({

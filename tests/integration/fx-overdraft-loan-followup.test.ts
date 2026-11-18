@@ -448,6 +448,55 @@ describe("the loan note's adjustment matches where the report booked the debt's 
     const t = msgs(ev, TRAD).find((x) => x.id === "report.fx_loan_repayment");
     expect(t?.context?.gain).toBe("80.00");
   });
+
+  // XYZ, bought with funded dollars, repays a loan (AAA, 1000 USD at 0.95)
+  // with its own sale on 06-02 at 0.90. Only the funding differs: at 0.95 on
+  // the loan's day (SAME) or at 0.94 a month before (DIFF). In SAME the
+  // paying dollars cost the loan's rate by coincidence, so the row in
+  // 1633/1637 nets to 0 (a `discard`), but both parts are still there: the
+  // debt's +50 and XYZ's dollars' −50. Lowering 1633 by 50 gives the Supreme
+  // Court split in both (savings −120 / general +50 in SAME, −110 / +50 in
+  // DIFF). A trap, review: a zero row counted as outside the boxes, so SAME
+  // got the `_manual` note and its hint blamed the shares bought with the
+  // loan, which repaid nothing.
+  const xyz = (fundRate: string, fundDay: string): LoanEv[] => [
+    { k: "fund", d: fundDay, usd: "1000", r: fundRate },
+    { k: "buy", d: fundDay, sym: "XYZ", qty: "10", px: "100", r: fundRate },
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-06-02", sym: "XYZ", qty: "10", px: "100", r: "0.90" },
+    { k: "sell", d: "2025-07-01", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+    { k: "conv", d: "2025-07-10", usd: "1000", r: "0.88" },
+  ];
+  it("the default: paying dollars that cost the loan's rate by coincidence are in 1633/1637", () => {
+    const r = runLoan(withReport("SAME", xyz("0.95", "2025-03-03")), {}).get(2025)!.report;
+    expect(r.capitalGains.disposals.map((d) => [d.symbol, f2(d.gainLossEur)])).toEqual([["XYZ", "0.00"], ["AAA", "0.00"]]);
+    expect(r.fxGains.disposals.map((d) => [d.trigger, f2(d.gainLossEur)])).toEqual([["conversion", "-70.00"]]);
+    const ids = r.messages.map((x) => x.id);
+    expect(ids).not.toContain("report.fx_loan_repayment_manual");
+    const m = r.messages.find((x) => x.id === "report.fx_loan_repayment");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "0.00", gain: "50.00", loss: "0.00" });
+    expect(m?.hint).toContain("baja el valor de transmisión (1633) en la ganancia");
+  });
+  it("the default: the same loan with funding at another rate gets the same note", () => {
+    const r = runLoan(withReport("DIFF", xyz("0.94", "2025-02-03")), {}).get(2025)!.report;
+    const m = r.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+    expect(m?.id).toBe("report.fx_loan_repayment");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "10.00", gain: "50.00", loss: "0.00" });
+  });
+  it("«Tradicional con divisa»: a shifted cost equal to the loan's rate is in 1633/1637 too", () => {
+    // XYZ's dollars cost 1.00 and bought it at 0.95; sold at 0.90 they come
+    // back at 1.00 + 0.90 − 0.95 = 0.95, the loan's rate: a zero row.
+    const ev: LoanEv[] = [
+      { k: "fund", d: "2025-02-03", usd: "1000", r: "1.00" },
+      { k: "buy", d: "2025-02-10", sym: "XYZ", qty: "10", px: "100", r: "0.95" },
+      ...xyz("0.95", "2025-03-03").slice(2),
+    ];
+    const r = runLoan(withReport("TRAD-SAME", ev), { ...TRAD, fxTrace: true }).get(2025)!.report;
+    expect(r.fxTrace!.filter((t) => t.trigger === "loan_repayment").map((t) => [t.kind, t.quantityFcy])).toEqual([["discard", "1000"]]);
+    const m = r.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+    expect(m?.id).toBe("report.fx_loan_repayment");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "0.00", gain: "50.00", loss: "0.00" });
+  });
 });
 
 describe("seeded cycles with opening cash, same-day repayments and sales of 0 or less", () => {
