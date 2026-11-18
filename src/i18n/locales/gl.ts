@@ -85,6 +85,7 @@ const gl: TranslationKeys = {
   "fx.trigger.stock_sale": "Divisa perdida nunha venda con perdas",
   "fx.trigger.stock_sale_guard": "Variación da divisa ata a compra das accións",
   "fx.trigger.stock_sale_cross": "Divisa investida en accións vendidas noutra moeda",
+  "fx.trigger.loan_repayment": "Devolución dun préstamo en divisa do bróker",
 
   "casilla.listed_transmission_value": "Valor de transmisión (accións negociadas)",
   "casilla.listed_acquisition_value": "Valor de adquisición (accións negociadas)",
@@ -914,13 +915,25 @@ const gl: TranslationKeys = {
   "report.fx_traditional_inflight.hint":
     "É así se aquel ano usaches «Tradicional con divisa» ou «Tradicional sen divisa (monodivisa)». Se usaches o «Criterio DGT (multidivisa)», o teu resultado de divisa deste ano está desviado nesa cantidade. Usa o mesmo método ca entón.",
   "report.fx_traditional_uncovered":
-    "{{qty}} {{ccy}} usados en compras de accións non teñen orixe en euros nos teus ficheiros (depósitos, saldos anteriores ou anos que non subiches). Tómanse ao tipo do día de compra, sen diferenza de cambio anterior.",
+    "{{qty}} {{ccy}} usados en compras de accións non teñen orixe en euros nos teus ficheiros (depósitos, saldos anteriores, anos que non subiches, ou un descuberto ou préstamo de marxe do bróker). Tómanse ao tipo do día de compra, sen diferenza de cambio anterior.",
   "report.fx_traditional_uncovered.hint":
     "Se cambiaches euros a {{ccy}} ata 7 días despois da compra, úsase o tipo dese cambio. Se coñeces a súa orixe, sube tamén os anos anteriores.",
+  "report.fx_traditional_uncovered_ibkr":
+    "{{qty}} {{ccy}} usados en compras de accións non teñen orixe en euros nos teus ficheiros (depósitos, saldos anteriores, anos que non subiches, ou un descuberto ou préstamo de marxe do bróker). Tómanse ao tipo do día de compra, sen diferenza de cambio anterior.",
+  "report.fx_traditional_uncovered_ibkr.hint":
+    "Se cambiaches euros a {{ccy}} ata 7 días despois da compra, úsase o tipo dese cambio. Se coñeces a súa orixe, sube tamén os anos anteriores. Se o teu saldo en {{ccy}} quedou en negativo (descuberto ou marxe), sube o extracto de IBKR coa sección «Cash Report». DeclaRenta trata ese saldo negativo como un préstamo en {{ccy}} só se o Cash Report cadra coas túas operacións, é dunha soa conta e non hai en {{ccy}} depósitos, retiradas, transferencias, opcións nin posicións curtas.",
+  "report.fx_traditional_opening":
+    "{{qty}} {{ccy}} do saldo inicial da túa conta (o «Cash Report» de IBKR) usáronse en compras de accións e non teñen orixe en euros nos teus ficheiros. Tómanse ao tipo do día de compra, sen diferenza de cambio anterior.",
+  "report.fx_traditional_opening.hint":
+    "Ese saldo xa estaba na conta ao comezar o primeiro período que subiches. Se coñeces a súa orixe, sube tamén os anos anteriores.",
   "report.fx_traditional_orphan":
     "A diferenza de cambio de {{qty}} {{ccy}} investidos en {{security}} non se puido asignar a ningunha venda (posible cambio de ISIN, fusión ou escisión). Revísaa a man.",
   "report.fx_traditional_orphan.hint":
     "Eses {{ccy}} usáronse para comprar {{security}}. A 31 de decembro xa non tes esas accións e ningunha venda os recuperou. A súa variación desde que compraches os {{ccy}} ata que compraches as accións ({{amount}} €) non se declarou.",
+  "report.fx_loan_repayment":
+    "Este ano devolviches {{ccy}} que che prestou o bróker (o teu saldo en {{ccy}} estivo en negativo). DeclaRenta declara {{amount}} € por esas devolucións nas casillas 1633/1637. A variación da propia débeda, desde que se abriu ata que a devolviches, é de {{gain}} € de ganancia e {{loss}} € de perda.",
+  "report.fx_loan_repayment.hint":
+    "O Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) leva a variación dun préstamo en moeda estranxeira á base xeral. A DGT lévaa á base do aforro (V2414-12), como fai DeclaRenta. Se segues o Supremo, declara a ganancia na casilla 0304 e a perda na casilla 0305, e quítaas das casillas 1633/1637: baixa o valor de transmisión (1633) na ganancia e súbeo na perda. DeclaRenta só trata o saldo negativo como préstamo cando o informe de efectivo (Cash Report) de IBKR cadra coas túas operacións.",
   "report.fx_method_name.multidivisa":
     "Criterio DGT (multidivisa)",
   "report.fx_method_name.tradicional-divisa":

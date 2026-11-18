@@ -121,7 +121,8 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
-    cashBalances.push(...ensureArray(stmt.CashReport?.CashReportCurrency).map(mapCashBalance));
+    const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
+    cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
 
@@ -660,12 +661,23 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
   };
 }
 
-function mapCashBalance(raw: Record<string, string>): CashBalance {
+/**
+ * One CashReport row. Besides the year-end balance (Modelo 720), it keeps the
+ * opening balance and the period of its own statement: a multi-year upload
+ * has one row per account, currency and statement, and the FX engine's loan
+ * model (issue #449) checks each period on its own.
+ */
+function mapCashBalance(raw: Record<string, string>, stmt: { fromDate?: string; toDate?: string }): CashBalance {
+  const fromDate = raw.fromDate || stmt.fromDate;
+  const toDate = raw.toDate || stmt.toDate;
   return {
     accountId: raw.accountId ?? "",
     currency: raw.currency ?? "",
+    ...(raw.startingCash !== undefined ? { startingCash: raw.startingCash } : {}),
     endingCash: raw.endingCash ?? "0",
     endingSettledCash: raw.endingSettledCash ?? "0",
+    ...(fromDate ? { fromDate } : {}),
+    ...(toDate ? { toDate } : {}),
     averageQ4Cash: raw.averageQ4Cash ?? raw.averageCash ?? raw.averageCashBalance,
     openedDate: raw.openedDate ?? raw.openDate,
     institutionName: raw.institutionName ?? raw.brokerName,

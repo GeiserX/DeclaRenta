@@ -257,8 +257,18 @@ export interface SecurityInfo {
 export interface CashBalance {
   accountId: string;
   currency: string;
+  /**
+   * IBKR CashReport: the balance at the start of the row's period (`fromDate`).
+   * Absent when the export has no such column. The FX engine's loan model
+   * (issue #449) reads it, with `endingCash` and the period, to prove that the
+   * upload explains every movement of the currency.
+   */
+  startingCash?: string;
   endingCash: string;
   endingSettledCash: string;
+  /** IBKR CashReport: the period of this row (the statement's when the row has none). */
+  fromDate?: string;
+  toDate?: string;
   /** Q4 average cash balance in the same currency, required for Modelo 720 Category C. */
   averageQ4Cash?: string;
   /** Account opening date in YYYYMMDD/ISO format when known. */
