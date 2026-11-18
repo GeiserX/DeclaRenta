@@ -31,6 +31,8 @@ function disposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
     acquireEcbRate: new Decimal(0.92),
     assetCategory: "STK",
     washSaleBlocked: false,
+    blockedLossEur: new Decimal(0),
+    reintegratedLossEur: new Decimal(0),
     ...overrides,
   };
 }

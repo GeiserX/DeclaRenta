@@ -126,7 +126,7 @@ function fundUsd(id: string, date: string, usd: string, afx = false): Trade {
     proceeds: usd,
     cost: usd,
     buySell: "SELL", // SELL EUR.USD = acquire USD (quote side) → +lot
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
     // The `notes: "AFx"` marker is what makes this a broker auto-conversion;
     // without it, an identical manual conversion (the non-AFx control).
@@ -151,7 +151,7 @@ function convUsd(id: string, date: string, usd: string, afx = false): Trade {
     proceeds: `-${usd}`,
     cost: usd,
     buySell: "BUY", // BUY EUR.USD = dispose USD (quote side) → −lot (conversion)
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
     ...(afx ? { notes: "AFx" } : {}),
   });

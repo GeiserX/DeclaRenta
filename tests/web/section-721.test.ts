@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import Decimal from "decimal.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { OpenPosition } from "../../src/types/ibkr.js";
@@ -45,7 +44,7 @@ function statement(openPositions: OpenPosition[]): Statement {
   };
 }
 
-const rateMap: EcbRateMap = new Map([["2025-12-31", new Map([["USD", new Decimal("0.9")]])]]);
+const rateMap: EcbRateMap = new Map([["2025-12-31", new Map([["USD", "0.9"]])]]);
 
 describe("Modelo 721 section — unvalued positions", () => {
   beforeEach(() => {

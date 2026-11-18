@@ -1,16 +1,15 @@
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import { FifoEngine } from "../../src/engine/fifo.js";
 import type { Trade, CorporateAction } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 // Simple rate map: 1 EUR = 1 USD (for simplicity)
 const rateMap: EcbRateMap = new Map([
-  ["2024-01-15", new Map([["USD", new Decimal("1")]])],
-  ["2024-06-01", new Map([["USD", new Decimal("1")]])],
-  ["2024-07-01", new Map([["USD", new Decimal("1")]])],
-  ["2024-09-01", new Map([["USD", new Decimal("1")]])],
-  ["2024-12-01", new Map([["USD", new Decimal("1")]])],
+  ["2024-01-15", new Map([["USD", "1"]])],
+  ["2024-06-01", new Map([["USD", "1"]])],
+  ["2024-07-01", new Map([["USD", "1"]])],
+  ["2024-09-01", new Map([["USD", "1"]])],
+  ["2024-12-01", new Map([["USD", "1"]])],
 ]);
 
 function makeTrade(overrides: Partial<Trade> = {}): Trade {
@@ -189,8 +188,8 @@ describe("Corporate Actions in FIFO Engine", () => {
       // (quantity < 0) and pays cash (amount ≠ 0). That is a transmisión onerosa
       // (Art. 33.1 / 35 LIRPF), so the lots must be consumed at the cash received.
       const cashRates: EcbRateMap = new Map([
-        ["2022-01-10", new Map([["USD", new Decimal("0.9")]])],
-        ["2022-10-28", new Map([["USD", new Decimal("0.95")]])],
+        ["2022-01-10", new Map([["USD", "0.9"]])],
+        ["2022-10-28", new Map([["USD", "0.95"]])],
       ]);
       const engine = new FifoEngine();
       const trades: Trade[] = [
@@ -245,8 +244,8 @@ describe("Corporate Actions in FIFO Engine", () => {
       // cash leg in `amount`; the new shares arrive on a second row with amount 0.
       // Booking the first row as a sale would invent a loss for the stock leg.
       const mergerRates: EcbRateMap = new Map([
-        ["2020-06-01", new Map([["USD", new Decimal("1")]])],
-        ["2020-10-30", new Map([["USD", new Decimal("1")]])],
+        ["2020-06-01", new Map([["USD", "1"]])],
+        ["2020-10-30", new Map([["USD", "1"]])],
       ]);
       const engine = new FifoEngine();
       const trades: Trade[] = [

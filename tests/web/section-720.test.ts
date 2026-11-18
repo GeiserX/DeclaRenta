@@ -54,7 +54,7 @@ function statement(openPositions: OpenPosition[]): Statement {
   };
 }
 
-const rateMap: EcbRateMap = new Map([["2025-12-31", new Map([["USD", new Decimal("0.9")]])]]);
+const rateMap: EcbRateMap = new Map([["2025-12-31", new Map([["USD", "0.9"]])]]);
 
 describe("Modelo 720 section — a holding with no market value", () => {
   beforeEach(() => {

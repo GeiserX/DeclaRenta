@@ -797,8 +797,12 @@ describe("FifoEngine", () => {
   describe("Unknown asset category warning", () => {
     it("should warn on unknown assetCategory but still process trade", () => {
       const rates = makeRateMap({ "2025-03-15": "0.92", "2025-09-20": "0.91" });
+      // "UNKNOWN" is not an AssetCategory on purpose: a broker export can carry a
+      // category the type does not list, and the engine must warn, not drop it.
       const trades: Trade[] = [
+        // @ts-expect-error deliberately invalid assetCategory (see above)
         makeTrade({ tradeID: "1", assetCategory: "UNKNOWN", tradeDate: "2025-03-15", buySell: "BUY", quantity: "10", tradePrice: "50" }),
+        // @ts-expect-error deliberately invalid assetCategory (see above)
         makeTrade({ tradeID: "2", assetCategory: "UNKNOWN", tradeDate: "2025-09-20", buySell: "SELL", quantity: "-10", tradePrice: "60" }),
       ];
 
@@ -817,16 +821,18 @@ describe("FifoEngine", () => {
       rates.set("2025-09-20", new Map([["USD", "0.90"]]));
 
       const ca: CorporateAction[] = [{
+        transactionID: "CA1",
+        accountId: "",
         type: "SD",
+        reportDate: "20250615",
         dateTime: "20250615",
         isin: "US1234567890",
         symbol: "NEWCO",
         description: "NEWCO SCRIP DIV",
+        actionDescription: "Stock Dividend",
         quantity: "5",
         amount: "500",
         currency: "USD",
-        proceeds: "0",
-        value: "500",
       }];
 
       // SELL the scrip dividend shares — they should exist as lots
@@ -880,16 +886,18 @@ describe("FifoEngine", () => {
       ];
 
       const ca: CorporateAction[] = [{
+        transactionID: "CA1",
+        accountId: "",
         type: "SO",
+        reportDate: "20250615",
         dateTime: "20250615",
         isin: "US0000000001",
         symbol: "PARENT",
         description: "PARENT(US0000000001) SPINOFF 1 FOR 2 SPINCO(US0000000002)",
+        actionDescription: "Spinoff",
         quantity: "50",
         amount: "0",
         currency: "USD",
-        proceeds: "0",
-        value: "0",
       }];
 
       const engine = new FifoEngine();

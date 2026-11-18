@@ -45,7 +45,7 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
       </FlexStatements>
     </FlexQueryResponse>`;
     const result = parseIbkrFlexXml(xml);
-    expect(result.trades[0].conid).toBe("265598");
+    expect(result.trades[0]!.conid).toBe("265598");
   });
 
   it("should not include conid when empty", () => {
@@ -63,7 +63,7 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
       </FlexStatements>
     </FlexQueryResponse>`;
     const result = parseIbkrFlexXml(xml);
-    expect(result.trades[0].conid).toBeUndefined();
+    expect(result.trades[0]!.conid).toBeUndefined();
   });
 
   it("should not include conid when only whitespace", () => {
@@ -81,7 +81,7 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
       </FlexStatements>
     </FlexQueryResponse>`;
     const result = parseIbkrFlexXml(xml);
-    expect(result.trades[0].conid).toBeUndefined();
+    expect(result.trades[0]!.conid).toBeUndefined();
   });
 
   it("should handle put option putCall=P", () => {
@@ -99,7 +99,7 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
       </FlexStatements>
     </FlexQueryResponse>`;
     const result = parseIbkrFlexXml(xml);
-    expect(result.trades[0].putCall).toBe("P");
+    expect(result.trades[0]!.putCall).toBe("P");
   });
 
   it("should handle missing optional fields with empty strings", () => {
@@ -131,7 +131,7 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
 
     // Trade defaults — when XML attributes are explicitly empty strings,
     // ?? keeps them as "" (since "" is not null/undefined)
-    const trade = result.trades[0];
+    const trade = result.trades[0]!;
     expect(trade.tradeID).toBe("");
     expect(trade.description).toBe("");
     expect(trade.settlementDate).toBe("");
@@ -150,14 +150,14 @@ describe("parseIbkrFlexXml - trade attribute defaults", () => {
     expect(trade.underlyingIsin).toBeUndefined();
 
     // CashTransaction defaults
-    const ct = result.cashTransactions[0];
+    const ct = result.cashTransactions[0]!;
     expect(ct.transactionID).toBe("");
     expect(ct.settleDate).toBe("");
     expect(ct.amount).toBe("");
     expect(ct.type).toBe("");
 
     // CorporateAction defaults
-    const ca = result.corporateActions[0];
+    const ca = result.corporateActions[0]!;
     expect(ca.transactionID).toBe("");
     expect(ca.reportDate).toBe("");
     expect(ca.quantity).toBe("");

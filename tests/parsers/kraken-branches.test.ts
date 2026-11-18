@@ -9,8 +9,8 @@ describe("krakenParser - Ledgers CSV", () => {
     ].join("\n");
     const result = krakenParser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].symbol).toBe("ETH");
-    expect(result.cashTransactions[0].type).toBe("Crypto Reward Income");
+    expect(result.cashTransactions[0]!.symbol).toBe("ETH");
+    expect(result.cashTransactions[0]!.type).toBe("Crypto Reward Income");
   });
 
   it("should skip non-staking ledger entries", () => {
@@ -66,8 +66,8 @@ describe("krakenParser - Trades CSV", () => {
       '"T001","O001","XXBTZEUR","2025-01-15 10:00:00","buy","limit","40000","400","1","0.01","0","","","T001"',
     ].join("\n");
     const result = krakenParser.parse(input);
-    expect(result.trades[0].symbol).toBe("BTC");
-    expect(result.trades[0].currency).toBe("EUR");
+    expect(result.trades[0]!.symbol).toBe("BTC");
+    expect(result.trades[0]!.currency).toBe("EUR");
   });
 
   it("should handle plain pairs like DOTUSD", () => {
@@ -76,9 +76,9 @@ describe("krakenParser - Trades CSV", () => {
       '"T001","O001","DOTUSD","2025-01-15 10:00:00","sell","market","7.5","75","0.5","10","0","","","T001"',
     ].join("\n");
     const result = krakenParser.parse(input);
-    expect(result.trades[0].symbol).toBe("DOT");
-    expect(result.trades[0].currency).toBe("USD");
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.symbol).toBe("DOT");
+    expect(result.trades[0]!.currency).toBe("USD");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should handle pair with XETH quote", () => {
@@ -87,8 +87,8 @@ describe("krakenParser - Trades CSV", () => {
       '"T001","O001","XXRPXETH","2025-01-15 10:00:00","buy","limit","0.0003","0.003","0","10","0","","","T001"',
     ].join("\n");
     const result = krakenParser.parse(input);
-    expect(result.trades[0].symbol).toBe("XRP");
-    expect(result.trades[0].currency).toBe("ETH");
+    expect(result.trades[0]!.symbol).toBe("XRP");
+    expect(result.trades[0]!.currency).toBe("ETH");
   });
 
   it("should handle short pair fallback", () => {
@@ -99,8 +99,8 @@ describe("krakenParser - Trades CSV", () => {
     const result = krakenParser.parse(input);
     // 6-char pair, last 3 = DEF, first 3 = ABC. DEF is not a known quote, so
     // the split is a guess and the user is warned to review it.
-    expect(result.trades[0].symbol).toBe("ABC");
-    expect(result.trades[0].currency).toBe("DEF");
+    expect(result.trades[0]!.symbol).toBe("ABC");
+    expect(result.trades[0]!.currency).toBe("DEF");
     expect(result.parserMessages?.map((m) => m.id)).toEqual(["kraken.unrecognized_pair"]);
   });
 
@@ -111,8 +111,8 @@ describe("krakenParser - Trades CSV", () => {
     ].join("\n");
     const result = krakenParser.parse(input);
     // Very short pair, fallback: symbol=AB, currency=EUR
-    expect(result.trades[0].symbol).toBe("AB");
-    expect(result.trades[0].currency).toBe("EUR");
+    expect(result.trades[0]!.symbol).toBe("AB");
+    expect(result.trades[0]!.currency).toBe("EUR");
   });
 
   it("should use semicolon delimiter when present", () => {

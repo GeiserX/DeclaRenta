@@ -10,10 +10,10 @@ describe("binanceParser - Transaction History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(2);
-    expect(result.trades[0].buySell).toBe("SELL");
-    expect(result.trades[0].symbol).toBe("USDT");
-    expect(result.trades[1].buySell).toBe("BUY");
-    expect(result.trades[1].symbol).toBe("BTC");
+    expect(result.trades[0]!.buySell).toBe("SELL");
+    expect(result.trades[0]!.symbol).toBe("USDT");
+    expect(result.trades[1]!.buySell).toBe("BUY");
+    expect(result.trades[1]!.symbol).toBe("BTC");
   });
 
   it("should parse Transaction Sold + Revenue pairs", () => {
@@ -24,8 +24,8 @@ describe("binanceParser - Transaction History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
-    expect(result.trades[0].symbol).toBe("BTC");
+    expect(result.trades[0]!.buySell).toBe("SELL");
+    expect(result.trades[0]!.symbol).toBe("BTC");
   });
 
   it("should parse Transaction Buy + Spend pairs", () => {
@@ -36,8 +36,8 @@ describe("binanceParser - Transaction History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("BUY");
-    expect(result.trades[0].symbol).toBe("ETH");
+    expect(result.trades[0]!.buySell).toBe("BUY");
+    expect(result.trades[0]!.symbol).toBe("ETH");
   });
 
   it("should handle Transaction Fee with Sold + Revenue", () => {
@@ -49,7 +49,7 @@ describe("binanceParser - Transaction History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].commission).not.toBe("0");
+    expect(result.trades[0]!.commission).not.toBe("0");
   });
 
   it("should handle Transaction Fee with Buy + Spend", () => {
@@ -61,7 +61,7 @@ describe("binanceParser - Transaction History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].commission).not.toBe("0");
+    expect(result.trades[0]!.commission).not.toBe("0");
   });
 
   it("should skip deposit and withdraw operations", () => {
@@ -109,7 +109,7 @@ describe("binanceParser - Trade History format", () => {
     ].join("\n");
     const result = binanceParser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].commissionCurrency).toBe("BTC");
+    expect(result.trades[0]!.commissionCurrency).toBe("BTC");
   });
 
   it("should parse trade with numeric-only fee", () => {
@@ -118,7 +118,7 @@ describe("binanceParser - Trade History format", () => {
       "2025-01-15 10:30:00,ETHEUR,SELL,3000,1,3000,1.5",
     ].join("\n");
     const result = binanceParser.parse(input);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should parse trade with empty fee", () => {
@@ -127,7 +127,7 @@ describe("binanceParser - Trade History format", () => {
       "2025-01-15 10:30:00,BTCEUR,BUY,40000,0.01,400,",
     ].join("\n");
     const result = binanceParser.parse(input);
-    expect(result.trades[0].commission).toBe("0");
+    expect(result.trades[0]!.commission).toBe("0");
   });
 
   it("should parse USDT pair", () => {

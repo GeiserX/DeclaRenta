@@ -227,8 +227,8 @@ describe("FifoEngine options", () => {
 
 describe("FxFifoEngine extractors carry the source row's broker", () => {
   const rates: EcbRateMap = new Map([
-    ["2025-03-15", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.18")]])],
-    ["2025-03-17", new Map([["USD", new Decimal("0.92")], ["GBP", new Decimal("1.18")]])],
+    ["2025-03-15", new Map([["USD", "0.92"], ["GBP", "1.18"]])],
+    ["2025-03-17", new Map([["USD", "0.92"], ["GBP", "1.18"]])],
   ]);
   const brokers = (events: FxEvent[]) => events.map((e) => e.brokerSource);
 

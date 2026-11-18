@@ -4,5 +4,8 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  // Restated on purpose: without it, `extends` inherits tsconfig.json's
+  // exclude of "tests" and this config checks no test file at all (#442).
+  "exclude": ["node_modules", "dist", "src/web/sw.ts"]
 }

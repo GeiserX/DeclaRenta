@@ -23,7 +23,7 @@ describe("freedom24Parser - branch coverage", () => {
     });
     const result = freedom24Parser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].symbol).toBe("SPY");
+    expect(result.trades[0]!.symbol).toBe("SPY");
   });
 
   it("should parse report wrapper structure", () => {
@@ -45,7 +45,7 @@ describe("freedom24Parser - branch coverage", () => {
     });
     const result = freedom24Parser.parse(input);
     expect(result.trades).toHaveLength(1);
-    expect(result.trades[0].buySell).toBe("SELL");
+    expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
   it("should skip zero-quantity trades", () => {
@@ -69,8 +69,8 @@ describe("freedom24Parser - branch coverage", () => {
       },
     });
     const result = freedom24Parser.parse(input);
-    expect(result.trades[0].symbol).toBe("NOTICKER");
-    expect(result.trades[0].exchange).toBe("");
+    expect(result.trades[0]!.symbol).toBe("NOTICKER");
+    expect(result.trades[0]!.exchange).toBe("");
   });
 
   it("should handle ticker with multiple dots", () => {
@@ -82,7 +82,7 @@ describe("freedom24Parser - branch coverage", () => {
       },
     });
     const result = freedom24Parser.parse(input);
-    expect(result.trades[0].symbol).toBe("BRK.B");
+    expect(result.trades[0]!.symbol).toBe("BRK.B");
   });
 
   it("should parse dividends with withholding tax", () => {
@@ -104,8 +104,8 @@ describe("freedom24Parser - branch coverage", () => {
     });
     const result = freedom24Parser.parse(input);
     expect(result.cashTransactions).toHaveLength(2);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
-    expect(result.cashTransactions[1].type).toBe("Withholding Tax");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
+    expect(result.cashTransactions[1]!.type).toBe("Withholding Tax");
   });
 
   it("should parse coupon type as dividend", () => {
@@ -126,7 +126,7 @@ describe("freedom24Parser - branch coverage", () => {
     });
     const result = freedom24Parser.parse(input);
     expect(result.cashTransactions).toHaveLength(1);
-    expect(result.cashTransactions[0].type).toBe("Dividends");
+    expect(result.cashTransactions[0]!.type).toBe("Dividends");
   });
 
   it("should skip non-dividend corporate actions", () => {
@@ -158,7 +158,7 @@ describe("freedom24Parser - branch coverage", () => {
       },
     });
     const result = freedom24Parser.parse(input);
-    const wht = result.cashTransactions.find((ct) => ct.type === "Withholding Tax");
+    const wht = result.cashTransactions.find((ct) => ct.type === "Withholding Tax")!;
     expect(wht.amount).toBe("-1.5");
   });
 
@@ -171,7 +171,7 @@ describe("freedom24Parser - branch coverage", () => {
       },
     });
     const result = freedom24Parser.parse(input);
-    expect(result.cashTransactions[0].isin).toBe("");
+    expect(result.cashTransactions[0]!.isin).toBe("");
   });
 
   it("should handle EUR currency with exchange in trade", () => {
@@ -183,7 +183,7 @@ describe("freedom24Parser - branch coverage", () => {
       },
     });
     const result = freedom24Parser.parse(input);
-    expect(result.trades[0].exchange).toBe("XETR");
+    expect(result.trades[0]!.exchange).toBe("XETR");
   });
 
   it("should handle undefined values with str() helper", () => {
@@ -196,7 +196,7 @@ describe("freedom24Parser - branch coverage", () => {
     });
     const result = freedom24Parser.parse(input);
     // Commission defaults to "0" when undefined
-    expect(result.trades[0].commission).toBe("0");
+    expect(result.trades[0]!.commission).toBe("0");
   });
 });
 

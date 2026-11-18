@@ -7,13 +7,13 @@ import type { Trade, OptionExercise } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 const rateMap: EcbRateMap = new Map([
-  ["2025-01-10", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-01-15", new Map([["USD", new Decimal("0.92")]])],
-  ["2025-02-01", new Map([["USD", new Decimal("0.93")]])],
-  ["2025-03-15", new Map([["USD", new Decimal("0.94")]])],
-  ["2025-03-21", new Map([["USD", new Decimal("0.94")]])],
-  ["2025-06-20", new Map([["USD", new Decimal("0.95")]])],
-  ["2025-06-21", new Map([["USD", new Decimal("0.95")]])],
+  ["2025-01-10", new Map([["USD", "0.92"]])],
+  ["2025-01-15", new Map([["USD", "0.92"]])],
+  ["2025-02-01", new Map([["USD", "0.93"]])],
+  ["2025-03-15", new Map([["USD", "0.94"]])],
+  ["2025-03-21", new Map([["USD", "0.94"]])],
+  ["2025-06-20", new Map([["USD", "0.95"]])],
+  ["2025-06-21", new Map([["USD", "0.95"]])],
 ]);
 
 function makeOptionTrade(overrides: Partial<Trade> = {}): Trade {
@@ -472,7 +472,7 @@ describe("Options taxation — DGT V0137-23 (Art. 37.1.m LIRPF)", () => {
     it("call exercise on a stock not held before: the later ISIN-keyed sale finds the exercised shares", () => {
       const xml = readFileSync(new URL("../fixtures/ibkr-options.xml", import.meta.url), "utf-8");
       const hut = parseIbkrFlexXml(xml).optionExercises!.find((e) => e.underlyingSymbol === "HUT")!;
-      const usd = new Map([["USD", new Decimal("0.96")]]);
+      const usd = new Map([["USD", "0.96"]]);
       const rates: EcbRateMap = new Map([
         ["2024-12-10", usd],
         ["2025-01-17", usd],

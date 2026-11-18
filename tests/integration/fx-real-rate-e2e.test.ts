@@ -130,7 +130,7 @@ function fundUsd(id: string, date: string, usd: string, realEur?: string): Trade
     proceeds: usd,
     cost: usd,
     buySell: "SELL", // SELL EUR.USD = acquire USD (quote side) → +lot
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
     ...(realEur !== undefined ? { realEurAmount: realEur } : {}),
   });
@@ -156,7 +156,7 @@ function convUsd(id: string, date: string, usd: string, realEur?: string, commis
     proceeds: `-${usd}`,
     cost: usd,
     buySell: "BUY", // BUY EUR.USD = dispose USD (quote side) → −lot (conversion)
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
     ...(commissionEur !== undefined ? { commission: `-${commissionEur}`, commissionCurrency: "EUR" } : {}),
     ...(realEur !== undefined ? { realEurAmount: realEur } : {}),

@@ -133,7 +133,7 @@ function fundUsd(id: string, date: string, usd: string): Trade {
     proceeds: usd,
     cost: usd,
     buySell: "SELL", // SELL EUR.USD = acquire USD (quote side) → +lot
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
   });
 }
@@ -155,7 +155,7 @@ function convUsd(id: string, date: string, usd: string): Trade {
     proceeds: `-${usd}`,
     cost: usd,
     buySell: "BUY", // BUY EUR.USD = dispose USD (quote side) → −lot (conversion)
-    openCloseIndicator: "",
+    openCloseIndicator: "O",
     exchange: "IDEALFX",
   });
 }
@@ -572,7 +572,7 @@ describe("carry-basis e2e #5: funding that settles AFTER the stock trade date is
     assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
     settlementDate: "2024-02-05", quantity: "2000", tradePrice: "1",
     tradeMoney: "2000", proceeds: "2000", cost: "2000",
-    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+    buySell: "SELL", openCloseIndicator: "O", exchange: "IDEALFX",
   });
   // Both buys: trade 02-03 (before funding settles), settle 02-07 (after).
   const buyAapl = makeTrade({
@@ -680,7 +680,7 @@ describe("issue #230: FCY stock loss-sell with NO EUR conversion → divisa 1633
     assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
     settlementDate: "2024-02-01", quantity: "1000", tradePrice: "1",
     tradeMoney: "1000", proceeds: "1000", cost: "1000",
-    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+    buySell: "SELL", openCloseIndicator: "O", exchange: "IDEALFX",
   });
   const statement = makeStatement([
     fund,
@@ -719,7 +719,7 @@ describe("issue #230: only the real conversion of the surviving dollars hits 163
     assetCategory: "CASH", currency: "USD", tradeDate: "2024-02-01",
     settlementDate: "2024-02-01", quantity: "1000", tradePrice: "1",
     tradeMoney: "1000", proceeds: "1000", cost: "1000",
-    buySell: "SELL", openCloseIndicator: "", exchange: "IDEALFX",
+    buySell: "SELL", openCloseIndicator: "O", exchange: "IDEALFX",
   });
   const statement = makeStatement([
     fund,
