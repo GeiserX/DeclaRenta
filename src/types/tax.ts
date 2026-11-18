@@ -539,7 +539,9 @@ export interface FxShift {
  * purchase is booked at the sale and it returns at the sale rate. A
  * `stock_sale_cross` DISPOSAL is the same drift for shares bought in this
  * currency and sold in another one: the currency left inside the shares and
- * never comes back.
+ * never comes back. A `loan_repayment` DISPOSAL (issue #449) is currency that
+ * repays a loan from the broker (a balance below zero, in a currency whose
+ * cash the IBKR CashReport proves): `quantity × (r_loan − cost)`.
  *
  * `stock_purchase` / `stock_sale` label the divisa-side effect of a
  * foreign-currency SECURITY trade under the carry-basis-defer model (issue #230
@@ -559,7 +561,8 @@ export type FxTrigger =
   | "stock_purchase"
   | "stock_sale"
   | "stock_sale_guard"
-  | "stock_sale_cross";
+  | "stock_sale_cross"
+  | "loan_repayment";
 
 /**
  * Movement kinds recorded in the FX-FIFO trace ({@link FxTraceEvent}).
@@ -616,8 +619,10 @@ export interface FxTraceEvent {
   /**
    * The pool lot this row touches. On acquire/unpark/profit it is the lot CREATED
    * (the id later park/dispose rows reference); on park/dispose it is the lot
-   * CONSUMED ("UNKNOWN" for a missing-lots floor). Absent on discard and on a park
-   * with no pool lot behind it (uncovered or covered manual opening lot).
+   * CONSUMED ("UNKNOWN" for a missing-lots floor, "LOAN" for a debit paid with
+   * currency borrowed from the broker, issue #449). Absent on discard and on a
+   * park with no pool lot behind it (uncovered, borrowed, or covered manual
+   * opening lot).
    */
   lotId?: string;
   /**
@@ -668,6 +673,14 @@ export interface FxDisposal {
    * when zero and under every other method.
    */
   declaredShiftEur?: Decimal;
+  /**
+   * `loan_repayment` rows only (issue #449): the part of `gainLossEur` that is
+   * the change of the debt itself, `quantity × (r_loan − r_day)`, from the day
+   * the loan opened to the day it was repaid. STS 71/2021 puts that part in the
+   * base general (casillas 0304/0305); DeclaRenta books the whole row in
+   * 1633/1637, as the DGT does (V2414-12), and says so in a note.
+   */
+  loanDebtPartEur?: Decimal;
 }
 
 /** Loss carryforward entry (Art. 49 LIRPF) */
