@@ -29,10 +29,17 @@ function day(n: number): string {
  * that day (a loan the first sale already repaid, PR #456 review); and
  * `more.worthless` ends the cycle with a share bought for 10 USD and sold for
  * 0 with a 5 USD commission (proceeds −5): the caller writes the commission
- * into the XML (`WORTHLESS_COMMISSION`) and the CashReport's ending. Neither
- * draws a random number unless it is on, so the other seeds do not move.
+ * into the XML (`WORTHLESS_COMMISSION`) and the CashReport's ending.
+ * `more.loss` sells at a loss about 40% of the time, down to 0 (a same-day
+ * loss sale on a day that spent opening balance, PR #456 review). None of
+ * them draws a random number unless it is on, so the other seeds do not move.
  */
-export function gen(seed: number, overdraft: boolean, sameDay = false, more: { twice?: boolean; worthless?: boolean } = {}): Scenario {
+export function gen(
+  seed: number,
+  overdraft: boolean,
+  sameDay = false,
+  more: { twice?: boolean; worthless?: boolean; loss?: boolean } = {},
+): Scenario {
   const rand = rng(seed);
   const ri = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
   const rate = () => (0.8 + ri(0, 40) / 100).toFixed(2);
@@ -45,7 +52,8 @@ export function gen(seed: number, overdraft: boolean, sameDay = false, more: { t
   const qty = (s: string) => held[s]!.reduce((a, l) => a + l.q, 0);
   const sell = (s: string, all: boolean, r = rate()) => {
     const q = all ? qty(s) : ri(1, qty(s));
-    const px = maxPx(s) + ri(0, 25); // never a loss
+    // Never a loss, unless `more.loss`.
+    const px = more.loss && rand() < 0.4 ? Math.max(0, maxPx(s) - ri(5, 60)) : maxPx(s) + ri(0, 25);
     ev.push({ k: "sell", d: day(d), sym: s, qty: String(q), px: String(px), r });
     usd += q * px;
     let left = q;
@@ -123,6 +131,6 @@ export function gen(seed: number, overdraft: boolean, sameDay = false, more: { t
   }
   if (usd > 0) ev.push({ k: "conv", d: day(d), usd: String(usd), r: rate() });
   const out = [...ev].sort((a, b) => a.d.localeCompare(b.d));
-  return { id: `X${seed}${overdraft ? "" : "-nod"}${sameDay ? "-sd" : ""}${more.twice ? "-2x" : ""}${more.worthless ? "-w" : ""}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
+  return { id: `X${seed}${overdraft ? "" : "-nod"}${sameDay ? "-sd" : ""}${more.twice ? "-2x" : ""}${more.worthless ? "-w" : ""}${more.loss ? "-l" : ""}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
 }
 

@@ -2855,10 +2855,17 @@ export class FxFifoEngine {
       this.returnOpening(event.currency, back.minus(this.repayLoansWithOpening(event, back)));
     }
     if (lost.greaterThan(EPS)) {
-      this.debts.push({ np, sale: event, qty: lost, ...(p.buyRate !== undefined ? { buyRate: p.buyRate } : {}) });
       // It left the position: a discard for the conservation check. A
       // currency of that day that pays it takes back its phantom acquire.
       this.accumulate("discard", event.currency, lost);
+      // Issue #449: in a loan currency a `null` slice is the account's
+      // opening balance, which it really held, so what the sale does not
+      // return is lost principal now, not a debt. A trap: as a same-day debt,
+      // a later round trip's profit that day paid it, 200 real dollars left
+      // the pool, and the final conversion opened a loan nothing repaid (D2:
+      // 80 on a true 50, in both methods).
+      if (this.loan.has(event.currency)) this.discardUntracked(event, lost);
+      else this.debts.push({ np, sale: event, qty: lost, ...(p.buyRate !== undefined ? { buyRate: p.buyRate } : {}) });
     }
   }
 
@@ -2984,23 +2991,33 @@ export class FxFifoEngine {
         continue;
       }
       if (!d.qty.greaterThan(FxFifoEngine.EPS)) continue;
-      this.record("discard", d.sale, {
-        quantityFcy: d.qty,
-        rate: null,
-        note: this.traditionalFx
-          ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
-          : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
-      });
-      if (this.traditionalFx) {
-        this.tradStats.uncovered.push({
-          date: d.sale.date,
-          currency: d.sale.currency,
-          qty: d.qty,
-          ...(d.sale.brokerSource !== undefined ? { brokerSource: d.sale.brokerSource } : {}),
-        });
-      }
+      this.discardUntracked(d.sale, d.qty);
     }
     this.debts = loans;
+  }
+
+  /**
+   * `qty` units of untracked principal lost in `sale`: a `discard` row with
+   * no FX, named in `fx_traditional_uncovered` (or, in a loan currency,
+   * `fx_traditional_opening`) under «Tradicional con divisa». The caller has
+   * already counted the discard for the conservation check.
+   */
+  private discardUntracked(sale: FxEvent, qty: Decimal): void {
+    this.record("discard", sale, {
+      quantityFcy: qty,
+      rate: null,
+      note: this.traditionalFx
+        ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
+        : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
+    });
+    if (this.traditionalFx) {
+      this.tradStats.uncovered.push({
+        date: sale.date,
+        currency: sale.currency,
+        qty,
+        ...(sale.brokerSource !== undefined ? { brokerSource: sale.brokerSource } : {}),
+      });
+    }
   }
 
   /** One `lostDollarSales` entry per sale (`fx_traditional_lost_dollars`). */

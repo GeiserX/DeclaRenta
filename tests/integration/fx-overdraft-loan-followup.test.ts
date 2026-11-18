@@ -239,6 +239,47 @@ describe("a same-day sale repays the loan before it gives the opening balance ba
   });
 });
 
+describe("opening balance lost in a same-day loss sale is not a debt", () => {
+  // 500 USD of opening balance. On 04-01 at 0.95 AAA is bought for 500 and
+  // sold for 300 (200 of the opening balance lost), then CCC is bought for
+  // 100 and sold for 400. The account ends the day with 600 USD, converted
+  // at 0.80 on 06-02. Truth: stock 95; FX −45 (300 of opening balance at
+  // gain 0, plus the 300 profit lot from 0.95 to 0.80); total 50, no loan.
+  // A trap: the 200 lost were pushed as a #447 same-day debt, as if the
+  // account were still below zero; CCC's profit paid it, 200 real dollars
+  // left the pool, and the conversion opened a loan nothing repaid (80).
+  const D2: LoanEv[] = [
+    { k: "buy", d: "2025-04-01", sym: "AAA", qty: "5", px: "100", r: "0.95", time: "10:00:00" },
+    { k: "sell", d: "2025-04-01", sym: "AAA", qty: "5", px: "60", r: "0.95", time: "10:10:00" },
+    { k: "buy", d: "2025-04-01", sym: "CCC", qty: "1", px: "100", r: "0.95", time: "11:00:00" },
+    { k: "sell", d: "2025-04-01", sym: "CCC", qty: "1", px: "400", r: "0.95", time: "11:10:00" },
+    { k: "conv", d: "2025-06-02", usd: "600", r: "0.80" },
+  ];
+  // The same day with AAA sold for 0: 100 of opening balance lost, 700
+  // converted. Truth: stock 190, FX −45, total 145.
+  const Z1: LoanEv[] = [
+    { k: "buy", d: "2025-04-01", sym: "AAA", qty: "1", px: "100", r: "0.95", time: "10:00:00" },
+    { k: "sell", d: "2025-04-01", sym: "AAA", qty: "1", px: "0", r: "0.95", time: "10:10:00" },
+    { k: "buy", d: "2025-04-01", sym: "CCC", qty: "1", px: "100", r: "0.95", time: "11:00:00" },
+    { k: "sell", d: "2025-04-01", sym: "CCC", qty: "1", px: "400", r: "0.95", time: "11:10:00" },
+    { k: "conv", d: "2025-06-02", usd: "700", r: "0.80" },
+  ];
+  const loanTrace = (per: Per) =>
+    [...per.values()].flatMap((v) => v.report.fxTrace!.filter((t) => t.lotId === "LOAN").map((t) => [t.date, t.quantityFcy]));
+  for (const [name, opts] of METHODS) {
+    for (const [id, ev, total] of [["D2", D2, "50.00"], ["Z1", Z1, "145.00"]] as const) {
+      it(`${name}: ${id} gives ${total}, no loan, the pool ends empty`, () => {
+        const per = runLoan(withReport(id, ev, { opening: "500" }), { ...opts, fxTrace: true });
+        expect(loanTrace(per)).toEqual([]);
+        expect(loanRows(per)).toEqual([]);
+        expect(f2(lifetime(per))).toBe(total);
+        expect(poolEnd(per)).toBe("0");
+        expect(ids(per)).not.toContain("fx.conservation_mismatch");
+      });
+    }
+  }
+});
+
 describe("a loan already repaid that day is not repaid again", () => {
   // 500 USD at 0.90; AAA bought for 1000 at 0.95 (500 borrowed); half sold
   // for 510 and the other half for 550, both that day; 560 converted. The
@@ -446,6 +487,49 @@ describe("seeded cycles with opening cash, same-day repayments and sales of 0 or
             : [...hs.ev, { k: "conv", d: "2027-12-01", usd: "250", r: "0.90" }];
         const per = runLoan(withReport(hs.id, ev, { opening: "250" }), { ...opts, fxTrace: true });
         return poolEnd(per) !== "0" || ids(per).includes("fx.conservation_mismatch");
+      });
+      expect(miss.map((hs) => hs.id)).toEqual([]);
+    });
+  }
+
+  // The same cycles with loss sales, down to 0, some on the day a buy spent
+  // the opening balance, then a second sale that day. 1500 USD of opening
+  // balance, so the first buys usually open no loan and that second sale's
+  // dollars reach the lost opening balance. All the account holds is
+  // converted at the end, so a loan on that day is a phantom. A trap: the
+  // opening balance a loss sale did not return became a same-day debt, the
+  // second sale's dollars paid it, and the conversion opened a loan nothing
+  // repaid (10 of these 150 seeds).
+  const loss = SEEDS.map((seed) => gen(seed, true, true, { twice: true, loss: true }));
+  const OPENING = "1500";
+  const withOpening = (hs: (typeof loss)[number]): LoanEv[] => {
+    const last = hs.ev.at(-1)!;
+    return last.k === "conv"
+      ? [...hs.ev.slice(0, -1), { ...last, usd: new Decimal(last.usd).plus(OPENING).toString() }]
+      : [...hs.ev, { k: "conv", d: "2027-12-01", usd: OPENING, r: "0.90" }];
+  };
+  it("the generator really sells at a loss on a day that spends the opening balance", () => {
+    const n = loss.filter((hs) => {
+      const per = runLoan(withReport(hs.id, withOpening(hs), { opening: OPENING }), { ...TRAD, fxTrace: true });
+      return [...per.values()].some((v) => v.report.fxTrace!.some((t) => t.note?.startsWith("principal perdido en la venta, sin origen")));
+    }).length;
+    expect(n).toBeGreaterThan(50);
+  });
+  it("«Tradicional con divisa»: loss sales without an opening balance keep EUR out − EUR in", () => {
+    const miss = loss.filter((hs) => {
+      const per = runLoan(withReport(hs.id, hs.ev), { ...TRAD, fxTrace: true });
+      return f2(lifetime(per)) !== f2(economic(hs)) || poolEnd(per) !== "0";
+    });
+    expect(miss.map((hs) => hs.id)).toEqual([]);
+  });
+  for (const [name, opts] of METHODS) {
+    it(`${name}: loss sales with an opening balance: no loan at the final conversion, the pool ends empty`, () => {
+      const miss = loss.filter((hs) => {
+        const ev = withOpening(hs);
+        const end = ev.at(-1)!.d;
+        const per = runLoan(withReport(hs.id, ev, { opening: OPENING }), { ...opts, fxTrace: true });
+        const phantom = [...per.values()].some((v) => v.report.fxTrace!.some((t) => t.date === end && t.lotId === "LOAN"));
+        return phantom || poolEnd(per) !== "0" || ids(per).includes("fx.conservation_mismatch");
       });
       expect(miss.map((hs) => hs.id)).toEqual([]);
     });
