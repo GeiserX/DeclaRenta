@@ -142,7 +142,9 @@ describe("the issue's repro, with a CashReport", () => {
       expect(f2(lifetime(per))).toBe("-145.00");
       expect(poolEnd(per)).toBe("0");
       expect(ids(per)).not.toContain("fx.conservation_mismatch");
+      // REPRO is an IBKR upload: neither form of the untracked note may fire.
       expect(ids(per)).not.toContain("report.fx_traditional_uncovered");
+      expect(ids(per)).not.toContain("report.fx_traditional_uncovered_ibkr");
       expect(ids(per)).not.toContain("report.fx_traditional_lost_dollars");
     });
   }
@@ -435,23 +437,28 @@ describe("the loan note: the debt's own change, the same in both methods", () =>
     { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "110", r: "0.90" },
     { k: "conv", d: "2025-06-10", usd: "100", r: "0.88" },
   ];
+  // The default's 50 sit in its stock line, not in 1633/1637, so its note is
+  // the `_manual` form (see fx-overdraft-loan-followup.test.ts).
   const note = (ev: LoanEv[], opts: object) =>
-    runLoan(withReport("OWN", ev), opts).get(2025)!.report.messages.find((m) => m.id === "report.fx_loan_repayment");
+    runLoan(withReport("OWN", ev), opts)
+      .get(2025)!
+      .report.messages.find((m) => m.id === "report.fx_loan_repayment" || m.id === "report.fx_loan_repayment_manual");
 
   it("a gain of 50 in both methods; 50 in 1633/1637 in «Tradicional con divisa», 0 in the default", () => {
     expect(note(OWN, TRAD)?.context).toEqual({ ccy: "USD", amount: "50.00", gain: "50.00", loss: "0.00" });
-    expect(note(OWN, {})?.context).toEqual({ ccy: "USD", amount: "0.00", gain: "50.00", loss: "0.00" });
+    expect(note(OWN, {})?.context).toEqual({ ccy: "USD", amount: "0.00", gain: "50.00", loss: "0.00", boxGain: "0.00", boxLoss: "0.00" });
   });
 
-  it("a loss is a positive amount for box 0305, and the hint says to take it out of 1633/1637", () => {
+  it("a loss is a positive amount for box 0305; the hint says to take it out of 1633/1637 where a row holds it", () => {
     const up = OWN.map((e) => (e.k === "sell" ? { ...e, r: "1.00" } : e.k === "conv" ? { ...e, r: "0.98" } : e));
     for (const [, opts] of METHODS) {
       const m = note(up, opts);
       expect(m?.context?.gain).toBe("0.00");
       expect(m?.context?.loss).toBe("50.00");
       expect(m?.hint).toContain("0305");
-      expect(m?.hint).toContain("quítalas de las casillas 1633/1637");
     }
+    expect(note(up, TRAD)?.hint).toContain("quítalas de las casillas 1633/1637");
+    expect(note(up, {})?.hint).toContain("cuádralo a mano");
   });
 });
 
@@ -704,8 +711,18 @@ describe("the loan message in every locale", () => {
     ).get(2025)!.report.messages;
     const ibkr = runLoan({ id: "REPRO-bare", ev: REPRO }, TRAD).get(2025)!.report.messages;
     const plain = run(harnessScenario({ id: "REPRO-plain", ev: REPRO }), TRAD).get(2025)!.report.messages;
+    const manual = runLoan(
+      withReport("OWN", [
+        { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+        { k: "fund", d: "2025-04-01", usd: "300", r: "0.80" },
+        { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "110", r: "0.90" },
+        { k: "conv", d: "2025-06-10", usd: "400", r: "0.88" },
+      ]),
+      {},
+    ).get(2025)!.report.messages;
     for (const m of [
       def.find((x) => x.id === "report.fx_loan_repayment"),
+      manual.find((x) => x.id === "report.fx_loan_repayment_manual"),
       open.find((x) => x.id === "report.fx_traditional_opening"),
       ibkr.find((x) => x.id === "report.fx_traditional_uncovered_ibkr"),
       plain.find((x) => x.id === "report.fx_traditional_uncovered"),
@@ -720,6 +737,8 @@ describe("the loan message in every locale", () => {
     "fx.trigger.loan_repayment",
     "report.fx_loan_repayment",
     "report.fx_loan_repayment.hint",
+    "report.fx_loan_repayment_manual",
+    "report.fx_loan_repayment_manual.hint",
     "report.fx_traditional_uncovered",
     "report.fx_traditional_uncovered.hint",
     "report.fx_traditional_uncovered_ibkr",

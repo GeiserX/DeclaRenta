@@ -4,6 +4,9 @@
  * sold and every dollar converted by the end.
  */
 import type { Ev, Scenario } from "./fx-traditional-harness.js";
+
+/** USD commission of the `worthless` sale (see {@link gen}). */
+export const WORTHLESS_COMMISSION = 5;
 function rng(seed: number): () => number {
   let s = (seed * 2654435761) >>> 0;
   return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32;
@@ -22,8 +25,21 @@ function day(n: number): string {
  * `sameDay` also sells part of the position, or all of it, on the day of an
  * overdrawing buy, at no loss (the review's MIN1 shape: the default lost
  * `x × (r_loan − cost)` when that sale's currency repaid the loan).
+ * `more.twice` sells the rest of that position, or part of it, a second time
+ * that day (a loan the first sale already repaid, PR #456 review); and
+ * `more.worthless` ends the cycle with a share bought for 10 USD and sold for
+ * 0 with a 5 USD commission (proceeds −5): the caller writes the commission
+ * into the XML (`WORTHLESS_COMMISSION`) and the CashReport's ending.
+ * `more.loss` sells at a loss about 40% of the time, down to 0 (a same-day
+ * loss sale on a day that spent opening balance, PR #456 review). None of
+ * them draws a random number unless it is on, so the other seeds do not move.
  */
-export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario {
+export function gen(
+  seed: number,
+  overdraft: boolean,
+  sameDay = false,
+  more: { twice?: boolean; worthless?: boolean; loss?: boolean } = {},
+): Scenario {
   const rand = rng(seed);
   const ri = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
   const rate = () => (0.8 + ri(0, 40) / 100).toFixed(2);
@@ -36,7 +52,8 @@ export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario
   const qty = (s: string) => held[s]!.reduce((a, l) => a + l.q, 0);
   const sell = (s: string, all: boolean, r = rate()) => {
     const q = all ? qty(s) : ri(1, qty(s));
-    const px = maxPx(s) + ri(0, 25); // never a loss
+    // Never a loss, unless `more.loss`.
+    const px = more.loss && rand() < 0.4 ? Math.max(0, maxPx(s) - ri(5, 60)) : maxPx(s) + ri(0, 25);
     ev.push({ k: "sell", d: day(d), sym: s, qty: String(q), px: String(px), r });
     usd += q * px;
     let left = q;
@@ -67,7 +84,10 @@ export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario
       const deficit = cost - usd;
       usd -= cost;
       // Same day, same rate: part of the position, or all of it, sold at no loss.
-      if (sameDay && deficit > 0 && rand() < 0.5) sell(sym, rand() < 0.3, r);
+      if (sameDay && deficit > 0 && rand() < 0.5) {
+        sell(sym, rand() < 0.3, r);
+        if (more.twice && qty(sym) > 0 && rand() < 0.7) sell(sym, rand() < 0.5, r);
+      }
       if (overdraft && deficit > 0) {
         const others = syms.filter((s) => s !== sym && qty(s) > 0);
         if (others.length > 0 && rand() < 0.6) {
@@ -96,6 +116,13 @@ export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario
       sell(s, true);
     }
   }
+  if (more.worthless) {
+    d += 1;
+    ev.push({ k: "buy", d: day(d), sym: "AAA", qty: "1", px: "10", r: rate() });
+    d += 1;
+    ev.push({ k: "sell", d: day(d), sym: "AAA", qty: "1", px: "0", r: rate() });
+    usd -= 10 + WORTHLESS_COMMISSION;
+  }
   d += 2;
   if (usd < 0) {
     ev.push({ k: "fund", d: day(d), usd: String(-usd), r: rate() });
@@ -104,6 +131,6 @@ export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario
   }
   if (usd > 0) ev.push({ k: "conv", d: day(d), usd: String(usd), r: rate() });
   const out = [...ev].sort((a, b) => a.d.localeCompare(b.d));
-  return { id: `X${seed}${overdraft ? "" : "-nod"}${sameDay ? "-sd" : ""}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
+  return { id: `X${seed}${overdraft ? "" : "-nod"}${sameDay ? "-sd" : ""}${more.twice ? "-2x" : ""}${more.worthless ? "-w" : ""}${more.loss ? "-l" : ""}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
 }
 
