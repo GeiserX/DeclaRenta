@@ -109,6 +109,7 @@ flowchart LR
 - No genera el XML oficial del Modelo 721; muestra una revisión orientativa. El D-6 es una guía, no un fichero.
 - No lee todavía XTB ni MyInvestor, ni CFDs de criptomonedas. Ver [Desarrollo](development.md) si quieres ayudar.
 - Con ficheros de un solo ejercicio, la pérdida diferida por anti-churning de años anteriores se sigue a mano. Ver [Regla anti-churning](casillas.md#regla-anti-churning-art-335fg-lirpf).
+- No sabe en qué mercado cotiza cada valor: aplica la ventana anti-churning de 2 meses a todo valor con ISIN. Si tu valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año y las recompras de entre 2 meses y 1 año se revisan a mano ([issue #452](https://github.com/GeiserX/DeclaRenta/issues/452)).
 
 ## Privacidad
 
