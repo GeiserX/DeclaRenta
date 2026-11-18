@@ -4,11 +4,16 @@
  * Spanish tax law blocks capital losses if homogeneous securities are
  * repurchased within:
  * - **2 calendar months** before or after the sale — for securities admitted
- *   to trading on an EU regulated market (33.5.f) or on a third-country market
- *   the European Commission declared equivalent, such as NYSE and Nasdaq (DGT
- *   V0778-25, Implementing Decision (EU) 2017/2320).
+ *   to trading on a regulated market of the European Economic Area (33.5.f) or
+ *   on a third-country market the European Commission declared equivalent:
+ *   only the US (NYSE, Nasdaq: DGT V0778-25, Implementing Decision (EU)
+ *   2017/2320), Australia (2017/2318) and Hong Kong (2017/2319).
  * - **1 year** before or after the sale — for securities admitted to neither
- *   (33.5.g): most crypto, unlisted shares, OTC-only securities.
+ *   (33.5.g): unlisted shares, OTC-only securities, shares listed only on a
+ *   third-country market with no equivalence decision (London, SIX, Toronto).
+ * Crypto is no «valor o participación»: the law applies 33.5.e to it (only a
+ * repurchase in the year after the sale counts); the engine gives it ±1 year
+ * (#457).
  *
  * The block is **proportional to the repurchased quantity** ("por paquetes",
  * DGT V0913-08): sell 100 at a loss, rebuy 30 → only the loss on 30 is deferred,
@@ -848,10 +853,14 @@ function buyQtyConversionToSellUnits(
  *
  * Art. 33.5.f/g LIRPF distinguishes by whether the security is admitted to
  * trading on a regulated market:
- *  - **2 months** on an EU regulated market, or on a third-country market the
- *    European Commission declared equivalent (NYSE, Nasdaq: DGT V0778-25).
- *  - **1 year (12 months)** on neither (crypto, unlisted shares, OTC-only
- *    securities such as OTC Markets / pink sheets).
+ *  - **2 months** on a regulated market of the European Economic Area, or on a
+ *    third-country market the European Commission declared equivalent (the US,
+ *    e.g. NYSE and Nasdaq: DGT V0778-25; Australia; Hong Kong).
+ *  - **1 year (12 months)** on neither (unlisted shares, OTC-only securities
+ *    such as OTC Markets / pink sheets, shares listed only on the London Stock
+ *    Exchange, SIX or Toronto).
+ * Crypto gets 12 months here; the law applies 33.5.e to it, which counts only
+ * a repurchase in the year after the sale (#457, not handled).
  *
  * We have no reliable "is listed" flag from the brokers, so we use a heuristic:
  *  - CRYPTO → always unlisted (12 months).
@@ -859,8 +868,9 @@ function buyQtyConversionToSellUnits(
  *  - Anything else with NO ISIN → treated as unlisted (12 months).
  *
  * LIMITATION (#452): a real ISIN does not guarantee admission to a regulated or
- * equivalent market (some ISIN-bearing instruments trade only OTC, where the
- * statute gives 1 year and we apply 2 months), and conversely a few
+ * equivalent market (some ISIN-bearing instruments trade only OTC, or only on a
+ * third-country market with no equivalence decision such as the London Stock
+ * Exchange, where the statute gives 1 year and we apply 2 months), and conversely a few
  * listed instruments may arrive without an ISIN. This is a conservative
  * approximation; precise classification would require per-instrument market
  * admission data we do not collect.

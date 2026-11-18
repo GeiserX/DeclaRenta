@@ -9,10 +9,10 @@
 ## The rule (verified against primary sources)
 
 When a taxpayer sells securities at a **loss** and acquires **homogeneous**
-securities within **±2 calendar months** (admitted to trading on an EU
-regulated market or an equivalent third-country market, letter f; NYSE and
-Nasdaq are equivalent, DGT V0778-25) / **±1 year** (admitted to neither,
-letter g) of the sale, the loss is **not computable now**. It is:
+securities within **±2 calendar months** (admitted to trading on a regulated
+market of the European Economic Area or an equivalent third-country market,
+letter f; NYSE and Nasdaq are equivalent, DGT V0778-25) / **±1 year** (admitted
+to neither, letter g) of the sale, the loss is **not computable now**. It is:
 
 1. **Proportional to the repurchased quantity.** Sell 100 at a loss, rebuy 30 →
    only the loss on **30** is blocked/deferred; the loss on **70** is deductible
@@ -237,12 +237,21 @@ transmission that releases them.
 ## Known limitations (documented, accepted)
 
 - **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged. Letter
-  f covers an EU regulated market and any third-country market the European
-  Commission declared equivalent: NYSE and Nasdaq are (DGT V0778-25,
-  Implementing Decision (EU) 2017/2320), so a share listed only there gets
-  2 months under the statute too, and that is no deviation. The deviation is an
-  ISIN-bearing security admitted to neither kind of market (e.g. OTC Markets /
-  pink sheets): letter g gives it 1 year, the engine 2 months (#452).
+  f covers a regulated market of the European Economic Area (the EU, Norway,
+  Iceland, Liechtenstein) and any third-country market the European Commission
+  declared equivalent while the decision stands (DGT V0778-25). The decisions
+  in force are Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the
+  other SEC national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong
+  Kong); Switzerland's (2018/2047) expired on 30/06/2019 and the UK has none.
+  So a share listed only on NYSE or Nasdaq gets 2 months under the statute too,
+  and that is no deviation. The deviation is an ISIN-bearing security admitted
+  to neither kind of market: one traded only on OTC Markets, or listed only on
+  the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
+  the engine 2 months (#452).
+- **Crypto window.** The engine gives crypto ±1 year. Crypto is no «valor o
+  participación», so letters f and g do not apply: art. 33.5.e («elementos
+  patrimoniales») counts only a repurchase within the year after the sale, so
+  a buy before the sale should not block (#457, not handled here).
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
