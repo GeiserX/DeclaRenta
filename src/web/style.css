@@ -1062,6 +1062,26 @@ tbody tr.wash-sale-detail details p {
   margin: 0.25rem 0 0 1rem;
 }
 
+/* Anti-churning: a sale that releases pending losses of earlier sales (a
+   «transmisión definitiva»). Same layout, accent colour instead of warning. */
+tbody tr.wash-sale-released,
+tbody tr.wash-sale-detail-released {
+  background: var(--accent-subtle);
+}
+
+tbody tr.wash-sale-released td {
+  border-bottom: none;
+}
+
+tbody tr.wash-sale-released td:first-child,
+tbody tr.wash-sale-detail-released td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+tbody tr.wash-sale-detail-released summary {
+  color: var(--accent-text);
+}
+
 .mono {
   font-family: "SF Mono", "Fira Code", monospace;
   font-size: 0.8rem;

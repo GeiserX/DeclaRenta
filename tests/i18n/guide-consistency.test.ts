@@ -47,4 +47,16 @@ describe("Renta Web guide consistency", () => {
       expect(locale["guide_rw.dt_campo_hint"], name).not.toContain("0029");
     }
   });
+
+  it("never says a blocked loss is added to the new position's cost, and warns users who filed with 0.66.5 or earlier (#451)", () => {
+    // The deferred loss waits for a «transmisión definitiva»; it is not added to
+    // the cost of the repurchased shares (docs/design/antichurning-proportional.md).
+    for (const [name, locale] of Object.entries(locales)) {
+      const text = locale["guide_rw.blocked_losses_hint"];
+      expect(text, name).not.toMatch(/se suma a la adquisición|added to the acquisition cost|se suma a l'adquisició|eskuraketa kostuari gehitzen|súmase á adquisición/);
+      expect(text, name).toContain("0.66.5");
+      expect(locale["casilla.reintegrated_losses"], name).not.toMatch(/años anteriores|prior years|anys anteriors|Aurreko urteetako|anos anteriores/);
+    }
+  });
 });
+

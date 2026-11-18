@@ -106,7 +106,7 @@ const en: TranslationKeys = {
   "casilla.double_taxation": "Double taxation deduction",
   "casilla.dt_foreign_income_total": "Total foreign income",
   "casilla.reintegrated_losses":
-    "Deferred losses from prior years now deductible (the repurchased securities were sold): {{amount}} EUR",
+    "Deferred losses now deductible (sales with no repurchase in the window, «transmisión definitiva»): {{amount}} EUR",
   "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months listed / 1 year unlisted): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} warning(s)",
   "messages.errors_title": "{{count}} error(s) — action required",
@@ -597,7 +597,10 @@ const en: TranslationKeys = {
   "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
   "annex.wash_hint":
-    'In Renta Web, mark this sale as "Non-attributable capital losses". The loss counts once you sell what you bought back.',
+    "In Renta Web, mark this sale as \"Non-attributable capital losses\". The loss stays pending: it counts once you sell shares of this security without buying it back within 2 months before or after (1 year if unlisted), oldest losses first.",
+  "annex.wash_released": "Releases {{amount}} EUR of deferred losses of this security («transmisión definitiva», art. 33.5 LIRPF)",
+  "annex.wash_released_dates": "Pending losses from the sales of: {{dates}}",
+  "annex.wash_released_hint": "This sale has no repurchase in the window, so those blocked losses count now, oldest first. In Renta Web, include them in this year.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",
@@ -684,7 +687,7 @@ const en: TranslationKeys = {
     "The double taxation deduction prevents paying tax twice on the same dividends. It is limited to the lesser of the amount paid abroad and the Spanish tax due. If the tax treaty allows a lower maximum rate (e.g. 15% USA), only that amount is deductible.",
   "guide_rw.blocked_losses_title": "Blocked losses (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    'If DeclaRenta shows blocked losses, tick the <strong>"Non-attributable capital losses"</strong> box in Renta Web. These losses are deferred to the next year because the same security was repurchased within 2 months (listed) or 1 year (unlisted). The amount is added to the acquisition cost of the new position.',
+    "If DeclaRenta shows blocked losses, tick the <strong>\"Non-attributable capital losses\"</strong> box in Renta Web. They are blocked because you bought the same security back within 2 months before or after the sale (1 year if unlisted). They are not added to the cost of the new position: they stay pending and count when you sell shares of that security without buying it back in that window («transmisión definitiva»), oldest first. If you filed a year with DeclaRenta 0.66.5 or earlier, those versions released a loss when you sold the repurchased shares even if you bought back again: if you already deducted that loss, do not deduct it again when DeclaRenta releases it now, or file a supplementary return («complementaria») for that year.",
   "guide_rw.closing_tip": "After entering all data, use the \"Verify declaration\" button in Renta Web to check for errors. If another tool shows a different capital gains amount, it may use another method for foreign-currency shares. In the Modelo 100 results, open «Compare with the other methods» to see the figures of all three. To change the method, go back to the «Review and choose method» step. Use the same method every year.",
 
   // PDF report

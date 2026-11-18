@@ -814,7 +814,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
   }
   if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
     console.error(
-      `    ↩ Pérdidas reintegradas (diferidas de años anteriores): ${report.capitalGains.reintegratedLosses.toFixed(2)} EUR`,
+      `    ↩ Pérdidas diferidas integradas (transmisión definitiva): ${report.capitalGains.reintegratedLosses.toFixed(2)} EUR`,
     );
   }
   console.error("");
