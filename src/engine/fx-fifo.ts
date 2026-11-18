@@ -192,16 +192,21 @@ interface NullPark {
 /**
  * Untracked principal an intraday round trip borrowed and its own sale did
  * not pay back (a loss): the account still owes it that day (issue #447).
+ * Also, with `loanSince`, a currency loan (issue #449): what a buy or a
+ * debit spent beyond the account's balance, in a currency the CashReport
+ * proves (see `loanCurrencies`). A loan lasts until inflows repay it.
  */
 interface SameDayDebt {
-  /** The `null` park of the round trip's buy; its `qty` still counts the debt. */
+  /** The `null` park of the round trip's buy; its `qty` still counts the debt (not for a loan). */
   np: NullPark;
-  /** The losing sale that left it owed. */
+  /** The losing sale that left it owed (a loan: the buy or debit that opened it). */
   sale: FxEvent;
   /** Still owed. */
   qty: Decimal;
-  /** «Tradicional con divisa» only: the buy's rate (`r_b`). */
+  /** «Tradicional con divisa» only: the buy's rate (`r_b`). A loan: the rate it opened at, every method. */
   buyRate?: Decimal;
+  /** A loan (issue #449): the date it opened. */
+  loanSince?: string;
 }
 
 /** The late covers of one pass (see `processWithCovers`). */
@@ -240,9 +245,16 @@ export class FxFifoEngine {
    * Every line it gates is a no-op for the default method and monodivisa.
    */
   private readonly traditionalFx: boolean;
+  /**
+   * Issue #449: the currencies whose cash the upload proves (`loanCurrencies`),
+   * each with its opening balance. Spending one of them beyond its balance
+   * opens a loan instead of the untracked path. Empty by default.
+   */
+  private readonly loan: ReadonlyMap<string, Decimal>;
 
-  constructor(options?: { traditionalFx?: boolean }) {
+  constructor(options?: { traditionalFx?: boolean; loan?: ReadonlyMap<string, Decimal> }) {
     this.traditionalFx = options?.traditionalFx === true;
+    this.loan = options?.loan ?? new Map();
   }
 
   private lots: Map<string, FxLot[]> = new Map();
@@ -460,8 +472,12 @@ export class FxFifoEngine {
   private nullParks: NullPark[] = [];
   /** The `null` park each untracked parked slice of the current pass belongs to. */
   private nullOfSlice: Map<ParkedSlice, NullPark> = new Map();
-  /** Same-day debts of the date being run (see {@link repayBorrowed}). */
+  /** Same-day debts of the date being run (see {@link repayBorrowed}), and the open loans. */
   private debts: SameDayDebt[] = [];
+  /** The loan each borrowed parked slice belongs to (issue #449). */
+  private loanOfSlice: Map<ParkedSlice, SameDayDebt> = new Map();
+  /** Opening balance not spent yet, per loan currency (see {@link takeOpening}). */
+  private opening: Map<string, Decimal> = new Map();
   /** Sales already counted in `tradStats.lostDollarSales`. */
   private lostSales: Set<FxEvent> = new Set();
   /** Every disposal shortfall of the current pass (missing lots). */
@@ -952,7 +968,7 @@ export class FxFifoEngine {
    * and `commissionEur` are split in the same proportion. True when it added
    * a part.
    */
-  private takeLateCover(event: FxEvent, remaining: Decimal): boolean {
+  private takeLateCover(event: FxEvent, remaining: Decimal, untracked = new Decimal(0)): boolean {
     const c = this.cover;
     if (!c) return false;
     const EPS = FxFifoEngine.EPS;
@@ -964,7 +980,7 @@ export class FxFifoEngine {
     const chain =
       c.trial !== undefined &&
       (own || !c.trial.bounded) &&
-      (c.trial.pick.has(event) || remaining.greaterThan((c.trial.refGross.get(event) ?? new Decimal(0)).plus(EPS)));
+      (c.trial.pick.has(event) || remaining.plus(untracked).greaterThan((c.trial.refGross.get(event) ?? new Decimal(0)).plus(EPS)));
     const widens = chain && own;
     if (!c.enabled.has(event) && !chain) return false;
     let need = remaining;
@@ -1007,6 +1023,8 @@ export class FxFifoEngine {
     this.nullParks = [];
     this.nullOfSlice = new Map();
     this.debts = [];
+    this.loanOfSlice = new Map();
+    this.opening = new Map(this.loan);
     this.lostSales = new Set();
     this.shortfalls = [];
     this.trace = [];
@@ -1972,6 +1990,16 @@ export class FxFifoEngine {
         : {}),
     });
     this.accumulate("acquire", event.currency, event.quantity);
+    // Issue #449: an inflow repays the open loans first. A late-cover part
+    // does not: it pays its own buy, as if it had arrived before it.
+    if (movedFrom === undefined && this.loan.has(event.currency)) {
+      this.repayLoans(lot, event);
+      if (!lot.quantity.greaterThan(FxFifoEngine.EPS)) {
+        const pool = this.lots.get(event.currency)!;
+        const idx = pool.indexOf(lot);
+        if (idx >= 0) pool.splice(idx, 1);
+      }
+    }
   }
 
   /**
@@ -2006,9 +2034,10 @@ export class FxFifoEngine {
   private consumeLots(event: FxEvent): void {
     let remaining = event.quantity.abs();
     const totalQty = remaining;
-    const lots = this.lots.get(event.currency);
+    const lots = this.lots.get(event.currency) ?? [];
+    const loan = this.loan.has(event.currency);
 
-    if (!lots || lots.length === 0) {
+    if (lots.length === 0 && !loan) {
       const entry = this.fxMissing.get(event.currency) ?? { count: 0, totalQty: new Decimal(0) };
       entry.count++;
       entry.totalQty = entry.totalQty.plus(remaining);
@@ -2102,6 +2131,14 @@ export class FxFifoEngine {
       this.accumulate("dispose", event.currency, consumed);
     }
 
+    // Issue #449: past the pool and the opening balance, a loan currency borrows.
+    let borrowed = new Decimal(0);
+    if (loan && remaining.greaterThan(0)) {
+      const fromOpening = this.takeOpening(event.currency, remaining);
+      borrowed = remaining.minus(fromOpening);
+      remaining = fromOpening;
+    }
+
     if (remaining.greaterThan(0)) {
       const entry = this.fxMissing.get(event.currency) ?? { count: 0, totalQty: new Decimal(0) };
       entry.count++;
@@ -2142,6 +2179,49 @@ export class FxFifoEngine {
       // lots.length === 0; this floor only books gain = 0 + warns).
       this.accumulate("phantom", event.currency, remaining);
     }
+    if (borrowed.greaterThan(0)) this.borrowForDebit(event, borrowed, totalQty);
+  }
+
+  /**
+   * Issue #449: a debit (a conversion out, a fee, interest charged) that takes
+   * more of a loan currency than the account holds sells borrowed currency.
+   * Its disposal row has the loan's own cost (the day's rate), so it books
+   * only the commission; the loan opens at that rate and inflows repay it
+   * ({@link payDebt}). While a loan is open the pool is empty, so interest
+   * charged on it adds to it instead of consuming pool lots.
+   */
+  private borrowForDebit(event: FxEvent, x: Decimal, totalQty: Decimal): void {
+    const rate = FxFifoEngine.effectiveRate(event);
+    let proceedsEur = x.mul(rate);
+    if (event.commissionEur) proceedsEur = proceedsEur.minus(event.commissionEur.mul(x.div(totalQty)));
+    const costBasisEur = x.mul(rate);
+    const gainLossEur = proceedsEur.minus(costBasisEur);
+    this.disposals.push({
+      currency: event.currency,
+      disposeDate: event.date,
+      acquireDate: event.date,
+      quantity: x,
+      proceedsEur,
+      costBasisEur,
+      gainLossEur,
+      trigger: event.trigger,
+      holdingPeriodDays: 0,
+      lotId: "LOAN",
+      brokerSource: event.brokerSource,
+    });
+    this.record("dispose", event, {
+      quantityFcy: x,
+      rate,
+      costBasisEur,
+      proceedsEur,
+      gainLossEur,
+      lotId: "LOAN",
+      note: `préstamo en divisa: sale más ${event.currency} de los que hay en la cuenta; se abre una deuda de ${x.toString()} ${event.currency} al tipo del día`,
+    });
+    this.accumulate("dispose", event.currency, x);
+    this.accumulate("phantom", event.currency, x);
+    const np: NullPark = { event, currency: event.currency, date: event.date, qty: x, gross: x, seq: -1 };
+    this.debts.push({ np, sale: event, qty: x, buyRate: rate, loanSince: event.date });
   }
 
   /**
@@ -2317,18 +2397,35 @@ export class FxFifoEngine {
       }
     };
     takePool();
+    // A loan currency (issue #449) first spends its known opening balance,
+    // which takes the untracked path below: its EUR cost is not in the upload.
+    const loan = this.loan.has(event.currency);
+    let untracked = new Decimal(0);
+    if (loan && remaining.greaterThan(EPS)) {
+      untracked = this.takeOpening(event.currency, remaining);
+      remaining = remaining.minus(untracked);
+    }
     // A late cover adds parts to the empty pool.
-    if (remaining.greaterThan(EPS) && this.cover && this.takeLateCover(event, remaining)) takePool();
+    if (remaining.greaterThan(EPS) && this.cover && this.takeLateCover(event, remaining, untracked)) takePool();
+    // What is still missing: a loan in a loan currency, untracked otherwise.
+    let borrowed = new Decimal(0);
+    if (loan) borrowed = remaining.greaterThan(EPS) ? remaining : borrowed;
+    else untracked = remaining;
+    const short = untracked.plus(borrowed);
+    // One `null` park per buy for the cover planner: its untracked part and its loan.
+    const np: NullPark | undefined = short.greaterThan(EPS)
+      ? { event, currency: event.currency, date: event.date, qty: short, gross: short, seq: this.nullParks.length }
+      : undefined;
+    if (np) this.nullParks.push(np);
 
     // Shortfall: the pool had no (more) tracked dollars → park uncovered (no
     // tracked origin → no carried date either; the sell re-adds it at the sale
     // date, which is correct for genuinely-untracked dollars).
-    if (remaining.greaterThan(EPS)) {
+    if (untracked.greaterThan(EPS)) {
+      remaining = untracked;
       const slice: ParkedSlice = { q: remaining, rate: null, acquireDate: null, ...this.traditionalTags(event, undefined) };
       park.push(slice);
-      const np: NullPark = { event, currency: event.currency, date: event.date, qty: remaining, gross: remaining, seq: this.nullParks.length };
-      this.nullParks.push(np);
-      this.nullOfSlice.set(slice, np);
+      this.nullOfSlice.set(slice, np!);
       this.record("park", event, {
         quantityFcy: remaining,
         rate: null,
@@ -2340,6 +2437,66 @@ export class FxFifoEngine {
       // count a phantom acquire of the same qty to keep the identity balanced.
       this.accumulate("phantom", event.currency, remaining);
     }
+    // The opening balance went first, the loan comes after it.
+    if (borrowed.greaterThan(EPS)) this.borrowForBuy(event, park, borrowed, np!);
+  }
+
+  /**
+   * Issue #449: what a buy spends beyond the account's balance, in a currency
+   * the CashReport proves, is a loan from the broker. The borrowed currency
+   * is parked like a covered slice at the buy's rate, dated on the buy, so a
+   * later sale returns it at that cost; the loan stays open, at that same
+   * rate, until inflows repay it ({@link payDebt}). Before this, a buy that
+   * overdrew the account parked `null` and the later inflow that really paid
+   * the overdraft stayed in the pool as currency that no longer existed (the
+   * issue's example: −175 on an economic −145 in both methods, 200 USD left).
+   */
+  private borrowForBuy(event: FxEvent, park: ParkedSlice[], q: Decimal, np: NullPark): void {
+    const slice: ParkedSlice = {
+      q,
+      rate: event.ecbRate,
+      acquireDate: event.date,
+      ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
+      ...this.traditionalTags(event, undefined),
+    };
+    park.push(slice);
+    const debt: SameDayDebt = { np, sale: event, qty: q, buyRate: event.ecbRate, loanSince: event.date };
+    this.debts.push(debt);
+    this.loanOfSlice.set(slice, debt);
+    this.record("park", event, {
+      quantityFcy: q,
+      rate: event.ecbRate,
+      lotAcquireDate: event.date,
+      note: `préstamo en divisa: la compra gasta más ${event.currency} de los que hay en la cuenta; se abre una deuda de ${q.toString()} ${event.currency} al tipo del día`,
+    });
+    this.accumulate("park", event.currency, q);
+    // Borrowed, never acquired: a phantom acquire, taken back as inflows repay it.
+    this.accumulate("phantom", event.currency, q);
+  }
+
+  /**
+   * Issue #449: the part of `need` a loan currency takes from its opening
+   * balance (the CashReport's `startingCash`, whose EUR cost the upload does
+   * not show). None while a loan is open: the account is below zero then, so
+   * a debit (interest charged on the loan, a fee) adds to the loan.
+   */
+  private takeOpening(currency: string, need: Decimal): Decimal {
+    if (this.openLoan(currency)) return new Decimal(0);
+    const left = this.opening.get(currency) ?? new Decimal(0);
+    const x = Decimal.min(need, left);
+    if (x.greaterThan(0)) this.opening.set(currency, left.minus(x));
+    return Decimal.max(x, 0);
+  }
+
+  /** Issue #449: currency the opening balance gets back (a same-day cover or payback freed it). */
+  private returnOpening(currency: string, q: Decimal): void {
+    if (!this.loan.has(currency) || !q.greaterThan(0)) return;
+    this.opening.set(currency, (this.opening.get(currency) ?? new Decimal(0)).plus(q));
+  }
+
+  /** Issue #449: whether a loan of `currency` is still open. */
+  private openLoan(currency: string): boolean {
+    return this.debts.some((d) => d.loanSince !== undefined && d.sale.currency === currency && d.qty.greaterThan(FxFifoEngine.EPS));
   }
 
   /**
@@ -2520,7 +2677,7 @@ export class FxFifoEngine {
    * returns it: the currency an intraday round trip borrowed (issue #447).
    */
   private borrowedOn(p: ParkedSlice, date: string): boolean {
-    return p.rate === null && this.nullOfSlice.get(p)?.date === date;
+    return (p.rate === null && this.nullOfSlice.get(p)?.date === date) || this.loanOfSlice.get(p)?.loanSince === date;
   }
 
   /** The borrowed part (see {@link borrowedOn}) of the first `cost` units of `park`. */
@@ -2561,8 +2718,15 @@ export class FxFifoEngine {
    */
   private repayBorrowed(event: FxEvent, p: ParkedSlice, back: Decimal, lost: Decimal): void {
     const EPS = FxFifoEngine.EPS;
+    const loan = this.loanOfSlice.get(p);
+    if (loan) {
+      this.repayLoanSameDay(event, p, loan, back, lost);
+      return;
+    }
     const np = this.nullOfSlice.get(p)!;
     if (back.greaterThan(EPS)) {
+      // A loan currency's opening balance gets back what the round trip borrowed from it.
+      this.returnOpening(event.currency, back);
       np.qty = np.qty.minus(back);
       this.record("discard", event, {
         quantityFcy: back,
@@ -2580,14 +2744,51 @@ export class FxFifoEngine {
   }
 
   /**
+   * Issue #449, an intraday round trip whose buy borrowed from the broker:
+   * as for untracked currency (#447), its sale first pays the loan back with
+   * the currency it returns, `back` units with no FX and no pool lot, so a
+   * loss falls on the slices it held. A trap: re-adding that currency at the
+   * buy's rate and repaying the loan with the oldest pool lot instead moved
+   * the #447 result (IRT-LOSS: −190 / −45 in the default, against −190 /
+   * −30). `lost` units the proceeds do not reach stay owed: the loan stays
+   * open and later inflows repay it.
+   */
+  private repayLoanSameDay(event: FxEvent, p: ParkedSlice, loan: SameDayDebt, back: Decimal, lost: Decimal): void {
+    const EPS = FxFifoEngine.EPS;
+    if (back.greaterThan(EPS)) {
+      loan.qty = loan.qty.minus(back);
+      this.record("discard", event, {
+        quantityFcy: back,
+        rate: p.rate,
+        note: "compraventa del mismo día con divisa prestada: la venta devuelve al bróker la divisa que prestó a la compra, sin diferencia de cambio",
+      });
+      this.accumulate("discard", event.currency, back);
+    }
+    if (lost.greaterThan(EPS)) {
+      this.record("discard", event, {
+        quantityFcy: lost,
+        rate: p.rate,
+        note: "divisa prestada perdida en la venta: la deuda con el bróker sigue abierta",
+      });
+      this.accumulate("discard", event.currency, lost);
+    }
+  }
+
+  /**
    * End of a day: what the day's round trips still owe (see
    * {@link repayBorrowed}) was lost principal with no tracked origin, as any
    * untracked principal lost in a sale. It stays in its buy's `null` count,
    * and «Tradicional con divisa» names it in `fx_traditional_uncovered`: the
-   * upload does not show where those dollars came from.
+   * upload does not show where those dollars came from. An open loan
+   * (issue #449) is not a same-day debt: it stays until inflows repay it.
    */
   private closeDebts(): void {
+    const loans: SameDayDebt[] = [];
     for (const d of this.debts) {
+      if (d.loanSince !== undefined) {
+        if (d.qty.greaterThan(FxFifoEngine.EPS)) loans.push(d);
+        continue;
+      }
       if (!d.qty.greaterThan(FxFifoEngine.EPS)) continue;
       this.record("discard", d.sale, {
         quantityFcy: d.qty,
@@ -2598,7 +2799,7 @@ export class FxFifoEngine {
       });
       if (this.traditionalFx) this.tradStats.uncovered.push({ date: d.sale.date, currency: d.sale.currency, qty: d.qty });
     }
-    this.debts = [];
+    this.debts = loans;
   }
 
   /** One `lostDollarSales` entry per sale (`fx_traditional_lost_dollars`). */
@@ -2949,7 +3150,10 @@ export class FxFifoEngine {
     // The day's `null` slices of this currency, in the order their buys parked.
     type Open = { key: string; slices: ParkedSlice[]; slice: ParkedSlice; seq: number } | { debt: SameDayDebt; seq: number };
     const open: Open[] = [];
+    // Issue #449: the open loans come first, oldest first.
+    this.repayLoans(lot, event);
     for (const debt of this.debts) {
+      if (debt.loanSince !== undefined) continue;
       if (debt.sale.currency === event.currency && debt.qty.greaterThan(EPS)) open.push({ debt, seq: debt.np.seq });
     }
     for (const [key, slices] of on ? this.parked : []) {
@@ -2986,6 +3190,8 @@ export class FxFifoEngine {
       }
       const np = this.nullOfSlice.get(slice);
       if (np) np.qty = np.qty.minus(x);
+      // The buy did not spend a loan currency's opening balance after all.
+      this.returnOpening(event.currency, x);
       lot.quantity = lot.quantity.minus(x);
       lot.costInEur = lot.costInEur.minus(x.mul(lot.costPerUnit));
       this.record("park", { ...event, positionKey: key === event.currency ? undefined : key.slice(prefix.length) }, {
@@ -3004,14 +3210,31 @@ export class FxFifoEngine {
     }
   }
 
-  /** `lot` pays what it can of a same-day debt (see {@link sameDayCover}). */
-  private payDebt(lot: FxLot, debt: SameDayDebt): void {
+  /** Issue #449: `lot`, brought in by `event`, repays the open loans of its currency, oldest first. */
+  private repayLoans(lot: FxLot, event: FxEvent): void {
+    for (const debt of this.debts) {
+      if (!lot.quantity.greaterThan(FxFifoEngine.EPS)) return;
+      if (debt.loanSince === undefined || debt.sale.currency !== lot.currency || !debt.qty.greaterThan(FxFifoEngine.EPS)) continue;
+      this.payDebt(lot, debt, event);
+    }
+  }
+
+  /**
+   * `lot` pays what it can of a same-day debt (see {@link sameDayCover}), or
+   * of a loan (issue #449), brought in by `payEvent` (see {@link bookRepayment}).
+   */
+  private payDebt(lot: FxLot, debt: SameDayDebt, payEvent?: FxEvent): void {
     const x = Decimal.min(debt.qty, lot.quantity);
     debt.qty = debt.qty.minus(x);
-    debt.np.qty = debt.np.qty.minus(x);
+    // A loan keeps its buy's gross `null` count: the cover planner compares what each buy borrowed.
+    if (debt.loanSince === undefined) debt.np.qty = debt.np.qty.minus(x);
     lot.quantity = lot.quantity.minus(x);
     lot.costInEur = lot.costInEur.minus(x.mul(lot.costPerUnit));
     this.accumulate("phantom", debt.sale.currency, x.negated());
+    if (debt.loanSince !== undefined) {
+      this.bookRepayment(payEvent ?? debt.sale, debt, x, lot);
+      return;
+    }
     const paid: ParkedSlice = {
       q: x,
       rate: lot.costPerUnit,
@@ -3029,6 +3252,71 @@ export class FxFifoEngine {
       lotId: lot.id,
       lotAcquireDate: lot.acquireDate,
       note: "compraventa del mismo día sin divisa: la divisa que devuelve una venta posterior de ese día paga la que perdió esta venta",
+    });
+  }
+
+  /**
+   * Issue #449: `x` units of `lot` repay a loan on `payEvent`'s date. The
+   * repayment hands over currency that cost `lot.costPerUnit` to settle a debt
+   * worth the rate it opened at, so it books `x × (r_loan − cost)`: the debt's
+   * own change from its opening to the repayment day (`loanDebtPartEur`,
+   * `x × (r_loan − r_day)`) plus the change of the currency that pays it
+   * (`x × (r_day − cost)`), as for a loan in foreign currency (art. 14.2.e
+   * LIRPF; DGT V2414-12, V1604-15 for the two parts). Both methods book it in
+   * 1633/1637, «Tradicional con divisa» with the paying lot's shifted cost,
+   * except that the default books nothing for a loan repaid the day it
+   * opened: it keeps the #447 rule for same-day debts (its loss-sale rule).
+   * Never a lost-dollar row: no currency was lost (its own message,
+   * `report.fx_loan_repayment`).
+   */
+  private bookRepayment(payEvent: FxEvent, debt: SameDayDebt, x: Decimal, lot: FxLot): void {
+    const ccy = debt.sale.currency;
+    const rate = debt.buyRate!;
+    const proceedsEur = x.mul(rate);
+    const costBasisEur = x.mul(lot.costPerUnit);
+    const gainLossEur = proceedsEur.minus(costBasisEur);
+    const sameDay = payEvent.date === debt.loanSince;
+    const event: FxEvent = { ...payEvent, trigger: "loan_repayment" };
+    if ((this.traditionalFx || !sameDay) && !gainLossEur.isZero()) {
+      const loanDebtPartEur = x.mul(rate.minus(payEvent.ecbRate));
+      const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, x, lot.shifts) : undefined;
+      this.disposals.push({
+        currency: ccy,
+        disposeDate: payEvent.date,
+        acquireDate: lot.acquireDate,
+        quantity: x,
+        proceedsEur,
+        costBasisEur,
+        gainLossEur,
+        trigger: "loan_repayment",
+        holdingPeriodDays: daysBetween(lot.acquireDate, payEvent.date),
+        lotId: lot.id,
+        ...(payEvent.brokerSource !== undefined ? { brokerSource: payEvent.brokerSource } : {}),
+        ...(lot.brokerSource !== undefined ? { acquireBrokerSource: lot.brokerSource } : {}),
+        loanDebtPartEur,
+        ...(declaredShiftEur !== undefined ? { declaredShiftEur } : {}),
+      });
+      this.record("dispose", event, {
+        quantityFcy: x,
+        rate,
+        costBasisEur,
+        proceedsEur,
+        gainLossEur,
+        lotId: lot.id,
+        lotAcquireDate: lot.acquireDate,
+        note: `devolución del préstamo en divisa del ${debt.loanSince} (abierto a ${rate.toString()} €/${ccy}): ${loanDebtPartEur.toFixed(2)} € por la variación de la deuda y ${gainLossEur.minus(loanDebtPartEur).toFixed(2)} € por la divisa que la paga`,
+      });
+      return;
+    }
+    this.record("discard", event, {
+      quantityFcy: x,
+      rate: lot.costPerUnit,
+      lotId: lot.id,
+      lotAcquireDate: lot.acquireDate,
+      note:
+        sameDay && !this.traditionalFx
+          ? `devolución del préstamo en divisa el mismo día en que se abrió: sin diferencia de cambio en este método`
+          : `devolución del préstamo en divisa del ${debt.loanSince}: diferencia de cambio 0`,
     });
   }
 

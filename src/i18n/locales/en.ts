@@ -84,6 +84,7 @@ const en: TranslationKeys = {
   "fx.trigger.stock_sale": "Currency lost in a losing sale",
   "fx.trigger.stock_sale_guard": "Currency change up to the share purchase",
   "fx.trigger.stock_sale_cross": "Currency invested in shares sold in another currency",
+  "fx.trigger.loan_repayment": "Repayment of a currency loan from the broker",
 
   "casilla.listed_transmission_value": "Transmission value (listed shares)",
   "casilla.listed_acquisition_value": "Acquisition value (listed shares)",
@@ -900,13 +901,17 @@ const en: TranslationKeys = {
   "report.fx_traditional_inflight.hint":
     "That holds if that year you used «Traditional with currency» or «Traditional without currency (single-currency)». If you used the «DGT criterion (multi-currency)», this year's currency result is off by that amount. Use the same method as then.",
   "report.fx_traditional_uncovered":
-    "{{qty}} {{ccy}} used to buy shares have no euro origin in your files (deposits, earlier balances or years you have not uploaded). They are taken at the buy-date rate, with no earlier exchange difference.",
+    "{{qty}} {{ccy}} used to buy shares have no euro origin in your files (deposits, earlier balances, years you have not uploaded, or an overdraft or margin loan from the broker). They are taken at the buy-date rate, with no earlier exchange difference.",
   "report.fx_traditional_uncovered.hint":
-    "If you converted euros to {{ccy}} up to 7 days after the purchase, the rate of that conversion is used. If you know where they came from, upload the earlier years too.",
+    "If you converted euros to {{ccy}} up to 7 days after the purchase, the rate of that conversion is used. If you know where they came from, upload the earlier years too. If your {{ccy}} balance went below zero (overdraft or margin), upload the IBKR statement with its «Cash Report» section: if it matches your trades, DeclaRenta treats that negative balance as a loan in {{ccy}}.",
   "report.fx_traditional_orphan":
     "The exchange difference of {{qty}} {{ccy}} invested in {{security}} could not be assigned to any sale (possible ISIN change, merger or spin-off). Review it by hand.",
   "report.fx_traditional_orphan.hint":
     "Those {{ccy}} were used to buy {{security}}. At 31 December you no longer hold those shares and no sale has brought them back. Their change from when you bought the {{ccy}} to when you bought the shares ({{amount}} €) has not been declared.",
+  "report.fx_loan_repayment":
+    "This year you repaid {{ccy}} the broker lent you (your {{ccy}} balance was below zero). Its exchange difference, {{amount}} €, goes in boxes 1633/1637. Of it, {{debt}} € is the change of the debt from when it opened to when you repaid it.",
+  "report.fx_loan_repayment.hint":
+    "The Spanish Supreme Court (STS 71/2021, ECLI:ES:TS:2021:345) puts the exchange difference on repaying a foreign-currency loan in the general base (boxes 0304/0305). The DGT puts it in the savings base (V2414-12). DeclaRenta declares it in boxes 1633/1637. If you follow the Supreme Court, those {{debt}} € go in box 0304 if they are a gain or in box 0305 if they are a loss. DeclaRenta treats the negative balance as a loan only when the IBKR cash statement (Cash Report) matches your trades.",
   "report.fx_method_name.multidivisa":
     "DGT criterion (multi-currency)",
   "report.fx_method_name.tradicional-divisa":

@@ -23,6 +23,7 @@ import type {
 import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
+import { loanCurrencies } from "../engine/fx-loan-gate.js";
 import { detectWashSales } from "../engine/wash-sale.js";
 import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
@@ -83,6 +84,7 @@ function splitFxDisposal(d: FxDisposal, n: number): FxDisposal {
     costBasisEur: d.costBasisEur.div(n),
     gainLossEur: d.gainLossEur.div(n),
     ...(d.declaredShiftEur !== undefined ? { declaredShiftEur: d.declaredShiftEur.div(n) } : {}),
+    ...(d.loanDebtPartEur !== undefined ? { loanDebtPartEur: d.loanDebtPartEur.div(n) } : {}),
   };
 }
 
@@ -518,7 +520,8 @@ const fmt2 = (d: Decimal): string => d.toFixed(2);
  *    this year carries drift a stock sale of an EARLIER year declared; off by
  *    that amount if that year was filed with the default method.
  *  - `fx_traditional_uncovered` (info): a sale this year returned principal
- *    with no EUR origin in the upload (deposits, older years). An acquisition
+ *    with no EUR origin in the upload (deposits, older years, or an overdraft
+ *    or margin loan outside the loan gate of issue #449, fx-loan-gate.ts). An acquisition
  *    1 to 7 calendar days AFTER the buy covers it instead, first, even when it
  *    paid a later buy (that buy then takes its own late funding), unless
  *    covering makes a disposal find no lot or leaves another buy untracked in
@@ -627,8 +630,8 @@ function traditionalFxMessages(input: {
     out.push({
       id: "report.fx_traditional_uncovered",
       severity: "info",
-      message: `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores o años que no has subido). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`,
-      hint: `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.`,
+      message: `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores, años que no has subido, o un descubierto o préstamo de margen del bróker). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`,
+      hint: `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores. Si tu saldo en ${ccy} quedó en negativo (descubierto o margen), sube el extracto de IBKR con la sección «Cash Report»: si cuadra con tus operaciones, DeclaRenta trata ese saldo negativo como un préstamo en ${ccy}.`,
       context: { qty, ccy },
     });
   }
@@ -908,10 +911,6 @@ export function generateTaxReport(
   let traditionalStats: ReturnType<FxFifoEngine["getTraditionalStats"]> | undefined;
 
   if (!options?.skipFx) {
-    // «Tradicional con divisa» runs the same producers and engine in its own
-    // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
-    const fxEngine = traditionalFx ? new FxFifoEngine({ traditionalFx: true }) : new FxFifoEngine();
-    if (options?.fxTrace) fxEngine.enableTrace();
     // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
     // (trackAutoConvert === false) restores the historical skip (issue #239).
     const trackAutoConvert = options?.trackAutoConvert !== false;
@@ -941,6 +940,25 @@ export function generateTaxReport(
       ...manualOpeningLotFxEvents,
       ...stockProceedsFxEvents,
     ];
+    // Issue #449: a currency whose cash the IBKR CashReport proves (every
+    // statement's rows, also those `yearEndHoldings` left out of Modelo 720)
+    // treats a balance below zero as a loan from the broker. Every other
+    // currency keeps the untracked path.
+    const loan = loanCurrencies({
+      events: allFxEvents,
+      cashBalances: statement.holdingsBySource
+        ? statement.holdingsBySource.flatMap((s) => s.cashBalances)
+        : (statement.cashBalances ?? []),
+      trades: statement.trades,
+      trackAutoConvert,
+    });
+    // «Tradicional con divisa» runs the same producers and engine in its own
+    // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
+    const fxEngine = new FxFifoEngine({
+      ...(traditionalFx ? { traditionalFx: true } : {}),
+      ...(loan.size > 0 ? { loan } : {}),
+    });
+    if (options?.fxTrace) fxEngine.enableTrace();
     // «Tradicional con divisa» replays every year in the upload (no stored state)
     // and snapshots the parked principal at this year's end for the orphan check.
     const allFxDisposals = traditionalFx
@@ -1137,6 +1155,23 @@ export function generateTaxReport(
         hint: "Tu bróker (p. ej. IBKR) puede mostrar una «realized forex gain» aunque no hayas pasado a euros: usa el criterio fiscal de EE. UU., no el español. Con el «Criterio DGT (multidivisa)», la ganancia de divisa solo se declara al cambiarla a euros o a otra divisa.",
       });
     }
+  }
+
+  // Issue #449: currency that repaid a loan from the broker this year (both
+  // methods that run the FX engine). The law puts the debt's own change in
+  // another base than DeclaRenta does, so the note gives that part.
+  const loanRows = fxDisposals.filter((d) => d.trigger === "loan_repayment");
+  if (loanRows.length > 0) {
+    const ccy = [...new Set(loanRows.map((d) => d.currency))].sort().join(", ");
+    const amount = fmt2(loanRows.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)));
+    const debt = fmt2(loanRows.reduce((sum, d) => sum.plus(d.loanDebtPartEur ?? 0), new Decimal(0)));
+    allMessages.push({
+      id: "report.fx_loan_repayment",
+      severity: "info",
+      message: `Este año has devuelto ${ccy} que te prestó el bróker (tu saldo en ${ccy} estuvo en negativo). Su diferencia de cambio, ${amount} €, va en las casillas 1633/1637. De ella, ${debt} € son la variación de la deuda desde que se abrió hasta que la devolviste.`,
+      hint: `El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la diferencia de cambio al devolver un préstamo en moneda extranjera a la base general (casillas 0304/0305). La DGT la lleva a la base del ahorro (V2414-12). DeclaRenta la declara en las casillas 1633/1637. Si sigues al Supremo, esos ${debt} € van en la casilla 0304 si son ganancia o en la 0305 si son pérdida. DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.`,
+      context: { ccy, amount, debt },
+    });
   }
 
   // Monodivisa drops every currency conversion silently (the FX engine is off), so

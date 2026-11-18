@@ -85,6 +85,7 @@ const eu: TranslationKeys = {
   "fx.trigger.stock_sale": "Galerak dituen salmenta batean galdutako dibisa",
   "fx.trigger.stock_sale_guard": "Dibisaren aldaketa akzioak erosi arte",
   "fx.trigger.stock_sale_cross": "Beste moneta batean saldutako akzioetan inbertitutako dibisa",
+  "fx.trigger.loan_repayment": "Brokerraren dibisa-mailegu baten itzulketa",
 
   "casilla.listed_transmission_value": "Transmisio-balioa (negoziatutako akzioak)",
   "casilla.listed_acquisition_value": "Eskuratze-balioa (negoziatutako akzioak)",
@@ -904,13 +905,17 @@ const eu: TranslationKeys = {
   "report.fx_traditional_inflight.hint":
     "Hala da urte hartan «Tradizionala dibisarekin» edo «Tradizionala dibisarik gabe (monodibisa)» erabili bazenuen. «DGTren irizpidea (multidibisa)» erabili bazenuen, aurtengo zure dibisa-emaitza kopuru horretan desbideratuta dago. Erabili orduko metodo bera.",
   "report.fx_traditional_uncovered":
-    "Akzio-erosketetan erabilitako {{qty}} {{ccy}}-k ez dute jatorririk euroetan zure fitxategietan (gordailuak, aurreko saldoak edo igo ez dituzun urteak). Erosketa-eguneko tasan hartzen dira, aurreko kanbio-diferentziarik gabe.",
+    "Akzio-erosketetan erabilitako {{qty}} {{ccy}}-k ez dute jatorririk euroetan zure fitxategietan (gordailuak, aurreko saldoak, igo ez dituzun urteak, edo saldo negatibo bat edo brokerraren marjina-mailegu bat). Erosketa-eguneko tasan hartzen dira, aurreko kanbio-diferentziarik gabe.",
   "report.fx_traditional_uncovered.hint":
-    "Erosketaren ondorengo 7 egunetan euroak {{ccy}} bihurtu bazenituen, bihurketa horren tasa erabiltzen da. Haien jatorria ezagutzen baduzu, igo aurreko urteak ere.",
+    "Erosketaren ondorengo 7 egunetan euroak {{ccy}} bihurtu bazenituen, bihurketa horren tasa erabiltzen da. Haien jatorria ezagutzen baduzu, igo aurreko urteak ere. Zure {{ccy}} saldoa negatiboan geratu bazen (saldo negatiboa edo marjina), igo IBKRren laburpena «Cash Report» atalarekin: zure eragiketekin bat badator, DeclaRentak saldo negatibo hori {{ccy}}-ko mailegu gisa tratatzen du.",
   "report.fx_traditional_orphan":
     "{{security}}-n inbertitutako {{qty}} {{ccy}}-ren kanbio-diferentzia ezin izan da inongo salmentari esleitu (ISIN aldaketa, bat-egitea edo zatiketa izan daiteke). Berrikusi eskuz.",
   "report.fx_traditional_orphan.hint":
     "{{ccy}} horiek {{security}} erosteko erabili ziren. Abenduaren 31n ez dituzu akzio horiek eta ez du inongo salmentak berreskuratu. {{ccy}} erosi zenituenetik akzioak erosi zenituen arteko aldaketa ({{amount}} €) ez da aitortu.",
+  "report.fx_loan_repayment":
+    "Aurten brokerrak utzi zizkizun {{ccy}} itzuli dituzu (zure {{ccy}} saldoa negatiboan egon zen). Haien kanbio-diferentzia, {{amount}} €, 1633/1637 laukietan doa. Horietatik, {{debt}} € zorraren aldaketa dira, ireki zenetik itzuli zenuen arte.",
+  "report.fx_loan_repayment.hint":
+    "Auzitegi Gorenak (STS 71/2021, ECLI:ES:TS:2021:345) atzerriko monetako mailegu bat itzultzean sortzen den kanbio-diferentzia oinarri orokorrera eramaten du (0304/0305 laukiak). DGTk aurrezkiaren oinarrira eramaten du (V2414-12). DeclaRentak 1633/1637 laukietan aitortzen du. Auzitegi Gorenari jarraitzen badiozu, {{debt}} € horiek 0304 laukian doaz irabazia badira, edo 0305ean galera badira. DeclaRentak saldo negatiboa mailegutzat hartzen du soilik IBKRren eskudiru-txostena (Cash Report) zure eragiketekin bat datorrenean.",
   "report.fx_method_name.multidivisa":
     "DGTren irizpidea (multidibisa)",
   "report.fx_method_name.tradicional-divisa":

@@ -87,6 +87,7 @@ const es = {
   "fx.trigger.stock_sale": "Divisa perdida en una venta con pérdidas",
   "fx.trigger.stock_sale_guard": "Variación de la divisa hasta la compra de las acciones",
   "fx.trigger.stock_sale_cross": "Divisa invertida en acciones vendidas en otra moneda",
+  "fx.trigger.loan_repayment": "Devolución de un préstamo en divisa del bróker",
 
   // Casillas
   "casilla.listed_transmission_value": "Valor de transmisión (acciones negociadas)",
@@ -939,13 +940,17 @@ const es = {
   "report.fx_traditional_inflight.hint":
     "Así es si aquel año usaste «Tradicional con divisa» o «Tradicional sin divisa (monodivisa)». Si usaste el «Criterio DGT (multidivisa)», tu resultado de divisa de este año está desviado en esa cantidad. Usa el mismo método que entonces.",
   "report.fx_traditional_uncovered":
-    "{{qty}} {{ccy}} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores o años que no has subido). Se toman al tipo del día de compra, sin diferencia de cambio anterior.",
+    "{{qty}} {{ccy}} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores, años que no has subido, o un descubierto o préstamo de margen del bróker). Se toman al tipo del día de compra, sin diferencia de cambio anterior.",
   "report.fx_traditional_uncovered.hint":
-    "Si cambiaste euros a {{ccy}} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.",
+    "Si cambiaste euros a {{ccy}} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores. Si tu saldo en {{ccy}} quedó en negativo (descubierto o margen), sube el extracto de IBKR con la sección «Cash Report»: si cuadra con tus operaciones, DeclaRenta trata ese saldo negativo como un préstamo en {{ccy}}.",
   "report.fx_traditional_orphan":
     "La diferencia de cambio de {{qty}} {{ccy}} invertidos en {{security}} no se ha podido asignar a ninguna venta (posible cambio de ISIN, fusión o escisión). Revísala a mano.",
   "report.fx_traditional_orphan.hint":
     "Esos {{ccy}} se usaron para comprar {{security}}. A 31 de diciembre ya no tienes esas acciones y ninguna venta los ha recuperado. Su variación desde que compraste los {{ccy}} hasta que compraste las acciones ({{amount}} €) no se ha declarado.",
+  "report.fx_loan_repayment":
+    "Este año has devuelto {{ccy}} que te prestó el bróker (tu saldo en {{ccy}} estuvo en negativo). Su diferencia de cambio, {{amount}} €, va en las casillas 1633/1637. De ella, {{debt}} € son la variación de la deuda desde que se abrió hasta que la devolviste.",
+  "report.fx_loan_repayment.hint":
+    "El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la diferencia de cambio al devolver un préstamo en moneda extranjera a la base general (casillas 0304/0305). La DGT la lleva a la base del ahorro (V2414-12). DeclaRenta la declara en las casillas 1633/1637. Si sigues al Supremo, esos {{debt}} € van en la casilla 0304 si son ganancia o en la 0305 si son pérdida. DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.",
   "report.fx_method_name.multidivisa":
     "Criterio DGT (multidivisa)",
   "report.fx_method_name.tradicional-divisa":
