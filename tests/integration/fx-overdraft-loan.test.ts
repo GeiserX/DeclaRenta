@@ -369,6 +369,56 @@ describe("intraday round trips (issue #447) inside the gate keep their results",
   }
 });
 
+describe("the default: a sale's currency that repays the loan the day it opened pays the shares", () => {
+  // MIN1: 500 USD at 0.90; on 04-01 (0.95) AAA is bought for 1000, so 500
+  // are borrowed, and 5 of the 10 shares are sold the same day for 510 (a
+  // gain); the other 5 are sold on 06-02 for 550 (0.85); 560 converted at
+  // 0.80. The sale returns the 500 that cost 0.90 first, and they repay the
+  // loan. A trap: booking nothing and leaving the borrowed slice parked at
+  // 0.95 lost 500 × (0.95 − 0.90) = 25 (−27 on an economic −2; f9926b6 and
+  // the upload without a CashReport give −2).
+  const MIN1: LoanEv[] = [
+    { k: "fund", d: "2025-03-03", usd: "500", r: "0.90" },
+    { k: "buy", d: "2025-04-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-04-01", sym: "AAA", qty: "5", px: "102", r: "0.95" },
+    { k: "sell", d: "2025-06-02", sym: "AAA", qty: "5", px: "110", r: "0.85" },
+    { k: "conv", d: "2025-07-01", usd: "560", r: "0.80" },
+  ];
+  const sc = withReport("MIN1", MIN1);
+
+  it("both methods: −2, as without a CashReport, the pool ends empty", () => {
+    expect(f2(economic(harnessScenario(sc)))).toBe("-2.00");
+    for (const [, opts] of METHODS) {
+      const per = runLoan(sc, { ...opts, fxTrace: true });
+      expect(f2(lifetime(per))).toBe("-2.00");
+      expect(poolEnd(per)).toBe("0");
+      expect(ids(per)).not.toContain("fx.conservation_mismatch");
+    }
+    expect(years(runLoan(sc, {}))).toEqual(years(runLoan({ id: "MIN1-bare", ev: MIN1 }, {})));
+  });
+
+  it("the default's trace: the borrowed slice takes the cost of the dollars that repaid it", () => {
+    const trace = runLoan(sc, { fxTrace: true }).get(2025)!.report.fxTrace ?? [];
+    const row = trace.find((t) => t.kind === "park" && /paga la compra en lugar del préstamo/.test(t.note ?? ""));
+    expect(row?.date).toBe("2025-04-01");
+    expect(row?.quantityFcy).toBe("500");
+    expect(row?.rate).toBe("0.9");
+  });
+
+  // The issue's generator with same-day sales (part of the position, or all
+  // of it) on the day of an overdrawing buy, at no loss.
+  const SEEDS = Array.from({ length: 200 }, (_, i) => i + 1);
+  for (const [name, opts] of METHODS) {
+    it(`${name}: every seed with same-day sales matches EUR out − EUR in with a CashReport`, () => {
+      const miss = SEEDS.filter((seed) => {
+        const hs = gen(seed, true, true);
+        return f2(lifetime(runLoan(withReport(hs.id, hs.ev), opts))) !== f2(economic(hs));
+      });
+      expect(miss).toEqual([]);
+    });
+  }
+});
+
 describe("the gate: no proof of the account's cash, no loan", () => {
   const bare = (opts: object) => runLoan({ id: "REPRO-bare", ev: REPRO }, opts);
   const same = (sc: LoanScenario) => {

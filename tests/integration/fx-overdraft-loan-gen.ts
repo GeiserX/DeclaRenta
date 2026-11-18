@@ -19,8 +19,11 @@ function day(n: number): string {
  * come on a later day, one event per day (no same-day trades), no loss
  * sales; sometimes a held sale between an overdrawing buy and its funding.
  * `overdraft=false` funds every buy the day before instead (control).
+ * `sameDay` also sells part of the position, or all of it, on the day of an
+ * overdrawing buy, at no loss (the review's MIN1 shape: the default lost
+ * `x × (r_loan − cost)` when that sale's currency repaid the loan).
  */
-export function gen(seed: number, overdraft: boolean): Scenario {
+export function gen(seed: number, overdraft: boolean, sameDay = false): Scenario {
   const rand = rng(seed);
   const ri = (a: number, b: number) => a + Math.floor(rand() * (b - a + 1));
   const rate = () => (0.8 + ri(0, 40) / 100).toFixed(2);
@@ -31,10 +34,10 @@ export function gen(seed: number, overdraft: boolean): Scenario {
   let d = 0;
   const maxPx = (s: string) => Math.max(0, ...held[s]!.map((l) => l.px));
   const qty = (s: string) => held[s]!.reduce((a, l) => a + l.q, 0);
-  const sell = (s: string, all: boolean) => {
+  const sell = (s: string, all: boolean, r = rate()) => {
     const q = all ? qty(s) : ri(1, qty(s));
     const px = maxPx(s) + ri(0, 25); // never a loss
-    ev.push({ k: "sell", d: day(d), sym: s, qty: String(q), px: String(px), r: rate() });
+    ev.push({ k: "sell", d: day(d), sym: s, qty: String(q), px: String(px), r });
     usd += q * px;
     let left = q;
     while (left > 0) {
@@ -58,10 +61,13 @@ export function gen(seed: number, overdraft: boolean): Scenario {
         usd = cost;
         d += 1;
       }
-      ev.push({ k: "buy", d: day(d), sym, qty: String(q), px: String(px), r: rate() });
+      const r = rate();
+      ev.push({ k: "buy", d: day(d), sym, qty: String(q), px: String(px), r });
       held[sym]!.push({ q, px });
       const deficit = cost - usd;
       usd -= cost;
+      // Same day, same rate: part of the position, or all of it, sold at no loss.
+      if (sameDay && deficit > 0 && rand() < 0.5) sell(sym, rand() < 0.3, r);
       if (overdraft && deficit > 0) {
         const others = syms.filter((s) => s !== sym && qty(s) > 0);
         if (others.length > 0 && rand() < 0.6) {
@@ -98,6 +104,6 @@ export function gen(seed: number, overdraft: boolean): Scenario {
   }
   if (usd > 0) ev.push({ k: "conv", d: day(d), usd: String(usd), r: rate() });
   const out = [...ev].sort((a, b) => a.d.localeCompare(b.d));
-  return { id: `X${seed}${overdraft ? "" : "-nod"}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
+  return { id: `X${seed}${overdraft ? "" : "-nod"}${sameDay ? "-sd" : ""}`, years: [...new Set(out.map((e) => Number(e.d.slice(0, 4))))].sort(), closed: true, ev: out };
 }
 

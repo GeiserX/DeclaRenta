@@ -3263,28 +3263,35 @@ export class FxFifoEngine {
    * `x × (r_loan − r_day)`) plus the change of the currency that pays it
    * (`x × (r_day − cost)`), as for a loan in foreign currency (art. 14.2.e
    * LIRPF; DGT V2414-12, V1604-15 for the two parts). Both methods book it in
-   * 1633/1637, «Tradicional con divisa» with the paying lot's shifted cost,
-   * except that the default books nothing for a loan repaid the day it
-   * opened: it keeps the #447 rule for same-day debts (its loss-sale rule).
-   * Never a lost-dollar row: no currency was lost (its own message,
+   * 1633/1637, «Tradicional con divisa» with the paying lot's shifted cost.
+   * The default, for a loan repaid the day it opened, books nothing: the
+   * borrowed currency still parked in the shares takes the paying lot's cost
+   * instead ({@link coverLoanSlices}), and what the round trip's losing sale
+   * did not return is lost principal (its #447 loss-sale rule). Never a
+   * lost-dollar row: no currency was lost (its own message,
    * `report.fx_loan_repayment`).
    */
   private bookRepayment(payEvent: FxEvent, debt: SameDayDebt, x: Decimal, lot: FxLot): void {
     const ccy = debt.sale.currency;
     const rate = debt.buyRate!;
-    const proceedsEur = x.mul(rate);
-    const costBasisEur = x.mul(lot.costPerUnit);
-    const gainLossEur = proceedsEur.minus(costBasisEur);
     const sameDay = payEvent.date === debt.loanSince;
+    const loanDebtPartEur = x.mul(rate.minus(payEvent.ecbRate));
     const event: FxEvent = { ...payEvent, trigger: "loan_repayment" };
+    let rest = x;
+    if (sameDay && !this.traditionalFx) {
+      rest = rest.minus(this.coverLoanSlices(event, debt, x, lot));
+      if (!rest.greaterThan(FxFifoEngine.EPS)) return;
+    }
+    const proceedsEur = rest.mul(rate);
+    const costBasisEur = rest.mul(lot.costPerUnit);
+    const gainLossEur = proceedsEur.minus(costBasisEur);
     if ((this.traditionalFx || !sameDay) && !gainLossEur.isZero()) {
-      const loanDebtPartEur = x.mul(rate.minus(payEvent.ecbRate));
-      const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, x, lot.shifts) : undefined;
+      const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, rest, lot.shifts) : undefined;
       this.disposals.push({
         currency: ccy,
         disposeDate: payEvent.date,
         acquireDate: lot.acquireDate,
-        quantity: x,
+        quantity: rest,
         proceedsEur,
         costBasisEur,
         gainLossEur,
@@ -3297,7 +3304,7 @@ export class FxFifoEngine {
         ...(declaredShiftEur !== undefined ? { declaredShiftEur } : {}),
       });
       this.record("dispose", event, {
-        quantityFcy: x,
+        quantityFcy: rest,
         rate,
         costBasisEur,
         proceedsEur,
@@ -3309,15 +3316,68 @@ export class FxFifoEngine {
       return;
     }
     this.record("discard", event, {
-      quantityFcy: x,
+      quantityFcy: rest,
       rate: lot.costPerUnit,
       lotId: lot.id,
       lotAcquireDate: lot.acquireDate,
       note:
         sameDay && !this.traditionalFx
-          ? `devolución del préstamo en divisa el mismo día en que se abrió: sin diferencia de cambio en este método`
-          : `devolución del préstamo en divisa del ${debt.loanSince}: diferencia de cambio 0`,
+          ? `devolución del préstamo en divisa el mismo día en que se abrió, de divisa perdida en una venta con pérdidas: sin diferencia de cambio en este método`
+          : `devolución del préstamo en divisa del ${debt.loanSince}: diferencia de cambio 0 en las casillas 1633/1637; variación de la deuda ${loanDebtPartEur.toFixed(2)} €`,
     });
+  }
+
+  /**
+   * Issue #449, the default only: `lot` repays, the day it opened, a loan
+   * whose borrowed currency is still parked in the shares it bought (a sale of
+   * part of them that day returned other currency, issue review MIN1). Those
+   * parked slices take the lot's cost and date, up to `x`, and are no longer
+   * borrowed: the shares were paid with that currency after all, as the
+   * same-day cover does for a buy with no dollars of its own
+   * ({@link sameDayCover}). A trap: booking nothing and leaving the slice at
+   * the loan's rate lost `x × (r_loan − cost)` (MIN1: −27 on an economic −2).
+   * The lot already left the pool ({@link payDebt}). Returns the quantity
+   * covered.
+   */
+  private coverLoanSlices(event: FxEvent, debt: SameDayDebt, x: Decimal, lot: FxLot): Decimal {
+    const EPS = FxFifoEngine.EPS;
+    const ccy = debt.sale.currency;
+    const prefix = `${ccy}|`;
+    let left = x;
+    for (const [key, slices] of this.parked) {
+      if (key !== ccy && !key.startsWith(prefix)) continue;
+      for (let i = 0; i < slices.length && left.greaterThan(EPS); i++) {
+        const slice = slices[i]!;
+        if (this.loanOfSlice.get(slice) !== debt) continue;
+        const y = Decimal.min(slice.q, left);
+        const covered: ParkedSlice = {
+          q: y,
+          rate: lot.costPerUnit,
+          acquireDate: lot.acquireDate,
+          ...(lot.brokerSource !== undefined ? { brokerSource: lot.brokerSource } : {}),
+          ...(slice.buyRate !== undefined ? { buyRate: slice.buyRate } : {}),
+          ...(lot.shifts !== undefined ? { shifts: lot.shifts } : {}),
+          ...(slice.parkDate !== undefined ? { parkDate: slice.parkDate } : {}),
+        };
+        if (y.greaterThanOrEqualTo(slice.q.minus(EPS))) {
+          slices[i] = covered;
+          this.loanOfSlice.delete(slice);
+        } else {
+          slice.q = slice.q.minus(y);
+          slices.splice(i, 0, covered);
+          i++;
+        }
+        left = left.minus(y);
+        this.record("park", { ...event, positionKey: key === ccy ? undefined : key.slice(prefix.length) }, {
+          quantityFcy: y,
+          rate: lot.costPerUnit,
+          lotId: lot.id,
+          lotAcquireDate: lot.acquireDate,
+          note: "devolución del préstamo en divisa el mismo día en que se abrió: la divisa de una venta de ese día paga la compra en lugar del préstamo",
+        });
+      }
+    }
+    return x.minus(left);
   }
 
   getDisposals(): FxDisposal[] {
