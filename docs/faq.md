@@ -46,7 +46,7 @@ No. DeclaRenta genera los valores numéricos de cada casilla. Debes introducirlo
 
 ### ¿Qué hago con las pérdidas bloqueadas por anti-churning?
 
-Sí tienes que actuar: **no es automático**. Se bloquea solo la parte proporcional a las acciones recompradas (el resto de la pérdida se imputa con normalidad). Por el importe bloqueado, marca la casilla **«Pérdidas patrimoniales no imputables»** en Renta Web. Esa pérdida bloqueada **no se suma al coste** de la nueva posición: queda diferida y deberás imputarla cuando vendas los valores recomprados. DeclaRenta las muestra resaltadas para que lleves el control.
+Sí tienes que actuar: **no es automático**. Se bloquea solo la parte proporcional a las acciones recompradas (el resto de la pérdida se imputa con normalidad). Por el importe bloqueado, marca la casilla **«Pérdidas patrimoniales no imputables»** en Renta Web. Esa pérdida bloqueada **no se suma al coste** de la nueva posición: queda diferida y deberás imputarla en el ejercicio en que vendas acciones de ese valor sin recomprar en los 2 meses anteriores o posteriores (transmisión definitiva). Si declaraste un año con la versión 0.66.5 o anterior, puede que ya dedujeras una pérdida que debía seguir diferida: no la deduzcas otra vez cuando DeclaRenta la libere ahora, o presenta una complementaria de aquel año. DeclaRenta las muestra resaltadas para que lleves el control.
 
 ### ¿Puedo exportar los resultados?
 
