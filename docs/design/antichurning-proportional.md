@@ -4,7 +4,7 @@
 > issue #451 (the «transmisión definitiva» queue). Supersedes the boolean
 > whole-loss model. Grounded in BOE Art. 33.5.f/g + Art. 37.2, Art. 8 RIRPF, and
 > DGT V0913-08 / V2481-20 / V3282-18 / V0248-18 / V0571-21 / V1760-23 /
-> V0754-26 / V0046-20 / V1294-22 (all verified verbatim).
+> V0754-26 / V0046-20 / V1294-22 / V0279-25 (all verified verbatim).
 
 ## The rule (verified against primary sources)
 
@@ -60,7 +60,7 @@ homogeneous key:
 - **Buy budget**: sorted buy events `{time, qty}`; `qty` is consumable.
 - **Remaining-position budget**: signed BUY/SELL movements compute
   `holdingAfter = max(0, net position after the sale date)`. This caps only
-  PRE-sale absorption and is shared across same-date FIFO disposal splits.
+  PRE-sale absorption, once per sale day.
   Forward/reverse splits are applied to compare every movement in the sale's
   share units, matching the FIFO engine's split-adjusted disposal quantities.
 - **Pending-loss queue**: per key, a FIFO list of `{qty, eur, time, sellDate}`
@@ -70,9 +70,11 @@ homogeneous key:
   so a loss blocked by one FIFO split of a sale is never released by another
   split of the same sale. Entries are split-adjusted at release time.
 
-For each disposal (chronological):
-1. **Absorb.** Take the in-window homogeneous repurchases that no earlier
-   transmission used: POST-sale buys first, uncapped, because they are genuine
+For each sale day of a key (chronological). FIFO splits one sale into one
+disposal per lot, and same-day sales have no intraday order, so the day is one
+unit:
+1. **Absorb.** Over the day's sold quantity, take the in-window homogeneous
+   repurchases that no earlier transmission used: POST-sale buys first, uncapped, because they are genuine
    replacement lots; then PRE-sale buys newest-first, only up to the
    remaining-position budget `holdingAfter`. A full exit with no later
    repurchase therefore absorbs `0`, while a full exit followed by a later
@@ -83,10 +85,17 @@ For each disposal (chronological):
    uses «los mismos criterios» as the block (V3282-18), and a rebuy counted there
    is used up for later sales (V0248-18: «no pueden considerarse 3000 acciones
    que ya fueron tenidas en cuenta en la transmisión de 25 de abril»). A gain
-   sale with nothing pending has no test to run and uses no rebuy.
+   lot with nothing pending has no test to run and uses no rebuy.
+   **Hand out.** Of the shares sold, the rebought ones are the last acquired:
+   «la pérdida patrimonial que puede imputarse es la atribuible a las acciones
+   adquiridas en primer lugar» (V0913-08; V1294-22; Art. 37.2). So the absorbed
+   shares go to the day's loss lots first, newest acquisition first, then to its
+   gain lots, newest first. A loss lot inside a sale with a net gain stays
+   blocked (V0279-25), and a pending loss elsewhere can never hand a gain lot
+   the rebuy that blocks a loss lot of the same sale.
 2. **Release.** The shares no rebuy absorbed are definitive. Each releases one
-   pending share's loss, **oldest first**, into `reintegratedLossEur`, whichever
-   lot FIFO sells. V0754-26: the definitive 2026 sale of 770 shares releases
+   pending share's loss, **oldest first**, into the `reintegratedLossEur` of
+   the disposal that carries it, whichever lot FIFO sells. V0754-26: the definitive 2026 sale of 770 shares releases
    «1 de agosto de 2025 – 190 acciones … 9 de octubre de 2025 – 185 acciones de
    las 207». V0571-21: the definitive 25/12 sale of 3,000 releases the 800 of
    2,000 shares of 05/07 and the loss of 1,000 of the 3,000 shares of 08/07.
@@ -99,8 +108,11 @@ For each disposal (chronological):
    podrá imputar las pérdidas patrimoniales de 2022 que le resten por imputar».
    The queue can hold more shares than the position, because a rebought loss
    sale keeps the old losses pending and adds its own; without this step those
-   losses would never come back.
-4. **Block (losses only).** `blockedLossEur = |gainLossEur| × absorbed/qty`,
+   losses would never come back. The position must be zero both in the BUY/SELL
+   trades and in FIFO (`remainingLots` plus the disposals' holding spans), so
+   shares that came in without a BUY (scrip dividend, merger into a new ISIN,
+   spin-off, reward lots) still count as held.
+4. **Block (loss lots only).** `blockedLossEur = |gainLossEur| × absorbed/qty`,
    appended to the end of the queue. The absorbed shares that keep the old
    losses pending are the same ones that block this loss; they are not counted
    twice (V0913-08: «se produce la transmisión efectiva de 955 acciones, por lo
@@ -182,22 +194,23 @@ transmission that releases them.
   engine releases on such a sale. In V0571-21 itself the engine still gets the
   DGT's answer, because an unused pre-sale buy also absorbs that sale.
 - **Rebuy pick order**: post-sale buys first, then pre-sale newest-first. The
-  DGT picks the earliest unused buy, pre-sale before post-sale (V3282-18,
-  V1760-23). The totals match on V3282-18, V0571-21, V1760-23 and V0754-26, but
-  not on V2481-20: there the 22/04 loss is rebought the same day, the engine
-  takes 905 of the 27/04 buy instead, and the 29/04 sale ends up definitive for
-  925 shares (2020: engine 1,079.44, DGT 1,767). A pre-sale-first order gives
-  1,751.73 there but breaks V1760-23, and no strict budget reaches 1,767: the
-  DGT's short answer does not track the 23/04 gain sales' use of the 06/05 buy.
-  Tracked apart from #451.
-- **Lot attribution inside one sale**: when one sale spans several FIFO lots,
-  the engine lets the first-processed (oldest) lot absorb the rebuy first. The
-  DGT puts the deductible part on the first-acquired shares (V0913-08, V1294-22,
-  Art. 37.2), so the blocked part sits on the newest lots. Totals of blocked
-  loss can differ by the price gap between lots (V0913-08: 144,000 against the
-  DGT's 144,500). The release step is not affected.
+  DGT picks the earliest unused buy, pre-sale before post-sale (V0248-18,
+  V3282-18, V1760-23). Three consultas show the gap; each is a known-gap test
+  (`it.fails` on the DGT's figure, the engine's figure in a comment):
+  - **V0248-18**, the cleanest proof, with no same-day buy: the engine lets the
+    25/04 and 28/04 gain sales take the 28/05 buy, so the 29/05 sale has 1,000
+    definitive shares and releases 400 (2017: engine 500, DGT 900).
+  - **V0754-26** matches only when every rebuy follows its sale. With each
+    rebuy a few days before its sale (the consulta allows both), each sale takes
+    the next sale's rebuy and 2025 releases 385 (engine −775, DGT 0).
+  - **V2481-20** (engine 1,079.44, DGT 1,767): mostly the same-day exclusion
+    above. The 22/04 loss is rebought the same day; counting same-day buys gives
+    1,751.73, so 672.29 of the 687.56 released comes from that, and the last
+    15.27 from the pick order.
+  The totals match on V3282-18, V0571-21, V1760-23 and V0754-26 with post-sale
+  rebuys. Tracked apart from #451.
 - **Multiple sales, one repurchase**: budget consumed **chronologically**
-  (earliest sale first, gain sales with pending losses included), the most
+  (earliest sale day first, gain sales with pending losses included), the most
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
   tiebreak).
 - **Single-purchase exception** (AEAT Manual 2025, V3282-18 A): not applied; a
@@ -208,10 +221,11 @@ transmission that releases them.
   window limitation the FIFO engine already surfaces elsewhere; this fix does
   not reconstruct prior-year holdings from absent input.
 - **Corporate actions**: forward/reverse splits are reflected in both the
-  remaining-position cap and deferred-loss release proration. More complex
-  tax-neutral transformations (mergers, spin-offs, scrip dividends) still rely
-  on the FIFO disposal stream for the actual gain/loss and should get dedicated
-  anti-churning tests if a real case reaches this path.
+  remaining-position cap and deferred-loss release proration. The total exit
+  also reads FIFO's lots, so scrip dividends and mergers into a new ISIN keep
+  the position open (tested). The pre-sale cap still reads the BUY/SELL trades
+  only, so after such an action it can understate the position, the same way
+  as the single-year limitation above.
 
 ## Migration note (issue #451)
 

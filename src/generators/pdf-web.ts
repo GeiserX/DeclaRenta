@@ -169,7 +169,7 @@ export async function generatePdfWebReport(
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
     casillasBody.push([t("pdf.informative"), t("pdf.blocked_losses"), eur(report.capitalGains.blockedLosses)]);
   }
-  // Reintegrated losses: previously-blocked losses released this year (surviving repurchased shares sold) — informative
+  // Reintegrated losses: previously-blocked losses released this year (a later «transmisión definitiva» of the same security) — informative
   if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
     casillasBody.push([t("pdf.informative"), t("pdf.reintegrated_losses"), eur(report.capitalGains.reintegratedLosses)]);
   }

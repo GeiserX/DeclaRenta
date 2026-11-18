@@ -13,7 +13,7 @@
 - La casilla **0327** es un campo de texto (denominación de los valores), no un importe. Las opciones, criptomonedas y fondos no cotizados se declaran como «otros elementos patrimoniales» en las casillas **1633/1637**, no en 0328/0331.
 - En valores en **moneda extranjera**, el valor de adquisición mostrado se calcula al tipo de cambio del BCE de la fecha de **venta** (no de compra), de modo que transmisión − adquisición coincide exactamente con la ganancia o pérdida (DGT **V2422-20**: la ganancia se calcula en la moneda del valor y solo la diferencia se convierte a euros). Por eso este importe puede diferir del coste histórico en euros de la fecha de compra.
 - El motor FIFO (Art. 37.2 LIRPF) determina qué lotes se consumen al vender valores homogéneos.
-- La regla anti-churning (Art. 33.5.f/g LIRPF) bloquea **solo la parte proporcional** de la pérdida correspondiente a la cantidad recomprada; el resto se computa ahora. La pérdida entera va dentro de la diferencia entre 0328 y 0331 (o entre 1633 y 1637); la parte bloqueada se difiere (no se pierde) y se reporta por separado hasta que se vendan los valores recomprados.
+- La regla anti-churning (Art. 33.5.f/g LIRPF) bloquea **solo la parte proporcional** de la pérdida correspondiente a la cantidad recomprada; el resto se computa ahora. La pérdida entera va dentro de la diferencia entre 0328 y 0331 (o entre 1633 y 1637); la parte bloqueada se difiere (no se pierde) y se reporta por separado hasta la siguiente transmisión definitiva del mismo valor (una venta sin recompra en su plazo).
 - Los impuestos de transacción (STT, FTT, SEC fees) se incluyen en el coste de adquisición (compras) y se deducen del valor de transmisión (ventas).
 
 ## Base del ahorro — Ganancias por transmisión de moneda extranjera
@@ -130,15 +130,17 @@ En Renta Web esto **requiere acción**: no es automático. Por el importe bloque
 
     Esas versiones liberaban una pérdida al vender las acciones recompradas aunque esa venta volviera a tener recompra en su plazo. Si ya dedujiste esa pérdida en un año presentado, no la deduzcas otra vez cuando DeclaRenta la libere ahora en un año posterior, o presenta una autoliquidación complementaria de aquel año. Ejemplo: con el caso de la issue #451, la 0.66.5 dedujo 20 € en 2025; la versión actual los mantiene diferidos y libera 25 € en 2026 en lugar de 5 €.
 
+    También puede pasar al revés: la versión actual puede liberar una pérdida en un año anterior al que la liberaba la 0.66.5 (por ejemplo, cuando una venta definitiva vende lotes antiguos, DGT **V0046-20**). Si ese año ya está presentado, puedes solicitar la rectificación de aquella autoliquidación para deducirla; si no, esa pérdida no se deduce nunca.
+
 ### Cómo lo detecta DeclaRenta
 
 El motor de anti-churning recorre todas las operaciones en orden cronológico y, para cada valor homogéneo:
 
 1. Identifica las ventas con pérdida (`gainLossEur < 0`).
-2. Para cada una, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para cotizados, 1 año para no cotizados/cripto), antes o después de la venta.
-3. Bloquea la pérdida de forma **proporcional**: `pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida`. La parte restante se computa ahora.
+2. Para cada día de venta, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para cotizados, 1 año para no cotizados/cripto), antes o después de la venta.
+3. Bloquea la pérdida de forma **proporcional**: `pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida`. La parte restante se computa ahora. Si una venta consume varios lotes FIFO, las acciones recompradas son las últimas adquiridas: la parte deducible es la de las acciones adquiridas en primer lugar (DGT **V0913-08**, **V1294-22**), y un lote con pérdida queda bloqueado antes que uno con ganancia.
 4. La pérdida bloqueada queda **pendiente** en una cola por valor, contada en acciones (no se suma al coste de ninguna compra).
-5. **Liberación:** en cada venta posterior del mismo valor, con ganancia o con pérdida, el motor descuenta las recompras de su plazo que ninguna venta anterior haya usado. Las acciones restantes son una transmisión definitiva y liberan, una por una, la pérdida pendiente más antigua. Si la venta deja la posición a cero sin recompra, se libera todo lo pendiente.
+5. **Liberación:** en cada venta posterior del mismo valor, con ganancia o con pérdida, el motor descuenta las recompras de su plazo que ninguna venta anterior haya usado. Las acciones restantes son una transmisión definitiva y liberan, una por una, la pérdida pendiente más antigua. Si la venta deja la posición a cero sin recompra, se libera todo lo pendiente. La posición cuenta también las acciones que llegan sin compra (dividendo en acciones, fusión, escisión).
 6. Las operaciones con pérdida bloqueada aparecen resaltadas en la tabla de resultados.
 
 !!! warning
