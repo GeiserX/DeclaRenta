@@ -665,7 +665,9 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
  * One CashReport row. Besides the year-end balance (Modelo 720), it keeps the
  * opening balance and the period of its own statement: a multi-year upload
  * has one row per account, currency and statement, and the FX engine's loan
- * model (issue #449) checks each period on its own.
+ * model (issue #449) checks each period on its own. A row with no
+ * `endingCash` keeps the "0" Modelo 720 has always read, and is flagged so
+ * the loan model does not take that default for a balance the broker gave.
  */
 function mapCashBalance(raw: Record<string, string>, stmt: { fromDate?: string; toDate?: string }): CashBalance {
   const fromDate = raw.fromDate || stmt.fromDate;
@@ -675,6 +677,7 @@ function mapCashBalance(raw: Record<string, string>, stmt: { fromDate?: string; 
     currency: raw.currency ?? "",
     ...(raw.startingCash !== undefined ? { startingCash: raw.startingCash } : {}),
     endingCash: raw.endingCash ?? "0",
+    ...(raw.endingCash === undefined ? { endingCashMissing: true as const } : {}),
     endingSettledCash: raw.endingSettledCash ?? "0",
     ...(fromDate ? { fromDate } : {}),
     ...(toDate ? { toDate } : {}),

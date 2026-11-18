@@ -55,6 +55,7 @@ export const METHOD_NOTE_IDS: ReadonlySet<string> = new Set([
   "report.fx_traditional_uncovered_ibkr",
   "report.fx_traditional_opening",
   "report.fx_loan_repayment",
+  "report.fx_loan_repayment_manual",
 ]);
 
 export function isMethodNote(m: TaxMessage): boolean {
