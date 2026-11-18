@@ -237,7 +237,7 @@ interface SameDayDebt {
    * drops when currency in 1633/1637 repays the loan (those units are paid
    * for), when a slice stops being the loan's (a same-day cover, the
    * opening balance, a same-day sale), and when the principal pays a debt as
-   * borrowed currency (see {@link FxFifoEngine.bookRepayment}).
+   * borrowed currency, whatever the row books (see {@link FxFifoEngine.bookRepayment}).
    */
   borrowedLeft?: Decimal;
 }
@@ -3592,16 +3592,24 @@ export class FxFifoEngine {
     // only the loan's own counted outside, so when AAA's sale repaid L2
     // with L1's principal and BBB's sale repaid L1 with L2's (no currency
     // ever paid for), the report told the user to lower 1633 (0) by 100 €
-    // (CROSS), while the other sale order (OWN) said `_manual`.
+    // (CROSS), while the other sale order (OWN) said `_manual`. The borrowed
+    // units this repayment spends leave their loan's count whatever the row
+    // books: they are gone. A trap, PR #463 review: only a gain-0 row took
+    // them out, so after 500 of L2's 1000 repaid L1 with a result (5 €) and
+    // a funding paid for 500 of L2, L2 still counted 500 borrowed, and the
+    // paid-for 500 left in its shares, repaying L3, went to the `_manual`
+    // note (boxGain 35 instead of 55, PASS).
     const zeroRow = (this.traditionalFx || !sameDay) && !booked;
-    const origin = zeroRow ? this.loanPrincipal.get(lot) : undefined;
-    const outside = origin === undefined ? new Decimal(0) : origin === debt ? rest : Decimal.min(rest, origin.borrowedLeft ?? 0);
-    if (origin !== undefined) FxFifoEngine.lessBorrowed(origin, outside);
+    const origin = this.loanPrincipal.get(lot);
+    const spent = origin === undefined ? new Decimal(0) : origin === debt ? rest : Decimal.min(rest, origin.borrowedLeft ?? 0);
+    if (origin !== undefined) FxFifoEngine.lessBorrowed(origin, spent);
+    const outside = zeroRow ? spent : new Decimal(0);
     const inside = booked || zeroRow ? rest.minus(outside) : new Decimal(0);
     if (inside.greaterThan(FxFifoEngine.EPS)) {
       note(inside, true);
-      // Those units of the loan are paid for: its principal is owned currency now.
-      FxFifoEngine.lessBorrowed(debt, inside);
+      // Those units of the loan are paid for: its principal is owned currency
+      // now (its own principal already left the count above).
+      if (origin !== debt) FxFifoEngine.lessBorrowed(debt, inside);
     }
     if (rest.minus(inside).greaterThan(FxFifoEngine.EPS)) note(rest.minus(inside), false);
     if (booked) {

@@ -846,3 +846,109 @@ describe("the gate reconciles the cash rows day by day (PR #460 review)", () => 
     for (const [, opts] of METHODS) expect(loanRows(runUpload(toUpload(p), rates, [2025], opts)).length).toBeGreaterThan(0);
   });
 });
+
+describe("returned principal that repays another loan with a result leaves its own loan's borrowed count (PR #463 review)", () => {
+  // AAA is bought on L1 (500 USD at 0.95), BBB on L2 (1000 USD at 0.94).
+  // Half of BBB sold at 0.90 returns 500 of L2's principal at 0.94, which
+  // repays L1: a row of 500 × (0.95 − 0.94) = 5 € in 1633/1637 (debt part
+  // 25). Those 500 units of L2 are spent: only the 500 still in BBB are
+  // L2's principal. A funding of 500 at 0.92 repays half of L2 (10 €, debt
+  // part 10), so the 500 left in BBB are paid for. CCC, bought on L3 (500 at
+  // 0.94) and sold at 0.90, repays the rest of L2 with borrowed principal: a
+  // gain-0 row outside 1633/1637 (debt part 20). The rest of BBB repays L3
+  // with paid-for principal: a gain-0 row inside (debt part 20). So 55 € of
+  // the 75 € are in the boxes. A trap: only a gain-0 row took the units
+  // out of L2's count, so L2 still counted 500 borrowed after the funding,
+  // and the last row went outside too (boxGain 35, 40 € to reconcile).
+  // `lead` changes only L1's rate. At 0.94 the first row is gain 0, so it
+  // spends L2's borrowed principal outside 1633/1637 and L1's 20 € of debt
+  // part move outside. The last row (L3 repaid by the paid-for rest of BBB)
+  // stays inside in both.
+  const PASS = (lead: string): LoanEv[] => [
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "5", px: "100", r: lead },
+    { k: "buy", d: "2025-03-04", sym: "BBB", qty: "10", px: "100", r: "0.94" },
+    { k: "sell", d: "2025-04-01", sym: "BBB", qty: "5", px: "100", r: "0.90" },
+    { k: "fund", d: "2025-05-01", usd: "500", r: "0.92" },
+    { k: "buy", d: "2025-05-02", sym: "CCC", qty: "5", px: "100", r: "0.94" },
+    { k: "sell", d: "2025-06-02", sym: "CCC", qty: "5", px: "100", r: "0.90" },
+    { k: "sell", d: "2025-07-01", sym: "BBB", qty: "5", px: "100", r: "0.90" },
+    { k: "sell", d: "2025-08-01", sym: "AAA", qty: "5", px: "100", r: "0.90" },
+    { k: "conv", d: "2025-08-04", usd: "500", r: "0.88" },
+  ];
+  const note = (per: Per) => per.get(2025)!.report.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+
+  it("the default: a pass-on with a result retires the units, the paid-for rest repays inside 1633/1637", () => {
+    const per = runLoan(withReport("PASS", PASS("0.95")), {});
+    expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(withReport("PASS", PASS("0.95"))))));
+    expect(loanRows(per)).toEqual([
+      ["2025-04-01", "500", "5.00", "25.00"],
+      ["2025-05-01", "500", "10.00", "10.00"],
+    ]);
+    const m = note(per);
+    expect(m?.id).toBe("report.fx_loan_repayment_manual");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "15.00", gain: "75.00", loss: "0.00", boxGain: "55.00", boxLoss: "0.00" });
+  });
+
+  it("the default: the same pass-on at gain 0 moves L1's part outside and keeps the last row inside 1633/1637", () => {
+    const per = runLoan(withReport("PASS-ZERO", PASS("0.94")), {});
+    expect(loanRows(per)).toEqual([["2025-05-01", "500", "10.00", "10.00"]]);
+    // L1's 20 € are outside now (L2's principal was borrowed when it paid
+    // L1, at gain 0), L3's 20 € inside, as in PASS.
+    expect(note(per)?.context).toEqual({ ccy: "USD", amount: "10.00", gain: "70.00", loss: "0.00", boxGain: "30.00", boxLoss: "0.00" });
+  });
+
+  it("«Tradicional con divisa» books every repayment in 1633/1637: the plain note", () => {
+    const per = runLoan(withReport("PASS", PASS("0.95")), TRAD);
+    expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(withReport("PASS", PASS("0.95"))))));
+    const m = note(per);
+    expect(m?.id).toBe("report.fx_loan_repayment");
+    expect(m?.context?.gain).toBe("75.00");
+  });
+});
+
+describe("a loan repaid by another loan's borrowed principal with a result counts as paid (PR #463 review)", () => {
+  // AAA is bought on L1 (500 USD at `r1`), BBB on L2 (500 USD at 0.95). BBB
+  // sold at 0.90 returns L2's principal, which repays L1. A funding of 500
+  // at 0.92 repays L2, never L1 (debt part 15, in 1633/1637). CCC is bought
+  // on L3 (500 at `r1`). AAA sold at 0.90 returns L1's principal, which
+  // repays L3 at gain 0 (debt part 30 with `r1` 0.96, 25 with 0.95).
+  // At 0.96 the first row books 500 × (0.96 − 0.95) = 5 €: a row in
+  // 1633/1637, so it pays L1 (debt part 30 inside), and L1's principal pays
+  // L3 like any lot (30 inside): 75 of 75 in the boxes, the plain note. No
+  // currency of the user's own ever paid L1; what pays a loan is a
+  // repayment in 1633/1637, also one paid with borrowed principal.
+  // At 0.95 the first row is gain 0 and stays outside, so L1's principal is
+  // still borrowed when it repays L3: 15 of 65 in the boxes, `_manual`.
+  const P2 = (r1: string): LoanEv[] => [
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "5", px: "100", r: r1 },
+    { k: "buy", d: "2025-03-04", sym: "BBB", qty: "5", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-04-01", sym: "BBB", qty: "5", px: "100", r: "0.90" },
+    { k: "fund", d: "2025-05-01", usd: "500", r: "0.92" },
+    { k: "buy", d: "2025-05-02", sym: "CCC", qty: "5", px: "100", r: r1 },
+    { k: "sell", d: "2025-06-02", sym: "AAA", qty: "5", px: "100", r: "0.90" },
+    { k: "sell", d: "2025-07-01", sym: "CCC", qty: "5", px: "100", r: "0.90" },
+    { k: "conv", d: "2025-08-04", usd: "500", r: "0.88" },
+  ];
+  const note = (per: Per) => per.get(2025)!.report.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+
+  it("the default: the pass-on with a result pays L1, so L1's principal repays L3 inside 1633/1637", () => {
+    const sc = withReport("P2", P2("0.96"));
+    const per = runLoan(sc, {});
+    expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(sc))));
+    expect(loanRows(per)).toEqual([
+      ["2025-04-01", "500", "5.00", "30.00"],
+      ["2025-05-01", "500", "15.00", "15.00"],
+    ]);
+    const m = note(per);
+    expect(m?.id).toBe("report.fx_loan_repayment");
+    expect(m?.context?.gain).toBe("75.00");
+  });
+
+  it("the default: the same pass-on at gain 0 leaves L1's principal borrowed, `_manual`", () => {
+    const sc = withReport("P2-ZERO", P2("0.95"));
+    const per = runLoan(sc, {});
+    expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(sc))));
+    expect(loanRows(per)).toEqual([["2025-05-01", "500", "15.00", "15.00"]]);
+    expect(note(per)?.context).toEqual({ ccy: "USD", amount: "15.00", gain: "65.00", loss: "0.00", boxGain: "15.00", boxLoss: "0.00" });
+  });
+});
