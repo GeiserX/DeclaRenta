@@ -110,7 +110,7 @@ const es = {
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.dt_foreign_income_total": "Total rendimientos extranjeros",
   "casilla.reintegrated_losses":
-    "Pérdidas diferidas de años anteriores ahora deducibles (se vendieron los valores recomprados): {{amount}} EUR",
+    "Pérdidas diferidas que ahora se integran (acciones vendidas sin recompra en su plazo, «transmisión definitiva»): {{amount}} EUR",
   "casilla.blocked_losses":
     "Pérdidas bloqueadas por regla anti-churning (2 meses cotizados / 1 año no cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
@@ -632,7 +632,10 @@ const es = {
   "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
   "annex.wash_hint":
-    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida se aplicará cuando vendas lo que recompraste.",
+    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida queda pendiente: se integra cuando vendas acciones de este valor sin recomprar en los 2 meses anteriores o posteriores (1 año si no cotiza), primero las pérdidas más antiguas.",
+  "annex.wash_released": "Libera {{amount}} EUR de pérdidas diferidas de este valor (transmisión definitiva, art. 33.5 LIRPF)",
+  "annex.wash_released_dates": "Pérdidas pendientes de las ventas del: {{dates}}",
+  "annex.wash_released_hint": "Las acciones de esta venta que ninguna recompra en su plazo cubre son una transmisión definitiva: integran ahora las pérdidas pendientes de ese valor, la de una acción por cada acción, primero las más antiguas (si la venta cierra la posición, todas las que queden). En Renta Web, impútalas en este ejercicio.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
@@ -650,6 +653,7 @@ const es = {
   "tax.breakdown_dividends": "Dividendos",
   "tax.breakdown_interest": "Intereses",
   "tax.breakdown_blocked_losses": "Pérdidas bloqueadas (diferidas)",
+  "tax.breakdown_reintegrated_losses": "Pérdidas diferidas que ahora se integran",
 
   // Sidebar - guide
   "sidebar.guia": "Guía Renta Web",
@@ -719,7 +723,7 @@ const es = {
     "La deducción por doble imposición evita pagar dos veces impuestos sobre los mismos dividendos. Se limita al menor entre lo pagado en origen y la cuota española. Si el convenio de doble imposición permite un tipo máximo inferior (ej. 15% EE.UU.), solo es deducible hasta ese límite.",
   "guide_rw.blocked_losses_title": "Pérdidas bloqueadas (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Estas pérdidas se difieren al ejercicio siguiente porque se recompró el mismo valor en los 2 meses posteriores (cotizados) o 1 año (no cotizados). El importe se suma a la adquisición de la nueva posición.",
+    "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Se bloquean porque recompraste el mismo valor en los 2 meses anteriores o posteriores a la venta (1 año si no cotiza). No se suman al coste de la nueva posición: quedan pendientes y se integran cuando vendas acciones de ese valor sin recomprar en ese plazo (transmisión definitiva), primero las más antiguas. Si declaraste un año con DeclaRenta 0.66.5 o anterior, esas versiones liberaban una pérdida al vender las acciones recompradas aunque volvieras a recomprar: si ya dedujiste esa pérdida, no la deduzcas otra vez cuando DeclaRenta la libere ahora, o presenta una autoliquidación complementaria de aquel año. Y al revés: si DeclaRenta libera ahora una pérdida en un año que ya presentaste con la 0.66.5 o anterior, puedes solicitar la rectificación de aquella autoliquidación para deducirla.",
   "guide_rw.closing_tip": "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta muestra un importe distinto en ganancias patrimoniales, puede usar otro método para las acciones en divisa. En los resultados de Modelo 100, abre «Comparar con los otros métodos» para ver las cifras de los tres. Para cambiar de método, vuelve al paso «Revisar y elegir método». Usa el mismo método todos los años.",
 
   // PDF report

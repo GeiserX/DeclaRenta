@@ -108,7 +108,7 @@ const eu: TranslationKeys = {
   "casilla.double_taxation": "Zergapetze bikoitzaren kenkaria",
   "casilla.dt_foreign_income_total": "Atzerriko errendimenduak guztira",
   "casilla.reintegrated_losses":
-    "Aurreko urteetako galera atzeratuak orain kengarriak (berrerositako balioak saldu ziren): {{amount}} EUR",
+    "Orain integratzen diren galera atzeratuak (epean berrerosketarik gabe saldutako akzioak, «behin betiko eskualdaketa»): {{amount}} EUR",
   "casilla.blocked_losses":
     "Anti-churning arauagatik blokeatutako galerak (2 hilabete kotizatuak / 1 urte kotizatu gabeak): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} abisu",
@@ -599,7 +599,10 @@ const eu: TranslationKeys = {
   "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
   "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
   "annex.wash_hint":
-    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera berrerosi duzuna saltzen duzunean aplikatuko da.",
+    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera zain geratzen da: balio honen akzioak aurreko edo ondorengo 2 hilabeteetan berrerosi gabe saltzen dituzunean integratzen da (urtebete kotizatzen ez badu), galera zaharrenak lehenik.",
+  "annex.wash_released": "Balio honen {{amount}} EUR galera atzeratu askatzen ditu (behin betiko eskualdaketa, LIRPF 33.5 art.)",
+  "annex.wash_released_dates": "Data hauetako salmenten galerak: {{dates}}",
+  "annex.wash_released_hint": "Salmenta honetako akzioetatik, epean inolako berrerosketak estaltzen ez dituenak behin betiko eskualdaketa dira: balio horren zain dauden galerak integratzen dituzte orain, akzio bakoitzeko akzio baten galera, zaharrenak lehenik (salmentak posizioa ixten badu, geratzen diren guztiak). Renta Web-en, egotzi ekitaldi honetan.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Zerga-estimazioa (aurrezki-oinarria)",
@@ -617,6 +620,7 @@ const eu: TranslationKeys = {
   "tax.breakdown_dividends": "Dibidenduak",
   "tax.breakdown_interest": "Interesak",
   "tax.breakdown_blocked_losses": "Blokeatutako galerak (atzeratuak)",
+  "tax.breakdown_reintegrated_losses": "Orain integratzen diren galera atzeratuak",
 
   // Sidebar - guide
   "sidebar.guia": "Renta Web Gida",
@@ -686,7 +690,7 @@ const eu: TranslationKeys = {
     "Zergapetze bikoitzagatiko kenkariak dibidendo berberengatik bi aldiz zerga ordaintzea ekiditen du. Atzerrian ordaindutakoaren eta Espainiako kuotaren arteko txikienera mugatzen da. Zergapetze bikoitza saihesteko hitzarmenak tasa maximo txikiagoa baimentzen badu (adib. %15 AEB), kopuru horretaraino bakarrik da kengarria.",
   "guide_rw.blocked_losses_title": "Blokeatutako galerak (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egozteko ondare galerak»</strong> gelaxka Renta Web-en. Galera hauek hurrengo ekitaldira atzeratzen dira balio bera 2 hilabetetan (kotizatuak) edo urtebetean (kotizatu gabeak) berrerosi zelako. Zenbatekoa posizio berriaren eskuraketa kostuari gehitzen zaio.",
+    "DeclaRenta-k blokeatutako galerak erakusten baditu, markatu <strong>«Egotzi ezin diren ondare-galerak»</strong> gelaxka Renta Web-en. Blokeatu egiten dira balio bera salmentaren aurreko edo ondorengo 2 hilabeteetan berrerosi zenuelako (urtebete kotizatzen ez badu). Ez zaizkio posizio berriaren kostuari gehitzen: zain geratzen dira, eta balio horren akzioak epe horretan berrerosi gabe saltzen dituzunean integratzen dira (behin betiko eskualdaketa), zaharrenak lehenik. Urte bat DeclaRenta 0.66.5 edo aurreko bertsio batekin aitortu bazenuen, bertsio horiek galera askatzen zuten berrerositako akzioak saltzean, berriro berrerosi arren: galera hori dagoeneko kendu bazenuen, ez kendu berriro DeclaRenta-k orain askatzen duenean, edo aurkeztu urte horretako autolikidazio osagarria. Eta alderantziz: DeclaRenta-k orain galera bat askatzen badu 0.66.5 edo aurreko bertsio batekin dagoeneko aurkeztu zenuen urte batean, autolikidazio horren zuzenketa eska dezakezu galera hori kentzeko.",
   "guide_rw.closing_tip": "Datu guztiak sartu ondoren, erabili Renta Web-eko «Aitorpena egiaztatu» botoia akatsak egiaztatzeko. Beste tresna batek ondare irabazietan zenbateko desberdina erakusten badu, baliteke dibisako akzioetarako beste metodo bat erabiltzea. 100 Ereduko emaitzetan, ireki «Beste metodoekin alderatu» hiru metodoen zifrak ikusteko. Metodoa aldatzeko, itzuli «Berrikusi eta metodoa aukeratu» urratsera. Erabili metodo bera urte guztietan.",
 
   // PDF report

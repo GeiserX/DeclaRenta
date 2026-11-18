@@ -57,6 +57,8 @@ export function formatReport(report: TaxSummary) {
       tipo_ecb_compra: d.acquireEcbRate.toFixed(6),
       tipo_ecb_venta: d.sellEcbRate.toFixed(6),
       bloqueada_antichurning: d.washSaleBlocked,
+      perdida_bloqueada_eur: d.blockedLossEur.toFixed(2),
+      perdida_reintegrada_eur: d.reintegratedLossEur.toFixed(2),
       broker_venta: d.brokerSource,
       broker_compra: d.acquireBrokerSource,
     })),

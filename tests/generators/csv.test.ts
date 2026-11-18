@@ -333,6 +333,18 @@ describe("formatCsv", () => {
     expect(lines).toContain("—,Perdidas reintegradas antichurning (Art. 33.5.f — informativo),250.00");
   });
 
+  it("names, per sale, the earlier deferred loss it releases (#451)", () => {
+    // A «transmisión definitiva» releasing 250 of an earlier deferral: the row
+    // says which sale released it, not only the summary line.
+    const report = makeReport();
+    report.capitalGains.disposals[0]!.reintegratedLossEur = new Decimal(250);
+    report.capitalGains.reintegratedLosses = new Decimal(250);
+    const lines = formatCsv(report).split("\n");
+    const header = lines.find((l) => l.startsWith("ISIN,Simbolo,Descripcion"))!.split(",");
+    const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
+    expect(row[header.indexOf("Perdida_Reintegrada_EUR")]).toBe("250.00");
+  });
+
   it("appends the sale and acquisition broker as the last two columns", () => {
     // Bought at one broker, sold at another: FIFO pools lots per ISIN across
     // brokers, so the row names both. Earlier columns keep their positions.
@@ -344,15 +356,15 @@ describe("formatCsv", () => {
 
     const header = lines.find((l) => l.startsWith("ISIN,Simbolo,Descripcion"))!.split(",");
     const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
-    expect(header.slice(-3)).toEqual(["Perdida_Bloqueada_EUR", "Broker_Venta", "Broker_Compra"]);
+    expect(header.slice(-4)).toEqual(["Perdida_Bloqueada_EUR", "Broker_Venta", "Broker_Compra", "Perdida_Reintegrada_EUR"]);
     expect(row).toHaveLength(header.length);
-    expect(row.slice(-2)).toEqual(["Degiro", "Interactive Brokers"]);
+    expect(row.slice(-3, -1)).toEqual(["Degiro", "Interactive Brokers"]);
   });
 
   it("leaves the broker columns empty when the disposal names no broker", () => {
     const lines = formatCsv(makeReport()).split("\n");
     const row = lines.find((l) => l.startsWith("US0378331005,AAPL,APPLE INC"))!.split(",");
-    expect(row.slice(-2)).toEqual(["", ""]);
+    expect(row.slice(-3, -1)).toEqual(["", ""]);
   });
 
   it("writes 0.00 in the blocked column and no anti-churning summary rows when nothing is blocked", () => {
@@ -432,7 +444,7 @@ describe("formatCsv — excel-es dialect", () => {
     expect(header).not.toContain(",");
 
     const cols = lines.find((l) => l.startsWith("US0378331005;AAPL;APPLE INC;STK"))!.split(";");
-    expect(cols).toHaveLength(23);
+    expect(cols).toHaveLength(24);
     expect(cols[6]).toBe("10");
     expect(cols[7]).toBe("800,00");
     expect(cols[8]).toBe("1000,00");

@@ -192,12 +192,21 @@ export interface FifoDisposal {
    */
   washSaleRepurchaseDates?: string[];
   /**
-   * Prior deferred (blocked) loss RELEASED because this disposal sold shares that
-   * were the homogeneous repurchase which previously blocked an earlier loss
-   * ("se integrarán a medida que se transmitan los valores que permanezcan en el
-   * patrimonio", Art. 33.5 closing paragraph). `≥ 0`; subtracted from the
-   * deductible base (a now-deductible loss). Only meaningful within a single
-   * (possibly multi-year merged) run; not persisted across separate filings.
+   * Display only: the YYYY-MM-DD sell dates of the earlier loss sales whose
+   * pending loss this disposal released (sorted, unique). Set by detectWashSales
+   * only when `reintegratedLossEur > 0`. Never used for tax math.
+   */
+  washSaleReleasedFromDates?: string[];
+  /**
+   * Prior deferred (blocked) loss RELEASED by this disposal ("se integrarán a
+   * medida que se transmitan los valores que permanezcan en el patrimonio",
+   * Art. 33.5 closing paragraph). Only the shares of this disposal that no unused
+   * in-window repurchase absorbed release anything (a «transmisión definitiva»,
+   * DGT V3282-18): each releases one pending share's loss of the same security,
+   * oldest first, whichever lot FIFO sells; a definitive total exit releases all
+   * that is left. `≥ 0`; subtracted from the deductible base (a now-deductible
+   * loss). Only meaningful within a single (possibly multi-year merged) run; not
+   * persisted across separate filings.
    */
   reintegratedLossEur: Decimal;
   /** True for short position disposals (SELL+O → BUY+C) */
@@ -383,8 +392,8 @@ export interface TaxSummary {
      */
     blockedLosses: Decimal;
     /**
-     * Previously-blocked losses RELEASED this year because the surviving
-     * repurchased shares were sold (Σ of each disposal's `reintegratedLossEur`).
+     * Previously-blocked losses RELEASED this year by definitive transmissions
+     * of the same security (Σ of each disposal's `reintegratedLossEur`).
      * Subtracted from the deductible base — a now-deductible deferred loss.
      */
     reintegratedLosses: Decimal;

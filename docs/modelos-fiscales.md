@@ -44,7 +44,7 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
-- **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto) — solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se reintegra al transmitir los valores recomprados. Excluye derivados y forex
+- **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (cotizados en mercado regulado) o 1 año (no cotizados/cripto) — solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se integra en la siguiente transmisión definitiva del mismo valor (sin recompra en su plazo), primero la más antigua. Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse (tipos FS y RS de IBKR); las fracciones de acción conservan su coste y, si el split cambia el ISIN, los lotes pasan al nuevo
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
@@ -112,7 +112,7 @@ Mediante la opción `--prior-losses` del CLI, puedes proporcionar un fichero JSO
 4. Aplica compensación cruzada de las pérdidas anteriores. El límite del 25% se calcula sobre el saldo positivo del año antes de compensar y es uno solo, compartido con el paso 2.
 5. Añade al arrastre lo que quede del saldo negativo del ejercicio.
 
-Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f) no cuentan como pérdida del año: se integran cuando se venden los valores recomprados.
+Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f) no cuentan como pérdida del año: se integran en la siguiente transmisión definitiva del mismo valor (una venta sin recompra en su plazo).
 
 El formato del fichero JSON es:
 
@@ -183,7 +183,7 @@ DeclaRenta implementa las siguientes normas de la legislación fiscal española:
 | Art. 25.1.a LIRPF | Rendimientos del capital mobiliario: dividendos y participaciones en beneficios de entidades. |
 | Art. 25.2 LIRPF | Rendimientos del capital mobiliario: intereses de cuentas, depósitos y activos financieros. |
 | Art. 26.1.a LIRPF | Gastos deducibles de los rendimientos del capital mobiliario (gastos de administración y custodia). |
-| Art. 33.5.f/g LIRPF | Norma anti-churning: no se computa la parte proporcional de la pérdida por venta de valores si se recompran homogéneos en 2 meses (cotizados) o 1 año (no cotizados/cripto). La pérdida bloqueada se difiere y se reintegra al transmitir los valores recomprados. |
+| Art. 33.5.f/g LIRPF | Norma anti-churning: no se computa la parte proporcional de la pérdida por venta de valores si se recompran homogéneos en 2 meses (cotizados) o 1 año (no cotizados/cripto). La pérdida bloqueada se difiere y se integra en la siguiente transmisión definitiva del mismo valor (sin recompra en su plazo). |
 | Art. 35 LIRPF | Transmisiones onerosas: valor de transmisión y valor de adquisición de elementos patrimoniales. |
 | Art. 37.2 LIRPF | Método FIFO obligatorio para valores homogéneos: las primeras adquiridas se consideran las primeras transmitidas. |
 | Art. 46 LIRPF | Base del ahorro: ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales. |
