@@ -599,7 +599,7 @@ const eu: TranslationKeys = {
   "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
   "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
   "annex.wash_hint":
-    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera zain geratzen da: balio honen akzioak aurreko edo ondorengo 2 hilabeteetan berrerosi gabe saltzen dituzunean integratzen da (urtebete kotizatzen ez badu), galera zaharrenak lehenik.",
+    "Renta Web-en, markatu salmenta hau «Egotzi ezin diren ondare-galerak» gisa. Galera zain geratzen da, eta integratu egiten da, galera zaharrenak lehenik, aurreko edo ondorengo 2 hilabeteetan (urtebete kotizatzen ez badu) inolako berrerosketak estaltzen ez dituen balio honen akzioak saltzen dituzun heinean; zati bat berrerosten baduzu, berrerosi gabeko akzioek bakarrik balio dute.",
   "annex.wash_released": "Balio honen {{amount}} EUR galera atzeratu askatzen ditu (behin betiko eskualdaketa, LIRPF 33.5 art.)",
   "annex.wash_released_dates": "Data hauetako salmenten galerak: {{dates}}",
   "annex.wash_released_hint": "Salmenta honetako akzioetatik, epean inolako berrerosketak estaltzen ez dituenak behin betiko eskualdaketa dira: balio horren zain dauden galerak integratzen dituzte orain, akzio bakoitzeko akzio baten galera, zaharrenak lehenik (salmentak posizioa ixten badu eta epean inolako berrerosketak estaltzen ez badu, geratzen diren guztiak). Renta Web-en, egotzi ekitaldi honetan.",
@@ -864,9 +864,13 @@ const eu: TranslationKeys = {
   "report.crypto_general_gain_unvalued.hint":
     "Errenta hauek kripto berean jasotzen dira eta ez dute BCEren kanbio-tasa ofizialik. Kalkulatu eurotako balioa kobratze-datan eta deklaratu eskuz transmisiotik ez datorren ondare-irabazi gisa (oinarri orokorra).",
   "report.antichurning_window_past_data":
-    "{{year}} urteko {{count}} salmentaren berrerosketa-epea (anti-churning araua: 2 hilabete, edo urtebete balioak kotizatzen ez badu) igotako fitxategien azken dataren ({{lastDate}}) ondoren amaitzen da. DeclaRenta-k ez ditu data horren ondorengo erosketak ikusten.",
+    "{{year}} urteko {{count}} salmentaren berrerosketa-epea (anti-churning araua: 2 hilabete edo urtebete, balioaren arabera) broker horren igotako fitxategiek hartzen duten azken dataren ({{lastDate}}) ondoren amaitzen da. DeclaRenta-k ez ditu data horren ondorengo erosketak ikusten.",
   "report.antichurning_window_past_data.hint":
     "Balio bera {{lastDate}} ondoren eta salmenta horien epearen barruan erosi bazenuen ({{windowEnd}} arte gehienez), haien galeraren zati bat blokeatuta gera daiteke, edo salmenta ez da behin betiko eskualdaketa izango eta ez ditu zain dauden galerak askatuko. Igo {{windowEnd}} arteko eragiketak dituen fitxategia ere honekin batera, eta kalkulatu berriro. Erosi ez bazenuen, kalkulua zuzena da.",
+  "report.antichurning_window_open_at_filing":
+    "{{year}} urteko {{count}} salmentaren berrerosketa-epea (anti-churning araua) {{windowEnd}} arte luzatzen da gehienez: aitorpena aurkezteko azken eguna ({{deadline}}) igaro ondoren, eta broker horren igotako fitxategiek hartzen duten azken dataren ({{lastDate}}) ondoren. Aitorpena aurkezten duzunean, epe hori irekita egongo da oraindik.",
+  "report.antichurning_window_open_at_filing.hint":
+    "Aurkeztu aurretik, igo {{lastDate}} ondorengo eragiketak dituen fitxategia ere, eta kalkulatu berriro. Balio bera {{windowEnd}} baino lehen erosten baduzu, salmenta horien galeraren zati bat blokeatuta gera daiteke, edo salmenta ez da behin betiko eskualdaketa izango eta ez ditu zain dauden galerak askatuko. Kasu horretan, zuzendu aurkeztutako aitorpena autolikidazio zuzentzaile batekin («autoliquidación rectificativa»).",
   "report.titularidad_compartida":
     "Erakutsitako zenbatekoak {{titulares}} titularren artean banatuta daude (zergadun bakoitzari dagokion zatia). Txosten honek titular BAKAR baten aitorpena islatzen du: {{titulares}} titularretako bakoitzak bere aitorpena aurkeztu behar du zati berberarekin. Ez ezazu zenbatekoa osoa aitorpen bakar batean deklaratu, ezta hainbat titularren zatiak zurean batu ere.",
   "report.titularidad_compartida.hint":

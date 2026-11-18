@@ -599,7 +599,7 @@ const ca: TranslationKeys = {
   "annex.wash_blocked": "Pèrdua bloquejada per recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compres del mateix valor que la bloquegen: {{dates}}",
   "annex.wash_hint":
-    "A Renta Web, marca aquesta venda com a «Pèrdues patrimonials no imputables». La pèrdua queda pendent: s'integra quan venguis accions d'aquest valor sense recomprar en els 2 mesos anteriors o posteriors (1 any si no cotitza), primer les pèrdues més antigues.",
+    "A Renta Web, marca aquesta venda com a «Pèrdues patrimonials no imputables». La pèrdua queda pendent: s'integra, primer les pèrdues més antigues, a mesura que venguis accions d'aquest valor que cap recompra en els 2 mesos anteriors o posteriors (1 any si no cotitza) no cobreix; si en recompres una part, només compten les accions no recomprades.",
   "annex.wash_released": "Allibera {{amount}} EUR de pèrdues diferides d'aquest valor (transmissió definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pèrdues pendents de les vendes del: {{dates}}",
   "annex.wash_released_hint": "Les accions d'aquesta venda que cap recompra en el seu termini no cobreix són una transmissió definitiva: integren ara les pèrdues pendents d'aquest valor, la d'una acció per cada acció, primer les més antigues (si la venda tanca la posició i cap recompra en el seu termini no la cobreix, totes les que quedin). A Renta Web, imputa-les en aquest exercici.",
@@ -862,9 +862,13 @@ const ca: TranslationKeys = {
   "report.crypto_general_gain_unvalued.hint":
     "Aquestes rendes es reben en la mateixa cripto i no tenen tipus de canvi oficial del BCE. Calcula'n el valor en euros a la data de cobrament i declara-les manualment com a guany patrimonial no derivat de transmissió (base general).",
   "report.antichurning_window_past_data":
-    "Hi ha {{count}} venda(es) de {{year}} el termini de recompra de les quals per la regla anti-churning (2 mesos, o 1 any si el valor no cotitza) acaba després de l'última data dels fitxers pujats ({{lastDate}}). DeclaRenta no veu les compres posteriors a aquesta data.",
+    "Hi ha {{count}} venda(es) de {{year}} el termini de recompra de les quals per la regla anti-churning (2 mesos o 1 any, segons el valor) acaba després de l'última data que cobreixen els fitxers pujats d'aquest broker ({{lastDate}}). DeclaRenta no veu les compres posteriors a aquesta data.",
   "report.antichurning_window_past_data.hint":
     "Si vas comprar el mateix valor després del {{lastDate}} i dins del termini d'aquestes vendes (com a molt tard, fins al {{windowEnd}}), part de la seva pèrdua pot quedar bloquejada, o la venda deixa de ser una transmissió definitiva i no allibera pèrdues pendents. Puja també el fitxer amb les operacions fins al {{windowEnd}} juntament amb aquest i torna a calcular. Si no vas comprar, el càlcul ja és correcte.",
+  "report.antichurning_window_open_at_filing":
+    "Hi ha {{count}} venda(es) de {{year}} el termini de recompra de les quals per la regla anti-churning acaba el {{windowEnd}} com a molt tard: després del {{deadline}}, últim dia per presentar la declaració, i després de l'última data que cobreixen els fitxers pujats d'aquest broker ({{lastDate}}). Quan presentis la declaració, aquest termini encara estarà obert.",
+  "report.antichurning_window_open_at_filing.hint":
+    "Abans de presentar-la, puja també el fitxer amb les teves operacions posteriors al {{lastDate}} i torna a calcular. Si compres el mateix valor abans del {{windowEnd}}, part de la pèrdua d'aquestes vendes pot quedar bloquejada, o la venda deixa de ser una transmissió definitiva i no allibera pèrdues pendents. En aquest cas, corregeix la declaració presentada amb una autoliquidació rectificativa.",
   "report.titularidad_compartida":
     "Els imports mostrats estan dividits entre {{titulares}} titulars (la part que correspon a cada contribuent). Aquest informe reflecteix la declaració d'UN sol titular: cadascun dels {{titulares}} titulars ha de presentar la seva pròpia declaració amb aquesta mateixa part. No declaris el total en una sola declaració ni sumis les parts de diversos titulars a la teva.",
   "report.titularidad_compartida.hint":

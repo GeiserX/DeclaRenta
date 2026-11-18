@@ -26,7 +26,7 @@
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
-import { parseDate } from "./dates.js";
+import { normalizeDate, parseDate } from "./dates.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -119,7 +119,8 @@ interface PendingLoss {
  *  4. BLOCK (loss lots only) — defer `|loss| × absorbed/qty` and append it to
  *     the queue. The same absorbed shares keep the old losses pending.
  * Only held shares are transmitted: a short cover (`isShort`) runs no definitive
- * test, releases nothing and is no exit, and a zero-share disposal is skipped.
+ * test, releases nothing and is no exit, the shares its buy covers are no
+ * repurchase, and a zero-share disposal is skipped.
  *
  * Passing the FULL (all-year) disposal+trade set makes the release work across
  * years in a merged multi-file run (the cross-year case). A single-year run sees
@@ -144,6 +145,20 @@ export function detectWashSales(
   splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }> = new Map(),
   remainingLots?: ReadonlyMap<string, readonly Lot[]>,
 ): FifoDisposal[] {
+  // Shares bought back on each (key, day) to close a short, from FIFO's short
+  // disposals. They go straight back to the lender and never stay in the
+  // patrimony, so they are no repurchase (fx-fifo.ts does not count a cover as a
+  // purchase either). Without this, a cover buy could block a loss that nothing
+  // ever releases, because a cover is no «transmisión definitiva».
+  const coveredLeft = new Map<string, Decimal>();
+  for (const d of disposals) {
+    if (d.isShort !== true || WASH_SALE_EXEMPT.has(d.assetCategory)) continue;
+    const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
+    if (!key) continue;
+    const dayKey = `${key}|${parseDate(d.sellDate).getTime()}`;
+    coveredLeft.set(dayKey, (coveredLeft.get(dayKey) ?? new Decimal(0)).plus(d.quantity.abs()));
+  }
+
   // Index in-window-eligible BUY events and signed position movements by key.
   const buysByAsset = new Map<string, BuyEvent[]>();
   const positionEventsByAsset = new Map<string, PositionEvent[]>();
@@ -164,12 +179,26 @@ export function detectWashSales(
 
     if (trade.buySell === "BUY") {
       positionEvents.push({ time, qty });
-      let events = buysByAsset.get(key);
-      if (!events) {
-        events = [];
-        buysByAsset.set(key, events);
+      // FIFO sends a BUY flagged "C" or "C;O" to the open short lots first
+      // (fifo.ts consumeShortLots). Only what is left after the cover becomes a
+      // held lot. A "C" buy with no open short books nothing at all.
+      let repurchased = qty;
+      const oci = trade.openCloseIndicator;
+      if (oci === "C" || oci === "C;O") {
+        const dayKey = `${key}|${time}`;
+        const left = coveredLeft.get(dayKey) ?? new Decimal(0);
+        const covered = Decimal.min(qty, left);
+        coveredLeft.set(dayKey, left.minus(covered));
+        repurchased = oci === "C" && covered.isZero() ? new Decimal(0) : qty.minus(covered);
       }
-      events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: qty });
+      if (repurchased.greaterThan(0)) {
+        let events = buysByAsset.get(key);
+        if (!events) {
+          events = [];
+          buysByAsset.set(key, events);
+        }
+        events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: repurchased });
+      }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
     }
@@ -502,22 +531,64 @@ export function detectWashSales(
 /**
  * The sales (one per security and sale day, as the detector groups them) whose
  * anti-churning result a buy after the loaded data could still change, with
- * the last day of each one's window. The detector sees only the uploaded
- * trades, so a repurchase after `lastLoadedDate` is invisible. It matters for
- * a loss not fully blocked (the buy would block more of it, the BLOCK step) and
- * for a sale that released pending losses (the buy would make its shares
- * non-definitive, the RELEASE and TOTAL EXIT steps). Nothing is withheld: the
- * caller only warns.
+ * the last day of each one's window and the last date the data covers for it.
+ * The detector sees only the uploaded trades, so a repurchase after that date
+ * is invisible. It matters for a loss not fully blocked (the buy would block
+ * more of it, the BLOCK step) and for a sale that released pending losses (the
+ * buy would make its shares non-definitive, the RELEASE and TOTAL EXIT steps).
+ * Nothing is withheld: the caller only warns.
  *
- * @param lastLoadedDate - Last date the upload covers (YYYY-MM-DD or YYYYMMDD)
+ * With one broker the data covers every security up to `lastLoadedDate` (its
+ * statement end or its last trade of any security: a final exit never has a
+ * later trade of its own). With several merged brokers each one's files end on
+ * their own date, and a rebuy of a security can sit at any broker that trades
+ * it. A security is then covered up to the earliest end among the brokers that
+ * trade it: a broker's end is its last trade of any security, or its statement
+ * end from `endBySource` when later.
+ *
+ * @param lastLoadedDate - Last date the whole upload covers (YYYY-MM-DD or YYYYMMDD)
+ * @param trades - The uploaded trades, with `brokerSource` set by the merge
+ * @param endBySource - Statement end per broker, when its files give one
  */
 export function salesWithWindowPastData(
   disposals: readonly FifoDisposal[],
   lastLoadedDate: string,
-): { key: string; sellDate: string; windowEnd: string }[] {
-  const lastTime = parseDate(lastLoadedDate).getTime();
-  if (!Number.isFinite(lastTime)) return [];
-  const out = new Map<string, { key: string; sellDate: string; windowEnd: string }>();
+  trades: readonly Trade[] = [],
+  endBySource: ReadonlyMap<string, string> = new Map(),
+): { key: string; sellDate: string; windowEnd: string; lastDate: string }[] {
+  // Day only: a trade date may carry a time ("20250602;101500").
+  const dayTime = (date: string): number => parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime();
+  const uploadEnd = dayTime(lastLoadedDate);
+  if (!Number.isFinite(uploadEnd)) return [];
+
+  // Per broker: the last date its files cover, and the keys it trades.
+  const endOfSource = new Map<string, number>();
+  const sourcesOfKey = new Map<string, Set<string>>();
+  for (const trade of trades) {
+    const source = trade.brokerSource;
+    const time = dayTime(trade.tradeDate);
+    if (!source || !Number.isFinite(time)) continue;
+    endOfSource.set(source, Math.max(endOfSource.get(source) ?? Number.NEGATIVE_INFINITY, time));
+    const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
+    if (!key) continue;
+    let sources = sourcesOfKey.get(key);
+    if (!sources) {
+      sources = new Set();
+      sourcesOfKey.set(key, sources);
+    }
+    sources.add(source);
+  }
+  for (const [source, date] of endBySource) {
+    const time = dayTime(date);
+    if (endOfSource.has(source) && Number.isFinite(time)) endOfSource.set(source, Math.max(endOfSource.get(source)!, time));
+  }
+  const coveredUntil = (key: string): number => {
+    const sources = sourcesOfKey.get(key);
+    if (endOfSource.size < 2 || !sources) return uploadEnd;
+    return Math.min(...[...sources].map((source) => endOfSource.get(source)!));
+  };
+
+  const out = new Map<string, { key: string; sellDate: string; windowEnd: string; lastDate: string }>();
   for (const d of disposals) {
     if (WASH_SALE_EXEMPT.has(d.assetCategory) || d.quantity.isZero()) continue;
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
@@ -527,9 +598,15 @@ export function salesWithWindowPastData(
     const sellDate = parseDate(d.sellDate);
     if (!Number.isFinite(sellDate.getTime())) continue;
     const windowEnd = addMonths(sellDate, windowMonths(d.assetCategory, d.isin));
+    const lastTime = coveredUntil(key);
     if (windowEnd.getTime() <= lastTime) continue;
     const day = normalizeDay(d.sellDate);
-    out.set(`${key}|${day}`, { key, sellDate: day, windowEnd: windowEnd.toISOString().slice(0, 10) });
+    out.set(`${key}|${day}`, {
+      key,
+      sellDate: day,
+      windowEnd: windowEnd.toISOString().slice(0, 10),
+      lastDate: new Date(lastTime).toISOString().slice(0, 10),
+    });
   }
   return [...out.values()];
 }

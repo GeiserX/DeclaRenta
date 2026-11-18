@@ -632,7 +632,7 @@ const es = {
   "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
   "annex.wash_hint":
-    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida queda pendiente: se integra cuando vendas acciones de este valor sin recomprar en los 2 meses anteriores o posteriores (1 año si no cotiza), primero las pérdidas más antiguas.",
+    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida queda pendiente: se integra, primero las pérdidas más antiguas, a medida que vendas acciones de este valor que ninguna recompra en los 2 meses anteriores o posteriores (1 año si no cotiza) cubre; si recompras parte, solo cuentan las acciones no recompradas.",
   "annex.wash_released": "Libera {{amount}} EUR de pérdidas diferidas de este valor (transmisión definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pérdidas pendientes de las ventas del: {{dates}}",
   "annex.wash_released_hint": "Las acciones de esta venta que ninguna recompra en su plazo cubre son una transmisión definitiva: integran ahora las pérdidas pendientes de ese valor, la de una acción por cada acción, primero las más antiguas (si la venta cierra la posición y ninguna recompra en su plazo la cubre, todas las que queden). En Renta Web, impútalas en este ejercicio.",
@@ -899,9 +899,13 @@ const es = {
   "report.crypto_general_gain_unvalued.hint":
     "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
   "report.antichurning_window_past_data":
-    "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning (2 meses, o 1 año si el valor no cotiza) termina después de la última fecha de los ficheros subidos ({{lastDate}}). DeclaRenta no ve las compras posteriores a esa fecha.",
+    "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning (2 meses o 1 año, según el valor) termina después de la última fecha que cubren los ficheros subidos de ese bróker ({{lastDate}}). DeclaRenta no ve las compras posteriores a esa fecha.",
   "report.antichurning_window_past_data.hint":
     "Si compraste el mismo valor después del {{lastDate}} y dentro del plazo de esas ventas (como muy tarde, hasta el {{windowEnd}}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el {{windowEnd}} junto a este y calcula de nuevo. Si no compraste, el cálculo ya es correcto.",
+  "report.antichurning_window_open_at_filing":
+    "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning termina el {{windowEnd}} como muy tarde: después del {{deadline}}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker ({{lastDate}}). Cuando presentes la declaración, ese plazo seguirá abierto.",
+  "report.antichurning_window_open_at_filing.hint":
+    "Antes de presentar, sube también el fichero con tus operaciones posteriores al {{lastDate}} y calcula de nuevo. Si compras el mismo valor antes del {{windowEnd}}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.",
   "report.titularidad_compartida":
     "Los importes mostrados están divididos entre {{titulares}} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los {{titulares}} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.",
   "report.titularidad_compartida.hint":

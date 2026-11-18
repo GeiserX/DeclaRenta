@@ -597,7 +597,7 @@ const en: TranslationKeys = {
   "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
   "annex.wash_hint":
-    "In Renta Web, mark this sale as \"Non-attributable capital losses\". The loss stays pending: it counts once you sell shares of this security without buying it back within 2 months before or after (1 year if unlisted), oldest losses first.",
+    "In Renta Web, mark this sale as \"Non-attributable capital losses\". The loss stays pending: it counts, oldest losses first, as you sell shares of this security that no repurchase within 2 months before or after (1 year if unlisted) covers; if you buy some back, only the shares not bought back count.",
   "annex.wash_released": "Releases {{amount}} EUR of deferred losses of this security («transmisión definitiva», art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pending losses from the sales of: {{dates}}",
   "annex.wash_released_hint": "The shares of this sale that no repurchase in its window covers are a definitive transmission («transmisión definitiva»): they now release the pending losses of this security, one share's loss for each share, oldest first (all that remain if the sale closes the position and no repurchase in its window covers it). In Renta Web, include them in this year.",
@@ -860,9 +860,13 @@ const en: TranslationKeys = {
   "report.crypto_general_gain_unvalued.hint":
     "This income is received in the crypto itself and has no official ECB rate. Compute its value in euros on the receipt date and declare it manually as a capital gain not arising from a transfer (general tax base).",
   "report.antichurning_window_past_data":
-    "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window (2 months, or 1 year if the security is unlisted) ends after the last date in the uploaded files ({{lastDate}}). DeclaRenta cannot see purchases after that date.",
+    "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window (2 months or 1 year, depending on the security) ends after the last date covered by the uploaded files of that broker ({{lastDate}}). DeclaRenta cannot see purchases after that date.",
   "report.antichurning_window_past_data.hint":
     "If you bought the same security after {{lastDate}} and within the window of those sales (at the latest until {{windowEnd}}), part of their loss may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. Also upload the file with your trades up to {{windowEnd}} together with this one and calculate again. If you did not buy, the result is already correct.",
+  "report.antichurning_window_open_at_filing":
+    "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window ends on {{windowEnd}} at the latest: after {{deadline}}, the last day to file the return, and after the last date covered by the uploaded files of that broker ({{lastDate}}). When you file the return, that window will still be open.",
+  "report.antichurning_window_open_at_filing.hint":
+    "Before you file, also upload the file with your trades after {{lastDate}} and calculate again. If you buy the same security before {{windowEnd}}, part of the loss on those sales may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. In that case, correct the filed return with a corrective return («autoliquidación rectificativa»).",
   "report.titularidad_compartida":
     "The amounts shown are split between {{titulares}} holders (the share corresponding to each taxpayer). This report reflects the return of a SINGLE holder: each of the {{titulares}} holders must file their own return with this same share. Do not declare the total in a single return, nor add several holders' shares into yours.",
   "report.titularidad_compartida.hint":

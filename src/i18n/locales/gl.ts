@@ -599,7 +599,7 @@ const gl: TranslationKeys = {
   "annex.wash_blocked": "Perda bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras do mesmo valor que a bloquean: {{dates}}",
   "annex.wash_hint":
-    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda queda pendente: intégrase cando vendas accións deste valor sen recomprar nos 2 meses anteriores ou posteriores (1 ano se non cotiza), primeiro as perdas máis antigas.",
+    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda queda pendente: intégrase, primeiro as perdas máis antigas, a medida que vendas accións deste valor que ningunha recompra nos 2 meses anteriores ou posteriores (1 ano se non cotiza) cobre; se recompras parte, só contan as accións non recompradas.",
   "annex.wash_released": "Libera {{amount}} EUR de perdas diferidas deste valor (transmisión definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Perdas pendentes das vendas do: {{dates}}",
   "annex.wash_released_hint": "As accións desta venda que ningunha recompra no seu prazo cobre son unha transmisión definitiva: integran agora as perdas pendentes dese valor, a dunha acción por cada acción, primeiro as máis antigas (se a venda pecha a posición e ningunha recompra no seu prazo a cobre, todas as que queden). En Renta Web, impútaas neste exercicio.",
@@ -862,9 +862,13 @@ const gl: TranslationKeys = {
   "report.crypto_general_gain_unvalued.hint":
     "Estas rendas recíbense na propia cripto e non teñen tipo de cambio oficial do BCE. Calcula o seu valor en euros na data de cobramento e decláraas manualmente como ganancia patrimonial non derivada de transmisión (base xeral).",
   "report.antichurning_window_past_data":
-    "Hai {{count}} venda(s) de {{year}} cuxo prazo de recompra da regra anti-churning (2 meses, ou 1 ano se o valor non cotiza) remata despois da última data dos ficheiros subidos ({{lastDate}}). DeclaRenta non ve as compras posteriores a esa data.",
+    "Hai {{count}} venda(s) de {{year}} cuxo prazo de recompra da regra anti-churning (2 meses ou 1 ano, segundo o valor) remata despois da última data que cobren os ficheiros subidos dese bróker ({{lastDate}}). DeclaRenta non ve as compras posteriores a esa data.",
   "report.antichurning_window_past_data.hint":
     "Se compraches o mesmo valor despois do {{lastDate}} e dentro do prazo desas vendas (como moi tarde, ata o {{windowEnd}}), parte da súa perda pode quedar bloqueada, ou a venda deixa de ser unha transmisión definitiva e non libera perdas pendentes. Sube tamén o ficheiro coas operacións ata o {{windowEnd}} xunto con este e calcula de novo. Se non compraches, o cálculo xa é correcto.",
+  "report.antichurning_window_open_at_filing":
+    "Hai {{count}} venda(s) de {{year}} cuxo prazo de recompra da regra anti-churning remata o {{windowEnd}} como moi tarde: despois do {{deadline}}, último día para presentar a declaración, e despois da última data que cobren os ficheiros subidos dese bróker ({{lastDate}}). Cando presentes a declaración, ese prazo seguirá aberto.",
+  "report.antichurning_window_open_at_filing.hint":
+    "Antes de presentala, sube tamén o ficheiro coas túas operacións posteriores ao {{lastDate}} e calcula de novo. Se compras o mesmo valor antes do {{windowEnd}}, parte da perda desas vendas pode quedar bloqueada, ou a venda deixa de ser unha transmisión definitiva e non libera perdas pendentes. Nese caso, corrixe a declaración presentada cunha autoliquidación rectificativa.",
   "report.titularidad_compartida":
     "Os importes amosados están divididos entre {{titulares}} titulares (a parte que corresponde a cada contribuínte). Este informe reflicte a declaración dun SÓ titular: cada un dos {{titulares}} titulares debe presentar a súa propia declaración con esta mesma parte. Non declares o total nunha soa declaración nin sumes as partes de varios titulares na túa.",
   "report.titularidad_compartida.hint":

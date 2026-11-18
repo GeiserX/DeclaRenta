@@ -105,7 +105,14 @@ unit:
    transmisión definitiva de acciones a lo largo del ejercicio 2017»).
    Only held shares are transmitted: a short cover (`isShort`) buys back shares
    sold short, so it runs no definitive test (it uses no rebuy as a gain lot),
-   releases nothing and is no exit; its own loss still blocks. A zero-share
+   releases nothing and is no exit; its own loss still blocks. For the same
+   reason the shares a cover buys are no repurchase: they go straight back to
+   the lender and never stay in the patrimony («los valores … que permanezcan
+   en el patrimonio»). FIFO books no lot for them (`consumeShortLots`) and
+   `fx-fifo.ts` does not count a cover as a purchase. Only what a `C;O` buy (or
+   a `C` buy larger than the open short) leaves after the cover is a held lot
+   and a repurchase. Without this a cover buy blocked a loss that nothing could
+   release once the position stayed flat (Σ blocked ≠ Σ released). A zero-share
    disposal (a 0-quantity SELL row FIFO books with no lots) is skipped. The
    release keeps a cursor on the queue, so a sale of many lots walks it once.
 3. **Total exit.** A sale day whose sales no rebuy absorbed and that leaves no
@@ -195,7 +202,15 @@ transmission that releases them.
   result a later buy could change (a loss not fully blocked, or a release),
   gets one shared warning, `report.antichurning_window_past_data` (5 locales).
   BLOCK and RELEASE are treated the same: nothing is withheld, the user is
-  asked to add the next file.
+  asked to add the next file. With several merged brokers, each broker's files
+  end on their own date (its last trade of any security, or its statement end
+  when later), and a security is covered up to the earliest end among the
+  brokers that trade it. The per-security last trade is not used: a final exit
+  never has a later trade of its own. From tax year 2024 on, a window that ends
+  after 30 June of the next year (the filing deadline) is still open when the
+  user files, so it gets `report.antichurning_window_open_at_filing` instead:
+  no "if you did not buy, the result is correct", and a buy before the window
+  ends means correcting the filed return with an autoliquidación rectificativa.
 - **Separate per-year filings**: the pending-loss queue is not persisted to disk in
   this change. Users file cross-year correctly by uploading adjacent years
   together (already supported). A `--prior-blocked-losses` JSON I/O analogous to
@@ -205,7 +220,8 @@ transmission that releases them.
 ## Known limitations (documented, accepted)
 
 - **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged; an
-  ISIN-bearing unlisted instrument still gets the 2-month window.
+  ISIN-bearing unlisted instrument, or one listed only outside an EU regulated
+  market, still gets the 2-month window (#452).
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the

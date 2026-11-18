@@ -91,9 +91,20 @@ describe("Renta Web guide consistency", () => {
       eu: /berrerosi gabeko akzioek bakarrik balio dute/,
       gl: /só contan as accións non recompradas/,
     };
+    const wholeSaleRule = {
+      es: /sin recomprar/,
+      en: /without buying it back/,
+      ca: /sense recomprar/,
+      eu: /berrerosi gabe saltzen/,
+      gl: /sen recomprar/,
+    };
     for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
       expect(locale["annex.wash_released_hint"], name).toMatch(closeNeedsNoRebuy[name]);
       expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(onlyUncoveredShares[name]);
+      // The hint on every blocked sale says the same (it used to read as a
+      // whole-sale rule: "once you sell … without buying it back").
+      expect(locale["annex.wash_hint"], name).toMatch(onlyUncoveredShares[name]);
+      expect(locale["annex.wash_hint"], name).not.toMatch(wholeSaleRule[name]);
     }
   });
 
@@ -123,7 +134,13 @@ describe("Renta Web guide consistency", () => {
     const modelos = doc("modelos-fiscales.md");
     const design = doc("design/antichurning-proportional.md");
     const faqAnswer = faq.slice(faq.indexOf("### ¿Qué hago con las pérdidas bloqueadas"), faq.indexOf("### ¿Puedo exportar"));
-    expect(faqAnswer).toMatch(/1 año si el valor no cotiza, art\. 33\.5\.g/);
+    // The statute's test (not "if unlisted": a NYSE-only share is listed, yet
+    // falls under letter g), and the engine's ISIN heuristic said as a limit.
+    expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación en un mercado regulado de la UE, art\. 33\.5\.g/);
+    expect(faqAnswer).toMatch(/#452/);
+    expect(faqAnswer).not.toMatch(/si el valor no cotiza/);
+    // A window still open at filing time is corrected with a rectificativa.
+    expect(casillas).toMatch(/30 de junio del año siguiente[^.]*autoliquidación rectificativa/);
     expect(faqAnswer).toMatch(/solo son definitivas las acciones no recompradas/);
     expect(casillas).toMatch(/solo son definitivas las acciones que ninguna recompra/);
     for (const [name, text] of Object.entries({ casillas, faq, modelos })) {

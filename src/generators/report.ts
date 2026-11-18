@@ -1079,27 +1079,61 @@ export function generateTaxReport(
   // Anti-churning sees only the uploaded trades. A sale of this year whose
   // repurchase window runs past the last date the upload covers could still be
   // blocked (a loss) or turn non-definitive (a release) by a buy we cannot see.
-  // Both steps share this one warning; nothing is withheld.
+  // Both steps share one warning; nothing is withheld. With several brokers each
+  // security is checked against the files of the brokers that trade it.
   const lastLoadedDate = [statement.toDate, ...washSaleTrades.map((tr) => tr.tradeDate)]
     .filter((d): d is string => typeof d === "string" && d.trim() !== "")
     .map((d) => normalizeDate(d.trim()).slice(0, 10))
     .reduce((max, d) => (d > max ? d : max), "");
-  const uncoveredWindows = lastLoadedDate ? salesWithWindowPastData(disposals, lastLoadedDate) : [];
-  if (uncoveredWindows.length > 0) {
-    const windowEnd = uncoveredWindows.reduce((max, u) => (u.windowEnd > max ? u.windowEnd : max), "");
-    const ctx = {
-      count: String(uncoveredWindows.length),
+  const endBySource = new Map<string, string>();
+  for (const src of statement.holdingsBySource ?? []) {
+    if (!src.brokerSource || !src.toDate) continue;
+    const end = normalizeDate(src.toDate).slice(0, 10);
+    const prev = endBySource.get(src.brokerSource);
+    if (!prev || end > prev) endBySource.set(src.brokerSource, end);
+  }
+  const uncoveredWindows = lastLoadedDate
+    ? salesWithWindowPastData(disposals, lastLoadedDate, washSaleTrades, endBySource)
+    : [];
+  // The return is due on 30 June of the next year. A window that ends later is
+  // still open when the user files, so "if you did not buy" cannot be known yet:
+  // a later buy means correcting the filed return with an autoliquidación
+  // rectificativa, the only procedure from tax year 2024 on (AEAT, Manual Renta
+  // 2025). For 2023 and earlier the deadline and every window have passed.
+  const deadline = `${year + 1}-06-30`;
+  const openAtFiling = (u: { windowEnd: string }): boolean => year >= 2024 && u.windowEnd > deadline;
+  const windowGroups = [
+    { id: "report.antichurning_window_past_data", sales: uncoveredWindows.filter((u) => !openAtFiling(u)) },
+    { id: "report.antichurning_window_open_at_filing", sales: uncoveredWindows.filter(openAtFiling) },
+  ];
+  for (const { id, sales } of windowGroups) {
+    if (sales.length === 0) continue;
+    const windowEnd = sales.reduce((max, u) => (u.windowEnd > max ? u.windowEnd : max), "");
+    const lastDate = sales.reduce((min, u) => (min === "" || u.lastDate < min ? u.lastDate : min), "");
+    const base = {
+      count: String(sales.length),
       year: yearStr,
-      lastDate: formatDateDmy(lastLoadedDate),
+      lastDate: formatDateDmy(lastDate),
       windowEnd: formatDateDmy(windowEnd),
     };
-    allMessages.push({
-      id: "report.antichurning_window_past_data",
-      severity: "warning",
-      message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning (2 meses, o 1 año si el valor no cotiza) termina después de la última fecha de los ficheros subidos (${ctx.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
-      hint: `Si compraste el mismo valor después del ${ctx.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${ctx.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${ctx.windowEnd} junto a este y calcula de nuevo. Si no compraste, el cálculo ya es correcto.`,
-      context: ctx,
-    });
+    if (id === "report.antichurning_window_past_data") {
+      allMessages.push({
+        id,
+        severity: "warning",
+        message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses o 1 año, según el valor) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
+        hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. Si no compraste, el cálculo ya es correcto.`,
+        context: base,
+      });
+    } else {
+      const ctx = { ...base, deadline: formatDateDmy(deadline) };
+      allMessages.push({
+        id,
+        severity: "warning",
+        message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning termina el ${ctx.windowEnd} como muy tarde: después del ${ctx.deadline}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker (${ctx.lastDate}). Cuando presentes la declaración, ese plazo seguirá abierto.`,
+        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
+        context: ctx,
+      });
+    }
   }
 
   // Shared-titularity notice: amounts have been split equally per contribuyente.
