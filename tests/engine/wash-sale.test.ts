@@ -1038,14 +1038,82 @@ describe("a short cover runs no definitive test", () => {
       makeDisposal({ sellDate: "2025-04-01", acquireDate: "2025-03-20", gainLossEur: new Decimal(10), isShort: true }),
       makeDisposal({ sellDate: "2025-04-10", acquireDate: "2025-03-10", gainLossEur: new Decimal(10) }),
     ];
-    const trades = [
+    const trades: Trade[] = [
       makeTrade(isin, "2025-01-02", "BUY"), makeTrade(isin, "2025-03-03", "SELL"), makeTrade(isin, "2025-03-10", "BUY"),
-      makeTrade(isin, "2025-03-20", "SELL"), makeTrade(isin, "2025-04-01", "BUY"), makeTrade(isin, "2025-04-10", "SELL"),
+      // The 01/04 buy is the cover ("C"): it buys back the shorted shares, so it
+      // is no repurchase, and only the 20/04 buy can keep 10/04 non-definitive.
+      makeTrade(isin, "2025-03-20", "SELL"),
+      { ...makeTrade(isin, "2025-04-01", "BUY"), openCloseIndicator: "C" },
+      makeTrade(isin, "2025-04-10", "SELL"),
       makeTrade(isin, "2025-04-20", "BUY"),
     ];
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.blockedLossEur.toString()).toBe("20");
     expect(result[1]!.reintegratedLossEur.toString()).toBe("0");
     expect(result[2]!.reintegratedLossEur.toString()).toBe("0");
+  });
+
+  it("the total exit's remainder goes to the long sale, even when the day's short cover comes last", () => {
+    // 20 + 5 pending on 20 shares, 10 held. On 01/09 the 10 long shares are
+    // definitive and release 20; the day empties the position, so the total
+    // exit releases the other 5. A short cover of 5 the same day, listed last,
+    // releases nothing.
+    const isin = "US0378331005";
+    const disposals = [
+      makeDisposal({ sellDate: "2025-03-03", acquireDate: "2025-01-02", gainLossEur: new Decimal(-20) }),
+      makeDisposal({ sellDate: "2025-04-22", acquireDate: "2025-03-10", gainLossEur: new Decimal(-5) }),
+      makeDisposal({ sellDate: "2025-09-01", acquireDate: "2025-04-25", gainLossEur: new Decimal(0) }),
+      makeDisposal({ sellDate: "2025-09-01", acquireDate: "2025-06-02", quantity: new Decimal(5), gainLossEur: new Decimal(10), isShort: true }),
+    ];
+    const trades: Trade[] = [
+      makeTrade(isin, "2025-01-02", "BUY"), makeTrade(isin, "2025-03-03", "SELL"), makeTrade(isin, "2025-03-10", "BUY"),
+      makeTrade(isin, "2025-04-22", "SELL"), makeTrade(isin, "2025-04-25", "BUY"),
+      { ...makeTrade(isin, "2025-06-02", "SELL", "5"), openCloseIndicator: "O" },
+      makeTrade(isin, "2025-09-01", "SELL"),
+      { ...makeTrade(isin, "2025-09-01", "BUY", "5"), openCloseIndicator: "C" },
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[2]!.reintegratedLossEur.toString()).toBe("25");
+    expect(result[3]!.reintegratedLossEur.toString()).toBe("0");
+  });
+
+  it("same-day cover buys take the cover in FIFO's order: C;O before C, whatever the file order", () => {
+    // A short of 10 is covered on 20/03. FIFO runs the C;O buy of 10 first (it
+    // covers the short and opens nothing) and then finds no short for the C buy
+    // of 15, which books nothing. No share is repurchased.
+    const isin = "US0378331005";
+    const disposals = [
+      makeDisposal({ sellDate: "2025-03-03", acquireDate: "2025-01-02", gainLossEur: new Decimal(-20) }),
+      makeDisposal({ sellDate: "2025-03-20", acquireDate: "2025-03-10", gainLossEur: new Decimal(0), isShort: true }),
+    ];
+    const trades: Trade[] = [
+      makeTrade(isin, "2025-01-02", "BUY"), makeTrade(isin, "2025-03-03", "SELL"),
+      { ...makeTrade(isin, "2025-03-10", "SELL"), openCloseIndicator: "O" },
+      { ...makeTrade(isin, "2025-03-20", "BUY", "15"), openCloseIndicator: "C" },
+      { ...makeTrade(isin, "2025-03-20", "BUY"), openCloseIndicator: "C;O" },
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toString()).toBe("0");
+  });
+
+  it("a C;O buy covers only the short opened before its day; a C buy covers the short the same day's SELL O opened", () => {
+    // Short 6 since 10/03. On 20/03 FIFO runs the C;O buy of 12 first: it covers
+    // the 6 opened on 10/03 and keeps 6. The SELL O then opens 6, which the C buy
+    // of 9 covers, keeping 3. 9 shares are repurchased: 9/10 of the 03/03 loss.
+    const isin = "US0378331005";
+    const disposals = [
+      makeDisposal({ sellDate: "2025-03-03", acquireDate: "2025-01-02", gainLossEur: new Decimal(-20) }),
+      makeDisposal({ sellDate: "2025-03-20", acquireDate: "2025-03-10", quantity: new Decimal(6), gainLossEur: new Decimal(0), isShort: true }),
+      makeDisposal({ sellDate: "2025-03-20", acquireDate: "2025-03-20", quantity: new Decimal(6), gainLossEur: new Decimal(0), isShort: true }),
+    ];
+    const trades: Trade[] = [
+      makeTrade(isin, "2025-01-02", "BUY"), makeTrade(isin, "2025-03-03", "SELL"),
+      { ...makeTrade(isin, "2025-03-10", "SELL", "6"), openCloseIndicator: "O" },
+      { ...makeTrade(isin, "2025-03-20", "SELL", "6"), openCloseIndicator: "O" },
+      { ...makeTrade(isin, "2025-03-20", "BUY", "9"), openCloseIndicator: "C" },
+      { ...makeTrade(isin, "2025-03-20", "BUY", "12"), openCloseIndicator: "C;O" },
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toString()).toBe("18");
   });
 });

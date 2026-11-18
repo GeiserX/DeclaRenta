@@ -518,6 +518,28 @@ describe("the total exit does not fire while FIFO still holds shares the trades 
       expect(r.fiscal).toBe("0.00");
     }
   });
+
+  it("a TC row that keeps the ISIN does not move the held shares' entry date: 01/09 still releases only 100", () => {
+    // The scrip case, plus a TC row on 01/10 that names no new security. FIFO
+    // books it as a merger of the ISIN into itself. The 10 shares FIFO still
+    // holds were in the position on 01/09, so the 01/09 sale is no total exit.
+    const ops: Op[] = [
+      ["2025-01-10", "BUY", 100, 1000], ["2025-03-03", "SELL", 100, 900], ["2025-03-10", "BUY", 100, 900],
+      ["2025-04-22", "SELL", 100, 800], ["2025-04-25", "BUY", 100, 800], ["2025-09-01", "SELL", 100, 1000],
+    ];
+    const scrip: CorporateAction = {
+      transactionID: "SD1", accountId: "U1", symbol: "XYZ", isin: ISIN, description: `XYZ(${ISIN}) STOCK DIVIDEND`,
+      currency: "EUR", reportDate: "20250203", dateTime: "20250203", quantity: "10", amount: "100", type: "SD", actionDescription: "",
+    };
+    const sameIsin: CorporateAction = {
+      transactionID: "TC3", accountId: "U1", symbol: "XYZ", isin: ISIN, description: `XYZ(${ISIN}) TENDERED TO XYZ.TEN`,
+      currency: "EUR", reportDate: "20251001", dateTime: "20251001", quantity: "-10", amount: "0", type: "TC", actionDescription: "",
+    };
+    for (const method of METHODS) {
+      const r = year(ops, 2025, method, "EUR", [scrip, sameIsin]);
+      expect(onDate(r, "2025-09-01", "reintegratedLossEur"), method).toBe("100.00");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -764,6 +786,70 @@ describe("a short cover is not a transmission of held shares, and its buy is not
     const r = yearOf(roll, 2025, "monodivisa");
     expect(onDate(r, "2025-03-03", "blockedLossEur")).toBe("10.00");
   });
+
+  for (const method of METHODS) {
+    it(`[${method}] same-day covers follow FIFO's order: a C;O buy listed after an orphan C buy still covers first`, () => {
+      // A short of 10 is open on 20/03. The file lists a C buy of 15 before a
+      // C;O buy of 10. FIFO runs C;O first (opens and rolls before closes): it
+      // covers the 10 and opens nothing. The C buy then finds no short and books
+      // nothing. No share stays, so the 03/03 loss is deductible now.
+      const covers: Trade[] = [
+        flagged(["2025-01-02", "BUY", 10, 100], 0, "O"),
+        flagged(["2025-03-03", "SELL", 10, 80], 1, "C"),
+        flagged(["2025-03-10", "SELL", 10, 100], 2, "O"),
+        flagged(["2025-03-20", "BUY", 15, 150], 3, "C"),
+        { ...flagged(["2025-03-20", "BUY", 10, 100], 4, "C"), openCloseIndicator: "C;O" },
+      ];
+      const r = yearOf(covers, 2025, method);
+      expect(r.disposals.filter((d) => d.isShort === true && d.sellDate === "2025-03-20").reduce((s, d) => s.plus(d.quantity), new Decimal(0)).toString()).toBe("10");
+      expect(r.blocked).toBe("0.00");
+      expect(r.fiscal).toBe("-20.00");
+    });
+
+    it(`[${method}] an intraday flip from short to long: the shares a same-day C buy keeps after covering a new short still block`, () => {
+      // Short 6 since 10/03. On 20/03, in the broker's intraday order: SELL O 6
+      // (short 12), BUY C 9 (short 3), BUY C;O 12 (long 9). FIFO runs C;O first:
+      // it covers the 6 opened on 10/03 and keeps 6. The SELL O opens 6, and the
+      // C buy covers those 6 and keeps 3. The day ends 9 shares long, 0 short.
+      const flip: Trade[] = [
+        flagged(["2025-01-02", "BUY", 10, 100], 0, "O"),
+        flagged(["2025-03-03", "SELL", 10, 80], 1, "C"),
+        flagged(["2025-03-10", "SELL", 6, 60], 2, "O"),
+        flagged(["2025-03-20", "SELL", 6, 60], 3, "O"),
+        flagged(["2025-03-20", "BUY", 9, 90], 4, "C"),
+        { ...flagged(["2025-03-20", "BUY", 12, 120], 5, "C"), openCloseIndicator: "C;O" },
+      ];
+      const r = yearOf(flip, 2025, method);
+      expect(r.disposals.filter((d) => d.isShort === true).reduce((s, d) => s.plus(d.quantity), new Decimal(0)).toString()).toBe("12");
+      // 9 of the 10 shares sold at a loss on 03/03 come back within 2 months: 18 of 20 deferred.
+      expect(onDate(r, "2025-03-03", "blockedLossEur")).toBe("18.00");
+    });
+
+    it(`[${method}] a total exit that shares its day with a short cover gives the rest of the queue to the long sale`, () => {
+      // Issue example: 20 + 5 pending on 20 shares, 10 held. On 01/09 the long
+      // sale (a C;O sell, which FIFO books before the C cover) is definitive and
+      // empties the position: 10 shares release 20, the total exit the other 5.
+      // The same day a C buy covers a short of 5 at a gain. A cover releases
+      // nothing, so all 25 belong to the long sale.
+      const day: Trade[] = [
+        flagged(["2025-01-02", "BUY", 10, 100], 0, "O"),
+        flagged(["2025-03-03", "SELL", 10, 80], 1, "C"),
+        flagged(["2025-03-10", "BUY", 10, 100], 2, "O"),
+        flagged(["2025-04-22", "SELL", 10, 95], 3, "C"),
+        flagged(["2025-04-25", "BUY", 10, 100], 4, "O"),
+        flagged(["2025-06-02", "SELL", 5, 60], 5, "O"),
+        { ...flagged(["2025-09-01", "SELL", 10, 100], 6, "C"), openCloseIndicator: "C;O" },
+        flagged(["2025-09-01", "BUY", 5, 50], 7, "C"),
+      ];
+      const r = yearOf(day, 2025, method);
+      const cover = r.disposals.filter((d) => d.sellDate === "2025-09-01" && d.isShort === true);
+      expect(cover.length).toBe(1);
+      expect(cover[0]!.gainLossEur.greaterThan(0)).toBe(true);
+      expect(cover[0]!.reintegratedLossEur.toFixed(2)).toBe("0.00");
+      expect(r.disposals.filter((d) => d.sellDate === "2025-09-01" && d.isShort !== true).reduce((s, d) => s.plus(d.reintegratedLossEur), new Decimal(0)).toFixed(2)).toBe("25.00");
+      expect(r.reintegrated).toBe("25.00");
+    });
+  }
 });
 
 describe("a zero-share sale is not a total exit", () => {
@@ -974,6 +1060,16 @@ describe("the window-past-data warning checks each broker's files on their own",
     const ibkr = flex("20260228", [at(buy("2025-06-02", 10), 0), at(sell("2025-12-20", 10, -20), 1)]);
     const other = flex("", [at(["2025-03-03", "BUY", 1, 50, "US0000000009"], 2), at(["2026-01-05", "SELL", 1, 60, "US0000000009"], 3)]);
     expect(report(merged([[ibkr, "Interactive Brokers"], [other, "DEGIRO"]])).messages.some((m) => m.id === ID)).toBe(false);
+  });
+
+  it("a statement-only broker running to 2026 does not hide another broker's December loss", () => {
+    // The IBKR file has a statement end but no trades. XYZ trades only at
+    // DEGIRO, whose data ends on its 20/12 loss sale.
+    const ibkrEmpty = flex("20261231", []);
+    const r = report(merged([[degiro, "DEGIRO"], [ibkrEmpty, "Interactive Brokers"]]));
+    expect(r.messages.find((m) => m.id === ID)?.context).toEqual({
+      count: "1", year: "2025", lastDate: "20/12/2025", windowEnd: "20/02/2026",
+    });
   });
 
   it("a single broker keeps the whole-upload date: its statement end covers every security", () => {

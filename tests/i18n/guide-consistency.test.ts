@@ -108,6 +108,95 @@ describe("Renta Web guide consistency", () => {
     }
   });
 
+  it("gives the 1-year window only to securities on no EEA regulated or equivalent market; NYSE and Nasdaq are no deviation (DGT V0778-25)", () => {
+    // The old wording: 1 year "if unlisted" / "if not on an EU regulated market",
+    // and NYSE- or Nasdaq-only listings presented as a DeclaRenta deviation.
+    const equivalent = { es: /equivalente/, en: /equivalent/, ca: /equivalent/, eu: /baliokide/, gl: /equivalente/ };
+    const oldWording = {
+      es: /1 año si no cotiza|2 meses cotizados|según el valor/,
+      en: /1 year if unlisted|2 months listed|depending on the security/,
+      ca: /1 any si no cotitza|2 mesos cotitzats|segons el valor/,
+      eu: /urtebete kotizatzen ez badu|hilabete kotizatuak|balioaren arabera/,
+      gl: /1 ano se non cotiza|2 meses cotizados|segundo o valor/,
+    };
+    // Letter f's regulated markets are those of the whole European Economic
+    // Area (V0778-25), not only the EU: an Oslo Børs share gets 2 months.
+    const eea = { es: /Espacio Económico Europeo/, en: /European Economic Area/, ca: /Espai Econòmic Europeu/, eu: /Europako Esparru Ekonomiko/, gl: /Espazo Económico Europeo/ };
+    const euOnly = { es: /regulado de la UE/, en: /EU regulated/, ca: /regulat de la UE/, eu: /EBko merkatu/, gl: /regulado da UE/ };
+    const keys = ["casilla.blocked_losses", "annex.wash_hint", "guide_rw.blocked_losses_hint", "report.antichurning_window_past_data"] as const;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      for (const key of keys) {
+        expect(locale[key], `${name} ${key}`).toMatch(equivalent[name]);
+        expect(locale[key], `${name} ${key}`).not.toMatch(oldWording[name]);
+        expect(locale[key], `${name} ${key}`).not.toMatch(euOnly[name]);
+      }
+      for (const key of ["annex.wash_hint", "guide_rw.blocked_losses_hint", "report.antichurning_window_past_data"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(eea[name]);
+      }
+      // The hints name the equivalent markets, so a NYSE-only share reads as 2 months.
+      expect(locale["annex.wash_hint"], name).toMatch(/NYSE/);
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(/NYSE/);
+    }
+    // The Spanish text report.ts writes into the message is the es locale's.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    const pinned = "(2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente)";
+    expect(source).toContain(pinned);
+    expect(es["report.antichurning_window_past_data"]).toContain(pinned);
+
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const docs = { casillas: doc("casillas.md"), faq: doc("faq.md"), modelos: doc("modelos-fiscales.md"), design: doc("design/antichurning-proportional.md") };
+    for (const [name, text] of Object.entries(docs)) {
+      expect(text, name).toMatch(/V0778-25/);
+      expect(text, name).not.toMatch(/aunque solo cotice fuera de la UE|listed only outside an EU regulated/);
+      expect(text, name).not.toMatch(/no está admitido a negociación en un mercado regulado de la UE, art/);
+      expect(text, name).not.toMatch(/2 meses cotizados|\(cotizados\)|valores \*\*cotizados\*\*|valores \*\*no cotizados\*\*/);
+      // EEA, not EU: Norway, Iceland and Liechtenstein have letter-f markets.
+      expect(text, name).not.toMatch(/mercado regulado de la UE|EU regulated market/);
+      // Crypto is no «valor o participación»: letter e, never a letter-g example.
+      expect(text, name).not.toMatch(/solo OTC, cripto|la mayoría de criptomonedas\)|most crypto/);
+    }
+    expect(docs.casillas).toMatch(/mercado de un tercer país declarado equivalente por la Comisión Europea/);
+    // Only the US, Australian and Hong Kong decisions are in force, so the #452
+    // gap also covers a share listed only in London, Switzerland or Toronto.
+    expect(docs.casillas).toMatch(/2017\/2318[^.]*2017\/2319|2017\/2319[^.]*2017\/2318/);
+    expect(docs.casillas).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(docs.casillas).toMatch(/33\.5\.e[^.]*#457/);
+    expect(docs.modelos).toMatch(/Londres/);
+    expect(docs.design).toMatch(/admitted\s+to\s+neither\s+kind\s+of\s+market[\s\S]{0,200}London\s+Stock\s+Exchange[\s\S]{0,200}#452/);
+    expect(docs.design).toMatch(/33\.5\.e[\s\S]{0,300}#457/);
+    const claude = readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8");
+    expect(claude).toMatch(/2017\/2318/);
+    expect(claude).toMatch(/London Stock Exchange[^\n]*#452/);
+    expect(claude).toMatch(/33\.5\.e[^\n]*#457/);
+    expect(claude).not.toMatch(/or non-EU listing|on an EU regulated or equivalent|on an EU regulated market, or|most crypto/);
+    // The engine's own header no longer reads letter f as "MiFID venues" only.
+    const engine = readFileSync(new URL("../../src/engine/wash-sale.ts", import.meta.url), "utf8");
+    expect(engine).not.toMatch(/on MiFID venues/);
+    expect(engine).toMatch(/V0778-25/);
+    expect(engine).not.toMatch(/EU regulated market|most crypto/);
+    expect(engine).toMatch(/#457/);
+  });
+
+  it("warns wherever it states the 1-year window that the engine applies 2 months to every ISIN, so a London-only share needs a manual check (#452)", () => {
+    // The guide and the window warning describe the law; without this note a
+    // user reads the engine's 2-month result as the legal 1-year window.
+    for (const [name, locale] of Object.entries(locales)) {
+      for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(/SIX[^.]*Toronto[^.]*OTC Markets/);
+        expect(locale[key], `${name} ${key}`).toMatch(/#452/);
+      }
+    }
+    // report.ts writes the Spanish hint itself; it must say the same as es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    const note = "Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año";
+    expect(source).toContain(note);
+    expect(es["report.antichurning_window_past_data.hint"]).toContain(note);
+    for (const p of ["modelos-fiscales.md", "index.md"]) {
+      const text = readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+      expect(text, p).toMatch(/2 meses a todo valor con ISIN[^\n]*Tokio u OTC Markets[^\n]*#452/);
+    }
+  });
+
   it("corrects a filed year with an «autoliquidación rectificativa» from 2024 on, and keeps complementaria for 2023 and earlier (#455 follow-up)", () => {
     // AEAT, Manual práctico de Renta 2025: the rectificativa is the only way to
     // correct an IRPF return from tax year 2024 on, in both directions; the old
@@ -134,10 +223,14 @@ describe("Renta Web guide consistency", () => {
     const modelos = doc("modelos-fiscales.md");
     const design = doc("design/antichurning-proportional.md");
     const faqAnswer = faq.slice(faq.indexOf("### ¿Qué hago con las pérdidas bloqueadas"), faq.indexOf("### ¿Puedo exportar"));
-    // The statute's test (not "if unlisted": a NYSE-only share is listed, yet
-    // falls under letter g), and the engine's ISIN heuristic said as a limit.
-    expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación en un mercado regulado de la UE, art\. 33\.5\.g/);
-    expect(faqAnswer).toMatch(/#452/);
+    // The statute's test, as DGT V0778-25 reads letter f: an EEA regulated market
+    // OR a third-country market the Commission declared equivalent (NYSE and
+    // Nasdaq are). Only a security on neither falls under letter g, and the
+    // engine's ISIN heuristic deviates there (#452); crypto is letter e (#457).
+    expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación ni en un mercado regulado del Espacio Económico Europeo ni en un mercado de un tercer país declarado equivalente por la Comisión Europea, art\. 33\.5\.g/);
+    expect(faqAnswer).toMatch(/NYSE y Nasdaq[^.]*consulta DGT V0778-25/);
+    expect(faqAnswer).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(faqAnswer).toMatch(/33\.5\.e[^.]*#457/);
     expect(faqAnswer).not.toMatch(/si el valor no cotiza/);
     // A window still open at filing time is corrected with a rectificativa.
     expect(casillas).toMatch(/30 de junio del año siguiente[^.]*autoliquidación rectificativa/);
