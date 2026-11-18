@@ -504,6 +504,9 @@ const MONODIVISA_CONVERSIONS_SKIPPED_HINT =
 /** Amount or quantity in a message context: two decimals, as the other messages. */
 const fmt2 = (d: Decimal): string => d.toFixed(2);
 
+/** `brokerSource` of an IBKR upload (`ibkrParser.name`). */
+const IBKR_BROKER = "Interactive Brokers";
+
 /**
  * The messages of «Tradicional con divisa» (issue #434). Each Spanish text here
  * is byte-identical to the `es` locale key of the same id with the same context
@@ -540,8 +543,10 @@ function traditionalFxMessages(input: {
   fxDisposals: FxDisposal[];
   disposals: FifoDisposal[];
   yearEndLots: Map<string, Lot[]>;
+  /** Currencies the FX engine ran with the loan model (issue #449, fx-loan-gate.ts). */
+  loanCcys: ReadonlySet<string>;
 }): TaxMessage[] {
-  const { stats, yearStr, titulares, fxDisposals, disposals, yearEndLots } = input;
+  const { stats, yearStr, titulares, fxDisposals, disposals, yearEndLots, loanCcys } = input;
   const perTitular = (d: Decimal): Decimal => (titulares > 1 ? d.div(titulares) : d);
   const uniq = (xs: string[]): string => [...new Set(xs)].sort().join(", ");
   const out: TaxMessage[] = [
@@ -620,20 +625,40 @@ function traditionalFxMessages(input: {
     });
   }
 
-  const uncovered = new Map<string, Decimal>();
+  const uncovered = new Map<string, { qty: Decimal; ibkr: boolean }>();
   for (const u of stats.uncovered) {
     if (!u.date.startsWith(yearStr)) continue;
-    uncovered.set(u.currency, (uncovered.get(u.currency) ?? new Decimal(0)).plus(u.qty));
+    const prev = uncovered.get(u.currency) ?? { qty: new Decimal(0), ibkr: false };
+    uncovered.set(u.currency, { qty: prev.qty.plus(u.qty), ibkr: prev.ibkr || u.brokerSource === IBKR_BROKER });
   }
-  for (const [ccy, q] of [...uncovered].sort(([a], [b]) => a.localeCompare(b))) {
-    const qty = fmt2(perTitular(q));
-    out.push({
-      id: "report.fx_traditional_uncovered",
-      severity: "info",
-      message: `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores, años que no has subido, o un descubierto o préstamo de margen del bróker). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`,
-      hint: `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores. Si tu saldo en ${ccy} quedó en negativo (descubierto o margen), sube el extracto de IBKR con la sección «Cash Report»: si cuadra con tus operaciones, DeclaRenta trata ese saldo negativo como un préstamo en ${ccy}.`,
-      context: { qty, ccy },
-    });
+  for (const [ccy, u] of [...uncovered].sort(([a], [b]) => a.localeCompare(b))) {
+    const qty = fmt2(perTitular(u.qty));
+    // Inside the loan gate (issue #449) the only currency with no EUR origin
+    // is the account's opening balance, the Cash Report's `startingCash`.
+    if (loanCcys.has(ccy)) {
+      out.push({
+        id: "report.fx_traditional_opening",
+        severity: "info",
+        message: `${qty} ${ccy} del saldo inicial de tu cuenta (el «Cash Report» de IBKR) se usaron en compras de acciones y no tienen origen en euros en tus archivos. Se toman al tipo del día de compra, sin diferencia de cambio anterior.`,
+        hint: `Ese saldo ya estaba en la cuenta al empezar el primer periodo que has subido. Si conoces su origen, sube también los años anteriores.`,
+        context: { qty, ccy },
+      });
+      continue;
+    }
+    const message = `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores, años que no has subido, o un descubierto o préstamo de margen del bróker). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`;
+    const hint = `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.`;
+    // An IBKR currency with no Cash Report the loan gate accepts: say how to get the loan model.
+    if (u.ibkr) {
+      out.push({
+        id: "report.fx_traditional_uncovered_ibkr",
+        severity: "info",
+        message,
+        hint: `${hint} Si tu saldo en ${ccy} quedó en negativo (descubierto o margen), sube el extracto de IBKR con la sección «Cash Report». DeclaRenta trata ese saldo negativo como un préstamo en ${ccy} solo si el Cash Report cuadra con tus operaciones, es de una sola cuenta y no hay en ${ccy} depósitos, retiradas, transferencias, opciones ni posiciones cortas.`,
+        context: { qty, ccy },
+      });
+      continue;
+    }
+    out.push({ id: "report.fx_traditional_uncovered", severity: "info", message, hint, context: { qty, ccy } });
   }
 
   // Orphan detector: keyed like FxFifoEngine.positionKey (isin || symbol).
@@ -909,6 +934,9 @@ export function generateTaxReport(
   let fxMessagesList: TaxMessage[] = [];
   let fxTrace: FxTraceEvent[] | undefined;
   let traditionalStats: ReturnType<FxFifoEngine["getTraditionalStats"]> | undefined;
+  // Issue #449: the loan model's currencies and every loan repayment of the run.
+  let loanCcys: ReadonlySet<string> = new Set();
+  let loanRepayments: ReturnType<FxFifoEngine["getLoanRepayments"]> = [];
 
   if (!options?.skipFx) {
     // Process broker auto-conversions (AFx/FXCONV) by default; the opt-out
@@ -962,6 +990,7 @@ export function generateTaxReport(
       corporateActions: statement.corporateActions,
       trackAutoConvert,
     });
+    loanCcys = new Set(loan.keys());
     // «Tradicional con divisa» runs the same producers and engine in its own
     // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
     const fxEngine = new FxFifoEngine({
@@ -975,6 +1004,7 @@ export function generateTaxReport(
       ? fxEngine.processEvents(allFxEvents, { checkpointDate: yearEnd })
       : fxEngine.processEvents(allFxEvents);
     if (traditionalFx) traditionalStats = fxEngine.getTraditionalStats();
+    loanRepayments = fxEngine.getLoanRepayments();
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
@@ -1118,6 +1148,7 @@ export function generateTaxReport(
   if (traditionalFx) {
     allMessages.push(
       ...traditionalFxMessages({
+        loanCcys,
         stats: traditionalStats!,
         yearStr,
         titulares,
@@ -1169,18 +1200,25 @@ export function generateTaxReport(
 
   // Issue #449: currency that repaid a loan from the broker this year (both
   // methods that run the FX engine). The law puts the debt's own change in
-  // another base than DeclaRenta does, so the note gives that part.
+  // another base than DeclaRenta does, so the note gives that part, from
+  // every repayment: also those that book nothing in 1633/1637 (the default
+  // repays a loan with the shares' own sale at the loan's rate), so both
+  // methods give the same figures for the same loan. Gains and losses apart:
+  // they go in two boxes.
   const loanRows = fxDisposals.filter((d) => d.trigger === "loan_repayment");
-  if (loanRows.length > 0) {
-    const ccy = [...new Set(loanRows.map((d) => d.currency))].sort().join(", ");
+  const yearRepayments = loanRepayments.filter((r) => r.date.startsWith(yearStr));
+  if (loanRows.length > 0 || yearRepayments.some((r) => !r.debtPartEur.isZero())) {
+    const perTitular = (d: Decimal): Decimal => (titulares > 1 ? d.div(titulares) : d);
+    const ccy = [...new Set([...loanRows, ...yearRepayments].map((d) => d.currency))].sort().join(", ");
     const amount = fmt2(loanRows.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)));
-    const debt = fmt2(loanRows.reduce((sum, d) => sum.plus(d.loanDebtPartEur ?? 0), new Decimal(0)));
+    const gain = fmt2(perTitular(yearRepayments.reduce((sum, r) => (r.debtPartEur.greaterThan(0) ? sum.plus(r.debtPartEur) : sum), new Decimal(0))));
+    const loss = fmt2(perTitular(yearRepayments.reduce((sum, r) => (r.debtPartEur.lessThan(0) ? sum.minus(r.debtPartEur) : sum), new Decimal(0))));
     allMessages.push({
       id: "report.fx_loan_repayment",
       severity: "info",
-      message: `Este año has devuelto ${ccy} que te prestó el bróker (tu saldo en ${ccy} estuvo en negativo). Su diferencia de cambio, ${amount} €, va en las casillas 1633/1637. De ella, ${debt} € son la variación de la deuda desde que se abrió hasta que la devolviste.`,
-      hint: `El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la diferencia de cambio al devolver un préstamo en moneda extranjera a la base general (casillas 0304/0305). La DGT la lleva a la base del ahorro (V2414-12). DeclaRenta la declara en las casillas 1633/1637. Si sigues al Supremo, esos ${debt} € van en la casilla 0304 si son ganancia o en la 0305 si son pérdida. DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.`,
-      context: { ccy, amount, debt },
+      message: `Este año has devuelto ${ccy} que te prestó el bróker (tu saldo en ${ccy} estuvo en negativo). DeclaRenta declara ${amount} € por esas devoluciones en las casillas 1633/1637. La variación de la propia deuda, desde que se abrió hasta que la devolviste, es de ${gain} € de ganancia y ${loss} € de pérdida.`,
+      hint: `El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la variación de un préstamo en moneda extranjera a la base general. La DGT la lleva a la base del ahorro (V2414-12), como hace DeclaRenta. Si sigues al Supremo, declara la ganancia en la casilla 0304 y la pérdida en la casilla 0305, y quítalas de las casillas 1633/1637: baja el valor de transmisión (1633) en la ganancia y súbelo en la pérdida. DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.`,
+      context: { ccy, amount, gain, loss },
     });
   }
 

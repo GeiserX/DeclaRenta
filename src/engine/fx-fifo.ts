@@ -168,12 +168,25 @@ export interface TraditionalFxStats {
   lostDollarSales: { date: string; currency: string }[];
   /** One entry per sale that booked at least one negative-cost guard row. */
   guardSales: { date: string; currency: string }[];
-  /** Untracked (`null`) principal re-added at a sale, one entry per sale. */
-  uncovered: { date: string; currency: string; qty: Decimal }[];
+  /** Untracked (`null`) principal re-added at a sale, one entry per sale, with the sale's broker. */
+  uncovered: { date: string; currency: string; qty: Decimal; brokerSource?: string }[];
   /** `${year}|${currency}` → shifts of earlier years consumed by that year's disposals. */
   inflight: Map<string, TraditionalInflight>;
   /** Parked principal per position at the checkpoint date (the declared year end). */
   parkedAtCheckpoint: TraditionalParkedAtYearEnd[];
+}
+
+/**
+ * One repayment of a currency loan from the broker (issue #449), whatever the
+ * method books for it in 1633/1637: `debtPartEur = qty × (r_loan − r_day)`,
+ * the change of the debt itself from the day it opened to the day it was
+ * repaid. It does not depend on the method (`report.fx_loan_repayment`).
+ */
+export interface LoanRepayment {
+  date: string;
+  currency: string;
+  qty: Decimal;
+  debtPartEur: Decimal;
 }
 
 /** A stock buy's principal parked with no tracked origin (late and same-day covers). */
@@ -478,6 +491,8 @@ export class FxFifoEngine {
   private loanOfSlice: Map<ParkedSlice, SameDayDebt> = new Map();
   /** Opening balance not spent yet, per loan currency (see {@link takeOpening}). */
   private opening: Map<string, Decimal> = new Map();
+  /** Every loan repayment of the run (see {@link getLoanRepayments}). */
+  private loanRepayments: LoanRepayment[] = [];
   /** Sales already counted in `tradStats.lostDollarSales`. */
   private lostSales: Set<FxEvent> = new Set();
   /** Every disposal shortfall of the current pass (missing lots). */
@@ -1025,6 +1040,7 @@ export class FxFifoEngine {
     this.debts = [];
     this.loanOfSlice = new Map();
     this.opening = new Map(this.loan);
+    this.loanRepayments = [];
     this.lostSales = new Set();
     this.shortfalls = [];
     this.trace = [];
@@ -2797,7 +2813,14 @@ export class FxFifoEngine {
           ? "principal perdido en la venta, sin origen rastreado: sin diferencia de cambio"
           : "principal perdido en la venta — sin efecto de divisa (nunca convertido a EUR)",
       });
-      if (this.traditionalFx) this.tradStats.uncovered.push({ date: d.sale.date, currency: d.sale.currency, qty: d.qty });
+      if (this.traditionalFx) {
+        this.tradStats.uncovered.push({
+          date: d.sale.date,
+          currency: d.sale.currency,
+          qty: d.qty,
+          ...(d.sale.brokerSource !== undefined ? { brokerSource: d.sale.brokerSource } : {}),
+        });
+      }
     }
     this.debts = loans;
   }
@@ -2997,7 +3020,14 @@ export class FxFifoEngine {
 
     if (lostRows > 0) this.noteLostSale(event);
     if (guardRows > 0) this.tradStats.guardSales.push({ date: event.date, currency: ccy });
-    if (uncoveredQty.greaterThan(EPS)) this.tradStats.uncovered.push({ date: event.date, currency: ccy, qty: uncoveredQty });
+    if (uncoveredQty.greaterThan(EPS)) {
+      this.tradStats.uncovered.push({
+        date: event.date,
+        currency: ccy,
+        qty: uncoveredQty,
+        ...(event.brokerSource !== undefined ? { brokerSource: event.brokerSource } : {}),
+      });
+    }
   }
 
   /**
@@ -3269,13 +3299,15 @@ export class FxFifoEngine {
    * instead ({@link coverLoanSlices}), and what the round trip's losing sale
    * did not return is lost principal (its #447 loss-sale rule). Never a
    * lost-dollar row: no currency was lost (its own message,
-   * `report.fx_loan_repayment`).
+   * `report.fx_loan_repayment`). Every repayment records its debt part
+   * ({@link getLoanRepayments}), also when nothing reaches 1633/1637.
    */
   private bookRepayment(payEvent: FxEvent, debt: SameDayDebt, x: Decimal, lot: FxLot): void {
     const ccy = debt.sale.currency;
     const rate = debt.buyRate!;
     const sameDay = payEvent.date === debt.loanSince;
     const loanDebtPartEur = x.mul(rate.minus(payEvent.ecbRate));
+    this.loanRepayments.push({ date: payEvent.date, currency: ccy, qty: x, debtPartEur: loanDebtPartEur });
     const event: FxEvent = { ...payEvent, trigger: "loan_repayment" };
     let rest = x;
     if (sameDay && !this.traditionalFx) {
@@ -3400,6 +3432,11 @@ export class FxFifoEngine {
   }
 
   /** What «Tradicional con divisa» saw during the last run (empty otherwise). */
+  /** Issue #449: every loan repayment of the last run, all years (see {@link LoanRepayment}). */
+  getLoanRepayments(): LoanRepayment[] {
+    return this.loanRepayments;
+  }
+
   getTraditionalStats(): TraditionalFxStats {
     return this.tradStats;
   }

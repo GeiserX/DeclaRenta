@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import Decimal from "decimal.js";
-import { lifetime, economic, TRAD, MONO, type Ev } from "./fx-traditional-harness.js";
+import { lifetime, economic, run, TRAD, MONO, type Ev } from "./fx-traditional-harness.js";
 import { harnessScenario, runLoan, runUpload, toUpload, toXml, type LoanEv, type LoanScenario } from "./fx-overdraft-loan-xml.js";
 import { gen } from "./fx-overdraft-loan-gen.js";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
@@ -32,6 +32,7 @@ import en from "../../src/i18n/locales/en.js";
 import ca from "../../src/i18n/locales/ca.js";
 import eu from "../../src/i18n/locales/eu.js";
 import gl from "../../src/i18n/locales/gl.js";
+import { isMethodNote } from "../../src/web/casilla-detail.js";
 import type { YearFigures } from "./fx-traditional-harness.js";
 
 const f2 = (d: Decimal) => d.toFixed(2);
@@ -170,9 +171,11 @@ describe("the issue's repro, with a CashReport", () => {
   it("the loan note gives the debt's part, and no lost-dollar note", () => {
     const m = runLoan(sc, {}).get(2025)!.report.messages.find((x) => x.id === "report.fx_loan_repayment");
     expect(m?.severity).toBe("info");
-    expect(m?.context).toEqual({ ccy: "USD", amount: "10.00", debt: "2.00" });
+    expect(m?.context).toEqual({ ccy: "USD", amount: "10.00", gain: "2.00", loss: "0.00" });
     expect(m?.hint).toContain("STS 71/2021");
     expect(m?.hint).toContain("V2414-12");
+    // It shows in the open «Cómo se ha calculado» box with the other method notes.
+    expect(isMethodNote(m!)).toBe(true);
   });
 
   it("the trace shows the loan opening, the same-day repayment and the later one", () => {
@@ -324,7 +327,9 @@ describe("a positive opening balance is spent before any loan opens", () => {
       ["2025-06-02", "300", "15.00", "15.00"],
       ["2025-06-02", "400", "20.00", "20.00"],
     ]);
-    expect(per.get(2025)!.report.messages.find((m) => m.id === "report.fx_traditional_uncovered")?.context).toEqual({ qty: "300.00", ccy: "USD" });
+    // Those 300 are the Cash Report's opening balance: no advice to upload it again.
+    expect(per.get(2025)!.report.messages.find((m) => m.id === "report.fx_traditional_opening")?.context).toEqual({ qty: "300.00", ccy: "USD" });
+    expect(ids(per).filter((id) => id.startsWith("report.fx_traditional_uncovered"))).toEqual([]);
     expect(poolEnd(per)).toBe("0");
   });
 });
@@ -417,6 +422,57 @@ describe("the default: a sale's currency that repays the loan the day it opened 
       expect(miss).toEqual([]);
     });
   }
+});
+
+describe("the loan note: the debt's own change, the same in both methods", () => {
+  // A loan of 1000 USD opened at 0.95 and repaid at 0.90 by the sale of the
+  // shares it bought: the debt fell by 1000 × (0.95 − 0.90) = 50 €. The
+  // default's stock line (sale-rate cost) holds that change and books 0 in
+  // 1633/1637; «Tradicional con divisa» books it there. A trap: the note
+  // summed only the rows in 1633/1637 and did not fire in the default.
+  const OWN: LoanEv[] = [
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "110", r: "0.90" },
+    { k: "conv", d: "2025-06-10", usd: "100", r: "0.88" },
+  ];
+  const note = (ev: LoanEv[], opts: object) =>
+    runLoan(withReport("OWN", ev), opts).get(2025)!.report.messages.find((m) => m.id === "report.fx_loan_repayment");
+
+  it("a gain of 50 in both methods; 50 in 1633/1637 in «Tradicional con divisa», 0 in the default", () => {
+    expect(note(OWN, TRAD)?.context).toEqual({ ccy: "USD", amount: "50.00", gain: "50.00", loss: "0.00" });
+    expect(note(OWN, {})?.context).toEqual({ ccy: "USD", amount: "0.00", gain: "50.00", loss: "0.00" });
+  });
+
+  it("a loss is a positive amount for box 0305, and the hint says to take it out of 1633/1637", () => {
+    const up = OWN.map((e) => (e.k === "sell" ? { ...e, r: "1.00" } : e.k === "conv" ? { ...e, r: "0.98" } : e));
+    for (const [, opts] of METHODS) {
+      const m = note(up, opts);
+      expect(m?.context?.gain).toBe("0.00");
+      expect(m?.context?.loss).toBe("50.00");
+      expect(m?.hint).toContain("0305");
+      expect(m?.hint).toContain("quítalas de las casillas 1633/1637");
+    }
+  });
+});
+
+describe("the untracked-currency note names the right way out", () => {
+  it("an IBKR upload with no Cash Report: the note says to upload it", () => {
+    const per = runLoan({ id: "REPRO-bare", ev: REPRO }, TRAD);
+    const m = per.get(2025)!.report.messages.find((x) => x.id === "report.fx_traditional_uncovered_ibkr");
+    expect(m?.context).toEqual({ qty: "200.00", ccy: "USD" });
+    expect(m?.hint).toContain("Cash Report");
+    expect(isMethodNote(m!)).toBe(true);
+    expect(ids(per)).not.toContain("report.fx_traditional_uncovered");
+  });
+
+  it("another broker: no word of an IBKR Cash Report", () => {
+    // The harness statement names no broker.
+    const r = run(harnessScenario({ id: "REPRO-plain", ev: REPRO }), TRAD).get(2025)!.report;
+    const m = r.messages.find((x) => x.id === "report.fx_traditional_uncovered");
+    expect(m?.message).toContain("descubierto o préstamo de margen");
+    expect(m?.hint).not.toContain("Cash Report");
+    expect(r.messages.map((x) => x.id)).not.toContain("report.fx_traditional_uncovered_ibkr");
+  });
 });
 
 describe("the gate: no proof of the account's cash, no loan", () => {
@@ -646,14 +702,31 @@ describe("the loan message in every locale", () => {
       ),
       TRAD,
     ).get(2025)!.report.messages;
-    for (const m of [def.find((x) => x.id === "report.fx_loan_repayment"), open.find((x) => x.id === "report.fx_traditional_uncovered")]) {
+    const ibkr = runLoan({ id: "REPRO-bare", ev: REPRO }, TRAD).get(2025)!.report.messages;
+    const plain = run(harnessScenario({ id: "REPRO-plain", ev: REPRO }), TRAD).get(2025)!.report.messages;
+    for (const m of [
+      def.find((x) => x.id === "report.fx_loan_repayment"),
+      open.find((x) => x.id === "report.fx_traditional_opening"),
+      ibkr.find((x) => x.id === "report.fx_traditional_uncovered_ibkr"),
+      plain.find((x) => x.id === "report.fx_traditional_uncovered"),
+    ]) {
       expect(m).toBeDefined();
       expect(localizeMessage(m!)).toBe(m!.message);
       expect(localizeHint(m!)).toBe(m!.hint);
     }
   });
 
-  const keys = ["fx.trigger.loan_repayment", "report.fx_loan_repayment", "report.fx_loan_repayment.hint"];
+  const keys = [
+    "fx.trigger.loan_repayment",
+    "report.fx_loan_repayment",
+    "report.fx_loan_repayment.hint",
+    "report.fx_traditional_uncovered",
+    "report.fx_traditional_uncovered.hint",
+    "report.fx_traditional_uncovered_ibkr",
+    "report.fx_traditional_uncovered_ibkr.hint",
+    "report.fx_traditional_opening",
+    "report.fx_traditional_opening.hint",
+  ];
   const ph = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
   for (const [name, loc] of Object.entries({ en, ca, eu, gl })) {
     it(`${name} has every key with the same placeholders`, () => {

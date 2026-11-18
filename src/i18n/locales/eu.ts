@@ -907,15 +907,23 @@ const eu: TranslationKeys = {
   "report.fx_traditional_uncovered":
     "Akzio-erosketetan erabilitako {{qty}} {{ccy}}-k ez dute jatorririk euroetan zure fitxategietan (gordailuak, aurreko saldoak, igo ez dituzun urteak, edo saldo negatibo bat edo brokerraren marjina-mailegu bat). Erosketa-eguneko tasan hartzen dira, aurreko kanbio-diferentziarik gabe.",
   "report.fx_traditional_uncovered.hint":
-    "Erosketaren ondorengo 7 egunetan euroak {{ccy}} bihurtu bazenituen, bihurketa horren tasa erabiltzen da. Haien jatorria ezagutzen baduzu, igo aurreko urteak ere. Zure {{ccy}} saldoa negatiboan geratu bazen (saldo negatiboa edo marjina), igo IBKRren laburpena «Cash Report» atalarekin: zure eragiketekin bat badator, DeclaRentak saldo negatibo hori {{ccy}}-ko mailegu gisa tratatzen du.",
+    "Erosketaren ondorengo 7 egunetan euroak {{ccy}} bihurtu bazenituen, bihurketa horren tasa erabiltzen da. Haien jatorria ezagutzen baduzu, igo aurreko urteak ere.",
+  "report.fx_traditional_uncovered_ibkr":
+    "Akzio-erosketetan erabilitako {{qty}} {{ccy}}-k ez dute jatorririk euroetan zure fitxategietan (gordailuak, aurreko saldoak, igo ez dituzun urteak, edo saldo negatibo bat edo brokerraren marjina-mailegu bat). Erosketa-eguneko tasan hartzen dira, aurreko kanbio-diferentziarik gabe.",
+  "report.fx_traditional_uncovered_ibkr.hint":
+    "Erosketaren ondorengo 7 egunetan euroak {{ccy}} bihurtu bazenituen, bihurketa horren tasa erabiltzen da. Haien jatorria ezagutzen baduzu, igo aurreko urteak ere. Zure {{ccy}} saldoa negatiboan geratu bazen (saldo negatiboa edo marjina), igo IBKRren laburpena «Cash Report» atalarekin. DeclaRentak saldo negatibo hori {{ccy}}-ko mailegu gisa tratatzen du soilik Cash Report-a zure eragiketekin bat badator, kontu bakarrekoa bada eta {{ccy}}-tan ez badago gordailurik, erretiratzerik, transferentziarik, aukerarik edo posizio laburrik.",
+  "report.fx_traditional_opening":
+    "Zure kontuaren hasierako saldoko {{qty}} {{ccy}} (IBKRren «Cash Report»-a) akzio-erosketetan erabili ziren, eta ez dute jatorririk euroetan zure fitxategietan. Erosketa-eguneko tasan hartzen dira, aurreko kanbio-diferentziarik gabe.",
+  "report.fx_traditional_opening.hint":
+    "Saldo hori kontuan zegoen igo duzun lehen aldia hasi zenean. Haren jatorria ezagutzen baduzu, igo aurreko urteak ere.",
   "report.fx_traditional_orphan":
     "{{security}}-n inbertitutako {{qty}} {{ccy}}-ren kanbio-diferentzia ezin izan da inongo salmentari esleitu (ISIN aldaketa, bat-egitea edo zatiketa izan daiteke). Berrikusi eskuz.",
   "report.fx_traditional_orphan.hint":
     "{{ccy}} horiek {{security}} erosteko erabili ziren. Abenduaren 31n ez dituzu akzio horiek eta ez du inongo salmentak berreskuratu. {{ccy}} erosi zenituenetik akzioak erosi zenituen arteko aldaketa ({{amount}} €) ez da aitortu.",
   "report.fx_loan_repayment":
-    "Aurten brokerrak utzi zizkizun {{ccy}} itzuli dituzu (zure {{ccy}} saldoa negatiboan egon zen). Haien kanbio-diferentzia, {{amount}} €, 1633/1637 laukietan doa. Horietatik, {{debt}} € zorraren aldaketa dira, ireki zenetik itzuli zenuen arte.",
+    "Aurten brokerrak utzi zizkizun {{ccy}} itzuli dituzu (zure {{ccy}} saldoa negatiboan egon zen). DeclaRentak {{amount}} € aitortzen ditu itzulketa horiengatik 1633/1637 laukietan. Zorraren beraren aldaketa, ireki zenetik itzuli zenuen arte, {{gain}} €-ko irabazia eta {{loss}} €-ko galera da.",
   "report.fx_loan_repayment.hint":
-    "Auzitegi Gorenak (STS 71/2021, ECLI:ES:TS:2021:345) atzerriko monetako mailegu bat itzultzean sortzen den kanbio-diferentzia oinarri orokorrera eramaten du (0304/0305 laukiak). DGTk aurrezkiaren oinarrira eramaten du (V2414-12). DeclaRentak 1633/1637 laukietan aitortzen du. Auzitegi Gorenari jarraitzen badiozu, {{debt}} € horiek 0304 laukian doaz irabazia badira, edo 0305ean galera badira. DeclaRentak saldo negatiboa mailegutzat hartzen du soilik IBKRren eskudiru-txostena (Cash Report) zure eragiketekin bat datorrenean.",
+    "Auzitegi Gorenak (STS 71/2021, ECLI:ES:TS:2021:345) atzerriko monetako mailegu baten aldaketa oinarri orokorrera eramaten du. DGTk aurrezkiaren oinarrira eramaten du (V2414-12), DeclaRentak bezala. Auzitegi Gorenari jarraitzen badiozu, aitortu irabazia 0304 laukian eta galera 0305 laukian, eta kendu 1633/1637 laukietatik: jaitsi transmisio-balioa (1633) irabaziaren zenbatekoan eta igo galeraren zenbatekoan. DeclaRentak saldo negatiboa mailegutzat hartzen du soilik IBKRren eskudiru-txostena (Cash Report) zure eragiketekin bat datorrenean.",
   "report.fx_method_name.multidivisa":
     "DGTren irizpidea (multidibisa)",
   "report.fx_method_name.tradicional-divisa":

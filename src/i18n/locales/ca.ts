@@ -905,15 +905,23 @@ const ca: TranslationKeys = {
   "report.fx_traditional_uncovered":
     "{{qty}} {{ccy}} usats en compres d'accions no tenen origen en euros als teus fitxers (dipòsits, saldos anteriors, anys que no has pujat, o un descobert o préstec de marge del bróker). Es prenen al tipus del dia de compra, sense diferència de canvi anterior.",
   "report.fx_traditional_uncovered.hint":
-    "Si vas canviar euros a {{ccy}} fins a 7 dies després de la compra, es fa servir el tipus d'aquest canvi. Si en coneixes l'origen, puja també els anys anteriors. Si el teu saldo en {{ccy}} va quedar en negatiu (descobert o marge), puja l'extracte d'IBKR amb la secció «Cash Report»: si quadra amb les teves operacions, DeclaRenta tracta aquest saldo negatiu com un préstec en {{ccy}}.",
+    "Si vas canviar euros a {{ccy}} fins a 7 dies després de la compra, es fa servir el tipus d'aquest canvi. Si en coneixes l'origen, puja també els anys anteriors.",
+  "report.fx_traditional_uncovered_ibkr":
+    "{{qty}} {{ccy}} usats en compres d'accions no tenen origen en euros als teus fitxers (dipòsits, saldos anteriors, anys que no has pujat, o un descobert o préstec de marge del bróker). Es prenen al tipus del dia de compra, sense diferència de canvi anterior.",
+  "report.fx_traditional_uncovered_ibkr.hint":
+    "Si vas canviar euros a {{ccy}} fins a 7 dies després de la compra, es fa servir el tipus d'aquest canvi. Si en coneixes l'origen, puja també els anys anteriors. Si el teu saldo en {{ccy}} va quedar en negatiu (descobert o marge), puja l'extracte d'IBKR amb la secció «Cash Report». DeclaRenta tracta aquest saldo negatiu com un préstec en {{ccy}} només si el Cash Report quadra amb les teves operacions, és d'un sol compte i no hi ha en {{ccy}} dipòsits, retirades, transferències, opcions ni posicions curtes.",
+  "report.fx_traditional_opening":
+    "{{qty}} {{ccy}} del saldo inicial del teu compte (el «Cash Report» d'IBKR) es van fer servir en compres d'accions i no tenen origen en euros als teus fitxers. Es prenen al tipus del dia de compra, sense diferència de canvi anterior.",
+  "report.fx_traditional_opening.hint":
+    "Aquest saldo ja era al compte en començar el primer període que has pujat. Si en coneixes l'origen, puja també els anys anteriors.",
   "report.fx_traditional_orphan":
     "La diferència de canvi de {{qty}} {{ccy}} invertits en {{security}} no s'ha pogut assignar a cap venda (possible canvi d'ISIN, fusió o escissió). Revisa-la a mà.",
   "report.fx_traditional_orphan.hint":
     "Aquests {{ccy}} es van fer servir per comprar {{security}}. A 31 de desembre ja no tens aquestes accions i cap venda no els ha recuperat. La seva variació des que vas comprar els {{ccy}} fins que vas comprar les accions ({{amount}} €) no s'ha declarat.",
   "report.fx_loan_repayment":
-    "Aquest any has retornat {{ccy}} que et va prestar el bróker (el teu saldo en {{ccy}} va estar en negatiu). La seva diferència de canvi, {{amount}} €, va a les caselles 1633/1637. D'aquesta, {{debt}} € són la variació del deute des que es va obrir fins que el vas retornar.",
+    "Aquest any has retornat {{ccy}} que et va prestar el bróker (el teu saldo en {{ccy}} va estar en negatiu). DeclaRenta declara {{amount}} € per aquests retorns a les caselles 1633/1637. La variació del mateix deute, des que es va obrir fins que el vas retornar, és de {{gain}} € de guany i {{loss}} € de pèrdua.",
   "report.fx_loan_repayment.hint":
-    "El Tribunal Suprem (STS 71/2021, ECLI:ES:TS:2021:345) porta la diferència de canvi en retornar un préstec en moneda estrangera a la base general (caselles 0304/0305). La DGT la porta a la base de l'estalvi (V2414-12). DeclaRenta la declara a les caselles 1633/1637. Si segueixes el Suprem, aquests {{debt}} € van a la casella 0304 si són guany o a la 0305 si són pèrdua. DeclaRenta només tracta el saldo negatiu com a préstec quan l'informe d'efectiu (Cash Report) d'IBKR quadra amb les teves operacions.",
+    "El Tribunal Suprem (STS 71/2021, ECLI:ES:TS:2021:345) porta la variació d'un préstec en moneda estrangera a la base general. La DGT la porta a la base de l'estalvi (V2414-12), com fa DeclaRenta. Si segueixes el Suprem, declara el guany a la casella 0304 i la pèrdua a la casella 0305, i treu-los de les caselles 1633/1637: baixa el valor de transmissió (1633) en el guany i puja'l en la pèrdua. DeclaRenta només tracta el saldo negatiu com a préstec quan l'informe d'efectiu (Cash Report) d'IBKR quadra amb les teves operacions.",
   "report.fx_method_name.multidivisa":
     "Criteri DGT (multidivisa)",
   "report.fx_method_name.tradicional-divisa":
