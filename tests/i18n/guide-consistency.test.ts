@@ -177,6 +177,26 @@ describe("Renta Web guide consistency", () => {
     expect(engine).toMatch(/#457/);
   });
 
+  it("warns wherever it states the 1-year window that the engine applies 2 months to every ISIN, so a London-only share needs a manual check (#452)", () => {
+    // The guide and the window warning describe the law; without this note a
+    // user reads the engine's 2-month result as the legal 1-year window.
+    for (const [name, locale] of Object.entries(locales)) {
+      for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(/SIX[^.]*Toronto[^.]*OTC Markets/);
+        expect(locale[key], `${name} ${key}`).toMatch(/#452/);
+      }
+    }
+    // report.ts writes the Spanish hint itself; it must say the same as es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    const note = "Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año";
+    expect(source).toContain(note);
+    expect(es["report.antichurning_window_past_data.hint"]).toContain(note);
+    for (const p of ["modelos-fiscales.md", "index.md"]) {
+      const text = readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+      expect(text, p).toMatch(/2 meses a todo valor con ISIN[^\n]*Tokio u OTC Markets[^\n]*#452/);
+    }
+  });
+
   it("corrects a filed year with an «autoliquidación rectificativa» from 2024 on, and keeps complementaria for 2023 and earlier (#455 follow-up)", () => {
     // AEAT, Manual práctico de Renta 2025: the rectificativa is the only way to
     // correct an IRPF return from tax year 2024 on, in both directions; the old
