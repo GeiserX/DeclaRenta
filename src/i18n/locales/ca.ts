@@ -107,7 +107,7 @@ const ca: TranslationKeys = {
   "casilla.double_taxation": "Deducció doble imposició",
   "casilla.dt_foreign_income_total": "Total rendiments estrangers",
   "casilla.reintegrated_losses":
-    "Pèrdues diferides que ara s'integren (vendes sense recompra en el termini, «transmissió definitiva»): {{amount}} EUR",
+    "Pèrdues diferides que ara s'integren (accions venudes sense recompra en el seu termini, «transmissió definitiva»): {{amount}} EUR",
   "casilla.blocked_losses":
     "Pèrdues bloquejades per regla anti-churning (2 mesos cotitzats / 1 any no cotitzats): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertència(es)",
@@ -602,7 +602,7 @@ const ca: TranslationKeys = {
     "A Renta Web, marca aquesta venda com a «Pèrdues patrimonials no imputables». La pèrdua queda pendent: s'integra quan venguis accions d'aquest valor sense recomprar en els 2 mesos anteriors o posteriors (1 any si no cotitza), primer les pèrdues més antigues.",
   "annex.wash_released": "Allibera {{amount}} EUR de pèrdues diferides d'aquest valor (transmissió definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pèrdues pendents de les vendes del: {{dates}}",
-  "annex.wash_released_hint": "Aquesta venda no té recompra en el termini, així que integra ara aquestes pèrdues bloquejades, primer les més antigues. A Renta Web, imputa-les en aquest exercici.",
+  "annex.wash_released_hint": "Les accions d'aquesta venda que cap recompra en el seu termini no cobreix són una transmissió definitiva: integren ara les pèrdues pendents d'aquest valor, la d'una acció per cada acció, primer les més antigues (si la venda tanca la posició, totes les que quedin). A Renta Web, imputa-les en aquest exercici.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3 fiscal (base de l'estalvi)",
@@ -689,7 +689,7 @@ const ca: TranslationKeys = {
     "La deducció per doble imposició evita pagar dues vegades impostos sobre els mateixos dividends. Es limita al menor entre el pagat a l'origen i la quota espanyola. Si el conveni de doble imposició permet un tipus màxim inferior (ex. 15% EUA), només és deduïble fins a aquest límit.",
   "guide_rw.blocked_losses_title": "Pèrdues bloquejades (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web. Es bloquegen perquè vas recomprar el mateix valor en els 2 mesos anteriors o posteriors a la venda (1 any si no cotitza). No se sumen al cost de la nova posició: queden pendents i s'integren quan venguis accions d'aquest valor sense recomprar en aquest termini (transmissió definitiva), primer les més antigues. Si vas declarar un any amb DeclaRenta 0.66.5 o anterior, aquelles versions alliberaven una pèrdua en vendre les accions recomprades encara que tornessis a recomprar: si ja vas deduir aquesta pèrdua, no la tornis a deduir quan DeclaRenta l'alliberi ara, o presenta una autoliquidació complementària d'aquell any.",
+    "Si DeclaRenta mostra pèrdues bloquejades, marca la casella <strong>«Pèrdues patrimonials no imputables»</strong> a Renta Web. Es bloquegen perquè vas recomprar el mateix valor en els 2 mesos anteriors o posteriors a la venda (1 any si no cotitza). No se sumen al cost de la nova posició: queden pendents i s'integren quan venguis accions d'aquest valor sense recomprar en aquest termini (transmissió definitiva), primer les més antigues. Si vas declarar un any amb DeclaRenta 0.66.5 o anterior, aquelles versions alliberaven una pèrdua en vendre les accions recomprades encara que tornessis a recomprar: si ja vas deduir aquesta pèrdua, no la tornis a deduir quan DeclaRenta l'alliberi ara, o presenta una autoliquidació complementària d'aquell any. I a l'inrevés: si DeclaRenta allibera ara una pèrdua en un any que ja vas presentar amb la 0.66.5 o anterior, pots sol·licitar la rectificació d'aquella autoliquidació per deduir-la.",
   "guide_rw.closing_tip": "Després d'introduir totes les dades, usa el botó «Verificar declaració» de Renta Web per comprovar errors. Si una altra eina mostra un import diferent en guanys patrimonials, potser fa servir un altre mètode per a les accions en divisa. Als resultats del Model 100, obre «Comparar amb els altres mètodes» per veure les xifres dels tres. Per canviar de mètode, torna al pas «Revisar i triar mètode». Fes servir el mateix mètode tots els anys.",
 
   // PDF report

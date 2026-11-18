@@ -120,6 +120,10 @@ describe("renderWashSaleDetailRow", () => {
     expect(html).toContain("<summary>Pérdida bloqueada por recompra: 400,00 EUR");
     expect(html).toContain("Libera 138.000,00 EUR");
     expect(html).toContain("15/02/2007");
+    // The sale is partly rebought (10 shares), so the release hint speaks of the
+    // shares no rebuy covers, never of a sale with no rebuy.
+    expect(html).not.toContain("no tiene recompra");
+    expect(html).toContain("que ninguna recompra en su plazo cubre son una transmisión definitiva");
   });
 
   it("no longer says the loss is applied when you sell what you bought back", () => {

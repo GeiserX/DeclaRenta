@@ -56,6 +56,23 @@ describe("Renta Web guide consistency", () => {
       expect(text, name).not.toMatch(/se suma a la adquisición|added to the acquisition cost|se suma a l'adquisició|eskuraketa kostuari gehitzen|súmase á adquisición/);
       expect(text, name).toContain("0.66.5");
       expect(locale["casilla.reintegrated_losses"], name).not.toMatch(/años anteriores|prior years|anys anteriors|Aurreko urteetako|anos anteriores/);
+      // The other direction: a loss the new engine releases in a year already
+      // filed with 0.66.5 or earlier can be claimed by rectifying that return.
+      expect(text, name).toMatch(/rectificación|rectificació|zuzenketa/);
+    }
+  });
+
+  it("says the release comes from the shares no rebuy covers, not from a sale with no rebuy (#451)", () => {
+    // A partly rebought sale releases its definitive shares (V0913-08: 10
+    // rebought, 955 definitive), so the hint must not say the sale has no rebuy.
+    const saleHasNoRebuy =
+      /Esta venta no tiene recompra|This sale has no repurchase|Aquesta venda no té recompra|Salmenta honek ez du berrerosketarik|Esta venda non ten recompra/;
+    const salesWithoutRebuy =
+      /\(ventas sin recompra|\(sales with no repurchase|\(vendes sense recompra|berrerosketarik gabeko salmentak|\(vendas sen recompra/;
+    for (const [name, locale] of Object.entries(locales)) {
+      expect(locale["annex.wash_released_hint"], name).not.toMatch(saleHasNoRebuy);
+      expect(locale["annex.wash_released_hint"], name).toMatch(/transmisión definitiva|transmissió definitiva|behin betiko eskualdaketa/);
+      expect(locale["casilla.reintegrated_losses"], name).not.toMatch(salesWithoutRebuy);
     }
   });
 });

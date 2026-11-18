@@ -107,7 +107,7 @@ const gl: TranslationKeys = {
   "casilla.double_taxation": "Dedución dobre imposición",
   "casilla.dt_foreign_income_total": "Total rendementos estranxeiros",
   "casilla.reintegrated_losses":
-    "Perdas diferidas que agora se integran (vendas sen recompra no prazo, «transmisión definitiva»): {{amount}} EUR",
+    "Perdas diferidas que agora se integran (accións vendidas sen recompra no seu prazo, «transmisión definitiva»): {{amount}} EUR",
   "casilla.blocked_losses":
     "Perdas bloqueadas pola regra anti-churning (2 meses cotizados / 1 ano non cotizados): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
@@ -602,7 +602,7 @@ const gl: TranslationKeys = {
     "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda queda pendente: intégrase cando vendas accións deste valor sen recomprar nos 2 meses anteriores ou posteriores (1 ano se non cotiza), primeiro as perdas máis antigas.",
   "annex.wash_released": "Libera {{amount}} EUR de perdas diferidas deste valor (transmisión definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Perdas pendentes das vendas do: {{dates}}",
-  "annex.wash_released_hint": "Esta venda non ten recompra no prazo, así que integra agora esas perdas bloqueadas, primeiro as máis antigas. En Renta Web, impútaas neste exercicio.",
+  "annex.wash_released_hint": "As accións desta venda que ningunha recompra no seu prazo cobre son unha transmisión definitiva: integran agora as perdas pendentes dese valor, a dunha acción por cada acción, primeiro as máis antigas (se a venda pecha a posición, todas as que queden). En Renta Web, impútaas neste exercicio.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimaci\u00f3n fiscal (base do aforro)",
@@ -689,7 +689,7 @@ const gl: TranslationKeys = {
     "A dedución por dobre imposición evita pagar dúas veces impostos sobre os mesmos dividendos. Limítase ao menor entre o pagado na orixe e a cota española. Se o convenio de dobre imposición permite un tipo máximo inferior (ex. 15% EUA), só é deducible ata ese límite.",
   "guide_rw.blocked_losses_title": "Perdas bloqueadas (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "Se DeclaRenta amosa perdas bloqueadas, marca a casilla <strong>«Perdas patrimoniais non imputables»</strong> en Renta Web. Bloquéanse porque recompraches o mesmo valor nos 2 meses anteriores ou posteriores á venda (1 ano se non cotiza). Non se suman ao custo da nova posición: quedan pendentes e intégranse cando vendas accións dese valor sen recomprar nese prazo (transmisión definitiva), primeiro as máis antigas. Se declaraches un ano con DeclaRenta 0.66.5 ou anterior, esas versións liberaban unha perda ao vender as accións recompradas aínda que volveses recomprar: se xa deduciches esa perda, non a deduzas outra vez cando DeclaRenta a libere agora, ou presenta unha autoliquidación complementaria daquel ano.",
+    "Se DeclaRenta amosa perdas bloqueadas, marca a casilla <strong>«Perdas patrimoniais non imputables»</strong> en Renta Web. Bloquéanse porque recompraches o mesmo valor nos 2 meses anteriores ou posteriores á venda (1 ano se non cotiza). Non se suman ao custo da nova posición: quedan pendentes e intégranse cando vendas accións dese valor sen recomprar nese prazo (transmisión definitiva), primeiro as máis antigas. Se declaraches un ano con DeclaRenta 0.66.5 ou anterior, esas versións liberaban unha perda ao vender as accións recompradas aínda que volveses recomprar: se xa deduciches esa perda, non a deduzas outra vez cando DeclaRenta a libere agora, ou presenta unha autoliquidación complementaria daquel ano. E ao revés: se DeclaRenta libera agora unha perda nun ano que xa presentaches coa 0.66.5 ou anterior, podes solicitar a rectificación daquela autoliquidación para deducila.",
   "guide_rw.closing_tip": "Tras introducir todos os datos, usa o botón «Verificar declaración» de Renta Web para comprobar erros. Se outra ferramenta amosa un importe distinto en ganancias patrimoniais, pode usar outro método para as accións en divisa. Nos resultados do Modelo 100, abre «Comparar cos outros métodos» para ver as cifras dos tres. Para cambiar de método, volve ao paso «Revisar e escoller método». Usa o mesmo método todos os anos.",
 
   // PDF report
