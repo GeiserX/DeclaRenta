@@ -153,14 +153,29 @@ export function detectWashSales(
   // patrimony, so they are no repurchase (fx-fifo.ts does not count a cover as a
   // purchase either). Without this, a cover buy could block a loss that nothing
   // ever releases, because a cover is no «transmisión definitiva».
-  const coveredLeft = new Map<string, Decimal>();
+  // The covered shares are split by the day the short opened (the disposal's
+  // acquireDate): a short opened on an earlier day, or one opened on the cover
+  // day itself by a SELL "O". FIFO runs a day's "C;O" buys before its SELL "O"
+  // rows and its "C" buys after them (compareFifoTradeOrder), so a "C;O" buy can
+  // only cover an earlier short, and a "C" buy covers what is left of the
+  // earlier short and then the same-day one.
+  const coveredEarlier = new Map<string, Decimal>();
+  const coveredSameDay = new Map<string, Decimal>();
   for (const d of disposals) {
     if (d.isShort !== true || WASH_SALE_EXEMPT.has(d.assetCategory)) continue;
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
     if (!key) continue;
-    const dayKey = `${key}|${parseDate(d.sellDate).getTime()}`;
-    coveredLeft.set(dayKey, (coveredLeft.get(dayKey) ?? new Decimal(0)).plus(d.quantity.abs()));
+    const time = parseDate(d.sellDate).getTime();
+    const dayKey = `${key}|${time}`;
+    const bucket = parseDate(d.acquireDate).getTime() < time ? coveredEarlier : coveredSameDay;
+    bucket.set(dayKey, (bucket.get(dayKey) ?? new Decimal(0)).plus(d.quantity.abs()));
   }
+  const takeCovered = (bucket: Map<string, Decimal>, dayKey: string, wanted: Decimal): Decimal => {
+    const left = bucket.get(dayKey) ?? new Decimal(0);
+    const taken = Decimal.min(wanted, left);
+    bucket.set(dayKey, left.minus(taken));
+    return taken;
+  };
 
   // Index in-window-eligible BUY events and signed position movements by key.
   // Walk the trades in FIFO's processing order, so same-day covers take the
@@ -188,14 +203,15 @@ export function detectWashSales(
       // FIFO sends a BUY flagged "C" or "C;O" to the open short lots first
       // (fifo.ts consumeShortLots). Only what is left after the cover becomes a
       // held lot. A "C" buy with no open short books nothing at all. The day's
-      // covered shares go to the cover buys in FIFO's order (the sort above).
+      // covered shares go to the cover buys in FIFO's order (the sort above):
+      // a "C;O" buy takes only shorts opened on an earlier day, a "C" buy takes
+      // those first and then the shorts the same day's SELL "O" opened.
       let repurchased = qty;
       const oci = trade.openCloseIndicator;
       if (oci === "C" || oci === "C;O") {
         const dayKey = `${key}|${time}`;
-        const left = coveredLeft.get(dayKey) ?? new Decimal(0);
-        const covered = Decimal.min(qty, left);
-        coveredLeft.set(dayKey, left.minus(covered));
+        let covered = takeCovered(coveredEarlier, dayKey, qty);
+        if (oci === "C") covered = covered.plus(takeCovered(coveredSameDay, dayKey, qty.minus(covered)));
         repurchased = oci === "C" && covered.isZero() ? new Decimal(0) : qty.minus(covered);
       }
       if (repurchased.greaterThan(0)) {

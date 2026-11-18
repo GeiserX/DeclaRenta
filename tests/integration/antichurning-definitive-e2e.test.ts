@@ -806,6 +806,25 @@ describe("a short cover is not a transmission of held shares, and its buy is not
       expect(r.fiscal).toBe("-20.00");
     });
 
+    it(`[${method}] an intraday flip from short to long: the shares a same-day C buy keeps after covering a new short still block`, () => {
+      // Short 6 since 10/03. On 20/03, in the broker's intraday order: SELL O 6
+      // (short 12), BUY C 9 (short 3), BUY C;O 12 (long 9). FIFO runs C;O first:
+      // it covers the 6 opened on 10/03 and keeps 6. The SELL O opens 6, and the
+      // C buy covers those 6 and keeps 3. The day ends 9 shares long, 0 short.
+      const flip: Trade[] = [
+        flagged(["2025-01-02", "BUY", 10, 100], 0, "O"),
+        flagged(["2025-03-03", "SELL", 10, 80], 1, "C"),
+        flagged(["2025-03-10", "SELL", 6, 60], 2, "O"),
+        flagged(["2025-03-20", "SELL", 6, 60], 3, "O"),
+        flagged(["2025-03-20", "BUY", 9, 90], 4, "C"),
+        { ...flagged(["2025-03-20", "BUY", 12, 120], 5, "C"), openCloseIndicator: "C;O" },
+      ];
+      const r = yearOf(flip, 2025, method);
+      expect(r.disposals.filter((d) => d.isShort === true).reduce((s, d) => s.plus(d.quantity), new Decimal(0)).toString()).toBe("12");
+      // 9 of the 10 shares sold at a loss on 03/03 come back within 2 months: 18 of 20 deferred.
+      expect(onDate(r, "2025-03-03", "blockedLossEur")).toBe("18.00");
+    });
+
     it(`[${method}] a total exit that shares its day with a short cover gives the rest of the queue to the long sale`, () => {
       // Issue example: 20 + 5 pending on 20 shares, 10 held. On 01/09 the long
       // sale (a C;O sell, which FIFO books before the C cover) is definitive and

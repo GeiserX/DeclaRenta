@@ -116,7 +116,13 @@ unit:
    and a repurchase. The day's covered shares go to the cover buys in FIFO's
    own order (`compareFifoTradeOrder`: a `C;O` buy before a `C` buy, whatever
    the file order), so an orphan `C` buy listed before the `C;O` buy that
-   closed the short is never counted as a repurchase. Without this a cover buy
+   closed the short is never counted as a repurchase. FIFO also runs the day's
+   SELL `O` rows between the two, so the covered shares are split by the day
+   the short opened (the short disposal's `acquireDate`): a `C;O` buy covers
+   only a short opened on an earlier day, and a `C` buy covers what is left of
+   it and then the short a same-day SELL `O` opened. In an intraday flip from
+   short to long the shares each buy keeps are then the ones FIFO keeps.
+   Without this a cover buy
    blocked a loss that nothing could release once the position stayed flat
    (Σ blocked ≠ Σ released). A zero-share
    disposal (a 0-quantity SELL row FIFO books with no lots) is skipped. The
