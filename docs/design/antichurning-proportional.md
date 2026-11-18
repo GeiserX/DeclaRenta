@@ -9,8 +9,10 @@
 ## The rule (verified against primary sources)
 
 When a taxpayer sells securities at a **loss** and acquires **homogeneous**
-securities within **±2 calendar months** (listed, letter f) / **±1 year**
-(unlisted, letter g) of the sale, the loss is **not computable now**. It is:
+securities within **±2 calendar months** (admitted to trading on a regulated
+market of the European Economic Area or an equivalent third-country market,
+letter f; NYSE and Nasdaq are equivalent, DGT V0778-25) / **±1 year** (admitted
+to neither, letter g) of the sale, the loss is **not computable now**. It is:
 
 1. **Proportional to the repurchased quantity.** Sell 100 at a loss, rebuy 30 →
    only the loss on **30** is blocked/deferred; the loss on **70** is deductible
@@ -111,8 +113,18 @@ unit:
    en el patrimonio»). FIFO books no lot for them (`consumeShortLots`) and
    `fx-fifo.ts` does not count a cover as a purchase. Only what a `C;O` buy (or
    a `C` buy larger than the open short) leaves after the cover is a held lot
-   and a repurchase. Without this a cover buy blocked a loss that nothing could
-   release once the position stayed flat (Σ blocked ≠ Σ released). A zero-share
+   and a repurchase. The day's covered shares go to the cover buys in FIFO's
+   own order (`compareFifoTradeOrder`: a `C;O` buy before a `C` buy, whatever
+   the file order), so an orphan `C` buy listed before the `C;O` buy that
+   closed the short is never counted as a repurchase. FIFO also runs the day's
+   SELL `O` rows between the two, so the covered shares are split by the day
+   the short opened (the short disposal's `acquireDate`): a `C;O` buy covers
+   only a short opened on an earlier day, and a `C` buy covers what is left of
+   it and then the short a same-day SELL `O` opened. In an intraday flip from
+   short to long the shares each buy keeps are then the ones FIFO keeps.
+   Without this a cover buy
+   blocked a loss that nothing could release once the position stayed flat
+   (Σ blocked ≠ Σ released). A zero-share
    disposal (a 0-quantity SELL row FIFO books with no lots) is skipped. The
    release keeps a cursor on the queue, so a sale of many lots walks it once.
 3. **Total exit.** A sale day whose sales no rebuy absorbed and that leaves no
@@ -126,10 +138,13 @@ unit:
    shares that came in without a BUY (scrip dividend, merger into a new ISIN,
    spin-off, reward lots) still count as held. A holding span starts on the
    date the shares entered the security: `entryDate`, which FIFO sets on
-   spin-off and merger lots and their disposals, else `acquireDate`. Those lots
-   keep the parent's tax `acquireDate` (Art. 37.1), which would otherwise make
-   them look held before the corporate action. The day must transmit held
-   shares: a day of short covers only is no exit.
+   spin-off lots and on lots of a merger into a new ISIN, and their disposals,
+   else `acquireDate`. Those lots keep the parent's tax `acquireDate`
+   (Art. 37.1), which would otherwise make them look held before the corporate
+   action. A TC row that keeps the ISIN moves no shares into a new security,
+   so its lots keep their entry date. The day must transmit held shares: a day
+   of short covers only is no exit, and what the total exit releases goes to
+   the day's last long sale, never to a short cover.
 4. **Block (loss lots only).** `blockedLossEur = |gainLossEur| × absorbed/qty`,
    appended to the end of the queue. The absorbed shares that keep the old
    losses pending are the same ones that block this loss; they are not counted
@@ -205,7 +220,9 @@ transmission that releases them.
   asked to add the next file. With several merged brokers, each broker's files
   end on their own date (its last trade of any security, or its statement end
   when later), and a security is covered up to the earliest end among the
-  brokers that trade it. The per-security last trade is not used: a final exit
+  brokers that trade it. A broker with a statement end and no trades counts as
+  one of the merged brokers too, so its later statement end cannot cover a
+  security traded elsewhere. The per-security last trade is not used: a final exit
   never has a later trade of its own. From tax year 2024 on, a window that ends
   after 30 June of the next year (the filing deadline) is still open when the
   user files, so it gets `report.antichurning_window_open_at_filing` instead:
@@ -219,9 +236,22 @@ transmission that releases them.
 
 ## Known limitations (documented, accepted)
 
-- **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged; an
-  ISIN-bearing unlisted instrument, or one listed only outside an EU regulated
-  market, still gets the 2-month window (#452).
+- **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged. Letter
+  f covers a regulated market of the European Economic Area (the EU, Norway,
+  Iceland, Liechtenstein) and any third-country market the European Commission
+  declared equivalent while the decision stands (DGT V0778-25). The decisions
+  in force are Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the
+  other SEC national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong
+  Kong); Switzerland's (2018/2047) expired on 30/06/2019 and the UK has none.
+  So a share listed only on NYSE or Nasdaq gets 2 months under the statute too,
+  and that is no deviation. The deviation is an ISIN-bearing security admitted
+  to neither kind of market: one traded only on OTC Markets, or listed only on
+  the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
+  the engine 2 months (#452).
+- **Crypto window.** The engine gives crypto ±1 year. Crypto is no «valor o
+  participación», so letters f and g do not apply: art. 33.5.e («elementos
+  patrimoniales») counts only a repurchase within the year after the sale, so
+  a buy before the sale should not block (#457, not handled here).
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the

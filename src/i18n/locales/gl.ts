@@ -110,7 +110,7 @@ const gl: TranslationKeys = {
   "casilla.reintegrated_losses":
     "Perdas diferidas que agora se integran (accións vendidas sen recompra no seu prazo, «transmisión definitiva»): {{amount}} EUR",
   "casilla.blocked_losses":
-    "Perdas bloqueadas pola regra anti-churning (2 meses cotizados / 1 ano non cotizados): {{amount}} EUR",
+    "Perdas bloqueadas pola regra anti-churning (2 meses en mercado regulado ou equivalente / 1 ano o resto): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
   "messages.errors_title": "{{count}} erro(s) — require atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
@@ -600,7 +600,7 @@ const gl: TranslationKeys = {
   "annex.wash_blocked": "Perda bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras do mesmo valor que a bloquean: {{dates}}",
   "annex.wash_hint":
-    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda queda pendente: intégrase, primeiro as perdas máis antigas, a medida que vendas accións deste valor que ningunha recompra nos 2 meses anteriores ou posteriores (1 ano se non cotiza) cobre; se recompras parte, só contan as accións non recompradas.",
+    "En Renta Web, marca esta venda como «Perdas patrimoniais non imputables». A perda queda pendente: intégrase, primeiro as perdas máis antigas, a medida que vendas accións deste valor que ningunha recompra nos 2 meses anteriores ou posteriores (1 ano se o valor non cotiza nun mercado regulado do Espazo Económico Europeo nin noutro equivalente, como NYSE ou Nasdaq) cobre; se recompras parte, só contan as accións non recompradas.",
   "annex.wash_released": "Libera {{amount}} EUR de perdas diferidas deste valor (transmisión definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Perdas pendentes das vendas do: {{dates}}",
   "annex.wash_released_hint": "As accións desta venda que ningunha recompra no seu prazo cobre son unha transmisión definitiva: integran agora as perdas pendentes dese valor, a dunha acción por cada acción, primeiro as máis antigas (se a venda pecha a posición e ningunha recompra no seu prazo a cobre, todas as que queden). En Renta Web, impútaas neste exercicio.",
@@ -691,7 +691,7 @@ const gl: TranslationKeys = {
     "A dedución por dobre imposición evita pagar dúas veces impostos sobre os mesmos dividendos. Limítase ao menor entre o pagado na orixe e a cota española. Se o convenio de dobre imposición permite un tipo máximo inferior (ex. 15% EUA), só é deducible ata ese límite.",
   "guide_rw.blocked_losses_title": "Perdas bloqueadas (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "Se DeclaRenta amosa perdas bloqueadas, marca a casilla <strong>«Perdas patrimoniais non imputables»</strong> en Renta Web. Bloquéanse porque recompraches o mesmo valor nos 2 meses anteriores ou posteriores á venda (1 ano se non cotiza). Non se suman ao custo da nova posición: quedan pendentes e intégranse, primeiro as máis antigas, a medida que vendas accións dese valor que ningunha recompra nese prazo cobre (transmisión definitiva); se recompras parte, só contan as accións non recompradas. Se declaraches un ano con DeclaRenta 0.66.5 ou anterior, esas versións liberaban unha perda ao vender as accións recompradas aínda que volveses recomprar: se xa deduciches esa perda, non a deduzas outra vez cando DeclaRenta a libere agora, ou corrixe aquel ano (2024 e posteriores: autoliquidación rectificativa; 2023 e anteriores: autoliquidación complementaria). E ao revés: se DeclaRenta libera agora unha perda nun ano que xa presentaches coa 0.66.5 ou anterior, podes corrixir aquel ano para deducila (2024 e posteriores: autoliquidación rectificativa; 2023 e anteriores: solicitude de rectificación).",
+    "Se DeclaRenta amosa perdas bloqueadas, marca a casilla <strong>«Perdas patrimoniais non imputables»</strong> en Renta Web. Bloquéanse porque recompraches o mesmo valor nos 2 meses anteriores ou posteriores á venda (1 ano se o valor non cotiza nun mercado regulado do Espazo Económico Europeo nin noutro equivalente, como NYSE ou Nasdaq). Non se suman ao custo da nova posición: quedan pendentes e intégranse, primeiro as máis antigas, a medida que vendas accións dese valor que ningunha recompra nese prazo cobre (transmisión definitiva); se recompras parte, só contan as accións non recompradas. Se declaraches un ano con DeclaRenta 0.66.5 ou anterior, esas versións liberaban unha perda ao vender as accións recompradas aínda que volveses recomprar: se xa deduciches esa perda, non a deduzas outra vez cando DeclaRenta a libere agora, ou corrixe aquel ano (2024 e posteriores: autoliquidación rectificativa; 2023 e anteriores: autoliquidación complementaria). E ao revés: se DeclaRenta libera agora unha perda nun ano que xa presentaches coa 0.66.5 ou anterior, podes corrixir aquel ano para deducila (2024 e posteriores: autoliquidación rectificativa; 2023 e anteriores: solicitude de rectificación).",
   "guide_rw.closing_tip": "Tras introducir todos os datos, usa o botón «Verificar declaración» de Renta Web para comprobar erros. Se outra ferramenta amosa un importe distinto en ganancias patrimoniais, pode usar outro método para as accións en divisa. Nos resultados do Modelo 100, abre «Comparar cos outros métodos» para ver as cifras dos tres. Para cambiar de método, volve ao paso «Revisar e escoller método». Usa o mesmo método todos os anos.",
 
   // PDF report
@@ -863,7 +863,7 @@ const gl: TranslationKeys = {
   "report.crypto_general_gain_unvalued.hint":
     "Estas rendas recíbense na propia cripto e non teñen tipo de cambio oficial do BCE. Calcula o seu valor en euros na data de cobramento e decláraas manualmente como ganancia patrimonial non derivada de transmisión (base xeral).",
   "report.antichurning_window_past_data":
-    "Hai {{count}} venda(s) de {{year}} cuxo prazo de recompra da regra anti-churning (2 meses ou 1 ano, segundo o valor) remata despois da última data que cobren os ficheiros subidos dese bróker ({{lastDate}}). DeclaRenta non ve as compras posteriores a esa data.",
+    "Hai {{count}} venda(s) de {{year}} cuxo prazo de recompra da regra anti-churning (2 meses; 1 ano se o valor non cotiza nun mercado regulado do Espazo Económico Europeo nin noutro equivalente) remata despois da última data que cobren os ficheiros subidos dese bróker ({{lastDate}}). DeclaRenta non ve as compras posteriores a esa data.",
   "report.antichurning_window_past_data.hint":
     "Se compraches o mesmo valor despois do {{lastDate}} e dentro do prazo desas vendas (como moi tarde, ata o {{windowEnd}}), parte da súa perda pode quedar bloqueada, ou a venda deixa de ser unha transmisión definitiva e non libera perdas pendentes. Sube tamén o ficheiro coas operacións ata o {{windowEnd}} xunto con este e calcula de novo. Se non compraches, o cálculo xa é correcto.",
   "report.antichurning_window_open_at_filing":

@@ -1187,7 +1187,7 @@ export function generateTaxReport(
       allMessages.push({
         id,
         severity: "warning",
-        message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses o 1 año, según el valor) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
+        message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
         hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. Si no compraste, el cálculo ya es correcto.`,
         context: base,
       });
