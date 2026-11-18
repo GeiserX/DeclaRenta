@@ -205,6 +205,17 @@ export interface FifoDisposal {
    */
   washSaleReleasedFromDates?: string[];
   /**
+   * Display only: the one-purchase exception of the 2-month rule (DGT V3282-18,
+   * AEAT Manual Renta 2025) on this disposal's sale day. Set only where the
+   * purchases of the 2 months before the sale would otherwise count as a
+   * repurchase. `"applied"`: the one purchase in that window, with no shares at
+   * its start, did not count (the loss is not blocked by it, and it does not
+   * make the sale non-definitive). `"unverified"`: the upload shows no shares at
+   * the window start but does not reach back to it, so the exception was NOT
+   * applied. Never used for tax math.
+   */
+  washSaleSinglePurchase?: "applied" | "unverified";
+  /**
    * Prior deferred (blocked) loss RELEASED by this disposal ("se integrarán a
    * medida que se transmitan los valores que permanezcan en el patrimonio",
    * Art. 33.5 closing paragraph). Only the shares of this disposal that no unused

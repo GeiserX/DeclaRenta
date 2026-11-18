@@ -110,6 +110,20 @@ La pérdida bloqueada **se difiere, no se pierde**: «las pérdidas patrimoniale
 
 Solo se bloquea «la correspondiente a las acciones que se consideran recompradas», y una misma compra no puede bloquear varias pérdidas (lectura proporcional «por paquetes»): DGT **V0913-08**, **V2481-20** y **V3282-18**.
 
+### Excepción de compra única
+
+Las compras de los 2 meses **anteriores** a la venta no cuentan como recompra si fueron **una sola operación de compra** y al empezar ese plazo **no tenías acciones** de ese valor: «esta regla no resulta de aplicación cuando dentro del plazo de los dos meses anteriores a la transmisión sólo se hubiera efectuado una operación de compra y, además, al inicio de ese período no se tuvieran acciones o participaciones homogéneas» (DGT **V3282-18**, repetida en consultas posteriores; Manual práctico de Renta 2025 de la AEAT). Ejemplo: compras 100 acciones el 01/03, no tenías ninguna antes y vendes 50 con 100 € de pérdida el 15/03. Si no compras más en los 2 meses siguientes, los 100 € se imputan ese año.
+
+Cómo la aplica DeclaRenta:
+
+- **Solo levanta la regla de las compras anteriores.** Una compra en los 2 meses **posteriores** a la venta sigue bloqueando la pérdida (V3282-18: «sin perjuicio de que las recompras efectuadas en el plazo de los dos meses posteriores a la transmisión impidan también la imputación»).
+- **Solo en el plazo de 2 meses** (art. 33.5.f). La doctrina la formula para ese plazo; no hay doctrina que la extienda al de 1 año, así que DeclaRenta no la aplica a los valores sin ISIN ni a las criptomonedas.
+- **Una operación de compra es una orden en un día.** Las ejecuciones parciales de una misma orden cuentan como una compra (IBKR las agrupa por número de orden; DEGIRO y Flatex les dan el mismo «ID Orden»). Dos órdenes, aunque sean del mismo día, son dos compras. Una compra el mismo día de la venta cuenta como otra compra, porque sin hora no se sabe si fue antes o después.
+- **«Al inicio de ese período»** es el primer día del plazo: si ese día tenías acciones, aunque las vendieras después dentro del plazo, la excepción no se aplica. Cuentan las acciones de todos los ficheros subidos (también de otros brókers), los lotes de apertura que añadas y las que llegan sin compra (dividendo en acciones, fusión, escisión).
+- **Si los ficheros no llegan al inicio del plazo, no se aplica.** DeclaRenta no ve las acciones que tenías antes de tus ficheros. Si el plazo empieza antes de la fecha inicial del fichero (o de la primera operación, si el fichero no la indica), o antes de la de cualquier bróker que opere ese valor, DeclaRenta no aplica la excepción y avisa: sube también los ficheros anteriores. Tampoco la aplica a un valor del que vendes más acciones de las que muestran los ficheros.
+- Cuando la aplica, DeclaRenta lo avisa. Si al empezar el plazo tenías acciones de ese valor en un bróker o cuenta que no has subido, la excepción no vale y esa pérdida queda bloqueada.
+- La misma excepción decide si una venta es una **transmisión definitiva** (V3282-18: «deberán observarse los mismos criterios»): una venta cuya única compra anterior en el plazo cumple la excepción libera las pérdidas pendientes.
+
 **Ejemplo.** Vender 100 acciones con una pérdida de 1.000 € y recomprar 30 dentro de los 2 meses:
 - Se difieren **300 €** (la pérdida correspondiente a 30 acciones).
 - Se imputan **700 €** ahora (la pérdida de las 70 acciones no recompradas).
@@ -135,6 +149,8 @@ En Renta Web esto **requiere acción**: no es automático. Por el importe bloque
 
     También puede pasar al revés: la versión actual puede liberar una pérdida en un año anterior al que la liberaba la 0.66.5 (por ejemplo, cuando una venta definitiva vende lotes antiguos, DGT **V0046-20**). Si ese año ya está presentado, puedes corregirlo para deducirla: con una autoliquidación rectificativa si es 2024 o posterior, o con una solicitud de rectificación de la autoliquidación si es 2023 o anterior. Si no lo corriges, esa pérdida no se deduce nunca.
 
+    La versión 0.66.13 y las anteriores no aplicaban la excepción de compra única (issue #453): bloqueaban la pérdida de una venta cuya única compra en los 2 meses anteriores se hizo sin tener acciones antes. Si presentaste un año con esa pérdida bloqueada, puedes corregirlo para deducirla: con una autoliquidación rectificativa si es 2024 o posterior, o con una solicitud de rectificación de la autoliquidación si es 2023 o anterior.
+
     Desde el ejercicio 2024, la autoliquidación rectificativa es el único procedimiento para corregir una declaración de IRPF, tanto si el resultado sale a ingresar como a devolver. La complementaria y la solicitud de rectificación solo siguen para 2023 y años anteriores (Manual práctico de Renta 2025 de la AEAT, «Regularización de situaciones tributarias: la autoliquidación rectificativa»).
 
 ### Cómo lo detecta DeclaRenta
@@ -142,7 +158,7 @@ En Renta Web esto **requiere acción**: no es automático. Por el importe bloque
 El motor de anti-churning recorre todas las operaciones en orden cronológico y, para cada valor homogéneo:
 
 1. Identifica las ventas con pérdida (`gainLossEur < 0`).
-2. Para cada día de venta, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para los valores con ISIN, 1 año para las criptomonedas y los valores sin ISIN), antes o después de la venta.
+2. Para cada día de venta, suma la cantidad de valores homogéneos recomprados dentro de la ventana aplicable (2 meses para los valores con ISIN, 1 año para las criptomonedas y los valores sin ISIN), antes o después de la venta. Las compras anteriores no cuentan si se cumple la excepción de compra única (ver arriba).
 3. Bloquea la pérdida de forma **proporcional**: `pérdida bloqueada = |pérdida| × cantidad recomprada / cantidad vendida`. La parte restante se computa ahora. Si una venta consume varios lotes FIFO, las acciones recompradas son las últimas adquiridas: la parte deducible es la de las acciones adquiridas en primer lugar (DGT **V0913-08**, **V1294-22**), y un lote con pérdida queda bloqueado antes que uno con ganancia.
 4. La pérdida bloqueada queda **pendiente** en una cola por valor, contada en acciones (no se suma al coste de ninguna compra).
 5. **Liberación:** en cada venta posterior del mismo valor, con ganancia o con pérdida, el motor descuenta las recompras de su plazo que ninguna venta anterior haya usado. Las acciones restantes son una transmisión definitiva y liberan, una por una, la pérdida pendiente más antigua. Si la venta deja la posición a cero y ninguna recompra de su plazo la cubre, se libera todo lo pendiente. El cierre de una posición corta (la compra que la cubre) no transmite acciones que tuvieras, así que no libera nada. La posición cuenta también las acciones que llegan sin compra (dividendo en acciones, fusión, escisión).

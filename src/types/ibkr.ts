@@ -42,6 +42,8 @@ export interface FlexStatement {
 /** The year-end holdings of one merged file, dated to that file's period end. */
 export interface HoldingsSource {
   accountId: string;
+  /** That file's period start, when it gives one (the anti-churning one-purchase exception reads it). */
+  fromDate?: string;
   toDate: string;
   /** The merged file's broker (`mergeStatement`'s `brokerName`), when given. */
   brokerSource?: string;

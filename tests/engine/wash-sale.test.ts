@@ -1117,3 +1117,14 @@ describe("a short cover runs no definitive test", () => {
     expect(result[0]!.blockedLossEur.toString()).toBe("18");
   });
 });
+
+describe("one-purchase exception (#453): position steps", () => {
+  it("a trade with an unreadable date does not hang the position walk", () => {
+    // The day walk groups trades by time; NaN equals no time, so each group
+    // must still take at least one trade (an infinite loop ran out of memory).
+    const trades = [makeTrade("US0378331005", "not-a-date", "BUY"), makeTrade("US0378331005", "2025-03-01", "BUY", "100")];
+    const disposals = [makeDisposal({ sellDate: "2025-03-15", acquireDate: "2025-03-01", quantity: new Decimal(50) })];
+    const result = detectWashSales(disposals, trades);
+    expect(result).toHaveLength(1);
+  });
+});
