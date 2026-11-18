@@ -1112,7 +1112,8 @@ export function generateTaxReport(
   // rows later (reportDate); other brokers date a refund on its own day, in
   // January for a late-December dividend. That year's 0588 (foreign tax) or
   // 0597 (Spanish retención) was computed with the original withholding; when
-  // the correction lowers it, the user may owe a complementaria. Each box gets
+  // the correction lowers it, the user corrects that year: an autoliquidación
+  // rectificativa from 2024 on, a complementaria for 2023 and earlier (#458). Each box gets
   // its own message. This year's boxes never include it: the matcher gives a
   // late-posted row only to a dividend of its own year.
   for (const { year: lateYear, spanish, amount } of priorYearWithholdingRefunds(statement.cashTransactions, year, resolvedRateMap, manualRates)) {
@@ -1123,14 +1124,14 @@ export function generateTaxReport(
             id: "report.spanish_withholding_corrected_prior_year",
             severity: "warning",
             message: `Este fichero trae correcciones de retenciones españolas de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0597 de ese año pudo salir alta.`,
-            hint: `La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
+            hint: `La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, corrige la declaración de ${ctx.year} (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Las casillas de ${ctx.reportYear} no cambian.`,
             context: ctx,
           }
         : {
             id: "report.withholding_corrected_prior_year",
             severity: "warning",
             message: `Este fichero trae correcciones de retenciones en origen de ${ctx.year} anotadas en ${ctx.reportYear}: la retención de ${ctx.year} baja ${ctx.amount} €. Si presentaste ${ctx.year} con la retención original, la casilla 0588 de ese año pudo salir alta.`,
-            hint: `La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de ${ctx.year}. Las casillas de ${ctx.reportYear} no cambian.`,
+            hint: `La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de ${ctx.year} junto a este y calcula ${ctx.year}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, corrige la declaración de ${ctx.year} (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Las casillas de ${ctx.reportYear} no cambian.`,
             context: ctx,
           },
     );
