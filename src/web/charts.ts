@@ -297,6 +297,8 @@ export interface TaxBaseBreakdown {
   dividends: number;
   interest: number;
   blockedLosses: number;
+  /** Earlier deferred losses released this year (positive; the base subtracts it). */
+  reintegratedLosses: number;
 }
 
 export function renderTaxBracketCard(
@@ -401,6 +403,7 @@ function renderBreakdown(b: TaxBaseBreakdown): string {
   if (b.dividends !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_dividends"))}: <strong>${fmtEur(b.dividends)} &euro;</strong></span>`);
   if (b.interest !== 0) lines.push(`<span>${escSvg(t("tax.breakdown_interest"))}: <strong>${fmtEur(b.interest)} &euro;</strong></span>`);
   if (b.blockedLosses > 0) lines.push(`<span>${escSvg(t("tax.breakdown_blocked_losses"))}: <strong>+${fmtEur(b.blockedLosses)} &euro;</strong></span>`);
+  if (b.reintegratedLosses > 0) lines.push(`<span>${escSvg(t("tax.breakdown_reintegrated_losses"))}: <strong>&minus;${fmtEur(b.reintegratedLosses)} &euro;</strong></span>`);
   if (lines.length === 0) return "";
   return `<div class="bracket-breakdown muted" style="font-size:0.8rem;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 12px">${lines.join("")}</div>`;
 }

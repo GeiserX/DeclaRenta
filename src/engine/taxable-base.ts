@@ -24,7 +24,7 @@ import Decimal from "decimal.js";
 import { offsetCurrentYearLosses } from "./loss-carryforward.js";
 
 /**
- * The five components feeding the displayed taxable base, as plain numbers
+ * The six components feeding the displayed taxable base, as plain numbers
  * (the chart's `TaxBaseBreakdown` shape lives in web/charts.ts; we mirror its
  * fields here without importing the web layer into the engine).
  */
@@ -34,6 +34,8 @@ export interface TaxableBaseBreakdown {
   dividends: number;
   interest: number;
   blockedLosses: number;
+  /** Earlier deferred losses released this year, as a positive amount the base subtracts. */
+  reintegratedLosses: number;
 }
 
 /** Result of {@link computeTaxableBaseBreakdown}: the breakdown plus the clamped base. */
@@ -87,8 +89,9 @@ export function computeTaxableBase(report: TaxableBaseReport): Decimal {
  *
  * Arithmetic (in Decimal):
  * - `breakdown` carries each component (capital gains, FX gains, gross
- *   dividends, interest earned, and wash-sale `blockedLosses` added back so
- *   deferred losses don't reduce the base).
+ *   dividends, interest earned, wash-sale `blockedLosses` added back so
+ *   deferred losses don't reduce the base, and `reintegratedLosses` subtracted
+ *   because a released deferred loss is deductible now).
  * - `taxableBase` = the two {@link savingsBalances} after the same-year 25%
  *   cross-offset, each clamped at zero, summed.
  */
@@ -98,6 +101,7 @@ export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableB
   const dividends = report.dividends.grossIncome;
   const interest = report.interest.earned;
   const blockedLosses = report.capitalGains.blockedLosses;
+  const reintegratedLosses = report.capitalGains.reintegratedLosses;
 
   const clamped = computeTaxableBase(report);
 
@@ -108,6 +112,7 @@ export function computeTaxableBaseBreakdown(report: TaxableBaseReport): TaxableB
       dividends: dividends.toNumber(),
       interest: interest.toNumber(),
       blockedLosses: blockedLosses.toNumber(),
+      reintegratedLosses: reintegratedLosses.toNumber(),
     },
     taxableBase: clamped.toNumber(),
   };

@@ -62,7 +62,7 @@ describe("declarenta convert: broker of each sale", () => {
     const csv = runCli([...args, "-f", "csv"]);
     expect(csv.status).toBe(0);
     const row = csv.stdout.split("\n").find((l) => l.startsWith("ES0000000001,"));
-    expect(row?.split(",").slice(-2)).toEqual(["Degiro", "Interactive Brokers"]);
+    expect(row?.split(",").slice(-3, -1)).toEqual(["Degiro", "Interactive Brokers"]);
   }, 30_000);
 
   it("names a Revolut XLSX export with the broker name the web app uses", () => {

@@ -776,10 +776,10 @@ export function generateTaxReport(
 
   const yearStr = year.toString();
   // Run anti-churning on the FULL (all-year) disposal set BEFORE year-filtering,
-  // so a loss blocked in one year and released when the surviving repurchased
-  // shares are sold in a LATER year are matched in a merged multi-file run
-  // (cross-year reintegration). For a single-year file the full set == the year
-  // set, so this is identical to before. Then keep only the target year's
+  // so a loss blocked in one year and released by a definitive transmission in a
+  // LATER year are matched in a merged multi-file run (cross-year release). For
+  // a single-year file the full set == the year set, so this is identical to
+  // before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
   const allDisposals = detectWashSales(
@@ -787,6 +787,7 @@ export function generateTaxReport(
     washSaleTrades,
     statement.corporateActions,
     fifoEngine.getSplitRatios(),
+    fifoEngine.getRemainingLots(),
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
@@ -795,7 +796,7 @@ export function generateTaxReport(
   const acquisitionValue = disposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
   // Anti-churning (Art. 33.5.f/g LIRPF), PROPORTIONAL: blocked = the portion of
   // each loss deferred now (Σ blockedLossEur); reintegrated = previously-deferred
-  // losses released this year because the surviving repurchased shares were sold
+  // losses released this year by definitive transmissions of the same security
   // (Σ reintegratedLossEur). The fiscal capital-gains contribution adds the
   // blocked portion BACK (not deductible now) and SUBTRACTS the reintegrated
   // portion (now deductible) — see totalSavingsBase below.

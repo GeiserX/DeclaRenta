@@ -39,6 +39,9 @@ function makeDisposal(overrides: Partial<FifoDisposal> = {}): FifoDisposal {
 const blocked = (dates?: string[]) =>
   makeDisposal({ washSaleBlocked: true, blockedLossEur: new Decimal(400), washSaleRepurchaseDates: dates });
 
+const released = (from?: string[]) =>
+  makeDisposal({ gainLossEur: new Decimal(50), reintegratedLossEur: new Decimal(25), washSaleReleasedFromDates: from });
+
 afterEach(async () => {
   await setLocale("es");
 });
@@ -50,6 +53,10 @@ describe("washSaleRowAttr", () => {
 
   it("leaves a normal row untouched", () => {
     expect(washSaleRowAttr(makeDisposal())).toBe("");
+  });
+
+  it("marks a row that only releases pending losses", () => {
+    expect(washSaleRowAttr(released(["2025-03-01"]))).toBe(' class="wash-sale-released"');
   });
 });
 
@@ -91,5 +98,37 @@ describe("renderWashSaleDetailRow", () => {
     expect(html).toContain("Loss blocked by repurchase");
     expect(html).toContain("Purchases of the same security that block it: 01/07/2025");
     expect(html).not.toContain("Pérdida bloqueada");
+  });
+
+  it("says which earlier loss sales a definitive sale releases", () => {
+    const html = renderWashSaleDetailRow(released(["2025-10-01", "2025-10-10"]), 9);
+    expect(html).toContain('<tr class="wash-sale-detail wash-sale-detail-released">');
+    expect(html).toContain("Libera 25,00 EUR de pérdidas diferidas de este valor (transmisión definitiva, art. 33.5 LIRPF)");
+    expect(html).toContain("Pérdidas pendientes de las ventas del: 01/10/2025, 10/10/2025");
+    expect(html).not.toContain("Pérdida bloqueada");
+  });
+
+  it("shows both lines on a sale that blocks its own loss and releases older ones (V0913-08)", () => {
+    const html = renderWashSaleDetailRow(
+      makeDisposal({
+        washSaleBlocked: true, blockedLossEur: new Decimal(400), washSaleRepurchaseDates: ["2007-04-16"],
+        reintegratedLossEur: new Decimal(138000), washSaleReleasedFromDates: ["2007-02-15"],
+      }),
+      9,
+    );
+    expect(html).toContain('<tr class="wash-sale-detail">');
+    expect(html).toContain("<summary>Pérdida bloqueada por recompra: 400,00 EUR");
+    expect(html).toContain("Libera 138.000,00 EUR");
+    expect(html).toContain("15/02/2007");
+    // The sale is partly rebought (10 shares), so the release hint speaks of the
+    // shares no rebuy covers, never of a sale with no rebuy.
+    expect(html).not.toContain("no tiene recompra");
+    expect(html).toContain("que ninguna recompra en su plazo cubre son una transmisión definitiva");
+  });
+
+  it("no longer says the loss is applied when you sell what you bought back", () => {
+    const html = renderWashSaleDetailRow(blocked(["2025-07-01"]), 9);
+    expect(html).not.toContain("cuando vendas lo que recompraste");
+    expect(html).toContain("primero las pérdidas más antiguas");
   });
 });
