@@ -98,6 +98,13 @@ export interface Lot {
   ecbRate: Decimal;
   /** True for short lots (opened via SELL+O) */
   isShort?: boolean;
+  /**
+   * Date (YYYY-MM-DD) the shares entered this security, set only when it differs
+   * from `acquireDate`: a spin-off or merger lot keeps the parent's tax
+   * acquisition date but entered this ISIN on the corporate action's date. The
+   * anti-churning total exit reads it to know whether the shares were held.
+   */
+  entryDate?: string;
   /** Option put/call indicator */
   putCall?: "P" | "C";
   /** Option strike price */
@@ -211,6 +218,8 @@ export interface FifoDisposal {
   reintegratedLossEur: Decimal;
   /** True for short position disposals (SELL+O → BUY+C) */
   isShort?: boolean;
+  /** The sold lot's `Lot.entryDate`, when it has one (spin-off or merger lot). */
+  entryDate?: string;
   /** Option scenario per DGT V0137-23 */
   optionScenario?: OptionScenario;
   /** Option put/call indicator */

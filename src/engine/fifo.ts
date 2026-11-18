@@ -721,6 +721,8 @@ export class FifoEngine {
         symbol: merger.newSymbol,
         description: merger.newDescription,
         quantity: newQuantity,
+        // Same tax acquisition date, but the shares enter the new ISIN today.
+        entryDate: merger.date,
         pricePerShare: lot.costInFcy.dividedBy(newQuantity), // Recalculate per-share cost
         // costInFcy preserved — total cost basis unchanged (tax-neutral exchange)
       });
@@ -794,6 +796,8 @@ export class FifoEngine {
         symbol: spinOff.newSymbol,
         description: spinOff.newDescription,
         acquireDate: lot.acquireDate, // Inherit original acquisition date
+        // The shares enter the spin-off's ISIN today (anti-churning total exit).
+        entryDate: spinOff.date,
         quantity: spinOffQuantity,
         pricePerShare: spinOffCost.dividedBy(spinOffQuantity),
         costInFcy: spinOffCost,
@@ -963,6 +967,7 @@ export class FifoEngine {
       optionFields?: Partial<FifoDisposal>;
       acquireBrokerSource?: string;
       acquireCurrency?: string;
+      entryDate?: string;
     }): FifoDisposal => ({
       isin: trade.isin,
       symbol: trade.symbol,
@@ -988,6 +993,7 @@ export class FifoEngine {
       brokerSource: trade.brokerSource,
       acquireBrokerSource: parts.acquireBrokerSource,
       ...(parts.acquireCurrency !== undefined ? { acquireCurrency: parts.acquireCurrency } : {}),
+      ...(parts.entryDate !== undefined ? { entryDate: parts.entryDate } : {}),
       ...(parts.optionFields ?? {}),
     });
 
@@ -1079,6 +1085,7 @@ export class FifoEngine {
           acquireEcbRate: lot.ecbRate,
           acquireBrokerSource: lot.brokerSource,
           ...(this.markLotCurrency && lot.currency !== trade.currency ? { acquireCurrency: lot.currency } : {}),
+          ...(lot.entryDate !== undefined ? { entryDate: lot.entryDate } : {}),
           optionFields:
             trade.assetCategory === "OPT" || trade.assetCategory === "FOP" || trade.assetCategory === "FSFOP"
               ? {
@@ -1815,6 +1822,7 @@ export class FifoEngine {
         // delivering USD-bought shares) release the lot currency's parked
         // principal, as a cross-currency sale does (consumeLots).
         ...(this.markLotCurrency && lot.currency !== ex.currency ? { acquireCurrency: lot.currency } : {}),
+        ...(lot.entryDate !== undefined ? { entryDate: lot.entryDate } : {}),
       });
 
       lot.quantity = lot.quantity.minus(consumed);

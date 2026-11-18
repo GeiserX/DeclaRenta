@@ -14,8 +14,9 @@
  * share's loss, once (no double-counting — DGT V2481-20). The deferred loss is
  * NOT forfeited: it is released ("se integrarán a medida que se transmitan los
  * valores que permanezcan en el patrimonio del contribuyente") on a later
- * «transmisión definitiva» of homogeneous shares, one with no unused repurchase
- * in its own window, gain or loss (DGT V3282-18, V1760-23). Pending losses form
+ * «transmisión definitiva» of homogeneous shares: the shares of a later sale,
+ * gain or loss, that no unused repurchase in its own window absorbs (DGT
+ * V3282-18, V1760-23). Pending losses form
  * a per-security queue counted in shares; each definitive share releases the
  * oldest pending share's loss, tracked as `reintegratedLossEur` on that
  * disposal. See docs/design/antichurning-proportional.md for the full contract
@@ -25,7 +26,7 @@
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
-import { parseDate } from "./dates.js";
+import { normalizeDate, parseDate } from "./dates.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -117,6 +118,9 @@ interface PendingLoss {
  *     and in FIFO) releases every loss still pending.
  *  4. BLOCK (loss lots only) — defer `|loss| × absorbed/qty` and append it to
  *     the queue. The same absorbed shares keep the old losses pending.
+ * Only held shares are transmitted: a short cover (`isShort`) runs no definitive
+ * test, releases nothing and is no exit, the shares its buy covers are no
+ * repurchase, and a zero-share disposal is skipped.
  *
  * Passing the FULL (all-year) disposal+trade set makes the release work across
  * years in a merged multi-file run (the cross-year case). A single-year run sees
@@ -141,6 +145,20 @@ export function detectWashSales(
   splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }> = new Map(),
   remainingLots?: ReadonlyMap<string, readonly Lot[]>,
 ): FifoDisposal[] {
+  // Shares bought back on each (key, day) to close a short, from FIFO's short
+  // disposals. They go straight back to the lender and never stay in the
+  // patrimony, so they are no repurchase (fx-fifo.ts does not count a cover as a
+  // purchase either). Without this, a cover buy could block a loss that nothing
+  // ever releases, because a cover is no «transmisión definitiva».
+  const coveredLeft = new Map<string, Decimal>();
+  for (const d of disposals) {
+    if (d.isShort !== true || WASH_SALE_EXEMPT.has(d.assetCategory)) continue;
+    const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
+    if (!key) continue;
+    const dayKey = `${key}|${parseDate(d.sellDate).getTime()}`;
+    coveredLeft.set(dayKey, (coveredLeft.get(dayKey) ?? new Decimal(0)).plus(d.quantity.abs()));
+  }
+
   // Index in-window-eligible BUY events and signed position movements by key.
   const buysByAsset = new Map<string, BuyEvent[]>();
   const positionEventsByAsset = new Map<string, PositionEvent[]>();
@@ -161,12 +179,26 @@ export function detectWashSales(
 
     if (trade.buySell === "BUY") {
       positionEvents.push({ time, qty });
-      let events = buysByAsset.get(key);
-      if (!events) {
-        events = [];
-        buysByAsset.set(key, events);
+      // FIFO sends a BUY flagged "C" or "C;O" to the open short lots first
+      // (fifo.ts consumeShortLots). Only what is left after the cover becomes a
+      // held lot. A "C" buy with no open short books nothing at all.
+      let repurchased = qty;
+      const oci = trade.openCloseIndicator;
+      if (oci === "C" || oci === "C;O") {
+        const dayKey = `${key}|${time}`;
+        const left = coveredLeft.get(dayKey) ?? new Decimal(0);
+        const covered = Decimal.min(qty, left);
+        coveredLeft.set(dayKey, left.minus(covered));
+        repurchased = oci === "C" && covered.isZero() ? new Decimal(0) : qty.minus(covered);
       }
-      events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: qty });
+      if (repurchased.greaterThan(0)) {
+        let events = buysByAsset.get(key);
+        if (!events) {
+          events = [];
+          buysByAsset.set(key, events);
+        }
+        events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: repurchased });
+      }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
     }
@@ -255,12 +287,15 @@ export function detectWashSales(
 
   // One unit per (key, sell day): FIFO splits a sale into one disposal per lot,
   // and same-day sales have no intraday order, so the absorption, the definitive
-  // test and the total exit run once over the day's whole quantity.
+  // test and the total exit run once over the day's whole quantity. A disposal
+  // of zero shares (FIFO books a 0-quantity SELL row with no lots) transmits
+  // nothing: it can neither block, release nor empty the position.
   const groups: { key: string; sellDate: Date; sellTime: number; idxs: number[] }[] = [];
   const groupByDay = new Map<string, (typeof groups)[number]>();
   for (const idx of order) {
     const d = result[idx]!;
     if (WASH_SALE_EXEMPT.has(d.assetCategory)) continue;
+    if (d.quantity.isZero()) continue;
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
     if (!key) continue;
     const sellDate = parseDate(d.sellDate);
@@ -276,6 +311,10 @@ export function detectWashSales(
   }
 
   const isLossAt = (idx: number): boolean => result[idx]!.gainLossEur.lessThan(0);
+  // A short cover buys back shares sold short; it transmits no held shares, so
+  // it is never a «transmisión definitiva»: it runs no definitive test, releases
+  // no pending loss and cannot empty the position. Its own loss still blocks.
+  const isShortAt = (idx: number): boolean => result[idx]!.isShort === true;
   const acquireTimeAt = (idx: number): number => {
     const t = parseDate(result[idx]!.acquireDate).getTime();
     return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
@@ -299,8 +338,9 @@ export function detectWashSales(
     //    are pending every sold share, gain or loss, needs them for the definitive
     //    test («con independencia de que determinen ganancias o pérdidas»,
     //    V3282-18), and a rebuy counted there is used up (V0248-18). With nothing
-    //    pending a gain lot has nothing to test and uses no rebuy.
-    const seekers = idxs.filter((idx) => hasPending || isLossAt(idx));
+    //    pending a gain lot has nothing to test and uses no rebuy, and a short
+    //    cover never has one.
+    const seekers = idxs.filter((idx) => isLossAt(idx) || (hasPending && !isShortAt(idx)));
     const need = seekers.reduce((sum, idx) => sum.plus(result[idx]!.quantity.abs()), new Decimal(0));
     let dayAbsorbed = new Decimal(0);
     const consumed: { date: string; qty: Decimal }[] = [];
@@ -389,7 +429,8 @@ export function detectWashSales(
     // 2. RELEASE: the shares no rebuy absorbed are a «transmisión definitiva».
     //    Each one releases one pending share, oldest pending loss first (V0571-21,
     //    V0754-26), whichever lot FIFO sells (V0046-20). The absorbed shares keep
-    //    the pending losses deferred (V3282-18, V2481-20).
+    //    the pending losses deferred (V3282-18, V2481-20). A short cover
+    //    transmits no held shares and releases nothing.
     const releasedFromOf = new Map<number, Set<string>>();
     const releaseInto = (idx: number, entry: PendingLoss, eur: Decimal): void => {
       const disposal = result[idx]!;
@@ -402,20 +443,29 @@ export function detectWashSales(
       from.add(entry.sellDate);
     };
     if (queue && hasPending) {
+      // The cursor moves past each entry as it is spent, so a sale of many lots
+      // walks the queue once instead of rescanning the spent prefix per lot.
+      let cursor = queue.head;
       for (const idx of idxs) {
+        if (isShortAt(idx)) continue;
         let toRelease = result[idx]!.quantity.abs().minus(absorbedOf.get(idx) ?? 0);
-        for (let i = queue.head; i < queue.entries.length; i++) {
-          const entry = queue.entries[i]!;
-          if (toRelease.lessThanOrEqualTo(0) || entry.time >= sellTime) break;
+        while (toRelease.greaterThan(0) && cursor < queue.entries.length) {
+          const entry = queue.entries[cursor]!;
+          if (entry.time >= sellTime) break;
           const conversion = splitFactorBetween(splitsByAsset, key, entry.time, sellTime);
           const entryQtyAtSell = entry.qty.mul(conversion.num).div(conversion.den);
-          if (entryQtyAtSell.lessThanOrEqualTo(0)) continue;
+          if (entryQtyAtSell.lessThanOrEqualTo(0)) {
+            cursor++;
+            continue;
+          }
           const take = Decimal.min(toRelease, entryQtyAtSell);
-          const releasedEur = take.equals(entryQtyAtSell) ? entry.eur : entry.eur.mul(take).div(entryQtyAtSell);
+          const spent = take.equals(entryQtyAtSell);
+          const releasedEur = spent ? entry.eur : entry.eur.mul(take).div(entryQtyAtSell);
           releaseInto(idx, entry, releasedEur);
           entry.eur = entry.eur.minus(releasedEur);
-          entry.qty = take.equals(entryQtyAtSell) ? new Decimal(0) : entry.qty.minus(take.mul(conversion.den).div(conversion.num));
+          entry.qty = spent ? new Decimal(0) : entry.qty.minus(take.mul(conversion.den).div(conversion.num));
           toRelease = toRelease.minus(take);
+          if (spent) cursor++;
         }
       }
     }
@@ -425,10 +475,12 @@ export function detectWashSales(
     //    («las pérdidas … que le resten por imputar», V1760-23). The queue can
     //    hold more shares than the position, because a rebought sale both keeps
     //    the old losses pending and adds its own. Both the trades and FIFO must
-    //    show the position at zero.
+    //    show the position at zero, and the day must transmit held shares: a
+    //    day of short covers only is no exit.
     if (
       queue &&
       hasPending &&
+      idxs.some((idx) => !isShortAt(idx)) &&
       dayAbsorbed.isZero() &&
       holdingAfter(key, sellTime).isZero() &&
       !fifoHoldsAfter(key, sellTime)
@@ -477,10 +529,95 @@ export function detectWashSales(
 }
 
 /**
+ * The sales (one per security and sale day, as the detector groups them) whose
+ * anti-churning result a buy after the loaded data could still change, with
+ * the last day of each one's window and the last date the data covers for it.
+ * The detector sees only the uploaded trades, so a repurchase after that date
+ * is invisible. It matters for a loss not fully blocked (the buy would block
+ * more of it, the BLOCK step) and for a sale that released pending losses (the
+ * buy would make its shares non-definitive, the RELEASE and TOTAL EXIT steps).
+ * Nothing is withheld: the caller only warns.
+ *
+ * With one broker the data covers every security up to `lastLoadedDate` (its
+ * statement end or its last trade of any security: a final exit never has a
+ * later trade of its own). With several merged brokers each one's files end on
+ * their own date, and a rebuy of a security can sit at any broker that trades
+ * it. A security is then covered up to the earliest end among the brokers that
+ * trade it: a broker's end is its last trade of any security, or its statement
+ * end from `endBySource` when later.
+ *
+ * @param lastLoadedDate - Last date the whole upload covers (YYYY-MM-DD or YYYYMMDD)
+ * @param trades - The uploaded trades, with `brokerSource` set by the merge
+ * @param endBySource - Statement end per broker, when its files give one
+ */
+export function salesWithWindowPastData(
+  disposals: readonly FifoDisposal[],
+  lastLoadedDate: string,
+  trades: readonly Trade[] = [],
+  endBySource: ReadonlyMap<string, string> = new Map(),
+): { key: string; sellDate: string; windowEnd: string; lastDate: string }[] {
+  // Day only: a trade date may carry a time ("20250602;101500").
+  const dayTime = (date: string): number => parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime();
+  const uploadEnd = dayTime(lastLoadedDate);
+  if (!Number.isFinite(uploadEnd)) return [];
+
+  // Per broker: the last date its files cover, and the keys it trades.
+  const endOfSource = new Map<string, number>();
+  const sourcesOfKey = new Map<string, Set<string>>();
+  for (const trade of trades) {
+    const source = trade.brokerSource;
+    const time = dayTime(trade.tradeDate);
+    if (!source || !Number.isFinite(time)) continue;
+    endOfSource.set(source, Math.max(endOfSource.get(source) ?? Number.NEGATIVE_INFINITY, time));
+    const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
+    if (!key) continue;
+    let sources = sourcesOfKey.get(key);
+    if (!sources) {
+      sources = new Set();
+      sourcesOfKey.set(key, sources);
+    }
+    sources.add(source);
+  }
+  for (const [source, date] of endBySource) {
+    const time = dayTime(date);
+    if (endOfSource.has(source) && Number.isFinite(time)) endOfSource.set(source, Math.max(endOfSource.get(source)!, time));
+  }
+  const coveredUntil = (key: string): number => {
+    const sources = sourcesOfKey.get(key);
+    if (endOfSource.size < 2 || !sources) return uploadEnd;
+    return Math.min(...[...sources].map((source) => endOfSource.get(source)!));
+  };
+
+  const out = new Map<string, { key: string; sellDate: string; windowEnd: string; lastDate: string }>();
+  for (const d of disposals) {
+    if (WASH_SALE_EXEMPT.has(d.assetCategory) || d.quantity.isZero()) continue;
+    const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
+    if (!key) continue;
+    const openLoss = d.gainLossEur.lessThan(0) && d.blockedLossEur.lessThan(d.gainLossEur.abs());
+    if (!openLoss && !d.reintegratedLossEur.greaterThan(0)) continue;
+    const sellDate = parseDate(d.sellDate);
+    if (!Number.isFinite(sellDate.getTime())) continue;
+    const windowEnd = addMonths(sellDate, windowMonths(d.assetCategory, d.isin));
+    const lastTime = coveredUntil(key);
+    if (windowEnd.getTime() <= lastTime) continue;
+    const day = normalizeDay(d.sellDate);
+    out.set(`${key}|${day}`, {
+      key,
+      sellDate: day,
+      windowEnd: windowEnd.toISOString().slice(0, 10),
+      lastDate: new Date(lastTime).toISOString().slice(0, 10),
+    });
+  }
+  return [...out.values()];
+}
+
+/**
  * Whether FIFO still holds shares of a homogeneous key after a sale day, built
  * from the lots FIFO holds at the end and the disposals it booked. A lot is held
- * after day `t` if it was acquired on or before `t` and is either still open or
- * sold after `t`. Splits change the share count, never zero against non-zero, so
+ * after day `t` if it entered the security on or before `t` and is either still
+ * open or sold after `t`. The entry date is `entryDate` when FIFO set one (a
+ * spin-off or merger lot keeps the parent's tax `acquireDate` but entered this
+ * security on the corporate action's date), else `acquireDate`. Splits change the share count, never zero against non-zero, so
  * the test needs no split conversion. Without `remainingLots` it answers false
  * and the caller relies on the trades alone.
  */
@@ -505,7 +642,7 @@ function buildFifoHoldings(
       const key = mapKey.startsWith("CRYPTO:")
         ? mapKey
         : lot.isin || `${mapKey.split(":")[0]}:${lot.symbol.toUpperCase()}`;
-      const t = timeOf(lot.acquireDate);
+      const t = timeOf(lot.entryDate ?? lot.acquireDate);
       const prev = firstOpenByKey.get(key);
       if (prev === undefined || t < prev) firstOpenByKey.set(key, t);
     }
@@ -523,7 +660,7 @@ function buildFifoHoldings(
       spans = [];
       spansByKey.set(key, spans);
     }
-    spans.push({ acquire: timeOf(d.acquireDate), sell: parseDate(d.sellDate).getTime() });
+    spans.push({ acquire: timeOf(d.entryDate ?? d.acquireDate), sell: parseDate(d.sellDate).getTime() });
   }
   const maxSellByKey = new Map<string, { acquire: number[]; maxSell: number[] }>();
   for (const [key, spans] of spansByKey) {
