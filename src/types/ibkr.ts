@@ -264,7 +264,14 @@ export interface CashBalance {
    * upload explains every movement of the currency.
    */
   startingCash?: string;
+  /** "0" when the row has no such column (see `endingCashMissing`). */
   endingCash: string;
+  /**
+   * IBKR CashReport: true when the row has no `endingCash` column. Modelo 720
+   * keeps reading `endingCash` ("0" then); the loan model (issue #449) does not
+   * accept a defaulted balance as proof of the account's cash.
+   */
+  endingCashMissing?: true;
   endingSettledCash: string;
   /** IBKR CashReport: the period of this row (the statement's when the row has none). */
   fromDate?: string;

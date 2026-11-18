@@ -625,17 +625,25 @@ function traditionalFxMessages(input: {
     });
   }
 
-  const uncovered = new Map<string, { qty: Decimal; ibkr: boolean }>();
+  // One note per currency and kind: the IBKR hint (upload a Cash Report) can
+  // explain only the IBKR amount (a trap: summed per currency, it offered an
+  // IBKR Cash Report for another broker's dollars too).
+  const kindOrder = { opening: 0, ibkr: 1, other: 2 } as const;
+  const uncovered = new Map<string, { ccy: string; kind: keyof typeof kindOrder; qty: Decimal }>();
   for (const u of stats.uncovered) {
     if (!u.date.startsWith(yearStr)) continue;
-    const prev = uncovered.get(u.currency) ?? { qty: new Decimal(0), ibkr: false };
-    uncovered.set(u.currency, { qty: prev.qty.plus(u.qty), ibkr: prev.ibkr || u.brokerSource === IBKR_BROKER });
+    const kind = loanCcys.has(u.currency) ? "opening" : u.brokerSource === IBKR_BROKER ? "ibkr" : "other";
+    const key = `${u.currency}|${kind}`;
+    const prev = uncovered.get(key) ?? { ccy: u.currency, kind, qty: new Decimal(0) };
+    uncovered.set(key, { ...prev, qty: prev.qty.plus(u.qty) });
   }
-  for (const [ccy, u] of [...uncovered].sort(([a], [b]) => a.localeCompare(b))) {
+  const notes = [...uncovered.values()].sort((a, b) => a.ccy.localeCompare(b.ccy) || kindOrder[a.kind] - kindOrder[b.kind]);
+  for (const u of notes) {
+    const ccy = u.ccy;
     const qty = fmt2(perTitular(u.qty));
     // Inside the loan gate (issue #449) the only currency with no EUR origin
     // is the account's opening balance, the Cash Report's `startingCash`.
-    if (loanCcys.has(ccy)) {
+    if (u.kind === "opening") {
       out.push({
         id: "report.fx_traditional_opening",
         severity: "info",
@@ -648,7 +656,7 @@ function traditionalFxMessages(input: {
     const message = `${qty} ${ccy} usados en compras de acciones no tienen origen en euros en tus archivos (depósitos, saldos anteriores, años que no has subido, o un descubierto o préstamo de margen del bróker). Se toman al tipo del día de compra, sin diferencia de cambio anterior.`;
     const hint = `Si cambiaste euros a ${ccy} hasta 7 días después de la compra, se usa el tipo de ese cambio. Si conoces su origen, sube también los años anteriores.`;
     // An IBKR currency with no Cash Report the loan gate accepts: say how to get the loan model.
-    if (u.ibkr) {
+    if (u.kind === "ibkr") {
       out.push({
         id: "report.fx_traditional_uncovered_ibkr",
         severity: "info",
@@ -962,27 +970,17 @@ export function generateTaxReport(
     const stockProceedsFxEvents = traditionalFx
       ? FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true })
       : FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals());
-    const allFxEvents = [
-      ...tradeFxEvents,
-      ...cashFxEvents,
-      ...stockPurchaseFxEvents,
-      ...manualOpeningLotFxEvents,
-      ...stockProceedsFxEvents,
-    ];
     // Issue #449: a currency whose cash the IBKR CashReport proves (every
     // statement's rows, also those `yearEndHoldings` left out of Modelo 720)
     // treats a balance below zero as a loan from the broker. Every other
     // currency keeps the untracked path. The gate reads the stock sales as
     // «Tradicional con divisa» does (every sale, also with proceeds ≤ 0), so
     // both methods reach the same answer on the same upload.
+    const allSales = traditionalFx
+      ? stockProceedsFxEvents
+      : FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true });
     const loan = loanCurrencies({
-      events: [
-        ...tradeFxEvents,
-        ...cashFxEvents,
-        ...stockPurchaseFxEvents,
-        ...manualOpeningLotFxEvents,
-        ...(traditionalFx ? stockProceedsFxEvents : FxFifoEngine.extractStockProceedsFxEvents(fifoEngine.getDisposals(), { traditionalFx: true })),
-      ],
+      events: [...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...manualOpeningLotFxEvents, ...allSales],
       cashBalances: statement.holdingsBySource
         ? statement.holdingsBySource.flatMap((s) => s.cashBalances)
         : (statement.cashBalances ?? []),
@@ -992,6 +990,17 @@ export function generateTaxReport(
       trackAutoConvert,
     });
     loanCcys = new Set(loan.keys());
+    // The default's own producer drops a sale with proceeds of 0 or less. In a
+    // loan currency the gate counted its cash (a commission above a worthless
+    // sale's gross), so the default's ledger must see that sale too (a trap:
+    // the 5 USD such a commission cost stayed in the default's pool). The two
+    // producers differ only in that filter, so every other currency keeps the
+    // default's own sales, in the same order.
+    const sales =
+      traditionalFx || loan.size === 0
+        ? stockProceedsFxEvents
+        : allSales.filter((e) => e.crossCurrency === true || (e.proceedsFcy ?? new Decimal(0)).greaterThan(0) || loan.has(e.currency));
+    const allFxEvents = [...tradeFxEvents, ...cashFxEvents, ...stockPurchaseFxEvents, ...manualOpeningLotFxEvents, ...sales];
     // «Tradicional con divisa» runs the same producers and engine in its own
     // mode; `new FxFifoEngine()` (no options) is the default, unchanged.
     const fxEngine = new FxFifoEngine({
@@ -1265,22 +1274,49 @@ export function generateTaxReport(
   // every repayment: also those that book nothing in 1633/1637 (the default
   // repays a loan with the shares' own sale at the loan's rate), so both
   // methods give the same figures for the same loan. Gains and losses apart:
-  // they go in two boxes.
+  // they go in two boxes. The hint tells how to take the part out of
+  // 1633/1637 only for the part a row there holds; for the rest (in the
+  // default's stock line) DeclaRenta cannot name the box value, so the
+  // `_manual` note says so (a trap: it told the user to lower 1633 by 50 €
+  // when 1633 held none of it, and was 0).
   const loanRows = fxDisposals.filter((d) => d.trigger === "loan_repayment");
   const yearRepayments = loanRepayments.filter((r) => r.date.startsWith(yearStr));
   if (loanRows.length > 0 || yearRepayments.some((r) => !r.debtPartEur.isZero())) {
     const perTitular = (d: Decimal): Decimal => (titulares > 1 ? d.div(titulares) : d);
     const ccy = [...new Set([...loanRows, ...yearRepayments].map((d) => d.currency))].sort().join(", ");
     const amount = fmt2(loanRows.reduce((sum, d) => sum.plus(d.gainLossEur), new Decimal(0)));
-    const gain = fmt2(perTitular(yearRepayments.reduce((sum, r) => (r.debtPartEur.greaterThan(0) ? sum.plus(r.debtPartEur) : sum), new Decimal(0))));
-    const loss = fmt2(perTitular(yearRepayments.reduce((sum, r) => (r.debtPartEur.lessThan(0) ? sum.minus(r.debtPartEur) : sum), new Decimal(0))));
-    allMessages.push({
-      id: "report.fx_loan_repayment",
-      severity: "info",
-      message: `Este año has devuelto ${ccy} que te prestó el bróker (tu saldo en ${ccy} estuvo en negativo). DeclaRenta declara ${amount} € por esas devoluciones en las casillas 1633/1637. La variación de la propia deuda, desde que se abrió hasta que la devolviste, es de ${gain} € de ganancia y ${loss} € de pérdida.`,
-      hint: `El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la variación de un préstamo en moneda extranjera a la base general. La DGT la lleva a la base del ahorro (V2414-12), como hace DeclaRenta. Si sigues al Supremo, declara la ganancia en la casilla 0304 y la pérdida en la casilla 0305, y quítalas de las casillas 1633/1637: baja el valor de transmisión (1633) en la ganancia y súbelo en la pérdida. DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.`,
-      context: { ccy, amount, gain, loss },
-    });
+    const sum = (sign: 1 | -1, onlyInBoxes: boolean): Decimal =>
+      perTitular(
+        yearRepayments.reduce(
+          (acc, r) => (r.debtPartEur.mul(sign).greaterThan(0) && (!onlyInBoxes || r.inBoxes) ? acc.plus(r.debtPartEur.mul(sign)) : acc),
+          new Decimal(0),
+        ),
+      );
+    const [gainDec, lossDec, boxGainDec, boxLossDec] = [sum(1, false), sum(-1, false), sum(1, true), sum(-1, true)];
+    const gain = fmt2(gainDec);
+    const loss = fmt2(lossDec);
+    const message = `Este año has devuelto ${ccy} que te prestó el bróker (tu saldo en ${ccy} estuvo en negativo). DeclaRenta declara ${amount} € por esas devoluciones en las casillas 1633/1637. La variación de la propia deuda, desde que se abrió hasta que la devolviste, es de ${gain} € de ganancia y ${loss} € de pérdida.`;
+    const law = "El Tribunal Supremo (STS 71/2021, ECLI:ES:TS:2021:345) lleva la variación de un préstamo en moneda extranjera a la base general. La DGT la lleva a la base del ahorro (V2414-12), como hace DeclaRenta.";
+    const gate = "DeclaRenta solo trata el saldo negativo como préstamo cuando el informe de efectivo (Cash Report) de IBKR cuadra con tus operaciones.";
+    if (gainDec.equals(boxGainDec) && lossDec.equals(boxLossDec)) {
+      allMessages.push({
+        id: "report.fx_loan_repayment",
+        severity: "info",
+        message,
+        hint: `${law} Si sigues al Supremo, declara la ganancia en la casilla 0304 y la pérdida en la casilla 0305, y quítalas de las casillas 1633/1637: baja el valor de transmisión (1633) en la ganancia y súbelo en la pérdida. ${gate}`,
+        context: { ccy, amount, gain, loss },
+      });
+    } else {
+      const boxGain = fmt2(boxGainDec);
+      const boxLoss = fmt2(boxLossDec);
+      allMessages.push({
+        id: "report.fx_loan_repayment_manual",
+        severity: "info",
+        message,
+        hint: `${law} Si sigues al Supremo, declara la ganancia en la casilla 0304 y la pérdida en la casilla 0305. De esas cifras, solo ${boxGain} € de ganancia y ${boxLoss} € de pérdida están en las casillas 1633/1637: baja el valor de transmisión (1633) en esa ganancia y súbelo en esa pérdida. El resto no está en 1633/1637, sino dentro del resultado de otras operaciones (por ejemplo, la venta de las acciones que compraste con el préstamo), y DeclaRenta no puede decirte qué casilla corregir: cuádralo a mano antes de presentar la declaración. ${gate}`,
+        context: { ccy, amount, gain, loss, boxGain, boxLoss },
+      });
+    }
   }
 
   // Monodivisa drops every currency conversion silently (the FX engine is off), so

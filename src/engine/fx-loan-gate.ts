@@ -11,19 +11,27 @@
  *
  * So the loan model runs for a currency only when the upload proves its cash:
  *  - an IBKR CashReport row of that currency for every statement period, all
- *    of one account (no merged accounts), whose first period starts at a
- *    known, non-negative `startingCash`;
+ *    of one account (no merged accounts) and one broker, whose first period
+ *    starts at a known, non-negative `startingCash`. Each row needs a
+ *    non-blank account id, real calendar dates with `fromDate` ≤ `toDate`,
+ *    and an `endingCash` the broker wrote (the parser's "0" for a missing one
+ *    proves nothing). A blank id matched every other blank id, and
+ *    "2025-00-01" .. "2025-99-31" held every date of 2025;
  *  - every row of the upload that moves that currency is one the FX engine
  *    reads, of that account and broker: a trade of a currency pair or a
  *    stock, fund or bond trade (no option, future, short cover, or commission
- *    paid in the currency for a trade in another one), a cash row of income,
- *    withholding, interest or fees (no deposit, withdrawal or transfer), and
- *    no corporate action with cash. A per-period net cannot prove the balance
+ *    paid in the currency for a trade in another one, no opening short sale),
+ *    a cash row of income, withholding, interest or fees (no deposit,
+ *    withdrawal or transfer), and no corporate action with cash. And each
+ *    period's cash rows add up to the cash events the engine made of them: a
+ *    withholding with no income on its day (an orphan) is dropped there, so
+ *    its debit is not seen. A per-period net cannot prove the balance
  *    along the way: a USD deposit and an equal withdrawal in one year net to
  *    zero, the balance never went below zero, and the loan model invented a
  *    loan (70 € in «Tradicional con divisa»). Likewise a second account with
  *    no CashReport, merged with one that has it, ran the model on dollars the
- *    upload cannot see;
+ *    upload cannot see, and an opening short sale's inflow cancelled an
+ *    orphan withholding's debit;
  *  - each period's `startingCash` plus the movements the FX engine sees in
  *    that period (conversions, income, fees, interest, stock buys and sales)
  *    equals its `endingCash`, within {@link CASH_TOLERANCE}, and a period
@@ -73,8 +81,20 @@ interface Period {
   ending: Decimal;
 }
 
+/** Whether `d` (normalized) is a real calendar date, YYYY-MM-DD. */
+function calendarDate(d: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (!m) return false;
+  const t = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return t.toISOString().slice(0, 10) === d;
+}
+
 function parsePeriod(row: CashBalance): Period | null {
-  if (row.startingCash === undefined || !row.fromDate || !row.toDate) return null;
+  if (row.startingCash === undefined || row.endingCashMissing || !row.fromDate || !row.toDate) return null;
+  if (!row.accountId || row.accountId.trim() === "") return null;
+  const from = normalizeDate(row.fromDate);
+  const to = normalizeDate(row.toDate);
+  if (!calendarDate(from) || !calendarDate(to) || from > to) return null;
   let starting: Decimal;
   let ending: Decimal;
   try {
@@ -87,8 +107,8 @@ function parsePeriod(row: CashBalance): Period | null {
   return {
     accountId: row.accountId,
     brokerSource: row.brokerSource,
-    from: normalizeDate(row.fromDate),
-    to: normalizeDate(row.toDate),
+    from,
+    to,
     starting,
     ending,
   };
@@ -149,6 +169,11 @@ function rowsReadable(
     // cancels it, so the reconciliation catches it (the parser writes "O"
     // on a sale with no indicator, so the indicator cannot tell a short sale).
     if (t.buySell === "BUY" && (t.openCloseIndicator === "C" || t.openCloseIndicator === "C;O")) return false;
+    // An opening short sale: the stock FIFO opens a short lot and makes no
+    // disposal, so its inflow is unseen too. Alone the reconciliation catches
+    // it; with an unseen debit of the same size (an orphan withholding) the
+    // period nets to its ending.
+    if (t.buySell === "SELL" && t.openCloseIndicator === "O") return false;
   }
   for (const c of rows.cashTransactions) {
     if (c.currency !== ccy) continue;
@@ -165,6 +190,40 @@ function rowsReadable(
     if (!amount.isZero()) return false;
   }
   return true;
+}
+
+/**
+ * Whether, in each period, the cash rows of `ccy` add up to the cash events
+ * the FX engine made of them (dividends, withholding netted in, interest,
+ * fees). `extractCashFxEvents` drops a withholding with no income on its day
+ * (an orphan) and a row with no ECB rate, so their cash is not seen; a
+ * per-period net could hide it behind another unseen movement. A row outside
+ * every period proves nothing either.
+ */
+function cashRowsSeen(ccy: string, periods: Period[], cashTransactions: CashTransaction[], events: FxEvent[]): boolean {
+  const at = (date: string): number => periods.findIndex((p) => date >= p.from && date <= p.to);
+  const raw = periods.map(() => new Decimal(0));
+  const seen = periods.map(() => new Decimal(0));
+  for (const c of cashTransactions) {
+    if (c.currency !== ccy) continue;
+    const i = at(normalizeDate(c.dateTime || c.settleDate));
+    let amount: Decimal;
+    try {
+      amount = new Decimal(c.amount || "0");
+    } catch {
+      return false;
+    }
+    if (i < 0 || !amount.isFinite()) return false;
+    raw[i] = raw[i]!.plus(amount);
+  }
+  for (const e of events) {
+    // Conversions and stock trades are checked row by row in rowsReadable.
+    if (e.currency !== ccy || e.kind !== undefined || e.trigger === "conversion") continue;
+    const i = at(e.date);
+    if (i < 0) return false;
+    seen[i] = seen[i]!.plus(e.quantity);
+  }
+  return raw.every((r, i) => r.equals(seen[i]!));
 }
 
 /** See the module comment. */
@@ -193,8 +252,9 @@ export function loanCurrencies(input: {
         valid = false;
         break;
       }
-      // The same statement uploaded twice gives the same row twice.
-      const key = `${p.accountId}|${p.from}|${p.to}|${p.starting.toString()}|${p.ending.toString()}`;
+      // The same statement uploaded twice gives the same row twice. The broker
+      // is in the key: the same row from two brokers is two pieces of evidence.
+      const key = `${p.brokerSource ?? ""}|${p.accountId}|${p.from}|${p.to}|${p.starting.toString()}|${p.ending.toString()}`;
       if (seen.has(key)) continue;
       seen.add(key);
       periods.push(p);
@@ -230,6 +290,7 @@ export function loanCurrencies(input: {
       flow[i] = flow[i]!.plus(cashFlow(e));
     }
     if (!inside) continue;
+    if (!cashRowsSeen(ccy, periods, input.cashTransactions, input.events)) continue;
     const explained = periods.every((p, i) => p.starting.plus(flow[i]!).minus(p.ending).abs().lessThanOrEqualTo(CASH_TOLERANCE));
     if (!explained) continue;
     out.set(ccy, periods[0]!.starting);
