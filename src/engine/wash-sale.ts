@@ -3,10 +3,12 @@
  *
  * Spanish tax law blocks capital losses if homogeneous securities are
  * repurchased within:
- * - **2 calendar months** before or after the sale — for securities
- *   admitted to trading on regulated markets (STK, FUND, BOND on MiFID venues).
- * - **1 year** before or after the sale — for securities NOT admitted
- *   to trading on regulated markets (most crypto, unlisted shares, etc.).
+ * - **2 calendar months** before or after the sale — for securities admitted
+ *   to trading on an EU regulated market (33.5.f) or on a third-country market
+ *   the European Commission declared equivalent, such as NYSE and Nasdaq (DGT
+ *   V0778-25, Implementing Decision (EU) 2017/2320).
+ * - **1 year** before or after the sale — for securities admitted to neither
+ *   (33.5.g): most crypto, unlisted shares, OTC-only securities.
  *
  * The block is **proportional to the repurchased quantity** ("por paquetes",
  * DGT V0913-08): sell 100 at a loss, rebuy 30 → only the loss on 30 is deferred,
@@ -27,6 +29,7 @@ import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
+import { compareFifoTradeOrder } from "./fifo.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -160,9 +163,12 @@ export function detectWashSales(
   }
 
   // Index in-window-eligible BUY events and signed position movements by key.
+  // Walk the trades in FIFO's processing order, so same-day covers take the
+  // short in the order FIFO gave it to them: a "C;O" buy before a "C" buy,
+  // whatever the file order.
   const buysByAsset = new Map<string, BuyEvent[]>();
   const positionEventsByAsset = new Map<string, PositionEvent[]>();
-  for (const trade of allTrades) {
+  for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
     if (!key) continue;
@@ -181,7 +187,8 @@ export function detectWashSales(
       positionEvents.push({ time, qty });
       // FIFO sends a BUY flagged "C" or "C;O" to the open short lots first
       // (fifo.ts consumeShortLots). Only what is left after the cover becomes a
-      // held lot. A "C" buy with no open short books nothing at all.
+      // held lot. A "C" buy with no open short books nothing at all. The day's
+      // covered shares go to the cover buys in FIFO's order (the sort above).
       let repurchased = qty;
       const oci = trade.openCloseIndicator;
       if (oci === "C" || oci === "C;O") {
@@ -485,7 +492,9 @@ export function detectWashSales(
       holdingAfter(key, sellTime).isZero() &&
       !fifoHoldsAfter(key, sellTime)
     ) {
-      const lastIdx = idxs[idxs.length - 1]!;
+      // The last long sale of the day takes the rest: a short cover releases nothing.
+      const longIdxs = idxs.filter((idx) => !isShortAt(idx));
+      const lastIdx = longIdxs[longIdxs.length - 1]!;
       for (let i = queue.head; i < queue.entries.length; i++) {
         const entry = queue.entries[i]!;
         if (entry.time >= sellTime) break;
@@ -544,7 +553,8 @@ export function detectWashSales(
  * their own date, and a rebuy of a security can sit at any broker that trades
  * it. A security is then covered up to the earliest end among the brokers that
  * trade it: a broker's end is its last trade of any security, or its statement
- * end from `endBySource` when later.
+ * end from `endBySource` when later. A broker with a statement end and no
+ * trades is one of the merged brokers too.
  *
  * @param lastLoadedDate - Last date the whole upload covers (YYYY-MM-DD or YYYYMMDD)
  * @param trades - The uploaded trades, with `brokerSource` set by the merge
@@ -578,9 +588,11 @@ export function salesWithWindowPastData(
     }
     sources.add(source);
   }
+  // A broker with a statement end but no trades still counts as one of the
+  // merged brokers, or its later statement end would stand in for the others.
   for (const [source, date] of endBySource) {
     const time = dayTime(date);
-    if (endOfSource.has(source) && Number.isFinite(time)) endOfSource.set(source, Math.max(endOfSource.get(source)!, time));
+    if (Number.isFinite(time)) endOfSource.set(source, Math.max(endOfSource.get(source) ?? Number.NEGATIVE_INFINITY, time));
   }
   const coveredUntil = (key: string): number => {
     const sources = sourcesOfKey.get(key);
@@ -820,17 +832,19 @@ function buyQtyConversionToSellUnits(
  *
  * Art. 33.5.f/g LIRPF distinguishes by whether the security is admitted to
  * trading on a regulated market:
- *  - **2 months** for listed securities (regulated markets).
- *  - **1 year (12 months)** for securities NOT admitted to trading
- *    (crypto, unlisted shares, etc.).
+ *  - **2 months** on an EU regulated market, or on a third-country market the
+ *    European Commission declared equivalent (NYSE, Nasdaq: DGT V0778-25).
+ *  - **1 year (12 months)** on neither (crypto, unlisted shares, OTC-only
+ *    securities such as OTC Markets / pink sheets).
  *
  * We have no reliable "is listed" flag from the brokers, so we use a heuristic:
  *  - CRYPTO → always unlisted (12 months).
  *  - STK/FUND/BOND WITH a real ISIN → treated as listed (2 months).
  *  - Anything else with NO ISIN → treated as unlisted (12 months).
  *
- * LIMITATION: a real ISIN does not strictly guarantee admission to a regulated
- * market (some ISIN-bearing instruments are unlisted/OTC), and conversely a few
+ * LIMITATION (#452): a real ISIN does not guarantee admission to a regulated or
+ * equivalent market (some ISIN-bearing instruments trade only OTC, where the
+ * statute gives 1 year and we apply 2 months), and conversely a few
  * listed instruments may arrive without an ISIN. This is a conservative
  * approximation; precise classification would require per-instrument market
  * admission data we do not collect.

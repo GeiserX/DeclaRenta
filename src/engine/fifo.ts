@@ -57,6 +57,26 @@ function isinSuffix(isin: string): string {
   return isin ? ` (${isin})` : "";
 }
 
+/**
+ * The order FIFO processes trades in (a stable sort, so ties keep the input
+ * order). By date; on the same date opens and rolls ("O", "C;O") before closes
+ * ("C"), which handles both longs and shorts; within the same phase BUYs before
+ * SELLs, to avoid "sell without lots" on longs. The anti-churning detector
+ * replays same-day short covers in this order (wash-sale.ts).
+ */
+export function compareFifoTradeOrder(
+  a: Pick<Trade, "tradeDate" | "openCloseIndicator" | "buySell">,
+  b: Pick<Trade, "tradeDate" | "openCloseIndicator" | "buySell">,
+): number {
+  const cmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
+  if (cmp !== 0) return cmp;
+  const phase = (t: Pick<Trade, "openCloseIndicator">): number => (t.openCloseIndicator === "C" ? 1 : 0);
+  const phaseCmp = phase(a) - phase(b);
+  if (phaseCmp !== 0) return phaseCmp;
+  if (a.buySell !== b.buySell) return a.buySell === "BUY" ? -1 : 1;
+  return 0;
+}
+
 /** A stock split (IBKR FS/RS) as an exact ratio: `num` new shares for every `den` old ones. */
 interface Split {
   /** ISIN whose lots are split (the old ISIN when the split also changes it) */
@@ -227,17 +247,7 @@ export class FifoEngine {
         }
         return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
       })
-      .sort((a, b) => {
-        const cmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
-        if (cmp !== 0) return cmp;
-        // Same date: opens before closes (handles both longs and shorts correctly)
-        const phase = (t: Trade): number => (t.openCloseIndicator === "O" ? 0 : t.openCloseIndicator === "C" ? 1 : 0);
-        const phaseCmp = phase(a) - phase(b);
-        if (phaseCmp !== 0) return phaseCmp;
-        // Within same phase: BUYs before SELLs to avoid "sell without lots" on longs
-        if (a.buySell !== b.buySell) return a.buySell === "BUY" ? -1 : 1;
-        return 0;
-      });
+      .sort(compareFifoTradeOrder);
 
     // Parse splits from corporate actions: IBKR type FS (forward) and RS (reverse).
     // The ratio stays as two Decimals so 1-for-3 is exact. When a split moves the
@@ -721,8 +731,10 @@ export class FifoEngine {
         symbol: merger.newSymbol,
         description: merger.newDescription,
         quantity: newQuantity,
-        // Same tax acquisition date, but the shares enter the new ISIN today.
-        entryDate: merger.date,
+        // Same tax acquisition date, but the shares enter the new ISIN today. A
+        // TC row that names no new security keeps the ISIN (the fallback
+        // above): the shares were already held, so they keep their entry date.
+        ...(merger.oldIsin !== merger.newIsin ? { entryDate: merger.date } : {}),
         pricePerShare: lot.costInFcy.dividedBy(newQuantity), // Recalculate per-share cost
         // costInFcy preserved — total cost basis unchanged (tax-neutral exchange)
       });
