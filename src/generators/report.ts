@@ -954,7 +954,10 @@ export function generateTaxReport(
     const tradeFxEvents = FxFifoEngine.extractFxEvents(statement.trades, rateMap, trackAutoConvert);
     // The collapsed rows, the ones the income path reads (issue #439): a
     // reversed and re-credited dividend opens one lot, not three.
-    const cashFxEvents = FxFifoEngine.extractCashFxEvents(allCashTransactions, rateMap);
+    // The rows it leaves out tell the loan gate which currencies' cash it
+    // cannot prove (issue #449).
+    const omittedCash: CashTransaction[] = [];
+    const cashFxEvents = FxFifoEngine.extractCashFxEvents(allCashTransactions, rateMap, omittedCash);
     // Foreign-stock round-trips (issue #230, carry-basis-defer): a FCY stock BUY
     // CONSUMES the FCY it spends from the pool and PARKS the carried basis; a FCY
     // stock SELL re-adds that principal at its carried basis plus the profit at the
@@ -986,6 +989,7 @@ export function generateTaxReport(
         : (statement.cashBalances ?? []),
       trades: statement.trades,
       cashTransactions: statement.cashTransactions,
+      omittedCash,
       corporateActions: statement.corporateActions,
       trackAutoConvert,
     });

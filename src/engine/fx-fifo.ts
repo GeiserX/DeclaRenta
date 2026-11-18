@@ -499,8 +499,11 @@ export class FxFifoEngine {
   private debts: SameDayDebt[] = [];
   /** The loan each borrowed parked slice belongs to (issue #449). */
   private loanOfSlice: Map<ParkedSlice, SameDayDebt> = new Map();
-  /** Pool lots the default re-added from a borrowed slice: the loan's own principal back (see {@link bookRepayment}). */
-  private loanPrincipal: WeakSet<FxLot> = new WeakSet();
+  /**
+   * Pool lots the default re-added from a borrowed slice, with the loan that
+   * slice belongs to: that loan's own principal back (see {@link bookRepayment}).
+   */
+  private loanPrincipal: WeakMap<FxLot, SameDayDebt> = new WeakMap();
   /** Opening balance not spent yet, per loan currency (see {@link takeOpening}). */
   private opening: Map<string, Decimal> = new Map();
   /** Every loan repayment of the run (see {@link getLoanRepayments}). */
@@ -1051,7 +1054,7 @@ export class FxFifoEngine {
     this.nullOfSlice = new Map();
     this.debts = [];
     this.loanOfSlice = new Map();
-    this.loanPrincipal = new WeakSet();
+    this.loanPrincipal = new WeakMap();
     this.opening = new Map(this.loan);
     this.loanRepayments = [];
     this.lostSales = new Set();
@@ -1404,8 +1407,18 @@ export class FxFifoEngine {
    * the income path reads (issue #439): a reversal and its re-credit cancel
    * there. An income row that stays negative takes currency out with its sign
    * (see `revByKey` below).
+   *
+   * `omitted`, when given, collects every row whose currency this leaves out
+   * of the events: a row with no ECB rate in its lookup window, and the row
+   * of a key whose withholding no income absorbed (an orphan) or whose net
+   * refund or reversal opened no event. A withholding netted into its income
+   * is not left out. The loan gate rejects a currency with any such row
+   * (issue #449, PR #460 review): two left-out rows can cancel each other.
    */
-  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap, omitted?: CashTransaction[]): FxEvent[] {
+    const omit = (tx: CashTransaction): void => {
+      omitted?.push(tx);
+    };
     const events: FxEvent[] = [];
     // R0 (issues #434, #437): every FX event is dated on its trade date and
     // settlement is never read, so a cash row goes on `dateTime` (a fee charged
@@ -1454,12 +1467,14 @@ export class FxFifoEngine {
       `${brokerSource ?? ""}|${currency}|${date}`;
     const whtByKey = new Map<string, Decimal>(); // > 0 withheld, < 0 refunded (net)
     const refundRowByKey = new Map<string, CashTransaction>();
+    const whtRowByKey = new Map<string, CashTransaction>();
     for (const tx of cashTransactions) {
       if (tx.type !== "Withholding Tax" || tx.currency === "EUR") continue;
       const amt = new Decimal(tx.amount);
       const key = whtKey(tx.brokerSource, tx.currency, cashDate(tx));
       whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).minus(amt));
       if (amt.greaterThan(0) && !refundRowByKey.has(key)) refundRowByKey.set(key, tx);
+      if (!whtRowByKey.has(key)) whtRowByKey.set(key, tx);
     }
     /**
      * Reduce an income inflow by any withholding pending for its (broker,currency,date),
@@ -1558,7 +1573,10 @@ export class FxFifoEngine {
       // a year with no trades) must not throw — skip the event and let report.ts
       // surface it. lookupRateInMap returns null instead of throwing.
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
 
       // A reversal of an income credit: taken out with its sign (revByKey above).
       if (isReversal(tx)) continue;
@@ -1608,12 +1626,22 @@ export class FxFifoEngine {
     // on its key date, under the same guards a cash row passes above. A leftover
     // net deduction (pending > 0) is an orphan and stays dropped, never a disposal.
     for (const [key, pending] of whtByKey) {
-      if (!pending.isNegative() || convertedKeys.has(key)) continue;
+      if (pending.isZero()) continue;
+      if (pending.greaterThan(0) || convertedKeys.has(key)) {
+        omit(whtRowByKey.get(key)!);
+        continue;
+      }
       const tx = refundRowByKey.get(key)!; // pending < 0 needs at least one positive row
-      if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) continue;
+      if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) {
+        omit(tx);
+        continue;
+      }
       const date = cashDate(tx);
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
     }
 
@@ -1626,7 +1654,10 @@ export class FxFifoEngine {
       if (!isEcbResolvable(tx.currency)) continue;
       const date = cashDate(tx);
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
       const trigger = tx.type.includes("Interest") ? "interest" : "dividend";
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger, brokerSource: tx.brokerSource });
     }
@@ -2661,7 +2692,8 @@ export class FxFifoEngine {
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
           reAddedLot = pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
-          if (reAddedLot && this.loanOfSlice.has(p)) this.loanPrincipal.add(reAddedLot);
+          const sliceLoan = this.loanOfSlice.get(p);
+          if (reAddedLot && sliceLoan) this.loanPrincipal.set(reAddedLot, sliceLoan);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -3532,8 +3564,12 @@ export class FxFifoEngine {
     // paying currency's, unless the default repays with the loan's own
     // principal back from the shares: the stock line holds that change. A
     // trap, review: counting every gain-0 row as outside sent a funded lot
-    // that cost the loan's rate by coincidence to the `_manual` note.
-    note(rest, booked || ((this.traditionalFx || !sameDay) && !this.loanPrincipal.has(lot)));
+    // that cost the loan's rate by coincidence to the `_manual` note. Only
+    // the principal of THIS loan: another loan's principal (its loan already
+    // repaid by other currency) pays like any lot (a trap, PR #460 review:
+    // L1's principal repaying L2 at the same rate took L2's debt change out
+    // of the boxes).
+    note(rest, booked || ((this.traditionalFx || !sameDay) && this.loanPrincipal.get(lot) !== debt));
     if (booked) {
       const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, rest, lot.shifts) : undefined;
       this.disposals.push({
