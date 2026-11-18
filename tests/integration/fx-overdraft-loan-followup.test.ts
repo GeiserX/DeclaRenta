@@ -616,3 +616,233 @@ describe("seeded cycles with opening cash, same-day repayments and sales of 0 or
     }
   });
 });
+
+describe("returned loan principal counts outside 1633/1637 only while it is borrowed (PR #460 review)", () => {
+  // AAA is bought on a loan of 1000 USD at 0.95 (L1); a funding at 0.93 a
+  // fortnight later repays L1 in full. BBB is then bought on a second loan of
+  // 1000 USD at 0.95 (L2). AAA's sale at 0.90 returns L1's principal at 0.95
+  // and it repays L2: a row of gain 0 in 1633/1637 that holds L2's debt
+  // change (+50) and the paying dollars' change (−50). A trap: the lot was
+  // tagged as loan principal, so the report took L2's 50 € out of the boxes
+  // and sent the user to reconcile by hand, as if BBB's own sale had repaid
+  // L2. Only L1 is AAA's own loan.
+  const OTHER: LoanEv[] = [
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+    { k: "fund", d: "2025-03-20", usd: "1000", r: "0.93" },
+    { k: "buy", d: "2025-04-01", sym: "BBB", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+    { k: "sell", d: "2025-07-01", sym: "BBB", qty: "10", px: "100", r: "0.90" },
+    { k: "conv", d: "2025-07-10", usd: "1000", r: "0.88" },
+  ];
+
+  it("the default: another loan's principal pays like any lot, its debt change is in 1633/1637", () => {
+    const per = runLoan(withReport("OTHER", OTHER), {});
+    const r = per.get(2025)!.report;
+    expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(withReport("OTHER", OTHER)))));
+    expect(loanRows(per)).toEqual([["2025-03-20", "1000", "20.00", "20.00"]]);
+    expect(r.messages.map((x) => x.id)).not.toContain("report.fx_loan_repayment_manual");
+    const m = r.messages.find((x) => x.id === "report.fx_loan_repayment");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "20.00", gain: "70.00", loss: "0.00" });
+  });
+
+  it("«Tradicional con divisa» gives the same note", () => {
+    const r = runLoan(withReport("OTHER", OTHER), TRAD).get(2025)!.report;
+    expect(r.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"))?.id).toBe("report.fx_loan_repayment");
+  });
+
+  const note = (id: string, ev: LoanEv[]) =>
+    runLoan(withReport(id, ev), {})
+      .get(2025)!
+      .report.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+
+  // CHAIN: L1 repaid by a funding at 0.93; AAA's sale returns L1's principal,
+  // which repays L2; BBB's sale returns L2's principal, which repays L3; CCC's
+  // sale returns L3's, converted at 0.88. Each principal was paid for by the
+  // funding down the chain, so all 120 € of debt change are in 1633/1637.
+  it("a chain of loans paid down from one funding: the plain note", () => {
+    const CHAIN: LoanEv[] = [
+      { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "fund", d: "2025-03-20", usd: "1000", r: "0.93" },
+      { k: "buy", d: "2025-04-01", sym: "BBB", qty: "10", px: "100", r: "0.95" },
+      { k: "sell", d: "2025-06-02", sym: "AAA", qty: "10", px: "100", r: "0.90" },
+      { k: "buy", d: "2025-06-10", sym: "CCC", qty: "10", px: "100", r: "0.95" },
+      { k: "sell", d: "2025-07-01", sym: "BBB", qty: "10", px: "100", r: "0.90" },
+      { k: "sell", d: "2025-07-05", sym: "CCC", qty: "10", px: "100", r: "0.90" },
+      { k: "conv", d: "2025-07-10", usd: "1000", r: "0.88" },
+    ];
+    const m = note("CHAIN", CHAIN);
+    expect(m?.id).toBe("report.fx_loan_repayment");
+    expect(m?.context).toEqual({ ccy: "USD", amount: "20.00", gain: "120.00", loss: "0.00" });
+  });
+
+  // CROSS: AAA bought on L1, BBB on L2, both at 0.95, nothing else. If BBB
+  // sells first, L2's principal repays L1 (the oldest), then AAA's sale
+  // repays L2 with L1's principal. No currency ever paid for either
+  // principal, so the figures equal OWN (AAA first): 1633 = 0. A trap: only
+  // the loan's own principal counted outside, so CROSS got the plain note,
+  // telling the user to lower 1633 (0) by 100 €, while OWN said `_manual`.
+  const crossing = (first: string, second: string, d2: string): LoanEv[] => [
+    { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+    { k: "buy", d: "2025-04-01", sym: "BBB", qty: "10", px: "100", r: "0.95" },
+    { k: "sell", d: "2025-06-02", sym: first, qty: "10", px: "100", r: "0.90", time: "10:00:00" },
+    { k: "sell", d: d2, sym: second, qty: "10", px: "100", r: "0.90", time: "11:00:00" },
+  ];
+  const manual = { ccy: "USD", amount: "0.00", gain: "100.00", loss: "0.00", boxGain: "0.00", boxLoss: "0.00" };
+  for (const [name, d2] of [
+    ["same day", "2025-06-02"],
+    ["next day", "2025-06-03"],
+  ] as const) {
+    it(`two loans repaid with each other's principal (${name}): \`_manual\` in either sale order`, () => {
+      for (const [id, ev] of [
+        ["OWN", crossing("AAA", "BBB", d2)],
+        ["CROSS", crossing("BBB", "AAA", d2)],
+      ] as const) {
+        const per = runLoan(withReport(id, ev), {});
+        expect([id, ...years(per)[0]!]).toEqual([id, 2025, "0.00", "0.00"]);
+        expect(loanRows(per)).toEqual([]);
+        const m = note(id, ev);
+        expect([id, m?.id]).toEqual([id, "report.fx_loan_repayment_manual"]);
+        expect(m?.context).toEqual(manual);
+      }
+    });
+  }
+
+  // MIXED: as CROSS, but a funding of 400 at 0.93 repays 400 of L1 first.
+  // Of L1's principal, 400 are paid for and 600 still borrowed. Borrowed
+  // units go first. BBB first: L2's principal repays L1's 600 and 400 of
+  // L2, all borrowed; AAA's sale then repays L2's 600 with L1's 600
+  // borrowed units, and the 400 paid for go to the pool: only the funding's
+  // 8 € are in the boxes. AAA first: L1's principal repays L1's 600 (its
+  // own) and then 400 of L2 with the units paid for: 8 + 20 €.
+  it("a loan partly paid for passes on its borrowed units first", () => {
+    const mixed = (first: string, second: string): LoanEv[] => [
+      { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+      { k: "buy", d: "2025-04-01", sym: "BBB", qty: "10", px: "100", r: "0.95" },
+      { k: "fund", d: "2025-04-10", usd: "400", r: "0.93" },
+      { k: "sell", d: "2025-06-02", sym: first, qty: "10", px: "100", r: "0.90" },
+      { k: "sell", d: "2025-06-03", sym: second, qty: "10", px: "100", r: "0.90" },
+      { k: "conv", d: "2025-07-10", usd: "400", r: "0.88" },
+    ];
+    for (const [id, ev, boxGain] of [
+      ["MIXED-OWN", mixed("AAA", "BBB"), "28.00"],
+      ["MIXED-CROSS", mixed("BBB", "AAA"), "8.00"],
+    ] as const) {
+      const per = runLoan(withReport(id, ev), {});
+      expect(f2(lifetime(per))).toBe(f2(economic(harnessScenario(withReport(id, ev)))));
+      expect([id, note(id, ev)?.context]).toEqual([
+        id,
+        { ccy: "USD", amount: "8.00", gain: "88.00", loss: "0.00", boxGain, boxLoss: "0.00" },
+      ]);
+    }
+  });
+
+  // L1's slices that stop being borrowed on its own day leave its borrowed
+  // count: a same-day sale gives them back (SD-SALE: 500 of 1000, a loss of
+  // 100 still owed), a same-day sale's other currency covers them (SD-COVER:
+  // 300), or the opening balance does (SD-OPEN: 300). A funding then repays
+  // the rest of L1, so the principal left in AAA is paid for, and it repays
+  // L2 inside 1633/1637. Each of the three cuts alone left a borrowed count
+  // above what the shares still held, and the note said `_manual`.
+  it("slices that stop being borrowed on the loan's day leave its borrowed count", () => {
+    const cases: [string, LoanEv[], string, Record<string, string>][] = [
+      [
+        "SD-SALE",
+        [
+          { k: "buy", d: "2025-03-03", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-03-03", sym: "AAA", qty: "5", px: "80", r: "0.95" },
+          { k: "fund", d: "2025-03-20", usd: "600", r: "0.93" },
+          { k: "buy", d: "2025-04-01", sym: "BBB", qty: "5", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-06-02", sym: "AAA", qty: "5", px: "100", r: "0.90" },
+          { k: "sell", d: "2025-07-01", sym: "BBB", qty: "5", px: "100", r: "0.90" },
+          { k: "conv", d: "2025-07-10", usd: "500", r: "0.88" },
+        ],
+        "0",
+        { ccy: "USD", amount: "12.00", gain: "37.00", loss: "0.00" },
+      ],
+      [
+        "SD-COVER",
+        [
+          { k: "fund", d: "2025-03-03", usd: "300", r: "0.90" },
+          { k: "buy", d: "2025-04-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-04-01", sym: "AAA", qty: "3", px: "100", r: "0.95" },
+          { k: "fund", d: "2025-04-10", usd: "400", r: "0.93" },
+          { k: "buy", d: "2025-05-02", sym: "BBB", qty: "7", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-06-02", sym: "AAA", qty: "7", px: "100", r: "0.90" },
+          { k: "sell", d: "2025-07-01", sym: "BBB", qty: "7", px: "100", r: "0.90" },
+          { k: "conv", d: "2025-07-10", usd: "700", r: "0.88" },
+        ],
+        "0",
+        { ccy: "USD", amount: "23.00", gain: "43.00", loss: "0.00" },
+      ],
+      [
+        "SD-OPEN",
+        [
+          { k: "buy", d: "2025-04-01", sym: "AAA", qty: "10", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-04-01", sym: "AAA", qty: "3", px: "100", r: "0.95" },
+          { k: "fund", d: "2025-04-10", usd: "400", r: "0.93" },
+          { k: "buy", d: "2025-05-02", sym: "BBB", qty: "7", px: "100", r: "0.95" },
+          { k: "sell", d: "2025-06-02", sym: "AAA", qty: "7", px: "100", r: "0.90" },
+          { k: "sell", d: "2025-07-01", sym: "BBB", qty: "7", px: "100", r: "0.90" },
+          { k: "conv", d: "2025-07-10", usd: "700", r: "0.88" },
+        ],
+        "300",
+        { ccy: "USD", amount: "23.00", gain: "43.00", loss: "0.00" },
+      ],
+    ];
+    for (const [id, ev, opening, context] of cases) {
+      const m = runLoan(withReport(id, ev, { opening }), {})
+        .get(2025)!
+        .report.messages.find((x) => x.id.startsWith("report.fx_loan_repayment"));
+      expect([id, m?.id, m?.context]).toEqual([id, "report.fx_loan_repayment", context]);
+    }
+  });
+});
+
+describe("the gate reconciles the cash rows day by day (PR #460 review)", () => {
+  const credit = (d: string) =>
+    `<CashTransaction transactionID="c1" accountId="U1" description="COMMISSION ADJUSTMENT" currency="USD" dateTime="${d}" settleDate="${d}" amount="100" fxRateToBase="1" type="Commission Adjustments" />`;
+  const wht = (d: string) =>
+    `<CashTransaction transactionID="w1" accountId="U1" symbol="AAA" description="AAA US TAX" isin="US0000000AA1" currency="USD" dateTime="${d}" settleDate="${d}" amount="-100" fxRateToBase="1" type="Withholding Tax" />`;
+
+  // A credit of 100 USD on a day with no ECB rate in its lookup window, and an
+  // orphan withholding of 100 on another day. The FX engine drops both, and
+  // the period's raw rows and its cash events both add up to 0: the gate
+  // turned the loan model on although the credit's dollars were never seen.
+  it("a credit with no ECB rate and an orphan withholding on another day", () => {
+    const patch = (xml: string) => xml.replace("<CashTransactions>", `<CashTransactions>${credit("20250115")}${wht("20250702")}`);
+    for (const [, opts] of METHODS) {
+      const { gated, bare } = patchedRuns(patch, opts);
+      expect(loanRows(gated)).toEqual([]);
+      expect(years(gated)).toEqual(years(bare));
+    }
+  });
+
+  // The same two rows on one day cancel inside the day too: the extractor
+  // reports every row it leaves out, and one is enough to reject.
+  it("the same two rows on one day", () => {
+    const patch = (xml: string) => xml.replace("<CashTransactions>", `<CashTransactions>${credit("20250115")}${wht("20250115")}`);
+    for (const [, opts] of METHODS) {
+      const { gated, bare } = patchedRuns(patch, opts);
+      expect(loanRows(gated)).toEqual([]);
+      expect(years(gated)).toEqual(years(bare));
+    }
+  });
+
+  it("a row with no ECB rate alone, the CashReport counting it", () => {
+    const sc = withReport("REPRO", REPRO, { endingDelta: "100" });
+    const { xml, rates } = toXml(sc);
+    const p = xml.replace("<CashTransactions>", `<CashTransactions>${credit("20250115")}`);
+    for (const [, opts] of METHODS) expect(loanRows(runUpload(toUpload(p), rates, [2025], opts))).toEqual([]);
+  });
+
+  // Control: a dividend and its withholding on the same day net into one
+  // cash event, so the gate still passes.
+  it("control: a withholding netted into its dividend that day still passes", () => {
+    const sc = withReport("REPRO-DIV", [...REPRO, { k: "div", d: "2025-05-01", usd: "100", r: "0.80" }], { endingDelta: "-15" });
+    const { xml, rates } = toXml(sc);
+    const w = wht("20250501").replace('amount="-100"', 'amount="-15"');
+    const p = xml.replace("<CashTransactions>", `<CashTransactions>${w}`);
+    expect(p).not.toBe(xml);
+    for (const [, opts] of METHODS) expect(loanRows(runUpload(toUpload(p), rates, [2025], opts)).length).toBeGreaterThan(0);
+  });
+});

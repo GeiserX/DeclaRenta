@@ -22,10 +22,12 @@
  *    stock, fund or bond trade (no option, future, short cover, or commission
  *    paid in the currency for a trade in another one, no opening short sale),
  *    a cash row of income, withholding, interest or fees (no deposit,
- *    withdrawal or transfer), and no corporate action with cash. And each
- *    period's cash rows add up to the cash events the engine made of them: a
- *    withholding with no income on its day (an orphan) is dropped there, so
- *    its debit is not seen. A per-period net cannot prove the balance
+ *    withdrawal or transfer), and no corporate action with cash. And no cash
+ *    row is one the engine drops (a withholding with no income on its day, an
+ *    orphan, or a row with no ECB rate: its cash is not seen), and each day's
+ *    cash rows add up to the cash events the engine made of them (a per-period
+ *    sum let a dropped credit and a dropped debit on two days cancel). A
+ *    per-period net cannot prove the balance
  *    along the way: a USD deposit and an equal withdrawal in one year net to
  *    zero, the balance never went below zero, and the loan model invented a
  *    loan (70 € in «Tradicional con divisa»). Likewise a second account with
@@ -193,37 +195,54 @@ function rowsReadable(
 }
 
 /**
- * Whether, in each period, the cash rows of `ccy` add up to the cash events
- * the FX engine made of them (dividends, withholding netted in, interest,
- * fees). `extractCashFxEvents` drops a withholding with no income on its day
- * (an orphan) and a row with no ECB rate, so their cash is not seen; a
- * per-period net could hide it behind another unseen movement. A row outside
- * every period proves nothing either.
+ * Whether every cash row of `ccy` reaches the cash events the FX engine made
+ * of them (dividends, withholding netted in, interest, fees).
+ * `extractCashFxEvents` drops a withholding with no income on its day (an
+ * orphan) and a row with no ECB rate, so their cash is not seen, and it
+ * reports each row it drops (`omitted`): one is enough to reject. On top,
+ * the rows of each day (the date the extractor keys on) add up to the events
+ * of that day, which a withholding netted into its income that day keeps. A
+ * trap, PR #460 review: compared per period, a credit with no ECB rate and an
+ * orphan withholding of the same size on another day both vanished and the
+ * period still added up. A row outside every period proves nothing either.
  */
-function cashRowsSeen(ccy: string, periods: Period[], cashTransactions: CashTransaction[], events: FxEvent[]): boolean {
-  const at = (date: string): number => periods.findIndex((p) => date >= p.from && date <= p.to);
-  const raw = periods.map(() => new Decimal(0));
-  const seen = periods.map(() => new Decimal(0));
+function cashRowsSeen(
+  ccy: string,
+  periods: Period[],
+  cashTransactions: CashTransaction[],
+  omitted: CashTransaction[],
+  events: FxEvent[],
+): boolean {
+  if (omitted.some((c) => c.currency === ccy)) return false;
+  const inside = (date: string): boolean => periods.some((p) => date >= p.from && date <= p.to);
+  const raw = new Map<string, Decimal>();
+  const seen = new Map<string, Decimal>();
+  const add = (m: Map<string, Decimal>, date: string, q: Decimal): void => {
+    m.set(date, (m.get(date) ?? new Decimal(0)).plus(q));
+  };
   for (const c of cashTransactions) {
     if (c.currency !== ccy) continue;
-    const i = at(normalizeDate(c.dateTime || c.settleDate));
+    const date = normalizeDate(c.dateTime || c.settleDate);
     let amount: Decimal;
     try {
       amount = new Decimal(c.amount || "0");
     } catch {
       return false;
     }
-    if (i < 0 || !amount.isFinite()) return false;
-    raw[i] = raw[i]!.plus(amount);
+    if (!inside(date) || !amount.isFinite()) return false;
+    add(raw, date, amount);
   }
   for (const e of events) {
     // Conversions and stock trades are checked row by row in rowsReadable.
     if (e.currency !== ccy || e.kind !== undefined || e.trigger === "conversion") continue;
-    const i = at(e.date);
-    if (i < 0) return false;
-    seen[i] = seen[i]!.plus(e.quantity);
+    if (!inside(e.date)) return false;
+    add(seen, e.date, e.quantity);
   }
-  return raw.every((r, i) => r.equals(seen[i]!));
+  const zero = new Decimal(0);
+  for (const date of new Set([...raw.keys(), ...seen.keys()])) {
+    if (!(raw.get(date) ?? zero).equals(seen.get(date) ?? zero)) return false;
+  }
+  return true;
 }
 
 /** See the module comment. */
@@ -233,6 +252,8 @@ export function loanCurrencies(input: {
   cashBalances: CashBalance[];
   trades: Trade[];
   cashTransactions: CashTransaction[];
+  /** The cash rows `extractCashFxEvents` left out of its events (its `omitted`). */
+  omittedCash: CashTransaction[];
   corporateActions: CorporateAction[];
   trackAutoConvert: boolean;
 }): Map<string, Decimal> {
@@ -290,7 +311,7 @@ export function loanCurrencies(input: {
       flow[i] = flow[i]!.plus(cashFlow(e));
     }
     if (!inside) continue;
-    if (!cashRowsSeen(ccy, periods, input.cashTransactions, input.events)) continue;
+    if (!cashRowsSeen(ccy, periods, input.cashTransactions, input.omittedCash, input.events)) continue;
     const explained = periods.every((p, i) => p.starting.plus(flow[i]!).minus(p.ending).abs().lessThanOrEqualTo(CASH_TOLERANCE));
     if (!explained) continue;
     out.set(ccy, periods[0]!.starting);

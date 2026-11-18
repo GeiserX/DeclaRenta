@@ -230,6 +230,16 @@ interface SameDayDebt {
   buyRate?: Decimal;
   /** A loan (issue #449): the date it opened. */
   loanSince?: string;
+  /**
+   * A buy's loan (issue #449): how many units of its borrowed principal,
+   * still parked in the shares or on their way back, are borrowed currency,
+   * not currency the account owns. It starts at the loan's quantity and
+   * drops when currency in 1633/1637 repays the loan (those units are paid
+   * for), when a slice stops being the loan's (a same-day cover, the
+   * opening balance, a same-day sale), and when the principal pays a debt as
+   * borrowed currency (see {@link FxFifoEngine.bookRepayment}).
+   */
+  borrowedLeft?: Decimal;
 }
 
 /** The late covers of one pass (see `processWithCovers`). */
@@ -499,8 +509,12 @@ export class FxFifoEngine {
   private debts: SameDayDebt[] = [];
   /** The loan each borrowed parked slice belongs to (issue #449). */
   private loanOfSlice: Map<ParkedSlice, SameDayDebt> = new Map();
-  /** Pool lots the default re-added from a borrowed slice: the loan's own principal back (see {@link bookRepayment}). */
-  private loanPrincipal: WeakSet<FxLot> = new WeakSet();
+  /**
+   * Pool lots the default re-added from a borrowed slice, with the loan that
+   * slice belongs to: borrowed principal back while that loan counts it so
+   * (`SameDayDebt.borrowedLeft`, see {@link bookRepayment}).
+   */
+  private loanPrincipal: WeakMap<FxLot, SameDayDebt> = new WeakMap();
   /** Opening balance not spent yet, per loan currency (see {@link takeOpening}). */
   private opening: Map<string, Decimal> = new Map();
   /** Every loan repayment of the run (see {@link getLoanRepayments}). */
@@ -1051,7 +1065,7 @@ export class FxFifoEngine {
     this.nullOfSlice = new Map();
     this.debts = [];
     this.loanOfSlice = new Map();
-    this.loanPrincipal = new WeakSet();
+    this.loanPrincipal = new WeakMap();
     this.opening = new Map(this.loan);
     this.loanRepayments = [];
     this.lostSales = new Set();
@@ -1404,8 +1418,18 @@ export class FxFifoEngine {
    * the income path reads (issue #439): a reversal and its re-credit cancel
    * there. An income row that stays negative takes currency out with its sign
    * (see `revByKey` below).
+   *
+   * `omitted`, when given, collects every row whose currency this leaves out
+   * of the events: a row with no ECB rate in its lookup window, and the row
+   * of a key whose withholding no income absorbed (an orphan) or whose net
+   * refund or reversal opened no event. A withholding netted into its income
+   * is not left out. The loan gate rejects a currency with any such row
+   * (issue #449, PR #460 review): two left-out rows can cancel each other.
    */
-  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap): FxEvent[] {
+  static extractCashFxEvents(cashTransactions: CashTransaction[], rateMap: EcbRateMap, omitted?: CashTransaction[]): FxEvent[] {
+    const omit = (tx: CashTransaction): void => {
+      omitted?.push(tx);
+    };
     const events: FxEvent[] = [];
     // R0 (issues #434, #437): every FX event is dated on its trade date and
     // settlement is never read, so a cash row goes on `dateTime` (a fee charged
@@ -1454,12 +1478,14 @@ export class FxFifoEngine {
       `${brokerSource ?? ""}|${currency}|${date}`;
     const whtByKey = new Map<string, Decimal>(); // > 0 withheld, < 0 refunded (net)
     const refundRowByKey = new Map<string, CashTransaction>();
+    const whtRowByKey = new Map<string, CashTransaction>();
     for (const tx of cashTransactions) {
       if (tx.type !== "Withholding Tax" || tx.currency === "EUR") continue;
       const amt = new Decimal(tx.amount);
       const key = whtKey(tx.brokerSource, tx.currency, cashDate(tx));
       whtByKey.set(key, (whtByKey.get(key) ?? new Decimal(0)).minus(amt));
       if (amt.greaterThan(0) && !refundRowByKey.has(key)) refundRowByKey.set(key, tx);
+      if (!whtRowByKey.has(key)) whtRowByKey.set(key, tx);
     }
     /**
      * Reduce an income inflow by any withholding pending for its (broker,currency,date),
@@ -1558,7 +1584,10 @@ export class FxFifoEngine {
       // a year with no trades) must not throw — skip the event and let report.ts
       // surface it. lookupRateInMap returns null instead of throwing.
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
 
       // A reversal of an income credit: taken out with its sign (revByKey above).
       if (isReversal(tx)) continue;
@@ -1608,12 +1637,22 @@ export class FxFifoEngine {
     // on its key date, under the same guards a cash row passes above. A leftover
     // net deduction (pending > 0) is an orphan and stays dropped, never a disposal.
     for (const [key, pending] of whtByKey) {
-      if (!pending.isNegative() || convertedKeys.has(key)) continue;
+      if (pending.isZero()) continue;
+      if (pending.greaterThan(0) || convertedKeys.has(key)) {
+        omit(whtRowByKey.get(key)!);
+        continue;
+      }
       const tx = refundRowByKey.get(key)!; // pending < 0 needs at least one positive row
-      if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) continue;
+      if (tx.brokerConvertedToBase || !isEcbResolvable(tx.currency)) {
+        omit(tx);
+        continue;
+      }
       const date = cashDate(tx);
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger: "dividend", brokerSource: tx.brokerSource });
     }
 
@@ -1626,7 +1665,10 @@ export class FxFifoEngine {
       if (!isEcbResolvable(tx.currency)) continue;
       const date = cashDate(tx);
       const ecbRate = lookupRateInMap(rateMap, date, tx.currency);
-      if (ecbRate === null) continue;
+      if (ecbRate === null) {
+        omit(tx);
+        continue;
+      }
       const trigger = tx.type.includes("Interest") ? "interest" : "dividend";
       events.push({ date, currency: tx.currency, quantity: pending.negated(), ecbRate, trigger, brokerSource: tx.brokerSource });
     }
@@ -2518,7 +2560,7 @@ export class FxFifoEngine {
       ...this.traditionalTags(event, undefined),
     };
     park.push(slice);
-    const debt: SameDayDebt = { np, sale: event, qty: q, buyRate: event.ecbRate, loanSince: event.date };
+    const debt: SameDayDebt = { np, sale: event, qty: q, buyRate: event.ecbRate, loanSince: event.date, borrowedLeft: q };
     this.debts.push(debt);
     this.loanOfSlice.set(slice, debt);
     this.record("park", event, {
@@ -2661,7 +2703,8 @@ export class FxFifoEngine {
           // came from; an uncovered one is sale proceeds, so the sale's broker.
           const reAddBroker = p.rate === null ? event.brokerSource : p.brokerSource;
           reAddedLot = pushPoolLot(event.currency, reAddDate, give, reAddRate, reAddBroker);
-          if (reAddedLot && this.loanOfSlice.has(p)) this.loanPrincipal.add(reAddedLot);
+          const sliceLoan = this.loanOfSlice.get(p);
+          if (reAddedLot && sliceLoan) this.loanPrincipal.set(reAddedLot, sliceLoan);
           placed = placed.plus(give);
           // Re-add recorded AFTER the parked slice is decremented below would show
           // the wrong parked balance; we decrement first, then record both moves.
@@ -2941,6 +2984,7 @@ export class FxFifoEngine {
           i++;
         }
         left = left.minus(z);
+        FxFifoEngine.lessBorrowed(debt, z);
         this.record("park", { ...event, positionKey: key === ccy ? undefined : key.slice(prefix.length) }, {
           quantityFcy: z,
           rate: null,
@@ -2962,6 +3006,7 @@ export class FxFifoEngine {
    */
   private repayLoanSameDay(event: FxEvent, p: ParkedSlice, loan: SameDayDebt, back: Decimal, lost: Decimal): void {
     const EPS = FxFifoEngine.EPS;
+    FxFifoEngine.lessBorrowed(loan, back.plus(lost));
     if (back.greaterThan(EPS)) {
       loan.qty = loan.qty.minus(back);
       this.record("discard", event, {
@@ -3443,6 +3488,11 @@ export class FxFifoEngine {
     }
   }
 
+  /** `q` units of a buy's loan stop counting as borrowed principal (see `SameDayDebt.borrowedLeft`). */
+  private static lessBorrowed(loan: SameDayDebt, q: Decimal): void {
+    if (loan.borrowedLeft !== undefined) loan.borrowedLeft = Decimal.max(loan.borrowedLeft.minus(q), 0);
+  }
+
   /** Issue #449: `lot`, brought in by `event`, repays the open loans of its currency, oldest first. */
   private repayLoans(lot: FxLot, event: FxEvent): void {
     for (const debt of this.debts) {
@@ -3529,11 +3579,31 @@ export class FxFifoEngine {
     const gainLossEur = proceedsEur.minus(costBasisEur);
     const booked = (this.traditionalFx || !sameDay) && !gainLossEur.isZero();
     // A gain-0 row still holds both parts in 1633/1637, the debt's and the
-    // paying currency's, unless the default repays with the loan's own
-    // principal back from the shares: the stock line holds that change. A
-    // trap, review: counting every gain-0 row as outside sent a funded lot
-    // that cost the loan's rate by coincidence to the `_manual` note.
-    note(rest, booked || ((this.traditionalFx || !sameDay) && !this.loanPrincipal.has(lot)));
+    // paying currency's, unless the default repays with borrowed principal
+    // back from the shares: the stock line holds that change. A trap,
+    // review: counting every gain-0 row as outside sent a funded lot that
+    // cost the loan's rate by coincidence to the `_manual` note. Borrowed
+    // principal is the loan's own (`origin === debt`), or another loan's as
+    // far as that loan still counts it borrowed (`borrowedLeft`), taken
+    // first; the rest of another loan's principal was paid for by currency
+    // in 1633/1637 and pays like any lot. Two traps, PR #460 review: every
+    // returned principal counted outside took L2's debt change out of the
+    // boxes when L1's principal, L1 repaid by a funding, repaid L2 (OTHER);
+    // only the loan's own counted outside, so when AAA's sale repaid L2
+    // with L1's principal and BBB's sale repaid L1 with L2's (no currency
+    // ever paid for), the report told the user to lower 1633 (0) by 100 €
+    // (CROSS), while the other sale order (OWN) said `_manual`.
+    const zeroRow = (this.traditionalFx || !sameDay) && !booked;
+    const origin = zeroRow ? this.loanPrincipal.get(lot) : undefined;
+    const outside = origin === undefined ? new Decimal(0) : origin === debt ? rest : Decimal.min(rest, origin.borrowedLeft ?? 0);
+    if (origin !== undefined) FxFifoEngine.lessBorrowed(origin, outside);
+    const inside = booked || zeroRow ? rest.minus(outside) : new Decimal(0);
+    if (inside.greaterThan(FxFifoEngine.EPS)) {
+      note(inside, true);
+      // Those units of the loan are paid for: its principal is owned currency now.
+      FxFifoEngine.lessBorrowed(debt, inside);
+    }
+    if (rest.minus(inside).greaterThan(FxFifoEngine.EPS)) note(rest.minus(inside), false);
     if (booked) {
       const declaredShiftEur = this.traditionalFx ? this.shiftsOnConsume(ccy, payEvent.date, rest, lot.shifts) : undefined;
       this.disposals.push({
@@ -3617,6 +3687,7 @@ export class FxFifoEngine {
           i++;
         }
         left = left.minus(y);
+        FxFifoEngine.lessBorrowed(debt, y);
         this.record("park", { ...event, positionKey: key === ccy ? undefined : key.slice(prefix.length) }, {
           quantityFcy: y,
           rate: lot.costPerUnit,
