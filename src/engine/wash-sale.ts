@@ -115,10 +115,10 @@ interface BuyOperation {
 /**
  * A long-position movement for the one-purchase exception: what a trade does
  * to the shares held (a short open moves nothing, a cover only what it does not
- * cover), and the file group it comes from.
+ * cover), and the account it comes from.
  */
 interface LongEvent extends PositionEvent {
-  /** `brokerSource` of the trade ("" without one), or {@link MANUAL_GROUP}. */
+  /** {@link accountKey} of the trade's broker and account, or {@link MANUAL_GROUP}. */
   group: string;
 }
 
@@ -133,31 +133,42 @@ interface PositionStep {
 }
 
 /**
- * How far back the upload reaches, for the one-purchase exception: it needs the
- * holding at the start of the 2-month window, and holdings from before the
- * upload are invisible.
+ * What the uploaded files show, for the one-purchase exception: it needs the
+ * holding at the start of the 2-month window, and only a holdings list that
+ * the trades explain proves it (see {@link buildEvidenceCheck}).
  */
 export interface WashSaleCoverage {
-  /** First date the whole upload covers (YYYY-MM-DD or YYYYMMDD). */
-  dataStart?: string;
-  /** First date each broker's files cover (statement start or first trade). */
-  startBySource?: ReadonlyMap<string, string>;
   /**
-   * The end-of-period holdings each uploaded file lists (IBKR's OpenPositions).
-   * A start date proves nothing about shares bought before it: only a holdings
-   * list that the trades explain does. Absent or empty → the exception is never
-   * applied.
+   * One entry per uploaded file and account (an IBKR multi-account Flex gives
+   * one per account). Absent or empty → the exception is never applied.
    */
-  snapshots?: readonly HoldingsSnapshot[];
+  statements?: readonly AccountStatement[];
 }
 
-/** The holdings one uploaded file lists at its period end. */
-export interface HoldingsSnapshot {
+/** What one uploaded file shows for one account. */
+export interface AccountStatement {
   /** The file's broker (`brokerSource` of its trades), when merged with one. */
   source?: string;
-  /** The file's period end (YYYY-MM-DD or YYYYMMDD). */
-  toDate: string;
-  positions: readonly { isin: string; symbol: string; assetCategory: string; quantity: string; fromTrades?: boolean }[];
+  /** The account, as the trades' `accountId` names it. */
+  accountId: string;
+  /** First and last day the file covers for the account (YYYY-MM-DD or YYYYMMDD). */
+  fromDate?: string;
+  toDate?: string;
+  /**
+   * Whether the file has a trades section for the account. Without one (an
+   * IBKR Flex with only Open Positions) its period shows no trades and covers
+   * nothing; it can still give the holdings list.
+   */
+  hasTrades: boolean;
+  /** The account's holdings at `toDate` (IBKR's OpenPositions). */
+  positions: readonly {
+    isin: string;
+    symbol: string;
+    assetCategory: string;
+    quantity: string;
+    fromTrades?: boolean;
+    quantityUnknown?: boolean;
+  }[];
 }
 
 /** A blocked loss waiting for a definitive transmission, counted in shares. */
@@ -170,6 +181,20 @@ interface PendingLoss {
   time: number;
   /** Normalized YYYY-MM-DD of the loss sale (display trail of the release). */
   sellDate: string;
+}
+
+/**
+ * Crypto (art. 33.5.e): units of one buy day that carry pending losses. A
+ * crypto loss waits on the coins its repurchase brought in, not on any later
+ * sale. Each group is the units one loss sale absorbed on that day.
+ */
+interface TieGroup {
+  /** Units of the buy day that carry the loss. */
+  qty: Decimal;
+  /** The pending loss these units carry. */
+  entry: PendingLoss;
+  /** The EUR of that loss still on these units. */
+  eur: Decimal;
 }
 
 /**
@@ -197,6 +222,10 @@ interface PendingLoss {
  *     and in FIFO) releases every loss still pending.
  *  4. BLOCK (loss lots only) — defer `|loss| × absorbed/qty` and append it to
  *     the queue. The same absorbed shares keep the old losses pending.
+ * Crypto (art. 33.5.e) runs neither 2 nor 3, and only its loss lots absorb:
+ * each blocked loss is tied to the coins of the rebuys that absorbed it, and
+ * the sale of those coins releases it («se integrará cuando se produzca la
+ * posterior transmisión del elemento patrimonial»), whatever is bought after.
  * Only held shares are transmitted: a short cover (`isShort`) runs no definitive
  * test, releases nothing and is no exit, the shares its buy covers are no
  * repurchase, and a zero-share disposal is skipped.
@@ -214,10 +243,10 @@ interface PendingLoss {
  * @param remainingLots - Lots FIFO still holds after the last input
  *   (`FifoEngine.getRemainingLots()`). With them the total exit also sees shares
  *   that came in without a BUY (scrip dividend, merger, spin-off, reward lots)
- * @param coverage - How far back the upload reaches and the holdings its files
- *   list. The one-purchase exception applies only when the window start is
- *   inside the upload and the listed holdings are what the trades explain.
- *   Absent start → the first trade of `allTrades`; absent holdings → never applied.
+ * @param coverage - The period and the holdings of each uploaded file and
+ *   account. The one-purchase exception applies only when they prove that no
+ *   share was held at the window start (see `buildEvidenceCheck`); absent →
+ *   never applied.
  * @param windows - Per-ISIN window data (`collectIsinWindows`): the user's value
  *   and IBKR's listing codes. Pass the SAME map to `salesWithWindowPastData`, so
  *   the block, the definitive test and the past-data warning use one window.
@@ -271,6 +300,10 @@ export function detectWashSales(
   const buyOpsByAsset = new Map<string, BuyOperation[]>();
   const positionEventsByAsset = new Map<string, PositionEvent[]>();
   const longEventsByAsset = new Map<string, LongEvent[]>();
+  // Crypto repurchase units bought per `key|day` (`manual`: the part from
+  // manual opening lots, which FIFO books after the day's reward lots), for
+  // the rebought coins still held of a buy day.
+  const cryptoBoughtByDay = new Map<string, { all: Decimal; manual: Decimal }>();
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
@@ -290,7 +323,7 @@ export function detectWashSales(
       longEvents = [];
       longEventsByAsset.set(key, longEvents);
     }
-    const group = trade.notes === "manual-opening-lot" ? MANUAL_GROUP : (trade.brokerSource ?? "");
+    const group = trade.notes === "manual-opening-lot" ? MANUAL_GROUP : accountKey(trade.brokerSource, trade.accountId);
 
     if (trade.buySell === "BUY") {
       positionEvents.push({ time, qty });
@@ -324,6 +357,13 @@ export function detectWashSales(
           buysByAsset.set(key, events);
         }
         events.push({ time, date: normalizeDay(trade.tradeDate), qty: repurchased, remainingQty: repurchased });
+        if (trade.assetCategory === "CRYPTO") {
+          const dayKey = `${key}|${normalizeDay(trade.tradeDate)}`;
+          const bought = cryptoBoughtByDay.get(dayKey) ?? { all: new Decimal(0), manual: new Decimal(0) };
+          bought.all = bought.all.plus(repurchased);
+          if (group === MANUAL_GROUP) bought.manual = bought.manual.plus(repurchased);
+          cryptoBoughtByDay.set(dayKey, bought);
+        }
       }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
@@ -345,14 +385,17 @@ export function detectWashSales(
   }
   const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
   const positionSteps = buildPositionSteps(longEventsByAsset, splitsByAsset);
-  const coverageStartOf = buildCoverageStart(allTrades, coverage);
-  const snapshotsExplain = buildSnapshotCheck(longEventsByAsset, splitsByAsset, coverage.snapshots ?? []);
+  const filesProveNoShares = buildEvidenceCheck(longEventsByAsset, splitsByAsset, coverage.statements ?? []);
 
   // Pending-loss queue per key, oldest first. A blocked loss does not belong to
   // one lot: any later definitive transmission of homogeneous shares releases it.
   // Entries are appended in sell-time order and released from the front, so the
   // spent ones are a prefix that `head` skips.
   const pendingByAsset = new Map<string, { entries: PendingLoss[]; head: number }>();
+  // Crypto (art. 33.5.e): per key, the tie groups on each buy day (YYYY-MM-DD),
+  // oldest first. Only crypto losses are tied to their repurchase's coins.
+  const tiesByAsset = new Map<string, Map<string, TieGroup[]>>();
+  const cryptoHeldAfter = buildCryptoDayHoldings(disposals, remainingLots, cryptoBoughtByDay);
 
   // Process disposals oldest-first so a block is recorded before the later
   // disposal that releases it (stable sort by sell date; preserve input order
@@ -434,13 +477,13 @@ export function detectWashSales(
   // one (fail safe: not applied). The count runs from the window start to the
   // sale day included: a same-day buy has no intraday order, so it counts as a
   // second purchase. The positions are long holdings: a short is no share held.
-  // The upload proves "no shares at the window start" only when all of these hold:
-  //  - it reaches back to the window start (shares sold before it are invisible);
+  // The upload proves "no shares at the window start" only when both hold:
   //  - no sale ever takes more shares than the upload shows (else it holds
   //    shares from before the files);
-  //  - the end-of-period holdings of the files are exactly what their trades
-  //    explain (more means shares bought before the files, at the same broker
-  //    too; a file without a holdings list explains nothing).
+  //  - for every account that trades or lists the key, a holdings list dated
+  //    on or after the sale, reached without a gap in its files from the window
+  //    start, is exactly what its trades since the window start leave
+  //    (`buildEvidenceCheck`). A start date alone proves nothing.
   const singlePurchase = (key: string, windowStart: number, sellTime: number): "applied" | "unverified" | null => {
     const ops = buyOpsByAsset.get(key) ?? [];
     const from = firstIndexAtOrAfter(ops, windowStart);
@@ -453,8 +496,7 @@ export function detectWashSales(
     if (steps && before >= 0 && steps.steps[before]!.position.greaterThan(0)) return null;
     if (fifoHoldsAfter(key, windowStart - 1)) return null;
     if (!steps || steps.everNegative) return "unverified";
-    if (coverageStartOf(key) > windowStart) return "unverified";
-    return snapshotsExplain(key) ? "applied" : "unverified";
+    return filesProveNoShares(key, windowStart, sellTime) ? "applied" : "unverified";
   };
 
   // One unit per (key, sell day): FIFO splits a sale into one disposal per lot,
@@ -505,14 +547,47 @@ export function detectWashSales(
     const queue = pendingByAsset.get(key);
     const hasPending = queue !== undefined && queue.head < queue.entries.length && queue.entries[queue.head]!.time < sellTime;
 
+    // Crypto (art. 33.5.e): «se integrará cuando se produzca la posterior
+    // transmisión del elemento patrimonial», the coins the repurchase brought
+    // in. Of each buy day's coins sold today, the tied ones are the units that
+    // leave the tie pool: the rebought coins of that day still held after
+    // today keep the ties first (the tied coins of a day go last, so a release
+    // never comes early).
+    const ties = tiesByAsset.get(key);
+    const tiedOf = new Map<number, Decimal>();
+    if (ties) {
+      const lotsByDay = new Map<string, number[]>();
+      for (const idx of idxs) {
+        if (isShortAt(idx)) continue;
+        const day = normalizeDay(result[idx]!.acquireDate);
+        if (!ties.has(day)) continue;
+        const dayIdxs = lotsByDay.get(day);
+        if (dayIdxs) dayIdxs.push(idx);
+        else lotsByDay.set(day, [idx]);
+      }
+      for (const [day, dayIdxs] of lotsByDay) {
+        const tied = ties.get(day)!.reduce((sum, g) => sum.plus(g.qty), new Decimal(0));
+        let leaving = Decimal.max(0, tied.minus(cryptoHeldAfter(key, day, sellTime)));
+        for (const idx of dayIdxs) {
+          if (leaving.lessThanOrEqualTo(0)) break;
+          const take = Decimal.min(result[idx]!.quantity.abs(), leaving);
+          tiedOf.set(idx, take);
+          leaving = leaving.minus(take);
+        }
+      }
+    }
+
     // 1. ABSORB: the in-window homogeneous repurchases not yet used by an earlier
     //    transmission. A loss lot needs them to block its own loss; while losses
     //    are pending every sold share, gain or loss, needs them for the definitive
     //    test («con independencia de que determinen ganancias o pérdidas»,
     //    V3282-18), and a rebuy counted there is used up (V0248-18). With nothing
     //    pending a gain lot has nothing to test and uses no rebuy, and a short
-    //    cover never has one.
-    const seekers = idxs.filter((idx) => isLossAt(idx) || (hasPending && !isShortAt(idx)));
+    //    cover never has one. Crypto runs no definitive test (its tied coins
+    //    release when sold, whatever is bought after), so only its loss lots
+    //    take a rebuy: a gain sale uses up none that a later loss needs.
+    const isCrypto = key.startsWith("CRYPTO:");
+    const seekers = idxs.filter((idx) => isLossAt(idx) || (hasPending && !isShortAt(idx) && !isCrypto));
     const need = seekers.reduce((sum, idx) => sum.plus(result[idx]!.quantity.abs()), new Decimal(0));
     let dayAbsorbed = new Decimal(0);
     const consumed: { date: string; qty: Decimal }[] = [];
@@ -653,8 +728,11 @@ export function detectWashSales(
     // gain lots, so a loss lot of the sale stays blocked (V0279-25) and a pending
     // loss elsewhere cannot hand its rebuy to a gain lot. Each lot keeps the
     // dates of the repurchases it took, for the display trail.
+    // A crypto lot also keeps the quantity per buy day (`chunksOf`): its
+    // block is tied to those coins.
     const absorbedOf = new Map<number, Decimal>();
     const datesOf = new Map<number, Set<string>>();
+    const chunksOf = new Map<number, { date: string; qty: Decimal }[]>();
     const allocation = [
       ...seekers.filter((idx) => isLossAt(idx)).sort(newestFirst),
       ...seekers.filter((idx) => !isLossAt(idx)).sort(newestFirst),
@@ -667,16 +745,19 @@ export function detectWashSales(
       absorbedOf.set(idx, take);
       toAllocate = toAllocate.minus(take);
       const dates = new Set<string>();
+      const chunks: { date: string; qty: Decimal }[] = [];
       let toCover = take;
       while (toCover.greaterThan(0) && chunk < consumed.length) {
         const c = consumed[chunk]!;
         const part = Decimal.min(c.qty, toCover);
         dates.add(c.date);
+        chunks.push({ date: c.date, qty: part });
         c.qty = c.qty.minus(part);
         toCover = toCover.minus(part);
         if (c.qty.lessThanOrEqualTo(0)) chunk++;
       }
       datesOf.set(idx, dates);
+      chunksOf.set(idx, chunks);
     }
 
     // 2. RELEASE: the shares no rebuy absorbed are a «transmisión definitiva».
@@ -695,7 +776,22 @@ export function detectWashSales(
       }
       from.add(entry.sellDate);
     };
-    if (queue && hasPending) {
+    // Crypto: the tied coins sold release their losses, in proportion to the
+    // units, oldest group first. A rebuy after this sale does not hold them
+    // back: the law names the transmission of the reacquired coins as the
+    // moment, and that rebuy can block this sale's own loss instead. A sale of
+    // other coins releases nothing.
+    for (const [idx, tied] of tiedOf) {
+      const day = normalizeDay(result[idx]!.acquireDate);
+      const dayGroups = ties!.get(day)!;
+      takeTiedUnits(dayGroups, tied, (entry, eur, units) => {
+        releaseInto(idx, entry, eur);
+        entry.eur = entry.eur.minus(eur);
+        entry.qty = entry.qty.minus(units);
+      });
+      if (dayGroups.length === 0) ties!.delete(day);
+    }
+    if (queue && hasPending && !isCrypto) {
       // The cursor moves past each entry as it is spent, so a sale of many lots
       // walks the queue once instead of rescanning the spent prefix per lot.
       let cursor = queue.head;
@@ -729,8 +825,11 @@ export function detectWashSales(
     //    hold more shares than the position, because a rebought sale both keeps
     //    the old losses pending and adds its own. Both the trades and FIFO must
     //    show the position at zero, and the day must transmit held shares: a
-    //    day of short covers only is no exit.
+    //    day of short covers only is no exit. Crypto has no total exit: every
+    //    pending crypto loss is tied to its rebuy's coins, and selling out
+    //    before a rebuy that comes later transmits none of them.
     if (
+      !isCrypto &&
       queue &&
       hasPending &&
       idxs.some((idx) => !isShortAt(idx)) &&
@@ -759,6 +858,7 @@ export function detectWashSales(
     //    loss, `|loss| × absorbed / qty`, which joins the end of the pending
     //    queue. The shares that keep the old losses pending are the same that
     //    block this one; they are not counted twice (V0913-08).
+    const blockOf = new Map<number, PendingLoss>();
     for (const idx of idxs) {
       const disposal = result[idx]!;
       const absorbed = absorbedOf.get(idx);
@@ -776,11 +876,130 @@ export function detectWashSales(
         pending = { entries: [], head: 0 };
         pendingByAsset.set(key, pending);
       }
-      pending.entries.push({ qty: absorbed, eur: blocked, time: sellTime, sellDate: normalizeDay(disposal.sellDate) });
+      const entry: PendingLoss = { qty: absorbed, eur: blocked, time: sellTime, sellDate: normalizeDay(disposal.sellDate) };
+      pending.entries.push(entry);
+      blockOf.set(idx, entry);
+    }
+
+    // Crypto: tie each lot's new block to the coins of the rebuys that
+    // absorbed it, per buy day, in proportion to the units.
+    if (isCrypto) {
+      for (const [idx, chunks] of chunksOf) {
+        const block = blockOf.get(idx);
+        if (!block) continue;
+        const blockShare = shareOut(block.eur, absorbedOf.get(idx)!);
+        let keyTies = tiesByAsset.get(key);
+        if (!keyTies) {
+          keyTies = new Map();
+          tiesByAsset.set(key, keyTies);
+        }
+        for (const c of chunks) {
+          const part: TieGroup = { qty: c.qty, entry: block, eur: blockShare(c.qty) };
+          const dayGroups = keyTies.get(c.date);
+          if (dayGroups) dayGroups.push(part);
+          else keyTies.set(c.date, [part]);
+        }
+      }
     }
   }
 
   return result;
+}
+
+/**
+ * Hand out `eur` over `units` in parts: each call takes `eur × part / units`,
+ * and the call that takes the last units takes what is left, so the parts sum
+ * to `eur` exactly.
+ */
+function shareOut(eur: Decimal, units: Decimal): (part: Decimal) => Decimal {
+  let eurLeft = eur;
+  let unitsLeft = units;
+  return (part: Decimal): Decimal => {
+    const take = part.greaterThanOrEqualTo(unitsLeft) ? eurLeft : eurLeft.mul(part).div(unitsLeft);
+    eurLeft = eurLeft.minus(take);
+    unitsLeft = unitsLeft.minus(part);
+    return take;
+  };
+}
+
+/**
+ * Take `units` tied coins off a buy day's groups, oldest group first. Each
+ * group gives up its loss's share of EUR on the units taken (all of it when the
+ * whole group goes) through `onRelease`, with the units taken from that group.
+ */
+function takeTiedUnits(
+  groups: TieGroup[],
+  units: Decimal,
+  onRelease: (entry: PendingLoss, eur: Decimal, units: Decimal) => void,
+): void {
+  let left = units;
+  while (left.greaterThan(0) && groups.length > 0) {
+    const group = groups[0]!;
+    const take = Decimal.min(group.qty, left);
+    const eur = take.equals(group.qty) ? group.eur : group.eur.mul(take).div(group.qty);
+    group.eur = group.eur.minus(eur);
+    onRelease(group.entry, eur, take);
+    group.qty = group.qty.minus(take);
+    left = left.minus(take);
+    if (group.qty.lessThanOrEqualTo(0)) groups.shift();
+  }
+}
+
+/**
+ * Rebought crypto coins of each buy day still held after a given day, per key.
+ * The day's coins held are the disposals of that buy day sold later, plus the
+ * lots of that day FIFO still holds at the end (without FIFO's lots, the coins
+ * bought that day that no disposal sold). Of those, the coins no repurchase
+ * brought in (reward lots: the day's coins beyond `boughtByDay`) carry no tie.
+ * FIFO books one day's lots in input order (`generateTaxReport`: the trades,
+ * then the reward lots, then the manual opening lots; the sort compares days
+ * only), so it sells them in that order and the held ones are its tail: the
+ * manual coins, then the reward coins, then the trade coins. Keyed
+ * `key|YYYY-MM-DD` on the lot's acquisition day, which is the trade day of the
+ * buy that opened it.
+ */
+function buildCryptoDayHoldings(
+  disposals: readonly FifoDisposal[],
+  remainingLots: ReadonlyMap<string, readonly Lot[]> | undefined,
+  boughtByDay: ReadonlyMap<string, { all: Decimal; manual: Decimal }>,
+): (key: string, day: string, time: number) => Decimal {
+  const sales = new Map<string, { time: number; qty: Decimal }[]>();
+  const soldByDay = new Map<string, Decimal>();
+  for (const d of disposals) {
+    if (d.assetCategory !== "CRYPTO" || d.isShort === true || d.quantity.isZero()) continue;
+    const dayKey = `${homogeneousKey(d.isin, d.symbol, d.assetCategory)}|${normalizeDay(d.acquireDate)}`;
+    const qty = d.quantity.abs();
+    const sale = { time: parseDate(d.sellDate).getTime(), qty };
+    const daySales = sales.get(dayKey);
+    if (daySales) daySales.push(sale);
+    else sales.set(dayKey, [sale]);
+    soldByDay.set(dayKey, (soldByDay.get(dayKey) ?? new Decimal(0)).plus(qty));
+  }
+  const heldAtEnd = new Map<string, Decimal>();
+  if (remainingLots) {
+    for (const [mapKey, lots] of remainingLots) {
+      if (!mapKey.startsWith("CRYPTO:")) continue;
+      for (const lot of lots) {
+        if (lot.isShort || lot.quantity.lessThanOrEqualTo(0)) continue;
+        const dayKey = `${mapKey}|${normalizeDay(lot.acquireDate)}`;
+        heldAtEnd.set(dayKey, (heldAtEnd.get(dayKey) ?? new Decimal(0)).plus(lot.quantity));
+      }
+    }
+  } else {
+    for (const [dayKey, bought] of boughtByDay) {
+      heldAtEnd.set(dayKey, Decimal.max(0, bought.all.minus(soldByDay.get(dayKey) ?? 0)));
+    }
+  }
+  return (key: string, day: string, time: number): Decimal => {
+    const dayKey = `${key}|${day}`;
+    const end = heldAtEnd.get(dayKey) ?? new Decimal(0);
+    let held = end;
+    for (const sale of sales.get(dayKey) ?? []) if (sale.time > time) held = held.plus(sale.qty);
+    const bought = boughtByDay.get(dayKey);
+    const manual = bought?.manual ?? new Decimal(0);
+    const reward = Decimal.max(0, end.plus(soldByDay.get(dayKey) ?? 0).minus(bought?.all ?? 0));
+    return held.minus(Decimal.min(reward, Decimal.max(0, held.minus(manual))));
+  };
 }
 
 /**
@@ -791,6 +1010,8 @@ export function detectWashSales(
  * is invisible. It matters for a loss not fully blocked (the buy would block
  * more of it, the BLOCK step) and for a sale that released pending losses (the
  * buy would make its shares non-definitive, the RELEASE and TOTAL EXIT steps).
+ * A crypto release is final: the sale of the rebought coins integrates the loss
+ * whatever is bought after (art. 33.5.e), so it alone raises no warning.
  * Nothing is withheld: the caller only warns.
  *
  * With one broker the data covers every security up to `lastLoadedDate` (its
@@ -854,7 +1075,8 @@ export function salesWithWindowPastData(
     const key = homogeneousKey(d.isin, d.symbol, d.assetCategory);
     if (!key) continue;
     const openLoss = d.gainLossEur.lessThan(0) && d.blockedLossEur.lessThan(d.gainLossEur.abs());
-    if (!openLoss && !d.reintegratedLossEur.greaterThan(0)) continue;
+    const undoableRelease = d.reintegratedLossEur.greaterThan(0) && d.assetCategory !== "CRYPTO";
+    if (!openLoss && !undoableRelease) continue;
     const sellDate = parseDate(d.sellDate);
     if (!Number.isFinite(sellDate.getTime())) continue;
     const windowEnd = addMonths(sellDate, windowMonths(d.assetCategory, d.isin, windows, normalizeDay(d.sellDate)));
@@ -1003,134 +1225,160 @@ function buildPositionSteps(
   return out;
 }
 
-/**
- * The first date the upload covers for a key, as a time. With one broker it is
- * the upload's start. With several merged brokers a holding can sit at any
- * broker that trades the key, so the key is covered only from the latest start
- * among them. A broker's start is its statement start, or its first trade of
- * any security when it gives none. `dataStart` and `startBySource` come from
- * the statements; without `dataStart` the upload starts at the first trade.
- */
-function buildCoverageStart(allTrades: readonly Trade[], coverage: WashSaleCoverage): (key: string) => number {
-  const dayTime = (date: string): number => parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime();
-  const startOfSource = new Map<string, number>();
-  for (const [source, date] of coverage.startBySource ?? []) {
-    const time = dayTime(date);
-    if (Number.isFinite(time)) startOfSource.set(source, time);
-  }
-  const firstTradeOfSource = new Map<string, number>();
-  const sourcesOfKey = new Map<string, Set<string>>();
-  let firstTrade = Number.POSITIVE_INFINITY;
-  for (const trade of allTrades) {
-    const time = dayTime(trade.tradeDate);
-    if (!Number.isFinite(time)) continue;
-    firstTrade = Math.min(firstTrade, time);
-    const source = trade.brokerSource;
-    if (!source) continue;
-    firstTradeOfSource.set(source, Math.min(firstTradeOfSource.get(source) ?? Number.POSITIVE_INFINITY, time));
-    const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
-    if (!key) continue;
-    let sources = sourcesOfKey.get(key);
-    if (!sources) {
-      sources = new Set();
-      sourcesOfKey.set(key, sources);
-    }
-    sources.add(source);
-  }
-  // A given start wins over the trades: they also hold synthetic rows (manual
-  // opening lots) dated long before the files begin.
-  const given = coverage.dataStart ? dayTime(coverage.dataStart) : Number.NaN;
-  const uploadStart = Number.isFinite(given) ? given : firstTrade;
-  for (const [source, time] of firstTradeOfSource) {
-    startOfSource.set(source, Math.min(startOfSource.get(source) ?? Number.POSITIVE_INFINITY, time));
-  }
-  return (key: string): number => {
-    const sources = sourcesOfKey.get(key);
-    if (startOfSource.size < 2 || !sources) return uploadStart;
-    return Math.max(...[...sources].map((source) => startOfSource.get(source) ?? uploadStart));
-  };
+/** The account a trade or a holdings row belongs to: its broker and account id. */
+function accountKey(source: string | undefined, accountId: string | undefined): string {
+  return `${source ?? ""}\u0000${accountId ?? ""}`;
 }
 
+const DAY_MS = 86_400_000;
+
 /**
- * Whether the files' end-of-period holdings of a key are exactly what the
- * upload's trades explain, so no share of it came from before the files.
- *
- * Without transfers, the shares a broker lists at its period end are the
- * shares held before its files plus what its trades moved. So per broker, the
- * listed holding minus the trade position at that date is the holding from
- * before the files. Summed over the brokers it must equal the manual opening
- * lots (declared holdings from before the files): a share moved from one
- * uploaded broker to another cancels out. Each broker's latest list counts
- * (all its files ending that day, summed). A broker that trades the key with
- * no holdings list, or no list at all, explains nothing: false.
+ * Whether the uploaded files prove that no share of a key was held at the
+ * window start (the second condition of the one-purchase exception). The
+ * rule, for EVERY account (broker and account id) that trades the key or lists
+ * it in any holdings list of the upload:
+ *  1. it has a holdings list dated on or after the sale day (the earliest such
+ *     date counts);
+ *  2. its files with a trades section cover every day from the window start
+ *     to that date exactly once: no gap (a hidden trade), no day in two files
+ *     (the same trades counted twice). Back-to-back files qualify; a file with
+ *     no trades section (a holdings-only Flex) covers nothing, though it can
+ *     give the list;
+ *  3. every row of the key in that list has a readable quantity (a missing one
+ *     is no zero); a list with no row of the key says zero, but only when every
+ *     row of shares in every list of the upload has an ISIN, so no row can be
+ *     the key under another name (options, the other exempt categories and
+ *     crypto aside; only an ISIN key has the 2-month window);
+ *  4. the long holding listed equals what the account's own trades from the
+ *     window start to that date leave, split-adjusted to that date's units.
+ * Then the account held nothing at the window start: its list is that holding
+ * plus its trades since. Each account is checked on its own, in its own list's
+ * share units, and nothing is offset between accounts: a difference at one
+ * account is unexplained (shares held before, or moved in or out) even if
+ * another account shows the opposite one. So a transfer between two uploaded
+ * accounts is unverified too (no parser documents transfers), and so is a
+ * manual opening lot of the key dated on or after the window start (it belongs
+ * to no uploaded account). A list holding nothing at all cannot be told apart
+ * from a file without the section, and rows a parser built from the file's own
+ * trades (Revolut) always match them: neither is a list. Not visible to any
+ * check: shares held at the window start that leave the upload by a transfer
+ * before the list date (the "applied" message says so).
  */
-function buildSnapshotCheck(
+function buildEvidenceCheck(
   longEventsByAsset: ReadonlyMap<string, readonly LongEvent[]>,
   splitsByAsset: ReadonlyMap<string, readonly SplitEvent[]>,
-  snapshots: readonly HoldingsSnapshot[],
-): (key: string) => boolean {
-  const dayTime = (date: string): number => parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime();
-  // Per broker, its latest dated list that holds anything: an empty list cannot
-  // be told apart from a file without the section. Rows a parser built from the
-  // file's own trades always match them, so they prove nothing.
-  const latest = new Map<string, { time: number; lists: HoldingsSnapshot[] }>();
-  for (const snap of snapshots) {
-    if (!snap.positions.some((pos) => !pos.fromTrades)) continue;
-    const time = dayTime(snap.toDate);
-    if (!Number.isFinite(time)) continue;
-    const group = snap.source ?? "";
-    const prev = latest.get(group);
-    if (!prev || time > prev.time) latest.set(group, { time, lists: [snap] });
-    else if (time === prev.time) prev.lists.push(snap);
-  }
-  const listed = new Map<string, { time: number; byKey: Map<string, Decimal> }>();
-  for (const [group, { time, lists }] of latest) {
-    const byKey = new Map<string, Decimal>();
-    for (const snap of lists) {
-      for (const pos of snap.positions) {
-        if (pos.fromTrades) continue;
-        const key = homogeneousKey(pos.isin, pos.symbol, pos.assetCategory);
-        if (!key) continue;
-        let qty: Decimal;
-        try {
-          qty = new Decimal(pos.quantity || "0");
-        } catch {
-          continue;
-        }
-        // A short position is no share held.
-        if (!qty.isFinite() || !qty.greaterThan(0)) continue;
-        byKey.set(key, (byKey.get(key) ?? new Decimal(0)).plus(qty));
-      }
+  statements: readonly AccountStatement[],
+): (key: string, windowStart: number, sellTime: number) => boolean {
+  const dayTime = (date: string | undefined): number =>
+    date ? parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime() : Number.NaN;
+  /** Per account: the periods its files cover, and its lists by date (null quantity = unreadable). */
+  const accounts = new Map<string, { periods: [number, number][]; lists: Map<number, Map<string, Decimal | null>[]> }>();
+  /** Per key: the accounts whose lists have a row of it. */
+  const listedBy = new Map<string, Set<string>>();
+  /** Whether some list row of shares has no ISIN (exempt categories and crypto aside). */
+  let rowWithoutIsin = false;
+  for (const st of statements) {
+    const id = accountKey(st.source, st.accountId);
+    let account = accounts.get(id);
+    if (!account) {
+      account = { periods: [], lists: new Map() };
+      accounts.set(id, account);
     }
-    listed.set(group, { time, byKey });
+    const from = dayTime(st.fromDate);
+    const to = dayTime(st.toDate);
+    if (st.hasTrades && Number.isFinite(from) && Number.isFinite(to) && from <= to) account.periods.push([from, to]);
+    const rows = st.positions.filter((pos) => !pos.fromTrades);
+    if (rows.length === 0) continue;
+    const list = new Map<string, Decimal | null>();
+    for (const pos of rows) {
+      const key = homogeneousKey(pos.isin, pos.symbol, pos.assetCategory);
+      if (!pos.isin && !WASH_SALE_EXEMPT.has(pos.assetCategory) && pos.assetCategory !== "CRYPTO") rowWithoutIsin = true;
+      if (!key) continue;
+      let ids = listedBy.get(key);
+      if (!ids) {
+        ids = new Set();
+        listedBy.set(key, ids);
+      }
+      ids.add(id);
+      const qty = pos.quantityUnknown ? null : readQuantity(pos.quantity);
+      const prev = list.get(key);
+      list.set(key, prev === null || qty === null ? null : (prev ?? new Decimal(0)).plus(qty));
+    }
+    if (!Number.isFinite(to)) continue;
+    const lists = account.lists.get(to);
+    if (lists) lists.push(list);
+    else account.lists.set(to, [list]);
   }
-  const cache = new Map<string, boolean>();
-  return (key: string): boolean => {
-    const cached = cache.get(key);
-    if (cached !== undefined) return cached;
+  for (const account of accounts.values()) account.periods.sort((a, b) => a[0] - b[0]);
+
+  return (key: string, windowStart: number, sellTime: number): boolean => {
+    // Only an ISIN key reaches here (the 2-month window needs one). A list row
+    // of shares with no ISIN may be the key under another name, so then "no
+    // row of the key" proves nothing.
+    if (key.includes(":") || rowWithoutIsin) return false;
     const events = longEventsByAsset.get(key) ?? [];
     const splits = splitsByAsset.get(key) ?? [];
-    let ok = listed.size > 0 && events.every((ev) => ev.group === MANUAL_GROUP || listed.has(ev.group));
-    if (ok) {
-      let fromBefore = new Decimal(0);
-      let lastTime = Number.NEGATIVE_INFINITY;
-      for (const [group, { time, byKey }] of listed) {
-        fromBefore = fromBefore.plus(byKey.get(key) ?? 0).minus(longPositionAt(events, splits, group, time));
-        lastTime = Math.max(lastTime, time);
-      }
-      fromBefore = fromBefore.minus(longPositionAt(events, splits, MANUAL_GROUP, lastTime));
-      ok = fromBefore.abs().lessThan("1e-9");
+    const relevant = new Set(listedBy.get(key));
+    for (const ev of events) {
+      if (ev.group !== MANUAL_GROUP) relevant.add(ev.group);
+      else if (ev.time >= windowStart) return false;
     }
-    cache.set(key, ok);
-    return ok;
+    if (relevant.size === 0) return false;
+    for (const id of relevant) {
+      const account = accounts.get(id);
+      if (!account) return false;
+      let listTime = Number.POSITIVE_INFINITY;
+      for (const time of account.lists.keys()) if (time >= sellTime && time < listTime) listTime = time;
+      if (!Number.isFinite(listTime) || !coversDaysOnce(account.periods, windowStart, listTime)) return false;
+      let listed: Decimal | undefined;
+      for (const list of account.lists.get(listTime)!) {
+        const value = list.get(key);
+        const qty = value === undefined ? new Decimal(0) : value;
+        // Unreadable, or two files of the account on that date that disagree.
+        if (qty === null || (listed !== undefined && !listed.eq(qty))) return false;
+        listed = qty;
+      }
+      // A short position is no share held.
+      const held = Decimal.max(listed!, 0);
+      if (!held.minus(longPositionAt(events, splits, id, windowStart, listTime)).abs().lessThan("1e-9")) return false;
+    }
+    return true;
   };
 }
 
-/** The split-adjusted long position of one group's events at the end of `until`. */
+/**
+ * Whether the periods (sorted by start) cover every day from `start` to `end`
+ * exactly once: no gap, and no day of that span in two periods.
+ */
+function coversDaysOnce(periods: readonly [number, number][], start: number, end: number): boolean {
+  /** Last day of the span covered so far. */
+  let reach = start - DAY_MS;
+  for (const [from, to] of periods) {
+    if (to < start) continue;
+    if (from > end) break;
+    if (from <= reach && reach >= start) return false;
+    if (from > reach + DAY_MS) return false;
+    reach = Math.max(reach, to);
+  }
+  return reach >= end;
+}
+
+/** A holdings quantity, or null when it is missing or unreadable. */
+function readQuantity(quantity: string): Decimal | null {
+  try {
+    const qty = new Decimal(quantity.trim());
+    return qty.isFinite() ? qty : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The split-adjusted long position one account's events from `from` leave at the end of `until`, in that day's units. */
 function longPositionAt(
   events: readonly LongEvent[],
   splits: readonly SplitEvent[],
   group: string,
+  from: number,
   until: number,
 ): Decimal {
   let position = new Decimal(0);
@@ -1142,7 +1390,7 @@ function longPositionAt(
     }
   };
   for (const ev of events) {
-    if (!(ev.time <= until) || ev.group !== group) continue;
+    if (!(ev.time >= from && ev.time <= until) || ev.group !== group) continue;
     applySplitsUpTo(ev.time);
     position = position.plus(ev.qty);
   }

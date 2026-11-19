@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { computeCasillaBlocks } from "../../src/generators/casillas.js";
+import { generateD6Report } from "../../src/generators/d6.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 function fixture(name: string): string {
@@ -220,6 +221,27 @@ describe("parseIbkrFlexXml", () => {
     expect(result.openPositions[0]!.quantity).toBe("100");
     expect(result.openPositions[0]!.markPrice).toBe("195");
     expect(result.openPositions[0]!.assetCategory).toBe("STK");
+  });
+
+  it("reads the held quantity from IBKR's `position` attribute, so D-6 lists real exports", () => {
+    // IBKR writes Open Positions with `position`, never `quantity` (every real
+    // export in tests/fixtures). Reading only `quantity` gave "0" for every row,
+    // and the D-6 dropped every IBKR holding as "not long".
+    const result = parseIbkrFlexXml(fixture("ibkr-multicurrency.xml"));
+    expect(result.openPositions.map((p) => [p.symbol, p.quantity])).toEqual([
+      ["EDV", "120"],
+      ["ELE", "1000"],
+      ["GLO", "4500"],
+      ["LUG", "250"],
+    ]);
+    const rates: EcbRateMap = new Map([["2020-12-31", new Map([["CAD", "1.5"]])]]);
+    const d6 = generateD6Report(result.openPositions, rates, 2020, "X", "00000000T");
+    expect(d6.positions.map((p) => [p.isin, p.sharesAtYearEnd])).toEqual([
+      ["KYG3040R1589", "120"],
+      ["CA28619L1076", "1000"],
+      ["CA37957M1068", "4500"],
+      ["CA5503711080", "250"],
+    ]);
   });
 
   it("should parse multiple corporate actions as array", () => {

@@ -132,3 +132,21 @@ describe("renderWashSaleDetailRow", () => {
     expect(html).toContain("primero las pérdidas más antiguas");
   });
 });
+
+describe("renderWashSaleDetailRow for crypto (art. 33.5.e)", () => {
+  it("explains a crypto release by the sale of the rebought coins, not by the definitive test", () => {
+    const html = renderWashSaleDetailRow(
+      makeDisposal({ assetCategory: "CRYPTO", isin: "", symbol: "BTC", gainLossEur: new Decimal(5), reintegratedLossEur: new Decimal(10) }),
+      9,
+    );
+    expect(html).toContain("Libera 10,00 EUR de pérdidas diferidas de esta criptomoneda (venta de las unidades recompradas, art. 33.5.e LIRPF)");
+    expect(html).toContain("Vender otras unidades no la integra.");
+    expect(html).not.toContain("transmisión definitiva");
+  });
+
+  it("keeps the securities text on a share release", () => {
+    const html = renderWashSaleDetailRow(released(["2025-03-01"]), 9);
+    expect(html).toContain("transmisión definitiva");
+    expect(html).not.toContain("criptomoneda");
+  });
+});
