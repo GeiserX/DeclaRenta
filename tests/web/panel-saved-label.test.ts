@@ -390,6 +390,78 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(order).toEqual([lotsPanel(), cryptoPanel(), windowPanel()]);
   });
 
+  // A locale redraw while a Save rerun waits draws the panels from the report
+  // before that Save. An edit made before the redraw went with the old panel, so
+  // the run replaces the locale-drawn panel with the stored value; only an edit
+  // in the locale-drawn panel keeps it (#472 review).
+  const windowSelect = (p: HTMLElement) => p.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!;
+  const runLands = (strip: Element | null) =>
+    waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after the good Save").then(
+      () => new Promise((r) => setTimeout(r, 50)),
+    );
+
+  it("an edit, then a locale redraw while a Save reruns: the run shows the stored window, not the stale locale-drawn panel", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    windowSelect(before).value = "12";
+    windowSelect(before).dispatchEvent(new Event("change", { bubbles: true }));
+    redrawOnLocaleChange();
+    const localeDrawn = windowPanel()!;
+    await runLands(strip);
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 2 });
+    expect(windowPanel()).not.toBe(localeDrawn);
+    expect(windowSelect(windowPanel()!).value).toBe("2");
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("a refused Save, then a locale redraw while a good Save reruns: the run shows the stored window", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    refuseWrites = true;
+    windowSelect(before).value = "12";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    redrawOnLocaleChange();
+    await runLands(strip);
+    expect(windowSelect(windowPanel()!).value).toBe("2");
+    expect(windowPanel()!.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(true);
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("a typed price, then a locale redraw while a crypto Save reruns: the run shows the saved-prices panel", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const strip = document.getElementById("results-split");
+    const input = before.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+    input.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    input.value = "31000";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    redrawOnLocaleChange();
+    await runLands(strip);
+    expect(step3().querySelector(".crypto-rates-stored-panel")).not.toBeNull();
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  it("an edit in the locale-drawn panel while a Save reruns is kept as typed (control)", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    redrawOnLocaleChange();
+    const localeDrawn = windowPanel()!;
+    windowSelect(localeDrawn).value = "12";
+    windowSelect(localeDrawn).dispatchEvent(new Event("change", { bubbles: true }));
+    await runLands(strip);
+    expect(windowPanel()).toBe(localeDrawn);
+    expect(windowSelect(localeDrawn).value).toBe("12");
+    expect(windowLabel().hidden).toBe(true);
+    const order = [...step3().querySelectorAll(".manual-opening-lots-panel, .crypto-rates-panel, .antichurning-window-panel")].filter((el, i, all) => all.indexOf(el) === i);
+    expect(order).toEqual([lotsPanel(), cryptoPanel(), windowPanel()]);
+  });
+
   it("a panel touched while a year change reruns is still replaced: it belongs to the year on screen", async () => {
     const before = await waitFor(windowPanel, "window panel");
     const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;

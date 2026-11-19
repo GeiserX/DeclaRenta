@@ -963,13 +963,17 @@ let processRunToken = 0;
 type SavedPanel = "antichurning" | "crypto" | "openingLots";
 
 /**
- * Each results panel's revision (#472 review): bumped on every edit and every
- * button click in the panel (a Save, a refused Save, a Clear), before the
- * panel's own handlers run. A run notes the revisions when it starts. A panel
- * touched since then holds the user's newer state (typed values, an error), so
- * that run leaves it on screen instead of redrawing it.
+ * When each drawn results panel was last touched (#472 review): every edit and
+ * every button click in the panel (a Save, a refused Save, a Clear) stamps the
+ * panel element with the next `panelTouchSeq`, before the panel's own handlers
+ * run. A run notes `panelTouchSeq` when it starts. A panel on screen stamped
+ * since then holds the user's newer state (typed values, an error), so that run
+ * leaves it there instead of redrawing it. The stamp is on the element: a
+ * redraw in between (a locale change) draws an unstamped panel from the old
+ * report, and the run replaces it, so it never stays stale.
  */
-const panelRevision: Record<SavedPanel, number> = { antichurning: 0, crypto: 0, openingLots: 0 };
+const panelTouched = new WeakMap<Element, number>();
+let panelTouchSeq = 0;
 
 /**
  * Bumped by a redraw without a Save (a locale change). A Save run that started
@@ -980,7 +984,7 @@ let savedLabelEpoch = 0;
 
 async function processFiles(savedPanel: SavedPanel | null = null): Promise<void> {
   // Noted before any await: a Save calls this from its click handler.
-  const revisionsAtStart = { ...panelRevision };
+  const touchSeqAtStart = panelTouchSeq;
   const epochAtStart = savedLabelEpoch;
   if (!mergedStatement) {
     await parseFiles();
@@ -1058,11 +1062,7 @@ async function processFiles(savedPanel: SavedPanel | null = null): Promise<void>
     clearWizardError();
     // Panels touched while this run waited stay as the user left them, unless
     // the run shows another year (they belong to the year on screen).
-    const keep = new Set<SavedPanel>(
-      report.year === shownResultsYear
-        ? (Object.keys(panelRevision) as SavedPanel[]).filter((p) => panelRevision[p] !== revisionsAtStart[p])
-        : [],
-    );
+    const keep = (el: Element) => report.year === shownResultsYear && (panelTouched.get(el) ?? 0) > touchSeqAtStart;
     renderResults(report, epochAtStart === savedLabelEpoch ? savedPanel : null, keep);
     shownResultsYear = report.year;
 
@@ -1238,7 +1238,7 @@ opsFilter.addEventListener("change", () => renderOperationsTable());
 // Render results (Step 3)
 // ---------------------------------------------------------------------------
 
-function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null, keep: ReadonlySet<SavedPanel> = new Set()) {
+function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null, keep: (panel: Element) => boolean = () => false) {
   // The method chip, the «Cómo se ha calculado» text and the comparison apply
   // only to an upload with foreign currency.
   const method: FxMethod | null = uploadCurrencies.length > 0
@@ -1313,9 +1313,9 @@ function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null,
     antichurning: ".antichurning-window-panel",
   };
   const kept = new Map<SavedPanel, HTMLElement>();
-  for (const p of keep) {
+  for (const p of panelOrder) {
     const el = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
-    if (el) kept.set(p, el);
+    if (el && keep(el)) kept.set(p, el);
   }
   const keptEls = new Set<Element>(kept.values());
   resultsSectionEl.querySelectorAll(".crypto-rates-panel, .manual-opening-lots-panel, .antichurning-window-panel").forEach((el) => {
@@ -1330,8 +1330,8 @@ function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null,
 
   // Draw a panel, unless it is kept: then the user's panel stays where it is,
   // and a new one goes before the next kept panel so the order holds. Every
-  // edit or button click in a drawn panel bumps its revision, in the capture
-  // phase so it counts before a Save handler starts a run.
+  // edit or button click in a drawn panel stamps it, in the capture phase so it
+  // counts before a Save handler starts a run.
   const placePanel = (p: SavedPanel, html: string, bind: (el: HTMLElement) => void) => {
     if (kept.has(p) || !html) return;
     const anchor = panelOrder.slice(panelOrder.indexOf(p) + 1).map((q) => kept.get(q)).find((el) => el !== undefined) ?? casillasDiv;
@@ -1339,7 +1339,7 @@ function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null,
     const panel = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
     if (!panel) return;
     const touch = (e: Event) => {
-      if (e.type !== "click" || (e.target instanceof Element && e.target.closest("button"))) panelRevision[p]++;
+      if (e.type !== "click" || (e.target instanceof Element && e.target.closest("button"))) panelTouched.set(panel, ++panelTouchSeq);
     };
     for (const type of ["input", "change", "click"]) panel.addEventListener(type, touch, true);
     bind(panel);
