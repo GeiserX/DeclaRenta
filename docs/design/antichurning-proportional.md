@@ -558,6 +558,10 @@ práctico Renta 2025. The decisions, each pinned in
       A `DIVIDEND TAX (CORRECTION)` row books nothing, and
       `revolut.dividend_tax_correction` (info) names it by ticker, date and
       amount.
+      Revolut writes English US numbers, so a comma between groups of three
+      digits is a thousands separator: "USD 1,500" is 1500 and a quantity of
+      "1,000" is 1000 shares (both were read with the comma as a decimal
+      point). Any other comma is still a decimal comma ("EUR 15,61").
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

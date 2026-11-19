@@ -34,8 +34,8 @@ import {
   findColumn,
   parseNumber,
   toFiniteDecimal,
+  toFiniteDecimalString,
   quantityUnknownTrade,
-  quantityUnreadable,
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
@@ -208,15 +208,17 @@ function parseTrades(
     const fees = feesCol >= 0 ? (row[feesCol] ?? "0").trim() : "0";
     const currency = currencyCol >= 0 ? (row[currencyCol] ?? "USD").trim() : "USD";
 
-    // All money/quantity parsing routes through toFiniteDecimal so a garbled
-    // cell can never yield NaN/Infinity (which would poison cost basis). The
-    // emitted strings are decimal.js .toString()/.toFixed(), losslessly parsed.
-    const absQty = toFiniteDecimal(quantity).abs();
+    // All money/quantity parsing routes through readRevolutNumber, so a
+    // garbled cell can never yield NaN/Infinity (which would poison cost
+    // basis) and "1,500" is 1500. The emitted strings are decimal.js
+    // .toString()/.toFixed(), losslessly parsed.
+    const qtyRead = readRevolutNumber(quantity).amount;
+    const absQty = (qtyRead ?? new Decimal(0)).abs();
     if (absQty.isZero()) {
       // An empty or unreadable quantity is no "0": keep both legs as trades of
       // unknown quantity for the anti-churning evidence (#453), as eToro does.
       // They move no share and no money. A written 0 is still skipped.
-      if (quantityUnreadable(row[quantityCol])) {
+      if (qtyRead === undefined) {
         const leg = { symbol, isin: "", assetCategory: detectAssetCategory(symbol), currency, exchange: "REVOLUT" } as const;
         trades.push(
           quantityUnknownTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}-${symbol}-${i}`, tradeDate: dateAcquired, buySell: "BUY" }),
@@ -228,10 +230,10 @@ function parseTrades(
 
     const assetCategory = detectAssetCategory(symbol);
     // Use absolute values to avoid double-negative if input is already negative
-    const absCost = toFiniteDecimal(costBasis).abs();
-    const absProceeds = toFiniteDecimal(grossProceeds).abs();
-    const pnl = toFiniteDecimal(grossPnl);
-    const absFees = toFiniteDecimal(fees).abs();
+    const absCost = (readRevolutNumber(costBasis).amount ?? new Decimal(0)).abs();
+    const absProceeds = (readRevolutNumber(grossProceeds).amount ?? new Decimal(0)).abs();
+    const pnl = readRevolutNumber(grossPnl).amount ?? new Decimal(0);
+    const absFees = (readRevolutNumber(fees).amount ?? new Decimal(0)).abs();
 
     // Revolut reports per-trade cost/proceeds, compute price per unit
     const buyPrice = absQty.greaterThan(0) ? absCost.div(absQty).toFixed(8) : "0";
@@ -295,7 +297,7 @@ function parseTrades(
     });
   }
 
-  // Every money/quantity cell is finiteness-guarded via toFiniteDecimal; the
+  // Every money/quantity cell is finiteness-guarded via readRevolutNumber; the
   // only messages name the trades of unknown quantity and the unreadable rows.
   markUndatedTrades(trades, "Date acquired / Date sold");
   return { trades, parserMessages: tradeQuantityUnknownMessages("Revolut", trades) };
@@ -305,15 +307,27 @@ function parseTrades(
 // Transaction-log amount parser
 // ---------------------------------------------------------------------------
 
+// A number with commas between groups of three digits: "1,500", "1,234,567.5".
+const US_THOUSANDS = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/;
+
 /**
- * Parse Revolut "CCY amount" strings like "EUR 15.61" or "USD -217.14".
- * Returns { currency, amount } where amount is the raw numeric string.
+ * A Revolut number cell: an amount with its currency in front ("EUR 15.61",
+ * "USD -217.14"), a quantity or a closed-positions amount ("10", "1,500").
+ * Revolut writes English US numbers and drops trailing zeros, so a comma
+ * between groups of three digits is a thousands separator: "USD 1,500" is
+ * 1500, never 1.5 (#467). Any other comma is read by {@link parseNumber}
+ * ("EUR 15,61" is 15.61). `amount` is undefined when the cell has no number:
+ * blank, only a currency ("USD", "$"), text or not finite. A written zero is
+ * a number.
  */
-function parseCcyAmount(raw: string): { currency: string; amount: string } {
-  const trimmed = raw.trim();
-  const match = trimmed.match(/^([A-Z]{3})\s+(-?[\d.,]+)$/);
-  if (match) return { currency: match[1]!, amount: parseNumber(match[2]!) };
-  return { currency: "", amount: parseNumber(trimmed) };
+function readRevolutNumber(raw: string | undefined): { currency: string; amount: Decimal | undefined } {
+  const trimmed = (raw ?? "").trim();
+  const match = trimmed.match(/^([A-Z]{3})(?:\s+(.*))?$/);
+  const currency = match ? match[1]! : "";
+  const text = (match ? match[2] ?? "" : trimmed).replace(/[€$£¥]/g, "").trim();
+  if (!text) return { currency, amount: undefined };
+  const value = toFiniteDecimalString(US_THOUSANDS.test(text) ? text.replace(/,/g, "") : parseNumber(text), "", false);
+  return { currency, amount: value === "" ? undefined : new Decimal(value) };
 }
 
 // ---------------------------------------------------------------------------
@@ -403,10 +417,11 @@ function parseTransactionLog(
     const currencyRaw = (row[cols.currency] ?? "").trim();
 
     const totalRaw = (row[cols.total] ?? "").trim();
-    const { amount: totalAmountStr } = parseCcyAmount(totalRaw);
-    // Route money through toFiniteDecimal so a garbled cell can never yield
-    // NaN/Infinity (which would poison cost basis), mirroring the parseTrades path.
-    const totalAmountDec = toFiniteDecimal(totalAmountStr, "0", false);
+    // Money goes through readRevolutNumber, so a garbled cell can never yield
+    // NaN/Infinity (which would poison cost basis), mirroring the parseTrades
+    // path. totalRead is undefined when the cell has no number.
+    const totalRead = readRevolutNumber(totalRaw).amount;
+    const totalAmountDec = totalRead ?? new Decimal(0);
 
     // Cash flows: CASH TOP-UP, CASH WITHDRAWAL
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
@@ -476,8 +491,8 @@ function parseTransactionLog(
     const quantityStr = (row[cols.quantity] ?? "0").trim();
     const priceStr = (row[cols.price] ?? "0").trim();
 
-    const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
-    const signedQtyDec = toFiniteDecimal(qtyAmountStr, "0", false);
+    const qtyRead = readRevolutNumber(quantityStr).amount;
+    const signedQtyDec = qtyRead ?? new Decimal(0);
     const qtyDec = signedQtyDec.abs();
 
     // A ticker row that is a buy, a sale or of a type no branch handles (a
@@ -491,9 +506,10 @@ function parseTransactionLog(
     const sell = TXN_TYPE_SELL.test(type);
     const otherType = !buy && !sell && !TXN_TYPE_DIVIDEND.test(type) && !TXN_TYPE_SPLIT.test(type) &&
       !TXN_TYPE_ENTITY_TRANSFER.test(type);
-    // Read the Quantity cell as parseCcyAmount does (an optional "CCY " prefix,
-    // then parseNumber), so a blank or currency-only cell is unreadable too.
+    // The Quantity cell as the file writes it, with no "CCY " prefix, and
+    // whether it has no number (blank, currency-only, text): unreadable.
     const quantityCell = (row[cols.quantity] ?? "").trim().replace(/^[A-Z]{3}\s+/, "");
+    const quantityMissing = readRevolutNumber(row[cols.quantity]).amount === undefined;
     const keepUnreadable = (cell: string): void => {
       trades.push(unreadableTrade({
         tradeID: `revolut-row-${tradeDate}-${ticker}-${i}`,
@@ -502,7 +518,7 @@ function parseTransactionLog(
       }, cell));
       markUnknownSize(ticker, currencyRaw, buy);
     };
-    if (otherType && !quantityUnreadable(quantityCell) && qtyDec.isZero() &&
+    if (otherType && !quantityMissing && qtyDec.isZero() &&
       (totalAmountDec.isZero() || /\bFEES?$/i.test(type))) continue;
     if ((buy || sell || otherType) && !isReadableTradeDate(tradeDate)) {
       keepUnreadable(unreadableCell(headers[cols.date] ?? "Date", dateStr));
@@ -583,7 +599,7 @@ function parseTransactionLog(
       // unknown quantity for the anti-churning evidence (#453). It moves no
       // share and no money, and no holding is built from it (the ticker's
       // inferred holding is then of unknown size, below).
-      if (quantityUnreadable(quantityCell)) {
+      if (quantityMissing) {
         trades.push(quantityUnknownTrade({
           tradeID: `revolut-${buy ? "buy" : "sell"}-${tradeDate}-${ticker}-${i}`,
           symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
@@ -594,8 +610,7 @@ function parseTransactionLog(
       continue;
     }
 
-    const { amount: priceAmountStr } = parseCcyAmount(priceStr);
-    const pricePerShareDec = toFiniteDecimal(priceAmountStr, "0", false);
+    const pricePerShareDec = readRevolutNumber(priceStr).amount ?? new Decimal(0);
 
     const assetCategory = detectAssetCategory(ticker);
     const absTotalAmount = totalAmountDec.abs();
