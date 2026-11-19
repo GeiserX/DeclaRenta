@@ -22,6 +22,7 @@ import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes, normalizeManualQuote } from "../engine/manual-rates.js";
 import { isValidIsin } from "../engine/antichurning-window.js";
+import { isCountableAmount } from "../engine/amount-range.js";
 import { cashAverageOf, heldCashBalances } from "../engine/ecb.js";
 import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
 import {
@@ -477,6 +478,16 @@ program
             if (!amount.isFinite() || !remaining.isFinite()) {
               console.error(
                 `Aviso: se ha omitido una entrada de --prior-losses con importes no finitos (year ${year}).`,
+              );
+              continue;
+            }
+            // No loss reaches a billion euros (`isCountableAmount`, the bound of
+            // every box), and decimal.js reads "1e1000000000" as finite: the
+            // carryforward then printed it in full and ran out of memory (#470).
+            // Dropping it can only raise the tax, never lower it.
+            if (!isCountableAmount(amount) || !isCountableAmount(remaining)) {
+              console.error(
+                `Aviso: se ha omitido una entrada de --prior-losses con un importe que llega a un billón de euros (year ${year}). Revisa el fichero.`,
               );
               continue;
             }
