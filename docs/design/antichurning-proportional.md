@@ -276,10 +276,23 @@ transmission that releases them.
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
   engine releases on such a sale. In V0571-21 itself the engine still gets the
   DGT's answer, because an unused pre-sale buy also absorbs that sale. The
-  held-shares count of the pre-sale buys skips the same-day buys too, so an
-  older lot can stand in for a same-day rebuy (V2481-20: the 14/04 lot stands
+  held-shares walk skips the same-day buys but `holdingAfter` counts them, so
+  an older lot stands in for a same-day rebuy (V2481-20: the 14/04 lot stands
   in for the 880 bought on 20/04, and counting same-day buys gives the same
-  figure).
+  figure). Two gaps remain, each pinned as `it.fails` on the DGT's figure in
+  `tests/integration/antichurning-same-day-held-e2e.test.ts`. (a) The stand-in
+  needs an older lot inside the window: buy 100, sell them at a loss on 10/03
+  and buy 50 the same day blocks 50 when the 100 were bought on 01/03/2025 and
+  0 when they were bought on 01/12/2024; the DGT blocks 50 in both. (b) The
+  stood-in lot is used up, not the sale-day buy, so a later sale can use the
+  same shares again: sell 25 more at a loss on 20/03 and the engine blocks 25,
+  where the DGT deducts them and releases 25 of the 10/03 loss. The trail then
+  names the stood-in lot. Counting a sale-day buy for its own held shares, as
+  the newest day of the walk, closes both and keeps every consulta figure, but
+  it moves `degiro-transactions-sample.csv` 2021: buy 2 and sell 1 the same day
+  with nothing held before becomes a single purchase the CSV cannot prove, and
+  the #453 fail-safe blocks 49.02 with the "unverified" warning. It waits for a
+  decision.
 - **V2481-20** (engine 1,751.73, DGT 1,767; `it.fails` on the DGT's figure).
   The 23/04 sales leave no shares, so no purchase before them counts (V3282-18
   A, situation 1): they take the 1,880 of 27/04 and 40 of the 1,900 of 06/05.
@@ -409,7 +422,19 @@ the order it follows is derived from those names:
    después»). V1760-23: the 10/05 sale finds the 06/05 shares used and the
    04/05 shares sold, so its repurchase is the 10/06 purchase, after it. The
    engine reads the held shares as FIFO leaves them: the newest `holdingAfter`
-   shares bought before the sale day.
+   shares, handed to the buy days before the sale, newest first.
+
+   **The sale day.** `holdingAfter` includes the sale day's own buys, and the
+   walk skips that day (no time of day). So the shares a sale-day buy holds go
+   to the newest earlier buy day, even one FIFO sold: an older lot stands in for
+   the sale-day rebuy. The DGT counts a sale-day buy as a rebuy (V0571-21: the
+   7,000 bought on 11/08 make that sale not definitive), and the stand-in is how
+   the engine reaches that. Taking the sale-day buys off the count (proposed in
+   the review of #454) is wrong: buy 100 on 01/03 and 40 on 05/03, sell 100 at a
+   loss and buy 50 on 10/03 gives 40 blocked, where the DGT blocks 90 (05/03
+   and the 50 of 10/03; situation 3 gives min(90 held, 140 bought) = 90 too),
+   and V2481-20 falls to 1,088.08, V0571-21 to −1,500. The stand-in has two
+   gaps (see "Known limitations").
 4. **The rest of the lot the sale transmits comes last, after the post-sale
    purchases.** V3282-18 gives the 20/02 sale «las 2.000 acciones adquiridas el
    15 de marzo», not the 2,000 left of the 15/02 lot it sells from; V1760-23
