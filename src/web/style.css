@@ -3215,6 +3215,7 @@ footer a:hover {
   color: var(--danger-text);
 }
 
+.crypto-rates-saved-msg[hidden],
 .manual-opening-lots-error-msg[hidden],
 .antichurning-window-error[hidden] {
   display: none;
