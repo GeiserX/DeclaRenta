@@ -424,6 +424,11 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
 // Ledgers CSV parser
 // ---------------------------------------------------------------------------
 
+/** Ledger transfer subtypes that move the user's own coins between wallets. */
+const OWN_COIN_TRANSFERS = new Set([
+  "spottostaking", "stakingfromspot", "stakingtospot", "spotfromstaking", "spotfromfutures", "spottofutures",
+]);
+
 function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const headers = parseCsvLine(lines[0]!, delimiter);
   const cols = resolveLedgersColumns(headers);
@@ -435,8 +440,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const cashTransactions: CashTransaction[] = [];
   // Rows of a type this parser does not read, by type. Trades come from the
   // Trades CSV (and are named at merge time when none books them); deposits,
-  // withdrawals, transfers and Earn allocations only move the user's own
-  // coins, so none of those is counted.
+  // withdrawals, own-wallet transfers and Earn allocations only move the
+  // user's own coins, so none of those is counted.
   const ignoredTypes = new Map<string, number>();
   // Staking rewards whose asset cell names no coin, named (#467).
   const unidentifiedIncome: string[] = [];
@@ -464,7 +469,10 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     // Staking rewards: the older ledger books them as type "staking", the newer
     // Kraken Earn ledger as type "earn" with subtype "reward".
     const isEarnReward = type === "earn" && subtype === "reward";
-    if (type === "staking" || isEarnReward) {
+    // An airdrop (FLR, SGB) is a transfer of subtype "airdrop". It was skipped
+    // with every transfer, so the income went undeclared with no word (#467).
+    const isAirdrop = type === "transfer" && subtype === "airdrop";
+    if (type === "staking" || isEarnReward || isAirdrop) {
       const symbol = cleanSymbol(asset);
       const tradeDate = krakenDate(timeStr);
       const netAmount = amountDec.minus(feeLedgerDec);
@@ -488,6 +496,13 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         continue;
       }
 
+      // Only a credit is an airdrop. A row that takes coins away books no
+      // negative income: it is counted and named below.
+      if (isAirdrop && !netAmount.isPositive()) {
+        ignoredTypes.set("transfer/airdrop", (ignoredTypes.get("transfer/airdrop") ?? 0) + 1);
+        continue;
+      }
+
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,
       // not in the Art. 80 double-taxation pool). They are rendimiento del capital
       // mobiliario (savings base, Casilla 0027 — DGT V1766-22). Routed via
@@ -495,11 +510,13 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       // calculateDividends(). Paid in the staked coin with no fiat value here, so
       // rewardCostBasisEur is omitted — the report values it via ECB/manual rate
       // (and creates the cost-basis lot) or surfaces it for manual entry.
+      // An airdrop is a ganancia patrimonial not derived from a transmission
+      // (base general, art. 33.1 LIRPF; DGT V1948-21), as at Binance.
       cashTransactions.push({
-        transactionID: `kraken-${isEarnReward ? "earn" : "staking"}-${txid}`,
+        transactionID: `kraken-${isAirdrop ? "airdrop" : isEarnReward ? "earn" : "staking"}-${txid}`,
         accountId: "",
         symbol,
-        description: `Staking reward - ${symbol}`,
+        description: `${isAirdrop ? "Airdrop" : "Staking reward"} - ${symbol}`,
         isin: "",
         currency: symbol,
         dateTime: tradeDate,
@@ -507,7 +524,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         amount: netAmount.toString(),
         fxRateToBase: "1",
         type: "Crypto Reward Income",
-        taxBucket: "ahorro",
+        taxBucket: isAirdrop ? "general" : "ahorro",
         rewardQuantity: netAmount.abs().toString(),
       });
     } else if (type === "trade") {
@@ -519,7 +536,14 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
       if (!entry.date && isReadableTradeDate(tradeDate)) entry.date = tradeDate;
       entry.legs.push(`${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
       ledgerTrades.set(refid, entry);
-    } else if (!["deposit", "withdrawal", "transfer", "earn"].includes(type)) {
+    } else if (type === "transfer") {
+      // Only moves between the user's own wallets are skipped with no word.
+      // Any other transfer (a fork, an empty subtype) may be income: named.
+      if (!OWN_COIN_TRANSFERS.has(subtype)) {
+        const key = subtype ? `transfer/${subtype}` : "transfer";
+        ignoredTypes.set(key, (ignoredTypes.get(key) ?? 0) + 1);
+      }
+    } else if (!["deposit", "withdrawal", "earn"].includes(type)) {
       const key = type || "(vacío)";
       ignoredTypes.set(key, (ignoredTypes.get(key) ?? 0) + 1);
     }
@@ -531,7 +555,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,
         message: `Se han ignorado ${ignoredCount} movimiento(s) del libro mayor de Kraken de tipos que no se procesan: ${[...ignoredTypes].map(([t, n]) => `${t} (${n})`).join(", ")}.`,
-        hint: "Del libro mayor solo se leen las recompensas de staking y Earn; las compraventas se leen del CSV de operaciones (Trades). Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV: si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
+        hint: "Del libro mayor solo se leen las recompensas de staking y Earn y los airdrops; las compraventas se leen del CSV de operaciones (Trades). Una transferencia (transfer) que no mueve monedas entre tus propias cuentas puede ser un ingreso, como una bifurcación (fork): si lo es, decláralo a mano en Renta Web. Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV: si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
         context: { count: String(ignoredCount) },
       }]
     : [])];

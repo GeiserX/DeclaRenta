@@ -696,6 +696,13 @@ práctico Renta 2025. The decisions, each pinned in
       uploaded with no Trades CSV lost a sale with no word. At merge time,
       `kraken.ledger_trade_not_booked` names each ledger trade, by refid,
       date and legs, that no Kraken trade of the upload books.
+      Every ledger `transfer` was skipped with no word, so an airdrop
+      (subtype `airdrop`, FLR or SGB) went undeclared. It is now crypto
+      income of the base general (art. 33.1 LIRPF), as at Binance. Only the
+      moves between the user's own wallets (spottostaking, stakingfromspot,
+      stakingtospot, spotfromstaking, spotfromfutures, spottofutures) stay
+      skipped; any other transfer, and an airdrop that is not a credit, is
+      named by `kraken.ledger_rows_ignored` by type and subtype.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

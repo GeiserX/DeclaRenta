@@ -3421,4 +3421,37 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       }
     });
   });
+
+  describe("ledger transfer rows", () => {
+    // Kraken books an airdrop (FLR, SGB) as a ledger row of type transfer and
+    // subtype airdrop. Every transfer was skipped with no word, so 1500 FLR
+    // worth 45 € of base-general income (art. 33.1 LIRPF) went undeclared.
+    const KL_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+    const ledger = (...rows: string[]): Statement => krakenParser.parse([KL_H, ...rows].join("\n"));
+    const transfer = (id: string, subtype: string, amount = "1500"): string =>
+      `"${id}","R${id}","2023-01-10 00:00:00","transfer","${subtype}","currency","FLR","${amount}","0","1500"`;
+    const ignored = (s: Statement): TaxMessage | undefined => s.parserMessages?.find((m) => m.id === "kraken.ledger_rows_ignored");
+
+    it.each(METHODS)("[%s] an airdrop is base-general income valued on its day", (method) => {
+      const parsed = ledger(transfer("L1", "airdrop"));
+      expect(parsed.cashTransactions.map((c) => [c.transactionID, c.symbol, c.amount, c.type, c.taxBucket])).toEqual([["kraken-airdrop-L1", "FLR", "1500", "Crypto Reward Income", "general"]]);
+      expect(parsed.parserMessages).toBeUndefined();
+      const r = runWith([[parsed, "Kraken"]], 2023, method, manual({ FLR: "0.03" }));
+      expect(r.generalGains.total.toFixed(2)).toBe("45.00");
+      expect(r.interest.entries).toEqual([]);
+    });
+
+    it("control: moves between the user's own wallets stay skipped with no word", () => {
+      const parsed = ledger(...["spottostaking", "stakingfromspot", "stakingtospot", "spotfromstaking", "spotfromfutures", "SpotToFutures"].map((sub, i) => transfer(`L${i}`, sub, "-5")));
+      expect([parsed.cashTransactions, parsed.parserMessages]).toEqual([[], undefined]);
+    });
+
+    it("any other transfer, and an airdrop that is not positive, is named by type and subtype", () => {
+      const parsed = ledger(transfer("L1", ""), transfer("L2", "fork"), transfer("L3", "fork"), transfer("L4", "airdrop", "-1500"), transfer("L5", "airdrop", "abc"));
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(ignored(parsed)?.context).toEqual({ count: "4" });
+      expect(ignored(parsed)?.message).toContain("transfer (1), transfer/fork (2), transfer/airdrop (1).");
+      expect(parsed.parserMessages?.find((m) => m.id === "parser.crypto_income_amount_unreadable")?.context?.rows).toBe('transfer airdrop FLR 20230110 [amount: "abc"]');
+    });
+  });
 });
