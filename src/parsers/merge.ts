@@ -57,6 +57,7 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
       ...(brokerName ? { brokerSource: brokerName } : {}),
       openPositions: source.openPositions,
       cashBalances: source.cashBalances ?? [],
+      ...(source.accountPeriods ? { accountPeriods: source.accountPeriods } : {}),
     }]),
   ];
 

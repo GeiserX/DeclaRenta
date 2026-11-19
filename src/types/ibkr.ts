@@ -37,6 +37,22 @@ export interface FlexStatement {
    * holdings of the files that end on 31 December of the declared year.
    */
   holdingsBySource?: HoldingsSource[];
+  /**
+   * The period of each account in the file (IBKR: one FlexStatement per
+   * account, each with its own dates). The anti-churning one-purchase exception
+   * (#453) checks coverage per account; without it the file is one account
+   * over `fromDate`–`toDate`.
+   */
+  accountPeriods?: AccountPeriod[];
+}
+
+/** One account of a file and the dates that file covers for it. */
+export interface AccountPeriod {
+  accountId: string;
+  fromDate: string;
+  toDate: string;
+  /** Whether the file has a Trades section for the account: a holdings-only Flex shows no trades for its period. */
+  hasTrades: boolean;
 }
 
 /** The year-end holdings of one merged file, dated to that file's period end. */
@@ -49,6 +65,8 @@ export interface HoldingsSource {
   brokerSource?: string;
   openPositions: OpenPosition[];
   cashBalances: CashBalance[];
+  /** That file's `accountPeriods`, when it gives them. */
+  accountPeriods?: AccountPeriod[];
 }
 
 /**
@@ -247,6 +265,12 @@ export interface OpenPosition {
    * one-purchase exception (#453) cannot use it as proof of no earlier shares.
    */
   fromTrades?: boolean;
+  /**
+   * The file gave no readable quantity for this row (`quantity` then holds the
+   * "0" default). The one-purchase exception (#453) treats it as missing
+   * evidence, never as an explicit zero.
+   */
+  quantityUnknown?: boolean;
 }
 
 export interface SecurityInfo {
