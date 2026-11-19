@@ -1022,8 +1022,12 @@ const gl: TranslationKeys = {
     "Detectouse un valor non finito (NaN/Infinito) nun total calculado; revisa os arquivos importados.",
   "report.non_finite_total.hint":
     "É posible que un arquivo dun bróker teña un importe corrupto ou un formato numérico inesperado. Revisa as operacións de orixe.",
+  "report.trade_out_of_range":
+    "{{count}} operación(s) do ficheiro teñen unha cantidade, un prezo, unha comisión ou un importe que ningún bróker escribe (20 cifras enteiras ou máis, ou 20 ceros ou máis despois da coma): {{rows}}. Os seus importes non se suman ás casillas.",
+  "report.trade_out_of_range.hint":
+    "Se a cantidade se pode ler, a compra crea o seu lote sen custo: a venda que o usa suma o seu valor de transmisión e non o seu valor de adquisición, así que podes pagar de máis, nunca de menos. Unha venda así non suma o seu resultado, nin un dividendo, un xuro ou unha retención así o seu importe. Revisa esas filas no ficheiro do bróker e declara o seu resultado a man.",
   "report.non_finite_disposal":
-    "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito): {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
+    "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito) ou que pasa de 12 cifras enteiras en euros: {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
   "report.non_finite_disposal.hint":
     "Se falta o valor de transmisión dunha venda, DeclaRenta tampouco suma o seu valor de adquisición, para non crear unha perda que nada xustifica. Se falta o valor de adquisición, suma o de transmisión. Revisa esas operacións no ficheiro do bróker e nos tipos de cambio, e declara o seu resultado a man.",
   "flatex.lagerstellenwechsel.unmatched":

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { normalizeDate } from "../engine/dates.js";
+import { printsInFull } from "../engine/amount-range.js";
 
 /** "-1234.5" → "-1.234,5"; a negative zero ("-0", "-0.00") loses its sign. */
 function spanishNumber(str: string): string {
@@ -19,22 +20,10 @@ export function fmtEur(d: Decimal | number, decimals = 2): string {
   // A Number goes through its shortest decimal string, so 1.005 rounds to 1,01
   // like the Decimal 1.005 does, not to 1,00 like the binary float 1.00499…
   const dec = typeof d === "number" ? new Decimal(String(d)) : d;
+  // No amount past 60 digits is written in full (1e1000000000 is a billion
+  // characters and the page runs out of memory): «—» (#470).
+  if (dec.isFinite() && !printsInFull(dec, decimals)) return "—";
   return spanishNumber(dec.toFixed(decimals));
-}
-
-/**
- * The most digits a number may have when written in full. Real data never
- * comes near it: the engine computes at 20 significant digits, so a split,
- * a merger or a spin-off gives a count such as 0.041133333333333333333 (21
- * decimals). Only an absurd exponent passes it, and that is never expanded:
- * in full, "1e-1000000000" is a billion characters and the page runs out of
- * memory (CodeRabbit on #470).
- */
-const MAX_PRINTED_DIGITS = 60;
-
-/** Whether `d` written with `decimals` decimals has at most {@link MAX_PRINTED_DIGITS} digits. */
-function printsInFull(d: Decimal, decimals: number): boolean {
-  return Math.max(d.e + 1, 1) + decimals <= MAX_PRINTED_DIGITS;
 }
 
 /**
@@ -45,7 +34,7 @@ function printsInFull(d: Decimal, decimals: number): boolean {
  */
 export function fmtQty(q: Decimal.Value): string {
   const quantity = new Decimal(q);
-  if (quantity.isFinite() && !printsInFull(quantity, quantity.decimalPlaces())) return "—";
+  if (quantity.isFinite() && !printsInFull(quantity)) return "—";
   return spanishNumber(quantity.toFixed());
 }
 

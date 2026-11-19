@@ -1022,8 +1022,12 @@ const ca: TranslationKeys = {
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":
     "És possible que un fitxer d'un bróker tingui un import corrupte o un format numèric inesperat. Revisa les operacions d'origen.",
+  "report.trade_out_of_range":
+    "{{count}} operació(ns) del fitxer tenen una quantitat, un preu, una comissió o un import que cap bròker no escriu (20 xifres enteres o més, o 20 zeros o més després de la coma): {{rows}}. Els seus imports no es sumen a les caselles.",
+  "report.trade_out_of_range.hint":
+    "Si la quantitat es pot llegir, la compra crea el seu lot sense cost: la venda que el fa servir suma el seu valor de transmissió i no el seu valor d'adquisició, així que pots pagar de més, mai de menys. Una venda així no suma el seu resultat, ni un dividend, un interès o una retenció així el seu import. Revisa aquestes files al fitxer del bròker i declara'n el resultat a mà.",
   "report.non_finite_disposal":
-    "{{count}} venda(es) tenen un import que no és un número (NaN o infinit): {{rows}}. Aquest import no se suma a les caselles. La resta d'operacions de l'any sí que se sumen.",
+    "{{count}} venda(es) tenen un import que no és un número (NaN o infinit) o que passa de 12 xifres enteres en euros: {{rows}}. Aquest import no es suma a les caselles. La resta d'operacions de l'any sí que es sumen.",
   "report.non_finite_disposal.hint":
     "Si falta el valor de transmissió d'una venda, DeclaRenta tampoc no en suma el valor d'adquisició, per no crear una pèrdua que res no justifica. Si falta el valor d'adquisició, suma el de transmissió. Revisa aquestes operacions al fitxer del bròker i als tipus de canvi, i declara'n el resultat a mà.",
   "flatex.lagerstellenwechsel.unmatched":

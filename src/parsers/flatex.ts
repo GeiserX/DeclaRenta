@@ -32,6 +32,7 @@ import {
   tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -167,7 +168,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
     const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
     const absQty = qtyNum.abs();
-    const tradeMoney = absQty.mul(priceDec).toFixed();
+    // Never expanded past 60 digits: a cell of "1e1000000000" reaches the
+    // report as exponent text, which names the row (#470).
+    const tradeMoney = plainOrExponent(absQty.mul(priceDec));
 
     const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
     const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
@@ -187,7 +190,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       currency: currency || "EUR",
       tradeDate,
       settlementDate: tradeDate,
-      quantity: isSell ? `-${absQty.toFixed()}` : absQty.toFixed(),
+      quantity: isSell ? `-${plainOrExponent(absQty)}` : plainOrExponent(absQty),
       tradePrice: price,
       tradeMoney,
       proceeds: isSell ? tradeMoney : "0",
@@ -211,9 +214,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       parserMessages.push({
         id: "flatex.lagerstellenwechsel.unmatched",
         severity: "info",
-        message: `Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para ${isin}: ${net.toFixed()} títulos.`,
+        message: `Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para ${isin}: ${plainOrExponent(net)} títulos.`,
         hint: "Un traspaso sin pareja entró o salió del depósito sin precio de adquisición. Si más tarde vendes estos títulos, revisa que el valor de compra original esté incluido para no declarar una ganancia ficticia.",
-        context: { isin, netQuantity: net.toFixed() },
+        context: { isin, netQuantity: plainOrExponent(net) },
       });
     }
   }

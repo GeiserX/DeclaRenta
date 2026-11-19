@@ -44,6 +44,7 @@ import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
 import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
 import { hasSignConflict, readPositionNumber } from "./ecb.js";
+import { isCountableAmount } from "./amount-range.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -591,14 +592,16 @@ export function detectWashSales(
     group.idxs.push(idx);
   }
 
-  // Only a finite loss can be blocked. A sale with a non-finite proceeds or
-  // cost (a corrupt rate) has no loss the report counts: `finiteDisposalAmounts`
-  // leaves that amount out, so the sale reads as a gain or as nothing. Blocking
-  // its "Infinity" would zero the year's blocked total in guardNonFiniteTotals
-  // and drop every valid blocked loss from the base (#469).
+  // Only a loss the report counts can be blocked. A sale with non-finite
+  // proceeds or cost (a corrupt rate), or one past 12 integer digits of euros
+  // (`isCountableAmount`), has no counted loss: `finiteDisposalAmounts` leaves
+  // that amount out, so the sale reads as a gain or as nothing. Blocking its
+  // "Infinity" would zero the year's blocked total in guardNonFiniteTotals and
+  // drop every valid blocked loss from the base (#469); blocking 1e2000 would
+  // put a 2000-digit figure in the blocked line (#470).
   const isLossAt = (idx: number): boolean => {
     const d = result[idx]!;
-    return d.proceedsEur.isFinite() && d.costBasisEur.isFinite() && d.gainLossEur.lessThan(0);
+    return isCountableAmount(d.proceedsEur) && isCountableAmount(d.costBasisEur) && d.gainLossEur.lessThan(0);
   };
   // A short cover buys back shares sold short; it transmits no held shares, so
   // it is never a «transmisión definitiva»: it runs no definitive test, releases

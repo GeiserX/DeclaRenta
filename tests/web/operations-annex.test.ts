@@ -243,6 +243,24 @@ describe("renderOperationsAnnex — a sale with a non-finite amount (#469 review
     expect(subtotal).toEqual(["920,00", "2.184,00", "+1.264,00 EUR"]);
   });
 
+  // #470: an amount past 12 integer digits of euros is left out like a
+  // non-finite one. Proceeds of 1e15 next to a cost of 1e15 - 5 give a small
+  // finite result, but the subtotal adds nothing for that sale: every cell
+  // reads «—», never «+5,00».
+  it("treats an amount past 12 integer digits like one that is no number", () => {
+    const big = makeDisposal({ symbol: "BIG", proceedsEur: new Decimal("1e15"), costBasisEur: new Decimal("999999999999995"), gainLossEur: new Decimal(5) });
+    const bigCost = makeDisposal({ symbol: "BIGC", costBasisEur: new Decimal("1e2000"), gainLossEur: new Decimal("-1e2000") });
+    const bigProceeds = makeDisposal({ symbol: "BIGP", proceedsEur: new Decimal("1e2000"), gainLossEur: new Decimal("1e2000") });
+    const { rows, subtotal } = cells(renderOperationsAnnex(makeSummary([makeDisposal(), big, bigCost, bigProceeds])));
+    expect(rows).toEqual([
+      ["920,00", "1.092,00", "+172,00"],
+      ["—", "—", "—"],
+      ["—", "1.092,00", "+1.092,00"],
+      [`920,00 (${t("annex.not_counted")})`, "—", "—"],
+    ]);
+    expect(subtotal).toEqual(["920,00", "2.184,00", "+1.264,00 EUR"]);
+  });
+
   // Catalan writes the impersonal «es suma», never the Spanish «se suma».
   it("names the mark in the 5 locales", async () => {
     const expected = { es: "no se suma", en: "not added", ca: "no es suma", eu: "ez da batzen", gl: "non se suma" } as const;

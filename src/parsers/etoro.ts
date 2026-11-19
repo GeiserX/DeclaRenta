@@ -21,6 +21,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
+import { plainOrExponent } from "../engine/amount-range.js";
 import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
@@ -428,7 +429,7 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
 
       if (!isNaN(whtNum) && whtNum !== 0) {
         const wht = toFiniteDecimal(whtRaw);
-        grossAmount = net.plus(wht.abs()).toFixed(4);
+        grossAmount = plainOrExponent(net.plus(wht.abs()), 4);
         // A positive WHT column is tax withheld → emit as negative; a negative
         // value (refund/credit) is passed through unchanged. Decimal, never Number.
         taxAmount = whtNum > 0 ? wht.neg().toString() : wht.toString();
@@ -442,8 +443,8 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
       if (!isNaN(pctNum) && pctNum > 0) {
         const pct = toFiniteDecimal(pctRaw);
         const gross = net.div(new Decimal(1).minus(pct.div(100)));
-        grossAmount = gross.toFixed(4);
-        taxAmount = `-${gross.mul(pct.div(100)).toFixed(4)}`;
+        grossAmount = plainOrExponent(gross, 4);
+        taxAmount = `-${plainOrExponent(gross.mul(pct.div(100)), 4)}`;
       } else {
         grossAmount = netAmount;
       }

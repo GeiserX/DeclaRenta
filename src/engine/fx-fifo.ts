@@ -1741,7 +1741,14 @@ export class FxFifoEngine {
     // CASH conversions are excluded too (the latter are already the FX engine's
     // own conversion events — including them here would double-count).
     const SECURITY_CATEGORIES = new Set(["STK", "FUND", "BOND"]);
-    for (const d of disposals) {
+    for (const raw of disposals) {
+      // A trade with a number no broker writes reaches FIFO with amounts that
+      // are no number, and never reaches this engine (report.ts, #470). Its
+      // sale brings in no known currency: skipped. A lot with no cost parked
+      // nothing, so its sale releases nothing: cost 0, the safe re-add of the
+      // whole proceeds at the sale rate. A NaN here would poison the pool.
+      if (!raw.proceedsFcy.isFinite()) continue;
+      const d = raw.costBasisFcy.isFinite() ? raw : { ...raw, costBasisFcy: new Decimal(0) };
       // Shares bought in one currency and sold in another (same ISIN, another
       // listing; the stock FIFO matches by ISIN). Issue #434 for «Tradicional
       // con divisa», issue #441 for the default; `FifoEngine({ markLotCurrency })`

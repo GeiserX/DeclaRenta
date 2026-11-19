@@ -1024,8 +1024,12 @@ const eu: TranslationKeys = {
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":
     "Litekeena da broker baten fitxategi batek zenbateko hondatu bat edo ustekabeko zenbaki-formatu bat izatea. Berrikusi jatorrizko eragiketak.",
+  "report.trade_out_of_range":
+    "Fitxategiko {{count}} eragiketak inongo brokerrek idazten ez duen kantitate, prezio, komisio edo zenbateko bat du (20 zifra oso edo gehiago, edo komaren ondoren 20 zero edo gehiago): {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+  "report.trade_out_of_range.hint":
+    "Kantitatea irakur badaiteke, erosketak kosturik gabeko lotea sortzen du: hura erabiltzen duen salmentak bere eskualdatze-balioa batzen du, eta ez eskuratze-balioa; beraz, gehiago ordain dezakezu, inoiz ez gutxiago. Horrelako salmenta batek ez du bere emaitza batzen, eta horrelako dibidendu, interes edo atxikipen batek ez du bere zenbatekoa batzen. Berrikusi errenkada horiek brokerraren fitxategian eta adierazi haien emaitza eskuz.",
   "report.non_finite_disposal":
-    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua): {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
+    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
   "report.non_finite_disposal.hint":
     "Salmenta baten eskualdaketa-balioa falta bada, DeclaRentak ez du haren eskuratze-balioa ere batzen, ezerk justifikatzen ez duen galerarik ez sortzeko. Eskuratze-balioa falta bada, eskualdaketa-balioa batzen du. Berrikusi eragiketa horiek brokerraren fitxategian eta kanbio-tasetan, eta aitortu haien emaitza eskuz.",
   "flatex.lagerstellenwechsel.unmatched":
