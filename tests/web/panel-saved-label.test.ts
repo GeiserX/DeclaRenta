@@ -912,6 +912,15 @@ describe("Clear in each panel (#472 review)", () => {
     expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
   });
 
+  it("opening lots: a flagged row in a closed panel opens the panel (mirror of the crypto list)", async () => {
+    const panel = (await waitFor(lotsPanel, "opening lots panel")) as HTMLDetailsElement;
+    panel.open = false;
+    panel.querySelector<HTMLInputElement>("[data-field='quantity']")!.value = "diez";
+    panel.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    expect(panel.querySelector("[data-field='quantity']")!.getAttribute("aria-invalid")).toBe("true");
+    expect(panel.open).toBe(true);
+  });
+
   // A Clear, then an edit in the same panel while its rerun waits: the run
   // keeps the edited panel, so the panel must show what is stored now, or its
   // next Save writes the cleared values back.
@@ -1049,6 +1058,29 @@ describe("crypto prices a Save cannot store (#472 review)", () => {
     eth.value = "";
     before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     await expectRefused(before, eth, sol);
+  });
+
+  it("a flagged price inside the closed saved-prices list: the Save opens the list so the user sees it", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const { eth, sol } = inputs(before);
+    const list = eth.closest("details")!;
+    expect(list.open).toBe(false);
+    eth.value = "";
+    sol.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await expectRefused(before, eth, sol);
+    expect(list.open).toBe(true);
+    expect(shown(eth)).toBe(true);
+  });
+
+  it("a flagged price outside the saved-prices list leaves the list closed (control)", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const { eth, sol } = inputs(before);
+    const list = eth.closest("details")!;
+    sol.value = "abc";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await expectRefused(before, sol, eth);
+    expect(list.open).toBe(false);
   });
 
   it("an unreadable price next to a good one: the Save is refused, not half done", async () => {

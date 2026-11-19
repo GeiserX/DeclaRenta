@@ -585,6 +585,7 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
         : storedRateFor(currency, date) !== "";
       if (invalid) {
         input.setAttribute("aria-invalid", "true");
+        revealFlagged(input);
         invalidRows++;
       } else {
         input.removeAttribute("aria-invalid");
@@ -616,6 +617,15 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
 
     if (savedCount > 0) onSave("save");
   });
+}
+
+/**
+ * Open every closed <details> around a flagged input, so the error that asks
+ * the user to review the marked rows points at something on screen (#472
+ * review): a saved price sits in the collapsed «saved elsewhere» list.
+ */
+function revealFlagged(input: HTMLElement): void {
+  for (let d = input.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
 }
 
 function renderEmptyOpeningLotRow(groupEl: HTMLElement): string {
@@ -720,8 +730,10 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
         const invalid =
           (acquireDate !== "" || quantity !== "" || pricePerShare !== "") && normalizeManualOpeningLot(lot) === null;
         row.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
-          if (invalid) input.setAttribute("aria-invalid", "true");
-          else input.removeAttribute("aria-invalid");
+          if (invalid) {
+            input.setAttribute("aria-invalid", "true");
+            revealFlagged(input);
+          } else input.removeAttribute("aria-invalid");
         });
         if (invalid) invalidRows++;
         return lot;
