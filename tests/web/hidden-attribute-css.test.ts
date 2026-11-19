@@ -9,12 +9,16 @@ import { join } from "node:path";
 const WEB = new URL("../../src/web/", import.meta.url).pathname;
 const css = readFileSync(join(WEB, "style.css"), "utf8");
 
-/** Classes of every element the web code renders with the `hidden` attribute. */
+/**
+ * Classes of every element the web code renders with the `hidden` attribute,
+ * written plainly (`<span class="x" hidden>`) or conditionally
+ * (`<span class="x"${saved ? "" : " hidden"}>`, the «Guardado» labels since #472).
+ */
 function hiddenClasses(): Set<string> {
   const out = new Set<string>();
   for (const file of readdirSync(WEB).filter((f) => f.endsWith(".ts"))) {
     const src = readFileSync(join(WEB, file), "utf8");
-    for (const m of src.matchAll(/<\w+\b[^<>]*?\bclass="([^"$]+)"[^<>]*?\shidden(?=[\s>])[^<>]*>/g)) {
+    for (const m of src.matchAll(/<\w+\b[^<>]*?\bclass="([^"$]+)"[^<>]*?\shidden(?=[\s>"])[^<>]*>/g)) {
       for (const cls of m[1]!.split(/\s+/)) if (cls) out.add(cls);
     }
   }
@@ -41,10 +45,21 @@ describe("elements rendered with `hidden` really hide", () => {
     const found = hiddenClasses();
     expect(found.has("crypto-rates-saved-msg")).toBe(true);
     expect(found.has("antichurning-window-saved")).toBe(true);
+    expect(found.has("manual-opening-lots-saved-msg")).toBe(true);
   });
 
   it("every class that sets display also has a [hidden] rule with display: none", () => {
     const missing = [...hiddenClasses()].filter((cls) => setsDisplay(cls) && !hidesWhenHidden(cls));
     expect(missing).toEqual([]);
+  });
+});
+
+// An input the bind code flags with aria-invalid must look flagged: the crypto
+// prices error says «Revisa los precios marcados», so the row needs the red border
+// the opening-lots inputs already get (#472 review).
+describe("aria-invalid inputs have a visible mark", () => {
+  it.each(["manual-opening-lot-input", "crypto-rate-input"])("%s gets a border rule", (cls) => {
+    const esc = cls.replace(/[-]/g, "\\-");
+    expect(css).toMatch(new RegExp(`\\.${esc}\\[aria-invalid="true"\\][^{]*\\{[^}]*border-color`));
   });
 });

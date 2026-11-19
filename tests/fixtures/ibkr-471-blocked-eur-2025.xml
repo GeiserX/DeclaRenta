@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="WT" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1111111" fromDate="20250101" toDate="20251231" period="LastYear">
+      <Trades>
+        <Trade tradeID="1" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20250110" settlementDate="20250114" quantity="100" tradePrice="100.00" tradeMoney="10000.00"
+               proceeds="-10000.00" cost="10000.00" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="2" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20250616" settlementDate="20250618" quantity="-100" tradePrice="90.00" tradeMoney="-9000.00"
+               proceeds="9000.00" cost="-10000.00" fifoPnlRealized="-1000" fxRateToBase="1" buySell="SELL" openCloseIndicator="C"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="3" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20250701" settlementDate="20250703" quantity="100" tradePrice="95.00" tradeMoney="9500.00"
+               proceeds="-9500.00" cost="9500.00" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="4" accountId="U1111111" symbol="GLOBEX" description="GLOBEX INC" isin="US0000000002" assetCategory="STK" currency="EUR"
+               tradeDate="20250110" settlementDate="20250114" quantity="50" tradePrice="100.00" tradeMoney="5000.00"
+               proceeds="-5000.00" cost="5000.00" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="NYSE" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="5" accountId="U1111111" symbol="GLOBEX" description="GLOBEX INC" isin="US0000000002" assetCategory="STK" currency="EUR"
+               tradeDate="20250616" settlementDate="20250618" quantity="-50" tradePrice="110.00" tradeMoney="-5500.00"
+               proceeds="5500.00" cost="-5000.00" fifoPnlRealized="500" fxRateToBase="1" buySell="SELL" openCloseIndicator="C"
+               exchange="NYSE" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+      </Trades>
+      <OpenPositions>
+        <OpenPosition accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR" position="100" markPrice="95" positionValue="9500" costBasisMoney="9500" reportDate="20251231" />
+      </OpenPositions>
+      <CashTransactions />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

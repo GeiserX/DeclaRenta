@@ -74,8 +74,12 @@ export function clearWindowOverrides(): boolean {
 
 const monthsLabel = (m: WindowMonths): string => tr(m === 12 ? "antichurning_window.months_12" : "antichurning_window.months_2");
 
-function row(s: AntichurningSecurity): string {
-  const value = s.source === "user" ? String(s.months) : "auto";
+function row(s: AntichurningSecurity, stored: Readonly<Record<string, WindowMonths>>): string {
+  // The select shows what is stored, not the report's reading: a locale
+  // redraw in the middle of a Save or Clear rerun draws from the report before
+  // it, and a run keeps that panel once the user edits it (#472).
+  const months = stored[s.isin];
+  const value = months === undefined ? "auto" : String(months);
   const option = (v: string, label: string): string =>
     `<option value="${v}"${v === value ? " selected" : ""}>${esc(label)}</option>`;
   const listing = s.listingExchanges.length > 0 ? s.listingExchanges.join(", ") : tr("antichurning_window.no_listing");
@@ -98,11 +102,20 @@ function row(s: AntichurningSecurity): string {
  * The collapsed panel, or "" when the report lists no security. It opens by
  * itself when IBKR gave a security 1 year, when a 2-month reading rests on an
  * open decision, or when the user set a window.
+ *
+ * `saved` shows the «Guardado» label: a Save reruns the report, which redraws
+ * this panel, so the new panel has to carry the confirmation (#472).
  */
-export function renderAntichurningWindowPanel(securities: readonly AntichurningSecurity[] | undefined): string {
+export function renderAntichurningWindowPanel(
+  securities: readonly AntichurningSecurity[] | undefined,
+  { saved = false }: { saved?: boolean } = {},
+): string {
   if (!securities || securities.length === 0) return "";
-  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || s.source === "user");
-  return `<details class="antichurning-window-panel crypto-rates-panel"${open ? " open" : ""}>
+  const stored = getWindowOverrides();
+  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || stored[s.isin] !== undefined);
+  // A Save back to «auto» can leave no reason to open: open it anyway so
+  // «Guardado» is on screen (#472).
+  return `<details class="antichurning-window-panel crypto-rates-panel"${open || saved ? " open" : ""}>
     <summary class="crypto-rates-stored-summary">
       <span class="crypto-rates-stored-summary-text">${esc(tr("antichurning_window.title"))}</span>
       <span class="crypto-rates-stored-summary-count">${securities.length}</span>
@@ -115,13 +128,13 @@ export function renderAntichurningWindowPanel(securities: readonly AntichurningS
           <th>${esc(tr("antichurning_window.col_listing"))}</th>
           <th>${esc(tr("antichurning_window.col_window"))}</th>
         </tr></thead>
-        <tbody>${securities.map(row).join("")}</tbody>
+        <tbody>${securities.map((s) => row(s, stored)).join("")}</tbody>
       </table></div>
       <div class="crypto-rates-actions">
         <button type="button" class="btn-cta antichurning-window-save">${esc(tr("antichurning_window.save_btn"))}</button>
         <button type="button" class="btn-secondary antichurning-window-clear">${esc(tr("antichurning_window.clear_btn"))}</button>
       </div>
-      <span class="crypto-rates-saved-msg antichurning-window-saved" hidden>${esc(tr("antichurning_window.saved"))}</span>
+      <span class="crypto-rates-saved-msg antichurning-window-saved"${saved ? "" : " hidden"}>${esc(tr("antichurning_window.saved"))}</span>
       <span class="antichurning-window-error" role="alert" hidden></span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("antichurning_window.recalculate_hint"))}</p>
     </div>
@@ -131,9 +144,11 @@ export function renderAntichurningWindowPanel(securities: readonly AntichurningS
 /**
  * Save writes every row's choice in one write and reruns the report; Clear
  * removes every saved window and reruns. When the browser refuses the read or the write,
- * the panel says so, keeps the old settings and does not rerun.
+ * the panel says so, keeps the old settings and does not rerun. `onSave` gets
+ * "save" or "clear", so the caller shows «Guardado» in the redrawn panel only
+ * after a Save (#472).
  */
-export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () => void): void {
+export function bindAntichurningWindowPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   const saved = container.querySelector<HTMLElement>(".antichurning-window-saved");
   const error = container.querySelector<HTMLElement>(".antichurning-window-error");
   const show = (failure: "antichurning_window.save_error" | "antichurning_window.clear_error" | null): void => {
@@ -148,7 +163,7 @@ export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () =
       show("antichurning_window.clear_error");
       return;
     }
-    onSave();
+    onSave("clear");
   });
   container.querySelector<HTMLButtonElement>(".antichurning-window-save")?.addEventListener("click", () => {
     // An unreadable storage cannot say what is saved, and a write would drop
@@ -175,6 +190,6 @@ export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () =
       return;
     }
     show(null);
-    onSave();
+    onSave("save");
   });
 }

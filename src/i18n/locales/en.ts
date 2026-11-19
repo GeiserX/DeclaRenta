@@ -291,8 +291,11 @@ const en: TranslationKeys = {
   "results.split_fx": "Currency",
   "results.split_fx_sub": "included in 1633 and 1637",
   "results.split_fx_off": "not computed with this method",
+  "results.split_deferred": "Deferred losses (anti-churning)",
+  "results.split_deferred_sub": "blocked this year minus those released this year",
   "results.split_total": "Total",
   "results.split_total_sub": "to the savings base · estimated tax {{tax}} €",
+  "results.split_unreadable_sub": "cannot be computed: an amount could not be read; see the errors",
   "results.compare_title": "Compare with the other methods (to match another tool)",
   "results.compare_in_use": "In use",
   "results.compare_tax": "Estimated tax",
@@ -728,6 +731,10 @@ const en: TranslationKeys = {
   "crypto_rates.placeholder": "e.g. 142.50",
   "crypto_rates.save_btn": "Save and recalculate",
   "crypto_rates.saved": "Saved",
+  "crypto_rates.save_error":
+    "The browser did not let DeclaRenta save the prices: its storage may be full or blocked. The report has not changed.",
+  "crypto_rates.row_invalid":
+    "Check the highlighted prices: enter a price above zero (e.g. 1,234.56). To remove the saved prices, use «Clear saved prices». Nothing was saved.",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
   "crypto_rates.stored_title": "Saved manual prices",
   "crypto_rates.stored_description":
@@ -757,6 +764,8 @@ const en: TranslationKeys = {
   "opening_lots.save_btn": "Save lots and recalculate",
   "opening_lots.clear_btn": "Clear saved lots",
   "opening_lots.saved": "Saved",
+  "opening_lots.save_error":
+    "The browser did not let DeclaRenta save the lots: its storage may be full or blocked. The report has not changed.",
   "opening_lots.row_invalid":
     "Check the highlighted rows: enter the purchase date and a quantity and price above zero (e.g. 1,234.56). Nothing was saved.",
   "opening_lots.recalculate_hint": "Manual lots are saved in your browser and the report is recalculated.",

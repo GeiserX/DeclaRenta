@@ -146,9 +146,16 @@ describe("saved crypto prices once every swap is valued", () => {
     );
   }
 
-  it("lists the saved price collapsed, with its value", async () => {
+  it("lists the saved price with its value, open right after the Save (#472) and collapsed on a later redraw", async () => {
     const panel = await saveMistypedPrice();
-    expect(panel.open).toBe(false);
+    // The Save redraws this list: it opens so «Guardado» is on screen.
+    expect(panel.open).toBe(true);
+    expect(panel.querySelector<HTMLElement>(".crypto-rates-saved-msg")!.hidden).toBe(false);
+    // A redraw without a Save (a locale change) shows it collapsed again.
+    document.dispatchEvent(new Event("localechange"));
+    const redrawn = document.querySelector<HTMLDetailsElement>(".crypto-rates-stored-panel")!;
+    expect(redrawn).not.toBe(panel);
+    expect(redrawn.open).toBe(false);
     const input = panel.querySelector<HTMLInputElement>(".crypto-rate-input")!;
     expect(input.dataset.currency).toBe("SOL");
     expect(input.dataset.date).toBe(`${YEAR}-04-01`);

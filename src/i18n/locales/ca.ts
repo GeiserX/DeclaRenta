@@ -291,8 +291,11 @@ const ca: TranslationKeys = {
   "results.split_fx": "Divisa",
   "results.split_fx_sub": "inclosa a 1633 i 1637",
   "results.split_fx_off": "no es calcula amb aquest mètode",
+  "results.split_deferred": "Pèrdues diferides (anti-churning)",
+  "results.split_deferred_sub": "bloquejades aquest any menys les integrades aquest any",
   "results.split_total": "Total",
   "results.split_total_sub": "a la base de l'estalvi · quota estimada {{tax}} €",
+  "results.split_unreadable_sub": "no es pot calcular: no s'ha pogut llegir un import; mira els errors",
   "results.compare_title": "Comparar amb els altres mètodes (per quadrar amb una altra eina)",
   "results.compare_in_use": "En ús",
   "results.compare_tax": "Quota estimada",
@@ -730,6 +733,10 @@ const ca: TranslationKeys = {
   "crypto_rates.placeholder": "p. ex. 142,50",
   "crypto_rates.save_btn": "Desa i recalcula",
   "crypto_rates.saved": "Desat",
+  "crypto_rates.save_error":
+    "El navegador no ha deixat desar els preus: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "crypto_rates.row_invalid":
+    "Revisa els preus marcats: escriu un preu més gran que zero (p. ex. 1.234,56). Per treure els preus desats, fes servir «Esborra els preus desats». No s'ha desat res.",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
   "crypto_rates.stored_title": "Preus manuals desats",
   "crypto_rates.stored_description":
@@ -759,6 +766,8 @@ const ca: TranslationKeys = {
   "opening_lots.save_btn": "Desa els lots i recalcula",
   "opening_lots.clear_btn": "Esborra els lots desats",
   "opening_lots.saved": "Desat",
+  "opening_lots.save_error":
+    "El navegador no ha deixat desar els lots: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
   "opening_lots.row_invalid":
     "Revisa les files marcades: indica la data de compra i una quantitat i un preu més grans que zero (p. ex. 1.234,56). No s'ha desat res.",
   "opening_lots.recalculate_hint": "Els lots manuals es desen al teu navegador i l'informe es recalcula.",

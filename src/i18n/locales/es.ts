@@ -303,8 +303,11 @@ const es = {
   "results.split_fx": "Divisa",
   "results.split_fx_sub": "incluida en 1633 y 1637",
   "results.split_fx_off": "no se calcula en este método",
+  "results.split_deferred": "Pérdidas diferidas (anti-churning)",
+  "results.split_deferred_sub": "bloqueadas este año menos las integradas este año",
   "results.split_total": "Total",
   "results.split_total_sub": "a la base del ahorro · cuota estimada {{tax}} €",
+  "results.split_unreadable_sub": "no se puede calcular: un importe no se ha podido leer; mira los errores",
   "results.compare_title": "Comparar con los otros métodos (para cuadrar con otra herramienta)",
   "results.compare_in_use": "En uso",
   "results.compare_tax": "Cuota estimada",
@@ -763,6 +766,10 @@ const es = {
   "crypto_rates.placeholder": "p. ej. 142,50",
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
+  "crypto_rates.save_error":
+    "El navegador no ha dejado guardar los precios: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
+  "crypto_rates.row_invalid":
+    "Revisa los precios marcados: escribe un precio mayor que cero (p. ej. 1.234,56). Para quitar los precios guardados, usa «Borrar precios guardados». No se ha guardado nada.",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
   "crypto_rates.stored_title": "Precios manuales guardados",
   "crypto_rates.stored_description":
@@ -792,6 +799,8 @@ const es = {
   "opening_lots.save_btn": "Guardar lotes y recalcular",
   "opening_lots.clear_btn": "Borrar lotes guardados",
   "opening_lots.saved": "Guardado",
+  "opening_lots.save_error":
+    "El navegador no ha dejado guardar los lotes: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
   "opening_lots.row_invalid":
     "Revisa las filas marcadas: indica la fecha de compra y una cantidad y un precio mayores que cero (p. ej. 1.234,56). No se ha guardado nada.",
   "opening_lots.recalculate_hint": "Los lotes manuales se guardan en tu navegador y el informe se recalcula.",

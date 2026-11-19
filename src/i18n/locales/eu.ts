@@ -292,8 +292,11 @@ const eu: TranslationKeys = {
   "results.split_fx": "Dibisa",
   "results.split_fx_sub": "1633 eta 1637 laukietan sartuta",
   "results.split_fx_off": "ez da kalkulatzen metodo honekin",
+  "results.split_deferred": "Galera atzeratuak (anti-churning)",
+  "results.split_deferred_sub": "aurten blokeatutakoak, ken aurten integratutakoak",
   "results.split_total": "Guztira",
   "results.split_total_sub": "aurrezki-oinarrira · kuota estimatua {{tax}} €",
+  "results.split_unreadable_sub": "ezin da kalkulatu: zenbateko bat ezin izan da irakurri; ikusi erroreak",
   "results.compare_title": "Beste metodoekin alderatu (beste tresna batekin bat etortzeko)",
   "results.compare_in_use": "Erabiltzen",
   "results.compare_tax": "Kuota estimatua",
@@ -730,6 +733,10 @@ const eu: TranslationKeys = {
   "crypto_rates.placeholder": "adib. 142,50",
   "crypto_rates.save_btn": "Gorde eta birkalkulatu",
   "crypto_rates.saved": "Gordeta",
+  "crypto_rates.save_error":
+    "Nabigatzaileak ez du utzi prezioak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "crypto_rates.row_invalid":
+    "Berrikusi markatutako prezioak: idatzi zero baino handiagoa den prezio bat (adib. 1.234,56). Gordetako prezioak kentzeko, erabili «Ezabatu gordetako prezioak». Ez da ezer gorde.",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
   "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
   "crypto_rates.stored_description":
@@ -759,6 +766,8 @@ const eu: TranslationKeys = {
   "opening_lots.save_btn": "Gorde loteak eta birkalkulatu",
   "opening_lots.clear_btn": "Ezabatu gordetako loteak",
   "opening_lots.saved": "Gordeta",
+  "opening_lots.save_error":
+    "Nabigatzaileak ez du utzi loteak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
   "opening_lots.row_invalid":
     "Berrikusi markatutako errenkadak: adierazi erosketa-data eta zero baino handiagoak diren kantitatea eta prezioa (adib. 1.234,56). Ez da ezer gorde.",
   "opening_lots.recalculate_hint": "Eskuzko loteak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
