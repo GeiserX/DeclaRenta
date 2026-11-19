@@ -209,3 +209,24 @@ describe("Lightyear conversions: a leg with no readable amount or currency is na
     }
   });
 });
+
+describe("Lightyear Tax Amt.: a refund lowers the withholding, never raises it", () => {
+  const DIV = "16/12/2025 06:02:35,DD-1,GOOG,US02079K1079,Dividend,,USD,,14.09,,,13.09,1.00";
+
+  it.each(METHODS)("[%s] a 1.00 withholding and a 0.50 refund give the deduction of 0.50", (method) => {
+    expect(report([DIV], method).doubleTaxation.deduction.toString()).toBe("0.9");
+    const refund = "20/12/2025 06:02:35,DD-2,GOOG,US02079K1079,Dividend,,USD,,0.00,,,0.50,-0.50";
+    expect(report([DIV, refund], method).doubleTaxation.deduction.toString()).toBe("0.45");
+    expect(report([DIV.replace(",13.09,1.00", ",13.59,0.50")], method).doubleTaxation.deduction.toString()).toBe("0.45");
+  });
+
+  it("a withholding written negative with a Net that shows it was taken stays withholding", () => {
+    const s = parse(["15/01/2025,REF001,VWRL,IE00B3RBWM25,Distribution,,USD,,10,1,0,8.50,-1.50"]);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax -1.5"]);
+  });
+
+  it("a negative Tax Amt. whose Net cannot be read lowers the withholding (the conservative reading)", () => {
+    const s = parse(["15/01/2025,REF001,VWRL,IE00B3RBWM25,Distribution,,USD,,10,1,0,n/a,-1.50"]);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax 1.5"]);
+  });
+});

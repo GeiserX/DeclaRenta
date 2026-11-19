@@ -305,8 +305,15 @@ function parseLightyearCsv(lines: string[]): Statement {
         type: "Dividends",
       });
 
-      // Withholding tax (if present)
+      // Withholding tax (if present). Lightyear writes it positive, with
+      // Net = Gross − Fee − Tax. A negative Tax Amt. gives withholding back (a
+      // refund): it lowers the withholding, never raises it, or the
+      // double-taxation deduction grows (#467). It is withholding only when
+      // a readable Net shows the money went out (Net ≤ Gross − Fee: the tax
+      // written with its sign).
       const taxDec = new Decimal(taxAmount);
+      const withheld = !taxDec.isNegative() || (!quantityUnreadable(fields[cols.netAmount]) &&
+        new Decimal(netAmount).lessThanOrEqualTo(new Decimal(grossAmount).minus(new Decimal(fee).abs())));
       if (!taxDec.isZero()) {
         cashTransactions.push({
           transactionID: `lightyear-tax-${reference || `${tradeDate}-${security}-${i}`}`,
@@ -317,7 +324,7 @@ function parseLightyearCsv(lines: string[]): Statement {
           currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: taxDec.neg().abs().neg().toString(),
+          amount: withheld ? taxDec.abs().neg().toString() : taxDec.abs().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
