@@ -16,6 +16,7 @@ import type {
   SecurityInfo,
   CashBalance,
   OptionExercise,
+  AccountPeriod,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
@@ -88,6 +89,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
+  const accountPeriods: AccountPeriod[] = [];
 
   // The "Summary" option in the Cash Transactions section makes IBKR emit
   // every cash transaction twice: a DETAIL row (real transactionID, real
@@ -122,6 +124,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
+    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "" });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
@@ -220,6 +223,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     securitiesInfo,
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
     optionExercises: optionExercises.length > 0 ? optionExercises : undefined,
+    accountPeriods,
     parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
     parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
@@ -630,6 +634,9 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
 const IBKR_CUSTODIAN_COUNTRY = "IE";
 
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
+  // Keep a missing or unreadable quantity apart from an explicit zero: the
+  // "0" default would prove "no shares held" to the one-purchase exception.
+  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(raw.quantity ?? "");
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -645,6 +652,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     fifoPnlUnrealized: raw.fifoPnlUnrealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
     custodianCountry: IBKR_CUSTODIAN_COUNTRY,
+    ...(quantityUnknown ? { quantityUnknown } : {}),
   };
 }
 

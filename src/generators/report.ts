@@ -790,35 +790,42 @@ export function generateTaxReport(
   // before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
-  // How far back the files reach, for the one-purchase exception (#453): the
-  // statement start, or the first trade of the files (never a manual opening
-  // lot, which is dated long before them).
-  const firstFileTrade = statement.trades
-    .map((tr) => normalizeDate(tr.tradeDate.trim()).slice(0, 10))
-    .reduce((min, d) => (min === "" || d < min ? d : min), "");
-  const fromDay = statement.fromDate ? normalizeDate(statement.fromDate.trim()).slice(0, 10) : "";
-  const startBySource = new Map<string, string>();
-  for (const src of statement.holdingsBySource ?? []) {
-    if (!src.brokerSource || !src.fromDate) continue;
-    const start = normalizeDate(src.fromDate).slice(0, 10);
-    const prev = startBySource.get(src.brokerSource);
-    if (!prev || start < prev) startBySource.set(src.brokerSource, start);
-  }
+  // What each uploaded file shows per account, for the one-purchase exception
+  // (#453): the days it covers and its end-of-period holdings, the only proof
+  // that no share was held at the window start. An unmerged statement is one
+  // file. A multi-account IBKR Flex has one period per account; its holdings
+  // rows go to their own account, and a row of no listed account stays apart
+  // (with no period it can prove nothing).
+  const files = statement.holdingsBySource ?? [
+    {
+      accountId: statement.accountId,
+      fromDate: statement.fromDate,
+      toDate: statement.toDate,
+      openPositions: statement.openPositions,
+      cashBalances: [],
+      ...(statement.accountPeriods ? { accountPeriods: statement.accountPeriods } : {}),
+    },
+  ];
+  const accountStatements = files.flatMap((src) => {
+    const periods = src.accountPeriods?.length ? src.accountPeriods : [{ accountId: src.accountId, fromDate: src.fromDate ?? "", toDate: src.toDate }];
+    const ids = new Set(periods.map((p) => p.accountId));
+    const own = periods.map((p) => ({
+      source: src.brokerSource,
+      accountId: p.accountId,
+      fromDate: p.fromDate,
+      toDate: p.toDate,
+      positions: periods.length === 1 ? src.openPositions : src.openPositions.filter((pos) => pos.accountId === p.accountId),
+    }));
+    const stray = periods.length === 1 ? [] : src.openPositions.filter((pos) => !ids.has(pos.accountId));
+    return stray.length === 0 ? own : [...own, { source: src.brokerSource, accountId: "\u0000unlisted", toDate: src.toDate, positions: stray }];
+  });
   const allDisposals = detectWashSales(
     fifoEngine.getDisposals(),
     washSaleTrades,
     statement.corporateActions,
     fifoEngine.getSplitRatios(),
     fifoEngine.getRemainingLots(),
-    {
-      dataStart: fromDay && (firstFileTrade === "" || fromDay < firstFileTrade) ? fromDay : firstFileTrade,
-      startBySource,
-      // Each file's end-of-period holdings: the only proof that no share came
-      // from before the files (an unmerged statement is one file).
-      snapshots: statement.holdingsBySource
-        ? statement.holdingsBySource.map((src) => ({ source: src.brokerSource, toDate: src.toDate, positions: src.openPositions }))
-        : [{ toDate: statement.toDate, positions: statement.openPositions }],
-    },
+    { statements: accountStatements },
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
@@ -1265,7 +1272,7 @@ export function generateTaxReport(
         id: "report.antichurning_single_purchase_unverified",
         severity: "warning",
         message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
-        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran: deben empezar antes del ${ctx.windowStart} e incluir las posiciones a fin de periodo de cada bróker que opera ese valor (en IBKR, la sección Open Positions de la Flex Query), sin más acciones de las que explican sus operaciones. Un fichero que solo incluye operaciones no basta.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrirla sin huecos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, la sección Open Positions de la Flex Query), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
         context: ctx,
       });
     }

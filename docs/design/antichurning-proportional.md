@@ -334,30 +334,39 @@ práctico Renta 2025. The decisions, each pinned in
   nothing about shares bought before it, at the same broker or any other. The
   exception is "applied" only when all of these hold, and "unverified" (not
   applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
-  - The upload reaches back to the window start: the statement `fromDate`
-    (IBKR), else the first trade of the files (never a manual opening lot).
-    With several brokers, the latest start among the brokers that trade the key
-    (`HoldingsSource.fromDate`, else each broker's first trade of any
-    security). Shares sold before the files are invisible.
   - The long position never goes negative (a sale of shares the upload never
     shows bought).
-  - The end-of-period holdings explain the trades (`buildSnapshotCheck`).
-    Without transfers, the shares a broker lists at its period end are the
-    shares it held before the files plus what its trades moved. So per broker,
-    listed holding minus the trade position at its `toDate` is the holding from
-    before the files. Summed over the brokers it must equal the manual opening
-    lots, which are declared holdings from before the files. A share moved
-    between two uploaded brokers cancels out. Each broker's latest non-empty
-    list counts (all its files ending that day, summed). An empty list cannot be
-    told apart from a file without the section, so it counts as no list. A
-    broker that trades the key with no list, or no list at all, proves nothing.
-    Only IBKR (OpenPositions) gives such lists today. Revolut's list is built
-    by its parser from the file's own trades (`OpenPosition.fromTrades`), so it
-    always matches them and is ignored. A transactions CSV (DEGIRO, Trade
-    Republic and the rest) therefore always gets "unverified".
+  - `buildEvidenceCheck`, for EVERY account (broker and account id) that
+    trades the key or lists it in any holdings list of the upload:
+    1. it has a non-empty holdings list dated on or after the sale day; the
+       earliest such date counts;
+    2. its files cover it without a gap from the window start to that date
+       (adjacent or overlapping periods qualify; the IBKR parser gives one
+       period per FlexStatement, so each account of a multi-account Flex has
+       its own);
+    3. every row of the key in that list has a readable quantity (the IBKR
+       parser marks a missing or non-numeric one `quantityUnknown` instead of
+       reading its "0" default); a list with no row of the key says zero;
+    4. the long holding listed equals what that account's own trades from the
+       window start leave on that date, split-adjusted to that date.
+
+    Then the account held nothing at the window start: its list is that
+    holding plus its trades since. Each account is checked on its own, in its
+    own list's share units, so a split between two lists' dates cannot mix
+    units. Nothing is offset between accounts: one account's surplus and
+    another's deficit fit both a transfer between them and shares held before
+    plus a transfer out of the upload, and no parser documents transfers. So a
+    transfer between two uploaded accounts is "unverified", and so is a manual
+    opening lot of the key dated on or after the window start (it comes from an
+    account the upload does not hold). An empty list cannot be told apart from
+    a file without the section, so it counts as no list. Only IBKR
+    (OpenPositions) gives such lists today. Revolut's list is built by its
+    parser from the file's own trades (`OpenPosition.fromTrades`), so it always
+    matches them and is ignored. A transactions CSV (DEGIRO, Trade Republic and
+    the rest) therefore always gets "unverified".
   Left invisible on purpose: a broker or account the user did not upload, and
-  shares that left a listed broker without a trade (a transfer out, which the
-  IBKR parser does not read) before its `toDate`. The info message
+  shares held at the window start that a transfer out of the upload (which the
+  IBKR parser does not read) hides before the list date. The info message
   `report.antichurning_single_purchase` names both whenever the exception is
   applied.
 - **Definitive test.** Gain lots with pending losses share the absorption, so
@@ -382,7 +391,12 @@ Verified case: the issue example filed for 2025 with 0.66.5 deducted 20; the new
 engine releases 25 in 2026 instead of 5. The lifetime total does not change;
 only the year does. The new rule can also move a loss to an earlier year
 (V0046-20, the V1760-23 total exit); there the user can correct the earlier
-return to claim it. The procedure depends on the year: from 2024 on, an
+return to claim it. Whenever the user corrects an earlier year to claim a
+loss (that case, or a loss 0.66.13 and earlier blocked against the
+one-purchase exception, #453), the later years already filed must be checked
+too: where the old version released that same loss and the user deducted it,
+that year is corrected to remove it, so the loss is deducted once. The
+procedure depends on the year: from 2024 on, an
 «autoliquidación rectificativa» in both directions; for 2023 and earlier, an
 «autoliquidación complementaria» to pay more or a «solicitud de rectificación»
 to claim. AEAT, Manual práctico de Renta 2025: «la aplicación efectiva de la

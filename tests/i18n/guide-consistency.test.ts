@@ -274,4 +274,32 @@ describe("Renta Web guide consistency", () => {
     expect(design).toMatch(/autoliquidación rectificativa/);
     expect(design).not.toMatch(/or must file an «autoliquidación\s+complementaria» for the earlier year/);
   });
+
+  it("tells a user who corrects an earlier year to remove the same loss from a later filed year, and never says every later purchase blocks (review of #453)", () => {
+    // A loss 0.66.13 blocked against the one-purchase exception may have been
+    // released, and deducted, in a later filed year: correcting only the earlier
+    // year would deduct it twice. And a buy that only covers a short is no
+    // repurchase, so "the purchases after always block" is wrong.
+    const laterYears = {
+      es: /revisa también los años posteriores que ya presentaste[^.]*corrige también ese año para quitarla/,
+      en: /also check the later years you already filed[^.]*correct that year too to remove it/,
+      ca: /revisa també els anys posteriors que ja vas presentar[^.]*corregeix també aquell any per treure-la/,
+      eu: /berrikusi dagoeneko aurkeztu dituzun ondorengo urteak ere[^.]*zuzendu urte hori ere/,
+      gl: /revisa tamén os anos posteriores que xa presentaches[^.]*corrixe tamén ese ano para quitala/,
+    };
+    const shortCover = { es: /posición corta/, en: /short position/, ca: /posició curta/, eu: /posizio motz/, gl: /posición curta/ };
+    const alwaysBlock = /bloquean siempre|always block|sempre bloquegen|beti blokeatzen|bloquean sempre/;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      const text = locale["guide_rw.blocked_losses_hint"];
+      expect(text, name).toMatch(laterYears[name]);
+      expect(text, name).toMatch(shortCover[name]);
+      expect(text, name).not.toMatch(alwaysBlock);
+    }
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    for (const p of ["casillas.md", "faq.md"]) {
+      expect(doc(p), p).toMatch(/revisa también los años posteriores que ya presentaste/);
+      expect(doc(p), p).toMatch(/salvo la que solo cierra una posición corta/);
+      expect(doc(p), p).not.toMatch(/bloquea siempre/);
+    }
+  });
 });
