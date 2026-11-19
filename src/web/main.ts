@@ -73,6 +73,7 @@ import { symbolCell } from "./symbol-cell.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { amountCell, costCell, countedResult } from "./disposal-cells.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -1413,10 +1414,12 @@ function renderOperationsTable() {
         (brokers && (matches(d.acquireBrokerSource) || matches(d.brokerSource))),
     );
   }
+  // Gain or loss as the boxes split it (`finiteDisposalAmounts`): a NaN
+  // result failed both tests, so its sale showed under neither (#469, #470).
   if (filter === "gain") {
-    disposals = disposals.filter((d) => d.gainLossEur.greaterThanOrEqualTo(0));
+    disposals = disposals.filter((d) => finiteDisposalAmounts(d).gainLoss.greaterThanOrEqualTo(0));
   } else if (filter === "loss") {
-    disposals = disposals.filter((d) => d.gainLossEur.lessThan(0));
+    disposals = disposals.filter((d) => finiteDisposalAmounts(d).gainLoss.lessThan(0));
   }
 
   // Apply sort
@@ -1432,9 +1435,11 @@ function renderOperationsTable() {
       else if (col === "buyBroker") cmp = (a.acquireBrokerSource ?? "").localeCompare(b.acquireBrokerSource ?? "");
       else if (col === "sellBroker") cmp = (a.brokerSource ?? "").localeCompare(b.brokerSource ?? "");
       else if (col === "qty") cmp = a.quantity.minus(b.quantity).toNumber();
-      else if (col === "cost") cmp = a.costBasisEur.minus(b.costBasisEur).toNumber();
-      else if (col === "proceeds") cmp = a.proceedsEur.minus(b.proceedsEur).toNumber();
-      else if (col === "gl") cmp = a.gainLossEur.minus(b.gainLossEur).toNumber();
+      // The amounts the boxes count: a NaN difference made the comparison
+      // say «equal» to every row and scrambled the order (#469, #470).
+      else if (col === "cost") cmp = finiteDisposalAmounts(a).cost.comparedTo(finiteDisposalAmounts(b).cost);
+      else if (col === "proceeds") cmp = finiteDisposalAmounts(a).proceeds.comparedTo(finiteDisposalAmounts(b).proceeds);
+      else if (col === "gl") cmp = finiteDisposalAmounts(a).gainLoss.comparedTo(finiteDisposalAmounts(b).gainLoss);
       else if (col === "days") cmp = a.holdingPeriodDays - b.holdingPeriodDays;
       return cmp * dir;
     });
