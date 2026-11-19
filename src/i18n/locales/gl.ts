@@ -1023,9 +1023,13 @@ const gl: TranslationKeys = {
   "report.non_finite_total.hint":
     "É posible que un arquivo dun bróker teña un importe corrupto ou un formato numérico inesperado. Revisa as operacións de orixe.",
   "report.trade_out_of_range":
-    "{{count}} operación(s) do ficheiro teñen unha cantidade, un prezo, unha comisión ou un importe que ningún bróker escribe (20 cifras enteiras ou máis, ou 20 ceros ou máis despois da coma): {{rows}}. Os seus importes non se suman ás casillas.",
+    "{{count}} operación(s) do ficheiro teñen unha cantidade, un prezo, unha comisión ou un importe que ningún bróker escribe (máis de 20 cifras enteiras, ou 20 ceros ou máis despois da coma): {{rows}}. Os seus importes non se suman ás casillas.",
   "report.trade_out_of_range.hint":
     "Se a cantidade se pode ler, a compra crea o seu lote sen custo: a venda que o usa suma o seu valor de transmisión e non o seu valor de adquisición, así que podes pagar de máis, nunca de menos. Unha venda así non suma o seu resultado, nin un dividendo, un xuro ou unha retención así o seu importe. Revisa esas filas no ficheiro do bróker e declara o seu resultado a man.",
+  "report.cash_amount_too_large":
+    "{{count}} cobro(s) ou cargo(s) do ficheiro valen un billón de euros ou máis: {{rows}}. Os seus importes non se suman ás casillas.",
+  "report.cash_amount_too_large.hint":
+    "Ningún dividendo, xuro ou retención real chega a esa cifra. Adoita ser un erro do ficheiro ou do tipo de cambio. Revisa esas filas no ficheiro do bróker e declara o seu importe a man.",
   "report.non_finite_disposal":
     "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito) ou que pasa de 12 cifras enteiras en euros: {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
   "report.non_finite_disposal.hint":

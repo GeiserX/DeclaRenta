@@ -1060,9 +1060,13 @@ const es = {
   "report.non_finite_total.hint":
     "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
   "report.trade_out_of_range":
-    "{{count}} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (20 cifras enteras o más, o 20 ceros o más tras la coma): {{rows}}. Sus importes no se suman a las casillas.",
+    "{{count}} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (más de 20 cifras enteras, o 20 ceros o más tras la coma): {{rows}}. Sus importes no se suman a las casillas.",
   "report.trade_out_of_range.hint":
     "Si la cantidad se puede leer, la compra crea su lote sin coste: la venta que lo usa suma su valor de transmisión y no su valor de adquisición, así que puedes pagar de más, nunca de menos. Una venta así no suma su resultado, ni un dividendo, un interés o una retención así su importe. Revisa esas filas en el fichero del bróker y declara su resultado a mano.",
+  "report.cash_amount_too_large":
+    "{{count}} cobro(s) o cargo(s) del fichero valen un billón de euros o más: {{rows}}. Sus importes no se suman a las casillas.",
+  "report.cash_amount_too_large.hint":
+    "Ningún dividendo, interés o retención real llega a esa cifra. Suele ser un error del fichero o del tipo de cambio. Revisa esas filas en el fichero del bróker y declara su importe a mano.",
   "report.non_finite_disposal":
     "{{count}} venta(s) tienen un importe que no es un número (NaN o infinito) o que pasa de 12 cifras enteras en euros: {{rows}}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.",
   "report.non_finite_disposal.hint":

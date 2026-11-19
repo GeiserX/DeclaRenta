@@ -12,6 +12,7 @@ import type { Trade, CorporateAction, OptionExercise } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { getEcbRate, isEcbResolvable } from "./ecb.js";
 import { daysBetween, normalizeDate } from "./dates.js";
+import { optionExerciseOutOfRange } from "./amount-range.js";
 
 /** Known asset categories — warn on unknown values to catch future IBKR additions */
 const KNOWN_CATEGORIES: ReadonlySet<string> = new Set([
@@ -1381,6 +1382,14 @@ export class FifoEngine {
         });
         continue;
       }
+      // A row with a number no broker writes (contracts, multiplier or strike
+      // of 1e2000, `optionExerciseOutOfRange`) books nothing: its contracts
+      // would deliver 1e+2002 shares, and the sale or lot built from them ran
+      // the CLI out of memory (#470). report.ts names it
+      // (`report.trade_out_of_range`). It still feeds the exercise keys of
+      // `processTrades`, so the broker's own trade rows for the same exercise
+      // are still skipped and nothing is booked twice.
+      if (optionExerciseOutOfRange(ex)) continue;
       const date = normalizeDate(ex.date);
       const ecbRate = getEcbRate(rateMap, date, ex.currency);
       const quantity = new Decimal(ex.quantity).abs();

@@ -1023,9 +1023,13 @@ const ca: TranslationKeys = {
   "report.non_finite_total.hint":
     "És possible que un fitxer d'un bróker tingui un import corrupte o un format numèric inesperat. Revisa les operacions d'origen.",
   "report.trade_out_of_range":
-    "{{count}} operació(ns) del fitxer tenen una quantitat, un preu, una comissió o un import que cap bròker no escriu (20 xifres enteres o més, o 20 zeros o més després de la coma): {{rows}}. Els seus imports no es sumen a les caselles.",
+    "{{count}} operació(ns) del fitxer tenen una quantitat, un preu, una comissió o un import que cap bròker no escriu (més de 20 xifres enteres, o 20 zeros o més després de la coma): {{rows}}. Els seus imports no es sumen a les caselles.",
   "report.trade_out_of_range.hint":
     "Si la quantitat es pot llegir, la compra crea el seu lot sense cost: la venda que el fa servir suma el seu valor de transmissió i no el seu valor d'adquisició, així que pots pagar de més, mai de menys. Una venda així no suma el seu resultat, ni un dividend, un interès o una retenció així el seu import. Revisa aquestes files al fitxer del bròker i declara'n el resultat a mà.",
+  "report.cash_amount_too_large":
+    "{{count}} cobrament(s) o càrrec(s) del fitxer valen un bilió d'euros o més: {{rows}}. Els seus imports no es sumen a les caselles.",
+  "report.cash_amount_too_large.hint":
+    "Cap dividend, interès o retenció real no arriba a aquesta xifra. Sol ser un error del fitxer o del tipus de canvi. Revisa aquestes files al fitxer del bròker i declara'n l'import a mà.",
   "report.non_finite_disposal":
     "{{count}} venda(es) tenen un import que no és un número (NaN o infinit) o que passa de 12 xifres enteres en euros: {{rows}}. Aquest import no es suma a les caselles. La resta d'operacions de l'any sí que es sumen.",
   "report.non_finite_disposal.hint":

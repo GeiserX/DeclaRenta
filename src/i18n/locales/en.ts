@@ -1021,9 +1021,13 @@ const en: TranslationKeys = {
   "report.non_finite_total.hint":
     "A broker file may have a corrupt amount or an unexpected number format. Review the source operations.",
   "report.trade_out_of_range":
-    "{{count}} operation(s) in the file have a quantity, price, commission or amount that no broker writes (20 or more integer digits, or 20 or more zeros after the decimal point): {{rows}}. Their amounts are not added to the boxes.",
+    "{{count}} operation(s) in the file have a quantity, price, commission or amount that no broker writes (more than 20 integer digits, or 20 or more zeros after the decimal point): {{rows}}. Their amounts are not added to the boxes.",
   "report.trade_out_of_range.hint":
     "If the quantity can be read, the purchase creates its lot with no cost: the sale that uses it adds its transfer value and not its acquisition value, so you may pay more, never less. Such a sale does not add its result, and such a dividend, interest or withholding does not add its amount. Check those rows in the broker's file and declare their result by hand.",
+  "report.cash_amount_too_large":
+    "{{count}} cash row(s) in the file are worth a trillion euros (10^12) or more: {{rows}}. Their amounts are not added to the boxes.",
+  "report.cash_amount_too_large.hint":
+    "No real dividend, interest or withholding reaches that figure. It is usually an error in the file or in the exchange rate. Check those rows in the broker's file and declare their amount by hand.",
   "report.non_finite_disposal":
     "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":

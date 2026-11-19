@@ -20,7 +20,7 @@ import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
-import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
+import { buildManualRateMap, coerceManualQuotes, normalizeManualQuote } from "../engine/manual-rates.js";
 import { isValidIsin } from "../engine/antichurning-window.js";
 import { cashAverageOf, heldCashBalances } from "../engine/ecb.js";
 import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
@@ -395,9 +395,16 @@ program
             console.error("Error: --crypto-rates debe ser un array de { currency, date, eurPerUnit }.");
             process.exit(1);
           }
-          manualRates = buildManualRateMap(coerceManualQuotes(parsed));
+          const quotes = coerceManualQuotes(parsed);
+          manualRates = buildManualRateMap(quotes);
           const loaded = [...manualRates.values()].reduce((n, m) => n + m.size, 0);
           console.error(`  Tipos manuales crypto cargados: ${loaded}`);
+          // A rate that is no positive number, or one no price reaches
+          // (1e1000000000), is left out: say so, never silently (#470).
+          const ignored = quotes.filter((q) => normalizeManualQuote(q) === null);
+          if (ignored.length > 0) {
+            console.error(`  ⚠ ${ignored.length} tipo(s) de --crypto-rates no se usan porque su valor no es un precio válido: ${ignored.map((q) => `${q.currency} ${q.date}`).join(", ")}`);
+          }
         }
 
         // 3. Generate tax report

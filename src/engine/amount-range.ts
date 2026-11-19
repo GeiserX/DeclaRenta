@@ -30,7 +30,7 @@ type TradeNumbers = Record<(typeof TRADE_NUMBER_FIELDS)[number], string>;
 const TRADE_NUMBER_MAX = new Decimal("1e20");
 const TRADE_NUMBER_MIN = new Decimal("1e-20");
 
-/** A finite number past the range a broker writes: 20 integer digits or more, or below 10^-20 and not 0. */
+/** A finite number past the range a broker writes: more than 20 integer digits, or below 10^-20 and not 0. */
 function outOfReadRange(value: Decimal): boolean {
   if (!value.isFinite() || value.isZero()) return false;
   const abs = value.abs();
@@ -88,6 +88,42 @@ function anyOutOfReadRange(texts: (string | undefined)[]): boolean {
     const value = readNumber(text);
     return value !== null && outOfReadRange(value);
   });
+}
+
+/**
+ * Whether an option exercise, assignment or expiration (IBKR OptionEAE) has
+ * a number FIFO reads that no broker writes, by the rule of
+ * `tradeOutOfRange`: the contracts, the multiplier or the strike, the shares
+ * delivered (contracts × multiplier) or their amount (× strike). FIFO books
+ * nothing for such a row (`processOptionExercises`) and report.ts names it.
+ * The row's `proceeds` and `marketPrice` are not read: FIFO never uses them.
+ */
+export function optionExerciseOutOfRange(ex: { quantity: string; multiplier: string; strike: string }): boolean {
+  if (anyOutOfReadRange([ex.quantity, ex.multiplier, ex.strike])) return true;
+  const quantity = readNumber(ex.quantity);
+  if (quantity === null || !quantity.isFinite()) return false;
+  // FIFO reads an empty multiplier as 100 contracts' worth of shares.
+  const multiplier = readNumber(ex.multiplier) ?? new Decimal(100);
+  const shares = quantity.mul(multiplier.isFinite() ? multiplier : 1).abs();
+  if (shares.greaterThanOrEqualTo(TRADE_NUMBER_MAX)) return true;
+  const strike = readNumber(ex.strike);
+  return strike !== null && strike.isFinite() && shares.mul(strike).abs().greaterThanOrEqualTo(TRADE_NUMBER_MAX);
+}
+
+/**
+ * Whether a corporate action's quantity alone is past the range a broker
+ * writes. report.ts gives such an action the quantity "0", the parsers' "no
+ * readable quantity", so it moves no share (a cash buyout sells nothing, a
+ * scrip dividend books no lot); a split still takes its ratio from the
+ * description.
+ */
+export function corporateActionQuantityOutOfRange(action: { quantity: string }): boolean {
+  return anyOutOfReadRange([action.quantity]);
+}
+
+/** Whether a number written as text is past the range a broker writes (`tradeOutOfRange`). */
+export function numberTextOutOfRange(text: string): boolean {
+  return anyOutOfReadRange([text]);
 }
 
 /** Whether a trade's quantity alone is past the range a broker writes. */

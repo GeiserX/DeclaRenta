@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { normalizeDate } from "./dates.js";
 import { normalizeDecimalString } from "./manual-rates.js";
+import { tradeOutOfRange } from "./amount-range.js";
 import type { Trade } from "../types/ibkr.js";
 import type { ManualOpeningLot } from "../types/tax.js";
 
@@ -54,6 +55,14 @@ export function normalizeManualOpeningLot(lot: ManualOpeningLot): ManualOpeningL
 
   if (!quantity.isFinite() || !pricePerShare.isFinite()) return null;
   if (!quantity.greaterThan(0) || !pricePerShare.greaterThan(0)) return null;
+  // A quantity, price or cost no broker writes (`tradeOutOfRange`: 20 integer
+  // digits or more, or below 10^-20) is no lot: decimal.js reads
+  // "1e1000000000" as finite, and the lot's cost reached FIFO and every
+  // output (#470). The web form marks the row invalid.
+  if (tradeOutOfRange({
+    quantity: quantity.toString(), tradePrice: pricePerShare.toString(),
+    multiplier: "1", commission: "0", taxes: "0", tradeMoney: "0",
+  })) return null;
 
   return {
     symbol,

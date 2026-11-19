@@ -35,7 +35,15 @@ import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { formatDateDmy, normalizeDate, parseDate } from "../engine/dates.js";
 import { finiteDisposalAmounts } from "./casillas.js";
-import { cashOutOfRange, corporateActionOutOfRange, tradeOutOfRange, tradeQuantityOutOfRange } from "../engine/amount-range.js";
+import {
+  cashOutOfRange,
+  corporateActionOutOfRange,
+  corporateActionQuantityOutOfRange,
+  isCountableAmount,
+  optionExerciseOutOfRange,
+  tradeOutOfRange,
+  tradeQuantityOutOfRange,
+} from "../engine/amount-range.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
@@ -747,18 +755,25 @@ export function generateTaxReport(
   // the anti-churning evidence reads every trade, as for a trade of unknown
   // quantity. A cash row (dividend, withholding, interest, reward) with such
   // a number is named the same way and counted nowhere. A corporate action
-  // with one is named too and keeps its place, so its shares still move
-  // (a split takes its ratio from the description), but its amount is no
-  // number: a cash buyout's sale is left out (`finiteDisposalAmounts`) and a
-  // scrip dividend's lot has no cost.
+  // with one is named too and keeps its place (a split takes its ratio from
+  // the description), but its amount is no number: a cash buyout's sale is
+  // left out (`finiteDisposalAmounts`) and a scrip dividend's lot has no cost.
+  // An action whose quantity is out of range gets the quantity "0", so it
+  // moves no share: a cash buyout of 1e1000000000 shares booked a sale of
+  // that many and the web PDF ran out of memory. An option exercise with
+  // such a number books nothing in FIFO (`optionExerciseOutOfRange`) and is
+  // named here.
   const outOfRangeCash = statement.cashTransactions.filter((c) => cashOutOfRange(c));
-  const cashTransactions = outOfRangeCash.length === 0
+  const readableCash = outOfRangeCash.length === 0
     ? statement.cashTransactions
     : statement.cashTransactions.filter((c) => !outOfRangeCash.includes(c));
   const outOfRangeActions = statement.corporateActions.filter((ca) => corporateActionOutOfRange(ca));
   const corporateActions = outOfRangeActions.length === 0
     ? statement.corporateActions
-    : statement.corporateActions.map((ca) => (outOfRangeActions.includes(ca) ? { ...ca, amount: "NaN" } : ca));
+    : statement.corporateActions.map((ca) => (outOfRangeActions.includes(ca)
+        ? { ...ca, amount: "NaN", ...(corporateActionQuantityOutOfRange(ca) ? { quantity: "0" } : {}) }
+        : ca));
+  const outOfRangeExercises = (statement.optionExercises ?? []).filter((ex) => optionExerciseOutOfRange(ex));
   const outOfRangeTrades = statement.trades.filter((tr) => tradeOutOfRange(tr));
   const outOfRange = new Set<Trade>(outOfRangeTrades);
   const countedTrades = outOfRange.size === 0 ? statement.trades : statement.trades.filter((tr) => !outOfRange.has(tr));
@@ -771,6 +786,23 @@ export function generateTaxReport(
       });
   const valuation = resolveCryptoTradeValues(fifoInputTrades, rateMap, manualRates);
   const resolvedRateMap = valuation.rateMap;
+  // A cash row the read range lets through but worth 1e12 € or more (a
+  // dividend of 9e15 dollars) fails the counted bound (`isCountableAmount`),
+  // as a sale's amount does: it is named (`report.cash_amount_too_large`)
+  // and counted nowhere, neither in a box nor in the currency engine. Before,
+  // box 0029 showed -9,900,000,000,000,000.00 € with no message.
+  const uncountableCash = readableCash.filter((c) => {
+    let value: ReturnType<typeof valueIncomeEur>;
+    try {
+      value = valueIncomeEur(c, resolvedRateMap, manualRates);
+    } catch {
+      return false; // an amount that is no number: not this rule's concern
+    }
+    return value !== null && !isCountableAmount(value.amountEur);
+  });
+  const cashTransactions = uncountableCash.length === 0
+    ? readableCash
+    : readableCash.filter((c) => !uncountableCash.includes(c));
 
   // 0c. Crypto reward income (staking, Simple Earn interest, airdrops, referral)
   //     establishes an acquisition lot at the EUR value taxed as income, so a
@@ -1553,6 +1585,7 @@ export function generateTaxReport(
     ...outOfRangeTrades.map((tr) => `${tr.symbol || tr.isin} (${formatDateDmy(tr.tradeDate)})`),
     ...outOfRangeCash.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`),
     ...outOfRangeActions.map((ca) => `${ca.symbol || ca.isin} (${formatDateDmy(ca.dateTime.slice(0, 8))})`),
+    ...outOfRangeExercises.map((ex) => `${ex.symbol || ex.underlyingSymbol} (${formatDateDmy(ex.date)})`),
   ];
   if (outOfRangeRows.length > 0) {
     const count = String(outOfRangeRows.length);
@@ -1560,8 +1593,20 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.trade_out_of_range",
       severity: "error",
-      message: `${count} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (20 cifras enteras o más, o 20 ceros o más tras la coma): ${rows}. Sus importes no se suman a las casillas.`,
+      message: `${count} operación(es) del fichero tienen una cantidad, un precio, una comisión o un importe que ningún bróker escribe (más de 20 cifras enteras, o 20 ceros o más tras la coma): ${rows}. Sus importes no se suman a las casillas.`,
       hint: "Si la cantidad se puede leer, la compra crea su lote sin coste: la venta que lo usa suma su valor de transmisión y no su valor de adquisición, así que puedes pagar de más, nunca de menos. Una venta así no suma su resultado, ni un dividendo, un interés o una retención así su importe. Revisa esas filas en el fichero del bróker y declara su resultado a mano.",
+      context: { count, rows },
+    });
+  }
+  // A cash row worth 1e12 € or more: counted nowhere (see `uncountableCash`).
+  if (uncountableCash.length > 0) {
+    const count = String(uncountableCash.length);
+    const rows = uncountableCash.map((c) => `${c.symbol || c.isin || c.description} (${formatDateDmy(c.dateTime)})`).join(", ");
+    allMessages.push({
+      id: "report.cash_amount_too_large",
+      severity: "error",
+      message: `${count} cobro(s) o cargo(s) del fichero valen un billón de euros o más: ${rows}. Sus importes no se suman a las casillas.`,
+      hint: "Ningún dividendo, interés o retención real llega a esa cifra. Suele ser un error del fichero o del tipo de cambio. Revisa esas filas en el fichero del bróker y declara su importe a mano.",
       context: { count, rows },
     });
   }

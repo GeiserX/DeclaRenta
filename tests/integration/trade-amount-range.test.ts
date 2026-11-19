@@ -1,11 +1,15 @@
-import { afterEach, describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import PDFDocument from "pdfkit";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { computeCasillaBlocksWithFx } from "../../src/generators/casillas.js";
 import { formatCsv } from "../../src/generators/csv.js";
 import { formatReport } from "../../src/cli/format-report.js";
+import { generatePdfReport } from "../../src/generators/pdf.js";
+import { generatePdfWebReport } from "../../src/generators/pdf-web.js";
 import { renderOperationsAnnex } from "../../src/web/operations-annex.js";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
+import { buildManualRateMap } from "../../src/engine/manual-rates.js";
 import { FifoEngine } from "../../src/engine/fifo.js";
 import { FxFifoEngine } from "../../src/engine/fx-fifo.js";
 import { localizeHint, localizeMessage, setLocale } from "../../src/i18n/index.js";
@@ -38,12 +42,53 @@ function trade(date: string, side: "BUY" | "SELL", qty: string, price: string, e
   return `<Trade tradeID="${seq}" accountId="U1" symbol="${symbol}" description="${symbol} INC" conid="4531" isin="US0000004531" assetCategory="STK" currency="${currency}" tradeDate="${date}" settlementDate="${date}" quantity="${qty}" tradePrice="${price}" tradeMoney="0" proceeds="0" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}" exchange="NASDAQ" ibCommissionCurrency="${currency}" ibCommission="${extra.commission ?? "0"}" taxes="0" multiplier="1" />`;
 }
 
-function xml(rows: string[], cash: string[] = [], actions: string[] = []): string {
-  return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="Custom"><Trades>${rows.join("")}</Trades><CashTransactions>${cash.join("")}</CashTransactions><CorporateActions>${actions.join("")}</CorporateActions><OpenPositions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+function xml(rows: string[], cash: string[] = [], actions: string[] = [], exercises: string[] = []): string {
+  return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="Custom"><Trades>${rows.join("")}</Trades><OptionEAE>${exercises.join("")}</OptionEAE><CashTransactions>${cash.join("")}</CashTransactions><CorporateActions>${actions.join("")}</CorporateActions><OpenPositions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
 }
 
-function report(rows: string[], method: FxMethod = "multidivisa", cash: string[] = [], actions: string[] = []): TaxSummary {
-  return generateTaxReport(parseIbkrFlexXml(xml(rows, cash, actions)), RATES, 2025, reportOptionsForMethod(method));
+function report(rows: string[], method: FxMethod = "multidivisa", cash: string[] = [], actions: string[] = [], exercises: string[] = []): TaxSummary {
+  return generateTaxReport(parseIbkrFlexXml(xml(rows, cash, actions, exercises)), RATES, 2025, reportOptionsForMethod(method));
+}
+
+/** One XYZ option contract (100 shares, strike 20 USD): its purchase for 2 USD a share, and IBKR's own delivery row for an exercise. */
+const OPTION = `symbol="XYZC20" description="XYZ 01JUN25 20 C" conid="999" isin="" assetCategory="OPT" currency="USD"`;
+function optionBuy(putCall: "C" | "P" = "C"): string {
+  return `<Trade tradeID="O1" accountId="U1" ${OPTION.replace("XYZC20", `XYZ${putCall}20`).replace("20 C", `20 ${putCall}`)} tradeDate="20250115" settlementDate="20250115" quantity="1" tradePrice="2" tradeMoney="200" proceeds="-200" cost="200" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="CBOE" ibCommissionCurrency="USD" ibCommission="0" taxes="0" multiplier="100" underlyingSymbol="XYZ" underlyingSecurityID="US0000004531" strike="20" expiry="20250601" putCall="${putCall}" />`;
+}
+/** IBKR's delivery BookTrade of the 100 shares (notes "Ex"): FIFO skips it while an OptionEAE row delivers them. */
+const DELIVERY = `<Trade tradeID="X1" accountId="U1" symbol="XYZ" description="XYZ INC" conid="4531" isin="US0000004531" assetCategory="STK" currency="USD" tradeDate="20250301" settlementDate="20250301" quantity="100" tradePrice="20" tradeMoney="2000" proceeds="-2000" cost="2000" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="--" ibCommissionCurrency="USD" ibCommission="0" taxes="0" multiplier="1" notes="Ex" />`;
+
+/** An OptionEAE row on XYZ: one contract, a multiplier of 100 and a strike of 20, unless a field says otherwise. */
+function exercise(putCall: "C" | "P", type: "Exercise" | "Assignment", fields: { quantity?: string; multiplier?: string; strike?: string } = {}): string {
+  return `<OptionEAE accountId="U1" currency="USD" assetCategory="OPT" symbol="XYZ${putCall}20" description="XYZ 01JUN25 20 ${putCall}" conid="999" isin="" underlyingSymbol="XYZ" underlyingSecurityID="US0000004531" multiplier="${fields.multiplier ?? "100"}" strike="${fields.strike ?? "20"}" expiry="20250601" putCall="${putCall}" date="20250301" transactionType="${type}" quantity="${fields.quantity ?? "-1"}" tradePrice="0" markPrice="26" proceeds="0" tradeID="E1" />`;
+}
+
+/** A scrip dividend of XYZ shares (IBKR type SD), on 1 January 2025. */
+function scrip(quantity: string): string {
+  return `<CorporateAction transactionID="SD1" accountId="U1" symbol="XYZ" isin="US0000004531" currency="USD" description="XYZ(US0000004531) STOCK DIVIDEND 1 FOR 10 (XYZ, XYZ INC, US0000004531)" reportDate="20250101" dateTime="20250101" quantity="${quantity}" amount="0" type="SD" actionDescription="" />`;
+}
+
+function interest(id: string, date: string, amount: string): string {
+  return `<CashTransaction transactionID="${id}" accountId="U1" symbol="" description="USD CREDIT INT FOR FEB-2025" isin="" currency="USD" dateTime="${date}" settleDate="${date}" amount="${amount}" fxRateToBase="1" type="Broker Interest Received" />`;
+}
+
+/**
+ * Both PDFs build, with no «NaN» cell and no run of 30 digits. The words
+ * «(NaN o infinito)» of `report.non_finite_disposal` are no cell.
+ */
+const NAN_CELL = /\bNaN\b(?! o infinito)|\d{30}/;
+async function expectPdfsBounded(r: TaxSummary): Promise<void> {
+  const spy = vi.spyOn(PDFDocument.prototype, "text");
+  try {
+    await generatePdfReport(r);
+    const printed = spy.mock.calls.map((args) => String(args[0])).join("\n");
+    expect(printed).not.toMatch(NAN_CELL);
+  } finally {
+    spy.mockRestore();
+  }
+  const blob = await generatePdfWebReport(r, (key: string) => key);
+  const text = new TextDecoder("latin1").decode(new Uint8Array(await blob.arrayBuffer()));
+  expect(text).not.toMatch(NAN_CELL);
 }
 
 function dividend(id: string, date: string, amount: string, type = "Dividends"): string {
@@ -262,12 +307,37 @@ describe("a trade number no broker writes is named and not counted", () => {
   });
 
   it("a cash buyout of 1e2000 dollars: its sale takes the shares and is left out, and the action is named", () => {
-    for (const [quantity, amount] of [["-10", "1e2000"], ["-1e2000", "542"]] as const) {
-      const r = report([trade("20250201", "BUY", "10", "40")], "multidivisa", [], [action("buyout", quantity, amount)]);
+    const r = report([trade("20250201", "BUY", "10", "40")], "multidivisa", [], [action("buyout", "-10", "1e2000")]);
+    expectBounded(r);
+    expect(totals(r)).toEqual(["0", "0", "0"]);
+    expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (01/04/2025)");
+    expect(message(r, "report.non_finite_disposal")?.context?.rows).toContain("XYZ (01/04/2025)");
+  });
+
+  it("a cash buyout of -1e2000 shares sells nothing: the shares stay for the next sale, and the action is named", () => {
+    // Before, it booked a sale of 1e2000 shares (with -1e1000000000 the web
+    // PDF ran out of memory writing them). The quantity "0" moves no share.
+    for (const method of METHODS) {
+      const rows = [trade("20250201", "BUY", "10", "40"), trade("20250701", "SELL", "-10", "50")];
+      const control = report(rows, method);
+      const r = report(rows, method, [], [action("buyout", "-1e2000", "542")]);
       expectBounded(r);
-      expect(totals(r)).toEqual(["0", "0", "0"]);
+      expect(r.capitalGains.disposals).toHaveLength(1);
+      expect(totals(r)).toEqual(totals(control));
+      expect(totals(r)).toEqual(["550", "440", "110"]);
       expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (01/04/2025)");
-      expect(message(r, "report.non_finite_disposal")?.context?.rows).toContain("XYZ (01/04/2025)");
+      expect(message(r, "report.non_finite_disposal")).toBeUndefined();
+    }
+  });
+
+  it("a scrip dividend of 1e2000 shares books no lot, so the next sale takes the shares bought", () => {
+    const rows = [trade("20250201", "BUY", "10", "40"), trade("20250601", "SELL", "-10", "50")];
+    for (const method of METHODS) {
+      const r = report(rows, method, [], [scrip("1e2000")]);
+      expectBounded(r);
+      expect(totals(r)).toEqual(totals(report(rows, method)));
+      expect(totals(r)).toEqual(["550", "440", "110"]);
+      expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (01/01/2025)");
     }
   });
 
@@ -278,6 +348,105 @@ describe("a trade number no broker writes is named and not counted", () => {
     expectBounded(r);
     expect(totals(r)).toEqual(totals(control));
     expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZ (01/04/2025)");
+  });
+
+  it("an option exercise with a multiplier of 1e2000 books nothing and is named, never a lot of 1e2002 shares", () => {
+    // Control: the exercise in range adds the premium to the shares' cost,
+    // (2000 + 200) × 1.10 = 2420. IBKR's own delivery row stays skipped.
+    const rows = [optionBuy(), DELIVERY, trade("20250601", "SELL", "-100", "30")];
+    for (const method of METHODS) {
+      const control = report(rows, method, [], [], [exercise("C", "Exercise")]);
+      expect(totals(control)).toEqual(["3300", "2420", "880"]);
+      expect(message(control, "report.trade_out_of_range")).toBeUndefined();
+      // Out of range: no shares arrive, so the sale has no lot and a cost of 0
+      // (the user may overpay, never underpay). Before, it booked 1e2002
+      // shares at a cost with no premium, and said nothing.
+      for (const multiplier of ["1e2000", "1" + "0".repeat(2000)]) {
+        const r = report(rows, method, [], [], [exercise("C", "Exercise", { multiplier })]);
+        expectBounded(r);
+        expect(totals(r)).toEqual(["3300", "0", "3300"]);
+        expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe("XYZC20 (01/03/2025)");
+      }
+    }
+  });
+
+  for (const [label, putCall, type, fields] of [
+    ["a put exercise of -1e2000 contracts", "P", "Exercise", { quantity: "-1e2000" }],
+    ["a call assignment of 1e2000 contracts", "C", "Assignment", { quantity: "1e2000" }],
+    ["a put exercise with a 2001-digit strike", "P", "Exercise", { strike: "1" + "0".repeat(2000) }],
+    ["a put exercise with a strike of 1e2000", "P", "Exercise", { strike: "1e2000" }],
+    ["a put exercise of 1e19 contracts (1e21 shares)", "P", "Exercise", { quantity: "-1e19" }],
+    ["a put exercise of 1e19 contracts at a strike of 0.01 (1e21 shares worth 1e19)", "P", "Exercise", { quantity: "-1e19", strike: "0.01" }],
+  ] as const) {
+    it(`${label} sells no share and is named`, () => {
+      const rows = [trade("20250115", "BUY", "100", "10"), trade("20250701", "SELL", "-100", "12")];
+      for (const method of METHODS) {
+        const r = report(rows, method, [], [], [exercise(putCall, type, fields)]);
+        expectBounded(r);
+        // The shares stay for the July sale, as with no exercise at all.
+        expect(totals(r)).toEqual(totals(report(rows, method)));
+        expect(totals(r)).toEqual(["1320", "1100", "220"]);
+        expect(message(r, "report.trade_out_of_range")?.context?.rows).toBe(`XYZ${putCall}20 (01/03/2025)`);
+        expect(message(r, "report.non_finite_disposal")).toBeUndefined();
+      }
+    });
+  }
+
+  it("a put exercise in range still sells the shares at the strike (control)", () => {
+    const r = report([trade("20250115", "BUY", "100", "10")], "monodivisa", [], [], [exercise("P", "Exercise")]);
+    expect(totals(r)).toEqual(["2200", "1100", "1100"]);
+    expect(message(r, "report.trade_out_of_range")).toBeUndefined();
+  });
+
+  for (const method of METHODS) {
+    it(`a dividend of -9e15 dollars is named and left out of box 0029, never -9,900,000,000,000,000 € (${method})`, () => {
+      const r = report([], method, [dividend("D1", "20250315", "-9e15"), dividend("D2", "20250615", "50")]);
+      expectBounded(r);
+      expect(r.dividends.grossIncome.toString()).toBe("55");
+      const msg = message(r, "report.cash_amount_too_large");
+      expect(msg?.severity).toBe("error");
+      expect(msg?.context).toMatchObject({ count: "1", rows: "XYZ (15/03/2025)" });
+      // Named once, by its own message: no currency row stands in for it.
+      expect(r.messages.filter((m) => m.severity === "error").map((m) => m.id)).toEqual(["report.cash_amount_too_large"]);
+    });
+
+    it(`interest of 9e15 and -9e19 dollars is named and left out of box 0027 (${method})`, () => {
+      const r = report([], method, [interest("I1", "20250301", "9e15"), interest("I2", "20250401", "-9e19"), interest("I3", "20250501", "10")]);
+      expectBounded(r);
+      expect(r.interest.earned.toString()).toBe("11");
+      expect(message(r, "report.cash_amount_too_large")?.context).toMatchObject({ count: "2" });
+    });
+  }
+
+  it("a withholding of -9e15 dollars is named and gives no deduction", () => {
+    const r = report([], "multidivisa", [dividend("D1", "20250315", "50"), dividend("W1", "20250315", "-9e15", "Withholding Tax")]);
+    expectBounded(r);
+    expect(r.dividends.grossIncome.toString()).toBe("55");
+    expect(r.doubleTaxation.deduction.toString()).toBe("0");
+    expect(message(r, "report.cash_amount_too_large")?.context?.rows).toBe("XYZ (15/03/2025)");
+  });
+
+  it("a dividend worth 999.999.999.999,99 € still counts; 1.000.000.000.000,10 € is named", () => {
+    const counted = report([], "monodivisa", [dividend("D1", "20250315", "909090909090.9")]);
+    expect(counted.dividends.grossIncome.toString()).toBe("999999999999.99");
+    expect(message(counted, "report.cash_amount_too_large")).toBeUndefined();
+    const named = report([], "monodivisa", [dividend("D1", "20250315", "909090909091")]);
+    expect(named.dividends.grossIncome.toString()).toBe("0");
+    expect(message(named, "report.cash_amount_too_large")?.context?.rows).toBe("XYZ (15/03/2025)");
+  });
+
+  it("names the cash rows worth 1e12 € or more in the 5 locales", async () => {
+    const r = report([], "monodivisa", [dividend("D1", "20250315", "-9e15")]);
+    const m = message(r, "report.cash_amount_too_large")!;
+    expect(localizeMessage(m)).toBe(m.message);
+    expect(localizeHint(m)).toBe(m.hint);
+    for (const locale of ["en", "ca", "eu", "gl"] as const) {
+      await setLocale(locale);
+      expect(localizeMessage(m)).not.toBe(m.message);
+      expect(localizeHint(m)).not.toBe(m.hint);
+      expect(localizeMessage(m)).toContain("XYZ (15/03/2025)");
+      expect(localizeMessage(m)).not.toContain("{{");
+    }
   });
 
   it("names the rows in the 5 locales", async () => {
@@ -312,18 +481,81 @@ describe("a trade number no broker writes is named and not counted", () => {
         expect(Date.now() - started).toBeLessThan(5_000);
       });
     }
-    for (const [field, cash, actions] of [
-      ["a dividend", [dividend("D1", "20250315", huge)], []],
-      ["a cash buyout amount", [], [action("buyout", "-10", huge)]],
+    for (const [field, cash, actions, exercises] of [
+      ["a dividend", [dividend("D1", "20250315", huge)], [], []],
+      ["a cash buyout amount", [], [action("buyout", "-10", huge)], []],
+      ["a cash buyout quantity", [], [action("buyout", `-${huge}`, "542")], []],
+      ["a scrip dividend quantity", [], [scrip(huge)], []],
+      ["a put exercise quantity", [], [], [exercise("P", "Exercise", { quantity: `-${huge}` })]],
+      ["a call assignment quantity", [], [], [exercise("C", "Assignment", { quantity: huge })]],
+      ["a put exercise multiplier", [], [], [exercise("P", "Exercise", { multiplier: huge })]],
     ] as const) {
-      it(`${field} of ${huge}: the same`, () => {
+      it(`${field} of ${huge}: the same, and both PDFs`, async () => {
         const started = Date.now();
-        const r = report([trade("20250201", "BUY", "10", "10")], "multidivisa", [...cash], [...actions]);
+        const r = report([trade("20250115", "BUY", "100", "10"), trade("20250701", "SELL", "-100", "12")], "multidivisa", [...cash], [...actions], [...exercises]);
         expectBounded(r);
+        await expectPdfsBounded(r);
         expect(message(r, "report.trade_out_of_range")).toBeDefined();
-        expect(Date.now() - started).toBeLessThan(5_000);
+        expect(Date.now() - started).toBeLessThan(10_000);
       });
     }
+  }
+});
+
+describe("a hand-typed number no price reaches is not used (#470)", () => {
+  function crypto(side: "BUY" | "SELL", date: string, qty: string): string {
+    return `<Trade tradeID="${date}" accountId="U1" symbol="BTC" description="BITCOIN" conid="4531" isin="" assetCategory="CRYPTO" currency="SOL" tradeDate="${date}" settlementDate="${date}" quantity="${qty}" tradePrice="10" tradeMoney="0" proceeds="0" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}" exchange="PAXOS" ibCommissionCurrency="SOL" ibCommission="0" taxes="0" multiplier="1" />`;
+  }
+  const statement = () => parseIbkrFlexXml(xml([crypto("BUY", "20250115", "10"), crypto("SELL", "20250601", "-10")]));
+
+  it("a manual rate of 150 values the sale (control)", () => {
+    const manualRates = buildManualRateMap([
+      { currency: "SOL", date: "2025-01-15", eurPerUnit: "150" },
+      { currency: "SOL", date: "2025-06-01", eurPerUnit: "180" },
+    ]);
+    const r = generateTaxReport(statement(), RATES, 2025, { ...reportOptionsForMethod("multidivisa"), manualRates });
+    expect(totals(r)).toEqual(["18000", "15000", "3000"]);
+  });
+
+  it("a manual opening lot at 40 dollars gives the sale its cost (control)", () => {
+    const r = generateTaxReport(parseIbkrFlexXml(xml([trade("20250601", "SELL", "-10", "12")])), RATES, 2025, {
+      ...reportOptionsForMethod("multidivisa"),
+      manualOpeningLots: [{
+        symbol: "XYZ", description: "XYZ INC", isin: "US0000004531", assetCategory: "STK",
+        currency: "USD", acquireDate: "2024-01-10", quantity: "10", pricePerShare: "40",
+      }],
+    });
+    expect(totals(r)).toEqual(["132", "440", "-308"]);
+  });
+
+  // A red run on unfixed code must use TRADE_HUGE_CASES=1e100000.
+  for (const huge of (process.env.TRADE_HUGE_CASES ?? "1e100000,1e1000000000").split(",")) {
+    it(`a manual rate of ${huge} is left out: the sale is named as unvalued, and the outputs stay short`, () => {
+      const started = Date.now();
+      const manualRates = buildManualRateMap([
+        { currency: "SOL", date: "2025-01-15", eurPerUnit: "150" },
+        { currency: "SOL", date: "2025-06-01", eurPerUnit: huge },
+      ]);
+      const r = generateTaxReport(statement(), RATES, 2025, { ...reportOptionsForMethod("multidivisa"), manualRates });
+      expectBounded(r);
+      expect(totals(r)).toEqual(["0", "0", "0"]);
+      expect(message(r, "report.crypto_valuation_unresolved")).toBeDefined();
+      expect(Date.now() - started).toBeLessThan(5_000);
+    });
+
+    it(`a manual opening lot priced at ${huge} is no lot: the sale has no cost, never a huge one`, () => {
+      const started = Date.now();
+      const r = generateTaxReport(parseIbkrFlexXml(xml([trade("20250601", "SELL", "-10", "12")])), RATES, 2025, {
+        ...reportOptionsForMethod("multidivisa"),
+        manualOpeningLots: [{
+          symbol: "XYZ", description: "XYZ INC", isin: "US0000004531", assetCategory: "STK",
+          currency: "USD", acquireDate: "2024-01-10", quantity: "10", pricePerShare: huge,
+        }],
+      });
+      expectBounded(r);
+      expect(totals(r)).toEqual(["132", "0", "132"]);
+      expect(Date.now() - started).toBeLessThan(5_000);
+    });
   }
 });
 
