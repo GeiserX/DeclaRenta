@@ -107,8 +107,8 @@ const en: TranslationKeys = {
   "casilla.double_taxation": "Double taxation deduction",
   "casilla.dt_foreign_income_total": "Total foreign income",
   "casilla.reintegrated_losses":
-    "Deferred losses now deductible (shares sold with no repurchase in their window, «transmisión definitiva»): {{amount}} EUR",
-  "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months on a regulated or equivalent market / 1 year otherwise): {{amount}} EUR",
+    "Deferred losses now deductible (shares sold with no repurchase in their window, «transmisión definitiva»; for crypto, sale of the coins bought back): {{amount}} EUR",
+  "casilla.blocked_losses": "Losses blocked by anti-churning rule (2 months on a regulated or equivalent market / 1 year otherwise; for crypto, the year after the sale): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} warning(s)",
   "messages.errors_title": "{{count}} error(s) — action required",
   "messages.warnings_title": "{{count}} warning(s) — please review",
@@ -598,10 +598,13 @@ const en: TranslationKeys = {
   "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
   "annex.wash_hint":
-    "In Renta Web, mark this sale as \"Non-attributable capital losses\". The loss stays pending: it counts, oldest losses first, as you sell shares of this security that no repurchase within 2 months before or after (1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one such as NYSE or Nasdaq) covers; if you buy some back, only the shares not bought back count.",
+    "In Renta Web, mark this sale as \"Non-attributable capital losses\". The loss stays pending: it counts, oldest losses first, as you sell shares of this security that no repurchase within 2 months before or after (1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one such as NYSE or Nasdaq; for crypto, only the year after the sale, art. 33.5.e) covers; if you buy some back, only the shares not bought back count. For crypto, it counts when you sell the coins you bought back, even if you buy that coin again (art. 33.5.e); selling other coins does not release it.",
   "annex.wash_released": "Releases {{amount}} EUR of deferred losses of this security («transmisión definitiva», art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pending losses from the sales of: {{dates}}",
   "annex.wash_released_hint": "The shares of this sale that no repurchase in its window covers are a definitive transmission («transmisión definitiva»): they now release the pending losses of this security, one share's loss for each share, oldest first (all that remain if the sale closes the position and no repurchase in its window covers it). In Renta Web, include them in this year.",
+  "annex.wash_released_crypto": "Releases {{amount}} EUR of deferred losses of this coin (sale of the coins bought back, art. 33.5.e LIRPF)",
+  "annex.wash_released_hint_crypto":
+    "This sale transmits coins of the repurchase that blocked a loss: it now releases the part of that loss that matches the coins sold, even if you buy this coin again (art. 33.5.e). Selling other coins does not release it. In Renta Web, include it in this year.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Tax estimate (savings tax base)",
@@ -689,7 +692,7 @@ const en: TranslationKeys = {
     "The double taxation deduction prevents paying tax twice on the same dividends. It is limited to the lesser of the amount paid abroad and the Spanish tax due. If the tax treaty allows a lower maximum rate (e.g. 15% USA), only that amount is deductible.",
   "guide_rw.blocked_losses_title": "Blocked losses (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "If DeclaRenta shows blocked losses, tick the <strong>\"Non-attributable capital losses\"</strong> box in Renta Web. They are blocked because you bought the same security back within 2 months before or after the sale (1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one such as NYSE or Nasdaq). DeclaRenta applies 2 months to every security with an ISIN, because it does not know where it is listed: if yours is listed only in London, on SIX, in Toronto, in Tokyo or on OTC Markets, check by hand any repurchase between 2 months and 1 year before or after the sale, because that loss is blocked too (issue #452). They are not added to the cost of the new position: they stay pending and count, oldest first, as you sell shares of that security that no repurchase in that window covers («transmisión definitiva»); if you buy some back, only the shares not bought back count. If you filed a year with DeclaRenta 0.66.5 or earlier, those versions released a loss when you sold the repurchased shares even if you bought back again: if you already deducted that loss, do not deduct it again when DeclaRenta releases it now, or correct that year (2024 and later: a corrective return, «autoliquidación rectificativa»; 2023 and earlier: a supplementary return, «autoliquidación complementaria»). The other way round: if DeclaRenta now releases a loss in a year you already filed with 0.66.5 or earlier, you can correct that year to deduct it (2024 and later: «autoliquidación rectificativa»; 2023 and earlier: a rectification request, «solicitud de rectificación»).",
+    "If DeclaRenta shows blocked losses, tick the <strong>\"Non-attributable capital losses\"</strong> box in Renta Web. They are blocked because you bought the same security back within 2 months before or after the sale (1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one such as NYSE or Nasdaq). For crypto, they are blocked only if you buy the same coin back in the year after the sale (art. 33.5.e); purchases before the sale do not count. DeclaRenta applies 2 months to every security with an ISIN, unless IBKR shows it only on a market with no equivalence (London from 2021, SIX from July 2019, OTC Markets…) or you mark it as 1 year in the \"Anti-churning window per security\" panel of the results (on the command line, --antichurning-1y). Toronto, Tokyo and Singapore have an equivalence decision and DeclaRenta applies 2 months to them, although no DGT ruling confirms this for shares. If your security is listed only on a market with no equivalence and DeclaRenta does not know it, mark it as 1 year; if it is also listed on an EEA regulated market or an equivalent one, mark it as 2 months. A purchase in the 2 months before does not block if it was your only purchase of that security in that window and you held none of it when the window began (the one-purchase exception, DGT V3282-18); purchases in the 2 months after still block, except one that only closes a short position, which is no repurchase. Up to 0.66.13 DeclaRenta did not apply this exception: if you filed a year with that loss blocked, you can correct that year to deduct it (2024 and later: «autoliquidación rectificativa»; 2023 and earlier: a rectification request, «solicitud de rectificación»). They are not added to the cost of the new position: they stay pending and count, oldest first, as you sell shares of that security that no repurchase in that window covers («transmisión definitiva»); if you buy some back, only the shares not bought back count. For crypto, it counts when you sell the coins you bought back, even if you buy that coin again (art. 33.5.e); selling other coins does not release it. If you filed a year with DeclaRenta 0.66.5 or earlier, those versions released a loss when you sold the repurchased shares even if you bought back again: if you already deducted that loss, do not deduct it again when DeclaRenta releases it now, or correct that year (2024 and later: a corrective return, «autoliquidación rectificativa»; 2023 and earlier: a supplementary return, «autoliquidación complementaria»). The other way round: if DeclaRenta now releases a loss in a year you already filed with 0.66.5 or earlier, you can correct that year to deduct it (2024 and later: «autoliquidación rectificativa»; 2023 and earlier: a rectification request, «solicitud de rectificación»). For crypto, if you filed a year with DeclaRenta 0.66.13 or earlier, a purchase before the sale could block the loss: if DeclaRenta now deducts or releases a crypto loss in a year you already filed, correct that year to deduct it (2024 and later: «autoliquidación rectificativa»; 2023 and earlier: «solicitud de rectificación»); otherwise it is never deducted. Whenever you correct a year to deduct a loss, also check the later years you already filed: if you deducted that same loss in one of them because the older version released it there, correct that year too to remove it (2024 and later: «autoliquidación rectificativa»; 2023 and earlier: a supplementary return, «autoliquidación complementaria»), so you do not deduct it twice: a loss is deducted only once.",
   "guide_rw.closing_tip": "After entering all data, use the \"Verify declaration\" button in Renta Web to check for errors. If another tool shows a different capital gains amount, it may use another method for foreign-currency shares. In the Modelo 100 results, open «Compare with the other methods» to see the figures of all three. To change the method, go back to the «Review and choose method» step. Use the same method every year.",
 
   // PDF report
@@ -851,23 +854,79 @@ const en: TranslationKeys = {
   "report.withholding_corrected_prior_year":
     "This file has corrections to {{year}} foreign withholding tax, posted in {{reportYear}}: the {{year}} withholding goes down by {{amount}} €. If you filed {{year}} with the original withholding, that year's box 0588 may have come out too high.",
   "report.withholding_corrected_prior_year.hint":
-    "The international double-taxation deduction (box 0588, art. 80 LIRPF) only allows the tax you really paid abroad. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0588 comes out lower than the one you filed, you may need a supplementary return (declaración complementaria) for {{year}}. The {{reportYear}} boxes do not change.",
+    "The international double-taxation deduction (box 0588, art. 80 LIRPF) only allows the tax you really paid abroad. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0588 comes out lower than the one you filed, correct your {{year}} return (2024 and later: a corrective return, «autoliquidación rectificativa»; 2023 and earlier: a supplementary return, «autoliquidación complementaria»). The {{reportYear}} boxes do not change.",
   "report.spanish_withholding_corrected_prior_year":
     "This file has corrections to {{year}} Spanish withholding tax, posted in {{reportYear}}: the {{year}} withholding goes down by {{amount}} €. If you filed {{year}} with the original withholding, that year's box 0597 may have come out too high.",
   "report.spanish_withholding_corrected_prior_year.hint":
-    "Spanish withholding on dividends from Spanish issuers is a payment on account (box 0597, capital-income withholdings), and only what was really withheld counts. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0597 comes out lower than the one you filed, you may need a supplementary return (declaración complementaria) for {{year}}. The {{reportYear}} boxes do not change.",
+    "Spanish withholding on dividends from Spanish issuers is a payment on account (box 0597, capital-income withholdings), and only what was really withheld counts. Upload the {{year}} file together with this one and calculate {{year}}: DeclaRenta adds the correction to its dividend's withholding. If box 0597 comes out lower than the one you filed, correct your {{year}} return (2024 and later: a corrective return, «autoliquidación rectificativa»; 2023 and earlier: a supplementary return, «autoliquidación complementaria»). The {{reportYear}} boxes do not change.",
   "report.crypto_general_gain_unvalued":
     "There are {{count}} crypto capital gain(s) (e.g. airdrops or referral commissions) that could not be valued automatically and are not included in the calculated amounts.",
   "report.crypto_general_gain_unvalued.hint":
     "This income is received in the crypto itself and has no official ECB rate. Compute its value in euros on the receipt date and declare it manually as a capital gain not arising from a transfer (general tax base).",
   "report.antichurning_window_past_data":
-    "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window (2 months; 1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one) ends after the last date covered by the uploaded files of that broker ({{lastDate}}). DeclaRenta cannot see purchases after that date.",
+    "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window (2 months; 1 year if the security is not traded on a regulated market of the European Economic Area or an equivalent one; for crypto, only the year after the sale) ends after the last date covered by the uploaded files of that broker ({{lastDate}}). DeclaRenta cannot see purchases after that date.",
   "report.antichurning_window_past_data.hint":
-    "If you bought the same security after {{lastDate}} and within the window of those sales (at the latest until {{windowEnd}}), part of their loss may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. Also upload the file with your trades up to {{windowEnd}} together with this one and calculate again. That window uses 2 months: if the security is listed only in London, on SIX, in Toronto, in Tokyo or on OTC Markets, the law gives 1 year, so also check your purchases up to one year after each sale (issue #452). If you did not buy, the result is already correct.",
+    "If you bought the same security after {{lastDate}} and within the window of those sales (on {{windowEnd}} at the latest), part of their loss may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. Also upload the file with your trades up to {{windowEnd}} together with this one and calculate again. That window is 1 year for the securities DeclaRenta gives 1 year (because IBKR shows them only on a market with no equivalence, such as London from 2021, SIX or OTC Markets, or because you marked them) and 2 months for the other securities with an ISIN. If a security is listed only on such a market and DeclaRenta gives it 2 months, mark it as 1 year in the \"Anti-churning window per security\" panel (on the command line, --antichurning-1y) and calculate again. For crypto, only purchases of the same coin, on any exchange, made after the sale and on or before {{windowEnd}} count; purchases before the sale do not. If you did not buy, the result is already correct.",
   "report.antichurning_window_open_at_filing":
     "There are {{count}} sale(s) of {{year}} whose anti-churning repurchase window ends on {{windowEnd}} at the latest: after {{deadline}}, the last day to file the return, and after the last date covered by the uploaded files of that broker ({{lastDate}}). When you file the return, that window will still be open.",
   "report.antichurning_window_open_at_filing.hint":
-    "Before you file, also upload the file with your trades after {{lastDate}} and calculate again. If you buy the same security before {{windowEnd}}, part of the loss on those sales may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. In that case, correct the filed return with a corrective return («autoliquidación rectificativa»).",
+    "Before you file, also upload the file with your trades after {{lastDate}} and calculate again. If you buy the same security or the same coin up to and including {{windowEnd}}, part of the loss on those sales may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. In that case, correct the filed return with a corrective return («autoliquidación rectificativa»).",
+  "report.antichurning_one_year_ibkr":
+    "DeclaRenta applies the 1-year anti-churning window (art. 33.5.g LIRPF) to the sales of {{count}} security(ies) made on days when IBKR shows them only on a market that is neither a regulated market of the European Economic Area nor a market the European Commission declared equivalent: {{list}}.",
+  "report.antichurning_one_year_ibkr.hint":
+    "IBKR only shows the market of the lines you traded. If the security is also admitted to trading on a regulated market of the European Economic Area (a growth market or another multilateral trading facility is not enough) or on NYSE, Nasdaq, ASX or the Hong Kong Stock Exchange, it gets 2 months: mark it as 2 months in the \"Anti-churning window per security\" panel (on the command line, --antichurning-2m) and calculate again.",
+  "report.antichurning_listing_open":
+    "DeclaRenta applies 2 months to the sales of {{count}} security(ies) made on days when IBKR shows them in Toronto, on TSX Venture, on Aequitas Neo, in Tokyo or in Singapore: {{list}}. A European Commission decision declares that market equivalent to a regulated market, and the DGT accepts that kind of decision (ruling V0778-25), but no ruling confirms it for shares.",
+  "report.antichurning_listing_open.hint":
+    "If you prefer the cautious reading, mark it as 1 year in the \"Anti-churning window per security\" panel (on the command line, --antichurning-1y) and calculate again.",
+  "report.antichurning_window_user":
+    "You set the anti-churning window of {{count}} security(ies) by hand. 1 year: {{oneYear}}. 2 months, instead of the year IBKR gave: {{twoMonths}}.",
+  "report.antichurning_window_user.hint":
+    "DeclaRenta uses your window instead of the automatic one for the loss block, the definitive-transmission test and the window warnings. You can change it in the \"Anti-churning window per security\" panel (on the command line, --antichurning-1y or --antichurning-2m).",
+  "antichurning_window.title":
+    "Anti-churning window per security",
+  "antichurning_window.description":
+    "The anti-churning rule blocks a loss if you buy back the same security in the 2 months before or after the sale (art. 33.5.f LIRPF). If the security is not admitted to trading on a regulated market of the European Economic Area nor on a market declared equivalent, the window is 1 year (art. 33.5.g). DeclaRenta picks the window from the market IBKR shows and, when it does not know it, applies 2 months. Here you can set it for each security.",
+  "antichurning_window.col_security":
+    "Security",
+  "antichurning_window.col_listing":
+    "Market according to IBKR",
+  "antichurning_window.col_window":
+    "Window",
+  "antichurning_window.months_2":
+    "2 months",
+  "antichurning_window.months_12":
+    "1 year",
+  "antichurning_window.opt_auto":
+    "Automatic ({{window}})",
+  "antichurning_window.opt_2m":
+    "2 months: admitted on an EEA regulated market or an equivalent one",
+  "antichurning_window.opt_1y":
+    "1 year: not admitted on an EEA regulated market or an equivalent one (e.g. only on London from 2021, SIX, OTC or BME Growth)",
+  "antichurning_window.no_listing":
+    "no data",
+  "antichurning_window.open_note":
+    "Equivalent under Decision {{decision}}, not confirmed for shares",
+  "antichurning_window.save_btn":
+    "Save and recalculate",
+  "antichurning_window.clear_btn":
+    "Clear saved windows",
+  "antichurning_window.saved":
+    "Saved",
+  "antichurning_window.recalculate_hint":
+    "The windows are saved in your browser and the report is recalculated.",
+  "antichurning_window.save_error":
+    "The browser did not let DeclaRenta save the windows: its storage may be full or blocked. The report has not changed.",
+  "antichurning_window.clear_error":
+    "The browser did not let DeclaRenta clear the saved windows: its storage may be blocked. The report has not changed.",
+  "report.antichurning_single_purchase":
+    "In {{count}} sale(s) of {{year}}, the purchase in the 2 months before does not count as a repurchase: it was the only purchase of that security in that window and you held none of it when the window began (the one-purchase exception, DGT V3282-18). That purchase does not block the loss and does not stop the sale from releasing pending losses.",
+  "report.antichurning_single_purchase.hint":
+    "DeclaRenta only sees the uploaded files. If you held shares of that security when the window began (the first window begins on {{windowStart}}) at another broker or account you did not upload, or you later transferred them to another institution, the exception does not apply: upload those files too and calculate again. A purchase in the 2 months after the sale still blocks the loss.",
+  "report.antichurning_single_purchase_unverified":
+    "In {{count}} sale(s) of {{year}} the one-purchase exception of the 2-month rule may apply, but DeclaRenta does not apply it: the uploaded files do not prove that you held no shares of that security when the window began (the first window begins on {{windowStart}}). The purchase in the 2 months before counts as a repurchase.",
+  "report.antichurning_single_purchase_unverified.hint":
+    "If you held no shares of that security at any broker when the window began, and that was your only purchase in the 2 months before the sale, it does not count as a repurchase (DGT V3282-18). DeclaRenta applies it only when your files prove it, account by account: the files of every account that holds or trades that security must cover its trades with no gap and no day twice from {{windowStart}} to period-end positions dated on or after the sale (in IBKR, the Trades and Open Positions sections of the Flex Query, with the ISIN field), with every quantity readable and the same shares that account's trades leave. A share trade with no ISIN in that period, or shares with no ISIN you still held when it began (from Revolut, for example), in any account, also prevent it, because they may be of that security. A file that only includes trades is not enough, and a transfer between accounts or a manual lot inside that window cannot be checked.",
   "report.titularidad_compartida":
     "The amounts shown are split between {{titulares}} holders (the share corresponding to each taxpayer). This report reflects the return of a SINGLE holder: each of the {{titulares}} holders must file their own return with this same share. Do not declare the total in a single return, nor add several holders' shares into yours.",
   "report.titularidad_compartida.hint":
@@ -1043,6 +1102,14 @@ const en: TranslationKeys = {
   "parser.cancelled_trades.hint": 'IBKR marks a cancelled execution with a reversing row ("(Ca.)"). The original trade and its cancellation were discarded: they never became a real purchase or sale.',
   "parser.cancelled_trades_unmatched": "{{count}} IBKR cancellation rows were skipped because the original trade is not in this file.",
   "parser.cancelled_trades_unmatched.hint": "The cancelled trade falls outside this Flex Query's period. If you load it from another file, it will still count as real: export a period that includes both the trade and its cancellation in the same file.",
+  "parser.cancelled_trades_unreadable": "{{count}} IBKR cancellation rows were skipped without pairing them with the trade they cancel: a quantity or a price is not readable in the cancellation or in a trade of this file.",
+  "parser.cancelled_trades_unreadable.hint": "If the cancelled trade is in this file, DeclaRenta still counts it as a real purchase or sale. Make sure the Flex Query exports the quantity, the price and the execution ID (IB Execution ID) of every trade and export it again.",
+  "parser.open_position_quantity_unknown": "IBKR gives no readable share count for {{count}} open position(s): {{holdings}}.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta counts them as 0 shares: the Modelo 720 includes them with their value, but with 0 in «Número de valores», and the D-6 leaves them out. Check these holdings in the 720 and the D-6 by hand, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
+  "parser.trade_quantity_unknown": "{{broker}} gives no readable share count or price for {{count}} trade(s): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
+  "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",
+  "parser.crypto_quantity_unknown.hint": "DeclaRenta adds or removes no units for them, so the gains and losses of that cryptocurrency are not reliable. If one of them is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it because it does not know how many units you bought back. Make sure the exported file has the quantity and the price of every trade and export it again.",
 };
 
 export default en;

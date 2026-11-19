@@ -52,10 +52,12 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
     ...(target.holdingsBySource ?? []),
     ...(source.holdingsBySource ?? [{
       accountId: source.accountId,
+      ...(source.fromDate ? { fromDate: source.fromDate } : {}),
       toDate: source.toDate,
       ...(brokerName ? { brokerSource: brokerName } : {}),
       openPositions: source.openPositions,
       cashBalances: source.cashBalances ?? [],
+      ...(source.accountPeriods ? { accountPeriods: source.accountPeriods } : {}),
     }]),
   ];
 

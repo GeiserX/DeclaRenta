@@ -75,6 +75,15 @@ function exchangeFromIsin(isin: string, assetCategory?: string): string {
   return map[country] ?? "XXXX";
 }
 
+/** Whether a position value is a negative number (a short); an unreadable one is not. */
+function negativeValue(value: string): boolean {
+  try {
+    return new Decimal(value).isNegative();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generate a D-6 report from open positions at year end.
  *
@@ -129,12 +138,20 @@ export function generateD6Report(
   // Build cancellation list: ISINs in previousYearIsins no longer HELD. Use the
   // held foreign-position set, NOT `d6Positions` — a still-held position that
   // couldn't be valued (no year-end rate) is skipped from d6Positions but must
-  // NOT be reported as sold/liquidated.
+  // NOT be reported as sold/liquidated. Nor must a holding whose quantity the
+  // file does not give (`quantityUnknown`, quantity "0"): the broker lists it,
+  // so it is no sale, though without a share count it has no position entry.
+  // Its sign then comes from its value, as in the 720's `isHeldSecurity`: a
+  // short one (negative value) is no holding, so it is cancelled there too. An
+  // unreadable value proves no short: the holding stays held.
   const heldIsins = new Set(
     positions
       .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
       .filter((p) => p.isin.slice(0, 2).toUpperCase() !== "ES")
-      .filter((p) => new Decimal(p.quantity).greaterThan(0))
+      .filter((p) =>
+        p.quantityUnknown === true
+          ? !negativeValue(p.positionValue)
+          : new Decimal(p.quantity).greaterThan(0))
       .map((p) => p.isin),
   );
   const previousIsins = new Set(previousYearIsins ?? []);

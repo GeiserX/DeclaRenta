@@ -42,7 +42,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa (STK, FUND, OPT), dividendos, intereses, retenciones, acciones corporativas (splits, fusiones, spin-offs, scrip dividends) y posiciones abiertas.
 
-**Notas:** IBKR es el broker con soporte más completo. Las comisiones en divisa distinta a la operación se convierten correctamente. El multiplicador de opciones se aplica automáticamente.
+**Notas:** IBKR es el broker con soporte más completo. Las comisiones en divisa distinta a la operación se convierten correctamente. El multiplicador de opciones se aplica automáticamente. El campo **Listing Exchange** de Trades y de Financial Instrument Information decide el plazo anti-churning de cada valor: 1 año si IBKR solo lo muestra en un mercado sin equivalencia, como Londres desde 2021 (ver [Plazo de 2 meses o de 1 año por valor](casillas.md#plazo-de-2-meses-o-de-1-ano-por-valor)).
 
 ### Degiro
 

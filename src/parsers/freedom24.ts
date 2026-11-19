@@ -13,7 +13,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { toFiniteDecimal } from "./csv-utils.js";
+import { toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // JSON structure types
@@ -133,7 +133,19 @@ function parseFreedom24(input: string): Statement {
     const isSell = operation === "sell";
 
     const qtyDec = toFiniteDecimal(quantity).abs();
-    if (qtyDec.isZero()) continue;
+    if (qtyDec.isZero()) {
+      // An empty or unreadable quantity is no "0": keep a buy or sell row as a
+      // trade of unknown quantity for the anti-churning evidence (#453). Any
+      // other operation (a transfer, a deposit) is no trade and stays skipped.
+      if ((operation === "buy" || operation === "sell") && quantityUnreadable(t.q)) {
+        trades.push(quantityUnknownTrade({
+          tradeID: `freedom24-${tradeDate}-${i}`,
+          symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+          buySell: isSell ? "SELL" : "BUY", exchange: t.exchange || exchange,
+        }));
+      }
+      continue;
+    }
 
     const commDec = toFiniteDecimal(commission);
 
@@ -223,15 +235,17 @@ function parseFreedom24(input: string): Statement {
     }
   }
 
-  const parserMessages: TaxMessage[] = skippedMalformed > 0
-    ? [{
-        id: "freedom24.row_skipped_malformed",
-        severity: "warning" as const,
-        message: `Se ha(n) omitido ${skippedMalformed} fila(s) de Freedom24 con un formato no válido.`,
-        hint: "Suele deberse a filas incompletas o corruptas en el JSON exportado (campos \"operation\", \"type_id\", \"date\" o \"ticker\" vacíos o de tipo incorrecto). Si faltan operaciones, vuelve a descargar el informe JSON completo desde Freedom24.",
-        context: { count: String(skippedMalformed) },
-      }]
-    : [];
+  const parserMessages: TaxMessage[] = [];
+  if (skippedMalformed > 0) {
+    parserMessages.push({
+      id: "freedom24.row_skipped_malformed",
+      severity: "warning" as const,
+      message: `Se ha(n) omitido ${skippedMalformed} fila(s) de Freedom24 con un formato no válido.`,
+      hint: "Suele deberse a filas incompletas o corruptas en el JSON exportado (campos \"operation\", \"type_id\", \"date\" o \"ticker\" vacíos o de tipo incorrecto). Si faltan operaciones, vuelve a descargar el informe JSON completo desde Freedom24.",
+      context: { count: String(skippedMalformed) },
+    });
+  }
+  parserMessages.push(...tradeQuantityUnknownMessages("Freedom24", trades));
 
   return {
     accountId: "",

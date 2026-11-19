@@ -139,7 +139,7 @@ describe("Renta Web guide consistency", () => {
     }
     // The Spanish text report.ts writes into the message is the es locale's.
     const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
-    const pinned = "(2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente)";
+    const pinned = "(2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente; en las criptomonedas, solo el año siguiente a la venta)";
     expect(source).toContain(pinned);
     expect(es["report.antichurning_window_past_data"]).toContain(pinned);
 
@@ -156,17 +156,22 @@ describe("Renta Web guide consistency", () => {
       expect(text, name).not.toMatch(/solo OTC, cripto|la mayoría de criptomonedas\)|most crypto/);
     }
     expect(docs.casillas).toMatch(/mercado de un tercer país declarado equivalente por la Comisión Europea/);
-    // Only the US, Australian and Hong Kong decisions are in force, so the #452
-    // gap also covers a share listed only in London, Switzerland or Toronto.
+    // The MiFID II decisions (US, Australia, Hong Kong) and the EMIR ones
+    // (Toronto, Tokyo, Singapore: open for shares, so 2 months), and the
+    // per-ISIN window that replaced the old "2 months for every ISIN" gap (#452).
     expect(docs.casillas).toMatch(/2017\/2318[^.]*2017\/2319|2017\/2319[^.]*2017\/2318/);
-    expect(docs.casillas).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(docs.casillas).toMatch(/2016\/2273[^.]*2016\/2271[^.]*2016\/2270/);
+    expect(docs.casillas).toMatch(/### Plazo de 2 meses o de 1 año por valor/);
+    expect(docs.casillas).toMatch(/--antichurning-1y[\s\S]*--antichurning-2m/);
+    expect(docs.casillas).toMatch(/Londres \(`LSE`\) para las ventas desde el 01\/01\/2021/);
     expect(docs.casillas).toMatch(/33\.5\.e[^.]*#457/);
     expect(docs.modelos).toMatch(/Londres/);
-    expect(docs.design).toMatch(/admitted\s+to\s+neither\s+kind\s+of\s+market[\s\S]{0,200}London\s+Stock\s+Exchange[\s\S]{0,200}#452/);
+    expect(docs.design).toMatch(/Window per ISIN \(#452\)[\s\S]{0,1200}2016\/2273[\s\S]{0,1500}NON_EQUIVALENT_LISTINGS/);
     expect(docs.design).toMatch(/33\.5\.e[\s\S]{0,300}#457/);
     const claude = readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8");
     expect(claude).toMatch(/2017\/2318/);
-    expect(claude).toMatch(/London Stock Exchange[^\n]*#452/);
+    expect(claude).toMatch(/London Stock Exchange from 2021[^\n]*#452/);
+    expect(claude).toMatch(/never list Toronto or Tokyo as settled 1-year markets/);
     expect(claude).toMatch(/33\.5\.e[^\n]*#457/);
     expect(claude).not.toMatch(/or non-EU listing|on an EU regulated or equivalent|on an EU regulated market, or|most crypto/);
     // The engine's own header no longer reads letter f as "MiFID venues" only.
@@ -177,24 +182,38 @@ describe("Renta Web guide consistency", () => {
     expect(engine).toMatch(/#457/);
   });
 
-  it("warns wherever it states the 1-year window that the engine applies 2 months to every ISIN, so a London-only share needs a manual check (#452)", () => {
-    // The guide and the window warning describe the law; without this note a
-    // user reads the engine's 2-month result as the legal 1-year window.
+  it("tells the user how DeclaRenta picks the 1-year window per security and how to set it by hand, never listing Toronto or Tokyo as 1 year (#452)", () => {
+    // The guide and the window warning describe the law and the engine: 1 year
+    // when IBKR shows only a market with no equivalence (London from 2021) or
+    // the user marks it; Toronto, Tokyo and Singapore have an EMIR equivalence
+    // decision and stay at 2 months. The old note sent users to a manual check.
+    const flag = "--antichurning-1y";
     for (const [name, locale] of Object.entries(locales)) {
       for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
-        expect(locale[key], `${name} ${key}`).toMatch(/SIX[^.]*Toronto[^.]*OTC Markets/);
-        expect(locale[key], `${name} ${key}`).toMatch(/#452/);
+        const text = locale[key];
+        expect(text, `${name} ${key}`).toContain(flag);
+        expect(text, `${name} ${key}`).toMatch(/2021/);
+        expect(text, `${name} ${key}`).toMatch(/SIX[^.]*OTC Markets/);
+        expect(text, `${name} ${key}`).not.toMatch(/Toronto[^.]*OTC Markets|OTC Markets[^.]*Toronto|Tok(io|yo|ion)[^.]*OTC Markets/);
+        expect(text, `${name} ${key}`).not.toMatch(/#452/);
       }
+      // The guide names Toronto, Tokyo and Singapore as equivalent (2 months), open for shares.
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(/Toronto[^.]*Singap(ur|ore)[^.]*(DGT|DGTren)/);
     }
     // report.ts writes the Spanish hint itself; it must say the same as es.ts.
     const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
-    const note = "Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año";
+    const note = "Ese plazo es de 1 año en los valores a los que DeclaRenta aplica 1 año (porque IBKR solo los muestra en un mercado sin equivalencia, como Londres desde 2021, SIX u OTC Markets, o porque tú los marcaste) y de 2 meses en los demás valores con ISIN.";
     expect(source).toContain(note);
     expect(es["report.antichurning_window_past_data.hint"]).toContain(note);
+    expect(source).not.toMatch(/Toronto, Tokio u OTC Markets/);
     for (const p of ["modelos-fiscales.md", "index.md"]) {
       const text = readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
-      expect(text, p).toMatch(/2 meses a todo valor con ISIN[^\n]*Tokio u OTC Markets[^\n]*#452/);
+      expect(text, p).toMatch(/Plazo anti-churning por valor[^\n]*casillas\.md#plazo-de-2-meses-o-de-1-ano-por-valor/);
+      expect(text, p).not.toMatch(/Toronto, Tokio u OTC Markets|2 meses a todo valor con ISIN: si el tuyo/);
     }
+    // The engine's comments no longer list Toronto as a 1-year market.
+    const engine = readFileSync(new URL("../../src/engine/wash-sale.ts", import.meta.url), "utf8");
+    expect(engine).not.toMatch(/SIX or Toronto|\(London, SIX, Toronto\)/);
   });
 
   it("corrects a filed year with an «autoliquidación rectificativa» from 2024 on, and keeps complementaria for 2023 and earlier (#455 follow-up)", () => {
@@ -216,6 +235,29 @@ describe("Renta Web guide consistency", () => {
     }
   });
 
+  it("tells the user to correct a year with lowered withholding through a rectificativa from 2024 on, not only a complementaria (#458)", () => {
+    const complementaria = /complementaria|complementària|osagarria/;
+    const keys = ["report.withholding_corrected_prior_year.hint", "report.spanish_withholding_corrected_prior_year.hint"] as const;
+    for (const [name, locale] of Object.entries(locales)) {
+      for (const key of keys) {
+        const text = locale[key];
+        expect(text, `${name} ${key}`).toMatch(/rectificativa/);
+        // Every complementaria is the 2023-and-earlier one.
+        for (const m of text.matchAll(new RegExp(complementaria, "g"))) {
+          const before = text.slice(0, m.index);
+          expect(before.lastIndexOf("2023"), `${name} ${key}`).toBeGreaterThan(before.lastIndexOf("2024"));
+        }
+      }
+    }
+    // report.ts writes the Spanish hint itself; it must match es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    const pinned = "(2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria).";
+    expect(source.split(pinned).length - 1).toBe(2);
+    for (const key of keys) expect(es[key]).toContain(pinned);
+    const modelos = readFileSync(new URL("../../docs/modelos-fiscales.md", import.meta.url), "utf8");
+    expect(modelos).toMatch(/0597[^\n]*autoliquidación rectificativa si es 2024 o posterior/);
+  });
+
   it("the docs say the same: partial release, total exit only with no rebuy, the unlisted window, and the right correction procedure (#455 follow-up)", () => {
     const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
     const casillas = doc("casillas.md");
@@ -229,7 +271,9 @@ describe("Renta Web guide consistency", () => {
     // engine's ISIN heuristic deviates there (#452); crypto is letter e (#457).
     expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación ni en un mercado regulado del Espacio Económico Europeo ni en un mercado de un tercer país declarado equivalente por la Comisión Europea, art\. 33\.5\.g/);
     expect(faqAnswer).toMatch(/NYSE y Nasdaq[^.]*consulta DGT V0778-25/);
-    expect(faqAnswer).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(faqAnswer).toMatch(/Plazo anti-churning por valor[^.]*--antichurning-1y/);
+    expect(faqAnswer).toMatch(/Toronto, Tokio y Singapur tienen una decisión de equivalencia y usan 2 meses/);
+    expect(faqAnswer).not.toMatch(/SIX o Toronto/);
     expect(faqAnswer).toMatch(/33\.5\.e[^.]*#457/);
     expect(faqAnswer).not.toMatch(/si el valor no cotiza/);
     // A window still open at filing time is corrected with a rectificativa.
@@ -250,5 +294,229 @@ describe("Renta Web guide consistency", () => {
     }
     expect(design).toMatch(/autoliquidación rectificativa/);
     expect(design).not.toMatch(/or must file an «autoliquidación\s+complementaria» for the earlier year/);
+  });
+
+  it("tells a user who corrects an earlier year to remove the same loss from a later filed year, and never says every later purchase blocks (review of #453)", () => {
+    // A loss 0.66.13 blocked against the one-purchase exception may have been
+    // released, and deducted, in a later filed year: correcting only the earlier
+    // year would deduct it twice. And a buy that only covers a short is no
+    // repurchase, so "the purchases after always block" is wrong.
+    const laterYears = {
+      es: /revisa también los años posteriores que ya presentaste[^.]*corrige también ese año para quitarla/,
+      en: /also check the later years you already filed[^.]*correct that year too to remove it/,
+      ca: /revisa també els anys posteriors que ja vas presentar[^.]*corregeix també aquell any per treure-la/,
+      eu: /berrikusi dagoeneko aurkeztu dituzun ondorengo urteak ere[^.]*zuzendu urte hori ere/,
+      gl: /revisa tamén os anos posteriores que xa presentaches[^.]*corrixe tamén ese ano para quitala/,
+    };
+    // Only a buy that ONLY covers a short is out: one that also leaves long shares is a repurchase.
+    const shortCover = {
+      es: /salvo la que solo cierra una posición corta/,
+      en: /except one that only closes a short position/,
+      ca: /excepte la que només tanca una posició curta/,
+      eu: /posizio motz bat soilik ixten duena izan ezik/,
+      gl: /agás a que só pecha unha posición curta/,
+    };
+    const alwaysBlock = /bloquean siempre|always block|sempre bloquegen|beti blokeatzen|bloquean sempre/;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      const text = locale["guide_rw.blocked_losses_hint"];
+      expect(text, name).toMatch(laterYears[name]);
+      expect(text, name).toMatch(shortCover[name]);
+      expect(text, name).not.toMatch(alwaysBlock);
+    }
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    for (const p of ["casillas.md", "faq.md"]) {
+      expect(doc(p), p).toMatch(/revisa también los años posteriores que ya presentaste/);
+      expect(doc(p), p).toMatch(/salvo la que solo cierra una posición corta/);
+      expect(doc(p), p).not.toMatch(/bloquea siempre/);
+    }
+  });
+
+  it("gives crypto only the year after the sale (art. 33.5.e), in the 5 locales, report.ts, the docs and the engine (#457)", () => {
+    // Letter e counts only a reacquisition «dentro del año siguiente a la fecha
+    // de dicha transmisión»: a buy before the sale never blocks a crypto loss.
+    const yearAfter = {
+      es: /cripto[^.;]*año siguiente a la venta/,
+      en: /crypto[^.;]*year after the sale/,
+      ca: /cripto[^.;]*any següent a la venda/,
+      eu: /kripto[^.;]*salmentaren ondorengo urte/,
+      gl: /cripto[^.;]*ano seguinte á venda/,
+    };
+    const sameCoin = {
+      es: /mismo valor o la misma criptomoneda/,
+      en: /same security or the same coin/,
+      ca: /mateix valor o la mateixa criptomoneda/,
+      eu: /Balio bera edo kriptomoneta bera/,
+      gl: /mesmo valor ou a mesma criptomoeda/,
+    };
+    const beforeSale = {
+      es: /anteriores a la venta no cuentan/,
+      en: /before the sale do not/,
+      ca: /anteriors a la venda no compten/,
+      eu: /salmentaren aurreko[^.]*ez dute balio/,
+      gl: /anteriores á venda non contan/,
+    };
+    const keys = ["casilla.blocked_losses", "annex.wash_hint", "guide_rw.blocked_losses_hint", "report.antichurning_window_past_data"] as const;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      for (const key of keys) expect(locale[key], `${name} ${key}`).toMatch(yearAfter[name]);
+      expect(locale["report.antichurning_window_open_at_filing.hint"], name).toMatch(sameCoin[name]);
+      for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(beforeSale[name]);
+      }
+    }
+    // report.ts writes the Spanish text itself; it must say the same as es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    expect(source).toContain("En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta");
+    expect(es["report.antichurning_window_past_data.hint"]).toContain("En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta");
+    expect(source).toContain("Si compras el mismo valor o la misma criptomoneda hasta el ${ctx.windowEnd} inclusive");
+
+    // The old claim that the engine gives crypto ±1 year must not come back.
+    const oldClaim = /DeclaRenta les aplica ±1 año|engine (gives it|applies) ±1 year|criptomonedas[^.\n]*±12 meses|±12 meses[^.\n]*criptomonedas|#457, not handled/;
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const texts = {
+      casillas: doc("casillas.md"),
+      faq: doc("faq.md"),
+      modelos: doc("modelos-fiscales.md"),
+      design: doc("design/antichurning-proportional.md"),
+      claude: readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8"),
+      engine: readFileSync(new URL("../../src/engine/wash-sale.ts", import.meta.url), "utf8"),
+    };
+    for (const [name, text] of Object.entries(texts)) {
+      expect(text, name).not.toMatch(oldClaim);
+      expect(text, name).toMatch(/33\.5\.e/);
+    }
+    // Crypto = letter e is a deduction from the DGT's doctrine, not a holding.
+    for (const name of ["casillas", "faq", "design"] as const) {
+      expect(texts[name], name).toMatch(/V0525-25/);
+      expect(texts[name], name).toMatch(/V1613-25/);
+    }
+    expect(texts.casillas).toMatch(/ninguna consulta[^.]*criptomonedas[^.]*33\.5/i);
+    // Rewards do not count as a reacquisition: a documented choice.
+    expect(texts.casillas).toMatch(/staking[^.]*no cuentan como recompra|no cuentan como recompra[^.]*staking/);
+  });
+
+  it("names the window's last day as included wherever a hint says up to {{windowEnd}} (#457 follow-up)", () => {
+    // The detector counts a repurchase on the window's last day itself (sale +
+    // 12 months, de fecha a fecha), so «antes del» / «before» would leave it out.
+    const inclusive = {
+      es: /hasta el \{\{windowEnd\}\} inclusive/,
+      en: /up to and including \{\{windowEnd\}\}/,
+      ca: /fins al \{\{windowEnd\}\} inclòs/,
+      eu: /\{\{windowEnd\}\} arte, egun hori barne/,
+      gl: /ata o \{\{windowEnd\}\} incluído/,
+    };
+    const exclusive = /(antes del?|(?<!or )before|abans del|baino lehen|at the latest until) \{\{windowEnd\}\}|\{\{windowEnd\}\} baino lehen/;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      for (const key of ["report.antichurning_window_open_at_filing.hint", "report.antichurning_window_past_data.hint"] as const) {
+        expect(locale[key], `${name} ${key}`).not.toMatch(exclusive);
+      }
+      expect(locale["report.antichurning_window_open_at_filing.hint"], name).toMatch(inclusive[name]);
+    }
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/antes del \$\{(ctx|base)\.windowEnd\}/);
+  });
+
+  it("tells users who filed crypto with 0.66.13 or earlier to correct that year, or the loss is never deducted (#457)", () => {
+    // 0.66.13 let a buy before the sale block a crypto loss and released it in a
+    // later year. The new engine deducts it in the year of the sale and no later
+    // year releases it: without a correction the loss is lost.
+    const neverDeducted = {
+      es: /criptomonedas[^]*0\.66\.13[^]*solicitud de rectificación\); si no, no se deduce nunca/,
+      en: /crypto[^]*0\.66\.13[^]*«solicitud de rectificación»\); otherwise it is never deducted/,
+      ca: /criptomonedes[^]*0\.66\.13[^]*sol·licitud de rectificació\); si no, no es dedueix mai/,
+      eu: /Kriptomonetetan[^]*0\.66\.13[^]*zuzenketa-eskaera\); bestela, ez da inoiz kentzen/,
+      gl: /criptomoedas[^]*0\.66\.13[^]*solicitude de rectificación\); se non, non se deduce nunca/,
+    };
+    const twice = { es: /dos veces/, en: /twice/, ca: /dues vegades/, eu: /bi aldiz/, gl: /dúas veces/ };
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(neverDeducted[name]);
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(twice[name]);
+    }
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const casillas = doc("casillas.md");
+    expect(casillas).toContain('!!! warning "Criptomonedas: si declaraste con la versión 0.66.13 o anterior"');
+    expect(casillas).toMatch(/0\.66\.13[^]*Si no lo corriges, esa pérdida no se deduce nunca[^]*no la deduzcas dos veces/);
+    expect(doc("faq.md")).toMatch(/criptomonedas, si declaraste un año con la versión 0\.66\.13 o anterior[^.]*no se deduce nunca/);
+  });
+
+  it("says a crypto loss is released only when the rebought coins are sold, in the docs and the 5 locales (#457 follow-up)", () => {
+    // Letter e: «se integrará cuando se produzca la posterior transmisión del
+    // elemento patrimonial». The first #457 fix kept the share-count definitive
+    // test, which released on a sale of other coins; the docs called it open.
+    const doc = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
+    const files = {
+      casillas: doc("docs/casillas.md"),
+      faq: doc("docs/faq.md"),
+      modelos: doc("docs/modelos-fiscales.md"),
+      design: doc("docs/design/antichurning-proportional.md"),
+      claude: doc("CLAUDE.md"),
+    };
+    const oldOpenPoint = /puede liberarla antes de que vendas las unidades recompradas|can release before the reacquired units\s+are sold|Es un punto abierto|the engine keeps the #451\s+definitive test/;
+    for (const [name, text] of Object.entries(files)) expect(text, name).not.toMatch(oldOpenPoint);
+    expect(files.casillas).toMatch(/libera cuando las vendes[^.]*\. Si vendes otras unidades[^.]*\([^)]*\)[^.]*no se libera/);
+    expect(files.casillas).toMatch(/Ninguna consulta de la DGT trata esta regla para las criptomonedas/);
+    expect(files.faq).toMatch(/criptomonedas es distinto: la pérdida queda atada a las unidades de la recompra/);
+    expect(files.modelos).toMatch(/criptomonedas, la pérdida diferida se integra cuando se venden las unidades de la recompra/);
+    expect(files.design).toMatch(/A sale of other coins releases nothing/);
+    expect(files.claude).toMatch(/Release = transmission of the rebought coins/);
+    const otherCoins = {
+      es: /vender otras unidades no la integra/i,
+      en: /selling other coins does not release it/i,
+      ca: /vendre'n altres unitats no la integra/i,
+      eu: /beste unitate batzuk saltzeak ez du integratzen/i,
+      gl: /vender outras unidades non a integra/i,
+    };
+    // A rebuy after the sale of the rebought coins does not hold the loss back
+    // (no roll onto the new coins): the hints say «aunque vuelvas a comprar».
+    const evenIfRebought = {
+      es: /aunque vuelvas a comprar (esa|esta) criptomoneda/,
+      en: /even if you buy (that|this) coin again/,
+      ca: /encara que tornis a comprar aquesta criptomoneda/,
+      eu: /kriptomoneta (bera|hau) berriro erosten baduzu ere/,
+      gl: /aínda que volvas comprar (esa|esta) criptomoeda/,
+    };
+    const roll = /no vuelvas a comprar|do not buy that coin again|no tornis a comprar|erosten ez baduzu|non volvas comprar/;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      for (const key of ["annex.wash_hint", "guide_rw.blocked_losses_hint", "annex.wash_released_hint_crypto"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(otherCoins[name]);
+        expect(locale[key], `${name} ${key}`).toMatch(evenIfRebought[name]);
+        expect(locale[key], `${name} ${key}`).not.toMatch(roll);
+      }
+      // A crypto release row never explains itself with the securities rule.
+      for (const key of ["annex.wash_released_crypto", "annex.wash_released_hint_crypto"] as const) {
+        expect(locale[key], `${name} ${key}`).not.toMatch(/definitiva|definitive|behin betiko|oldest first|más antiguas|zaharrenak/);
+        expect(locale[key], `${name} ${key}`).toMatch(/33\.5\.e/);
+      }
+      expect(locale["casilla.reintegrated_losses"], name).toMatch(/cripto|crypto|kripto/);
+    }
+    const rollDocs = /pasa a las unidades nuevas|passes its claims to the new coins|rolledOf/;
+    for (const [name, text] of Object.entries(files)) expect(text, name).not.toMatch(rollDocs);
+  });
+
+  it("puts each migration note under a warning box whose version title covers it, so a user who filed with a covered version reads it (#454)", () => {
+    // A user skips a box titled «0.66.5 o anterior» when they filed with 0.66.6
+    // to 0.66.13. The #453, #454 pick-order and same-day notes concern every
+    // version up to 0.66.13, so they must sit under a box titled 0.66.13 or later.
+    const casillas = readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8");
+    const patch = (v: string) => Number(v.split(".")[2]);
+    // Each box: its title line, then its indented (or blank) body lines.
+    const boxes = [...casillas.matchAll(/^!!! warning "([^"]*)"\n((?:(?: {4}.*)?\n)*)/gm)]
+      .map((m) => ({ title: m[1] ?? "", body: m[2] ?? "" }))
+      .filter((b) => /versión 0\.66\.\d+ o anterior/.test(b.title));
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    for (const { title, body } of boxes) {
+      const covered = patch(/0\.66\.\d+/.exec(title)?.[0] ?? "0.0.0");
+      const named = [...body.matchAll(/0\.66\.\d+/g)].map((m) => patch(m[0]));
+      // No paragraph talks about a version the title does not cover.
+      for (const v of named) expect(v, title).toBeLessThanOrEqual(covered);
+      // When the box also names an older version, "Esas versiones" no longer says which.
+      if (named.some((v) => v < covered)) expect(body, title).not.toMatch(/Esas versiones/);
+    }
+    // The #451 note concerns 0.66.5 and earlier; the #453 and #454 notes concern
+    // every version up to 0.66.13, so they sit in the box titled 0.66.13.
+    const v5 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.5 o anterior");
+    const v13 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.13 o anterior");
+    expect(v5?.body).toContain("#451");
+    for (const issue of ["#453", "#454"]) expect(v13?.body).toContain(issue);
+    expect(v13?.body).toMatch(/mismo día de la venta \(issue #454\)[^]*V0571-21/);
   });
 });

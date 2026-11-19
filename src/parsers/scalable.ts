@@ -21,6 +21,9 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -205,10 +208,19 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
 
     // Trades
     const sharesNum = parseFloat(parseNumber(shares));
-    if (sharesNum === 0) continue;
-
     const isSell = SELL_TYPES.some((s) => type.includes(s));
     const isBuy = BUY_TYPES.some((b) => type.includes(b));
+    // An empty or unreadable share count is no "0": keep a buy or sale row as
+    // a trade of unknown quantity for the anti-churning evidence (#453).
+    if ((isSell || isBuy) && quantityUnreadable(fields[cols.shares])) {
+      trades.push(quantityUnknownTrade({
+        tradeID: reference || `scalable-${tradeDate}-${isin}-${i}`,
+        symbol: description, description, isin, assetCategory: /etf|fund/.test(assetType) ? "FUND" : "STK",
+        currency: currency || "EUR", tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange: "XETR",
+      }));
+      continue;
+    }
+    if (sharesNum === 0) continue;
     if (!isSell && !isBuy) continue;
 
     const absShares = Math.abs(sharesNum);
@@ -245,15 +257,17 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
-  const parserMessages: TaxMessage[] = interestWithholdingRows > 0
-    ? [{
-        id: "scalable.interest_withholding_detected",
-        severity: "info" as const,
-        message: `Se detectó una retención en ${interestWithholdingRows} fila(s) de intereses de Scalable Capital. El interés se ha declarado íntegro en la casilla 0027.`,
-        hint: "La deducción por doble imposición (casilla 0588) sobre intereses aún no se calcula automáticamente. Revisa la retención en tu certificado fiscal y, si procede, decláralo manualmente. Los intereses de cuenta a no residentes suelen pagarse sin retención.",
-        context: { count: String(interestWithholdingRows) },
-      }]
-    : [];
+  const parserMessages: TaxMessage[] = [];
+  if (interestWithholdingRows > 0) {
+    parserMessages.push({
+      id: "scalable.interest_withholding_detected",
+      severity: "info" as const,
+      message: `Se detectó una retención en ${interestWithholdingRows} fila(s) de intereses de Scalable Capital. El interés se ha declarado íntegro en la casilla 0027.`,
+      hint: "La deducción por doble imposición (casilla 0588) sobre intereses aún no se calcula automáticamente. Revisa la retención en tu certificado fiscal y, si procede, decláralo manualmente. Los intereses de cuenta a no residentes suelen pagarse sin retención.",
+      context: { count: String(interestWithholdingRows) },
+    });
+  }
+  parserMessages.push(...tradeQuantityUnknownMessages("Scalable Capital", trades));
 
   return {
     accountId: "",

@@ -111,9 +111,9 @@ const es = {
   "casilla.double_taxation": "Deducción doble imposición",
   "casilla.dt_foreign_income_total": "Total rendimientos extranjeros",
   "casilla.reintegrated_losses":
-    "Pérdidas diferidas que ahora se integran (acciones vendidas sin recompra en su plazo, «transmisión definitiva»): {{amount}} EUR",
+    "Pérdidas diferidas que ahora se integran (acciones vendidas sin recompra en su plazo, «transmisión definitiva»; en cripto, venta de las unidades recompradas): {{amount}} EUR",
   "casilla.blocked_losses":
-    "Pérdidas bloqueadas por regla anti-churning (2 meses en mercado regulado o equivalente / 1 año el resto): {{amount}} EUR",
+    "Pérdidas bloqueadas por regla anti-churning (2 meses en mercado regulado o equivalente / 1 año el resto; en cripto, el año siguiente a la venta): {{amount}} EUR",
   "casilla.warnings_count": "{{count}} advertencia(s)",
   "messages.errors_title": "{{count}} error(es) — requiere atención",
   "messages.warnings_title": "{{count}} aviso(s) — revisa",
@@ -633,10 +633,13 @@ const es = {
   "annex.wash_blocked": "Pérdida bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras del mismo valor que la bloquean: {{dates}}",
   "annex.wash_hint":
-    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida queda pendiente: se integra, primero las pérdidas más antiguas, a medida que vendas acciones de este valor que ninguna recompra en los 2 meses anteriores o posteriores (1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente, como NYSE o Nasdaq) cubre; si recompras parte, solo cuentan las acciones no recompradas.",
+    "En Renta Web, marca esta venta como «Pérdidas patrimoniales no imputables». La pérdida queda pendiente: se integra, primero las pérdidas más antiguas, a medida que vendas acciones de este valor que ninguna recompra en los 2 meses anteriores o posteriores (1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente, como NYSE o Nasdaq; en las criptomonedas, solo el año siguiente a la venta, art. 33.5.e) cubre; si recompras parte, solo cuentan las acciones no recompradas. En las criptomonedas, se integra cuando vendas las unidades recompradas, aunque vuelvas a comprar esa criptomoneda (art. 33.5.e); vender otras unidades no la integra.",
   "annex.wash_released": "Libera {{amount}} EUR de pérdidas diferidas de este valor (transmisión definitiva, art. 33.5 LIRPF)",
   "annex.wash_released_dates": "Pérdidas pendientes de las ventas del: {{dates}}",
   "annex.wash_released_hint": "Las acciones de esta venta que ninguna recompra en su plazo cubre son una transmisión definitiva: integran ahora las pérdidas pendientes de ese valor, la de una acción por cada acción, primero las más antiguas (si la venta cierra la posición y ninguna recompra en su plazo la cubre, todas las que queden). En Renta Web, impútalas en este ejercicio.",
+  "annex.wash_released_crypto": "Libera {{amount}} EUR de pérdidas diferidas de esta criptomoneda (venta de las unidades recompradas, art. 33.5.e LIRPF)",
+  "annex.wash_released_hint_crypto":
+    "Esta venta transmite unidades de la recompra que bloqueó una pérdida: integra ahora la parte de esa pérdida que corresponde a las unidades vendidas, aunque vuelvas a comprar esta criptomoneda (art. 33.5.e). Vender otras unidades no la integra. En Renta Web, impútala en este ejercicio.",
 
   // Tax bracket estimation
   "chart.tax_estimate": "Estimación fiscal (base del ahorro)",
@@ -724,7 +727,7 @@ const es = {
     "La deducción por doble imposición evita pagar dos veces impuestos sobre los mismos dividendos. Se limita al menor entre lo pagado en origen y la cuota española. Si el convenio de doble imposición permite un tipo máximo inferior (ej. 15% EE.UU.), solo es deducible hasta ese límite.",
   "guide_rw.blocked_losses_title": "Pérdidas bloqueadas (anti-churning)",
   "guide_rw.blocked_losses_hint":
-    "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Se bloquean porque recompraste el mismo valor en los 2 meses anteriores o posteriores a la venta (1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente, como NYSE o Nasdaq). DeclaRenta aplica 2 meses a todo valor con ISIN, porque no sabe en qué mercado cotiza: si el tuyo solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, revisa a mano las recompras de entre 2 meses y 1 año antes o después de la venta, porque esa pérdida también se bloquea (issue #452). No se suman al coste de la nueva posición: quedan pendientes y se integran, primero las más antiguas, a medida que vendas acciones de ese valor que ninguna recompra en ese plazo cubre (transmisión definitiva); si recompras parte, solo cuentan las acciones no recompradas. Si declaraste un año con DeclaRenta 0.66.5 o anterior, esas versiones liberaban una pérdida al vender las acciones recompradas aunque volvieras a recomprar: si ya dedujiste esa pérdida, no la deduzcas otra vez cuando DeclaRenta la libere ahora, o corrige aquel año (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Y al revés: si DeclaRenta libera ahora una pérdida en un año que ya presentaste con la 0.66.5 o anterior, puedes corregir aquel año para deducirla (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: solicitud de rectificación).",
+    "Si DeclaRenta muestra pérdidas bloqueadas, marca la casilla <strong>«Pérdidas patrimoniales no imputables»</strong> en Renta Web. Se bloquean porque recompraste el mismo valor en los 2 meses anteriores o posteriores a la venta (1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente, como NYSE o Nasdaq). En las criptomonedas, solo se bloquean si recompras la misma criptomoneda en el año siguiente a la venta (art. 33.5.e); las compras anteriores a la venta no cuentan. DeclaRenta aplica 2 meses a todo valor con ISIN, salvo que IBKR solo lo muestre en un mercado sin equivalencia (Londres desde 2021, SIX desde julio de 2019, OTC Markets…) o que tú lo marques con 1 año en el panel «Plazo anti-churning por valor» de los resultados (en la línea de comandos, --antichurning-1y). Toronto, Tokio y Singapur tienen una decisión de equivalencia y DeclaRenta les aplica 2 meses, aunque ninguna consulta de la DGT lo confirma para acciones. Si tu valor solo cotiza en un mercado sin equivalencia y DeclaRenta no lo sabe, márcalo con 1 año; si también cotiza en un mercado regulado del Espacio Económico Europeo o en uno equivalente, márcalo con 2 meses. Una compra de los 2 meses anteriores no bloquea si fue la única compra de ese valor en ese plazo y al empezarlo no tenías acciones de ese valor (excepción de compra única, DGT V3282-18); las compras de los 2 meses posteriores siguen bloqueando, salvo la que solo cierra una posición corta, que no es una recompra. Hasta la 0.66.13, DeclaRenta no aplicaba esta excepción: si presentaste un año con esa pérdida bloqueada, puedes corregir aquel año para deducirla (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: solicitud de rectificación). No se suman al coste de la nueva posición: quedan pendientes y se integran, primero las más antiguas, a medida que vendas acciones de ese valor que ninguna recompra en ese plazo cubre (transmisión definitiva); si recompras parte, solo cuentan las acciones no recompradas. En las criptomonedas, se integra cuando vendas las unidades recompradas, aunque vuelvas a comprar esa criptomoneda (art. 33.5.e); vender otras unidades no la integra. Si declaraste un año con DeclaRenta 0.66.5 o anterior, esas versiones liberaban una pérdida al vender las acciones recompradas aunque volvieras a recomprar: si ya dedujiste esa pérdida, no la deduzcas otra vez cuando DeclaRenta la libere ahora, o corrige aquel año (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Y al revés: si DeclaRenta libera ahora una pérdida en un año que ya presentaste con la 0.66.5 o anterior, puedes corregir aquel año para deducirla (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: solicitud de rectificación). En las criptomonedas, si declaraste un año con DeclaRenta 0.66.13 o anterior, una compra anterior a la venta podía bloquear la pérdida: si DeclaRenta deduce o libera ahora una pérdida de criptomonedas en un año que ya presentaste, corrige aquel año para deducirla (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: solicitud de rectificación); si no, no se deduce nunca. Siempre que corrijas un año para deducir una pérdida, revisa también los años posteriores que ya presentaste: si en alguno dedujiste esa misma pérdida porque la versión anterior la liberó allí, corrige también ese año para quitarla (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria), para no deducirla dos veces: una pérdida solo se deduce una vez.",
   "guide_rw.closing_tip": "Tras introducir todos los datos, usa el botón «Verificar declaración» de Renta Web para comprobar errores. Si otra herramienta muestra un importe distinto en ganancias patrimoniales, puede usar otro método para las acciones en divisa. En los resultados de Modelo 100, abre «Comparar con los otros métodos» para ver las cifras de los tres. Para cambiar de método, vuelve al paso «Revisar y elegir método». Usa el mismo método todos los años.",
 
   // PDF report
@@ -890,23 +893,79 @@ const es = {
   "report.withholding_corrected_prior_year":
     "Este fichero trae correcciones de retenciones en origen de {{year}} anotadas en {{reportYear}}: la retención de {{year}} baja {{amount}} €. Si presentaste {{year}} con la retención original, la casilla 0588 de ese año pudo salir alta.",
   "report.withholding_corrected_prior_year.hint":
-    "La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de {{year}}. Las casillas de {{reportYear}} no cambian.",
+    "La deducción por doble imposición internacional (casilla 0588, art. 80 LIRPF) solo admite el impuesto pagado de verdad en el extranjero. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0588 baja respecto a la que presentaste, corrige la declaración de {{year}} (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Las casillas de {{reportYear}} no cambian.",
   "report.spanish_withholding_corrected_prior_year":
     "Este fichero trae correcciones de retenciones españolas de {{year}} anotadas en {{reportYear}}: la retención de {{year}} baja {{amount}} €. Si presentaste {{year}} con la retención original, la casilla 0597 de ese año pudo salir alta.",
   "report.spanish_withholding_corrected_prior_year.hint":
-    "La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, puede hacer falta una declaración complementaria de {{year}}. Las casillas de {{reportYear}} no cambian.",
+    "La retención española sobre dividendos de emisores españoles es un pago a cuenta (casilla 0597, retenciones del capital mobiliario) y solo cuenta lo retenido de verdad. Sube el fichero de {{year}} junto a este y calcula {{year}}: DeclaRenta suma la corrección a la retención de su dividendo. Si la casilla 0597 baja respecto a la que presentaste, corrige la declaración de {{year}} (2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria). Las casillas de {{reportYear}} no cambian.",
   "report.crypto_general_gain_unvalued":
     "Hay {{count}} ganancia(s) patrimonial(es) en criptomoneda (p. ej. airdrops o comisiones de referidos) que no se han podido valorar automáticamente y no están incluidas en los importes calculados.",
   "report.crypto_general_gain_unvalued.hint":
     "Estas rentas se reciben en la propia cripto y no tienen tipo de cambio oficial del BCE. Calcula su valor en euros a la fecha de cobro y decláralas manualmente como ganancia patrimonial no derivada de transmisión (base general).",
   "report.antichurning_window_past_data":
-    "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente) termina después de la última fecha que cubren los ficheros subidos de ese bróker ({{lastDate}}). DeclaRenta no ve las compras posteriores a esa fecha.",
+    "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente; en las criptomonedas, solo el año siguiente a la venta) termina después de la última fecha que cubren los ficheros subidos de ese bróker ({{lastDate}}). DeclaRenta no ve las compras posteriores a esa fecha.",
   "report.antichurning_window_past_data.hint":
-    "Si compraste el mismo valor después del {{lastDate}} y dentro del plazo de esas ventas (como muy tarde, hasta el {{windowEnd}}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el {{windowEnd}} junto a este y calcula de nuevo. Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año, así que revisa también tus compras hasta un año después de cada venta (issue #452). Si no compraste, el cálculo ya es correcto.",
+    "Si compraste el mismo valor después del {{lastDate}} y dentro del plazo de esas ventas (como muy tarde, hasta el {{windowEnd}}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el {{windowEnd}} junto a este y calcula de nuevo. Ese plazo es de 1 año en los valores a los que DeclaRenta aplica 1 año (porque IBKR solo los muestra en un mercado sin equivalencia, como Londres desde 2021, SIX u OTC Markets, o porque tú los marcaste) y de 2 meses en los demás valores con ISIN. Si un valor solo cotiza en un mercado así y DeclaRenta le aplica 2 meses, márcalo con 1 año en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-1y) y calcula de nuevo. En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta y, como muy tarde, hasta el {{windowEnd}}; las anteriores a la venta no cuentan. Si no compraste, el cálculo ya es correcto.",
   "report.antichurning_window_open_at_filing":
     "Hay {{count}} venta(s) de {{year}} cuyo plazo de recompra de la regla anti-churning termina el {{windowEnd}} como muy tarde: después del {{deadline}}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker ({{lastDate}}). Cuando presentes la declaración, ese plazo seguirá abierto.",
   "report.antichurning_window_open_at_filing.hint":
-    "Antes de presentar, sube también el fichero con tus operaciones posteriores al {{lastDate}} y calcula de nuevo. Si compras el mismo valor antes del {{windowEnd}}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.",
+    "Antes de presentar, sube también el fichero con tus operaciones posteriores al {{lastDate}} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda hasta el {{windowEnd}} inclusive, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.",
+  "report.antichurning_one_year_ibkr":
+    "DeclaRenta aplica el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF) a las ventas de {{count}} valor(es) hechas en días en que IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: {{list}}.",
+  "report.antichurning_one_year_ibkr.hint":
+    "IBKR solo muestra el mercado de las líneas que has operado. Si el valor también está admitido a negociación en un mercado regulado del Espacio Económico Europeo (no basta un mercado de crecimiento ni otro sistema multilateral de negociación) o en NYSE, Nasdaq, ASX o la Bolsa de Hong Kong, le corresponden 2 meses: márcalo con 2 meses en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-2m) y calcula de nuevo.",
+  "report.antichurning_listing_open":
+    "DeclaRenta aplica 2 meses a las ventas de {{count}} valor(es) hechas en días en que IBKR los muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: {{list}}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.",
+  "report.antichurning_listing_open.hint":
+    "Si prefieres el criterio prudente, márcalo con 1 año en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-1y) y calcula de nuevo.",
+  "report.antichurning_window_user":
+    "Has fijado a mano el plazo de la regla anti-churning de {{count}} valor(es). 1 año: {{oneYear}}. 2 meses, en lugar del año que daba IBKR: {{twoMonths}}.",
+  "report.antichurning_window_user.hint":
+    "DeclaRenta usa tu plazo en lugar del automático en el bloqueo de pérdidas, en la prueba de transmisión definitiva y en los avisos de plazo. Puedes cambiarlo en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-1y o --antichurning-2m).",
+  "antichurning_window.title":
+    "Plazo anti-churning por valor",
+  "antichurning_window.description":
+    "La regla anti-churning bloquea una pérdida si recompras el mismo valor en los 2 meses anteriores o posteriores a la venta (art. 33.5.f LIRPF). Si el valor no está admitido a negociación en un mercado regulado del Espacio Económico Europeo ni en un mercado declarado equivalente, el plazo es de 1 año (art. 33.5.g). DeclaRenta elige el plazo con el mercado que muestra IBKR y, si no lo sabe, aplica 2 meses. Aquí puedes fijarlo para cada valor.",
+  "antichurning_window.col_security":
+    "Valor",
+  "antichurning_window.col_listing":
+    "Mercado según IBKR",
+  "antichurning_window.col_window":
+    "Plazo",
+  "antichurning_window.months_2":
+    "2 meses",
+  "antichurning_window.months_12":
+    "1 año",
+  "antichurning_window.opt_auto":
+    "Automático ({{window}})",
+  "antichurning_window.opt_2m":
+    "2 meses: admitido en un mercado regulado del EEE o en uno equivalente",
+  "antichurning_window.opt_1y":
+    "1 año: no admitido en un mercado regulado del EEE ni en uno equivalente (p. ej. solo en Londres desde 2021, SIX, OTC o BME Growth)",
+  "antichurning_window.no_listing":
+    "sin dato",
+  "antichurning_window.open_note":
+    "Equivalencia por la Decisión {{decision}}, sin confirmar para acciones",
+  "antichurning_window.save_btn":
+    "Guardar y recalcular",
+  "antichurning_window.clear_btn":
+    "Borrar los plazos guardados",
+  "antichurning_window.saved":
+    "Guardado",
+  "antichurning_window.recalculate_hint":
+    "Los plazos se guardan en tu navegador y el informe se recalcula.",
+  "antichurning_window.save_error":
+    "El navegador no ha dejado guardar los plazos: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
+  "antichurning_window.clear_error":
+    "El navegador no ha dejado borrar los plazos guardados: su almacenamiento puede estar bloqueado. El informe no ha cambiado.",
+  "report.antichurning_single_purchase":
+    "En {{count}} venta(s) de {{year}}, la compra de los 2 meses anteriores no cuenta como recompra: fue la única compra de ese valor en ese plazo y al empezar el plazo no tenías acciones de ese valor (excepción de compra única, DGT V3282-18). Esa compra no bloquea su pérdida ni impide que la venta libere pérdidas pendientes.",
+  "report.antichurning_single_purchase.hint":
+    "DeclaRenta solo ve los ficheros subidos. Si al empezar el plazo (el primero empieza el {{windowStart}}) tenías acciones de ese valor en otro bróker o cuenta que no has subido, o después las traspasaste a otra entidad, la excepción no se aplica: sube también esos ficheros y calcula de nuevo. Una compra en los 2 meses posteriores a la venta sigue bloqueando la pérdida.",
+  "report.antichurning_single_purchase_unverified":
+    "En {{count}} venta(s) de {{year}} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el {{windowStart}}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.",
+  "report.antichurning_single_purchase_unverified.hint":
+    "Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrir sus operaciones sin huecos ni días repetidos desde el {{windowStart}} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, las secciones Trades y Open Positions de la Flex Query, con el campo ISIN), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Una operación de acciones sin ISIN en ese periodo, o unas acciones sin ISIN que aún tuvieras al empezarlo (por ejemplo, de Revolut), en cualquier cuenta, también lo impiden, porque pueden ser de ese valor. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.",
   "report.titularidad_compartida":
     "Los importes mostrados están divididos entre {{titulares}} titulares (la parte que corresponde a cada contribuyente). Este informe refleja la declaración de UN solo titular: cada uno de los {{titulares}} titulares debe presentar su propia declaración con esta misma parte. No declares el total en una sola declaración ni sumes las partes de varios titulares en la tuya.",
   "report.titularidad_compartida.hint":
@@ -1084,6 +1143,14 @@ const es = {
   "parser.cancelled_trades.hint": 'IBKR marca una ejecución cancelada con una fila de anulación ("(Ca.)"). La operación original y su anulación se han descartado: nunca llegaron a ser una compra o venta real.',
   "parser.cancelled_trades_unmatched": "Se omitieron {{count}} anulaciones de IBKR sin la operación original en este archivo.",
   "parser.cancelled_trades_unmatched.hint": "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
+  "parser.cancelled_trades_unreadable": "Se omitieron {{count}} anulaciones de IBKR sin poder emparejarlas con la operación que anulan: falta una cantidad o un precio legible en la anulación o en una operación de este archivo.",
+  "parser.cancelled_trades_unreadable.hint": "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
+  "parser.open_position_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} posición(es) abierta(s): {{holdings}}.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.trade_quantity_unknown": "{{broker}} no da un número de acciones o un precio legible para {{count}} operación(es): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
+  "parser.crypto_quantity_unknown": "{{broker}} no da un número de unidades o un precio legible para {{count}} operación(es) con criptomonedas: {{trades}}.",
+  "parser.crypto_quantity_unknown.hint": "DeclaRenta no suma ni resta unidades por ellas, así que las ganancias y pérdidas de esa criptomoneda no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea porque no sabe cuántas unidades recompraste. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

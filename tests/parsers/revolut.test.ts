@@ -310,12 +310,25 @@ describe("revolutParser", () => {
       expect(statement.trades[0]!.symbol).toBe("TSLA");
     });
 
-    it("should skip rows with NaN quantity", async () => {
+    it("keeps a row with NaN quantity as two trades of unknown quantity, with no money (#453)", async () => {
       const data = buildRevolutWorkbook([
         ["2025-01-01", "2025-06-01", "AAPL", "abc", "1000", "1100", "100", "0", "100", "USD"],
       ]);
       const statement = await parseRevolutXlsx(data);
-      expect(statement.trades.length).toBe(0);
+      expect(statement.trades.map((t) => [t.buySell, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds])).toEqual([
+        ["BUY", "20250101", "0", true, "0", "0"],
+        ["SELL", "20250601", "0", true, "0", "0"],
+      ]);
+      expect(statement.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("Revolut");
+    });
+
+    it("still skips a row with an explicit 0 quantity, with no message", async () => {
+      const data = buildRevolutWorkbook([
+        ["2025-01-01", "2025-06-01", "AAPL", "0", "1000", "1100", "100", "0", "100", "USD"],
+      ]);
+      const statement = await parseRevolutXlsx(data);
+      expect(statement.trades).toEqual([]);
+      expect(statement.parserMessages).toBeUndefined();
     });
 
     it("should skip rows with empty symbol", async () => {
@@ -749,12 +762,14 @@ describe("revolutParser — transaction-log format", () => {
       expect(stmt.openPositions.length).toBe(0);
     });
 
-    it("should skip rows with Infinity quantity", async () => {
+    it("keeps a row with Infinity quantity as a trade of unknown quantity, with no money and no holding (#453)", async () => {
       const data = buildTxnLogWorkbook([
         ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "Infinity", "USD 150", "USD 750", "USD", "1.08"],
       ]);
       const stmt = await parseRevolutXlsx(data);
-      expect(stmt.trades.length).toBe(0);
+      expect(stmt.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown, t.tradeMoney, t.cost])).toEqual([["BUY", "0", true, "0", "0"]]);
+      expect(stmt.openPositions).toEqual([]);
+      expect(stmt.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("Revolut");
     });
   });
 
@@ -883,6 +898,7 @@ describe("Revolut stock tickers that are also crypto symbols", () => {
   const STOCK_TICKERS = [
     "META", "U", "H", "M", "S", "W", "BILL", "AMP", "TEL", "BIO",
     "IP", "VVV", "BEAM", "MET", "GT", "LIT", "CASH",
+    "CVX", "STX", "ADI", "BDX", "CFG",
   ];
 
   it.each(STOCK_TICKERS)("classifies %s as STK in the transaction log", async (ticker) => {
@@ -906,6 +922,20 @@ describe("Revolut stock tickers that are also crypto symbols", () => {
     expect(report.capitalGains.disposals).toHaveLength(2);
     expect(blocks.listedShares.transmissionValue.toFixed(2)).toBe("1080.00");
     expect(blocks.otherElements.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(["CVX", "STX", "ADI", "BDX", "CFG"])("keeps the pre-sale anti-churning block of %s, a listed share (#457)", async (ticker) => {
+    // Crypto gets only the year after the sale (art. 33.5.e). A listed share
+    // typed CRYPTO lost the block of a buy before the loss sale that is still
+    // held after it (letter f: 2 months before or after).
+    const data = buildRevolutWorkbook([
+      ["2024-12-01", "2025-06-02", ticker, "1", "200", "100", "-100", "0", "-100", "EUR"],
+      ["2025-05-01", "2026-01-12", ticker, "1", "150", "160", "10", "0", "10", "EUR"],
+    ]);
+    const parsed = await parseRevolutXlsx(data);
+    expect(parsed.trades.every((t) => t.assetCategory === "STK")).toBe(true);
+    const report = generateTaxReport(toFlex(parsed), new Map(), 2025);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("100.00");
   });
 
   it("still classifies real coins (BTC, ETH) as CRYPTO", async () => {

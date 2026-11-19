@@ -3206,7 +3206,8 @@ footer a:hover {
   color: var(--success-text);
 }
 
-.manual-opening-lots-error-msg {
+.manual-opening-lots-error-msg,
+.antichurning-window-error {
   display: block;
   margin-top: 0.5rem;
   font-size: 0.8rem;
@@ -3214,7 +3215,9 @@ footer a:hover {
   color: var(--danger-text);
 }
 
-.manual-opening-lots-error-msg[hidden] {
+.crypto-rates-saved-msg[hidden],
+.manual-opening-lots-error-msg[hidden],
+.antichurning-window-error[hidden] {
   display: none;
 }
 
@@ -3253,8 +3256,13 @@ footer a:hover {
   font-weight: 600;
 }
 
-.manual-opening-lots-panel {
+.manual-opening-lots-panel,
+.antichurning-window-panel {
   margin: 1.5rem 0;
+}
+
+.antichurning-window-select {
+  max-width: 100%;
 }
 
 .manual-opening-lots-summary,

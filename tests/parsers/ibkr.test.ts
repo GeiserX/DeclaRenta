@@ -3,7 +3,10 @@ import { readFileSync } from "fs";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { computeCasillaBlocks } from "../../src/generators/casillas.js";
+import { generateD6Report } from "../../src/generators/d6.js";
+import { generateModelo720 } from "../../src/generators/modelo720.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
+import type { OpenPosition } from "../../src/types/ibkr.js";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -220,6 +223,84 @@ describe("parseIbkrFlexXml", () => {
     expect(result.openPositions[0]!.quantity).toBe("100");
     expect(result.openPositions[0]!.markPrice).toBe("195");
     expect(result.openPositions[0]!.assetCategory).toBe("STK");
+  });
+
+  it("reads the held quantity from IBKR's `position` attribute, so D-6 lists real exports", () => {
+    // IBKR writes Open Positions with `position`, never `quantity` (every real
+    // export in tests/fixtures). Reading only `quantity` gave "0" for every row,
+    // and the D-6 dropped every IBKR holding as "not long".
+    const result = parseIbkrFlexXml(fixture("ibkr-multicurrency.xml"));
+    expect(result.openPositions.map((p) => [p.symbol, p.quantity])).toEqual([
+      ["EDV", "120"],
+      ["ELE", "1000"],
+      ["GLO", "4500"],
+      ["LUG", "250"],
+    ]);
+    const rates: EcbRateMap = new Map([["2020-12-31", new Map([["CAD", "1.5"]])]]);
+    const d6 = generateD6Report(result.openPositions, rates, 2020, "X", "00000000T");
+    expect(d6.positions.map((p) => [p.isin, p.sharesAtYearEnd])).toEqual([
+      ["KYG3040R1589", "120"],
+      ["CA28619L1076", "1000"],
+      ["CA37957M1068", "4500"],
+      ["CA5503711080", "250"],
+    ]);
+  });
+
+  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it, and warns", () => {
+    // position="" with no legacy `quantity`: the parser used to return "", and
+    // new Decimal("") threw in the D-6 (review of #453). The value, 60,000 USD,
+    // is above the 720's 50,000 EUR threshold, so the 720 writes its record.
+    const row = (position: string): string =>
+      `<OpenPosition accountId="U1" symbol="AAPL" description="APPLE INC" conid="265598" isin="US0378331005" currency="USD" assetCategory="STK" position="${position}" markPrice="200" positionValue="60000" costBasisMoney="45000" costBasisPrice="150" fifoPnlUnrealized="15000" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
+    const xml = (position: string): string =>
+      `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="LastYear"><Trades /><OpenPositions>${row(position)}</OpenPositions></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const rates: EcbRateMap = new Map([["2025-12-31", new Map([["USD", "1.1"]])]]);
+    const config = { nif: "00000000T", surname: "X", name: "Y", year: 2025, phone: "600000000", contactName: "X Y", declarationId: "7200000000001", isComplementary: false, isReplacement: false };
+    /** The 720 detail record of the holding (ISIN at 132-143), or undefined. */
+    const record720 = (positions: OpenPosition[]): string | undefined =>
+      generateModelo720(positions, rates, config).split("\n").find((line) => line.startsWith("2") && line.slice(131, 143) === "US0378331005");
+    const previous = ["US0378331005"];
+
+    for (const position of ["", "abc"]) {
+      const parsed = parseIbkrFlexXml(xml(position));
+      const positions = parsed.openPositions;
+      expect([positions[0]!.quantity, positions[0]!.quantityUnknown]).toEqual(["0", true]);
+      // The D-6 leaves it out of its positions, but the broker lists it, so it
+      // is no sale: declared last year, it gets no cancellation.
+      const d6 = generateD6Report(positions, rates, 2025, "X", "00000000T", previous);
+      expect(d6.positions).toEqual([]);
+      expect(d6.cancelled).toEqual([]);
+      // The 720 keeps it, with its value and 0 in «Número de valores» (463-474).
+      expect(() => generateModelo720(positions, rates, config)).not.toThrow();
+      const record = record720(positions);
+      expect(record?.slice(462, 474)).toBe("000000000000");
+      expect(record?.slice(431, 446)).toMatch(/[1-9]/);
+      // The D-6 leaves it out and the 720 gives it 0 shares: a warning names it.
+      const warning = parsed.parserMessages?.find((m) => m.id === "parser.open_position_quantity_unknown");
+      expect(warning?.severity).toBe("warning");
+      expect(warning?.context).toEqual({ count: "1", holdings: "AAPL (US0378331005)" });
+    }
+    // Control: a readable quantity is listed, with no warning.
+    const readable = parseIbkrFlexXml(xml("10"));
+    const held = readable.openPositions;
+    expect(generateD6Report(held, rates, 2025, "X", "00000000T", previous).positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
+    expect(record720(held)?.slice(462, 474)).toBe("000000001000");
+    expect(readable.parserMessages?.some((m) => m.id === "parser.open_position_quantity_unknown") ?? false).toBe(false);
+    // Controls: an explicit 0, or no row at all, is no holding: cancelled.
+    expect(generateD6Report(parseIbkrFlexXml(xml("0")).openPositions, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    expect(generateD6Report([], rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // Control: a short holding is no holding, whatever its quantity. With an
+    // unreadable quantity the sign comes from its value, as in the 720 (C
+    // record in «Origen del bien», byte 423): both cancel it.
+    const short = parseIbkrFlexXml(xml("").replace('positionValue="60000"', 'positionValue="-60000"').replace('side="Long"', 'side="Short"')).openPositions;
+    expect([short[0]!.quantityUnknown, short[0]!.positionValue]).toEqual([true, "-60000"]);
+    expect(generateD6Report(short, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    const previousSecurities = [{ isin: "US0378331005", claveSubclave: "V1", country: "US", acquireDate: "20230101" }];
+    const lines720 = (positions: OpenPosition[]): string[] =>
+      generateModelo720(positions, rates, { ...config, previousYearSecurities: previousSecurities }).split("\n").filter((line) => line.startsWith("2") && line.slice(131, 143) === "US0378331005");
+    expect(lines720(short).map((line) => line[422])).toEqual(["C"]);
+    // And the long one, kept by both: no D-6 cancellation, a 720 M record.
+    expect(lines720(parseIbkrFlexXml(xml("")).openPositions).map((line) => line[422])).toEqual(["M"]);
   });
 
   it("should parse multiple corporate actions as array", () => {
@@ -1636,5 +1717,71 @@ describe("IBKR Flex date format (Date Format setting)", () => {
 
   it("rejects a cash transaction date in another format (dividend-only files too)", () => {
     expect(() => parseIbkrFlexXml(flexXml(["20240110", "20240603"], "06/15/2024;093000"))).toThrow(/06\/15\/2024/);
+  });
+});
+
+describe("IBKR listingExchange (#452: it decides the anti-churning window)", () => {
+  it("reads the listing market from Trades and Financial Instrument Information, apart from the execution venue", () => {
+    const st = parseIbkrFlexXml(fixture("ibkr-multicurrency.xml"));
+    const asr = st.trades.filter((t) => t.symbol === "ASR");
+    expect(asr.length).toBeGreaterThan(0);
+    for (const t of asr) expect(t.listingExchange).toBe("TSE");
+    expect(asr.some((t) => t.exchange === "TRIACT")).toBe(true); // the venue stays in `exchange`
+    expect(st.trades.filter((t) => t.symbol === "BCM").every((t) => t.listingExchange === "VENTURE")).toBe(true);
+    expect(st.trades.filter((t) => t.symbol === "AEM").every((t) => t.listingExchange === "NYSE")).toBe(true);
+    const bySymbol = new Map(st.securitiesInfo.map((s) => [s.symbol, s.listingExchange]));
+    expect(bySymbol.get("ASR")).toBe("TSE");
+    expect(bySymbol.get("BCM")).toBe("VENTURE");
+    expect(bySymbol.get("AEM")).toBe("NYSE");
+  });
+
+  it("trims and upper-cases the code, leaves it out when empty, and keeps it through the merge of an order's fills", () => {
+    const fill = (id: string, qty: string, listing: string) =>
+      `<Trade tradeID="${id}" ibOrderID="777" accountId="U1" symbol="BP." description="BP PLC" isin="GB0007980591" assetCategory="STK" currency="GBP" tradeDate="20250301" settlementDate="20250305" quantity="${qty}" tradePrice="4" tradeMoney="${Number(qty) * 4}" proceeds="${-Number(qty) * 4}" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="CHIXUK" listingExchange="${listing}" ibCommissionCurrency="GBP" ibCommission="0" taxes="0" />`;
+    const xml = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231"><Trades>${fill("1", "10", " lse ")}${fill("2", "5", " lse ")}<Trade tradeID="3" accountId="U1" symbol="EUR.USD" description="EUR.USD" isin="" assetCategory="CASH" currency="USD" tradeDate="20250301" settlementDate="20250303" quantity="100" tradePrice="1.1" tradeMoney="110" proceeds="-110" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="" exchange="IDEALFX" listingExchange="" ibCommissionCurrency="USD" ibCommission="0" taxes="0" /></Trades></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const st = parseIbkrFlexXml(xml);
+    const bp = st.trades.filter((t) => t.isin === "GB0007980591");
+    expect(bp).toHaveLength(1);
+    expect(bp[0]!.quantity).toBe("15");
+    expect(bp[0]!.listingExchange).toBe("LSE");
+    expect(bp[0]!.exchange).toBe("CHIXUK");
+    const cash = st.trades.find((t) => t.symbol === "EUR.USD")!;
+    expect("listingExchange" in cash).toBe(false);
+  });
+  const order = (listings: string[]) => {
+    const fills = listings
+      .map((listing, i) =>
+        `<Trade tradeID="${i + 1}" ibOrderID="778" accountId="U1" symbol="BP." description="BP PLC" isin="GB0007980591" assetCategory="STK" currency="GBP" tradeDate="20250301" settlementDate="20250305" quantity="5" tradePrice="4" tradeMoney="20" proceeds="-20" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="CHIXUK"${listing ? ` listingExchange="${listing}"` : ""} ibCommissionCurrency="GBP" ibCommission="0" taxes="0" />`,
+      )
+      .join("");
+    const xml = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231"><Trades>${fills}</Trades></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const merged = parseIbkrFlexXml(xml).trades;
+    expect(merged).toHaveLength(1);
+    return merged[0]!;
+  };
+
+  it("keeps the first fill's listing that is not empty, when the first fill has none", () => {
+    const t = order(["", "LSE", "LSE"]);
+    expect(t.listingExchange).toBe("LSE");
+    expect("listingExchanges" in t).toBe(false);
+  });
+
+  it("keeps every listing when the fills disagree, so each one votes for the window", () => {
+    const t = order(["LSE", "", "NYSE", "LSE"]);
+    expect(t.listingExchange).toBe("LSE");
+    expect(t.listingExchanges).toEqual(["LSE", "NYSE"]);
+  });
+
+  it("no fill with a listing: the merged trade has none", () => {
+    const t = order(["", ""]);
+    expect("listingExchange" in t).toBe(false);
+  });
+
+  it("a SecurityInfo row keeps its conid and its statement's last day (the period its listing belongs to)", () => {
+    const xml = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="2"><FlexStatement accountId="U1" fromDate="20240101" toDate="20241231"><SecuritiesInfo><SecurityInfo symbol="X" description="X" isin="US0378331005" conid=" 7 " cusip="" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" listingExchange="NYSE" /></SecuritiesInfo></FlexStatement><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231"><SecuritiesInfo><SecurityInfo symbol="X" description="X" isin="US0378331005" cusip="" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" listingExchange="PINK" /></SecuritiesInfo></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const [old, now] = parseIbkrFlexXml(xml).securitiesInfo;
+    expect(old).toMatchObject({ listingExchange: "NYSE", conid: "7", asOf: "20241231" });
+    expect(now).toMatchObject({ listingExchange: "PINK", asOf: "20251231" });
+    expect("conid" in now!).toBe(false);
   });
 });

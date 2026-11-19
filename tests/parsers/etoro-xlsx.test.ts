@@ -335,7 +335,7 @@ describe("eToro XLSX parsing", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip rows with NaN units", async () => {
+    it("keeps both legs of a row with NaN units as trades of unknown quantity, moving no share or money (#453)", async () => {
       const data = buildEtoroWorkbook({
         closedPositions: [
           CLOSED_POSITIONS_HEADER,
@@ -344,7 +344,12 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown, t.tradeMoney, t.isin])).toEqual([
+        ["BUY", "0", true, "0", "US0378331005"],
+        ["SELL", "0", true, "0", "US0378331005"],
+      ]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("eToro");
+      expect(result.parserMessages?.some((m) => m.id === "etoro.closed_rows_skipped") ?? false).toBe(false);
     });
 
     it("should parse Commodity type as CFD (eToro commodities are always derivatives)", async () => {

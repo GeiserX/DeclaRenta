@@ -186,7 +186,8 @@ export interface FifoDisposal {
   washSaleBlocked: boolean;
   /**
    * Portion of THIS disposal's loss deferred now by anti-churning, proportional
-   * to the homogeneous quantity repurchased within the ±2-month/±1-year window
+   * to the homogeneous quantity repurchased within the ±2-month/±1-year window,
+   * or the year after the sale for crypto (art. 33.5.e)
    * (DGT V0913-08 "por paquetes"): `|gainLossEur| × absorbed/quantity`, with
    * `0 ≤ blockedLossEur ≤ |gainLossEur|`. A non-loss disposal carries 0. This is
    * the amount added BACK to the deductible base (deferred, not deducted now).
@@ -204,6 +205,17 @@ export interface FifoDisposal {
    * only when `reintegratedLossEur > 0`. Never used for tax math.
    */
   washSaleReleasedFromDates?: string[];
+  /**
+   * Display only: the one-purchase exception of the 2-month rule (DGT V3282-18,
+   * AEAT Manual Renta 2025) on this disposal's sale day. Set only where the
+   * purchases of the 2 months before the sale would otherwise count as a
+   * repurchase. `"applied"`: the one purchase in that window, with no shares at
+   * its start, did not count (the loss is not blocked by it, and it does not
+   * make the sale non-definitive). `"unverified"`: the upload shows no shares at
+   * the window start but does not reach back to it, so the exception was NOT
+   * applied. Never used for tax math.
+   */
+  washSaleSinglePurchase?: "applied" | "unverified";
   /**
    * Prior deferred (blocked) loss RELEASED by this disposal ("se integrarán a
    * medida que se transmitan los valores que permanezcan en el patrimonio",
@@ -240,6 +252,28 @@ export interface FifoDisposal {
    * sold at another). Absent when no lot was consumed (sale without lots).
    */
   acquireBrokerSource?: string;
+}
+
+/** One security's anti-churning window (LIRPF 33.5.f/g), as the report applied it (#452). */
+export interface AntichurningSecurity {
+  isin: string;
+  symbol: string;
+  description: string;
+  /** Window in calendar months: 2 (letter f) or 12 (letter g). */
+  months: 2 | 12;
+  /** `user`: set by the user; `ibkr`: IBKR's listing codes decided it; `default`: 2 months for any ISIN. */
+  source: "default" | "ibkr" | "user";
+  /** The months the automatic reading gives (IBKR's codes, else the default), whatever the user set. */
+  autoMonths: 2 | 12;
+  /** The IBKR listing codes of the ISIN in force on the row's day, sorted. Empty when IBKR gave none. */
+  listingExchanges: string[];
+  /**
+   * The EMIR equivalence decisions a 2-month IBKR reading rests on (open for
+   * shares), e.g. "2016/2273": on the row's day or on any loss or release sale day.
+   */
+  openDecision?: string;
+  /** The codes in force on the open-reading days, sorted; only when they differ from `listingExchanges`. */
+  openListingExchanges?: string[];
 }
 
 /** Dividend received from a foreign security */
@@ -408,6 +442,14 @@ export interface TaxSummary {
     reintegratedLosses: Decimal;
     /** Individual disposals */
     disposals: FifoDisposal[];
+    /**
+     * The anti-churning window of each security the user may want to check or
+     * set (#452): an ISIN with a loss sale or a released loss in the year, a
+     * user value, or a sale with an IBKR 1-year reading. A change of the
+     * window never removes a row. Crypto and the exempt categories
+     * (options, futures, CFDs, cash) are never listed.
+     */
+    antichurningSecurities?: AntichurningSecurity[];
   };
 
   /** Dividends: Rendimientos del capital mobiliario (Casillas 0029-0034) */

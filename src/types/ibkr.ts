@@ -37,16 +37,41 @@ export interface FlexStatement {
    * holdings of the files that end on 31 December of the declared year.
    */
   holdingsBySource?: HoldingsSource[];
+  /**
+   * The period of each account in the file (IBKR: one FlexStatement per
+   * account, each with its own dates). The anti-churning one-purchase exception
+   * (#453) checks coverage per account; without it the file is one account
+   * over `fromDate`–`toDate`.
+   */
+  accountPeriods?: AccountPeriod[];
+}
+
+/** One account of a file and the dates that file covers for it. */
+export interface AccountPeriod {
+  accountId: string;
+  fromDate: string;
+  toDate: string;
+  /** Whether the file has a Trades section for the account: a holdings-only Flex shows no trades for its period. */
+  hasTrades: boolean;
+  /**
+   * Whether the file has an Open Positions section for the account. An empty
+   * section lists nothing held at `toDate`; no section lists nothing at all.
+   */
+  hasPositions?: boolean;
 }
 
 /** The year-end holdings of one merged file, dated to that file's period end. */
 export interface HoldingsSource {
   accountId: string;
+  /** That file's period start, when it gives one (the anti-churning one-purchase exception reads it). */
+  fromDate?: string;
   toDate: string;
   /** The merged file's broker (`mergeStatement`'s `brokerName`), when given. */
   brokerSource?: string;
   openPositions: OpenPosition[];
   cashBalances: CashBalance[];
+  /** That file's `accountPeriods`, when it gives them. */
+  accountPeriods?: AccountPeriod[];
 }
 
 /**
@@ -87,6 +112,16 @@ export interface Trade {
   tradeTime?: string;
   settlementDate: string;
   quantity: string;
+  /**
+   * The file gave no readable quantity for this trade (`quantity` then holds
+   * the "0" default). The anti-churning one-purchase exception (#453) treats
+   * it as missing evidence, never as an explicit zero. Every share parser
+   * sets it for a buy or sale row whose quantity cell is empty or no number,
+   * and Flatex, DEGIRO and Trading 212 also for one whose price is (the
+   * quantity then also reads "0"). FIFO books no shares for it (no lot, no
+   * disposal).
+   */
+  quantityUnknown?: boolean;
   tradePrice: string;
   tradeMoney: string;
   proceeds: string;
@@ -95,7 +130,20 @@ export interface Trade {
   fxRateToBase: string;
   buySell: "BUY" | "SELL";
   openCloseIndicator: "O" | "C" | "C;O";
+  /** Execution venue of the trade (IBKR `exchange`); not the listing market. */
   exchange: string;
+  /**
+   * IBKR `listingExchange`, trimmed and upper-cased: the market the contract is
+   * listed on (e.g. LSE, NYSE, TSE). Decides the anti-churning window (#452).
+   * Only IBKR sets it. On an order merged from several fills: the first fill
+   * that has one.
+   */
+  listingExchange?: string;
+  /**
+   * Every distinct `listingExchange` of a merged order's fills, set only when
+   * the fills disagree, so each one still votes for the window (#452).
+   */
+  listingExchanges?: string[];
   commissionCurrency: string;
   commission: string;
   taxes: string;
@@ -239,6 +287,18 @@ export interface OpenPosition {
    */
   custodianCountry?: string;
   brokerSource?: string;
+  /**
+   * The parser built this row from the file's own trades (Revolut's transaction
+   * log), so it is no holding the broker reported. The anti-churning
+   * one-purchase exception (#453) cannot use it as proof of no earlier shares.
+   */
+  fromTrades?: boolean;
+  /**
+   * The file gave no readable quantity for this row (`quantity` then holds the
+   * "0" default). The one-purchase exception (#453) treats it as missing
+   * evidence, never as an explicit zero.
+   */
+  quantityUnknown?: boolean;
 }
 
 export interface SecurityInfo {
@@ -250,6 +310,17 @@ export interface SecurityInfo {
   assetCategory: AssetCategory;
   multiplier: string;
   subCategory: string;
+  /** IBKR «Listing Exchange» (stocks only), trimmed and upper-cased (#452). */
+  listingExchange?: string;
+  /** IBKR contract id: ties the listing to the trades of the same contract (#452). */
+  conid?: string;
+  /**
+   * Last day of the statement the row came from, as the statement writes it
+   * (YYYYMMDD or YYYY-MM-DD): the listing is
+   * the one of that period, so a later trade of the same contract naming
+   * another code replaces it (#452).
+   */
+  asOf?: string;
   brokerSource?: string;
 }
 

@@ -26,6 +26,9 @@ import {
   normalizeFractionalCurrency,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -271,7 +274,10 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
-    if (!isin || quantity === "0") {
+    // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
+    // is kept as a trade of unknown quantity (below, #453).
+    const quantityUnknown = isin !== "" && quantityUnreadable(fields[cols.quantity]);
+    if (!isin || (quantity === "0" && !quantityUnknown)) {
       // Trade-like row (carries a real quantity or price) dropped for lack of
       // ISIN / amount → suspicious (likely column drift). Plain non-trade lines
       // (deposits/sweeps with no qty and no price) are expected → not counted.
@@ -281,8 +287,16 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (rights assignments, non-tradeable conversions)
-    if (price === "0" || price === "0.0000") continue;
+    // Skip zero-price rows (rights assignments, non-tradeable conversions). A
+    // row whose price is empty or unreadable is still a buy or sale when it
+    // has an order id or a value (#453); a written zero price is always skipped,
+    // and so is a written zero quantity with no readable price ("0,00" reads
+    // "0.00", past the check above).
+    const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
+    const priceUnreadable = quantityUnreadable(fields[cols.price]);
+    if (!quantityUnknown && toFiniteDecimal(quantity).isZero() && priceUnreadable) continue;
+    const priceUnknown = priceUnreadable && tradeEvidence;
+    if ((price === "0" || price === "0.0000") && !priceUnknown) continue;
 
     // Determine buy/sell: negative local value = you paid = buy; or negative
     // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a
@@ -302,6 +316,16 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     let tradeValue = value;
     let tradeFxRate = fxRate;
     const fractional = normalizeFractionalCurrency(tradeCurrency);
+    if (quantityUnknown || priceUnknown) {
+      // With no quantity or no price FIFO cannot book its shares: it moves no
+      // share or money. Its direction comes from the value or the quantity sign.
+      trades.push(quantityUnknownTrade({
+        tradeID: orderId,
+        symbol: product, description: product, isin, assetCategory: "STK", currency: fractional.currency,
+        tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange,
+      }));
+      continue;
+    }
     if (!fractional.divisor.equals(1)) {
       tradeCurrency = fractional.currency;
       tradePrice = new Decimal(price).div(fractional.divisor).toString();
@@ -398,6 +422,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
+  parserMessages.push(...tradeQuantityUnknownMessages("DEGIRO", trades));
 
   return {
     accountId: "",

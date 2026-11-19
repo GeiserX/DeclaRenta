@@ -16,9 +16,12 @@ import type {
   SecurityInfo,
   CashBalance,
   OptionExercise,
+  AccountPeriod,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
+import { ISIN_SHAPE } from "../engine/antichurning-window.js";
+import { tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -88,6 +91,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
+  const accountPeriods: AccountPeriod[] = [];
 
   // The "Summary" option in the Cash Transactions section makes IBKR emit
   // every cash transaction twice: a DETAIL row (real transactionID, real
@@ -101,14 +105,21 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let orderLevelDetailDuplicatesSkipped = 0;
   let cancelledPairsDropped = 0;
   let cancelledUnmatchedDropped = 0;
+  let cancelledUnreadableDropped = 0;
 
   for (const stmt of statements) {
-    const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
+    // A row without an Account ID (the column is optional in Trades and in
+    // Open Positions) belongs to the FlexStatement it is in; an explicit one
+    // is kept, so a mismatch shows.
+    const stmtAccount = (stmt.accountId as string | undefined) ?? "";
+    const withAccount = (raw: Record<string, string>): Record<string, string> => (raw.accountId ? raw : { ...raw, accountId: stmtAccount });
+    const rawTrades = (ensureArray(stmt.Trades?.Trade) as Record<string, string>[]).map(withAccount);
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
-    const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
+    const { kept, pairedCount, unmatchedCount, unreadableCount } = dropCancelledExecutions(filteredRawTrades);
     cancelledPairsDropped += pairedCount;
     cancelledUnmatchedDropped += unmatchedCount;
+    cancelledUnreadableDropped += unreadableCount;
     const stmtTrades = kept.map(mapTrade);
     const { merged, mergedGroupCount, sourceFillCount } = mergeExecutionsByOrder(stmtTrades);
     trades.push(...merged);
@@ -119,9 +130,19 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
-    securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
+    const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
+    openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
+    securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
+    // An empty <Trades /> still says "no trades in this period", and an empty
+    // <OpenPositions /> "nothing held at its end"; no element says nothing.
+    accountPeriods.push({
+      accountId: stmtAccount,
+      fromDate: period.fromDate ?? "",
+      toDate: period.toDate ?? "",
+      hasTrades: stmt.Trades !== undefined && stmt.Trades !== null,
+      hasPositions: stmt.OpenPositions !== undefined && stmt.OpenPositions !== null,
+    });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
@@ -202,6 +223,36 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
+  if (cancelledUnreadableDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades_unreadable",
+      severity: "warning",
+      message: `Se omitieron ${cancelledUnreadableDropped} anulaciones de IBKR sin poder emparejarlas con la operación que anulan: falta una cantidad o un precio legible en la anulación o en una operación de este archivo.`,
+      hint: "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
+      context: { count: String(cancelledUnreadableDropped) },
+    });
+  }
+
+  // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
+  // the D-6 and the 720 then show a holding whose value is known with 0
+  // shares, or leave it out: say which holdings to check by hand.
+  const unreadablePositions = openPositions.filter((p) => p.quantityUnknown);
+  if (unreadablePositions.length > 0) {
+    const count = String(unreadablePositions.length);
+    const holdings = unreadablePositions.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    parserMessages.push({
+      id: "parser.open_position_quantity_unknown",
+      severity: "warning",
+      message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
+      hint: "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+      context: { count, holdings },
+    });
+  }
+
+  // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
+  // say which trades to check.
+  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades));
+
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
   const accountId = statements.length === 1
@@ -220,6 +271,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     securitiesInfo,
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
     optionExercises: optionExercises.length > 0 ? optionExercises : undefined,
+    accountPeriods,
     parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
     parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
@@ -249,7 +301,6 @@ function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): vo
   }
 }
 
-const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
 /**
  * IBKR sends the underlying's identifier as underlyingSecurityID (an ISIN, or a
@@ -262,7 +313,45 @@ function underlyingIsinOf(raw: Record<string, string>): string {
   return ISIN_SHAPE.test(id) ? id : "";
 }
 
+/** IBKR `listingExchange`, trimmed and upper-cased; nothing when empty. */
+function listingExchangeOf(raw: Record<string, string>): { listingExchange?: string } {
+  const code = raw.listingExchange?.trim().toUpperCase();
+  return code ? { listingExchange: code } : {};
+}
+
+/**
+ * A quantity attribute as written, or undefined when it is missing or no
+ * number (`new Decimal("")` and `new Decimal("abc")` throw). Never trimmed or
+ * rewritten, so every readable value reaches the engines exactly as before.
+ */
+function readableQuantity(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  try {
+    return new Decimal(raw).isFinite() ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A trade price as a finite Decimal, or undefined when it is missing, blank or
+ * no number: a missing price is no written "0" (#453).
+ */
+function finitePrice(raw: string | undefined): Decimal | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  try {
+    const price = new Decimal(raw);
+    return price.isFinite() ? price : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function mapTrade(raw: Record<string, string>): Trade {
+  // Keep a missing or unreadable quantity apart from an explicit zero, as
+  // mapOpenPosition does: the "0" default keeps FIFO from crashing, and the
+  // flag keeps the one-purchase exception (#453) from reading it as no shares.
+  const quantity = readableQuantity(raw.quantity);
   return {
     tradeID: raw.tradeID ?? "",
     accountId: raw.accountId ?? "",
@@ -276,7 +365,8 @@ function mapTrade(raw: Record<string, string>): Trade {
     // Flex exports name the attribute settleDateTarget; settlementDate is kept
     // for hand-written and older XML.
     settlementDate: raw.settlementDate || raw.settleDateTarget || "",
-    quantity: raw.quantity ?? "0",
+    quantity: quantity ?? "0",
+    ...(quantity === undefined ? { quantityUnknown: true } : {}),
     tradePrice: raw.tradePrice ?? "0",
     tradeMoney: raw.tradeMoney ?? "0",
     proceeds: raw.proceeds ?? "0",
@@ -289,6 +379,8 @@ function mapTrade(raw: Record<string, string>): Trade {
     buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
+    // The listing market, not the venue: it decides the anti-churning window (#452).
+    ...listingExchangeOf(raw),
     commissionCurrency: raw.ibCommissionCurrency ?? "",
     commission: raw.ibCommission ?? "0",
     taxes: raw.taxes ?? "0",
@@ -336,25 +428,31 @@ function cancelledTransactionId(cancel: Record<string, string>): string {
  * ibOrderID and tradeDate, and only the link says which one was cancelled.
  * Exports without that column fall back to a heuristic: same instrument,
  * currency, price and direction, exactly opposite quantity, with a matching
- * ibExecID, ibOrderID or tradeDate breaking ties.
+ * ibExecID, ibOrderID or tradeDate breaking ties. A quantity or price that is
+ * missing or no number on either row is compared through the ibExecID alone:
+ * the pair needs the same execution id (#453).
  *
  * A cancel row with no original in this statement (the fill is outside the
  * export's period) is dropped alone and counted separately so the user is
- * warned. It is never flipped into an opposite-direction trade: that would
- * create a lot or a disposal that never happened.
+ * warned; one that no ibExecID pairs while its own quantity or price, or that
+ * of a candidate fill in the file, is unreadable is counted apart, since its
+ * original may be in the file. It is never
+ * flipped into an opposite-direction trade: that would create a lot or a
+ * disposal that never happened.
  */
 function dropCancelledExecutions(
   rows: Record<string, string>[],
-): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number } {
+): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number; unreadableCount: number } {
   const cancelIdx: number[] = [];
   rows.forEach((raw, i) => {
     if (isCancelRow(raw)) cancelIdx.push(i);
   });
-  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0 };
+  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0, unreadableCount: 0 };
 
   const dropped = new Set<number>(cancelIdx);
   let pairedCount = 0;
   let unmatchedCount = 0;
+  let unreadableCount = 0;
   for (const ci of cancelIdx) {
     const cancel = rows[ci]!;
     const origId = cancelledTransactionId(cancel);
@@ -369,19 +467,34 @@ function dropCancelledExecutions(
       continue;
     }
     const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
-    const originalQty = new Decimal(cancel.quantity || "0").neg();
-    const price = new Decimal(cancel.tradePrice || "0");
+    // Read every quantity and price without throwing (`new Decimal("abc")`
+    // throws). When a quantity or price on either side is unreadable, only the
+    // fill's own execution id (ibExecID) can tie the pair; with none, an
+    // ordinary row goes on to mapTrade, which keeps it as a trade of unknown
+    // quantity, and the cancel row is dropped alone (#453).
+    const cancelQty = readableQuantity(cancel.quantity);
+    const price = finitePrice(cancel.tradePrice);
     let best = -1;
     let bestScore = -1;
+    // A candidate fill in the file that only unreadable data kept from
+    // pairing may be the original: the warning must not call it absent.
+    let unreadableCandidate = false as boolean; // set inside the forEach below
     rows.forEach((o, oi) => {
       if (dropped.has(oi)) return;
       const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
       if (!sameInstrument || (o.currency ?? "") !== (cancel.currency ?? "")) return;
       if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
-      if (!new Decimal(o.quantity || "0").eq(originalQty)) return;
-      if (!new Decimal(o.tradePrice || "0").eq(price)) return;
+      const sameExec = !!o.ibExecID && o.ibExecID === cancel.ibExecID;
+      const qty = readableQuantity(o.quantity);
+      const oPrice = finitePrice(o.tradePrice);
+      if (qty === undefined || cancelQty === undefined || oPrice === undefined || price === undefined) {
+        if (!sameExec) {
+          unreadableCandidate = true;
+          return;
+        }
+      } else if (!new Decimal(qty).eq(new Decimal(cancelQty).neg()) || !oPrice.eq(price)) return;
       const score =
-        (o.ibExecID && o.ibExecID === cancel.ibExecID ? 4 : 0) +
+        (sameExec ? 4 : 0) +
         (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
         (o.tradeDate === cancel.tradeDate ? 1 : 0);
       if (score > bestScore) {
@@ -392,11 +505,14 @@ function dropCancelledExecutions(
     if (best >= 0) {
       dropped.add(best);
       pairedCount++;
+    } else if (unreadableCandidate || cancelQty === undefined || price === undefined) {
+      // Not "the original is outside this file": it may be here, unpaired.
+      unreadableCount++;
     } else {
       unmatchedCount++;
     }
   }
-  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount };
+  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount, unreadableCount };
 }
 
 /**
@@ -419,7 +535,9 @@ function dropCancelledExecutions(
  * tax-relevant — `fifo.ts` branches on it for cost basis vs proceeds.
  *
  * Trades with no `ibOrderID` pass through un-merged (rare; only carry-forward
- * edge cases — real IBKR data always populates the field).
+ * edge cases — real IBKR data always populates the field), and so does a fill
+ * with no readable quantity (`quantityUnknown`), so the readable fills of its
+ * order still merge and book (#453).
  */
 function mergeExecutionsByOrder(
   trades: Trade[],
@@ -428,7 +546,12 @@ function mergeExecutionsByOrder(
   let ungroupedCounter = 0;
 
   for (const trade of trades) {
-    const key = trade.ibOrderID
+    // A fill with no readable quantity stays out of its order's merge, as its
+    // own flagged trade: merged in, it would leave the order's total unknown,
+    // and FIFO, which skips such a trade, would never book the readable fills
+    // (#453). Alone it books nothing, and the warning and the one-purchase
+    // evidence still see it.
+    const key = trade.ibOrderID && trade.quantityUnknown !== true
       ? `${trade.ibOrderID}|${trade.tradeDate}|${trade.buySell}|${trade.openCloseIndicator}`
       : `__ungrouped_${ungroupedCounter++}__`;
     let bucket = groups.get(key);
@@ -466,6 +589,9 @@ function mergeTradeGroup(group: Trade[]): Trade {
   let fifoPnl = new Decimal(0);
   const notes = new Set<string>();
   let exchange = first.exchange;
+  // The listing market of every fill: the first one that has it, and all of
+  // them when they disagree, so the window resolver sees each (#452).
+  const listings = [...new Set(group.map((t) => t.listingExchange).filter((code): code is string => !!code))];
 
   for (const t of group) {
     const q = new Decimal(t.quantity);
@@ -514,6 +640,8 @@ function mergeTradeGroup(group: Trade[]): Trade {
     taxes: taxes.toString(),
     fifoPnlRealized: fifoPnl.toString(),
     exchange,
+    ...(listings.length > 0 ? { listingExchange: listings[0] } : {}),
+    ...(listings.length > 1 ? { listingExchanges: listings } : {}),
     notes: notes.size > 0 ? Array.from(notes).join(";") : undefined,
   };
 }
@@ -629,7 +757,29 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
  */
 const IBKR_CUSTODIAN_COUNTRY = "IE";
 
+/**
+ * With both the Summary and the Lot options on, IBKR's Open Positions list
+ * each holding once as a SUMMARY row and again as one LOT row per tax lot.
+ * Keep the SUMMARY row and drop the LOT rows of the same account and
+ * security, so a holding is never counted twice. LOT rows with no SUMMARY row
+ * stay: together they are the holding.
+ */
+function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, string>[] {
+  const id = (raw: Record<string, string>): string => `${raw.accountId ?? ""}|${raw.conid ?? ""}|${raw.isin ?? ""}|${raw.symbol ?? ""}`;
+  const level = (raw: Record<string, string>): string => (raw.levelOfDetail ?? "").toUpperCase();
+  const summarized = new Set(rows.filter((raw) => level(raw) === LEVEL_OF_DETAIL_SUMMARY).map(id));
+  if (summarized.size === 0) return rows;
+  return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
+  // IBKR writes the held quantity as `position`; `quantity` is the older
+  // hand-written form some files use. Keep a missing or unreadable quantity
+  // apart from an explicit zero: the "0" default would prove "no shares held"
+  // to the one-purchase exception (#453). An unreadable one still reads "0"
+  // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
+  const rawQuantity = raw.position ?? raw.quantity;
+  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -637,7 +787,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: raw.quantity ?? "0",
+    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity,
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",
@@ -645,10 +795,13 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     fifoPnlUnrealized: raw.fifoPnlUnrealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
     custodianCountry: IBKR_CUSTODIAN_COUNTRY,
+    ...(quantityUnknown ? { quantityUnknown } : {}),
   };
 }
 
-function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
+/** `toDate`: the statement's last day; the row's listing is the one of that period (#452). */
+function mapSecurityInfo(raw: Record<string, string>, toDate?: string): SecurityInfo {
+  const asOf = toDate?.trim() ?? "";
   return {
     symbol: raw.symbol ?? "",
     description: raw.description ?? "",
@@ -658,6 +811,9 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     assetCategory: (raw.assetCategory ?? "STK") as SecurityInfo["assetCategory"],
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
+    ...listingExchangeOf(raw),
+    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+    ...(asOf ? { asOf } : {}),
   };
 }
 
