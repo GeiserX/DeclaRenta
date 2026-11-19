@@ -706,10 +706,10 @@ function parseBinanceTxCsv(lines: string[]): Statement {
           byRemark.get(r.remark)!.push(r);
         }
         for (const group of byRemark.values()) {
-          handBack(group, pairAndEmit(trades, netLegs(group), addHint, "Buy"));
+          handBack(group, pairAndEmit(trades, netLegs(group), group, addHint, "Buy"));
         }
       } else {
-        handBack(window, pairAndEmit(trades, netLegs(window), addHint, "Convert"));
+        handBack(window, pairAndEmit(trades, netLegs(window), window, addHint, "Convert"));
       }
     }
   }
@@ -807,10 +807,11 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count, rows },
     });
   }
-  // A spot window whose fiat payments the export does not tie to each coin
-  // bought: the payment was shared by a guess (emitBareSpotGroup), so each
-  // coin's cost, its gains and losses and its art. 33.5.e check are not
-  // reliable. Every leg of the window is named (#467).
+  // A window whose payments or proceeds the export does not tie to each
+  // coin: they were shared by a guess (emitBareSpotGroup, pairAndEmit,
+  // emitStrategyTrades), so each coin's cost or sale value, its gains and
+  // losses and its art. 33.5.e check are not reliable. Every leg of the
+  // window is named (#467).
   const guessedLegs = rows.filter((r) => r.costSplitGuessed);
   if (guessedLegs.length > 0) {
     const count = String(guessedLegs.length);
@@ -818,8 +819,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     parserMessages.push({
       id: "binance.spot_cost_split",
       severity: "warning",
-      message: `Binance: ${count} fila(s) de compras de varias criptomonedas en el mismo segundo no dicen qué pago va con cada criptomoneda. DeclaRenta ha repartido el pago entre ellas: ${rows}.`,
-      hint: "Binance anota varias compras en el mismo segundo. No pone cada pago junto a su compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Sus ganancias y sus pérdidas tampoco lo son. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
+      message: `Binance: ${count} fila(s) de operaciones con varias criptomonedas en el mismo segundo no dicen qué pago o cobro va con cada criptomoneda. DeclaRenta ha repartido los importes entre ellas: ${rows}.`,
+      hint: "Binance anota varias operaciones en el mismo segundo. No pone cada pago o cobro junto a su compra o venta. Por eso DeclaRenta no sabe qué importe va con cada criptomoneda. Ha repartido los importes entre ellas por orden o a partes iguales. El total es correcto, pero el coste o el importe de venta de cada criptomoneda no es fiable. Sus ganancias y sus pérdidas tampoco lo son. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste o el importe de venta de cada criptomoneda.",
       context: { count, rows },
     });
   }
@@ -894,14 +895,20 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * caller must therefore pre-split such windows (step 4 sub-groups fiat buys by
  * funding-wallet Remark) before calling here. When EUR values are absent (all
  * 0), the closest match is the next available buy in order — equivalent to
- * insertion-order pairing, the previous behavior. Returns the legs left without
- * a counterpart, so the Convert path can hand them back instead of losing them.
+ * insertion-order pairing, the previous behavior. That order is a guess when
+ * two or more coins are paired: "Buy ETH, Buy BTC, Sell EUR -11000, Sell USD
+ * -110" gave ETH the 11000 € with no word. So when two or more pairs are made
+ * and the EUR values do not decide them, every row of the group (`rows`) is
+ * named (`binance.spot_cost_split`) unless the file writes each pair as two
+ * adjacent rows (pairingProven, #467). Returns the legs left without a
+ * counterpart, so the Convert path can hand them back instead of losing them.
  */
-function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: string): NetLeg[] {
+function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: AddHint, label: string): NetLeg[] {
   const sells = legs.filter((l) => l.qty.isNegative());
   const buys = legs.filter((l) => l.qty.isPositive());
   const usedBuys = new Set<number>();
   const unpaired: NetLeg[] = [];
+  const pairs: [NetLeg, NetLeg][] = [];
   for (const sell of sells) {
     let bestIdx = -1;
     let bestDelta = Infinity;
@@ -919,11 +926,46 @@ function pairAndEmit(trades: Trade[], legs: NetLeg[], addHint: AddHint, label: s
     }
     usedBuys.add(bestIdx);
     const buy = buys[bestIdx]!;
+    pairs.push([sell, buy]);
     addHint(sell.coin, sell.date, sell.qty, sell.eur);
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
     emitCryptoSwap(trades, sell, buy, label);
   }
+  if (pairs.length >= 2 && !pairingProven(pairs, legs, rows)) for (const r of rows) r.costSplitGuessed = true;
   return [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
+}
+
+/**
+ * Whether the pairs pairAndEmit made are what the file says, not a guess.
+ * Either every leg has a nonzero EUR value, so the closest-EUR match decides
+ * (the documented disambiguation), or each leg is one row of the group (no
+ * netting) and the paired rows are written as adjacent pairs (writtenAsPairs).
+ */
+function pairingProven(pairs: [NetLeg, NetLeg][], legs: NetLeg[], rows: TxRow[]): boolean {
+  if (legs.every((l) => l.eur !== null && !l.eur.isZero())) return true;
+  if (rows.length !== legs.length) return false;
+  const byKey = new Map(rows.map((r) => [r.key, r] as const));
+  return writtenAsPairs(pairs.map(([sell, buy]) => [byKey.get(sell.key)!, byKey.get(buy.key)!] as const));
+}
+
+/**
+ * Whether the file writes each pair as two adjacent rows: in file order, the
+ * rows of all the pairs split into consecutive twos, each one of the pairs.
+ * Rows outside the pairs (a fee, a leg of another kind) do not break a pair.
+ * Then pairing them is what the file says, not a guess (#467).
+ */
+function writtenAsPairs(pairs: readonly (readonly [TxRow, TxRow])[]): boolean {
+  const partner = new Map<TxRow, TxRow>();
+  for (const [a, b] of pairs) {
+    if (partner.has(a) || partner.has(b)) return false;
+    partner.set(a, b);
+    partner.set(b, a);
+  }
+  const ordered = [...partner.keys()].sort((x, y) => x.index - y.index);
+  for (let k = 0; k < ordered.length; k += 2) {
+    if (partner.get(ordered[k]!) !== ordered[k + 1]) return false;
+  }
+  return true;
 }
 
 function absEur(l: NetLeg): number {
@@ -1033,7 +1075,11 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
 
 /**
  * Emit Strategy trades from a window: pair each Transaction Sold with a Revenue,
- * and each Buy with a Spend (by order, all of them — not just the first). Fees in
+ * and each Buy with a Spend (by order, all of them — not just the first). The
+ * k-th with the k-th is a guess when two or more pairs move more than one coin
+ * on a side: "Buy ETH, Buy BTC, Spend -11000, Spend -110" gave ETH the 11000 €
+ * with no word. Then the pairs' rows are named (`binance.spot_cost_split`)
+ * unless the file writes each pair as two adjacent rows (#467). Fees in
  * the acquired/received coin reduce cost / proceeds. A Sold/Revenue/Buy/Spend
  * leg left without a counterpart is handed back (parsed = false): when the next
  * trade starts in this window's last second, its first leg lands here but its
@@ -1049,6 +1095,9 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
   window.forEach((r) => (r.parsed = true));
 
   const nSell = Math.min(sold.length, revenue.length);
+  const nBuy = Math.min(bought.length, spend.length);
+  flagGuessedOrder(sold.slice(0, nSell), revenue.slice(0, nSell));
+  flagGuessedOrder(bought.slice(0, nBuy), spend.slice(0, nBuy));
   for (let k = 0; k < nSell; k++) {
     const soldRow = sold[k]!;
     const revenueRow = revenue[k]!;
@@ -1065,7 +1114,6 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
     applyFee(trades, feeAmount, revenueRow.coin);
   }
 
-  const nBuy = Math.min(bought.length, spend.length);
   for (let k = 0; k < nBuy; k++) {
     const buyRow = bought[k]!;
     const spendRow = spend[k]!;
@@ -1085,6 +1133,21 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
   for (const r of [...sold.slice(nSell), ...revenue.slice(nSell), ...bought.slice(nBuy), ...spend.slice(nBuy)]) {
     r.parsed = false;
   }
+}
+
+/**
+ * Strategy pairs the k-th row of `a` with the k-th of `b`. With two or more
+ * pairs that move more than one coin on a side, which row goes with which is
+ * a guess unless the file writes each pair as two adjacent rows: then every
+ * row of the pairs is named (#467). Pairs all of one coin on each side give
+ * each coin the same total, so they are not named.
+ */
+function flagGuessedOrder(a: TxRow[], b: TxRow[]): void {
+  if (a.length < 2) return;
+  const oneCoin = (side: TxRow[]): boolean => side.every((r) => r.coin === side[0]!.coin);
+  if (oneCoin(a) && oneCoin(b)) return;
+  if (writtenAsPairs(a.map((r, k) => [r, b[k]!] as const))) return;
+  for (const r of [...a, ...b]) r.costSplitGuessed = true;
 }
 
 /** Attach a fee to the most recently emitted trade (in the same coin). */
@@ -1195,7 +1258,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
   // closest-EUR pairing is correct (and merges same-coin multi-fills cleanly).
   const giveSingleFiat = give.length === 1 && isFiat(give[0]!.coin);
   if (recv.length <= 1 || !giveSingleFiat) {
-    return pairAndEmit(trades, [...give, ...recv], addHint, "Spot");
+    return pairAndEmit(trades, [...give, ...recv], rows, addHint, "Spot");
   }
 
   // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them

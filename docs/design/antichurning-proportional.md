@@ -695,6 +695,19 @@ práctico Renta 2025. The decisions, each pinned in
       equal split; the total paid stays exact), and
       `binance.spot_cost_split` names every leg of the window with the
       art. 33.5.e caveat.
+      The same holds for every other Binance path that pairs two or more
+      coins. A spot window paid in two currencies, and a Convert window,
+      go through `pairAndEmit`, which pairs by closest EUR value and, with
+      no EUR value, by order: "Buy ETH 1, Buy BTC 0.1, Sell EUR -11000,
+      Sell USD -110" gave ETH the 11000 € and a 10800 € loss with no word.
+      Strategy pairs the k-th `Transaction Buy` with the k-th `Transaction
+      Spend`, and the k-th `Transaction Sold` with the k-th `Transaction
+      Revenue`. When two or more pairs are made, a side moves more than one
+      coin and no EUR value on every leg decides them, the pairing is
+      trusted only when the file writes each pair as two adjacent rows
+      (other rows, such as fees, do not break a pair). Otherwise the
+      numbers are booked as before and `binance.spot_cost_split`, now
+      worded for purchases and sales, names every leg.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

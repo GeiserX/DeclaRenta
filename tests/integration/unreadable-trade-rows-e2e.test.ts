@@ -1813,3 +1813,100 @@ describe("#467 Freedom24: a withholding larger than its dividend is never booked
     expect(emitted?.hint).toBe(esText["freedom24.tax_amount_unreadable.hint"]);
   });
 });
+
+describe("#467 Binance: a window that pairs several coins by a guess names every leg, in every trade path", () => {
+  const TX_H = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const buyOf = (s: Statement, coin: string): string | undefined => {
+    const t = s.trades.find((x) => x.symbol === coin && x.buySell === "BUY");
+    return t ? `${t.cost} ${t.currency}` : undefined;
+  };
+  const ethGain = (r: TaxReport): string[] => r.capitalGains.disposals.filter((d) => d.symbol === "ETH").map((d) => new Decimal(d.gainLossEur).toFixed(2));
+  // Every leg on 10/01/2025 10:00:00, then the ETH sold on 01/06/2025 for 200 €.
+  const window = (...legs: string[]): Statement => binanceParser.parse([TX_H,
+    ...legs.map((l) => `1,2025-01-10 10:00:00,Spot,${l},`),
+    "1,2025-06-01 10:00:00,Spot,Sell,ETH,-1,", "1,2025-06-01 10:00:00,Spot,Buy,EUR,200,",
+  ].join("\n"));
+  const rowsOf = (legs: string[]): string => legs.map((l) => {
+    const [op, coin, change] = l.split(",");
+    return `${coin} ${op} ${change} 2025-01-10 10:00:00`;
+  }).join("; ");
+
+  // Two coins bought, paid in two currencies, with no EUR column. Which
+  // payment goes with which coin is a guess when the file does not write
+  // each payment next to its coin. ETH booked at 11000 € gives a -10800 €
+  // loss: it must be named, never silent.
+  const guessed: [string, string[], string][] = [
+    ["spot: ETH and BTC, then EUR and USD", ["Buy,ETH,1", "Buy,BTC,0.1", "Sell,EUR,-11000", "Sell,USD,-110"], "11000 EUR"],
+    ["spot: ETH and BTC, then EUR and USDT", ["Buy,ETH,1", "Buy,BTC,0.1", "Sell,EUR,-10000", "Sell,USDT,-110"], "10000 EUR"],
+    ["Convert: ETH and BTC, then EUR and USD", ["Binance Convert,ETH,1", "Binance Convert,BTC,0.1", "Binance Convert,EUR,-11000", "Binance Convert,USD,-110"], "11000 EUR"],
+    ["Strategy: Buy ETH and BTC, then two EUR Spend", ["Transaction Buy,ETH,1", "Transaction Buy,BTC,0.1", "Transaction Spend,EUR,-11000", "Transaction Spend,EUR,-110"], "11000 EUR"],
+  ];
+  describe.each(guessed)("%s", (_label, legs, ethCost) => {
+    it.each(METHODS)("[%s] books the same numbers as before, and names every leg of the window with art. 33.5.e", (method) => {
+      const parsed = window(...legs);
+      expect(buyOf(parsed, "ETH")).toBe(ethCost);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      const warning = message(r.messages, "binance.spot_cost_split");
+      expect(warning?.context).toEqual({ count: String(legs.length), rows: rowsOf(legs) });
+      expect(warning?.hint).toContain("33.5.e");
+    });
+  });
+
+  it.each(METHODS)("[%s] Strategy sales: two coins sold for two EUR rows by a guess are named", (method) => {
+    const legs = ["Transaction Sold,ETH,-1", "Transaction Sold,BTC,-0.1", "Transaction Revenue,EUR,10000", "Transaction Revenue,EUR,200"];
+    const parsed = binanceParser.parse([TX_H,
+      "1,2024-12-01 10:00:00,Spot,Buy,ETH,1,", "1,2024-12-01 10:00:00,Spot,Sell,EUR,-150,",
+      "1,2024-12-01 10:00:05,Spot,Buy,BTC,0.1,", "1,2024-12-01 10:00:05,Spot,Sell,EUR,-9000,",
+      ...legs.map((l) => `1,2025-01-10 10:00:00,Spot,${l},`),
+    ].join("\n"));
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(message(r.messages, "binance.spot_cost_split")?.context).toEqual({ count: "4", rows: rowsOf(legs) });
+  });
+
+  // Controls: the file writes each payment next to its coin, or the pairs
+  // are all of one coin, so the pairing is what the file says.
+  const proven: [string, string[], string, string][] = [
+    ["spot: each payment after its coin, EUR and USD", ["Buy,BTC,0.1", "Sell,EUR,-11000", "Buy,ETH,1", "Sell,USD,-110"], "110 USD", "79.00"],
+    ["spot: each payment before its coin, EUR and USDT", ["Sell,EUR,-10000", "Buy,BTC,0.1", "Sell,USDT,-110", "Buy,ETH,1"], "110 USDT", ""],
+    ["Convert: each payment after its coin", ["Binance Convert,BTC,0.1", "Binance Convert,EUR,-11000", "Binance Convert,ETH,1", "Binance Convert,USD,-110"], "110 USD", "79.00"],
+    ["Strategy: each Spend after its Buy", ["Transaction Buy,BTC,0.1", "Transaction Spend,EUR,-11000", "Transaction Buy,ETH,1", "Transaction Spend,EUR,-110"], "110 EUR", "90.00"],
+    ["Strategy: each Spend before its Buy, with a Fee between", ["Transaction Spend,EUR,-11000", "Transaction Buy,BTC,0.1", "Transaction Fee,BNB,-0.001", "Transaction Spend,EUR,-110", "Transaction Buy,ETH,1"], "110 EUR", "90.00"],
+  ];
+  describe.each(proven)("control: %s", (_label, legs, ethCost, gain) => {
+    it.each(METHODS)("[%s] ETH keeps its own payment and nothing is named", (method) => {
+      const parsed = window(...legs);
+      expect(buyOf(parsed, "ETH")).toBe(ethCost);
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      if (gain) expect(ethGain(run([[parsed, "Binance"]], 2025, method))).toEqual([gain]);
+    });
+  });
+
+  it("control: two Strategy buys of the same coin, paid in one currency, are not named", () => {
+    const parsed = window("Transaction Buy,ETH,0.5", "Transaction Buy,ETH,0.5", "Transaction Spend,EUR,-50", "Transaction Spend,EUR,-50");
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")).toBeUndefined();
+  });
+
+  it("control: a Convert window with an EUR value on every leg pairs by value and is not named", () => {
+    const parsed = binanceParser.parse(["User_ID,UTC_Time,Account,Operation,Coin,Change,Remark,EUR_Value",
+      "1,2025-01-10 10:00:00,Spot,Binance Convert,ETH,1,,110", "1,2025-01-10 10:00:00,Spot,Binance Convert,BTC,0.1,,11000",
+      "1,2025-01-10 10:00:00,Spot,Binance Convert,EUR,-11000,,-11000", "1,2025-01-10 10:00:00,Spot,Binance Convert,USD,-121,,-110",
+    ].join("\n"));
+    expect(buyOf(parsed, "ETH")).toBe("121 USD");
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")).toBeUndefined();
+  });
+
+  it("the warning speaks of purchases and sales in the five locales, and the parser emits the Spanish text", () => {
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["binance.spot_cost_split"]).toContain("{{rows}}");
+      expect(locale["binance.spot_cost_split.hint"]).toContain("33.5.e");
+    }
+    expect((es as Record<string, string>)["binance.spot_cost_split.hint"]).toContain("venta");
+    expect((en as Record<string, string>)["binance.spot_cost_split.hint"]).toContain("sale");
+    const emitted = message(window("Transaction Buy,ETH,1", "Transaction Buy,BTC,0.1", "Transaction Spend,EUR,-11000", "Transaction Spend,EUR,-110").parserMessages, "binance.spot_cost_split")!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText["binance.spot_cost_split"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText["binance.spot_cost_split.hint"]);
+  });
+});
+
