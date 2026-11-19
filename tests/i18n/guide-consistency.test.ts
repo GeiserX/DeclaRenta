@@ -216,6 +216,29 @@ describe("Renta Web guide consistency", () => {
     }
   });
 
+  it("tells the user to correct a year with lowered withholding through a rectificativa from 2024 on, not only a complementaria (#458)", () => {
+    const complementaria = /complementaria|complementària|osagarria/;
+    const keys = ["report.withholding_corrected_prior_year.hint", "report.spanish_withholding_corrected_prior_year.hint"] as const;
+    for (const [name, locale] of Object.entries(locales)) {
+      for (const key of keys) {
+        const text = locale[key];
+        expect(text, `${name} ${key}`).toMatch(/rectificativa/);
+        // Every complementaria is the 2023-and-earlier one.
+        for (const m of text.matchAll(new RegExp(complementaria, "g"))) {
+          const before = text.slice(0, m.index);
+          expect(before.lastIndexOf("2023"), `${name} ${key}`).toBeGreaterThan(before.lastIndexOf("2024"));
+        }
+      }
+    }
+    // report.ts writes the Spanish hint itself; it must match es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    const pinned = "(2024 y posteriores: autoliquidación rectificativa; 2023 y anteriores: autoliquidación complementaria).";
+    expect(source.split(pinned).length - 1).toBe(2);
+    for (const key of keys) expect(es[key]).toContain(pinned);
+    const modelos = readFileSync(new URL("../../docs/modelos-fiscales.md", import.meta.url), "utf8");
+    expect(modelos).toMatch(/0597[^\n]*autoliquidación rectificativa si es 2024 o posterior/);
+  });
+
   it("the docs say the same: partial release, total exit only with no rebuy, the unlisted window, and the right correction procedure (#455 follow-up)", () => {
     const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
     const casillas = doc("casillas.md");
