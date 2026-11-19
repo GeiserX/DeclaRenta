@@ -377,4 +377,29 @@ describe("Renta Web guide consistency", () => {
     expect(files.design).toMatch(/can release before the reacquired units\s+are sold/);
     expect(files.claude).toMatch(/can release before the reacquired units are sold/);
   });
+
+  it("puts each migration note under a warning box whose version title covers it, so a user who filed with a covered version reads it (#454)", () => {
+    // A user skips a box titled «0.66.5 o anterior» when they filed with 0.66.6
+    // to 0.66.13. The #453, #454 pick-order and same-day notes concern every
+    // version up to 0.66.13, so they must sit under a box titled 0.66.13 or later.
+    const casillas = readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8");
+    const patch = (v: string) => Number(v.split(".")[2]);
+    // Each box: its title line, then its indented (or blank) body lines.
+    const boxes = [...casillas.matchAll(/^!!! warning "([^"]*)"\n((?:(?: {4}.*)?\n)*)/gm)]
+      .map((m) => ({ title: m[1] ?? "", body: m[2] ?? "" }))
+      .filter((b) => /versión 0\.66\.\d+ o anterior/.test(b.title));
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    for (const { title, body } of boxes) {
+      const covered = patch(/0\.66\.\d+/.exec(title)?.[0] ?? "0.0.0");
+      const named = [...body.matchAll(/0\.66\.\d+/g)].map((m) => patch(m[0]));
+      // No paragraph talks about a version the title does not cover.
+      for (const v of named) expect(v, title).toBeLessThanOrEqual(covered);
+      // When the box also names an older version, "Esas versiones" no longer says which.
+      if (named.some((v) => v < covered)) expect(body, title).not.toMatch(/Esas versiones/);
+    }
+    const securities = boxes.find((b) => !b.title.startsWith("Criptomonedas"));
+    expect(securities?.title).toBe("Si declaraste con la versión 0.66.13 o anterior");
+    for (const issue of ["#451", "#453", "#454"]) expect(securities?.body).toContain(issue);
+    expect(securities?.body).toMatch(/mismo día de la venta \(issue #454\)[^]*V0571-21/);
+  });
 });
