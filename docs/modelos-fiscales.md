@@ -112,7 +112,7 @@ Mediante la opción `--prior-losses` del CLI, puedes proporcionar un fichero JSO
 4. Aplica compensación cruzada de las pérdidas anteriores. El límite del 25% se calcula sobre el saldo positivo del año antes de compensar y es uno solo, compartido con el paso 2.
 5. Añade al arrastre lo que quede del saldo negativo del ejercicio.
 
-Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f/g, o 33.5.e en las criptomonedas) no cuentan como pérdida del año: se integran a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva).
+Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f/g, o 33.5.e en las criptomonedas) no cuentan como pérdida del año: se integran a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva). En las criptomonedas, la pérdida se integra cuando se venden las unidades de la recompra que la bloqueó, en proporción a la cantidad vendida, aunque después vuelvas a comprar la misma criptomoneda.
 
 El formato del fichero JSON es:
 
