@@ -192,13 +192,18 @@ function parseTrades(
       // A closed position with no symbol is still a purchase and a sale of
       // some shares: keep both legs, which book nothing, so the one-purchase
       // evidence (#453) cannot be proven with them missing (#467). A row with
-      // no readable date either is no position (a totals line).
-      if (!isReadableTradeDate(dateAcquired) && !isReadableTradeDate(dateSold)) continue;
+      // no readable date either is a totals line only when a cell says
+      // "Total" or it has no quantity; one with a quantity is kept, its
+      // dates named too (it was dropped with no word).
+      const undated = !isReadableTradeDate(dateAcquired) && !isReadableTradeDate(dateSold);
+      if (undated && (row.some((c) => /^total(es)?:?$/i.test(c.trim())) || !(row[quantityCol] ?? "").trim())) continue;
       const leg = { symbol: "", isin: "", assetCategory: "STK", currency: (row[currencyCol] ?? "").trim(), exchange: "REVOLUT" } as const;
       const cell = unreadableCell(headers[symbolCol] ?? "Symbol", "");
+      const withDate = (col: number, date: string): string =>
+        isReadableTradeDate(date) ? cell : `${cell}, ${unreadableCell(headers[col] ?? "Date", row[col] ?? "")}`;
       trades.push(
-        unreadableTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}--${i}`, tradeDate: dateAcquired, buySell: "BUY" }, cell),
-        unreadableTrade({ ...leg, tradeID: `revolut-close-${dateSold}--${i}`, tradeDate: dateSold, buySell: "SELL" }, cell),
+        unreadableTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}--${i}`, tradeDate: dateAcquired, buySell: "BUY" }, withDate(dateAcqCol, dateAcquired)),
+        unreadableTrade({ ...leg, tradeID: `revolut-close-${dateSold}--${i}`, tradeDate: dateSold, buySell: "SELL" }, withDate(dateSoldCol, dateSold)),
       );
       continue;
     }
@@ -231,6 +236,20 @@ function parseTrades(
     }
 
     const assetCategory = detectAssetCategory(symbol);
+    // Gross proceeds with no number (blank, "$", text) were read as 0, so the
+    // sale became a full loss with no word (#467). Both legs are kept as
+    // unreadable rows named by that cell: they book nothing, and the
+    // purchase is no lot left open. A written 0 stays the file's word.
+    const proceedsCell = row[grossProceedsCol];
+    if (readRevolutNumber(proceedsCell).amount === undefined) {
+      const leg = { symbol, isin: "", assetCategory, currency, exchange: "REVOLUT" } as const;
+      const cell = unreadableCell(headers[grossProceedsCol] ?? "Gross proceeds", proceedsCell);
+      trades.push(
+        unreadableTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}-${symbol}-${i}`, tradeDate: dateAcquired, buySell: "BUY" }, cell),
+        unreadableTrade({ ...leg, tradeID: `revolut-close-${dateSold}-${symbol}-${i}`, tradeDate: dateSold, buySell: "SELL" }, cell),
+      );
+      continue;
+    }
     // Use absolute values to avoid double-negative if input is already negative
     const absCost = (readRevolutNumber(costBasis).amount ?? new Decimal(0)).abs();
     const absProceeds = (readRevolutNumber(grossProceeds).amount ?? new Decimal(0)).abs();

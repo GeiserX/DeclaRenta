@@ -575,6 +575,10 @@ práctico Renta 2025. The decisions, each pinned in
       either, a written zero price is a corporate-action row and any other
       price an unreadable row named by Price per share; the holding is of
       unknown size.
+      A closed position whose Gross proceeds cannot be read keeps both legs
+      as unreadable rows (it was a sale at 0). One with no symbol and no
+      readable date is kept too when it has a quantity; only a line with a
+      `Total` label or no quantity is skipped as a totals line.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

@@ -11,6 +11,8 @@
  *   Amount that cannot be read was dropped with no word.
  * - A buy or sale whose Price per share cannot be read, or is zero, was
  *   booked at price 0: a sale became a full loss with no word.
+ * - A closed position whose Gross proceeds cannot be read was booked as a
+ *   sale at 0, and one with no symbol and no readable date was dropped.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -215,5 +217,48 @@ describe("Revolut Price per share: a sale is never booked at price 0", () => {
     const r = await report([BUY, sell("USD 0", "USD 0")], method);
     expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
     expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
+  });
+});
+
+describe("Revolut closed positions: proceeds that cannot be read are no sale at 0", () => {
+  it.each(METHODS)("[%s] control: proceeds of 1500 give a 547.80 € gain", async (method) => {
+    const r = await report([closed()], method, HC);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
+  });
+
+  it.each(METHODS)("[%s] unreadable, empty or currency-only proceeds keep both legs as unreadable rows that book nothing", async (method) => {
+    for (const proceeds of ["abc", "", "$"]) {
+      const s = await parse([closed({ "Gross proceeds": proceeds })], HC);
+      const cell = `Gross proceeds: ${JSON.stringify(proceeds)}`;
+      expect(msg(s, "parser.trade_row_unreadable"), proceeds).toBe(`AAPL 20250203 [${cell}]; AAPL 20250603 [${cell}]`);
+      const r = await report([closed({ "Gross proceeds": proceeds })], method, HC);
+      expect(r.capitalGains.transmissionValue.toFixed(2), proceeds).toBe("0.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), proceeds).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] written zero proceeds stay the file's word", async (method) => {
+    const r = await report([closed({ "Gross proceeds": "0" })], method, HC);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("-1102.20");
+  });
+
+  it.each(METHODS)("[%s] a row with no symbol and no readable date that has a quantity is kept as two unreadable rows", async (method) => {
+    const row = closed({ Symbol: "", "Date acquired": "abc", "Date sold": "abc" });
+    const s = await parse([row], HC);
+    expect(msg(s, "parser.trade_row_unreadable"))
+      .toBe('— [Symbol: "", Date acquired: "abc"]; — [Symbol: "", Date sold: "abc"]');
+    const r = await report([closed(), row], method, HC);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
+  });
+
+  it("a totals line (a Total label, or no quantity) with no symbol and no date stays skipped", async () => {
+    for (const row of [
+      ["Total", "", "", "10", "1000", "1500", "500", "2", "498", ""],
+      ["", "", "", "", "1000", "1500", "500", "2", "498", ""],
+    ]) {
+      const s = await parse([closed(), row], HC);
+      expect(s.trades.map((t) => t.symbol), row.join()).toEqual(["AAPL", "AAPL"]);
+      expect(s.parserMessages, row.join()).toBeUndefined();
+    }
   });
 });
