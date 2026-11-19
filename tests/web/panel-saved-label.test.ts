@@ -316,6 +316,94 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
   });
 
+  it("a locale redraw while a Save rerun waits cancels that run's «Guardado»; the run still finishes", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    // The rerun is waiting (ECB rates, paint yield); the locale redraw lands first.
+    redrawOnLocaleChange();
+    const localeDrawn = windowPanel()!;
+    expect(localeDrawn).not.toBe(before);
+    expect(windowLabel().hidden).toBe(true);
+    // The rerun finishes: it redraws the panel with the saved window, without «Guardado».
+    const fromRun = await redrawn(windowPanel, localeDrawn, "rerun after Save");
+    expect(fromRun.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value).toBe("2");
+    expect(document.getElementById("results-split")).not.toBe(strip);
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("a refused Save while an earlier good Save reruns keeps the entered value and the error; the run still updates the results", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    const select = () => before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!;
+    select().value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    // While that rerun waits, a second Save the browser refuses.
+    refuseWrites = true;
+    select().value = "12";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    const error = before.querySelector<HTMLElement>(".antichurning-window-error")!;
+    expect(error.hidden).toBe(false);
+    // The first rerun finishes and redraws the results, but not this panel.
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after the good Save");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(windowPanel()).toBe(before);
+    expect(select().value).toBe("12");
+    expect(error.hidden).toBe(false);
+    expect(windowLabel().hidden).toBe(true);
+    // The good Save is stored and in the report.
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 2 });
+  });
+
+  it("with no edit after a Save, the rerun still redraws the panel with «Guardado» (control)", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    const field = (p: HTMLElement, f: string) => p.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field(before, "acquireDate").value = `${YEAR}-01-15`;
+    field(before, "quantity").value = "10";
+    field(before, "pricePerShare").value = "100";
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    // Folding the panel by its <summary> is no edit: the rerun still redraws it.
+    before.querySelector<HTMLElement>("summary.manual-opening-lots-summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await redrawn(lotsPanel, before, "rerun after Save");
+    expect(shown(lotsLabel())).toBe(true);
+  });
+
+  it("a refused crypto Save while an earlier good one reruns keeps the typed price and the error", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const strip = document.getElementById("results-split");
+    const input = before.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+    input.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    refuseWrites = true;
+    input.value = "31000";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after the good Save");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cryptoPanel()).toBe(before);
+    expect(input.value).toBe("31000");
+    expect(before.querySelector<HTMLElement>(".crypto-rates-error-msg")!.hidden).toBe(false);
+    expect(cryptoLabel().hidden).toBe(true);
+    // The panels keep their order: opening lots, crypto, anti-churning window, then the casillas.
+    const order = [...step3().querySelectorAll(".manual-opening-lots-panel, .crypto-rates-panel, .antichurning-window-panel")].filter((el, i, all) => all.indexOf(el) === i);
+    expect(order).toEqual([lotsPanel(), cryptoPanel(), windowPanel()]);
+  });
+
+  it("a panel touched while a year change reruns is still replaced: it belongs to the year on screen", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
+    const other = [...yearSelect.options].map((o) => o.value).find((v) => v !== String(YEAR));
+    if (!other) throw new Error("the year select offers no other year");
+    const header = document.getElementById("results-year-header")!.innerHTML;
+    yearSelect.value = other;
+    yearSelect.dispatchEvent(new Event("change"));
+    // An edit in the old year's panel while the other year computes.
+    before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.dispatchEvent(new Event("change", { bubbles: true }));
+    await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== header ? true : null), `results for ${other}`);
+    expect(before.isConnected).toBe(false);
+  });
+
   it("a year change after a Save redraws the panels without «Guardado»", async () => {
     const before = await waitFor(windowPanel, "window panel");
     before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
