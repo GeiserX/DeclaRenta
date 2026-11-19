@@ -2854,3 +2854,205 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
     expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
   });
 });
+
+describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number the parser cannot read is named, never booked as a fee, as 0, as euros or a crash", () => {
+  // Realistic rate: 1 USD = 0.92 EUR.
+  const realRates = (): EcbRateMap => {
+    const map: EcbRateMap = new Map();
+    for (let t = Date.UTC(2023, 0, 1); t <= Date.UTC(2025, 11, 31); t += 86_400_000) {
+      map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "0.92"]]));
+    }
+    return map;
+  };
+  const KH = "Buchtag;Valuta;BIC / BLZ;IBAN / Kontonummer;Buchungsinformationen;TA-Nr.;Betrag;;Auftraggeberkonto;Konto";
+  const drow = (date: string, qty: string, info: string, ta: string, kurs: string, ccy = "EUR", isin = ISIN): string =>
+    `1;${date};${date};${isin};XYZ SA;${qty};Stk.;${info};${ta};${kurs};${ccy};***xxx Depot`;
+  const krow = (date: string, info: string, ta: string, amount: string, ccy = "EUR"): string =>
+    `${date};${date};;;${info};${ta};${amount};${ccy};1;***xxx Cashkonto`;
+  const depot = (...rows: string[]): Statement => flatexParser.parse([FX_H, ...rows].join("\n"));
+  const konto = (...rows: string[]): Statement => flatexParser.parse([KH, ...rows].join("\n"));
+  const merged = (...parts: Statement[]): Statement => {
+    const statement = createEmptyStatement();
+    for (const part of parts) mergeStatement(statement, part, "Flatex");
+    return finalizeMergedStatement(statement);
+  };
+  const report = (statement: Statement, method: FxMethod): TaxReport =>
+    generateTaxReport(statement, realRates(), 2024, reportOptionsForMethod(method));
+  const message = (s: Statement, id: string): TaxMessage | undefined => s.parserMessages?.find((m) => m.id === id);
+  const gains = (r: TaxReport): string[] =>
+    [r.capitalGains.transmissionValue, r.capitalGains.acquisitionValue, r.capitalGains.netGainLoss].map((d) => new Decimal(d).toFixed(2));
+  const cash = (r: TaxReport): string[] =>
+    [r.dividends.grossIncome, r.doubleTaxation.deduction, r.interest.earned].map((d) => new Decimal(d).toFixed(2));
+  const FEE = "flatex.commission.not_recovered";
+  const INCOME = "parser.cash_income_amount_unreadable";
+
+  // Buy 10 at 100 € (order 111111), sell 10 at 120 € (order 222222); Flatex
+  // charges 5.90 € on each, so the gain is 1194.10 − 1005.90 = 188.20 €.
+  const BUY = drow("01.03.2024", "10", `Ausführung ORDER Kauf ${ISIN} 111111`, "9001", "100,00");
+  const SELL = drow("03.06.2024", "-10", `Ausführung ORDER Verkauf ${ISIN} 222222`, "9002", "120,00");
+  const legBuy = (amount = "-1005,90"): string => krow("01.03.2024", `Ausführung ORDER Kauf ${ISIN} 111111`, "8001", amount);
+  const legSell = (amount = "1194,10", ta = "8002", text = `Ausführung ORDER Verkauf ${ISIN} 222222`): string =>
+    krow("03.06.2024", text, ta, amount);
+
+  describe("the cash leg of an order", () => {
+    it.each(METHODS)("[%s] control: readable legs give each order its 5.90 € fee, with no warning", (method) => {
+      const statement = merged(depot(BUY, SELL), konto(legBuy(), legSell()));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "-5.9"]);
+      expect(statement.parserMessages ?? []).toEqual([]);
+      expect(gains(report(statement, method))).toEqual(["1194.10", "1005.90", "188.20"]);
+    });
+
+    describe.each(["", "€", "abc"])("a sale leg whose Betrag is %j", (cell) => {
+      it.each(METHODS)("[%s] gives the sale no fee (never the whole sale as a fee, never a crash) and names the order", (method) => {
+        const statement = merged(depot(BUY, SELL), konto(legBuy(), legSell(cell)));
+        expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "0"]);
+        expect(message(statement, FEE)?.context?.rows).toBe(`222222 ${ISIN} 20240603 [Betrag: ${JSON.stringify(cell)}]`);
+        expect(gains(report(statement, method))).toEqual(["1200.00", "1005.90", "194.10"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a written 0 on a sale leg is the file's word, but a fee as large as the sale is no fee: 0, named", (method) => {
+      const statement = merged(depot(BUY, SELL), konto(legBuy(), legSell("0")));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "0"]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`222222 ${ISIN} 20240603 [1200 EUR / 0 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["1200.00", "1005.90", "194.10"]);
+    });
+
+    it.each(METHODS)("[%s] an empty buy leg gives the buy no fee, never a cost of twice the buy", (method) => {
+      const statement = merged(depot(BUY, SELL), konto(legBuy(""), legSell()));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["0", "-5.9"]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`111111 ${ISIN} 20240301 [Betrag: ""]`);
+      expect(gains(report(statement, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+    });
+  });
+
+  describe("an order whose legs and fills differ in number", () => {
+    // Order 333333 filled in two parts of 5 at 100 €, each charged 5.90 €.
+    const fill = (ta: string): string => drow("01.03.2024", "5", `Ausführung ORDER Kauf ${ISIN} 333333`, ta, "100,00");
+    const leg = (ta: string, amount = "-505,90"): string => krow("01.03.2024", `Ausführung ORDER Kauf ${ISIN} 333333`, ta, amount);
+    const fills = (): Statement => depot(fill("9101"), fill("9102"), SELL);
+
+    it.each(METHODS)("[%s] controls: one leg per fill, and one combined leg split pro rata, give the same gain", (method) => {
+      const each = merged(fills(), konto(leg("8101"), leg("8102"), legSell()));
+      expect(each.parserMessages ?? []).toEqual([]);
+      expect(gains(report(each, method))).toEqual(["1194.10", "1011.80", "182.30"]);
+      const combined = merged(fills(), konto(leg("8101", "-1011,80"), legSell()));
+      expect(combined.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      expect(gains(report(combined, method))).toEqual(["1194.10", "1011.80", "182.30"]);
+    });
+
+    it.each(METHODS)("[%s] a missing leg makes no fee of half the order: both fills keep 0, the order is named", (method) => {
+      const statement = merged(fills(), konto(leg("8101"), legSell()));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["0", "0", "-5.9"]);
+      expect(statement.parserMessages?.map((m) => [m.id, m.severity, m.context?.rows])).toEqual([
+        [FEE, "warning", `333333 ${ISIN} 20240301 [1000 EUR / -505.9 EUR]`],
+      ]);
+      expect(gains(report(statement, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+    });
+
+    it.each(METHODS)("[%s] an extra sale leg makes no fee of the whole sale: the sale keeps 0, the order is named", (method) => {
+      const statement = merged(depot(BUY, SELL), konto(legBuy(), legSell(), legSell("1194,10", "8003")));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "0"]);
+      expect(message(statement, FEE)?.context?.rows).toBe(`222222 ${ISIN} 20240603 [1200 EUR / 2388.2 EUR]`);
+      expect(gains(report(statement, method))).toEqual(["1200.00", "1005.90", "194.10"]);
+    });
+
+    it.each(METHODS)("[%s] a Storno cancels its leg: the rebooked sale gets its own 5.90 € fee, as in the control", (method) => {
+      const storno = legSell("-1194,10", "8003", `Storno Ausführung ORDER Verkauf ${ISIN} 222222`);
+      const statement = merged(depot(BUY, SELL), konto(legBuy(), legSell(), storno, legSell("1194,10", "8004")));
+      expect(statement.trades.map((t) => t.commission)).toEqual(["-5.9", "-5.9"]);
+      expect(message(statement, FEE)).toBeUndefined();
+      expect(gains(report(statement, method))).toEqual(["1194.10", "1005.90", "188.20"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] a row with no order number gets no key from the digits of its ISIN: two orders never pool their legs", (method) => {
+    const row = (date: string, qty: string, side: string, ta: string, kurs: string, key: string): string =>
+      drow(date, qty, `Ausführung ORDER ${side} ${AAPL}${key}`, ta, kurs, "EUR", AAPL);
+    const leg = (key: string): string => krow("01.03.2024", `Ausführung ORDER Kauf ${AAPL}${key}`, "8001", "-1005,90");
+    const withKeys = merged(depot(row("01.03.2024", "10", "Kauf", "9001", "100,00", " 111111"), row("03.06.2024", "-10", "Verkauf", "9002", "120,00", " 222222")), konto(leg(" 111111")));
+    expect(gains(report(withKeys, method))).toEqual(["1200.00", "1005.90", "194.10"]);
+    const noKeys = merged(depot(row("01.03.2024", "10", "Kauf", "9001", "100,00", ""), row("03.06.2024", "-10", "Verkauf", "9002", "120,00", "")), konto(leg("")));
+    expect(noKeys.trades.map((t) => t.commission)).toEqual(["0", "0"]);
+    // With no order number neither file can be joined: each fill keeps a fee of 0, which can only raise the tax.
+    expect(noKeys.parserMessages ?? []).toEqual([]);
+    expect(gains(report(noKeys, method))).toEqual(["1200.00", "1000.00", "200.00"]);
+  });
+
+  describe("a dividend, withholding or interest row", () => {
+    const div = (amount: string, ccy = "EUR"): string => krow("15.05.2024", `Dividendenzahlung ${AAPL}`, "7001", amount, ccy);
+    const tax = (amount = "-1,50"): string => krow("15.05.2024", `Quellensteuer ${AAPL}`, "7002", amount);
+
+    it.each(METHODS)("[%s] control: a readable dividend and withholding are booked, and a written 0 stays a zero with no warning", (method) => {
+      expect(cash(report(merged(konto(div("10,00"), tax())), method))).toEqual(["10.00", "1.50", "0.00"]);
+      const zero = konto(div("0"), tax("0"));
+      expect(zero.cashTransactions.map((c) => c.amount)).toEqual(["0", "0"]);
+      expect(message(zero, INCOME)).toBeUndefined();
+    });
+
+    describe.each(["", "€", "abc"])("a dividend Betrag of %j", (cell) => {
+      it.each(METHODS)("[%s] books neither the dividend nor its withholding, the report runs, and both are named", (method) => {
+        const parsed = konto(div(cell), tax());
+        expect(parsed.cashTransactions).toEqual([]);
+        expect(message(parsed, INCOME)?.context?.rows).toBe(
+          `Dividendenzahlung ${AAPL} EUR 20240515 (Quellensteuer ${AAPL} -1.50 EUR) [Betrag: ${JSON.stringify(cell)}]`);
+        expect(cash(report(merged(parsed), method))).toEqual(["0.00", "0.00", "0.00"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a withholding Betrag of \"abc\" is named, not booked: the dividend stays, with no deduction", (method) => {
+      const parsed = konto(div("10,00"), tax("abc"));
+      expect(parsed.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10.00"]);
+      expect(message(parsed, INCOME)?.context?.rows).toBe(`Quellensteuer ${AAPL} EUR 20240515 [Betrag: "abc"]`);
+      expect(cash(report(merged(parsed), method))).toEqual(["10.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] a dividend with an empty currency cell is named, never booked as euros", (method) => {
+      expect(cash(report(merged(konto(div("10,00", "USD"))), method))).toEqual(["9.20", "0.00", "0.00"]);
+      const parsed = konto(div("10,00", ""));
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, INCOME)?.context?.rows).toBe(`Dividendenzahlung ${AAPL} 20240515 [Betrag, divisa: ""]`);
+      expect(cash(report(merged(parsed), method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] interest and coupons received are interest (casilla 0027); interest charged stays out", (method) => {
+      for (const text of ["Habenzinsen 01.01.2024 - 31.03.2024", "Zinsen", "Zinszahlung DE0001102341"]) {
+        const parsed = konto(krow("31.03.2024", text, "7101", "12,34"));
+        expect(parsed.parserMessages).toBeUndefined();
+        expect(cash(report(merged(parsed), method))).toEqual(["0.00", "0.00", "12.34"]);
+      }
+      expect(konto(krow("31.03.2024", "Sollzinsen 01.01.2024 - 31.03.2024", "7104", "-3,00")).cashTransactions).toEqual([]);
+      const unreadable = konto(krow("31.03.2024", "Habenzinsen 01.01.2024 - 31.03.2024", "7105", "abc"));
+      expect(unreadable.cashTransactions).toEqual([]);
+      expect(message(unreadable, INCOME)?.context?.rows).toBe('Habenzinsen 01.01.2024 - 31.03.2024 EUR 20240331 [Betrag: "abc"]');
+      expect(cash(report(merged(unreadable), method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+
+  describe("a Depotumsätze trade", () => {
+    it.each(METHODS)("[%s] with an empty currency cell is an unreadable row, never a trade in euros", (method) => {
+      const usd = merged(depot(BUY.replace(";EUR;", ";USD;"), SELL.replace(";EUR;", ";USD;")));
+      expect(gains(report(usd, method))).toEqual(["1104.00", "920.00", "184.00"]);
+      const parsed = depot(BUY.replace(";EUR;", ";;"), SELL.replace(";EUR;", ";;"));
+      expect(parsed.trades.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", true], ["0", true]]);
+      expect(unreadableRows(parsed)).toBe(`XYZ SA (${ISIN}) 20240301 [Kurs, divisa: ""]; XYZ SA (${ISIN}) 20240603 [Kurs, divisa: ""]`);
+      expect(gains(report(merged(parsed), method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] with a negative Kurs is an unreadable row, never negative proceeds", (method) => {
+      const parsed = depot(BUY, SELL.replace(";120,00;", ";-120,00;"));
+      expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "10", false], ["SELL", "0", true]]);
+      expect(unreadableRows(parsed)).toBe(`XYZ SA (${ISIN}) 20240603 [Kurs: "-120,00"]`);
+      expect(gains(report(merged(parsed), method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+
+  it("the order warning reads in the five locales", () => {
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale[FEE]).toContain("{{count}}");
+      expect(locale[FEE]).toContain("{{rows}}");
+      expect(locale[`${FEE}.hint`]).toBeTruthy();
+    }
+    expect(isTranslationKey(FEE)).toBe(true);
+  });
+});

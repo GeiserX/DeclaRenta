@@ -1023,6 +1023,10 @@ const eu: TranslationKeys = {
     "Komisio kalkulaturik gabeko Flatex eragiketak: {{trades}}. Kutxa-idazpena eragiketarena ez den beste txanpon batean dago.",
   "flatex.commission.cross_currency.hint":
     "Eragiketa horien komisioa 0an utzi da. Kontsultatu haren zenbatekoa Flatex-eko aginduaren likidazioan eta kontuan hartu aitorpena berrikustean: erosketetan eskuratze-balioari gehitzen zaio eta salmentetan transmisio-baliotik kentzen da.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura, edo irakurri ezin den zenbatekoaren gelaxka. Baliteke kutxa-idazpen bat falta izatea, bat soberan egotea edo zenbateko bat irakurri ezin izatea. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
   "flatex.commission.multi_fill_prorated":
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":

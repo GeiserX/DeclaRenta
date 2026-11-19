@@ -35,6 +35,8 @@ import {
   corporateActionTrade,
   markUndatedTrades,
   dropUndatedCash,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 
@@ -59,7 +61,10 @@ function extractIsin(text: string): string {
  * per-trade commission (gross vs. net cash discrepancy).
  */
 const ORDER_RE = /\bausf.hrung\b.*\border\b/i;
-const ORDER_KEY_RE = /(\d{6,})\s*$/;
+// The order number is a word of its own: with no word boundary, the last
+// digits of an ISIN (US0378331005) were read as one when the row had no
+// order number, and two orders pooled their legs and fees (#467).
+const ORDER_KEY_RE = /\b(\d{6,})\s*$/;
 
 /** Extract the trailing broker order id from an "Ausführung ORDER ..." line. */
 function extractOrderKey(text: string): string {
@@ -79,6 +84,16 @@ const DISTRIBUTION_PATTERNS = [/ertr.gnisaussch.ttung/i, /aussch.ttung/i];
 
 /** Withholding tax patterns (Quellensteuer). */
 const WITHHOLDING_PATTERNS = [/quellensteuer/i, /kapitalertragsteuer/i];
+
+/**
+ * Interest and coupon patterns (Kontoumsätze): "Habenzinsen" on the cash
+ * balance, "Zinsen", a bond's "Zinszahlung". A positive row is interest
+ * received (casilla 0027); it was dropped with no word (#467). A negative one
+ * (Sollzinsen on a debit balance) is left out, which can only raise the tax.
+ * "Stückzinsen" (accrued interest paid or received with a bond trade) has no
+ * word boundary before "zins" and is not matched.
+ */
+const INTEREST_PATTERNS = [/habenzins/i, /\bzins/i];
 
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text));
@@ -109,7 +124,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   const priceCol = findColumn(headers, ["Kurs"]);
   const txnCol = findColumn(headers, ["TA-Nr.", "TA-Nr"]);
   // Currency sits in the empty header immediately after Kurs.
-  const currencyCol = priceCol >= 0 ? priceCol + 1 : -1;
+  const currencyCol = priceCol + 1;
+  const currencyName = (headers[currencyCol] ?? "").trim() || `${(headers[priceCol] ?? "Kurs").trim()}, divisa`;
 
   if (isinCol < 0 || dateCol < 0 || qtyCol < 0 || priceCol < 0) {
     throw new Error(
@@ -136,7 +152,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const info = infoCol >= 0 ? (fields[infoCol] ?? "").trim() : "";
     const price = parseNumber(fields[priceCol] ?? "0");
     const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+    // An empty or missing currency cell is no "EUR" (checked before booking).
+    const currency = (fields[currencyCol] ?? "").trim();
     const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
     const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
     const qtyNum = toFiniteDecimal(fields[qtyCol] ?? "0");
@@ -200,6 +217,12 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       trades.push(keepAction());
       continue;
     }
+    // A negative Kurs is no price: booked, it made negative proceeds or a
+    // negative cost with no word (#467). Kept as a row that books nothing.
+    if (priceDec.isNegative()) {
+      keepUnreadable(unreadableCell(headers[priceCol] ?? "Kurs", fields[priceCol]));
+      continue;
+    }
 
     // A row whose text is neither Kauf nor Verkauf (a transfer in or out, a
     // corporate action) is no purchase or sale the parser can book: the sign
@@ -228,6 +251,14 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       continue;
     }
 
+    // A trade with no currency is not in euros: a pound or dollar trade
+    // booked as euros moved the gain with no word. Kept as a row that books
+    // nothing and named by that cell (#467).
+    if (!currency) {
+      keepUnreadable(unreadableCell(currencyName, fields[currencyCol]));
+      continue;
+    }
+
     const absQty = qtyNum.abs();
     const tradeMoney = absQty.mul(priceDec).toFixed();
     // Broker order id embedded in the Buchungsinformationen text — used after
@@ -241,7 +272,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       description: name,
       isin,
       assetCategory: "STK",
-      currency: currency || "EUR",
+      currency,
       tradeDate,
       settlementDate: tradeDate,
       quantity: isSell ? `-${absQty.toFixed()}` : absQty.toFixed(),
@@ -254,7 +285,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       buySell: isSell ? "SELL" : "BUY",
       openCloseIndicator: isSell ? "C" : "O",
       exchange: "",
-      commissionCurrency: currency || "EUR",
+      commissionCurrency: currency,
       commission: "0",
       taxes: "0",
       multiplier: "1",
@@ -319,7 +350,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
   const amountCol = findColumn(headers, ["Betrag"]);
   const txnCol = findColumn(headers, ["TA-Nr.", "TA-Nr"]);
   // Currency sits in the empty header immediately after Betrag.
-  const currencyCol = amountCol >= 0 ? amountCol + 1 : -1;
+  const currencyCol = amountCol + 1;
 
   if (dateCol < 0 || infoCol < 0 || amountCol < 0) {
     throw new Error(
@@ -327,8 +358,14 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     );
   }
 
+  const amountName = (headers[amountCol] ?? "").trim() || "Betrag";
+  const currencyName = (headers[currencyCol] ?? "").trim() || `${amountName}, divisa`;
   const cashTransactions: CashTransaction[] = [];
   const pendingOrderLegs: OrderLeg[] = [];
+  // Dividend, withholding and interest rows whose amount or currency cannot
+  // be read (#467). `key` pairs a dividend with its withholdings.
+  const unreadableIncome: { key: string; dividend: boolean; type: string; currency: string; date: string; cells: string[] }[] = [];
+  const incomeKey = (isin: string, date: string): string => `${isin}|${date}`;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -340,8 +377,11 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
     if (!info) continue;
 
     const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
-    const amount = parseNumber(fields[amountCol] ?? "0");
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+    // An empty, currency-only or textual Betrag is no "0" and no number: it
+    // is never booked as one (#467). A written 0 stays an explicit zero.
+    const amountUnreadable = quantityUnreadable(fields[amountCol]);
+    const amount = amountUnreadable ? "0" : parseNumber(fields[amountCol] ?? "0");
+    const currency = (fields[currencyCol] ?? "").trim();
     const isin = extractIsin(info);
 
     // Trade cash legs ("Ausführung ORDER Kauf/Verkauf <ISIN> <orderId>") are NOT
@@ -352,6 +392,8 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       const orderKey = extractOrderKey(info);
       if (orderKey) {
         const bookingId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
+        // A leg whose Betrag cannot be read carries its cell: its order then
+        // gets no fee, never the whole trade as a fee or a crash (#467).
         pendingOrderLegs.push({
           orderKey,
           netAmount: amount,
@@ -359,6 +401,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
           currency: currency || "EUR",
           tradeDate,
           ...(bookingId ? { bookingId } : {}),
+          ...(amountUnreadable ? { unreadableCell: unreadableCell(amountName, fields[amountCol]) } : {}),
         });
       }
       continue;
@@ -369,11 +412,33 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       type = "Withholding Tax";
     } else if (matchesAny(info, DIVIDEND_PATTERNS) || matchesAny(info, DISTRIBUTION_PATTERNS)) {
       type = "Dividends";
+    } else if (matchesAny(info, INTEREST_PATTERNS) && (amountUnreadable || toFiniteDecimal(amount).isPositive())) {
+      // A bond coupon names its ISIN; interest on the cash balance does not.
+      type = isin ? "Bond Interest Received" : "Broker Interest Received";
     }
 
     // Skip transfers ("ENTRE CUENTAS") and anything else that isn't
-    // dividend/distribution/withholding.
+    // dividend/distribution/withholding/interest.
     if (!type) continue;
+
+    // An amount that cannot be read, or a row with no currency, is not
+    // booked: as 0 it hid the income and kept its withholding, as text it
+    // stopped the report, and with no currency a dollar amount was read as
+    // euros. The row and the withholdings of its dividend are named (#467).
+    if (amountUnreadable || !currency) {
+      unreadableIncome.push({
+        key: incomeKey(isin, tradeDate),
+        dividend: type === "Dividends",
+        type: info,
+        currency,
+        date: tradeDate,
+        cells: [
+          ...(amountUnreadable ? [unreadableCell(amountName, fields[amountCol])] : []),
+          ...(currency ? [] : [unreadableCell(currencyName, fields[currencyCol])]),
+        ],
+      });
+      continue;
+    }
 
     const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
 
@@ -383,7 +448,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       symbol: isin,
       description: info,
       isin,
-      currency: currency || "EUR",
+      currency,
       dateTime: tradeDate,
       settleDate: tradeDate,
       amount,
@@ -391,6 +456,17 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       type,
     });
   }
+
+  // The withholdings of a dividend that is not booked (same ISIN, same day)
+  // are not booked either: a deduction for income the report does not count.
+  // They are named with it.
+  const unreadableRows = unreadableIncome.map((row) => {
+    if (!row.dividend) return cashIncomeRowText(row.type, "", row.currency, row.date, row.cells);
+    const withheld = cashTransactions.filter((c) => c.type === "Withholding Tax" && incomeKey(c.isin, c.dateTime) === row.key);
+    for (const w of withheld) cashTransactions.splice(cashTransactions.indexOf(w), 1);
+    const tax = withheld.map((w) => `${w.description} ${w.amount} ${w.currency}`).join(", ");
+    return cashIncomeRowText(row.type, "", row.currency, row.date, row.cells, tax);
+  });
 
   // Flatex credits a dividend as ONE net booking (after the foreign or Spanish
   // withholding) and usually writes no Quellensteuer row. The engine reads a
@@ -410,6 +486,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
       ),
   );
   const parserMessages: TaxMessage[] = dropUndatedCash("Flatex", cashTransactions, headers[dateCol] ?? "Buchtag");
+  parserMessages.push(...cashIncomeAmountUnreadableMessages("Flatex", unreadableRows));
   if (hasNetDividends) {
     parserMessages.push({
       id: "flatex.dividends.net_amounts",

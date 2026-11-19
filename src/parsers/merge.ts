@@ -201,6 +201,15 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * pro rata by trade value.
  * The fee is only derived when leg and trade share a currency: a USD-priced
  * trade settled in EUR would otherwise book the whole FX difference as a fee.
+ *
+ * A fee is kept only when the legs can give one (#467): every leg's amount is
+ * readable, and the fee is not below zero (a buy pays at least its gross, a
+ * sale gets at most its gross; one cent of rounding is allowed) and is below
+ * the gross. Otherwise the fills keep a fee of 0 and `flatex.commission.not_recovered`
+ * names the order: a leg with an empty amount made the whole trade a fee
+ * (a 1194 € gain became a 1006 € loss), and a missing or extra leg a fee as
+ * large as a fill. The legs are summed with their sign, so a Storno cancels
+ * the leg it reverses.
  */
 const FLATEX_ORDER_PREFIX = "flatex-order:";
 
@@ -222,6 +231,32 @@ function legOrder(a: OrderLeg, b: OrderLeg): number {
   const dateCmp = normalizeDate(a.tradeDate).localeCompare(normalizeDate(b.tradeDate));
   if (dateCmp !== 0) return dateCmp;
   return new Decimal(a.netAmount).abs().cmp(new Decimal(b.netAmount).abs());
+}
+
+// One cent: Flatex rounds the cash leg to cents, but not the gross (qty × Kurs).
+const FEE_ROUNDING = new Decimal("0.01");
+
+/**
+ * The fee readable legs give fills of one side and `gross` value, or
+ * undefined when they give none: a buy pays gross + fee (its legs are
+ * debits), a sale gets gross − fee (its legs are credits).
+ */
+function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decimal): Decimal | undefined {
+  const signed = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
+  const fee = side === "SELL" ? gross.minus(signed) : signed.negated().minus(gross);
+  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(gross) ? fee : undefined;
+}
+
+/** How `flatex.commission.not_recovered` names an order's fills and legs. */
+function orderRow(orderKey: string, legs: readonly OrderLeg[], trades: readonly Trade[]): string {
+  const first = trades[0]!;
+  const unreadable = legs.flatMap((leg) => leg.unreadableCell ?? []);
+  const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
+  const net = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
+  const cells = unreadable.length > 0
+    ? unreadable.join(", ")
+    : `${gross.toFixed()} ${first.currency} / ${net.toFixed()} ${legs[0]!.currency}`;
+  return `${orderKey} ${first.isin || first.symbol} ${first.tradeDate} [${cells}]`;
 }
 
 function reconcileOrderLegs(statement: Statement): void {
@@ -275,6 +310,7 @@ function reconcileOrderLegs(statement: Statement): void {
   let unmatchedTrades = 0;
   let crossCurrencyTrades = 0;
   let proratedOrders = 0;
+  const notRecovered: string[] = [];
 
   // Commission = | net cash settled − gross trade value |. The FIFO engine
   // (fifo.ts) reads Trade.commission directly and folds it into cost basis
@@ -290,6 +326,13 @@ function reconcileOrderLegs(statement: Statement): void {
       continue;
     }
 
+    // A leg that cannot be read could be any fill's: no fill of the order
+    // gets a fee from it, and the order is named.
+    if (legs.some((leg) => leg.unreadableCell !== undefined)) {
+      notRecovered.push(orderRow(orderKey, legs, trades));
+      continue;
+    }
+
     if (legs.length === trades.length) {
       // One cash leg per fill: pair by date, then by amount within a day.
       const sortedTrades = [...trades].sort(tradeOrder);
@@ -300,9 +343,12 @@ function reconcileOrderLegs(statement: Statement): void {
           crossCurrencyTrades++;
           return;
         }
-        const gross = new Decimal(trade.tradeMoney);
-        const net = new Decimal(leg.netAmount).abs();
-        trade.commission = net.minus(gross).abs().negated().toFixed();
+        const fee = legFee([leg], trade.buySell, new Decimal(trade.tradeMoney));
+        if (fee === undefined) {
+          notRecovered.push(orderRow(orderKey, [leg], [trade]));
+          return;
+        }
+        trade.commission = fee.abs().negated().toFixed();
         trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
       });
       continue;
@@ -315,9 +361,13 @@ function reconcileOrderLegs(statement: Statement): void {
       crossCurrencyTrades += trades.length;
       continue;
     }
-    const net = legs.reduce((sum, leg) => sum.plus(new Decimal(leg.netAmount).abs()), new Decimal(0));
     const gross = trades.reduce((sum, trade) => sum.plus(trade.tradeMoney), new Decimal(0));
-    const totalFee = net.minus(gross).abs();
+    const sides = new Set(trades.map((trade) => trade.buySell));
+    const totalFee = sides.size === 1 ? legFee(legs, trades[0]!.buySell, gross) : undefined;
+    if (totalFee === undefined) {
+      notRecovered.push(orderRow(orderKey, legs, trades));
+      continue;
+    }
     for (const trade of trades) {
       trade.commission = totalFee.mul(trade.tradeMoney).div(gross).abs().negated().toFixed();
       trade.commissionCurrency = legs[0]!.currency || trade.commissionCurrency || trade.currency;
@@ -356,6 +406,18 @@ function reconcileOrderLegs(statement: Statement): void {
       message: `Operaciones de Flatex sin comisión calculada: ${crossCurrencyTrades}. El apunte de caja está en una moneda distinta a la de la operación.`,
       hint: "La comisión de esas operaciones se ha dejado en 0. Consulta su importe en la liquidación de la orden en Flatex y tenlo en cuenta al revisar la declaración: se suma al valor de adquisición en las compras y se resta del valor de transmisión en las ventas.",
       context: { trades: String(crossCurrencyTrades) },
+    });
+  }
+
+  if (notRecovered.length > 0) {
+    const count = String(notRecovered.length);
+    const rows = notRecovered.join("; ");
+    addInfoMessage(statement, {
+      id: "flatex.commission.not_recovered",
+      severity: "warning",
+      message: `Flatex: ${count} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: ${rows}.`,
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja, o la celda del importe que no se puede leer. Puede faltar un apunte, sobrar uno o tener un importe que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+      context: { count, rows },
     });
   }
 

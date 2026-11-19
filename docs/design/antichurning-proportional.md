@@ -604,6 +604,26 @@ práctico Renta 2025. The decisions, each pinned in
       on one day that net to zero are skipped; every other leg is a
       corporate-action row, and `flatex.lagerstellenwechsel.unmatched` still
       names the ISIN.
+      A Kauf or Verkauf with an empty currency cell is an unreadable row
+      named `Kurs, divisa: ""` (it was booked as euros), and so is one with a
+      negative Kurs (it was booked as negative proceeds or cost).
+    - Flatex Kontoumsätze: an order's cash leg whose Betrag cannot be read
+      ("", "€", "abc") gives its order no fee: read as 0 it made the whole
+      trade a fee (a 1194 € gain became a 1006 € loss), and as text it
+      stopped the upload. The legs of an order are summed with their sign,
+      so a Storno cancels its leg. A fee is kept only when it is 0 or more
+      (one cent of rounding allowed) and below the gross; a missing or extra
+      leg made a fee as large as a fill. Otherwise the fills keep a fee of 0,
+      and `flatex.commission.not_recovered` names each order by number,
+      ISIN, date and the gross next to the sum of its legs, or the cell that
+      cannot be read. The order number is a word of its own: the last digits
+      of an ISIN are no order number. A dividend, distribution, withholding
+      or interest row whose Betrag cannot be read, or whose currency cell is
+      empty, is not booked, nor are the same-day withholdings of that
+      dividend, and `parser.cash_income_amount_unreadable` names each. A
+      written 0 stays a zero. A positive Habenzinsen, Zinsen or Zinszahlung
+      row is interest received (casilla 0027); it was dropped with no word.
+      A negative one stays out, which can only raise the tax.
     - Trade Republic: a buy or sale with no amount; a TRADING row of another
       type with a symbol, or a name and a share count. A CORPORATE_ACTION or
       DELIVERY row that names a security and does not write a zero share

@@ -1058,6 +1058,10 @@ const es = {
     "Operaciones de Flatex sin comisión calculada: {{trades}}. El apunte de caja está en una moneda distinta a la de la operación.",
   "flatex.commission.cross_currency.hint":
     "La comisión de esas operaciones se ha dejado en 0. Consulta su importe en la liquidación de la orden en Flatex y tenlo en cuenta al revisar la declaración: se suma al valor de adquisición en las compras y se resta del valor de transmisión en las ventas.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja, o la celda del importe que no se puede leer. Puede faltar un apunte, sobrar uno o tener un importe que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
   "flatex.commission.multi_fill_prorated":
     "Órdenes de Flatex ejecutadas en varias partes: {{orders}}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.",
   "flatex.commission.multi_fill_prorated.hint":

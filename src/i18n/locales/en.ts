@@ -1019,6 +1019,10 @@ const en: TranslationKeys = {
     "Flatex trades without a calculated commission: {{trades}}. The cash entry is in a different currency from the trade.",
   "flatex.commission.cross_currency.hint":
     "The commission of those trades has been left at 0. Look up its amount in the order's settlement note in Flatex and take it into account when reviewing the return: it is added to the acquisition value on purchases and subtracted from the transfer value on sales.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries, or the amount cell that cannot be read. A cash entry may be missing, there may be one too many, or its amount cannot be read. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
   "flatex.commission.multi_fill_prorated":
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":

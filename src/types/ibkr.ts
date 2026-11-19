@@ -91,6 +91,11 @@ export interface OrderLeg {
   tradeDate: string;
   /** Booking number of the cash leg (Flatex TA-Nr.), used to drop the same leg uploaded twice. */
   bookingId?: string;
+  /**
+   * The amount cell of a leg whose amount cannot be read (`Betrag: "abc"`).
+   * Such a leg's `netAmount` is "0", and its order gets no fee (#467).
+   */
+  unreadableCell?: string;
 }
 
 export interface Trade {

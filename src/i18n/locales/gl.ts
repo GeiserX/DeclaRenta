@@ -1021,6 +1021,10 @@ const gl: TranslationKeys = {
     "Operacións de Flatex sen comisión calculada: {{trades}}. O apuntamento de caixa está nunha moeda distinta á da operación.",
   "flatex.commission.cross_currency.hint":
     "A comisión desas operacións deixouse en 0. Consulta o seu importe na liquidación da orde en Flatex e tena en conta ao revisar a declaración: súmase ao valor de adquisición nas compras e réstase do valor de transmisión nas vendas.",
+  "flatex.commission.not_recovered":
+    "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
+  "flatex.commission.not_recovered.hint":
+    "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa, ou a cela do importe que non se pode ler. Pode faltar un apuntamento, sobrar un ou ter un importe que non se pode ler. DeclaRenta deixa esa comisión en 0. Non a suma ao custo das compras nin a resta do valor das vendas. Consulta a comisión na liquidación da orde en Flatex. Se queres deducila, engádea a man en Renta Web.",
   "flatex.commission.multi_fill_prorated":
     "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
   "flatex.commission.multi_fill_prorated.hint":
