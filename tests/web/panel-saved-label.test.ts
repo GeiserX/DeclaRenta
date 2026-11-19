@@ -550,6 +550,107 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(back).not.toBe(second);
     expect(windowLabel().hidden).toBe(true);
   });
+
+  // An edit after a good Save puts unsaved values on screen: «Guardado» goes
+  // at the first edit, both while the Save rerun waits (the run then keeps the
+  // edited panel) and after it has redrawn the panel (#472 review).
+  it("anti-churning window: an edit while the Save rerun waits hides «Guardado», and the kept panel stays without it", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    const strip = document.getElementById("results-split");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    expect(windowLabel().hidden).toBe(false);
+    windowSelect(before).value = "12";
+    windowSelect(before).dispatchEvent(new Event("change", { bubbles: true }));
+    expect(windowLabel().hidden).toBe(true);
+    await runLands(strip);
+    expect(windowPanel()).toBe(before);
+    expect(windowSelect(before).value).toBe("12");
+    expect(windowLabel().hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 2 });
+  });
+
+  it("anti-churning window: an edit in the redrawn panel hides «Guardado»; a Save brings it back", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    const second = await redrawn(windowPanel, before, "rerun after Save");
+    expect(shown(windowLabel())).toBe(true);
+    windowSelect(second).value = "12";
+    windowSelect(second).dispatchEvent(new Event("change", { bubbles: true }));
+    expect(windowLabel().hidden).toBe(true);
+    second.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, second, "rerun after the second Save");
+    expect(shown(windowLabel())).toBe(true);
+  });
+
+  it("crypto prices: an edit while the Save rerun waits hides «Guardado», and the kept panel stays without it", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const strip = document.getElementById("results-split");
+    const input = before.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+    input.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    expect(cryptoLabel().hidden).toBe(false);
+    input.value = "31000";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(cryptoLabel().hidden).toBe(true);
+    await runLands(strip);
+    expect(cryptoPanel()).toBe(before);
+    expect(input.value).toBe("31000");
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  it("crypto prices: an edit in the saved-prices form the rerun draws hides «Guardado»", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    before.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    const stored = await waitFor(() => step3().querySelector<HTMLElement>(".crypto-rates-stored-panel"), "saved prices panel");
+    expect(shown(cryptoLabel())).toBe(true);
+    const input = stored.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+    input.value = "31000";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  it("opening lots: an edit while the Save rerun waits hides «Guardado», and the kept panel stays without it", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    const strip = document.getElementById("results-split");
+    const field = (f: string) => before.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field("acquireDate").value = `${YEAR}-01-15`;
+    field("quantity").value = "10";
+    field("pricePerShare").value = "100";
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    expect(lotsLabel().hidden).toBe(false);
+    field("quantity").value = "11";
+    field("quantity").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(lotsLabel().hidden).toBe(true);
+    await runLands(strip);
+    expect(lotsPanel()).toBe(before);
+    expect(field("quantity").value).toBe("11");
+    expect(lotsLabel().hidden).toBe(true);
+  });
+
+  it("opening lots: a typed value or an added row in the redrawn panel hides «Guardado»", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    const field = (p: HTMLElement, f: string) => p.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field(before, "acquireDate").value = `${YEAR}-01-15`;
+    field(before, "quantity").value = "10";
+    field(before, "pricePerShare").value = "100";
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const second = await redrawn(lotsPanel, before, "rerun after Save");
+    expect(shown(lotsLabel())).toBe(true);
+    field(second, "quantity").value = "11";
+    field(second, "quantity").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(lotsLabel().hidden).toBe(true);
+
+    // The same after the next Save, with a row added instead of a typed value.
+    second.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    const third = await redrawn(lotsPanel, second, "rerun after the second Save");
+    expect(shown(lotsLabel())).toBe(true);
+    third.querySelector<HTMLButtonElement>(".manual-opening-lot-add")!.click();
+    expect(third.querySelectorAll(".manual-opening-lot-row")).toHaveLength(2);
+    expect(lotsLabel().hidden).toBe(true);
+  });
 });
 
 describe("the panel renderers carry «Guardado» only when asked (#472)", () => {

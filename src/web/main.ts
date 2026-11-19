@@ -1331,7 +1331,9 @@ function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null,
   // Draw a panel, unless it is kept: then the user's panel stays where it is,
   // and a new one goes before the next kept panel so the order holds. Every
   // edit or button click in a drawn panel stamps it, in the capture phase so it
-  // counts before a Save handler starts a run.
+  // counts before a Save handler starts a run. The same touch hides «Guardado»:
+  // after an edit the panel shows values nobody saved, and a good Save shows the
+  // label again from its own handler, which runs after this one.
   const placePanel = (p: SavedPanel, html: string, bind: (el: HTMLElement) => void) => {
     if (kept.has(p) || !html) return;
     const anchor = panelOrder.slice(panelOrder.indexOf(p) + 1).map((q) => kept.get(q)).find((el) => el !== undefined) ?? casillasDiv;
@@ -1339,7 +1341,11 @@ function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null,
     const panel = resultsSectionEl.querySelector<HTMLElement>(panelSelector[p]);
     if (!panel) return;
     const touch = (e: Event) => {
-      if (e.type !== "click" || (e.target instanceof Element && e.target.closest("button"))) panelTouched.set(panel, ++panelTouchSeq);
+      if (e.type === "click" && !(e.target instanceof Element && e.target.closest("button"))) return;
+      panelTouched.set(panel, ++panelTouchSeq);
+      panel.querySelectorAll<HTMLElement>(".crypto-rates-saved-msg").forEach((label) => {
+        label.hidden = true;
+      });
     };
     for (const type of ["input", "change", "click"]) panel.addEventListener(type, touch, true);
     bind(panel);
