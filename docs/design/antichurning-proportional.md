@@ -367,6 +367,18 @@ práctico Renta 2025. The decisions, each pinned in
     and its sale from the reconciliation. No identifier ties it to an ISIN in
     every file (IBKR's `conid` is optional, other brokers have none), so none
     is resolved: fail safe.
+  - No share holding without an ISIN may be open at the window start
+    (`unidentifiedHeldAt`): FIFO holds no ISIN-less share lot that entered
+    before it and was not sold before it (`buildUnidentifiedFifoHoldings`,
+    which also sees lots no BUY row opened, such as a scrip dividend keyed on
+    its bare symbol), and no ISIN-less share key ever sells more than the
+    upload shows bought (those shares were held before the files, perhaps
+    still at the window start). A trade with neither ISIN nor symbol before
+    the window has no holding to walk and also fails. Such a holding may be
+    this security bought before the window: a Flex without the Trades ISIN
+    column, or a Revolut file (Revolut gives no ISIN), would otherwise hide
+    it, because its account never trades the ISIN key. A holding closed
+    before the window does not stop the exception.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such
@@ -376,8 +388,10 @@ práctico Renta 2025. The decisions, each pinned in
        section (`AccountPeriod.hasPositions`, an empty `<OpenPositions />`);
        with no section there is no list. Each row goes to the account it
        names, in a one-account file too; the IBKR parser gives a row without
-       an Account ID its FlexStatement's account, and a row of no listed
-       account forms its own group with no period (so it fails);
+       an Account ID its FlexStatement's account (a Trade row too, so a Flex
+       without the Account ID column in either section still proves), and a
+       row of no listed account forms its own group with no period (so it
+       fails);
     2. its files with a trades section cover every day from the window start
        to that date exactly once: no gap (a hidden trade) and no day in two
        files (merge does not drop duplicated trades, so the same Flex uploaded
@@ -389,7 +403,9 @@ práctico Renta 2025. The decisions, each pinned in
     3. every row of the key in that list has a readable quantity. IBKR writes
        it as `position` (hand-written files may use `quantity`); the parser
        marks a missing or non-numeric one `quantityUnknown` instead of reading
-       its "0" default. A list with no row of the key says zero, but only when
+       its "0" default (the quantity stays "0" so the D-6 and the 720 do not
+       crash, and `parser.open_position_quantity_unknown` warns that those
+       holdings show 0 shares there and must be checked by hand). A list with no row of the key says zero, but only when
        every share row (not the exempt categories, not crypto) of every list in
        the upload has an ISIN: Open Positions may leave the ISIN field out
        while Trades has it, and then the row of the shares held is no row of
@@ -411,8 +427,10 @@ práctico Renta 2025. The decisions, each pinned in
     account the upload does not hold). Only IBKR
     (OpenPositions) gives such lists today. Revolut's list is built by its
     parser from the file's own trades (`OpenPosition.fromTrades`), so it always
-    matches them and is ignored. A transactions CSV (DEGIRO, Trade Republic and
-    the rest) therefore always gets "unverified".
+    matches them and is ignored. An account in a transactions CSV (DEGIRO,
+    Trade Republic and the rest) that trades the key therefore always gets
+    "unverified"; Revolut trades never carry the ISIN key, so they count only
+    through the two ISIN-less rules above.
   Left invisible on purpose: a broker or account the user did not upload, and
   shares held at the window start that a transfer out of the upload (which the
   IBKR parser does not read) hides before the list date, also when they pass

@@ -245,7 +245,7 @@ describe("parseIbkrFlexXml", () => {
     ]);
   });
 
-  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it", () => {
+  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it, and warns", () => {
     // position="" with no legacy `quantity`: the parser used to return "", and
     // new Decimal("") threw in the D-6 (review of #453).
     const row = (position: string): string =>
@@ -256,14 +256,21 @@ describe("parseIbkrFlexXml", () => {
     const config = { nif: "00000000T", surname: "X", name: "Y", year: 2025, phone: "600000000", contactName: "X Y", declarationId: "7200000000001", isComplementary: false, isReplacement: false };
 
     for (const position of ["", "abc"]) {
-      const positions = parseIbkrFlexXml(xml(position)).openPositions;
+      const parsed = parseIbkrFlexXml(xml(position));
+      const positions = parsed.openPositions;
       expect([positions[0]!.quantity, positions[0]!.quantityUnknown]).toEqual(["0", true]);
       expect(generateD6Report(positions, rates, 2025, "X", "00000000T").positions).toEqual([]);
       expect(() => generateModelo720(positions, rates, config)).not.toThrow();
+      // The D-6 leaves it out and the 720 gives it 0 shares: a warning names it.
+      const warning = parsed.parserMessages?.find((m) => m.id === "parser.open_position_quantity_unknown");
+      expect(warning?.severity).toBe("warning");
+      expect(warning?.context).toEqual({ count: "1", holdings: "AAPL (US0378331005)" });
     }
-    // Control: a readable quantity is listed.
-    const held = parseIbkrFlexXml(xml("10")).openPositions;
+    // Control: a readable quantity is listed, with no warning.
+    const readable = parseIbkrFlexXml(xml("10"));
+    const held = readable.openPositions;
     expect(generateD6Report(held, rates, 2025, "X", "00000000T").positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
+    expect(readable.parserMessages?.some((m) => m.id === "parser.open_position_quantity_unknown") ?? false).toBe(false);
   });
 
   it("should parse multiple corporate actions as array", () => {

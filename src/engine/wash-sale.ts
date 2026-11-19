@@ -305,6 +305,10 @@ export function detectWashSales(
   // column, a broker that gives none): any of them may be any ISIN's security,
   // so the one-purchase exception's evidence cannot count them (#453).
   const unidentifiedTradeTimes: number[] = [];
+  // Their symbol-only keys, and the days of those with neither ISIN nor symbol:
+  // a holding of one open at the window start may be any ISIN's shares (#453).
+  const unidentifiedKeys = new Set<string>();
+  const keylessTradeTimes: number[] = [];
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
@@ -312,7 +316,11 @@ export function detectWashSales(
     if (qty.lessThanOrEqualTo(0)) continue;
     const d = parseDate(trade.tradeDate);
     const time = d.getTime();
-    if (!trade.isin && trade.assetCategory !== "CRYPTO") unidentifiedTradeTimes.push(time);
+    if (!trade.isin && trade.assetCategory !== "CRYPTO") {
+      unidentifiedTradeTimes.push(time);
+      if (key) unidentifiedKeys.add(key);
+      else keylessTradeTimes.push(time);
+    }
     if (!key) continue;
 
     let positionEvents = positionEventsByAsset.get(key);
@@ -468,6 +476,21 @@ export function detectWashSales(
   // asks FIFO whether any lot of the key is still held after the sale day.
   const fifoHoldsAfter = buildFifoHoldings(disposals, remainingLots);
 
+  // Whether a share holding with no ISIN may be open at the window start: FIFO
+  // holds a lot of it the day before (any lot, also one no BUY row opened), or
+  // a sale of one took shares the upload never shows bought (so they were held
+  // before the files, maybe still at the window start). Such a holding may be
+  // any ISIN's shares bought before the window, so the files cannot prove "no
+  // shares at the window start" for any ISIN (#453). A holding closed before
+  // the window does not stop the exception.
+  const unidentifiedFifoHoldsAfter = buildUnidentifiedFifoHoldings(disposals, remainingLots);
+  const unidentifiedSoldUnbought = [...unidentifiedKeys].some((key) => positionSteps.get(key)?.everNegative === true);
+  const unidentifiedHeldAt = (windowStart: number): boolean =>
+    unidentifiedSoldUnbought ||
+    unidentifiedFifoHoldsAfter(windowStart - 1) ||
+    // A trade with neither ISIN nor symbol has no holding to walk.
+    keylessTradeTimes.some((time) => !(time >= windowStart));
+
   // The one-purchase exception (DGT V3282-18, AEAT Manual Renta 2025): the rule
   // on the purchases of the 2 months BEFORE a sale «no resulta de aplicación
   // cuando dentro del plazo de los dos meses anteriores a la transmisión sólo se
@@ -486,8 +509,10 @@ export function detectWashSales(
   //    on or after the sale, reached without a gap in its files from the window
   //    start, is exactly what its trades since the window start leave, and
   //    those trades never sell more than they bought before; and no share
-  //    trade without an ISIN falls in that span (`buildEvidenceCheck`). A start
-  //    date alone proves nothing.
+  //    trade without an ISIN falls in that span (`buildEvidenceCheck`);
+  //  - no share holding without an ISIN may be open at the window start
+  //    (`unidentifiedHeldAt`).
+  // A start date alone proves nothing.
   const singlePurchase = (key: string, windowStart: number, sellTime: number): "applied" | "unverified" | null => {
     const ops = buyOpsByAsset.get(key) ?? [];
     const from = firstIndexAtOrAfter(ops, windowStart);
@@ -500,7 +525,7 @@ export function detectWashSales(
     if (steps && before >= 0 && steps.steps[before]!.position.greaterThan(0)) return null;
     if (fifoHoldsAfter(key, windowStart - 1)) return null;
     if (!steps || steps.everNegative) return "unverified";
-    return filesProveNoShares(key, windowStart, sellTime) ? "applied" : "unverified";
+    return filesProveNoShares(key, windowStart, sellTime) && !unidentifiedHeldAt(windowStart) ? "applied" : "unverified";
   };
 
   // One unit per (key, sell day): FIFO splits a sale into one disposal per lot,
@@ -1225,6 +1250,38 @@ function buildPositionSteps(
     out.set(key, { steps, everNegative });
   }
   return out;
+}
+
+/**
+ * Whether FIFO holds a share lot with no ISIN after day `t` (crypto and the
+ * exempt categories aside): a lot still open that entered on or before `t`, or
+ * one sold after `t` that entered on or before it. This also sees lots no BUY
+ * row opened (a scrip dividend keyed on its bare symbol), whatever FIFO's key.
+ * A lot's category is the prefix of FIFO's key; a key with none (a scrip or
+ * merger lot) counts as shares.
+ */
+function buildUnidentifiedFifoHoldings(
+  disposals: readonly FifoDisposal[],
+  remainingLots: ReadonlyMap<string, readonly Lot[]> | undefined,
+): (time: number) => boolean {
+  const timeOf = (date: string): number => {
+    const t = parseDate(date).getTime();
+    // An unreadable entry date counts as held since forever (fail safe).
+    return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+  };
+  let firstOpen = Number.POSITIVE_INFINITY;
+  for (const [mapKey, lots] of remainingLots ?? []) {
+    const category = mapKey.includes(":") ? mapKey.split(":")[0]! : "STK";
+    if (category === "CRYPTO" || WASH_SALE_EXEMPT.has(category)) continue;
+    for (const lot of lots) {
+      if (lot.isin || lot.isShort || lot.quantity.lessThanOrEqualTo(0)) continue;
+      firstOpen = Math.min(firstOpen, timeOf(lot.entryDate ?? lot.acquireDate));
+    }
+  }
+  const spans = disposals
+    .filter((d) => !d.isin && !d.isShort && d.assetCategory !== "CRYPTO" && !WASH_SALE_EXEMPT.has(d.assetCategory))
+    .map((d) => ({ acquire: timeOf(d.entryDate ?? d.acquireDate), sell: parseDate(d.sellDate).getTime() }));
+  return (time) => firstOpen <= time || spans.some((span) => span.acquire <= time && time < span.sell);
 }
 
 /** The account a trade or a holdings row belongs to: its broker and account id. */

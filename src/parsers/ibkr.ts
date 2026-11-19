@@ -105,7 +105,12 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let cancelledUnmatchedDropped = 0;
 
   for (const stmt of statements) {
-    const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
+    // A row without an Account ID (the column is optional in Trades and in
+    // Open Positions) belongs to the FlexStatement it is in; an explicit one
+    // is kept, so a mismatch shows.
+    const stmtAccount = (stmt.accountId as string | undefined) ?? "";
+    const withAccount = (raw: Record<string, string>): Record<string, string> => (raw.accountId ? raw : { ...raw, accountId: stmtAccount });
+    const rawTrades = (ensureArray(stmt.Trades?.Trade) as Record<string, string>[]).map(withAccount);
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
     const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
@@ -121,12 +126,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    // A row without an Account ID (the column is optional) belongs to the
-    // FlexStatement it is in; an explicit one is kept, so a mismatch shows.
-    const stmtAccount = (stmt.accountId as string | undefined) ?? "";
-    const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map((raw) =>
-      raw.accountId ? raw : { ...raw, accountId: stmtAccount },
-    );
+    const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
     openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
@@ -216,6 +216,22 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       message: `Se omitieron ${cancelledUnmatchedDropped} anulaciones de IBKR sin la operación original en este archivo.`,
       hint: "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
       context: { count: String(cancelledUnmatchedDropped) },
+    });
+  }
+
+  // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
+  // the D-6 and the 720 then show a holding whose value is known with 0
+  // shares, or leave it out: say which holdings to check by hand.
+  const unreadablePositions = openPositions.filter((p) => p.quantityUnknown);
+  if (unreadablePositions.length > 0) {
+    const count = String(unreadablePositions.length);
+    const holdings = unreadablePositions.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    parserMessages.push({
+      id: "parser.open_position_quantity_unknown",
+      severity: "warning",
+      message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
+      hint: "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+      context: { count, holdings },
     });
   }
 
