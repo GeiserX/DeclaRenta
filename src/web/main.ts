@@ -197,11 +197,11 @@ function rerunWithOverlay(): void {
 document.addEventListener("localechange", () => {
   updateStaticText();
   renderFileList();
-  if (currentReport) {
-    // A Save rerun still waiting shows no «Guardado» after this redraw (#472).
-    savedPanels.clear();
-    renderResults(currentReport);
-  }
+  // A Save rerun still waiting shows no «Guardado» after this redraw (#472),
+  // nor does a later run after a failed one: a Save whose rerun failed leaves
+  // its panel in the set while no report is on screen (#472 review).
+  savedPanels.clear();
+  if (currentReport) renderResults(currentReport);
   rerenderSection720();
   rerenderSection721();
   rerenderSectionD6();

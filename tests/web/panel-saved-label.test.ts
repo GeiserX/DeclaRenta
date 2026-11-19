@@ -139,6 +139,7 @@ function shown(el: HTMLElement): boolean {
 const windowLabel = () => label(windowPanel(), ".antichurning-window-saved");
 const lotsLabel = () => label(lotsPanel(), ".manual-opening-lots-saved-msg");
 const cryptoLabel = () => label(cryptoPanel(), ".crypto-rates-saved-msg");
+const windowSelect = (p: HTMLElement) => p.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!;
 
 /** A redraw that happens without a Save: the results re-render on a locale change. */
 function redrawOnLocaleChange(): void {
@@ -402,7 +403,6 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
   // before that Save. An edit made before the redraw went with the old panel, so
   // the run replaces the locale-drawn panel with the stored value; only an edit
   // in the locale-drawn panel keeps it (#472 review).
-  const windowSelect = (p: HTMLElement) => p.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!;
   // A locale redraw replaces the results strip too: take `strip` after it, or
   // runLands returns before the rerun lands (#472 review).
   const runLands = (strip: Element | null) =>
@@ -775,6 +775,50 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== header ? true : null), `results for ${other}`);
     await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).not.toBe(crypto);
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+});
+
+describe("a Save rerun that fails (#472 review)", () => {
+  // The report generator throws on demand, so a rerun fails the way a broken
+  // statement or engine error makes it fail.
+  let failRun = false;
+  beforeEach(async () => {
+    failRun = false;
+    vi.resetModules();
+    vi.doMock("../../src/generators/report.js", async (importOriginal) => {
+      const real = await importOriginal<typeof import("../../src/generators/report.js")>();
+      return {
+        ...real,
+        generateTaxReport: (...args: Parameters<typeof real.generateTaxReport>) => {
+          if (failRun) throw new Error("rerun failed on purpose");
+          return real.generateTaxReport(...args);
+        },
+      };
+    });
+    await startApp();
+  });
+
+  afterEach(() => {
+    vi.doUnmock("../../src/generators/report.js");
+    vi.unstubAllGlobals();
+  });
+
+  it("a locale change after a crypto Save whose rerun failed: a later Save elsewhere does not bring back the crypto «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    crypto.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
+    failRun = true;
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await waitFor(() => step3().querySelector(".wizard-error"), "the error of the failed rerun");
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)).toHaveLength(1);
+    failRun = false;
+    redrawOnLocaleChange();
+    windowSelect(win).value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun after the anti-churning Save");
+    expect(shown(windowLabel())).toBe(true);
     expect(cryptoPanel()).not.toBe(crypto);
     expect(cryptoLabel().hidden).toBe(true);
   });
