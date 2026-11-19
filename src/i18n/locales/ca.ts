@@ -446,6 +446,7 @@ const ca: TranslationKeys = {
     "no té ISIN; al formulari s'identifica amb «Z» més el codi del país de l'emissor",
   "m720.omitted_no_country":
     "falta el país on està dipositat o situat",
+  "m720.omitted_quantity_unknown": "el fitxer no dona el seu nombre de valors; pren-lo de l'extracte de final d'any del bròker",
   "m720.omitted_no_account":
     "falta el número de compte",
   "m720.omitted_invalid_code":
@@ -492,6 +493,7 @@ const ca: TranslationKeys = {
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+  "d6.quantity_unknown": "El fitxer no dona el nombre de títols de {{count}} posició(ns): {{holdings}}. No són 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
   "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
@@ -530,6 +532,7 @@ const ca: TranslationKeys = {
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+  "m721.quantity_unknown": "El fitxer no dona el nombre d'unitats de {{count}} criptomoneda(es): {{coins}}. No són 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
@@ -1111,7 +1114,9 @@ const ca: TranslationKeys = {
   "parser.cancelled_trades_unreadable": "S'han omès {{count}} anul·lacions d'IBKR sense poder aparellar-les amb l'operació que anul·len: falta una quantitat o un preu llegible a l'anul·lació o a una operació d'aquest fitxer.",
   "parser.cancelled_trades_unreadable.hint": "Si l'operació anul·lada és en aquest fitxer, DeclaRenta la continua comptant com una compra o venda real. Comprova que la Flex Query exporta la quantitat, el preu i l'ID d'execució (IB Execution ID) de cada operació i torna-la a exportar.",
   "parser.open_position_quantity_unknown": "IBKR no dona un nombre d'accions llegible per a {{count}} posició(ns) oberta(es): {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRenta les compta amb 0 accions: el Model 720 les inclou amb el seu valor, però amb 0 a «Número de valores», i el D-6 no les inclou. Revisa a mà aquestes posicions al 720 i al D-6, o comprova que la secció Open Positions de la Flex Query inclou la quantitat i torna-la a exportar.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta no s'inventa el seu nombre d'accions: el Model 720 i el D-6 les mostren sense nombre de valors i et demanen que l'escriguis a mà, i si tampoc no hi ha el seu valor les compten com a sense valorar. Pren el nombre de l'extracte de final d'any d'IBKR, o comprova que la secció Open Positions de la Flex Query inclou la quantitat i torna-la a exportar.",
+  "parser.crypto_position_quantity_unknown": "IBKR no dona un nombre d'unitats llegible per a {{count}} posició(ns) de criptomonedes: {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRenta no s'inventa les seves unitats: el Model 721 les mostra com a desconegudes, i si tampoc no hi ha el seu valor les compta com a sense valorar, així que no pot concloure que no l'hagis de presentar. Pren les unitats de l'extracte de final d'any d'IBKR, o comprova que la secció Open Positions de la Flex Query inclou la quantitat i torna-la a exportar.",
   "parser.trade_quantity_unknown": "{{broker}} no dona un nombre d'accions o un preu llegible per a {{count}} operació(ns): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta accions per elles, així que els guanys i les pèrdues d'aquest valor no són fiables i no s'aplica l'excepció de compra única de la regla dels 2 mesos. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
   "parser.crypto_quantity_unknown": "{{broker}} no dona un nombre d'unitats o un preu llegible per a {{count}} operació(ns) amb criptomonedes: {{trades}}.",

@@ -445,6 +445,7 @@ const en: TranslationKeys = {
     "it has no ISIN; the form identifies it with “Z” plus the issuer's country code",
   "m720.omitted_no_country":
     "the country where it is deposited or located is missing",
+  "m720.omitted_quantity_unknown": "the file gives no number of securities; take it from the broker's year-end statement",
   "m720.omitted_no_account":
     "the account number is missing",
   "m720.omitted_invalid_code":
@@ -492,6 +493,7 @@ const en: TranslationKeys = {
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+  "d6.quantity_unknown": "The file gives no number of securities for {{count}} position(s): {{holdings}}. They are not 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
   "d6.deadline": "Deadline: January 1 – 31 of the following year",
@@ -531,6 +533,7 @@ const en: TranslationKeys = {
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+  "m721.quantity_unknown": "The file gives no number of units for {{count}} cryptocurrency(ies): {{coins}}. They are not 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",
@@ -1109,7 +1112,9 @@ const en: TranslationKeys = {
   "parser.cancelled_trades_unreadable": "{{count}} IBKR cancellation rows were skipped without pairing them with the trade they cancel: a quantity or a price is not readable in the cancellation or in a trade of this file.",
   "parser.cancelled_trades_unreadable.hint": "If the cancelled trade is in this file, DeclaRenta still counts it as a real purchase or sale. Make sure the Flex Query exports the quantity, the price and the execution ID (IB Execution ID) of every trade and export it again.",
   "parser.open_position_quantity_unknown": "IBKR gives no readable share count for {{count}} open position(s): {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRenta counts them as 0 shares: the Modelo 720 includes them with their value, but with 0 in «Número de valores», and the D-6 leaves them out. Check these holdings in the 720 and the D-6 by hand, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta does not invent their share count: the Modelo 720 and the D-6 show them with no number of securities and ask you to type it by hand, and if their value is missing too they count them as unvalued. Take the number from the IBKR year-end statement, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
+  "parser.crypto_position_quantity_unknown": "IBKR gives no readable number of units for {{count}} crypto position(s): {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRenta does not invent their units: the Modelo 721 shows them as unknown, and if their value is missing too it counts them as unvalued, so it cannot conclude that you do not have to file. Take the units from the IBKR year-end statement, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
   "parser.trade_quantity_unknown": "{{broker}} gives no readable share count or price for {{count}} trade(s): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
   "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",

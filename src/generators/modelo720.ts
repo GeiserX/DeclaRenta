@@ -179,19 +179,22 @@ export interface Previous720Security {
  * Something the 720 file cannot carry, so the user must declare it by hand:
  * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
  * no broker export gives us), a security or account whose country is unknown,
- * an account with no account code, or a sale of a security whose clave,
+ * a security whose share count the export does not give (`quantityUnknown`: the
+ * record would write 0 in «Número de valores», #470), an account with no
+ * account code, or a sale of a security whose clave,
  * subclave or country in last year's file is not a valid code (a file written
  * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130)
  * and that this year's sale trade cannot correct.
  */
 export type Modelo720Omission =
-  | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
+  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown"; position: OpenPosition }
   | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
   | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
 
-function positionOmission(p: OpenPosition): "no_isin" | "no_country" | null {
+function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | null {
   if (p.isin.trim() === "") return "no_isin";
   if (modelo720PositionCountry(p) === null) return "no_country";
+  if (p.quantityUnknown === true) return "quantity_unknown";
   return null;
 }
 

@@ -476,6 +476,7 @@ const es = {
     "no tiene ISIN; en el formulario se identifica con «Z» más el código del país del emisor",
   "m720.omitted_no_country":
     "falta el país donde está depositado o situado",
+  "m720.omitted_quantity_unknown": "el archivo no da su número de valores; tómalo del extracto de fin de año del bróker",
   "m720.omitted_no_account":
     "falta el número de cuenta",
   "m720.omitted_invalid_code":
@@ -523,6 +524,7 @@ const es = {
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+  "d6.quantity_unknown": "El archivo no da el número de títulos de {{count}} posición(es): {{holdings}}. No son 0: toma el número del extracto de fin de año del bróker y escríbelo a mano en el D-6.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",
   "d6.deadline": "Plazo: 1 – 31 enero del año siguiente",
@@ -561,6 +563,7 @@ const es = {
     "El formato oficial de la AEAT es XML (Orden HFP/886/2023). DeclaRenta solo muestra una revisión orientativa: la generación oficial está desactivada hasta implementar el XML validado.",
   "m721.positions_unvalued":
     "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+  "m721.quantity_unknown": "El archivo no da el número de unidades de {{count}} criptomoneda(s): {{coins}}. No son 0: toma las unidades del extracto de fin de año del exchange o del bróker y escríbelas a mano en el Modelo 721.",
   "m721.empty_title": "No hay posiciones de criptomonedas",
   "m721.empty_description":
     "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
@@ -1150,7 +1153,9 @@ const es = {
   "parser.cancelled_trades_unreadable": "Se omitieron {{count}} anulaciones de IBKR sin poder emparejarlas con la operación que anulan: falta una cantidad o un precio legible en la anulación o en una operación de este archivo.",
   "parser.cancelled_trades_unreadable.hint": "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
   "parser.open_position_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} posición(es) abierta(s): {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta no inventa su número de acciones: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y si tampoco viene su valor las cuentan como sin valorar. Toma el número del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.crypto_position_quantity_unknown": "IBKR no da un número de unidades legible para {{count}} posición(es) de criptomonedas: {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRenta no inventa sus unidades: el Modelo 721 las muestra como desconocidas, y si tampoco viene su valor las cuenta como sin valorar, así que no puede concluir que no debas presentarlo. Toma las unidades del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
   "parser.trade_quantity_unknown": "{{broker}} no da un número de acciones o un precio legible para {{count}} operación(es): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
   "parser.crypto_quantity_unknown": "{{broker}} no da un número de unidades o un precio legible para {{count}} operación(es) con criptomonedas: {{trades}}.",

@@ -22,8 +22,14 @@ export interface Modelo721Entry {
   exchangeName: string;
   /** Country code of the exchange */
   countryCode: string;
-  /** Quantity held at Dec 31 */
+  /** Quantity held at Dec 31 (0 when `quantityUnknown`: never a real count) */
   quantity: Decimal;
+  /**
+   * The export gives no readable quantity for this coin (#470): its units are
+   * unknown, never 0. Callers show them as unknown and ask for the year-end
+   * statement's figure.
+   */
+  quantityUnknown?: true;
   /** Valuation in EUR at Dec 31 */
   valuationEur: Decimal;
   /** Acquisition cost in EUR */
@@ -53,8 +59,9 @@ export interface Modelo721Valuation {
  * truth for 721 crypto valuation (web section and any future generator consume this).
  *
  * Only `assetCategory === "CRYPTO"` positions with a positive value qualify
- * (fiat/CASH belongs in Modelo 720). Each position is valued at the year-end
- * ECB rate via {@link lookupPositionRate}; positions whose currency has no
+ * (fiat/CASH belongs in Modelo 720), plus held coins with no value (below). A
+ * coin whose quantity the export does not give keeps `quantityUnknown`. Each
+ * position is valued at the year-end ECB rate via {@link lookupPositionRate}; positions whose currency has no
  * resolvable rate (e.g. the crypto coin itself), or held with no market value in
  * the export, are kept with `valuationEur: null` and counted in `unvaluedCount`
  * so callers can surface them for manual valuation.
@@ -98,6 +105,7 @@ export function buildModelo721Entries(
         exchangeName: "",
         countryCode: "",
         quantity: new Decimal(p.quantity),
+        ...(p.quantityUnknown === true ? { quantityUnknown: true as const } : {}),
         valuationEur: valuationEur ?? new Decimal(0),
         acquisitionCostEur,
       },

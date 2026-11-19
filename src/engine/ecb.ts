@@ -277,10 +277,12 @@ export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: 
  * no year-end price (Revolut's transaction log, or an IBKR position without a
  * positionValue). Its EUR value is unknown, not 0 €, so the Modelo 720/721/D-6
  * callers treat it like a position with no rate: left out of the EUR totals
- * and surfaced for manual valuation.
+ * and surfaced for manual valuation. A holding whose quantity the file does not
+ * give (`quantityUnknown`, quantity "0") counts as held: with no value either it
+ * is unvalued too, never a 0 € holding dropped from the totals (#470).
  */
-export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue">): boolean {
-  return new Decimal(p.quantity).greaterThan(0) && new Decimal(p.positionValue).isZero();
+export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  return (p.quantityUnknown === true || new Decimal(p.quantity).greaterThan(0)) && new Decimal(p.positionValue).isZero();
 }
 
 /**

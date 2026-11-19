@@ -47,7 +47,7 @@ export interface D6Report {
   cancelled: D6Cancellation[];
   totalPositions: number;
   totalValueEur: string;
-  /** Held foreign positions left out because they have no year-end rate or no market value: declare them by hand. */
+  /** Held foreign positions left out because they have no year-end rate, no market value or no readable share count (#470): declare them by hand. */
   unvaluedCount: number;
   guide: string[];
 }
@@ -113,12 +113,15 @@ export function generateD6Report(
       const country = p.isin.slice(0, 2).toUpperCase();
       return country !== "ES";
     })
-    .filter((p) => new Decimal(p.quantity).greaterThan(0)) // Exclude short positions
+    // Exclude short positions. A holding whose share count the file does not
+    // give is held unless its value is negative (as heldIsins below, #470).
+    .filter((p) => (p.quantityUnknown === true ? !negativeValue(p.positionValue) : new Decimal(p.quantity).greaterThan(0)))
     .flatMap((p) => {
       const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
       // No resolvable year-end rate, or no market value in the export → can't
-      // value in EUR; skip it (never as 0 €) and count it for the caller.
-      if (ecbRate === null || hasNoMarketValue(p)) {
+      // value in EUR; skip it (never as 0 €) and count it for the caller. With
+      // no share count the entry would say 0 shares: skip and count it too.
+      if (ecbRate === null || hasNoMarketValue(p) || p.quantityUnknown === true) {
         unvaluedCount++;
         return [];
       }

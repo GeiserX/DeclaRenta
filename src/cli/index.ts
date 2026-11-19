@@ -647,6 +647,7 @@ program
           const why = {
             no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
             no_country: "no tiene un código de país válido",
+            quantity_unknown: "no tiene un número de valores legible en el archivo (tómalo del extracto de fin de año del bróker)",
             no_account: "no tiene número de cuenta",
             invalid_code: "tiene una clave, subclave o país que el fichero no admite",
           }[o.reason];
@@ -777,7 +778,7 @@ program
 
         if (report.unvaluedCount > 0) {
           console.error(
-            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: calcula su valor en euros y decláralas a mano.`,
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado, sin número de títulos legible o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: completa su valor en euros y su número de títulos y decláralas a mano.`,
           );
         }
         // Positions declared last year and sold since must still be cancelled.

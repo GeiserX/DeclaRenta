@@ -446,6 +446,7 @@ const eu: TranslationKeys = {
     "ez du ISINik; inprimakian «Z» eta jaulkitzailearen herrialde-kodea erabiliz identifikatzen da",
   "m720.omitted_no_country":
     "gordailuan edo kokatuta dagoen herrialdea falta da",
+  "m720.omitted_quantity_unknown": "fitxategiak ez du haren balore kopururik ematen; hartu brokerraren urte amaierako laburpenetik",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
@@ -492,6 +493,7 @@ const eu: TranslationKeys = {
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+  "d6.quantity_unknown": "Fitxategiak ez du {{count}} posizioren titulu kopururik ematen: {{holdings}}. Ez dira 0: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
   "d6.deadline": "Epea: urtarrilaren 1etik 31ra hurrengo urtean",
@@ -530,6 +532,7 @@ const eu: TranslationKeys = {
     "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). DeclaRentak berrikuspen orientagarria bakarrik erakusten du: sorrera ofiziala desgaituta dago balioztatutako XMLa inplementatu arte.",
   "m721.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+  "m721.quantity_unknown": "Fitxategiak ez du {{count}} kriptomonetaren unitate kopururik ematen: {{coins}}. Ez dira 0: hartu unitateak exchangearen edo brokerraren urte amaierako laburpenetik eta idatzi eskuz 721 ereduan.",
   "m721.empty_title": "Ez dago kriptomoneda posiziorik kargatuta",
   "m721.empty_description":
     "721 Eredua aitorpen informatibo nahitaezkoa da atzerriko exchange-etan 50.000 € baino gehiagoko kriptomonedak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun. Epea: urtarrilaren 1etik martxoaren 31ra.",
@@ -1113,7 +1116,9 @@ const eu: TranslationKeys = {
   "parser.cancelled_trades_unreadable": "IBKRren {{count}} ezeztapen baztertu dira, ezeztatzen duten eragiketarekin parekatu ezinik: kopuru edo prezio irakurgarri bat falta da ezeztapenean edo fitxategi honetako eragiketa batean.",
   "parser.cancelled_trades_unreadable.hint": "Ezeztatutako eragiketa fitxategi honetan badago, DeclaRentak benetako erosketa edo salmentatzat hartzen jarraitzen du. Egiaztatu Flex Queryak eragiketa bakoitzaren kopurua, prezioa eta exekuzio IDa (IB Execution ID) esportatzen dituela eta esportatu berriro.",
   "parser.open_position_quantity_unknown": "IBKRk ez du akzio kopuru irakurgarririk ematen {{count}} posizio irekitarako: {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRentak 0 akziorekin zenbatzen ditu: 720 ereduak bere balioarekin sartzen ditu, baina «Número de valores» eremuan 0rekin, eta D-6ak ez ditu sartzen. Berrikusi eskuz posizio horiek 720an eta D-6an, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRentak ez du haien akzio kopururik asmatzen: 720 ereduak eta D-6ak balore kopururik gabe erakusten dituzte eta eskuz idazteko eskatzen dizute, eta haien balioa ere ez badago, baloratu gabekotzat hartzen dituzte. Hartu kopurua IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.crypto_position_quantity_unknown": "IBKRk ez du unitate kopuru irakurgarririk ematen kriptomoneten {{count}} posiziotarako: {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRentak ez ditu haien unitateak asmatzen: 721 ereduak ezezagun gisa erakusten ditu, eta haien balioa ere ez badago, baloratu gabekotzat hartzen ditu; beraz, ezin du ondorioztatu aurkeztu behar ez duzunik. Hartu unitateak IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
   "parser.trade_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du akzio kopuru edo prezio irakurgarririk ematen {{count}} eragiketatarako: {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRentak ez du akziorik gehitzen edo kentzen haiengatik; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
   "parser.crypto_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du unitate kopuru edo prezio irakurgarririk ematen kriptomonetekin egindako {{count}} eragiketatarako: {{trades}}.",

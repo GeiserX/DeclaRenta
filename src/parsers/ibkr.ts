@@ -233,20 +233,30 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
-  // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
-  // the D-6 and the 720 then show a holding whose value is known with 0
-  // shares, or leave it out: say which holdings to check by hand.
-  const unreadablePositions = openPositions.filter((p) => p.quantityUnknown);
-  if (unreadablePositions.length > 0) {
-    const count = String(unreadablePositions.length);
-    const holdings = unreadablePositions.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
-    parserMessages.push({
-      id: "parser.open_position_quantity_unknown",
-      severity: "warning",
-      message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
-      hint: "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
-      context: { count, holdings },
-    });
+  // An unreadable Open Positions quantity reads "0" (so nothing crashes) with
+  // `quantityUnknown`: the 720, the D-6 and the 721 show its units as unknown
+  // and ask for them, never 0 (#470). Say which holdings to check by hand, one
+  // warning for securities (720, D-6) and one for crypto (721).
+  for (const crypto of [false, true]) {
+    const unreadable = openPositions.filter((p) => p.quantityUnknown && (p.assetCategory === "CRYPTO") === crypto);
+    if (unreadable.length === 0) continue;
+    const count = String(unreadable.length);
+    const holdings = unreadable.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    parserMessages.push(crypto
+      ? {
+          id: "parser.crypto_position_quantity_unknown",
+          severity: "warning",
+          message: `IBKR no da un número de unidades legible para ${count} posición(es) de criptomonedas: ${holdings}.`,
+          hint: "DeclaRenta no inventa sus unidades: el Modelo 721 las muestra como desconocidas, y si tampoco viene su valor las cuenta como sin valorar, así que no puede concluir que no debas presentarlo. Toma las unidades del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+          context: { count, holdings },
+        }
+      : {
+          id: "parser.open_position_quantity_unknown",
+          severity: "warning",
+          message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
+          hint: "DeclaRenta no inventa su número de acciones: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y si tampoco viene su valor las cuentan como sin valorar. Toma el número del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+          context: { count, holdings },
+        });
   }
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):

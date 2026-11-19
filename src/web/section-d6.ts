@@ -33,6 +33,11 @@ function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): De
   return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
 }
 
+/** The share count shown, or "—" when the export does not give it (#470): never 0. */
+function unitsCell(p: OpenPosition): string {
+  return p.quantityUnknown === true ? "—" : fmtQty(p.quantity);
+}
+
 let cachedStatement: Statement | null = null;
 let cachedRateMap: EcbRateMap | null = null;
 let cachedBrokersWithoutHoldings: string[] = [];
@@ -87,7 +92,9 @@ export function renderSectionD6(
       (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND") &&
       p.isin.length >= 2 &&
       p.isin.slice(0, 2).toUpperCase() !== "ES" &&
-      new Decimal(p.quantity).greaterThan(0),
+      // A holding whose share count the file does not give is held unless its
+      // value is negative (a short), as in the D-6 generator (#470).
+      (p.quantityUnknown === true ? !new Decimal(p.positionValue || "0").isNegative() : new Decimal(p.quantity).greaterThan(0)),
   );
 
   const missingNotice = brokersWithoutHoldings.length > 0
@@ -151,6 +158,14 @@ export function renderSectionD6(
   if (unvaluedCount > 0) {
     html += `<div class="banner banner-warning">${esc(t("d6.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
+  // Holdings whose share count the export does not give: unknown, never 0 (#470).
+  const unknownUnits = positions.filter((p) => p.quantityUnknown === true);
+  if (unknownUnits.length > 0) {
+    html += `<div class="banner banner-warning d6-quantity-unknown">${esc(t("d6.quantity_unknown", {
+      count: String(unknownUnits.length),
+      holdings: unknownUnits.map((p) => `${p.symbol || p.description} (${p.isin})`).join(", "),
+    }))}</div>`;
+  }
 
   // Positions table
   html += `<h3>${t("d6.positions_title")}</h3>
@@ -165,7 +180,7 @@ export function renderSectionD6(
         const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
-        <td>${esc(p.isin.slice(0, 2))}</td><td>${fmtQty(p.quantity)}</td><td>${val}</td>
+        <td>${esc(p.isin.slice(0, 2))}</td><td>${unitsCell(p)}</td><td>${val}</td>
       </tr>`;
       })
       .join("")}</tbody>
@@ -261,7 +276,7 @@ function renderAforixGuide(
     html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);
     html += aforixField("País emisor", p.isin.slice(0, 2).toUpperCase());
-    html += aforixField("Nº títulos", fmtQty(p.quantity));
+    html += aforixField("Nº títulos", unitsCell(p));
     html += aforixField("Valor EUR", val);
     html += aforixField(t("table.currency"), p.currency);
   }

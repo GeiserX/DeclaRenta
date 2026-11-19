@@ -35,7 +35,7 @@ Un fichero de texto de **ancho fijo** (500 bytes por registro) codificado en **I
 - Un registro de **cuenta** (clave C) por cada saldo en efectivo con media del cuarto trimestre, con el número de cuenta en el campo de código de cuenta.
 - Registros de tipo **A** (alta), **M** (modificación) o **C** (cancelación) según si la posición es nueva, ya existía o se ha vendido. Para distinguirlos necesita el fichero .txt de tu último Modelo 720: súbelo en el recuadro «Tu último Modelo 720» de la sección (se lee en el navegador y no se guarda) o pásalo con `--previous-720` en la CLI. Sin ese fichero, todo sale como A. Una cancelación repite la clave y el país con que el fichero del año anterior declaró ese valor. Las versiones anteriores de DeclaRenta dejaban la subclave en blanco: en ese caso la subclave sale de la operación de venta de este año (acciones V1, bonos V2, fondos extranjeros I0). Si no hay venta que la indique, o el fichero anterior usó un país que el BOE no admite, la venta no entra en el fichero y DeclaRenta la lista para que la declares a mano. Lo que el fichero anterior ya dio de baja no se vuelve a cancelar.
 
-Las posiciones sin ISIN y los bienes o cuentas sin país conocido no caben en el fichero: si su categoría supera los 50.000 €, DeclaRenta los lista para que los declares a mano en el formulario.
+Las posiciones sin ISIN, las posiciones sin un número de acciones legible y los bienes o cuentas sin país conocido no caben en el fichero: si su categoría supera los 50.000 €, DeclaRenta los lista para que los declares a mano en el formulario. Una posición sin número de acciones no sale nunca con 0 en «Número de valores»: toma el número del extracto de fin de año del bróker. Su valor sí cuenta para el umbral. Si tampoco trae valor, cuenta como posición sin valorar, y la sección no dice que estés por debajo del umbral.
 
 Para acciones (STK), la valoración se calcula con el **tipo medio del cuarto trimestre** del BCE. Para fondos y bonos, se usa el tipo a 31 de diciembre.
 
@@ -70,6 +70,8 @@ La presentación oficial para programas externos se hace en XML según la Orden 
 
     DeclaRenta muestra una revisión orientativa de posiciones cripto, pero la generación oficial del Modelo 721 está desactivada hasta implementar y validar el XML AEAT.
 
+Si el fichero no da un número de unidades legible para una criptomoneda (IBKR puede exportar una posición sin cantidad), la sección muestra sus unidades como «—», nunca 0, y un aviso con esas monedas: toma las unidades del extracto de fin de año del exchange o del bróker. Su valor sí cuenta para el umbral. Si tampoco trae valor, cuenta como posición sin valorar, y la sección dice que no se puede determinar si superas el umbral, en lugar de decir que no estás obligado.
+
 ## Modelo D-6
 
 ### Qué es
@@ -99,7 +101,7 @@ Una **guía orientativa de cumplimentación** con los datos que necesitarías in
 
 Si proporcionas el D-6 del año anterior (vía `--previous-d6`), DeclaRenta genera también las **cancelaciones** para posiciones que ya no mantienes.
 
-Si IBKR lista una posición sin un número de acciones legible, el D-6 no la incluye en sus posiciones (no tiene número de títulos), pero tampoco la da como cancelación, porque el bróker la sigue listando. El Modelo 720 sí la incluye, con su valor y 0 en «Número de valores». Si la posición es corta (valor negativo), no es un bien que tengas, así que el D-6 y el 720 la dan como cancelada. DeclaRenta avisa de cada una: revisa a mano las dos declaraciones.
+Si IBKR lista una posición sin un número de acciones legible, la sección D-6 la muestra con «—» en el número de títulos, nunca 0, y un aviso que la nombra. La guía D-6 de la CLI no la incluye en sus posiciones y la cuenta entre las que debes declarar a mano. Tampoco la da como cancelación, porque el bróker la sigue listando. El Modelo 720 la lista para que la declares a mano, sin escribirla en el fichero con 0 en «Número de valores». Si la posición es corta (valor negativo), no es un bien que tengas, así que el D-6 y el 720 la dan como cancelada. DeclaRenta avisa de cada una: toma el número de acciones del extracto de fin de año de IBKR.
 
 ### Cómo presentarlo
 

@@ -130,6 +130,14 @@ export function renderSection721(
   if (unvaluedCount > 0) {
     html += `<div class="banner banner-warning">${esc(t("m721.positions_unvalued", { count: String(unvaluedCount) }))}</div>`;
   }
+  // Coins whose units the export does not give: unknown, never 0 (#470).
+  const unknownUnits = positions.filter((p) => p.entry.quantityUnknown === true);
+  if (unknownUnits.length > 0) {
+    html += `<div class="banner banner-warning m721-quantity-unknown">${esc(t("m721.quantity_unknown", {
+      count: String(unknownUnits.length),
+      coins: unknownUnits.map((p) => p.entry.assetId).join(", "),
+    }))}</div>`;
+  }
 
   html += `<div class="threshold-bar">
     <div class="threshold-track">
@@ -164,7 +172,7 @@ export function renderSection721(
       return `<tr>
         <td class="mono">${esc(p.entry.description)}</td>
         <td>${esc(exchange)}</td>
-        <td>${fmtQty(p.entry.quantity)}</td>
+        <td>${p.entry.quantityUnknown === true ? "—" : fmtQty(p.entry.quantity)}</td>
         <td>${val}</td>
       </tr>`;
     }).join("")}</tbody>
