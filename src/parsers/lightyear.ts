@@ -439,7 +439,11 @@ function parseLightyearCsv(lines: string[]): Statement {
     const isSell = txType === "sell";
     const isBuy = txType === "buy";
     if (!isSell && !isBuy) {
-      const rawType = (fields[cols.type] ?? "").trim();
+      // A row with an empty Type that carries anything (a date, an amount, a
+      // security) is listed as `Type: ""`, never dropped with no word (#467).
+      // An all-blank padding row stays skipped.
+      const rawType = (fields[cols.type] ?? "").trim() ||
+        (fields.some((f) => f.trim() !== "") ? unreadableCell(headers[cols.type] ?? "Type", "") : "");
       if (rawType) unknownTypes.set(rawType, (unknownTypes.get(rawType) ?? 0) + 1);
       continue;
     }

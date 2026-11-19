@@ -230,3 +230,25 @@ describe("Lightyear Tax Amt.: a refund lowers the withholding, never raises it",
     expect(s.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 10", "Withholding Tax 1.5"]);
   });
 });
+
+describe("Lightyear: a row with an empty Type is named, never dropped with no word", () => {
+  it("an empty Type with an amount, or with a security and no share count, is listed", () => {
+    for (const row of [
+      "01/05/2025 10:00:00,XX-9,,,,,EUR,,100.00,,,100.00,",
+      "01/05/2025 10:00:00,XX-9,AAPL,US0378331005,,,USD,,100.00,,,100.00,",
+    ]) {
+      const s = parse([row]);
+      expect(s.parserMessages?.find((m) => m.id === "lightyear.unknown_types")?.context?.types).toBe('Type: "" (1)');
+    }
+  });
+
+  it.each(METHODS)("[%s] the listed row moves no number: the sale next to it keeps its 448.2 € gain", (method) => {
+    const r = report([BUY, sell("150.00"), "01/05/2025 10:00:00,XX-9,,,,,EUR,,100.00,,,100.00,"], method);
+    expect(r.capitalGains.netGainLoss.toString()).toBe("448.2");
+    expect(r.messages.some((m) => m.id === "lightyear.unknown_types")).toBe(true);
+  });
+
+  it("an all-blank padding row stays skipped with no word", () => {
+    expect(parse([BUY, ",,,,,,,,,,,,"]).parserMessages).toBeUndefined();
+  });
+});
