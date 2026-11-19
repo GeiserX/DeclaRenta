@@ -1242,3 +1242,126 @@ describe("(i) a Trade row without an Account ID belongs to its FlexStatement", (
     expectUnverified(mergedFiles([[IB, xml]]));
   });
 });
+
+// ---------------------------------------------------------------------------
+// (j) Sixth review of the evidence rule. FIFO matches ISIN-less shares across
+// accounts (Spanish FIFO is per taxpayer), so a sale at one account can take
+// another account's lot: the holding check must still see that lot. A trade
+// row without a readable quantity is missing evidence, not zero shares.
+// ---------------------------------------------------------------------------
+
+describe("(j) another account's ISIN-less sale cannot hide a holding open at the window start", () => {
+  // IBKR U1 runs the issue example and lists the 50 left. Otro bróker (U9)
+  // bought 40 XYZ with no ISIN on 01/10/2024 and never sold them. Tercer
+  // bróker (U8) sold 40 XYZ with no ISIN on 05/11/2024, shares it held before
+  // its files. FIFO gives U8's sale U9's lot, so neither the lots nor the
+  // symbol's merged balance show U9's 40, still held when the window began.
+  const ib = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+  const isinLess = (account: string, rows: Row[]): string =>
+    flexXml([{ account, fromDate: "20240101", toDate: "20251231", rows, positionsSection: false, tradeIsin: "" }]);
+  const u9Buy = isinLess("U9", [["20241001", "BUY", 40, 10]]);
+
+  it.each(METHODS)("[%s] U8 sells 40 it never bought, FIFO takes U9's lot: not applied", (method) => {
+    const u8 = isinLess("U8", [["20241105", "SELL", 40, 11]]);
+    expectUnverified(mergedFiles([[IB, ib], ["Otro bróker", u9Buy], ["Tercer bróker", u8]], method));
+  });
+
+  it("the same with both accounts in one multi-account Flex: not applied", () => {
+    const xml = flexXml([
+      { fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] },
+      { account: "U9", fromDate: "20240101", toDate: "20251231", rows: [["20241001", "BUY", 40, 10]], tradeIsin: "", positionsSection: false },
+      { account: "U8", fromDate: "20240101", toDate: "20251231", rows: [["20241105", "SELL", 40, 11]], tradeIsin: "", positionsSection: false },
+    ]);
+    expectUnverified(mergedFiles([[IB, xml]]));
+  });
+
+  it("control: U8 sells 40 it bought itself and U9 sells its 40, all before the window: applied", () => {
+    const u8 = isinLess("U8", [["20240901", "BUY", 40, 10], ["20241105", "SELL", 40, 11]]);
+    const u9 = isinLess("U9", [["20241001", "BUY", 40, 10], ["20241201", "SELL", 40, 11]]);
+    expectApplied(mergedFiles([[IB, ib], ["Otro bróker", u9], ["Tercer bróker", u8]]));
+  });
+
+  it("control: U9 sells 40 from an ISIN-less manual opening lot before the window: applied", () => {
+    // A manual opening lot belongs to no uploaded account: any account may sell it.
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parseIbkrFlexXml(ib), IB);
+    mergeStatement(statement, parseIbkrFlexXml(isinLess("U9", [["20241105", "SELL", 40, 11]])), "Otro bróker");
+    const r = generateTaxReport(finalizeMergedStatement(statement), rates(), 2025, {
+      ...reportOptionsForMethod("monodivisa"),
+      manualOpeningLots: [
+        { symbol: "XYZ", description: "XYZ SA", isin: "", conid: "4531", assetCategory: "STK", currency: "EUR", acquireDate: "2023-03-01", quantity: "40", pricePerShare: "10" },
+      ],
+    });
+    expectApplied(r);
+  });
+});
+
+describe("(j) a trade row without a readable quantity is missing evidence, not zero shares", () => {
+  /** The issue example plus one buy and one sale of the security whose quantity attribute is `qty` (null: no attribute). */
+  const withHidden = (qty: string | null, isin = ISIN, extraRows: Row[] = [["20250201", "BUY", 30, 9], ["20250210", "SELL", 30, 9]]): string => {
+    const xml = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: [...issueRows, ...extraRows], positions: [[ISIN, 50]] }]);
+    // Rewrite the quantity of the extra rows (the last tradeIDs) only.
+    const ids = [...xml.matchAll(/<Trade tradeID="(\d+)"/g)].map((m) => m[1]!).slice(issueRows.length);
+    return ids.reduce((out, id) => {
+      const re = new RegExp(`(<Trade tradeID="${id}"[^>]*?) quantity="[^"]*"`);
+      return out.replace(re, qty === null ? "$1" : `$1 quantity="${qty}"`).replace(new RegExp(`(<Trade tradeID="${id}"[^>]*?) isin="[^"]*"`), `$1 isin="${isin}"`);
+    }, xml);
+  };
+
+  it("the parser keeps the row, quantity \"0\", flagged unknown, and warns", () => {
+    for (const qty of [null, "", "abc"]) {
+      const parsed = parseIbkrFlexXml(withHidden(qty));
+      const hidden = parsed.trades.slice(issueRows.length);
+      expect(hidden.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", true], ["0", true]]);
+      const warning = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
+      expect(warning?.severity).toBe("warning");
+      expect(warning?.context).toEqual({ count: "2", trades: "XYZ (ES0000004531) 20250201, XYZ (ES0000004531) 20250210" });
+    }
+    // Control: an explicit zero is a zero, with no flag and no warning.
+    const zero = parseIbkrFlexXml(withHidden("0"));
+    expect(zero.trades.slice(issueRows.length).map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", undefined], ["0", undefined]]);
+    expect(zero.parserMessages?.some((m) => m.id === "parser.trade_quantity_unknown") ?? false).toBe(false);
+  });
+
+  // FIFO books the "0" buy as an empty lot, and the 15/03 sale takes it first
+  // as a 0-share disposal: the mark sits on the sale's real disposal.
+  const expectUnverifiedSale = (r: TaxReport): void => {
+    expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15") && !d.quantity.isZero())!.washSaleSinglePurchase).toBe("unverified");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  };
+
+  it("two fills of one order, one with no quantity: the merged order's quantity is unknown too", () => {
+    const fills: Row[] = [["20250201", "BUY", 10, 9, 'ibOrderID="77"'], ["20250201", "BUY", 20, 9, 'ibOrderID="77"']];
+    const xml = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: [...issueRows, ...fills], positions: [[ISIN, 80]] }]);
+    const lastId = [...xml.matchAll(/<Trade tradeID="(\d+)"/g)].map((m) => m[1]!).at(-1)!;
+    const parsed = parseIbkrFlexXml(xml.replace(new RegExp(`(<Trade tradeID="${lastId}"[^>]*?) quantity="[^"]*"`), "$1"));
+    const merged = parsed.trades.filter((t) => t.ibOrderID === "77");
+    expect(merged.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["10", true]]);
+    // Control: both fills readable, no flag.
+    expect(parseIbkrFlexXml(xml).trades.filter((t) => t.ibOrderID === "77").map((t) => [t.quantity, t.quantityUnknown])).toEqual([["30", undefined]]);
+  });
+
+  it.each(METHODS)("[%s] a second buy in the window and its sale, both with no quantity attribute: not applied", (method) => {
+    expectUnverifiedSale(mergedFiles([[IB, withHidden(null)]], method));
+  });
+
+  it.each(["", "abc"])("the same with quantity=%j: not applied (it no longer crashes FIFO)", (qty) => {
+    expectUnverifiedSale(mergedFiles([[IB, withHidden(qty)]]));
+  });
+
+  it("an ISIN-less buy with no quantity before the window at another broker: not applied", () => {
+    const other = flexXml([{ account: "U9", fromDate: "20240101", toDate: "20251231", rows: [["20241001", "BUY", 40, 10]], positionsSection: false, tradeIsin: "" }])
+      .replace(/ quantity="[^"]*"/, "");
+    const ib = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+    expectUnverified(mergedFiles([[IB, ib], ["Otro bróker", other]]));
+  });
+
+  it("control: the same two rows with an explicit quantity=\"0\": applied", () => {
+    expectApplied(mergedFiles([[IB, withHidden("0")]]));
+  });
+
+  it("control: a row of another ISIN with no quantity: applied", () => {
+    expectApplied(mergedFiles([[IB, withHidden(null, OTHER)]]));
+  });
+});

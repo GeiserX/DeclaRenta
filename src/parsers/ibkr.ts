@@ -236,6 +236,21 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
+  // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
+  // say which trades to check.
+  const unreadableTrades = trades.filter((t) => t.quantityUnknown);
+  if (unreadableTrades.length > 0) {
+    const count = String(unreadableTrades.length);
+    const list = unreadableTrades.map((t) => `${t.isin ? `${t.symbol} (${t.isin})` : t.symbol} ${t.tradeDate}`).join(", ");
+    parserMessages.push({
+      id: "parser.trade_quantity_unknown",
+      severity: "warning",
+      message: `IBKR no da un número de acciones legible para ${count} operación(es): ${list}.`,
+      hint: "DeclaRenta las cuenta con 0 acciones, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que la sección Trades de la Flex Query incluye la cantidad y vuelve a exportarla.",
+      context: { count, trades: list },
+    });
+  }
+
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
   const accountId = statements.length === 1
@@ -302,7 +317,25 @@ function listingExchangeOf(raw: Record<string, string>): { listingExchange?: str
   return code ? { listingExchange: code } : {};
 }
 
+/**
+ * A quantity attribute as written, or undefined when it is missing or no
+ * number (`new Decimal("")` and `new Decimal("abc")` throw). Never trimmed or
+ * rewritten, so every readable value reaches the engines exactly as before.
+ */
+function readableQuantity(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  try {
+    return new Decimal(raw).isFinite() ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function mapTrade(raw: Record<string, string>): Trade {
+  // Keep a missing or unreadable quantity apart from an explicit zero, as
+  // mapOpenPosition does: the "0" default keeps FIFO from crashing, and the
+  // flag keeps the one-purchase exception (#453) from reading it as no shares.
+  const quantity = readableQuantity(raw.quantity);
   return {
     tradeID: raw.tradeID ?? "",
     accountId: raw.accountId ?? "",
@@ -316,7 +349,8 @@ function mapTrade(raw: Record<string, string>): Trade {
     // Flex exports name the attribute settleDateTarget; settlementDate is kept
     // for hand-written and older XML.
     settlementDate: raw.settlementDate || raw.settleDateTarget || "",
-    quantity: raw.quantity ?? "0",
+    quantity: quantity ?? "0",
+    ...(quantity === undefined ? { quantityUnknown: true } : {}),
     tradePrice: raw.tradePrice ?? "0",
     tradeMoney: raw.tradeMoney ?? "0",
     proceeds: raw.proceeds ?? "0",
@@ -557,6 +591,8 @@ function mergeTradeGroup(group: Trade[]): Trade {
     fifoPnlRealized: fifoPnl.toString(),
     exchange,
     notes: notes.size > 0 ? Array.from(notes).join(";") : undefined,
+    // One fill with no readable quantity leaves the order's total unknown.
+    ...(group.some((t) => t.quantityUnknown) ? { quantityUnknown: true } : {}),
   };
 }
 

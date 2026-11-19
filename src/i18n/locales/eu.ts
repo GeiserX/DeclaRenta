@@ -1104,6 +1104,8 @@ const eu: TranslationKeys = {
   "parser.cancelled_trades_unmatched.hint": "Ezeztatutako eragiketa Flex Query honen alditik kanpo dago. Beste fitxategi batetik kargatzen baduzu, benetakotzat hartzen jarraituko du: esportatu eragiketa eta haren ezeztapena fitxategi berean biltzen dituen aldi bat.",
   "parser.open_position_quantity_unknown": "IBKRk ez du akzio kopuru irakurgarririk ematen {{count}} posizio irekitarako: {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRentak 0 akziorekin zenbatzen ditu: 720 ereduak bere balioarekin sartzen ditu, baina «Número de valores» eremuan 0rekin, eta D-6ak ez ditu sartzen. Berrikusi eskuz posizio horiek 720an eta D-6an, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
+  "parser.trade_quantity_unknown": "IBKRk ez du akzio kopuru irakurgarririk ematen {{count}} eragiketatarako: {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRentak 0 akziorekin zenbatzen ditu; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu Flex Queryko Trades atalak kopurua duela eta esportatu berriro.",
 };
 
 export default eu;

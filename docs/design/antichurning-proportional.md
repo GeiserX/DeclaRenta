@@ -395,10 +395,27 @@ práctico Renta 2025. The decisions, each pinned in
     (`unidentifiedHeldAt`): FIFO holds no ISIN-less share lot that entered
     before it and was not sold before it (`buildUnidentifiedFifoHoldings`,
     which also sees lots no BUY row opened, such as a scrip dividend keyed on
-    its bare symbol), and no ISIN-less share key ever sells more than the
-    upload shows bought (those shares were held before the files, perhaps
-    still at the window start). A trade with neither ISIN nor symbol before
-    the window has no holding to walk and also fails. Such a holding may be
+    its bare symbol), and no account ever sells more shares of an ISIN-less
+    key than it shows bought (those shares were held before the files,
+    perhaps still at the window start). That last test runs per account
+    (`someAccountSoldUnbought`), because FIFO is the taxpayer's, across
+    accounts: account B's sale of shares it held before its files can take
+    account A's lot, so neither the lots nor the symbol's merged balance show
+    A's shares, still held. With no account ever below zero, FIFO holds a lot
+    exactly when some account does. Manual opening lots belong to no uploaded
+    account, so any account may sell them: a day's shortfall is taken from
+    them first. A trade with neither ISIN nor symbol before the window has no
+    holding to walk and also fails.
+  - No share trade has a missing or unreadable quantity. The IBKR parser keeps
+    such a row with quantity "0" and `Trade.quantityUnknown` (an explicit
+    `quantity="0"` stays a zero with no flag, and `parser.trade_quantity_unknown`
+    names the rows). With an ISIN, the row makes that security "unverified":
+    it may be a second purchase, or a purchase and a sale that leave the list
+    unchanged. With no ISIN, it is an unidentified trade with no holding to
+    walk, like one with neither ISIN nor symbol: before the window or in the
+    checked span, it fails every ISIN. Before this, both rows read "0" and the
+    check skipped them, so a buy in the window and its sale, both without a
+    quantity, vanished and the exception was applied. Such a holding may be
     this security bought before the window: a Flex without the Trades ISIN
     column, or a Revolut file (Revolut gives no ISIN), would otherwise hide
     it, because its account never trades the ISIN key. A holding closed
@@ -428,8 +445,12 @@ práctico Renta 2025. The decisions, each pinned in
        it as `position` (hand-written files may use `quantity`); the parser
        marks a missing or non-numeric one `quantityUnknown` instead of reading
        its "0" default (the quantity stays "0" so the D-6 and the 720 do not
-       crash, and `parser.open_position_quantity_unknown` warns that those
-       holdings show 0 shares there and must be checked by hand). A list with no row of the key says zero, but only when
+       crash). The two forms then differ: the D-6 leaves such a holding out of
+       its positions list (it has no share count), though it never lists it as
+       a cancellation (the broker still lists it, so it was not sold); the
+       Modelo 720 keeps it with its value and 0 in «Número de valores».
+       `parser.open_position_quantity_unknown` names those holdings so the user
+       checks both forms by hand. A list with no row of the key says zero, but only when
        every share row (not the exempt categories, not crypto) of every list in
        the upload has an ISIN: Open Positions may leave the ISIN field out
        while Trades has it, and then the row of the shares held is no row of

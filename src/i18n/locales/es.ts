@@ -1141,6 +1141,8 @@ const es = {
   "parser.cancelled_trades_unmatched.hint": "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
   "parser.open_position_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} posición(es) abierta(s): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.trade_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} operación(es): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que la sección Trades de la Flex Query incluye la cantidad y vuelve a exportarla.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

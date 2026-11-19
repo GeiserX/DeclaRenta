@@ -112,6 +112,12 @@ export interface Trade {
   tradeTime?: string;
   settlementDate: string;
   quantity: string;
+  /**
+   * The file gave no readable quantity for this trade (`quantity` then holds
+   * the "0" default). The anti-churning one-purchase exception (#453) treats
+   * it as missing evidence, never as an explicit zero. Only IBKR sets it.
+   */
+  quantityUnknown?: boolean;
   tradePrice: string;
   tradeMoney: string;
   proceeds: string;

@@ -319,9 +319,24 @@ export function detectWashSales(
   // a holding of one open at the window start may be any ISIN's shares (#453).
   const unidentifiedKeys = new Set<string>();
   const keylessTradeTimes: number[] = [];
+  // ISINs with a share trade whose quantity the file does not give: it may be
+  // a purchase or a sale of any size, so the upload cannot prove the
+  // exception for that security (#453).
+  const unknownQuantityIsins = new Set<string>();
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
+    // A missing or unreadable quantity reads "0" but is no explicit zero: a row
+    // with no ISIN may then be any security's trade, with no holding to walk.
+    if (trade.quantityUnknown === true && trade.assetCategory !== "CRYPTO") {
+      if (trade.isin) unknownQuantityIsins.add(trade.isin);
+      else {
+        const time = parseDate(trade.tradeDate).getTime();
+        unidentifiedTradeTimes.push(time);
+        keylessTradeTimes.push(time);
+      }
+      continue;
+    }
     const qty = parseQty(trade.quantity);
     if (qty.lessThanOrEqualTo(0)) continue;
     const d = parseDate(trade.tradeDate);
@@ -493,8 +508,15 @@ export function detectWashSales(
   // any ISIN's shares bought before the window, so the files cannot prove "no
   // shares at the window start" for any ISIN (#453). A holding closed before
   // the window does not stop the exception.
+  // The "sold unbought" test runs per account: FIFO matches across accounts
+  // (the taxpayer's FIFO), so another account's sale of shares held before its
+  // files can take this account's lot and net the merged balance to zero,
+  // hiding a lot that is still held. With no account ever below zero, FIFO
+  // holds a lot exactly when some account does.
   const unidentifiedFifoHoldsAfter = buildUnidentifiedFifoHoldings(disposals, remainingLots);
-  const unidentifiedSoldUnbought = [...unidentifiedKeys].some((key) => positionSteps.get(key)?.everNegative === true);
+  const unidentifiedSoldUnbought = [...unidentifiedKeys].some((key) =>
+    someAccountSoldUnbought(longEventsByAsset.get(key) ?? [], splitsByAsset.get(key) ?? []),
+  );
   const unidentifiedHeldAt = (windowStart: number): boolean =>
     unidentifiedSoldUnbought ||
     unidentifiedFifoHoldsAfter(windowStart - 1) ||
@@ -534,7 +556,7 @@ export function detectWashSales(
     const before = steps ? firstIndexAtOrAfter(steps.steps, windowStart) - 1 : -1;
     if (steps && before >= 0 && steps.steps[before]!.position.greaterThan(0)) return null;
     if (fifoHoldsAfter(key, windowStart - 1)) return null;
-    if (!steps || steps.everNegative) return "unverified";
+    if (!steps || steps.everNegative || unknownQuantityIsins.has(key)) return "unverified";
     return filesProveNoShares(key, windowStart, sellTime) && !unidentifiedHeldAt(windowStart) ? "applied" : "unverified";
   };
 
@@ -1310,6 +1332,41 @@ function buildUnidentifiedFifoHoldings(
     .filter((d) => !d.isin && !d.isShort && d.assetCategory !== "CRYPTO" && !WASH_SALE_EXEMPT.has(d.assetCategory))
     .map((d) => ({ acquire: timeOf(d.entryDate ?? d.acquireDate), sell: parseDate(d.sellDate).getTime() }));
   return (time) => firstOpen <= time || spans.some((span) => span.acquire <= time && time < span.sell);
+}
+
+/**
+ * Whether some account's long events ever end a day below zero: it sold shares
+ * the upload never shows it bought. Manual opening lots belong to no uploaded
+ * account, so any account may sell them: a day's shortfall is taken from them
+ * first. Splits scale every balance before the trades of their day.
+ */
+function someAccountSoldUnbought(events: readonly LongEvent[], splits: readonly SplitEvent[]): boolean {
+  const balances = new Map<string, Decimal>();
+  let manual = new Decimal(0);
+  let nextSplit = 0;
+  for (let i = 0; i < events.length; ) {
+    const time = events[i]!.time;
+    while (nextSplit < splits.length && splits[nextSplit]!.time <= time) {
+      const { num, den } = splits[nextSplit]!;
+      manual = manual.mul(num).div(den);
+      for (const [group, balance] of balances) balances.set(group, balance.mul(num).div(den));
+      nextSplit++;
+    }
+    // At least one event per day: an unreadable date (NaN) equals no time.
+    do {
+      const ev = events[i]!;
+      if (ev.group === MANUAL_GROUP) manual = manual.plus(ev.qty);
+      else balances.set(ev.group, (balances.get(ev.group) ?? new Decimal(0)).plus(ev.qty));
+      i++;
+    } while (i < events.length && events[i]!.time === time);
+    for (const [group, balance] of balances) {
+      if (!balance.isNegative()) continue;
+      if (manual.lessThan(balance.neg())) return true;
+      manual = manual.plus(balance);
+      balances.set(group, new Decimal(0));
+    }
+  }
+  return false;
 }
 
 /** The account a trade or a holdings row belongs to: its broker and account id. */

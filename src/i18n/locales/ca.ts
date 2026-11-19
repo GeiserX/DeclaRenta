@@ -1102,6 +1102,8 @@ const ca: TranslationKeys = {
   "parser.cancelled_trades_unmatched.hint": "L'operació cancel·lada queda fora del període d'aquest Flex Query. Si la carregues des d'un altre fitxer, es continuarà comptant com a real: exporta un període que inclogui l'operació i la seva anul·lació en el mateix fitxer.",
   "parser.open_position_quantity_unknown": "IBKR no dona un nombre d'accions llegible per a {{count}} posició(ns) oberta(es): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta les compta amb 0 accions: el Model 720 les inclou amb el seu valor, però amb 0 a «Número de valores», i el D-6 no les inclou. Revisa a mà aquestes posicions al 720 i al D-6, o comprova que la secció Open Positions de la Flex Query inclou la quantitat i torna-la a exportar.",
+  "parser.trade_quantity_unknown": "IBKR no dona un nombre d'accions llegible per a {{count}} operació(ns): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta les compta amb 0 accions, així que els guanys i les pèrdues d'aquest valor no són fiables i no s'aplica l'excepció de compra única de la regla dels 2 mesos. Comprova que la secció Trades de la Flex Query inclou la quantitat i torna-la a exportar.",
 };
 
 export default ca;
