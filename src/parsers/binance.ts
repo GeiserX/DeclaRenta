@@ -342,6 +342,20 @@ interface TxRow {
    * is named (#467).
    */
   costSplitGuessed?: boolean;
+  /** The row a trade phase paired this leg with, when each leg is one row. */
+  partner?: TxRow;
+  /**
+   * Pairings that are proven only if this leftover leg is paired by a later
+   * window next to its counterpart (proveOrder, resolveLeftovers, #467).
+   */
+  waitingPairings?: PendingPairing[];
+}
+
+/** A window's pairs, its leftover legs and all its rows, kept until every window has run. */
+interface PendingPairing {
+  pairs: (readonly [TxRow, TxRow])[];
+  leftovers: TxRow[];
+  rows: TxRow[];
 }
 
 /**
@@ -752,6 +766,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   emitConverts();
   emitStrategy();
   emitSpot();
+  resolveLeftovers(rows);
 
   // Name every row left out for a date or an amount it cannot read: they are
   // excluded from every phase, so they can't be silently mis-grouped, and the
@@ -896,12 +911,14 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * funding-wallet Remark) before calling here. When EUR values are absent (all
  * 0), the closest match is the next available buy in order — equivalent to
  * insertion-order pairing, the previous behavior. That order is a guess when
- * two or more coins are paired: "Buy ETH, Buy BTC, Sell EUR -11000, Sell USD
- * -110" gave ETH the 11000 € with no word. So when two or more pairs are made
- * and the EUR values do not decide them, every row of the group (`rows`) is
- * named (`binance.spot_cost_split`) unless the file writes each pair as two
- * adjacent rows (pairingProven, #467). Returns the legs left without a
- * counterpart, so the Convert path can hand them back instead of losing them.
+ * a side has two or more legs to choose from: "Buy ETH, Buy BTC, Sell EUR
+ * -11000, Sell USD -110" gave ETH the 11000 € with no word, and "Buy BTC, Buy
+ * SOL, Sell USD -110" gave BTC the 110 USD although SOL sits next to it. So
+ * when a pair is made from such a side and the EUR values do not decide it,
+ * every row of the group (`rows`) is named (`binance.spot_cost_split`) unless
+ * the file writes every leg in a pair of two adjacent rows (proveOrder,
+ * #467). Returns the legs left without a counterpart, so the Convert path can
+ * hand them back instead of losing them.
  */
 function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: AddHint, label: string): NetLeg[] {
   const sells = legs.filter((l) => l.qty.isNegative());
@@ -931,28 +948,63 @@ function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: Ad
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
     emitCryptoSwap(trades, sell, buy, label);
   }
-  if (pairs.length >= 2 && !pairingProven(pairs, legs, rows)) for (const r of rows) r.costSplitGuessed = true;
-  return [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
+  const left = [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
+  // Each leg one row of the group (no netting): the pairs are rows, and a
+  // later window can prove a pairing that waits on one of them.
+  const oneRowEach = rows.length === legs.length;
+  const byKey = new Map(rows.map((r) => [r.key, r] as const));
+  const rowPairs = oneRowEach ? pairs.map(([sell, buy]) => [byKey.get(sell.key)!, byKey.get(buy.key)!] as const) : [];
+  for (const [a, b] of rowPairs) {
+    a.partner = b;
+    b.partner = a;
+  }
+  // Every leg with a nonzero EUR value: the closest-EUR match decides (the
+  // documented disambiguation). Otherwise the order is a guess unless the
+  // file writes every leg in a pair of two adjacent rows.
+  const choice = pairs.length >= 1 && (sells.length >= 2 || buys.length >= 2);
+  if (choice && !legs.every((l) => l.eur !== null && !l.eur.isZero())) {
+    if (oneRowEach) proveOrder(rowPairs, left.map((l) => byKey.get(l.key)!), rows);
+    else for (const r of rows) r.costSplitGuessed = true;
+  }
+  return left;
 }
 
 /**
- * Whether the pairs pairAndEmit made are what the file says, not a guess.
- * Either every leg has a nonzero EUR value, so the closest-EUR match decides
- * (the documented disambiguation), or each leg is one row of the group (no
- * netting) and the paired rows are written as adjacent pairs (writtenAsPairs).
+ * Name every row of a window whose pairs are a guess (#467). With no leg left
+ * over, the pairs are proven when the file writes them as adjacent rows
+ * (writtenAsPairs). A leg left over can sit between a coin and the payment
+ * paired with it ("Buy BTC, Buy SOL, Sell USD" does not say whether the USD
+ * paid BTC or SOL), so the window waits: it is proven only if a later window
+ * pairs every leftover and all those pairs together are adjacent rows. That
+ * is a trade that starts in this window's last second and ends in the next
+ * one ("Sold XRP, Revenue, Sold ADA" then "Revenue"). resolveLeftovers decides
+ * once every window has run.
  */
-function pairingProven(pairs: [NetLeg, NetLeg][], legs: NetLeg[], rows: TxRow[]): boolean {
-  if (legs.every((l) => l.eur !== null && !l.eur.isZero())) return true;
-  if (rows.length !== legs.length) return false;
-  const byKey = new Map(rows.map((r) => [r.key, r] as const));
-  return writtenAsPairs(pairs.map(([sell, buy]) => [byKey.get(sell.key)!, byKey.get(buy.key)!] as const));
+function proveOrder(pairs: (readonly [TxRow, TxRow])[], leftovers: TxRow[], rows: TxRow[]): void {
+  if (leftovers.length === 0) {
+    if (!writtenAsPairs(pairs)) for (const r of rows) r.costSplitGuessed = true;
+    return;
+  }
+  const pending: PendingPairing = { pairs, leftovers, rows };
+  for (const l of leftovers) l.waitingPairings = [...(l.waitingPairings ?? []), pending];
+}
+
+/** Decide every window proveOrder left waiting on a leftover leg (#467). */
+function resolveLeftovers(rows: TxRow[]): void {
+  const pending = new Set(rows.flatMap((r) => r.waitingPairings ?? []));
+  for (const p of pending) {
+    const proven = p.leftovers.every((l) => l.partner !== undefined) &&
+      writtenAsPairs([...p.pairs, ...p.leftovers.map((l) => [l, l.partner!] as const)]);
+    if (!proven) for (const r of p.rows) r.costSplitGuessed = true;
+  }
 }
 
 /**
  * Whether the file writes each pair as two adjacent rows: in file order, the
  * rows of all the pairs split into consecutive twos, each one of the pairs.
- * Rows outside the pairs (a fee, a leg of another kind) do not break a pair.
- * Then pairing them is what the file says, not a guess (#467).
+ * Rows outside the pairs (a fee, a leg of the other side) do not break a pair,
+ * so the callers pass pairs that hold every leg row: a leg left over is a
+ * guess before this is asked (#467).
  */
 function writtenAsPairs(pairs: readonly (readonly [TxRow, TxRow])[]): boolean {
   const partner = new Map<TxRow, TxRow>();
@@ -1076,10 +1128,11 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
 /**
  * Emit Strategy trades from a window: pair each Transaction Sold with a Revenue,
  * and each Buy with a Spend (by order, all of them — not just the first). The
- * k-th with the k-th is a guess when two or more pairs move more than one coin
- * on a side: "Buy ETH, Buy BTC, Spend -11000, Spend -110" gave ETH the 11000 €
- * with no word. Then the pairs' rows are named (`binance.spot_cost_split`)
- * unless the file writes each pair as two adjacent rows (#467). Fees in
+ * k-th with the k-th is a guess when a side has two or more rows to choose
+ * from: "Buy ETH, Buy BTC, Spend -11000, Spend -110" gave ETH the 11000 € with
+ * no word. Then the rows are named (`binance.spot_cost_split`) unless the
+ * choice cannot change a lot or the file writes each pair as two adjacent
+ * rows (pairByOrder, #467). Fees in
  * the acquired/received coin reduce cost / proceeds. A Sold/Revenue/Buy/Spend
  * leg left without a counterpart is handed back (parsed = false): when the next
  * trade starts in this window's last second, its first leg lands here but its
@@ -1096,8 +1149,8 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
 
   const nSell = Math.min(sold.length, revenue.length);
   const nBuy = Math.min(bought.length, spend.length);
-  flagGuessedOrder(sold.slice(0, nSell), revenue.slice(0, nSell));
-  flagGuessedOrder(bought.slice(0, nBuy), spend.slice(0, nBuy));
+  pairByOrder(sold, revenue);
+  pairByOrder(bought, spend);
   for (let k = 0; k < nSell; k++) {
     const soldRow = sold[k]!;
     const revenueRow = revenue[k]!;
@@ -1136,18 +1189,30 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
 }
 
 /**
- * Strategy pairs the k-th row of `a` with the k-th of `b`. With two or more
- * pairs that move more than one coin on a side, which row goes with which is
- * a guess unless the file writes each pair as two adjacent rows: then every
- * row of the pairs is named (#467). Pairs all of one coin on each side give
- * each coin the same total, so they are not named.
+ * Strategy pairs the k-th row of `a` with the k-th of `b` (all the rows of
+ * each side, the leftovers too). This records the pairs (partner). When a
+ * side has two or more rows to choose from, which row goes with which is a
+ * guess, and every row of both sides is named (#467), unless one of two
+ * things holds:
+ * - the choice cannot change a lot: one coin on each side, every row of `b`
+ *   the same amount, and, when `a` keeps a leftover, every row of `a` too.
+ *   FIFO keeps one lot per Buy row, so "Buy ETH 1, Buy ETH 2, Spend -100,
+ *   Spend -200" is a guess: a later sale of 1 ETH costs 100 € or 200 €.
+ * - the file writes each pair as two adjacent rows, with any leftover paired
+ *   next to its own counterpart by a later window (proveOrder).
  */
-function flagGuessedOrder(a: TxRow[], b: TxRow[]): void {
-  if (a.length < 2) return;
-  const oneCoin = (side: TxRow[]): boolean => side.every((r) => r.coin === side[0]!.coin);
-  if (oneCoin(a) && oneCoin(b)) return;
-  if (writtenAsPairs(a.map((r, k) => [r, b[k]!] as const))) return;
-  for (const r of [...a, ...b]) r.costSplitGuessed = true;
+function pairByOrder(a: TxRow[], b: TxRow[]): void {
+  const n = Math.min(a.length, b.length);
+  const pairs = a.slice(0, n).map((r, k) => [r, b[k]!] as const);
+  for (const [x, y] of pairs) {
+    x.partner = y;
+    y.partner = x;
+  }
+  if (n === 0 || (a.length < 2 && b.length < 2)) return;
+  const same = (side: TxRow[], amountToo: boolean): boolean =>
+    side.every((r) => r.coin === side[0]!.coin && (!amountToo || r.change.equals(side[0]!.change)));
+  if (same(b, true) && same(a, a.length > b.length)) return;
+  proveOrder(pairs, [...a.slice(n), ...b.slice(n)], [...a, ...b]);
 }
 
 /** Attach a fee to the most recently emitted trade (in the same coin). */

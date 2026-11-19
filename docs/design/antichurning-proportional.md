@@ -711,12 +711,24 @@ práctico Renta 2025. The decisions, each pinned in
       Sell USD -110" gave ETH the 11000 € and a 10800 € loss with no word.
       Strategy pairs the k-th `Transaction Buy` with the k-th `Transaction
       Spend`, and the k-th `Transaction Sold` with the k-th `Transaction
-      Revenue`. When two or more pairs are made, a side moves more than one
-      coin and no EUR value on every leg decides them, the pairing is
-      trusted only when the file writes each pair as two adjacent rows
-      (other rows, such as fees, do not break a pair). Otherwise the
-      numbers are booked as before and `binance.spot_cost_split`, now
-      worded for purchases and sales, names every leg.
+      Revenue`. When a side has two or more legs to choose from (one pair
+      and a leftover included) and no EUR value on every leg decides them,
+      the pairing is trusted only when the file writes every leg in a pair
+      of two adjacent rows (fees and the other side's rows do not break a
+      pair). A leftover leg proves nothing on its own: in "Buy ETH, Sell
+      EUR, Buy BTC, Buy SOL, Sell USD" the pairs ETH/EUR and BTC/USD look
+      adjacent once SOL is ignored, but the USD sits next to SOL. Such a
+      window waits until every window has run. It is trusted only if a
+      later window pairs every leftover and all those pairs together are
+      adjacent rows: a trade that starts in one window's last second and
+      ends in the next. Strategy pairs of one coin on each side are trusted
+      only when the choice cannot change a lot, because FIFO keeps one lot
+      per Buy row: "Buy ETH 1, Buy ETH 2, Spend -100, Spend -200" gave a
+      later sale of 1 ETH a gain of 100 € where "Spend -200, Spend -100"
+      gave 0. So every Spend (or Revenue) must be the same amount, and
+      every Buy (or Sold) too when one is left over. Otherwise the numbers
+      are booked as before and `binance.spot_cost_split`, now worded for
+      purchases and sales, names every leg.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

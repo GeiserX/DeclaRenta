@@ -1906,6 +1906,86 @@ describe("#467 Binance: a window that pairs several coins by a guess names every
     expect(message(parsed.parserMessages, "binance.spot_cost_split")).toBeUndefined();
   });
 
+  // A leg left over makes the pairing a guess: the rows the pairs use can sit
+  // next to each other while the leftover sits between a coin and the
+  // payment it took. "Buy BTC, Buy SOL, Sell USD" does not say whether the
+  // 110 USD paid BTC or SOL. Every leg of the window is named, the leftover
+  // also by binance.unpaired_leg, and the numbers do not move.
+  const leftover: [string, string[], string, string][] = [
+    ["spot: ETH and EUR, then BTC, SOL and USD", ["Buy,ETH,1", "Sell,EUR,-11000", "Buy,BTC,0.1", "Buy,SOL,10", "Sell,USD,-110"], "110 USD", "SOL Buy 10"],
+    ["Convert: ETH and EUR, then BTC, SOL and USD", ["Binance Convert,ETH,1", "Binance Convert,EUR,-11000", "Binance Convert,BTC,0.1", "Binance Convert,SOL,10", "Binance Convert,USD,-110"], "110 USD", "SOL Binance Convert 10"],
+    ["Convert: one payment for BTC or SOL", ["Binance Convert,BTC,0.1", "Binance Convert,SOL,10", "Binance Convert,USD,-110"], "110 USD", "SOL Binance Convert 10"],
+    ["Strategy: Buy ETH, Spend, then Buy BTC, Buy SOL, Spend", ["Transaction Buy,ETH,1", "Transaction Spend,EUR,-11000", "Transaction Buy,BTC,0.1", "Transaction Buy,SOL,10", "Transaction Spend,EUR,-110"], "110 EUR", "SOL Transaction Buy 10"],
+    ["Strategy: the -50 Spend next to BTC is left over", ["Transaction Spend,EUR,-11000", "Transaction Buy,ETH,1", "Transaction Spend,EUR,-110", "Transaction Spend,EUR,-50", "Transaction Buy,BTC,0.1"], "110 EUR", "EUR Transaction Spend -50"],
+    ["Strategy: one Spend for BTC or SOL", ["Transaction Buy,BTC,0.1", "Transaction Buy,SOL,10", "Transaction Spend,EUR,-110"], "110 EUR", "SOL Transaction Buy 10"],
+  ];
+  describe.each(leftover)("a leg left over, %s", (_label, legs, btcCost, unpaired) => {
+    it.each(METHODS)("[%s] BTC keeps the same cost, and every leg of the window is named", (method) => {
+      const parsed = window(...legs);
+      expect(buyOf(parsed, "BTC")).toBe(btcCost);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      expect(message(r.messages, "binance.spot_cost_split")?.context).toEqual({ count: String(legs.length), rows: rowsOf(legs) });
+      expect(message(r.messages, "binance.unpaired_leg")?.context?.rows).toBe(`${unpaired} 2025-01-10 10:00:00`);
+    });
+  });
+
+  // A leftover that a later window pairs proves the first window only when
+  // all the pairs together are adjacent rows: "Sold XRP, Revenue, Sold ADA"
+  // then "Revenue" one second later is one trade after another (the straddle
+  // tests in binance.test.ts give no warning). Here SOL is paired one second
+  // later, but the 110 € sits next to SOL, not next to BTC.
+  it("a leftover paired one second later, but not next to its counterpart, still names the window", () => {
+    const legs: [string, string][] = [["0", "Transaction Buy,BTC,0.1"], ["1", "Transaction Buy,SOL,10"], ["1", "Transaction Spend,EUR,-110"], ["2", "Transaction Spend,EUR,-50"]];
+    const parsed = binanceParser.parse([TX_H, ...legs.map(([sec, l]) => `1,2025-01-10 10:00:0${sec},Spot,${l},`)].join("\n"));
+    expect(buyOf(parsed, "BTC")).toBe("110 EUR");
+    expect(buyOf(parsed, "SOL")).toBe("50 EUR");
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")).toBeUndefined();
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context?.rows)
+      .toBe("BTC Transaction Buy 0.1 2025-01-10 10:00:00; SOL Transaction Buy 10 2025-01-10 10:00:01; EUR Transaction Spend -110 2025-01-10 10:00:01");
+  });
+
+  it("control: a leftover paired one second later next to its counterpart names nothing", () => {
+    const legs: [string, string][] = [["0", "Transaction Buy,BTC,0.1"], ["1", "Transaction Spend,EUR,-110"], ["1", "Transaction Buy,SOL,10"], ["2", "Transaction Spend,EUR,-50"]];
+    const parsed = binanceParser.parse([TX_H, ...legs.map(([sec, l]) => `1,2025-01-10 10:00:0${sec},Spot,${l},`)].join("\n"));
+    expect([buyOf(parsed, "BTC"), buyOf(parsed, "SOL")]).toEqual(["110 EUR", "50 EUR"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+  });
+
+  // FIFO keeps one lot per Buy row, so two buys of one coin that cost
+  // different amounts are not the same whichever Spend each takes: "Buy ETH
+  // 1, Buy ETH 2, Spend -100, Spend -200" gives a later sale of 1 ETH a cost
+  // of 100 € or of 200 €. That is a guess, and it is named.
+  const sameCoin: [string, string[]][] = [
+    ["two ETH buys paid 100 and 200 €", ["Transaction Buy,ETH,1", "Transaction Buy,ETH,2", "Transaction Spend,EUR,-100", "Transaction Spend,EUR,-200"]],
+    ["two ETH sales for 100 and 200 €", ["Transaction Sold,ETH,-1", "Transaction Sold,ETH,-2", "Transaction Revenue,EUR,100", "Transaction Revenue,EUR,200"]],
+    ["two ETH buys of 1 and 2 for one Spend", ["Transaction Buy,ETH,1", "Transaction Buy,ETH,2", "Transaction Spend,EUR,-100"]],
+  ];
+  it.each(sameCoin)("Strategy, one coin, %s: booked by order as before, and every leg is named", (_label, legs) => {
+    const parsed = binanceParser.parse([TX_H,
+      "1,2024-12-01 10:00:00,Spot,Buy,ETH,3,", "1,2024-12-01 10:00:00,Spot,Sell,EUR,-300,",
+      ...legs.map((l) => `1,2025-01-10 10:00:00,Spot,${l},`),
+    ].join("\n"));
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context).toEqual({ count: String(legs.length), rows: rowsOf(legs) });
+  });
+
+  it.each(METHODS)("[%s] Strategy, two ETH buys paid 100 and 200 €: the later sale keeps the cost it had, and the buys are named", (method) => {
+    const legs = ["Transaction Buy,ETH,1", "Transaction Buy,ETH,2", "Transaction Spend,EUR,-100", "Transaction Spend,EUR,-200"];
+    const parsed = window(...legs);
+    expect(parsed.trades.filter((t) => t.symbol === "ETH" && t.buySell === "BUY").map((t) => `${t.quantity} ${t.cost}`)).toEqual(["1 100", "2 200"]);
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(ethGain(r)).toEqual(["100.00"]);
+    expect(message(r.messages, "binance.spot_cost_split")?.context?.rows).toBe(rowsOf(legs));
+  });
+
+  const sameCoinProven: [string, string[]][] = [
+    ["two ETH buys of 1 and 2, each paid 100 €", ["Transaction Buy,ETH,1", "Transaction Buy,ETH,2", "Transaction Spend,EUR,-100", "Transaction Spend,EUR,-100"]],
+    ["each Spend after its Buy", ["Transaction Buy,ETH,1", "Transaction Spend,EUR,-100", "Transaction Buy,ETH,2", "Transaction Spend,EUR,-200"]],
+    ["one Buy and two Spend of 50 €", ["Transaction Buy,ETH,1", "Transaction Spend,EUR,-50", "Transaction Spend,EUR,-50"]],
+  ];
+  it.each(sameCoinProven)("control: Strategy, one coin, %s: the pairing cannot change a lot, nothing is named as shared", (_label, legs) => {
+    expect(message(window(...legs).parserMessages, "binance.spot_cost_split")).toBeUndefined();
+  });
+
   it("the warning speaks of purchases and sales in the five locales, and the parser emits the Spanish text", () => {
     for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
       expect(locale["binance.spot_cost_split"]).toContain("{{rows}}");
