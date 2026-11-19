@@ -436,7 +436,7 @@ const eu: TranslationKeys = {
   "m720.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko posizioak eta saldoak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerriko kontuen saldoak edo atzerriko akzio eta funtsen balioak 50.000 € gainditzen dituen.",
   "m720.positions_title": "Aitortu beharreko posizioak",
   "m720.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; kantitateak eta balioak zeinu kontrakoak dituzte; edo fitxategiak ez du ez kantitaterik ez baliorik ematen (edo inongo balioak berresten ez duen 0 bat ematen du). Kalkulatu haien euro-balioa brokerraren urte amaierako laburpenarekin eta sartu eskuz.",
   "m720.cash_title": "Eskudiruzko saldoak (Kontuak)",
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
@@ -497,7 +497,7 @@ const eu: TranslationKeys = {
   "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik (ez dago merkatu-preziorik, kanbio-tasarik haien monetarako ekitaldi-amaieran edo titulu kopururik) eta totaletik kanpo utzi dira. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
+    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik, eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; titulu kopurua falta da, edo haren balioak berresten ez duen edo kontraesaten duen 0 bat da; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; edo kantitateak eta balioak zeinu kontrakoak dituzte. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
   "d6.quantity_unknown": "Fitxategiak ez du titulu kopuru baliodunik {{count}} posiziotarako (falta da, ezin da irakurri edo bere balioak berresten ez duen 0 bat da): {{holdings}}. Ez dira 0tzat hartzen: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
@@ -536,7 +536,7 @@ const eu: TranslationKeys = {
   "m721.format_notice":
     "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). DeclaRentak berrikuspen orientagarria bakarrik erakusten du: sorrera ofiziala desgaituta dago balioztatutako XMLa inplementatu arte.",
   "m721.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu eta totaletik kanpo utzi dira. Arrazoia hauetako bat izan daiteke: ez dago merkatu-preziorik edo haien monetaren kanbio-tasarik ekitaldi-amaieran; balioa ez da zenbaki bat edo 12 zifra oso baino gehiago ditu eurotan; kantitateak eta balioak zeinu kontrakoak dituzte; edo fitxategiak ez du ez kantitaterik ez baliorik ematen (edo inongo balioak berresten ez duen 0 bat ematen du). Kalkulatu haien euro-balioa exchangearen edo brokerraren urte amaierako laburpenarekin eta sartu eskuz.",
   "m721.quantity_unknown": "Fitxategiak ez du unitate kopuru baliodunik {{count}} kriptomonetatarako (falta da, ezin da irakurri edo bere balioak berresten ez duen 0 bat da): {{coins}}. Ez dira 0tzat hartzen: hartu unitateak exchangearen edo brokerraren urte amaierako laburpenetik eta idatzi eskuz 721 ereduan.",
   "m721.empty_title": "Ez dago kriptomoneda posiziorik kargatuta",
   "m721.empty_description":

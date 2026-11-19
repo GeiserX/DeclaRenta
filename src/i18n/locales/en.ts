@@ -435,7 +435,7 @@ const en: TranslationKeys = {
   "m720.brokers_without_holdings": "The {{brokers}} data you uploaded has no positions or balances at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your foreign account balances or your foreign shares and funds exceed €50,000.",
   "m720.positions_title": "Declarable positions",
   "m720.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros and were excluded from the total. The reason can be one of these: no market price, or no exchange rate for their currency at year-end; a value that is not a number or has more than 12 integer digits in euros; a quantity and a value of opposite signs; or a file that gives neither the quantity nor the value (or gives a 0 that no value confirms). Compute their euro value from the broker's year-end statement and include them by hand.",
   "m720.cash_title": "Cash balances (Accounts)",
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
@@ -497,7 +497,7 @@ const en: TranslationKeys = {
   "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros or have no valid number of securities (no market price, no exchange rate for their currency at year-end, or no number of securities) and were excluded from the total. Include them by hand with their euro value and their number of securities.",
+    "{{count}} position(s) could not be valued in euros or have no valid number of securities, and were excluded from the total. The reason can be one of these: no market price, or no exchange rate for their currency at year-end; no number of securities, or a 0 that its value does not confirm or contradicts; a value that is not a number or has more than 12 integer digits in euros; or a quantity and a value of opposite signs. Include them by hand with their euro value and their number of securities.",
   "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 its value does not confirm): {{holdings}}. They do not count as 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
@@ -537,7 +537,7 @@ const en: TranslationKeys = {
   "m721.format_notice":
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros and were excluded from the total. The reason can be one of these: no market price, or no exchange rate for their currency at year-end; a value that is not a number or has more than 12 integer digits in euros; a quantity and a value of opposite signs; or a file that gives neither the quantity nor the value (or gives a 0 that no value confirms). Compute their euro value from the year-end statement of the exchange or broker and include them by hand.",
   "m721.quantity_unknown": "The file has no valid number of units for {{count}} cryptocurrency(ies) (missing, unreadable, or a 0 its value does not confirm): {{coins}}. They do not count as 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":

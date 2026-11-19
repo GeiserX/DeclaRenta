@@ -436,7 +436,7 @@ const ca: TranslationKeys = {
   "m720.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves posicions ni saldos a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si el saldo dels teus comptes o el valor de les teves accions i fons a l'estranger supera els 50.000 €.",
   "m720.positions_title": "Posicions declarables",
   "m720.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; el valor no és un número o té més de 12 xifres enteres en euros; la quantitat i el valor tenen signes contraris; o el fitxer no dona ni la quantitat ni el valor (o dona un 0 que cap valor no confirma). Calcula el seu valor en euros amb l'extracte de final d'any del bròker i inclou-les a mà.",
   "m720.cash_title": "Saldos en efectiu (Comptes)",
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
@@ -497,7 +497,7 @@ const ca: TranslationKeys = {
   "d6.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen els teus valors a 31 de desembre, així que no apareixen aquí. Consulta'ls a l'extracte de final d'any de {{brokers}}.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid (sense preu de mercat, sense tipus de canvi per a la seva moneda al tancament de l'exercici o sense nombre de títols) i s'han exclòs del total. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid, i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; falta el nombre de títols, o és un 0 que el seu valor no confirma o contradiu; el valor no és un número o té més de 12 xifres enteres en euros; o la quantitat i el valor tenen signes contraris. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
   "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{holdings}}. No compten com a 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
@@ -536,7 +536,7 @@ const ca: TranslationKeys = {
   "m721.format_notice":
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; el valor no és un número o té més de 12 xifres enteres en euros; la quantitat i el valor tenen signes contraris; o el fitxer no dona ni la quantitat ni el valor (o dona un 0 que cap valor no confirma). Calcula el seu valor en euros amb l'extracte de final d'any de l'exchange o del bròker i inclou-les a mà.",
   "m721.quantity_unknown": "El fitxer no porta un nombre d'unitats vàlid per a {{count}} criptomoneda(es) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{coins}}. No compten com a 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
@@ -1024,7 +1024,7 @@ const ca: TranslationKeys = {
   "report.non_finite_disposal":
     "{{count}} venda(es) tenen un import que no és un número (NaN o infinit): {{rows}}. Aquest import no se suma a les caselles. La resta d'operacions de l'any sí que se sumen.",
   "report.non_finite_disposal.hint":
-    "Si falta el valor de transmissió d'una venda, DeclaRenta tampoc no en suma el valor d'adquisició, per no crear una pèrdua que res no justifica. Si falta el valor d'adquisició, suma el de transmissió. Revisa aquestes operacions al fitxer del bróker i als tipus de canvi, i declara'n el resultat a mà.",
+    "Si falta el valor de transmissió d'una venda, DeclaRenta tampoc no en suma el valor d'adquisició, per no crear una pèrdua que res no justifica. Si falta el valor d'adquisició, suma el de transmissió. Revisa aquestes operacions al fitxer del bròker i als tipus de canvi, i declara'n el resultat a mà.",
   "flatex.lagerstellenwechsel.unmatched":
     "Traspàs de custòdia (Lagerstellenwechsel) sense contrapartida per a {{isin}}: {{netQuantity}} títols.",
   "flatex.lagerstellenwechsel.unmatched.hint":

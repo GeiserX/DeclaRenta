@@ -436,7 +436,7 @@ const gl: TranslationKeys = {
   "m720.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen as túas posicións nin saldos a 31 de decembro, así que non se suman aquí. Comproba no extracto de fin de ano de {{brokers}} se o saldo das túas contas ou o valor das túas accións e fondos no estranxeiro supera os 50.000 €.",
   "m720.positions_title": "Posicións declarables",
   "m720.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros e excluíronse do total. O motivo pode ser un destes: falta o prezo de mercado ou o tipo de cambio da súa moeda ao peche do exercicio; o valor non é un número ou ten máis de 12 cifras enteiras en euros; a cantidade e o valor teñen signos contrarios; ou o ficheiro non dá nin a cantidade nin o valor (ou dá un 0 que ningún valor confirma). Calcula o seu valor en euros co extracto de fin de ano do bróker e inclúeas a man.",
   "m720.cash_title": "Saldos en efectivo (Contas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
@@ -497,7 +497,7 @@ const gl: TranslationKeys = {
   "d6.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen os teus valores a 31 de decembro, así que non aparecen aquí. Consúltaos no extracto de fin de ano de {{brokers}}.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros ou non traen un número de títulos válido (sen prezo de mercado, sen tipo de cambio para a súa moeda ao peche do exercicio ou sen número de títulos) e excluíronse do total. Inclúeas a man co seu valor en euros e o seu número de títulos.",
+    "{{count}} posición(s) non se puideron valorar en euros ou non traen un número de títulos válido, e excluíronse do total. O motivo pode ser un destes: falta o prezo de mercado ou o tipo de cambio da súa moeda ao peche do exercicio; falta o número de títulos, ou é un 0 que o seu valor non confirma ou contradí; o valor non é un número ou ten máis de 12 cifras enteiras en euros; ou a cantidade e o valor teñen signos contrarios. Inclúeas a man co seu valor en euros e o seu número de títulos.",
   "d6.quantity_unknown": "O ficheiro non trae un número de títulos válido para {{count}} posición(s) (falta, non se le ou é un 0 que o seu valor non confirma): {{holdings}}. Non contan como 0: toma o número do extracto de fin de ano do bróker e escríbeo a man no D-6.",
   "d6.cancellations_title": "Cancelacións",
   "d6.generate_btn": "Xerar guía D-6",
@@ -536,7 +536,7 @@ const gl: TranslationKeys = {
   "m721.format_notice":
     "O formato oficial da AEAT é XML (Orde HFP/886/2023). DeclaRenta só mostra unha revisión orientativa: a xeración oficial está desactivada ata implementar XML validado.",
   "m721.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros e excluíronse do total. O motivo pode ser un destes: falta o prezo de mercado ou o tipo de cambio da súa moeda ao peche do exercicio; o valor non é un número ou ten máis de 12 cifras enteiras en euros; a cantidade e o valor teñen signos contrarios; ou o ficheiro non dá nin a cantidade nin o valor (ou dá un 0 que ningún valor confirma). Calcula o seu valor en euros co extracto de fin de ano do exchange ou do bróker e inclúeas a man.",
   "m721.quantity_unknown": "O ficheiro non trae un número de unidades válido para {{count}} criptomoeda(s) (falta, non se le ou é un 0 que o seu valor non confirma): {{coins}}. Non contan como 0: toma as unidades do extracto de fin de ano do exchange ou do bróker e escríbeas a man no Modelo 721.",
   "m721.empty_title": "Non hai posicións de criptomoedas",
   "m721.empty_description":
