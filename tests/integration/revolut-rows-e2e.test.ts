@@ -7,6 +7,8 @@
  *   point: a sale of 1500 USD became 1.50 USD.
  * - A dividend whose Total Amount cannot be read was dropped with no word,
  *   with or without a ticker.
+ * - A row of unknown type (a cash merger) with a zero quantity and a Total
+ *   Amount that cannot be read was dropped with no word.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -134,6 +136,37 @@ describe("Revolut dividends whose Total Amount cannot be read are named, never d
       const s = await parse([dividend("USD 0", ticker)]);
       expect(s.cashTransactions).toEqual([]);
       expect(s.parserMessages).toBeUndefined();
+    }
+  });
+});
+
+describe("Revolut rows of unknown type with a zero quantity: an amount that cannot be read is no zero", () => {
+  const merger = (total: string, type = "MERGER - CASH") => ["2025-06-03T10:00:00Z", "AAPL", type, "0", "", total, "USD", "1.1"];
+
+  it.each(METHODS)("[%s] control: a readable amount keeps the row, named, and the holding is of unknown size", async (method) => {
+    const s = await parse([BUY, merger("USD 1500")]);
+    expect(msg(s, "parser.trade_row_unreadable")).toBe('AAPL 20250603 [Type: "MERGER - CASH"]');
+    expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown])).toEqual([["AAPL", true]]);
+    const r = await report([BUY, merger("USD 1500")], method);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] an unreadable or currency-only amount keeps the row the same way", async (method) => {
+    for (const total of ["USD abc", "USD"]) {
+      const s = await parse([BUY, merger(total)]);
+      expect(msg(s, "parser.trade_row_unreadable"), total).toBe('AAPL 20250603 [Type: "MERGER - CASH"]');
+      expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown]), total).toEqual([["AAPL", true]]);
+      const r = await report([BUY, merger(total)], method);
+      expect(r.capitalGains.netGainLoss.toFixed(2), total).toBe("0.00");
+    }
+  });
+
+  it("a blank or written-zero amount moves no money and stays skipped, and so does a fee", async () => {
+    for (const row of [merger(""), merger("USD 0"), merger("USD abc", "CUSTODY FEE")]) {
+      const s = await parse([BUY, row]);
+      expect(s.trades.map((t) => t.tradeID), row.join()).toEqual(["revolut-buy-20250203-AAPL-1"]);
+      expect(s.parserMessages, row.join()).toBeUndefined();
+      expect(s.openPositions.map((p) => [p.symbol, p.quantity, p.costBasisMoney]), row.join()).toEqual([["AAPL", "10", "1000.00"]]);
     }
   });
 });

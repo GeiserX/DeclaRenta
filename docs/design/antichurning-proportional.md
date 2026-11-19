@@ -566,6 +566,9 @@ práctico Renta 2025. The decisions, each pinned in
       text) is not booked and is named by
       `parser.cash_income_amount_unreadable`, with or without a ticker; it
       was dropped with no word. A written zero stays skipped.
+      A row of unknown type with a zero quantity whose Total Amount cannot
+      be read ("USD abc", "USD") is kept like one with a readable amount; a
+      blank or written-zero amount moves no money and stays skipped.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

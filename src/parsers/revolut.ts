@@ -513,9 +513,11 @@ function parseTransactionLog(
     // spin-off, a stock merger, a stop order) but cannot be read is kept as a
     // trade that books nothing, never dropped or booked as a buy (#467,
     // #468). A row of an unknown type that writes a zero quantity moves no
-    // shares and stays skipped when it moves no money either, or is a fee
-    // ("CUSTODY FEE"). One with an amount (a cash merger, cash in lieu) may
-    // be a taxable sale, so it is kept and named like the others.
+    // shares and stays skipped when it moves no money either (a blank or
+    // written-zero Total Amount), or is a fee ("CUSTODY FEE"). One with an
+    // amount (a cash merger, cash in lieu) may be a taxable sale, so it is
+    // kept and named like the others, also when that amount cannot be read
+    // ("USD abc", "USD"): it was read as 0 and dropped with no word.
     const buy = TXN_TYPE_BUY.test(type);
     const sell = TXN_TYPE_SELL.test(type);
     const otherType = !buy && !sell && !TXN_TYPE_DIVIDEND.test(type) && !TXN_TYPE_SPLIT.test(type) &&
@@ -532,8 +534,9 @@ function parseTransactionLog(
       }, cell));
       markUnknownSize(ticker, currencyRaw, buy);
     };
+    const movesNoMoney = totalRaw === "" || totalRead?.isZero() === true;
     if (otherType && !quantityMissing && qtyDec.isZero() &&
-      (totalAmountDec.isZero() || /\bFEES?$/i.test(type))) continue;
+      (movesNoMoney || /\bFEES?$/i.test(type))) continue;
     if ((buy || sell || otherType) && !isReadableTradeDate(tradeDate)) {
       keepUnreadable(unreadableCell(headers[cols.date] ?? "Date", dateStr));
       continue;
