@@ -651,6 +651,7 @@ program
             no_country: "no tiene un código de país válido",
             quantity_unknown: "no tiene un número de valores válido (falta, no se lee o es un 0 junto a un valor; tómalo del extracto de fin de año del bróker)",
             quantity_below_hundredth: "tiene un número de valores inferior a 0,01, y el fichero solo admite dos decimales (escribiría 0)",
+            quantity_too_large: "tiene un número de valores que no cabe en el campo del fichero (más de 10 cifras enteras)",
             no_account: "no tiene número de cuenta",
             invalid_code: "tiene una clave, subclave o país que el fichero no admite",
           }[o.reason];
@@ -662,8 +663,11 @@ program
             missing === "extinctionDate"
               ? `⚠ ${isin} figuraba en el 720 anterior y ya no está en cartera, pero no hay ninguna venta en ${opts.year} de las acciones declaradas. ` +
                   "Su registro de extinción (C) sale sin fecha de extinción y con valoración 0: complétalos antes de presentar."
-              : `⚠ ${isin} figuraba en el 720 anterior y se vendió en ${opts.year}, pero los datos no incluyen su compra. ` +
-                  "Su registro de extinción (C) sale sin fecha de adquisición: complétala antes de presentar.",
+              : missing === "acquisitionDate"
+                ? `⚠ ${isin} figuraba en el 720 anterior y se vendió en ${opts.year}, pero los datos no incluyen su compra. ` +
+                    "Su registro de extinción (C) sale sin fecha de adquisición: complétala antes de presentar."
+                : `⚠ ${isin} figuraba en el 720 anterior y se vendió en ${opts.year}, pero su valoración en la fecha de extinción no cabe en el campo del fichero (más de 12 cifras enteras). ` +
+                    "Su registro de extinción (C) sale con valoración 0: complétala antes de presentar.",
           );
         }
 

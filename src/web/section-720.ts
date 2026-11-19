@@ -14,6 +14,7 @@ import {
   checkModelo720Thresholds,
   findModelo720Omissions,
   findUndatedExtinctions,
+  fitsModelo720Amount,
   generateModelo720,
   modelo720DeclarationId,
   modelo720PositionCountry,
@@ -318,9 +319,10 @@ export function renderSection720(
         } else {
           rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
-        // No rate, or no market value in the export: unknown, never 0 €.
+        // No rate, no market value in the export, or a value too big for the
+        // file's valoración: unknown, never 0 € (#470).
         const value = positionValueOf(p);
-        if (hasNoMarketValue(p) || value === null) rate = null;
+        if (hasNoMarketValue(p) || value === null || (rate !== null && !fitsModelo720Amount(value.mul(rate)))) rate = null;
         if (rate === null) unvaluedCount++;
         const val = rate === null || value === null ? "—" : fmtEur(value.mul(rate));
         const origin = declaredIsins ? `<td>${esc(t(declaredIsins.has(p.isin) ? "m720.origin_m" : "m720.origin_a"))}</td>` : "";
@@ -365,8 +367,12 @@ export function renderSection720(
         const ecbRate = lookupPositionRate(rateMap, dateForRates, cb.currency);
         const ending = cashEndingOf(cb);
         const average = cashAverageOf(cb);
-        const val = ecbRate === null || ending === null ? "—" : fmtEur(ending.mul(ecbRate));
-        const avg = ecbRate !== null && ending !== null && average !== null ? fmtEur(average.mul(ecbRate)) : "—";
+        // A balance or an average too big for the file is «sin valorar», as
+        // `unvaluedCashBalances` counts it (#470).
+        const fits = ecbRate !== null && ending !== null && fitsModelo720Amount(ending.mul(ecbRate))
+          && (average === null || fitsModelo720Amount(average.mul(ecbRate)));
+        const val = fits ? fmtEur(ending.mul(ecbRate)) : "—";
+        const avg = fits && average !== null ? fmtEur(average.mul(ecbRate)) : "—";
         return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -383,7 +389,8 @@ export function renderSection720(
       const missing = undated.get(s.isin);
       const note = missing === "extinctionDate"
         ? `: ${esc(t("m720.sold_no_date", { year: String(year) }))}`
-        : missing === "acquisitionDate" ? `: ${esc(t("m720.sold_no_acquisition"))}` : "";
+        : missing === "acquisitionDate" ? `: ${esc(t("m720.sold_no_acquisition"))}`
+          : missing === "value" ? `: ${esc(t("m720.sold_value_too_large"))}` : "";
       return `<li><span class="mono">${esc(s.isin)}</span>${note}</li>`;
     }).join("")}</ul>`;
   }

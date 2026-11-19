@@ -450,6 +450,7 @@ const eu: TranslationKeys = {
     "gordailuan edo kokatuta dagoen herrialdea falta da",
   "m720.omitted_quantity_unknown": "fitxategiak ez du balore kopuru baliodunik (falta da, ezin da irakurri edo balio baten ondoko 0 bat da); hartu brokerraren urte amaierako laburpenetik",
   "m720.omitted_quantity_below_hundredth": "balore kopurua 0,01 baino txikiagoa da, eta fitxategiak bi hamartar baino ez ditu onartzen, beraz 0 idatziko luke; hartu brokerraren urte amaierako laburpenetik",
+  "m720.omitted_quantity_too_large": "balore kopurua ez da sartzen fitxategiaren eremuan (10 zifra oso baino gehiago), beraz ez da idazten; egiaztatu brokerraren urte amaierako laburpenean",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
@@ -476,6 +477,7 @@ const eu: TranslationKeys = {
   "m720.sold_help": "Fitxategiak C jatorriarekin jasotzen ditu, azken salmentaren data eta zenbatekoarekin.",
   "m720.sold_no_date": "{{year}} ekitaldian ez dago aitortutako akzioen salmentarik: baja iraungitze-datarik gabe eta 0 balorazioarekin ateratzen da; osatu aurkeztu aurretik",
   "m720.sold_no_acquisition": "datuek ez dute erosketa jasotzen: baja eskuratze-datarik gabe ateratzen da; osatu aurkeztu aurretik",
+  "m720.sold_value_too_large": "iraungitze-datako balorazioa ez da sartzen fitxategiaren eremuan (12 zifra oso baino gehiago): baja 0 balorazioarekin ateratzen da; osatu aurkeztu aurretik",
   "m720.generate_btn": "720 Ereduaren fitxategia sortu",
   "m720.deadline": "Epea: urtarrilaren 1etik martxoaren 31ra hurrengo urtean",
   "m720.total_value": "Balio osoa: {{amount}} €",

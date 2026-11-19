@@ -450,6 +450,7 @@ const ca: TranslationKeys = {
     "falta el país on està dipositat o situat",
   "m720.omitted_quantity_unknown": "el fitxer no porta un nombre de valors vàlid (falta, no es llegeix o és un 0 al costat d'un valor); pren-lo de l'extracte de final d'any del bròker",
   "m720.omitted_quantity_below_hundredth": "el seu nombre de valors és inferior a 0,01 i el fitxer només admet dos decimals, així que escriuria 0; pren-lo de l'extracte de final d'any del bròker",
+  "m720.omitted_quantity_too_large": "el seu nombre de valors no cap al camp del fitxer (més de 10 xifres enteres), així que no s'escriu; comprova'l a l'extracte de final d'any del bròker",
   "m720.omitted_no_account":
     "falta el número de compte",
   "m720.omitted_invalid_code":
@@ -476,6 +477,7 @@ const ca: TranslationKeys = {
   "m720.sold_help": "El fitxer els inclou amb origen C, amb la data i l'import de l'última venda.",
   "m720.sold_no_date": "no hi ha cap venda el {{year}} de les accions declarades: la baixa surt sense data d'extinció i amb valoració 0; completa-la abans de presentar",
   "m720.sold_no_acquisition": "les dades no n'inclouen la compra: la baixa surt sense data d'adquisició; completa-la abans de presentar",
+  "m720.sold_value_too_large": "la seva valoració a la data d'extinció no cap al camp del fitxer (més de 12 xifres enteres): la baixa surt amb valoració 0; completa-la abans de presentar",
   "m720.generate_btn": "Generar fitxer Model 720",
   "m720.deadline": "Termini: 1 gener – 31 març de l'any següent",
   "m720.total_value": "Valor total: {{amount}} €",

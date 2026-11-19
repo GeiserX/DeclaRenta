@@ -450,6 +450,7 @@ const gl: TranslationKeys = {
     "falta o país onde está depositado ou situado",
   "m720.omitted_quantity_unknown": "o ficheiro non trae un número de valores válido (falta, non se le ou é un 0 xunto a un valor); tómao do extracto de fin de ano do bróker",
   "m720.omitted_quantity_below_hundredth": "o seu número de valores é inferior a 0,01 e o ficheiro só admite dous decimais, así que escribiría 0; tómao do extracto de fin de ano do bróker",
+  "m720.omitted_quantity_too_large": "o seu número de valores non cabe no campo do ficheiro (máis de 10 cifras enteiras), así que non se escribe; compróbao no extracto de fin de ano do bróker",
   "m720.omitted_no_account":
     "falta o número de conta",
   "m720.omitted_invalid_code":
@@ -476,6 +477,7 @@ const gl: TranslationKeys = {
   "m720.sold_help": "O ficheiro inclúeos con orixe C, coa data e o importe da última venda.",
   "m720.sold_no_date": "non hai ningunha venda en {{year}} das accións declaradas: a baixa sae sen data de extinción e con valoración 0; complétaa antes de presentar",
   "m720.sold_no_acquisition": "os datos non inclúen a súa compra: a baixa sae sen data de adquisición; complétaa antes de presentar",
+  "m720.sold_value_too_large": "a súa valoración na data de extinción non cabe no campo do ficheiro (máis de 12 cifras enteiras): a baixa sae con valoración 0; complétaa antes de presentar",
   "m720.generate_btn": "Xerar ficheiro Modelo 720",
   "m720.deadline": "Prazo: 1 xaneiro – 31 marzo do ano seguinte",
   "m720.total_value": "Valor total: {{amount}} €",

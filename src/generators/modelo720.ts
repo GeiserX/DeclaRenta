@@ -58,6 +58,29 @@ export interface Modelo720ThresholdResult {
 const THRESHOLD = new Decimal(50000);
 
 /**
+ * The widths of the numeric fields a type-2 record writes: valoración 1 and 2
+ * (432-446, 447-461) carry 12 integer digits and 2 decimals, «Número de
+ * valores» (463-474) 10 integer digits and 2 decimals.
+ */
+const AMOUNT_INTEGER_DIGITS = 12;
+const QUANTITY_INTEGER_DIGITS = 10;
+
+/** Whether a number, rounded half up to cents as the field writes it, has at most `integerDigits` integer digits. */
+function fitsField(value: Decimal, integerDigits: number): boolean {
+  return value.abs().toDecimalPlaces(2, Decimal.ROUND_HALF_UP).lessThan(new Decimal(10).pow(integerDigits));
+}
+
+/**
+ * Whether an amount in euros fits a valoración field (up to 999,999,999,999.99).
+ * A value that does not fit is «sin valorar»: no field is ever written in
+ * exponent form or past its width (a positionValue of "1e999" is a finite
+ * number, #470). The web section uses it for the «—» it shows.
+ */
+export function fitsModelo720Amount(valueEur: Decimal): boolean {
+  return fitsField(valueEur, AMOUNT_INTEGER_DIGITS);
+}
+
+/**
  * A V-category holding: a long stock, fund or bond. A short position
  * (`isShortPosition`: negative value, or a negative quantity when the value
  * cannot tell) is stock the taxpayer owes, not an asset they own. A row of 0
@@ -68,6 +91,20 @@ export function isHeldSecurity(p: OpenPosition): boolean {
   return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     && !isShortPosition(p)
     && !holdsNothing(p);
+}
+
+/**
+ * A held security's value in euros for the 720, or null when it is «sin
+ * valorar»: no resolvable rate, no market value in the export, or a value too
+ * big for valoración 1 (`fitsModelo720Amount`). The threshold check and the
+ * file share it, so they never disagree on a holding.
+ */
+function securityValueEur(p: OpenPosition, rateMap: EcbRateMap, year: number): Decimal | null {
+  const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
+  const value = positionValueOf(p);
+  if (ecbRate === null || hasNoMarketValue(p) || value === null) return null;
+  const valueEur = value.abs().mul(ecbRate);
+  return fitsModelo720Amount(valueEur) ? valueEur : null;
 }
 
 /**
@@ -86,16 +123,19 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
   // rather than crash the threshold check / file generation.
   if (ecbRate === null || ending === null) return undefined;
   const average = cashAverageOf(cb);
-  return {
-    ending: ending.mul(ecbRate),
-    averageQ4: average === null ? null : average.mul(ecbRate),
-  };
+  const endingEur = ending.mul(ecbRate);
+  const averageEur = average === null ? null : average.mul(ecbRate);
+  // A balance or an average too big for its valoración is unknown too: never
+  // written in exponent form or past the field (#470).
+  if (!fitsModelo720Amount(endingEur) || (averageEur !== null && !fitsModelo720Amount(averageEur))) return undefined;
+  return { ending: endingEur, averageQ4: averageEur };
 }
 
 /**
  * The held cash balances (`heldCashBalances`) the 720 cannot value in euros:
- * the export gives no number for the balance, or its currency has no year-end
- * rate (IBKR's CNH, or a rate the ECB fetch did not return). Each is unknown,
+ * the export gives no number for the balance, its currency has no year-end
+ * rate (IBKR's CNH, or a rate the ECB fetch did not return), or the balance or
+ * its Q4 average is too big for its valoración (`fitsModelo720Amount`). Each is unknown,
  * never 0 € and never dropped: the accounts category counts it unvalued, and
  * the web section and the CLI name its account and currency (#470).
  */
@@ -162,15 +202,15 @@ export function checkModelo720Thresholds(
   let valuesTotal = new Decimal(0);
   let unvalued = 0;
   for (const p of positions.filter(isHeldSecurity)) {
-    const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
-    // Unvaluable position (no resolvable rate, or no market value in the
-    // export): excluded from the EUR total and counted, never added as 0 €.
-    const value = positionValueOf(p);
-    if (ecbRate === null || hasNoMarketValue(p) || value === null) {
+    // Unvaluable position (no resolvable rate, no market value in the export,
+    // or a value too big for the file): excluded from the EUR total and
+    // counted, never added as 0 €.
+    const valueEur = securityValueEur(p, rateMap, year);
+    if (valueEur === null) {
       unvalued++;
       continue;
     }
-    valuesTotal = valuesTotal.plus(value.abs().mul(ecbRate));
+    valuesTotal = valuesTotal.plus(valueEur);
   }
 
   const cash = cashCategoryTotals(cashBalances, rateMap, year);
@@ -214,23 +254,27 @@ export interface Previous720Security {
  * no broker export gives us), a security or account whose country is unknown,
  * a security whose share count the export does not give (`quantityUnknown`: the
  * record would write 0 in «Número de valores», #470) or is below 0.005, which
- * that field's two decimals round to 0 (`quantity_below_hundredth`), an account with no
+ * that field's two decimals round to 0 (`quantity_below_hundredth`) or too big
+ * for its 10 integer digits (`quantity_too_large`), an account with no
  * account code, or a sale of a security whose clave,
  * subclave or country in last year's file is not a valid code (a file written
  * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130)
  * and that this year's sale trade cannot correct.
  */
 export type Modelo720Omission =
-  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth"; position: OpenPosition }
+  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | "quantity_too_large"; position: OpenPosition }
   | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
   | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
 
-function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | null {
+function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | "quantity_too_large" | null {
   if (p.isin.trim() === "") return "no_isin";
   if (modelo720PositionCountry(p) === null) return "no_country";
   if (p.quantityUnknown === true) return "quantity_unknown";
   const quantity = readPositionNumber(p.quantity);
   if (quantity !== null && writesZeroUnits(quantity)) return "quantity_below_hundredth";
+  // More units than «Número de valores» holds (10 integer digits): never
+  // written in exponent form or past the field (#470).
+  if (quantity !== null && !fitsField(quantity, QUANTITY_INTEGER_DIGITS)) return "quantity_too_large";
   return null;
 }
 
@@ -477,14 +521,12 @@ function plan720(
   const entries = positions
     .filter(isHeldSecurity)
     .flatMap((p) => {
-      const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
-      // Unvaluable position (no resolvable rate, or no market value in the
-      // export): cannot be written to the fixed-width record without an EUR
-      // value — skip it. The caller surfaces a warning so the user values and
-      // declares it manually.
-      const value = positionValueOf(p);
-      if (ecbRate === null || hasNoMarketValue(p) || value === null) return [];
-      const valueEur = value.abs().mul(ecbRate);
+      // Unvaluable position (no resolvable rate, no market value in the
+      // export, or a value too big for valoración 1): cannot be written to the
+      // fixed-width record without an EUR value — skip it. The caller surfaces
+      // a warning so the user values and declares it manually.
+      const valueEur = securityValueEur(p, rateMap, config.year);
+      if (valueEur === null) return [];
 
       // One record per acquisition date of the lots held at year end
       const tranches = acquisitionTranches(new Decimal(p.quantity).abs(), valueEur, remainingLots?.get(p.isin));
@@ -500,10 +542,16 @@ function plan720(
   // and valued by the last sale of declared shares. Without such a sale the
   // record keeps a blank date and a zero value (see findUndatedExtinctions).
   const cancelled = findCancelledSecurities(positions, config.previousYearSecurities, config.year, disposals);
+  // A tranche value too big for valoración 1 is written as 0, as an undated
+  // extinction is, and findUndatedExtinctions names it to complete (#470).
   const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
     const tranches = extinctionTranches(security.isin, config.year, disposals);
     return tranches.length > 0
-      ? tranches.map((t) => ({ security: recordOfTranche(security, t.acquireDate, config.previousYearSecurities), ...t }))
+      ? tranches.map((t) => ({
+        security: recordOfTranche(security, t.acquireDate, config.previousYearSecurities),
+        ...t,
+        valueEur: fitsModelo720Amount(t.valueEur) ? t.valueEur : new Decimal(0),
+      }))
       : [{ security, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
   });
 
@@ -773,10 +821,10 @@ function extinctionTranches(
   }));
 }
 
-/** An extinction record with a field the file leaves blank (see findUndatedExtinctions). */
+/** An extinction record with a field the file leaves blank or at 0 (see findUndatedExtinctions). */
 export interface UndatedExtinction {
   isin: string;
-  missing: "extinctionDate" | "acquisitionDate";
+  missing: "extinctionDate" | "acquisitionDate" | "value";
 }
 
 /**
@@ -788,6 +836,8 @@ export interface UndatedExtinction {
  *   never an invented 31 December.
  * - `acquisitionDate`: the extinction is dated by a sale the upload holds no
  *   lot for (no history), so its acquisition date (415-422) is blank.
+ * - `value`: the value at the extinction date is too big for valoración 1
+ *   (`fitsModelo720Amount`), so the record writes 0 there (#470).
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
@@ -799,7 +849,8 @@ export function findUndatedExtinctions(
   return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
-    return tranches.some((t) => t.acquireDate === "") ? [{ isin, missing: "acquisitionDate" }] : [];
+    if (tranches.some((t) => t.acquireDate === "")) return [{ isin, missing: "acquisitionDate" }];
+    return tranches.some((t) => !fitsModelo720Amount(t.valueEur)) ? [{ isin, missing: "value" }] : [];
   });
 }
 
@@ -878,12 +929,17 @@ function numPad(value: string, intLen: number, decLen: number): string {
   // AEAT receives rounded values (not truncated) and any rounding that bumps
   // the integer part (e.g. 1.999 → 2.00) is reflected in the integer field.
   const dec = new Decimal(value).abs().toDecimalPlaces(decLen, Decimal.ROUND_HALF_UP);
-  const intDigits = dec.floor().toString();
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("8.5e+998"), which is shorter than the field and passed this check (#470).
+  const intDigits = dec.floor().toFixed(0);
   if (intDigits.length > intLen) {
     // A rounding carry (or an oversized input) pushed the integer part past the
     // fixed field width. Padding would silently shift every following byte and
-    // corrupt the 500-byte record — fail fast instead.
-    throw new Error(`Modelo 720: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
+    // corrupt the 500-byte record — fail fast instead. The callers keep every
+    // value a detail record writes inside its field (`fitsModelo720Amount`,
+    // `quantity_too_large`), so only the type-1 sums of more than a thousand
+    // records near the 12-digit maximum can still reach this.
+    throw new Error(`Modelo 720: importe ${dec.toFixed()} excede el campo de ${intLen} dígitos enteros`);
   }
   const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).round().toString().padStart(decLen, "0");

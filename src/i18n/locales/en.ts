@@ -449,6 +449,7 @@ const en: TranslationKeys = {
     "the country where it is deposited or located is missing",
   "m720.omitted_quantity_unknown": "the file has no valid number of securities (missing, unreadable, or a 0 next to a value); take it from the broker's year-end statement",
   "m720.omitted_quantity_below_hundredth": "its number of securities is below 0.01 and the file takes only two decimals, so it would write 0; take it from the broker's year-end statement",
+  "m720.omitted_quantity_too_large": "its number of securities does not fit the file's field (more than 10 integer digits), so it is not written; check it in the broker's year-end statement",
   "m720.omitted_no_account":
     "the account number is missing",
   "m720.omitted_invalid_code":
@@ -475,6 +476,7 @@ const en: TranslationKeys = {
   "m720.sold_help": "The file includes them with origin C, dated and valued by the last sale.",
   "m720.sold_no_date": "no sale of the declared shares in {{year}}: the record has no extinction date and a value of 0; complete it before filing",
   "m720.sold_no_acquisition": "the data does not include its purchase: the record has no acquisition date; complete it before filing",
+  "m720.sold_value_too_large": "its value at the extinction date does not fit the file's field (more than 12 integer digits): the record has a value of 0; complete it before filing",
   "m720.generate_btn": "Generate Modelo 720 file",
   "m720.deadline": "Deadline: January 1 – March 31 of the following year",
   "m720.total_value": "Total value: {{amount}} EUR",
