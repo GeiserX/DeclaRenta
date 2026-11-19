@@ -278,7 +278,10 @@ export function resolveIsinWindow(w: IsinWindow | undefined, day: string): Resol
  * picks (a toggle that removes a release adds a user value), so a change of
  * the window never removes a row. The row describes one day: the last sale day
  * with an IBKR 1-year reading, else the last sale day, else 31 December; its
- * `listingExchanges` are the codes in force on that day.
+ * `listingExchanges` are the codes in force on that day. `openDecision` also
+ * collects every other loss or release sale day with an open 2-month reading,
+ * and `openListingExchanges` names the codes of those days when they differ
+ * from `listingExchanges`.
  *
  * @param yearDisposals - The tax year's disposals, after anti-churning
  * @param windows - The same map `detectWashSales` used
@@ -290,15 +293,16 @@ export function listAntichurningSecurities(
   year: number,
   names: ReadonlyMap<string, { symbol: string; description: string }> = new Map(),
 ): AntichurningSecurity[] {
-  const sold = new Map<string, { symbol: string; description: string; days: Set<string>; relevant: boolean }>();
+  // Per ISIN: every sale day, and whether that day has a loss sale or a release.
+  const sold = new Map<string, { symbol: string; description: string; days: Map<string, boolean>; relevant: boolean }>();
   for (const d of yearDisposals) {
     if (!d.isin || NO_LISTING_VOTE.has(d.assetCategory) || d.quantity.isZero()) continue;
     const day = normalizeDate(d.sellDate.trim()).slice(0, 10);
     const relevant = d.gainLossEur.isNegative() || d.reintegratedLossEur.greaterThan(0);
     const prev = sold.get(d.isin);
-    if (!prev) sold.set(d.isin, { symbol: d.symbol, description: d.description, days: new Set([day]), relevant });
+    if (!prev) sold.set(d.isin, { symbol: d.symbol, description: d.description, days: new Map([[day, relevant]]), relevant });
     else {
-      prev.days.add(day);
+      prev.days.set(day, (prev.days.get(day) ?? false) || relevant);
       prev.relevant ||= relevant;
     }
   }
@@ -311,12 +315,26 @@ export function listAntichurningSecurities(
     const w = windows.get(isin);
     // The automatic reading, without the user's value.
     const ibkr: IsinWindow | undefined = w ? { listings: w.listings, ...(w.votes ? { votes: w.votes } : {}) } : undefined;
-    const days = [...(sale?.days ?? [])].sort();
+    const days = [...(sale?.days.keys() ?? [])].sort();
     const oneYearDay = days.filter((d) => resolveIsinWindow(ibkr, d)?.months === 12).at(-1);
     if (!sale?.relevant && w?.user === undefined && oneYearDay === undefined) continue;
     const day = oneYearDay ?? days.at(-1) ?? `${year}-12-31`;
     const auto = resolveIsinWindow(ibkr, day);
     const resolved = resolveIsinWindow(w, day) ?? { months: 2, source: "default" as const };
+    const listingExchanges = w ? listingsOn(w, day) : [];
+    // The open-point notice: the row's day, plus every loss or release sale
+    // day whose 2 months rest on an EMIR-only decision. A Toronto loss sale
+    // in March keeps its notice when a PINK sale in September gives the row
+    // 1 year; a Toronto gain sale with nothing to release adds none.
+    const decisions = new Set(auto?.openDecision?.split(", ") ?? []);
+    const openCodes = new Set(auto?.openDecision ? listingExchanges : []);
+    for (const d of days) {
+      const open = d !== day && sale?.days.get(d) === true && ibkr ? resolveIsinWindow(ibkr, d)?.openDecision : undefined;
+      if (!open || !ibkr) continue;
+      for (const id of open.split(", ")) decisions.add(id);
+      for (const code of listingsOn(ibkr, d)) openCodes.add(code);
+    }
+    const openListingExchanges = [...openCodes].sort();
     const name = sale ?? names.get(isin);
     rows.push({
       isin,
@@ -325,8 +343,9 @@ export function listAntichurningSecurities(
       months: resolved.months,
       source: resolved.source,
       autoMonths: auto?.months ?? 2,
-      listingExchanges: w ? listingsOn(w, day) : [],
-      ...(auto?.openDecision ? { openDecision: auto.openDecision } : {}),
+      listingExchanges,
+      ...(decisions.size > 0 ? { openDecision: [...decisions].sort().join(", ") } : {}),
+      ...(decisions.size > 0 && openListingExchanges.join() !== listingExchanges.join() ? { openListingExchanges } : {}),
     });
   }
   return rows.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.isin.localeCompare(b.isin));

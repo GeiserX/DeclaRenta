@@ -1284,7 +1284,7 @@ export function generateTaxReport(
   if (openListing.length > 0) {
     const ctx = {
       count: String(openListing.length),
-      list: openListing.map((s) => `${s.symbol || s.isin} (${s.isin}, IBKR: ${s.listingExchanges.join(", ")}, ${s.openDecision})`).join("; "),
+      list: openListing.map((s) => `${s.symbol || s.isin} (${s.isin}, IBKR: ${(s.openListingExchanges ?? s.listingExchanges).join(", ")}, ${s.openDecision})`).join("; "),
     };
     allMessages.push({
       id: "report.antichurning_listing_open",

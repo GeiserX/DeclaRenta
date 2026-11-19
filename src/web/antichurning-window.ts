@@ -71,7 +71,8 @@ function row(s: AntichurningSecurity): string {
   const option = (v: string, label: string): string =>
     `<option value="${v}"${v === value ? " selected" : ""}>${esc(label)}</option>`;
   const listing = s.listingExchanges.length > 0 ? s.listingExchanges.join(", ") : tr("antichurning_window.no_listing");
-  const open = s.openDecision ? `<br><span class="muted">${esc(tr("antichurning_window.open_note", { decision: s.openDecision }))}</span>` : "";
+  const openCodes = s.openListingExchanges ? `${s.openListingExchanges.join(", ")}: ` : "";
+  const open = s.openDecision ? `<br><span class="muted">${esc(openCodes + tr("antichurning_window.open_note", { decision: s.openDecision }))}</span>` : "";
   return `<tr>
     <td><strong>${esc(s.symbol || s.isin)}</strong><br><span class="mono muted">${esc(s.isin)}</span></td>
     <td class="mono">${esc(listing)}${open}</td>

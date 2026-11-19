@@ -453,3 +453,44 @@ describe("#452 follow-up: the listing survives the merge of an order's fills", (
     expect(row452(r, ISIN)?.listingExchanges).toEqual(["LSE", "NYSE"]);
   });
 });
+
+describe("#452 follow-up: a Toronto loss sale keeps its open-point notice when a later sale of the ISIN reads 1 year", () => {
+  // The row describes the last 1-year sale day, but the March loss sale was
+  // cut to 2 months by the EMIR decision 2016/2273, which always comes with
+  // the open-point notice. The notice names the codes in force on 01/03: TSE,
+  // and PINK, which first shows after that day and so still counts.
+  const CA = "CA0000000001";
+  const xml = (lossListing: string) =>
+    flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250102", side: "BUY", qty: 2, price: 100, listing: lossListing, conid: "5" },
+      { date: "20250301", side: "SELL", qty: 1, price: 80, listing: lossListing, conid: "5" },
+      { date: "20250901", side: "SELL", qty: 1, price: 130, listing: "PINK", conid: "5" },
+    ] }], CA);
+
+  it.each(METHODS)("[%s] TSE loss sale on 01/03, PINK gain sale on 01/09 (one conid): 1-year row with the open notice for TSE", (method) => {
+    const r = run(xml("TSE"), 2025, method);
+    expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["PINK"], openDecision: "2016/2273", openListingExchanges: ["PINK", "TSE"] });
+    expect(msg(r, ONE_YEAR)?.message).toContain(`(${CA}, IBKR: PINK)`);
+    expect(msg(r, OPEN)?.message).toContain(`(${CA}, IBKR: PINK, TSE, 2016/2273)`);
+    // The March loss sale is 2 months either way, as at a3fe6ae: the second
+    // share bought on 02/01 is inside them and still held, so the −20 stays blocked.
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+  });
+
+  it("the loss sale on NYSE instead: no open notice", () => {
+    const r = run(xml("NYSE"), 2025);
+    expect(row452(r, CA)?.openDecision).toBeUndefined();
+    expect(msg(r, OPEN)).toBeUndefined();
+  });
+
+  it("a Toronto gain sale before a 1-year gain sale gets no open notice (nothing to release)", () => {
+    const r = run(flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250102", side: "BUY", qty: 2, price: 100, listing: "TSE", conid: "5" },
+      { date: "20250301", side: "SELL", qty: 1, price: 120, listing: "TSE", conid: "5" },
+      { date: "20250901", side: "SELL", qty: 1, price: 130, listing: "PINK", conid: "5" },
+    ] }], CA), 2025);
+    expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", listingExchanges: ["PINK"] });
+    expect(row452(r, CA)?.openDecision).toBeUndefined();
+    expect(msg(r, OPEN)).toBeUndefined();
+  });
+});

@@ -178,6 +178,13 @@ describe("renderAntichurningWindowPanel", () => {
     expect(open).toContain(" open>");
     expect(open).toContain("2016/2273");
   });
+
+  it("names the codes of an open reading from another sale day before its note", () => {
+    const html = renderAntichurningWindowPanel([
+      { isin: ISIN, symbol: "MOVER", description: "MOVER", months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["PINK"], openDecision: "2016/2273", openListingExchanges: ["PINK", "TSE"] },
+    ]);
+    expect(html).toMatch(/PINK<br><span class="muted">PINK, TSE: [^<]*2016\/2273/);
+  });
 });
 
 describe("bindAntichurningWindowPanel: one write per Save, and failures shown", () => {

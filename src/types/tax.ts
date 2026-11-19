@@ -265,10 +265,15 @@ export interface AntichurningSecurity {
   source: "default" | "ibkr" | "user";
   /** The months the automatic reading gives (IBKR's codes, else the default), whatever the user set. */
   autoMonths: 2 | 12;
-  /** Every IBKR listing code of the ISIN, sorted. Empty when IBKR gave none. */
+  /** The IBKR listing codes of the ISIN in force on the row's day, sorted. Empty when IBKR gave none. */
   listingExchanges: string[];
-  /** The EMIR equivalence decision a 2-month IBKR reading rests on (open for shares), e.g. "2016/2273". */
+  /**
+   * The EMIR equivalence decisions a 2-month IBKR reading rests on (open for
+   * shares), e.g. "2016/2273": on the row's day or on any loss or release sale day.
+   */
   openDecision?: string;
+  /** The codes in force on the open-reading days, sorted; only when they differ from `listingExchanges`. */
+  openListingExchanges?: string[];
 }
 
 /** Dividend received from a foreign security */
