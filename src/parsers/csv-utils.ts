@@ -332,7 +332,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.trade_row_unreadable",
       severity: "warning",
       message: `${broker}: ${count} fila(s) de operación no se pueden leer y no se calculan: ${list}.`,
-      hint: "Entre corchetes va la celda que falla: falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a un valor que pueda ser el de una de esas filas. Si una fila es de una criptomoneda y es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
+      hint: "Entre corchetes va la celda que falla. Falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a ningún valor al que pueda pertenecer una de esas filas. Si una fila es una recompra de una criptomoneda en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
       context: { broker, count, rows: list },
     });
   }

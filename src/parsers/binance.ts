@@ -764,7 +764,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_timestamp",
       severity: "warning",
       message: `Binance: ${count} fila(s) no tienen una fecha y hora (UTC_Time) legible y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda de la fecha. Sin ella, DeclaRenta no sabe con qué otra fila va cada movimiento. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda de la fecha. Sin ella, DeclaRenta no sabe con qué otra fila va cada movimiento. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
       context: { count, rows },
     });
   }
@@ -775,7 +775,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_amount",
       severity: "warning",
       message: `Binance: ${count} fila(s) no tienen un importe (Change) legible y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
       context: { count, rows },
     });
   }
@@ -786,7 +786,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unparseable_coin",
       severity: "warning",
       message: `Binance: ${count} fila(s) no dicen de qué moneda son (Coin) y no se calculan: ${rows}.`,
-      hint: "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      hint: "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
       context: { count, rows },
     });
   }
@@ -803,7 +803,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.unpaired_leg",
       severity: "warning",
       message: `Binance: ${count} movimiento(s) de compra, venta o conversión no tienen la otra parte de la operación y no se calculan: ${rows}.`,
-      hint: "Cada compra o venta de Binance son dos filas con la misma hora: la moneda que entra y la que sale. DeclaRenta no ha encontrado la otra fila de estos movimientos. Por eso no suma ni resta unidades ni dinero por ellos. Las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Compara esas filas con tu historial de Binance y añade a mano en Renta Web las operaciones que falten.",
+      hint: "Cada compra o venta de Binance son dos filas con la misma hora: la moneda que entra y la que sale. DeclaRenta no ha encontrado la otra fila de estos movimientos. Por eso no suma ni resta unidades ni dinero por ellos. Las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Compara esas filas con tu historial de Binance y añade a mano en Renta Web las operaciones que falten.",
       context: { count, rows },
     });
   }
@@ -818,8 +818,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     parserMessages.push({
       id: "binance.spot_cost_split",
       severity: "warning",
-      message: `Binance: ${count} movimiento(s) de compra de varias criptomonedas a la vez no dicen qué pago va con cada una. DeclaRenta ha repartido el pago entre ellas: ${rows}.`,
-      hint: "Binance da varias compras en el mismo segundo. No pone cada pago junto a su compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
+      message: `Binance: ${count} fila(s) de compras de varias criptomonedas en el mismo segundo no dicen qué pago va con cada criptomoneda. DeclaRenta ha repartido el pago entre ellas: ${rows}.`,
+      hint: "Binance anota varias compras en el mismo segundo. No pone cada pago junto a su compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Sus ganancias y sus pérdidas tampoco lo son. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
       context: { count, rows },
     });
   }

@@ -331,7 +331,7 @@ function parseFreedom24(input: string): Statement {
       id: "freedom24.row_skipped_malformed",
       severity: "warning" as const,
       message: `Freedom24: ${skippedMalformed} fila(s) de acciones corporativas no tienen un tipo legible (type_id) y no se calculan.`,
-      hint: "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación. No suma ningún importe por ellas. Pueden mover acciones, así que el aviso de operaciones societarias no aplicadas también las nombra. Por eso la comprobación de compra única de la regla de los 2 meses puede verse afectada: DeclaRenta no aplica esa excepción a su valor, o a ningún valor si la fila no nombra ninguno. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
+      hint: "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación. No suma ningún importe por ellas. Pueden mover acciones. Por eso el aviso de operaciones societarias no aplicadas también las nombra. La comprobación de compra única de la regla de los 2 meses puede verse afectada. DeclaRenta no aplica esa excepción a su valor. Si la fila no nombra ningún valor, no la aplica a ninguno. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
       context: { count: String(skippedMalformed) },
     });
   }

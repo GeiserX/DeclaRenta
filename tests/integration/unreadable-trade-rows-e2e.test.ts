@@ -1753,6 +1753,25 @@ describe("#467 crypto income whose coin cannot be read is named, never skipped w
   });
 });
 
+describe("#466 #467 #468 the warnings of these issues read as plain short sentences in Spanish and English", () => {
+  const KEYS = [
+    "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
+    "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
+    "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
+    "parser.cash_row_unidentified", "parser.crypto_income_unidentified",
+    "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
+  ];
+  const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
+  it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 28 words", (_name, locale) => {
+    for (const key of KEYS) {
+      for (const text of [locale[key]!, locale[`${key}.hint`]!]) {
+        expect(text, key).not.toContain(";");
+        for (const sentence of sentences(text)) expect(sentence.split(/\s+/).length, `${key}: ${sentence}`).toBeLessThanOrEqual(28);
+      }
+    }
+  });
+});
+
 describe("#467 Freedom24: a withholding larger than its dividend is never booked", () => {
   const f24 = (...rows: Record<string, unknown>[]): Statement => freedom24Parser.parse(JSON.stringify({
     trades: { detailed: [] }, corporate_actions: { detailed: rows },

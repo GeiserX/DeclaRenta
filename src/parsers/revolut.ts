@@ -746,7 +746,7 @@ function parseTransactionLog(
     parserMessages.push({
       id: "revolut.bad_fx_rate",
       severity: "warning" as const,
-      message: `Se ha(n) omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: ${rows}.`,
+      message: `DeclaRenta ha omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut porque su tipo de cambio (FX Rate) no es válido: ${rows}.`,
       hint: "Solo los ingresos y las retiradas de efectivo usan esa columna. Las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. La causa suele ser una celda de tipo de cambio que no es un número, es negativa o vale cero. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut y súbelo de nuevo.",
       context: { count, rows },
     });
