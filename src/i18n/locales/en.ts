@@ -872,11 +872,11 @@ const en: TranslationKeys = {
   "report.antichurning_window_open_at_filing.hint":
     "Before you file, also upload the file with your trades after {{lastDate}} and calculate again. If you buy the same security or the same coin up to and including {{windowEnd}}, part of the loss on those sales may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. In that case, correct the filed return with a corrective return («autoliquidación rectificativa»).",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta applies the 1-year anti-churning window (art. 33.5.g LIRPF) to {{count}} security(ies), because IBKR shows them only on a market that is neither a regulated market of the European Economic Area nor a market the European Commission declared equivalent: {{list}}.",
+    "DeclaRenta applies the 1-year anti-churning window (art. 33.5.g LIRPF) to the sales of {{count}} security(ies) made on days when IBKR shows them only on a market that is neither a regulated market of the European Economic Area nor a market the European Commission declared equivalent: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR only shows the market of the lines you traded. If the security is also admitted to trading on a regulated market of the European Economic Area (a growth market or another multilateral trading facility is not enough) or on NYSE, Nasdaq, ASX or the Hong Kong Stock Exchange, it gets 2 months: mark it as 2 months in the \"Anti-churning window per security\" panel (on the command line, --antichurning-2m) and calculate again.",
   "report.antichurning_listing_open":
-    "DeclaRenta applies 2 months to {{count}} security(ies) that IBKR shows in Toronto, on TSX Venture, on Aequitas Neo, in Tokyo or in Singapore: {{list}}. A European Commission decision declares that market equivalent to a regulated market, and the DGT accepts that kind of decision (ruling V0778-25), but no ruling confirms it for shares.",
+    "DeclaRenta applies 2 months to the sales of {{count}} security(ies) made on days when IBKR shows them in Toronto, on TSX Venture, on Aequitas Neo, in Tokyo or in Singapore: {{list}}. A European Commission decision declares that market equivalent to a regulated market, and the DGT accepts that kind of decision (ruling V0778-25), but no ruling confirms it for shares.",
   "report.antichurning_listing_open.hint":
     "If you prefer the cautious reading, mark it as 1 year in the \"Anti-churning window per security\" panel (on the command line, --antichurning-1y) and calculate again.",
   "report.antichurning_window_user":

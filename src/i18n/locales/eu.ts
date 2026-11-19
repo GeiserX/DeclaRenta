@@ -876,11 +876,11 @@ const eu: TranslationKeys = {
   "report.antichurning_window_open_at_filing.hint":
     "Aurkeztu aurretik, igo {{lastDate}} ondorengo eragiketak dituen fitxategia ere, eta kalkulatu berriro. Balio bera edo kriptomoneta bera {{windowEnd}} arte, egun hori barne, erosten baduzu, salmenta horien galeraren zati bat blokeatuta gera daiteke, edo salmenta ez da behin betiko eskualdaketa izango eta ez ditu zain dauden galerak askatuko. Kasu horretan, zuzendu aurkeztutako aitorpena autolikidazio zuzentzaile batekin («autoliquidación rectificativa»).",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta-k anti-churning arauaren urtebeteko epea aplikatzen die {{count}} baliori (PFEZaren Legearen 33.5.g art.), IBKR-k Europako Esparru Ekonomikoko merkatu arautua ez den eta Europako Batzordeak baliokidetzat jo ez duen merkatu batean bakarrik erakusten dituelako: {{list}}.",
+    "DeclaRenta-k anti-churning arauaren urtebeteko epea aplikatzen die {{count}} balioren salmentei (PFEZaren Legearen 33.5.g art.), IBKR-k salmenta-egun horietan Europako Esparru Ekonomikoko merkatu arautua ez den eta Europako Batzordeak baliokidetzat jo ez duen merkatu batean bakarrik erakusten dituelako: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR-k eragiketak egin dituzun lerroen merkatua bakarrik erakusten du. Balioa Europako Esparru Ekonomikoko merkatu arautu batean ere negoziatzeko onartuta badago (ez da nahikoa hazkunde-merkatu bat edo beste negoziazio-sistema aldeaniztun bat) edo NYSEn, Nasdaqen, ASXen edo Hong Kongeko Burtsan, 2 hilabete dagozkio: markatu 2 hilabeterekin «Anti-churning epea balio bakoitzeko» panelean (komando-lerroan, --antichurning-2m) eta kalkulatu berriro.",
   "report.antichurning_listing_open":
-    "DeclaRenta-k 2 hilabete aplikatzen dizkie IBKR-k Toronton, TSX Venturen, Aequitas Neon, Tokion edo Singapurren erakusten dituen {{count}} baliori: {{list}}. Europako Batzordearen erabaki batek merkatu hori merkatu arautu baten baliokidetzat jotzen du, eta DGTk erabaki mota hori onartzen du (V0778-25 kontsulta), baina kontsultarik ez da akzioetarako berresten.",
+    "DeclaRenta-k 2 hilabete aplikatzen dizkie {{count}} balioren salmentei, IBKR-k salmenta-egun horietan Toronton, TSX Venturen, Aequitas Neon, Tokion edo Singapurren erakusten dituelako: {{list}}. Europako Batzordearen erabaki batek merkatu hori merkatu arautu baten baliokidetzat jotzen du, eta DGTk erabaki mota hori onartzen du (V0778-25 kontsulta), baina kontsultarik ez da akzioetarako berresten.",
   "report.antichurning_listing_open.hint":
     "Irizpide zuhurra nahiago baduzu, markatu urtebetearekin «Anti-churning epea balio bakoitzeko» panelean (komando-lerroan, --antichurning-1y) eta kalkulatu berriro.",
   "report.antichurning_window_user":

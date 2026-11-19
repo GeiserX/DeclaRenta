@@ -472,6 +472,9 @@ describe("#452 follow-up: a Toronto loss sale keeps its open-point notice when a
     expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["PINK"], openDecision: "2016/2273", openListingExchanges: ["PINK", "TSE"] });
     expect(msg(r, ONE_YEAR)?.message).toContain(`(${CA}, IBKR: PINK)`);
     expect(msg(r, OPEN)?.message).toContain(`(${CA}, IBKR: PINK, TSE, 2016/2273)`);
+    // Both notices name the ISIN, so each one speaks of the sales of its own days.
+    expect(msg(r, ONE_YEAR)?.message).toContain("a las ventas de 1 valor(es) hechas en días en que IBKR solo los muestra");
+    expect(msg(r, OPEN)?.message).toContain("a las ventas de 1 valor(es) hechas en días en que IBKR los muestra en Toronto");
     // The March loss sale is 2 months either way. The buy on 02/01 is the only
     // purchase in them, nothing was held on 01/01, and the empty Open Positions
     // at 31/12 reconciles with the trades, so the one-purchase exception (#453)

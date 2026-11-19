@@ -874,11 +874,11 @@ const gl: TranslationKeys = {
   "report.antichurning_window_open_at_filing.hint":
     "Antes de presentala, sube tamén o ficheiro coas túas operacións posteriores ao {{lastDate}} e calcula de novo. Se compras o mesmo valor ou a mesma criptomoeda ata o {{windowEnd}} incluído, parte da perda desas vendas pode quedar bloqueada, ou a venda deixa de ser unha transmisión definitiva e non libera perdas pendentes. Nese caso, corrixe a declaración presentada cunha autoliquidación rectificativa.",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta aplica a {{count}} valor(es) o prazo de 1 ano da regra anti-churning (art. 33.5.g LIRPF), porque IBKR só os mostra nun mercado que non é un mercado regulado do Espazo Económico Europeo nin un mercado declarado equivalente pola Comisión Europea: {{list}}.",
+    "DeclaRenta aplica o prazo de 1 ano da regra anti-churning (art. 33.5.g LIRPF) ás vendas de {{count}} valor(es) feitas en días en que IBKR só os mostra nun mercado que non é un mercado regulado do Espazo Económico Europeo nin un mercado declarado equivalente pola Comisión Europea: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR só mostra o mercado das liñas que operaches. Se o valor tamén está admitido a negociación nun mercado regulado do Espazo Económico Europeo (non abonda un mercado de crecemento nin outro sistema multilateral de negociación) ou en NYSE, Nasdaq, ASX ou a Bolsa de Hong Kong, correspóndenlle 2 meses: márcao con 2 meses no panel «Prazo anti-churning por valor» (na liña de comandos, --antichurning-2m) e calcula de novo.",
   "report.antichurning_listing_open":
-    "DeclaRenta aplica 2 meses a {{count}} valor(es) que IBKR mostra en Toronto, TSX Venture, Aequitas Neo, Tokio ou Singapur: {{list}}. Unha decisión da Comisión Europea declara ese mercado equivalente a un mercado regulado, e a DGT acepta ese tipo de decisión (consulta V0778-25), pero ningunha consulta o confirma para accións.",
+    "DeclaRenta aplica 2 meses ás vendas de {{count}} valor(es) feitas en días en que IBKR os mostra en Toronto, TSX Venture, Aequitas Neo, Tokio ou Singapur: {{list}}. Unha decisión da Comisión Europea declara ese mercado equivalente a un mercado regulado, e a DGT acepta ese tipo de decisión (consulta V0778-25), pero ningunha consulta o confirma para accións.",
   "report.antichurning_listing_open.hint":
     "Se prefires o criterio prudente, márcao con 1 ano no panel «Prazo anti-churning por valor» (na liña de comandos, --antichurning-1y) e calcula de novo.",
   "report.antichurning_window_user":
