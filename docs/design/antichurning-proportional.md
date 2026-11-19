@@ -674,6 +674,13 @@ práctico Renta 2025. The decisions, each pinned in
       crypto-quoted pair, `cost`) cannot be read keeps an unreadable row for
       each coin. Before, it was booked as zero units and FIFO dropped it
       with its gain and no word.
+      FIFO values a Kraken trade at price × vol. A `price` that cannot be
+      read (empty, only a currency sign, text, negative, or no column) was
+      booked as 0, so a sale became a full loss with no word, or was passed
+      on as text and stopped the whole report with a `DecimalError`. The
+      price is now cost ÷ vol, the file's own numbers; a row with neither
+      is an unreadable row named by its `price`. A written 0 stays the
+      file's word.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

@@ -3205,3 +3205,87 @@ describe("#467 Freedom24 sweep: price, currency, cash flows and description", ()
     }
   });
 });
+
+describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and airdrops", () => {
+  const KR_H = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
+  const KR_H_NOPRICE = `"txid","ordertxid","pair","time","type","ordertype","cost","fee","vol","margin","misc","ledgers"`;
+  const kraken = (...rows: string[]): Statement => krakenParser.parse([KR_H, ...rows].join("\n"));
+  const krBuy = `"T1","O1","XBTEUR","2024-03-15 10:30:00","buy","limit","30000.00","3000.00","0","0.1","0.0","","L1"`;
+  const krSell = (price: string, cost = "9000.00", pair = "XBTEUR"): string =>
+    `"T2","O2","${pair}","2025-03-01 10:00:00","sell","market","${price}","${cost}","0","0.1","0.0","","L2"`;
+  const manual = (coins: Record<string, string>): EcbRateMap => {
+    const map: EcbRateMap = new Map();
+    for (let t = Date.UTC(2023, 0, 1); t <= Date.UTC(2026, 11, 31); t += 86_400_000) map.set(new Date(t).toISOString().slice(0, 10), new Map(Object.entries(coins)));
+    return map;
+  };
+  const runWith = (parts: [Statement, string][], year: number, method: FxMethod, manualRates: EcbRateMap): TaxReport => {
+    const statement = createEmptyStatement();
+    for (const [part, broker] of parts) mergeStatement(statement, part, broker);
+    return generateTaxReport(finalizeMergedStatement(statement), rates(), year, { ...reportOptionsForMethod(method), manualRates });
+  };
+  const net = (r: TaxReport): string => r.capitalGains.netGainLoss.toFixed(2);
+
+  describe("a trade whose price cannot be read", () => {
+    // BTC bought for 3000 € and sold for 9000 €: a 6000 € gain. FIFO values a
+    // trade at price × vol, so an unreadable price crashed the report ("abc",
+    // "-") or booked the sale for 0 € ("", "€"): a 3000 € loss.
+    it.each(METHODS)("[%s] control: price 90000.00 gains 6000 €", (method) => {
+      expect(net(run([[kraken(krBuy, krSell("90000.00")), "Kraken"]], 2025, method))).toBe("6000.00");
+    });
+
+    describe.each(["abc", "-", "", "€", "NaN", "-90000.00"])("price %j with a readable cost", (price) => {
+      it.each(METHODS)("[%s] the sale is priced cost ÷ vol: the 6000 € gain, no crash", (method) => {
+        const parsed = kraken(krBuy, krSell(price));
+        expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.tradePrice])).toEqual([["BUY", "0.1", "30000.00"], ["SELL", "-0.1", "90000"]]);
+        expect(parsed.parserMessages).toBeUndefined();
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect([net(r), r.capitalGains.transmissionValue.toFixed(2)]).toEqual(["6000.00", "9000.00"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a buy whose price cannot be read is priced cost ÷ vol, never a lot that cost 0", (method) => {
+      const parsed = kraken(krBuy.replace('"30000.00"', '"abc"'), krSell("90000.00"));
+      expect(parsed.trades[0]!.tradePrice).toBe("30000");
+      expect(net(run([[parsed, "Kraken"]], 2025, method))).toBe("6000.00");
+    });
+
+    it.each(METHODS)("[%s] a file with no price column is priced cost ÷ vol", (method) => {
+      const parsed = krakenParser.parse([KR_H_NOPRICE,
+        `"T1","O1","XBTEUR","2024-03-15 10:30:00","buy","limit","3000.00","0","0.1","0.0","",""`,
+        `"T2","O2","XBTEUR","2025-03-01 10:00:00","sell","market","9000.00","0","0.1","0.0","",""`].join("\n"));
+      expect(parsed.trades.map((t) => t.tradePrice)).toEqual(["30000", "90000"]);
+      expect(net(run([[parsed, "Kraken"]], 2025, method))).toBe("6000.00");
+    });
+
+    describe.each([["abc", "abc", 'BTC 20250301 [price: "abc"]'], ["", "", 'BTC 20250301 [price: ""]'], ["-", "x", 'BTC 20250301 [price: "-"]']])("price %j and cost %j", (price, cost, rows) => {
+      it.each(METHODS)("[%s] the sale books nothing and is named by its price cell", (method) => {
+        const parsed = kraken(krBuy, krSell(price, cost));
+        expect(unreadableRows(parsed)).toBe(rows);
+        expect(parsed.trades[1]!.quantityUnknown).toBe(true);
+        const r = run([[parsed, "Kraken"]], 2025, method);
+        expect(r.capitalGains.disposals).toEqual([]);
+        expect(r.messages.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe(rows);
+      });
+    });
+
+    it("a written zero price stays the file's word", () => {
+      expect(kraken(krBuy, krSell("0.00")).trades[1]!.tradePrice).toBe("0.00");
+      expect(kraken(krBuy, krSell("0")).parserMessages).toBeUndefined();
+    });
+
+    it.each(METHODS)("[%s] a crypto-quoted buy whose price cannot be read is priced cost ÷ vol, never a crash", (method) => {
+      const rows = (price: string): Statement => kraken(
+        `"T0","O0","XBTEUR","2024-01-10 10:00:00","buy","limit","30000","3000","0","0.1","0.0","",""`,
+        `"T1","O1","XETHXXBT","2024-03-15 10:30:00","buy","limit","${price}","0.05","0","1","0.0","",""`,
+        `"T2","O2","XETHZEUR","2025-03-01 10:00:00","sell","market","3000","3000","0","1","0.0","",""`);
+      const btc = manual({ BTC: "40000" });
+      const control = runWith([[rows("0.05"), "Kraken"]], 2025, method, btc);
+      for (const price of ["abc", ""]) {
+        const parsed = rows(price);
+        expect(parsed.trades.find((t) => t.tradeID === "T1")!.tradePrice).toBe("0.05");
+        expect(net(runWith([[parsed, "Kraken"]], 2025, method, btc))).toBe(net(control));
+        expect(net(runWith([[parsed, "Kraken"]], 2024, method, btc))).toBe(net(runWith([[rows("0.05"), "Kraken"]], 2024, method, btc)));
+      }
+    });
+  });
+});

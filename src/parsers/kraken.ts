@@ -238,7 +238,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const volDec = toFiniteDecimal(fields[cols.vol] ?? "0").abs();
     const costDec = toFiniteDecimal(fields[cols.cost] ?? "0").abs();
     const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
-    const price = parseNumber(fields[cols.price] ?? "0");
+    // A missing column, a cell with no finite number ("", "€", "abc", "-"),
+    // or a negative price, which Kraken never writes, cannot be read.
+    const priceReadable = !quantityUnreadable(fields[cols.price]) && !toFiniteDecimal(fields[cols.price]!).isNegative();
 
     const tradeDate = krakenDate(timeStr);
     const tradeTime = timeOfDay(timeStr);
@@ -277,13 +279,16 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
 
     // A buy or sale whose vol (or, for a crypto-quoted pair, cost) cannot be
     // read was booked as zero units, so FIFO dropped it with no word: it may
-    // hide a gain, a loss or an art. 33.5.e repurchase. It is kept as a trade
-    // that books nothing for each coin it names, and named (#467).
+    // hide a gain, a loss or an art. 33.5.e repurchase. So may a row whose
+    // price and cost both cannot be read: FIFO values a trade at price × vol.
+    // It is kept as a trade that books nothing for each coin it names, and
+    // named (#467).
     const badCol = quantityUnreadable(fields[cols.vol]) ? "vol"
       : !isFiat(quote) && quantityUnreadable(fields[cols.cost]) ? "cost"
+      : !priceReadable && !volDec.isZero() && quantityUnreadable(fields[cols.cost]) ? "price"
       : "";
     if (badCol) {
-      const idx = badCol === "vol" ? cols.vol : cols.cost;
+      const idx = badCol === "vol" ? cols.vol : badCol === "cost" ? cols.cost : cols.price;
       const cell = unreadableCell(idx >= 0 ? headers[idx]!.trim() : badCol, fields[idx]);
       const legs = [{ id: rowId, symbol: base, currency: quote, buySell: type === "sell" ? "SELL" as const : "BUY" as const }];
       if (!isFiat(quote)) legs.push({ id: `${rowId}-${quote}`, symbol: quote, currency: base, buySell: type === "sell" ? "BUY" : "SELL" });
@@ -297,6 +302,13 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     }
 
     const isSell = type === "sell";
+    // FIFO values a trade at price × vol, never from cost. A price it cannot
+    // read crashed the report ("abc") or sold for 0 € ("", "€"): a gain
+    // became a loss with no word. Kraken writes cost = price × vol, so the
+    // price is then cost ÷ vol, the file's own numbers (#467). A readable
+    // price keeps the file's text; a written zero stays the file's word.
+    const price = priceReadable ? parseNumber(fields[cols.price]!)
+      : volDec.isZero() ? "0" : costDec.div(volDec).toString();
 
     trades.push({
       tradeID: rowId,
