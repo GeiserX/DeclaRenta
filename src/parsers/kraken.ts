@@ -25,6 +25,7 @@ import {
   timeOfDay,
   tradeQuantityUnknownMessages,
   cryptoIncomeUnidentifiedMessages,
+  cryptoIncomeAmountUnreadableMessages,
   isReadableTradeDate,
   unreadableTrade,
   unreadableCell,
@@ -406,6 +407,8 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   const ignoredTypes = new Map<string, number>();
   // Staking rewards whose asset cell names no coin, named (#467).
   const unidentifiedIncome: string[] = [];
+  // Staking rewards whose amount cell cannot be read, named (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -439,6 +442,16 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         unidentifiedIncome.push(`${rawType} ${(fields[cols.amount] ?? "").trim() || "—"} ${shownDate} [${unreadableCell(headers[cols.asset] ?? "asset", asset)}]`);
         continue;
       }
+      // A reward whose amount cannot be read was booked as 0 units, so the
+      // income went undeclared with no word. It is not booked, but named by
+      // type, coin, date and cell (#467).
+      const rawAmount = cols.amount >= 0 ? fields[cols.amount] : undefined;
+      if (quantityUnreadable(rawAmount)) {
+        const rawType = [(fields[cols.type] ?? "").trim(), cols.subtype >= 0 ? (fields[cols.subtype] ?? "").trim() : ""].filter(Boolean).join(" ");
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timeStr || "—";
+        unreadableIncome.push(`${rawType} ${symbol} ${shownDate} [${unreadableCell(headers[cols.amount] ?? "amount", rawAmount)}]`);
+        continue;
+      }
 
       // Staking rewards are NOT foreign dividends (no issuer/withholding country,
       // not in the Art. 80 double-taxation pool). They are rendimiento del capital
@@ -469,7 +482,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   }
 
   const ignoredCount = [...ignoredTypes.values()].reduce((a, b) => a + b, 0);
-  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...(ignoredCount > 0
+  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...cryptoIncomeUnidentifiedMessages("Kraken", unidentifiedIncome), ...cryptoIncomeAmountUnreadableMessages("Kraken", unreadableIncome), ...(ignoredCount > 0
     ? [{
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,

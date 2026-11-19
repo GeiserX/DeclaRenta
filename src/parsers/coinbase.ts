@@ -26,6 +26,7 @@ import {
   unreadableTrade,
   isReadableTradeDate,
   cryptoIncomeUnidentifiedMessages,
+  cryptoIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -177,6 +178,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   const cryptoQuotePairs = new Set<string>();
   // Income rows (staking, rewards...) whose Asset is empty, named (#467).
   const unidentifiedIncome: string[] = [];
+  // Income rows whose Total and Subtotal both cannot be read, named (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -243,8 +246,20 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // mis-bucketed into the savings base.
     const incomeBucket = INCOME_BUCKETS[txType];
     if (incomeBucket) {
+      // The value is the Total, else the Subtotal. An empty Total was read as
+      // "0", so the income was booked as 0 even with a Subtotal, and a Total of
+      // "abc" stopped the whole report. With neither cell readable the row is
+      // not booked, but named by type, coin, date and cells (#467).
+      const rawTotal = cols.total >= 0 ? fields[cols.total] : undefined;
+      const rawSubtotal = cols.subtotal >= 0 ? fields[cols.subtotal] : undefined;
+      if (quantityUnreadable(rawTotal) && quantityUnreadable(rawSubtotal)) {
+        const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
+        const cells = `${unreadableCell(headers[cols.total] ?? "Total", rawTotal)}, ${unreadableCell(headers[cols.subtotal] ?? "Subtotal", rawSubtotal)}`;
+        unreadableIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} ${asset} ${shownDate} [${cells}]`);
+        continue;
+      }
       if (txType === "rewards income") rewardsIncomeCount++;
-      const eurAmount = total || subtotal;
+      const eurAmount = quantityUnreadable(rawTotal) ? subtotal : total;
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
@@ -399,6 +414,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     ...tradeQuantityUnknownMessages("Coinbase", trades),
     ...dropUndatedCash("Coinbase", cashTransactions, headers[cols.timestamp] ?? "Timestamp"),
     ...cryptoIncomeUnidentifiedMessages("Coinbase", unidentifiedIncome),
+    ...cryptoIncomeAmountUnreadableMessages("Coinbase", unreadableIncome),
   ];
   // "rewards income" is treated as savings-base income by default, but it can
   // also cover promotional cashback that is legally base-general. Nudge the user

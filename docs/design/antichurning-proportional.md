@@ -647,6 +647,15 @@ práctico Renta 2025. The decisions, each pinned in
       type with an empty `Asset` is now counted by
       `coinbase.unknown_types_skipped` like the same type with a coin.
       Binance names such a row with `binance.unparseable_coin`.
+    - Crypto income whose amount cannot be read: a Coinbase income row
+      whose `Total` and `Subtotal` both cannot be read (empty, text, only a
+      currency sign), and a Kraken staking or Earn reward whose `amount`
+      cannot be read, is not booked.
+      `parser.crypto_income_amount_unreadable` names each row by type, coin,
+      date and cells. Before, an empty Coinbase Total booked the income as
+      0 with no word, even with a readable Subtotal (now used); a Total of
+      "abc" stopped the whole report with a `DecimalError`; and the Kraken
+      reward was booked as 0 units.
     - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
       whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
       number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each

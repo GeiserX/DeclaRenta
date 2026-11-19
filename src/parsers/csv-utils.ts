@@ -292,6 +292,26 @@ export function cryptoIncomeUnidentifiedMessages(broker: string, rows: readonly 
 }
 
 /**
+ * The warning naming every crypto income row (staking, rewards, learning
+ * rewards) whose amount the file does not let the parser read: `rows` are
+ * "type coin date [cells]" (#467). Booked, it would be income of 0 (Coinbase's
+ * empty Total) or stop the whole report (a Total of "abc"), so it is not
+ * booked, and never dropped with no word: the user adds it by hand.
+ */
+export function cryptoIncomeAmountUnreadableMessages(broker: string, rows: readonly string[]): TaxMessage[] {
+  if (rows.length === 0) return [];
+  const count = String(rows.length);
+  const list = rows.join("; ");
+  return [{
+    id: "parser.crypto_income_amount_unreadable",
+    severity: "warning",
+    message: `${broker}: ${count} ingreso(s) en criptomonedas no tienen un importe legible y no se calculan: ${list}.`,
+    hint: "Entre corchetes va el importe tal como está en el archivo. Sin un importe, DeclaRenta no sabe cuánto recibiste. Por eso no suma ese ingreso y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
+    context: { broker, count, rows: list },
+  }];
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none; one naming every

@@ -1758,7 +1758,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
-    "parser.cash_row_unidentified", "parser.crypto_income_unidentified",
+    "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
@@ -1910,3 +1910,75 @@ describe("#467 Binance: a window that pairs several coins by a guess names every
   });
 });
 
+describe("#467 crypto income whose amount cannot be read is named, never booked as 0 and never stops the report", () => {
+  const CB_H = "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+  const KR_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const incomeEntries = (r: TaxReport): number => r.interest.entries.length + r.generalGains.entries.length;
+  const cbIncome = (type: string, subtotal: string, total: string): Statement =>
+    coinbaseParser.parse([CB_H, `2025-03-01T10:00:00Z,${type},ETH,0.5,EUR,2000,${subtotal},${total},0,`].join("\n"));
+
+  const cbCases: [string, string, string][] = [
+    ["", "", 'Staking Income 0.5 ETH 20250301 [Total (inclusive of fees and/or spread): "", Subtotal: ""]'],
+    ["abc", "abc", 'Staking Income 0.5 ETH 20250301 [Total (inclusive of fees and/or spread): "abc", Subtotal: "abc"]'],
+    ["", "€", 'Staking Income 0.5 ETH 20250301 [Total (inclusive of fees and/or spread): "€", Subtotal: ""]'],
+  ];
+  describe.each(cbCases)("Coinbase Staking Income with Subtotal %j and Total %j", (subtotal, total, rows) => {
+    it.each(METHODS)("[%s] is not booked as 0, the report runs, and the row is named by its cells", (method) => {
+      const parsed = cbIncome("Staking Income", subtotal, total);
+      expect(parsed.cashTransactions).toEqual([]);
+      const r = run([[parsed, "Coinbase"]], 2025, method);
+      expect(incomeEntries(r)).toBe(0);
+      expect(message(r.messages, "parser.crypto_income_amount_unreadable")?.context).toEqual({ broker: "Coinbase", count: "1", rows });
+    });
+  });
+
+  it.each(METHODS)("[%s] an empty Total with a readable Subtotal books the Subtotal, not 0", (method) => {
+    const parsed = cbIncome("Staking Income", "1000", "");
+    expect(parsed.cashTransactions.map((c) => [c.symbol, c.amount])).toEqual([["ETH", "1000"]]);
+    const r = run([[parsed, "Coinbase"]], 2025, method);
+    expect(r.interest.earned.toFixed(2)).toBe("1000.00");
+    expect(message(r.messages, "parser.crypto_income_amount_unreadable")).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] control: a readable Total is booked and nothing is named", (method) => {
+    const parsed = cbIncome("Staking Income", "1000", "1000");
+    expect(parsed.cashTransactions.map((c) => [c.symbol, c.amount])).toEqual([["ETH", "1000"]]);
+    const r = run([[parsed, "Coinbase"]], 2025, method);
+    expect(r.interest.earned.toFixed(2)).toBe("1000.00");
+    expect(message(r.messages, "parser.crypto_income_amount_unreadable")).toBeUndefined();
+  });
+
+  const krLedger = (row: string): Statement => krakenParser.parse([KR_H, row].join("\n"));
+  const krCases: [string, string, string][] = [
+    ["staking amount 'abc'", `"L1","R1","2025-03-01 00:00:00","staking","","currency","XETH","abc","0","5"`, `staking ETH 20250301 [amount: "abc"]`],
+    ["Earn reward amount empty", `"L1","R1","2025-03-01 00:00:00","earn","reward","currency","XETH","","0","5"`, `earn reward ETH 20250301 [amount: ""]`],
+  ];
+  describe.each(krCases)("Kraken %s", (_label, row, rows) => {
+    it.each(METHODS)("[%s] is not booked as 0, and the row is named", (method) => {
+      const parsed = krLedger(row);
+      expect(parsed.cashTransactions).toEqual([]);
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect(incomeEntries(r)).toBe(0);
+      expect(message(r.messages, "parser.crypto_income_amount_unreadable")?.context).toEqual({ broker: "Kraken", count: "1", rows });
+    });
+  });
+
+  it("control: a Kraken staking reward with a readable amount is booked and nothing is named", () => {
+    const parsed = krLedger(`"L1","R1","2025-03-01 00:00:00","staking","","currency","XETH","0.5","0","5"`);
+    expect(parsed.cashTransactions.map((c) => [c.symbol, c.amount])).toEqual([["ETH", "0.5"]]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+  });
+
+  it("the warning exists in the five locales, names the rows, and the parser emits the Spanish text", () => {
+    expect(isTranslationKey("parser.crypto_income_amount_unreadable") && isTranslationKey("parser.crypto_income_amount_unreadable.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["parser.crypto_income_amount_unreadable"]).toContain("{{rows}}");
+      expect(locale["parser.crypto_income_amount_unreadable"]).toContain("{{broker}}");
+    }
+    const emitted = message(cbIncome("Staking Income", "", "").parserMessages, "parser.crypto_income_amount_unreadable")!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText["parser.crypto_income_amount_unreadable"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText["parser.crypto_income_amount_unreadable.hint"]);
+  });
+});
