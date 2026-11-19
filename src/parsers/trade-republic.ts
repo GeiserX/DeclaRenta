@@ -160,9 +160,12 @@ function parseTrCsv(lines: string[]): Statement {
     // --- TRADING of another type (#467): a row of the trading category that
     // names a security but is neither a buy nor a sale is kept as a trade that
     // books nothing and named, never dropped. One that writes a zero share
-    // count moves no shares and stays skipped.
+    // count moves no shares and stays skipped. With no ISIN (symbol), one that
+    // names the security only by name is kept when it writes a share count.
     if (category === "TRADING" && type !== "BUY" && type !== "SELL") {
-      if (symbol && !(!quantityUnreadable(fields[cols.shares]) && shares === 0)) {
+      const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
+      const named = symbol !== "" || (name !== "" && !sharesUnreadable);
+      if (named && !(!sharesUnreadable && shares === 0)) {
         const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
         trades.push(unreadableTrade({
           tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,

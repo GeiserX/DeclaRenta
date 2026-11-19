@@ -1,6 +1,7 @@
 import type { Statement } from "../types/broker.js";
 import Decimal from "decimal.js";
 import { formatDateDmy, isYearEndDate, normalizeDate } from "../engine/dates.js";
+import { isReadableTradeDate } from "./csv-utils.js";
 
 export function createEmptyStatement(): Statement {
   return {
@@ -128,6 +129,7 @@ export function yearEndHoldings(statement: Statement, year: number): Statement {
 
 export function finalizeMergedStatement(statement: Statement): Statement {
   reconcileOrderLegs(statement);
+  dateUndatedRowsAtUploadStart(statement);
 
   // Same-day trades go by time of day, then keep the parser's row order (the
   // sort is stable). Never by tradeID: Kraken txids are random and row-index
@@ -148,6 +150,34 @@ export function finalizeMergedStatement(statement: Statement): Statement {
     normalizeDate(a.date).localeCompare(normalizeDate(b.date)),
   );
   return statement;
+}
+
+/**
+ * An unreadable trade row with no date of its own (`undatedRow`, #467) stands
+ * at the earliest date of its file. Next to another broker's files that date
+ * can fall after that broker's year-end list, where the one-purchase evidence
+ * (#453) never looks, so a row with no ISIN would leave the exception
+ * "applied". Moved to the earliest date of the whole upload (trades and cash
+ * rows), it is on or before every sale: before the sale's window start or
+ * inside the window, where it makes the evidence "unverified". The row books
+ * nothing, so no number moves. A copy replaces it: the parsed file's own
+ * statement keeps its trade.
+ */
+function dateUndatedRowsAtUploadStart(statement: Statement): void {
+  if (!statement.trades.some((t) => t.undatedRow === true)) return;
+  const days = [
+    ...statement.trades.map((t) => t.tradeDate),
+    ...statement.cashTransactions.map((c) => c.dateTime),
+  ]
+    .map((d) => normalizeDate(d.trim()).slice(0, 10).replace(/-/g, ""))
+    .filter(isReadableTradeDate)
+    .sort();
+  const earliest = days[0];
+  if (earliest === undefined) return;
+  statement.trades = statement.trades.map((t) =>
+    t.undatedRow === true && earliest < normalizeDate(t.tradeDate).replace(/-/g, "")
+      ? { ...t, tradeDate: earliest, settlementDate: earliest }
+      : t);
 }
 
 /**

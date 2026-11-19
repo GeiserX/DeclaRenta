@@ -80,6 +80,12 @@ const TXN_TYPE_SELL = /^SELL\s*-\s*(MARKET|LIMIT)$/i;
 const TXN_TYPE_CASH_IN = /^CASH\s*TOP[- ]?UP$/i;
 const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 const TXN_TYPE_DIVIDEND = /^DIVIDEND$/i;
+// A withholding correction on a dividend ("DIVIDEND TAX (CORRECTION)"), with a
+// ticker, no quantity and a signed amount, often in +/- pairs. No trade: the
+// withholding comes from Revolut's annual tax report (revolut.dividends_net).
+const TXN_TYPE_DIVIDEND_TAX = /^DIVIDEND\s+TAX\b/i;
+// A buy or sale of any order kind ("BUY - STOP" too), for a row with no ticker.
+const TXN_TYPE_ANY_TRADE = /^(BUY|SELL)\b/i;
 const TXN_TYPE_SPLIT = /^STOCK\s*SPLIT$/i;
 // One row per ticker when Revolut moved accounts between its own entities
 // (e.g. to Revolut Securities Europe UAB): same holding, nothing to apply.
@@ -354,6 +360,16 @@ function parseTransactionLog(
     symbol: string; currency: string; assetCategory: AssetCategory;
     netQty: Decimal; totalCost: Decimal;
   }>();
+  // Tickers with a row the file does not let the parser size (an unreadable
+  // quantity, date or type): their holding is of unknown size. The first such
+  // row of each ticker, and whether one of them is a buy (then the ticker is
+  // held even with nothing readable left).
+  const unknownSize = new Map<string, { currency: string; assetCategory: AssetCategory; buy: boolean }>();
+  const markUnknownSize = (symbol: string, currency: string, buy: boolean): void => {
+    const known = unknownSize.get(symbol);
+    if (known) known.buy ||= buy;
+    else unknownSize.set(symbol, { currency, assetCategory: detectAssetCategory(symbol), buy });
+  };
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]!;
@@ -409,10 +425,20 @@ function parseTransactionLog(
       continue;
     }
 
-    // Skip non-trade rows without a ticker (e.g. REWARD). These never carry a
-    // usable trade amount in a ticker-less form, so they are not counted as
-    // dropped trade rows.
+    // A buy or a sale with no ticker is still a trade of some security: kept
+    // as a trade that books nothing and names no security, so the
+    // one-purchase evidence (#453) cannot be proven with it missing (#467),
+    // as the closed-positions format keeps a row with no symbol.
+    if (!ticker && TXN_TYPE_ANY_TRADE.test(type)) {
+      trades.push(unreadableTrade({
+        tradeID: `revolut-row-${tradeDate}--${i}`, symbol: "", isin: "", assetCategory: "STK", currency: currencyRaw,
+        tradeDate, exchange: "REVOLUT", buySell: /^SELL/i.test(type) ? "SELL" : "BUY",
+      }, unreadableCell(headers[cols.ticker] ?? "Ticker", "")));
+      continue;
+    }
+    // Skip other rows without a ticker (e.g. REWARD, CUSTODY FEE): no trade.
     if (!ticker) continue;
+    if (TXN_TYPE_DIVIDEND_TAX.test(type)) continue;
 
     const quantityStr = (row[cols.quantity] ?? "0").trim();
     const priceStr = (row[cols.price] ?? "0").trim();
@@ -439,6 +465,7 @@ function parseTransactionLog(
         symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
         exchange: "REVOLUT", ...(buy || sell ? { buySell: sell ? "SELL" as const : "BUY" as const } : {}),
       }, cell));
+      markUnknownSize(ticker, currencyRaw, buy);
     };
     if (otherType && !quantityUnreadable(quantityCell) && qtyDec.isZero()) continue;
     if ((buy || sell || otherType) && !isReadableTradeDate(tradeDate)) {
@@ -515,6 +542,7 @@ function parseTransactionLog(
           symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
           buySell: buy ? "BUY" : "SELL", exchange: "REVOLUT",
         }));
+        markUnknownSize(ticker, currencyRaw, buy);
       }
       continue;
     }
@@ -599,17 +627,13 @@ function parseTransactionLog(
     }
   }
 
-  // A ticker with a trade whose size the file does not give (an unreadable
-  // quantity or an unreadable row) has a holding of unknown size: the trades
-  // cannot say it. Its inferred row is kept flagged, quantity "0" with
-  // `quantityUnknown`, never the readable trades' part as if complete; a
-  // purchase of unknown size with nothing readable left still makes one.
-  const unknownSize = new Map<string, Trade>();
-  for (const t of trades) {
-    if (t.quantityUnknown !== true) continue;
-    if (t.buySell === "BUY" || !unknownSize.has(t.symbol)) unknownSize.set(t.symbol, t);
-  }
-
+  // A ticker with a row whose size the file does not give has a holding of
+  // unknown size: the trades cannot say it. Its inferred row keeps the
+  // readable trades' part as its quantity, so the Modelo 720/721 still count
+  // it as a holding with no value to fill in by hand, and is flagged
+  // `quantityUnknown` (never complete evidence); a purchase of unknown size
+  // with nothing readable left still makes one, of quantity "0".
+  // revolut.holding_size_unknown names every such ticker.
   // Build open positions from symbols with remaining shares
   const openPositions: OpenPosition[] = [];
   for (const pos of Array.from(positions.values())) {
@@ -623,7 +647,7 @@ function parseTransactionLog(
         isin: "",
         currency: pos.currency,
         assetCategory: pos.assetCategory,
-        quantity: unknown ? "0" : pos.netQty.toString(),
+        quantity: pos.netQty.toString(),
         costBasisMoney: unknown ? "0" : pos.totalCost.toFixed(2),
         costBasisPrice: unknown ? "0" : costPerUnit.toFixed(8),
         markPrice: "0",
@@ -636,7 +660,7 @@ function parseTransactionLog(
     }
   }
   for (const [symbol, t] of unknownSize) {
-    if (!symbol || t.buySell !== "BUY" || openPositions.some((p) => p.symbol === symbol)) continue;
+    if (!t.buy || openPositions.some((p) => p.symbol === symbol)) continue;
     openPositions.push({
       accountId: "",
       symbol,
@@ -657,6 +681,18 @@ function parseTransactionLog(
   }
 
   const parserMessages: TaxMessage[] = [];
+  const unknownHoldings = openPositions.filter((p) => p.quantityUnknown === true).map((p) => p.symbol);
+  if (unknownHoldings.length > 0) {
+    const count = String(unknownHoldings.length);
+    const tickers = unknownHoldings.join(", ");
+    parserMessages.push({
+      id: "revolut.holding_size_unknown",
+      severity: "warning" as const,
+      message: `El extracto de Revolut no permite saber cuántas acciones o unidades tienes al final de ${count} valor(es): ${tickers}.`,
+      hint: "Una fila de cada uno no se puede leer o no dice cuántas acciones o unidades mueve (otro aviso la nombra). DeclaRenta muestra solo la parte que sí se puede leer, que puede ser 0. Para los modelos 720 y 721, toma el número y el valor de esas posiciones del extracto de Revolut y añádelos a mano.",
+      context: { count, tickers },
+    });
+  }
   if (badFxRateRows.length > 0) {
     const count = String(badFxRateRows.length);
     const rows = badFxRateRows.join("; ");

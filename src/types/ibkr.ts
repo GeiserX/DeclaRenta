@@ -130,6 +130,13 @@ export interface Trade {
    * it. The row books nothing, as with an unreadable quantity.
    */
   unreadableRow?: string;
+  /**
+   * Set with `unreadableRow` when the file gives the row no readable date: its
+   * `tradeDate` is a stand-in, the earliest date of the upload
+   * (`finalizeMergedStatement`), so the row falls before or inside every
+   * anti-churning window and never after a year-end list (#467).
+   */
+  undatedRow?: boolean;
   tradePrice: string;
   tradeMoney: string;
   proceeds: string;

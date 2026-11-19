@@ -51,13 +51,13 @@ describe("krakenParser - Trades CSV", () => {
     expect(() => krakenParser.parse(input)).toThrow("faltan columnas obligatorias");
   });
 
-  it("should skip rows with empty txid", () => {
+  it("should book a readable row with an empty txid under a row id (#467)", () => {
     const input = [
       '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers","trade_id"',
       '"","O001","XXBTEUR","2025-01-15 10:00:00","buy","limit","40000","400","1","0.01","0","","","T001"',
     ].join("\n");
     const result = krakenParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.tradeID, t.symbol, t.buySell, t.quantity])).toEqual([["kraken-row-1", "BTC", "BUY", "0.01"]]);
   });
 
   it("should handle XXBT pair (BTC)", () => {

@@ -203,6 +203,12 @@ function parseClosedPositions(
     // English: "Action" = "Buy AAPL" (direction + symbol combined)
     // Spanish: "Acción" = instrument name, "Long / Short" = direction
     const actionStr = row[actionCol] ?? "";
+    // An empty Action names no position only when the row has nothing else
+    // either (no ISIN, units or dates): a totals or blank line, skipped. With
+    // any of them it is a position whose name is missing, kept unreadable.
+    const blankPosition = !actionStr.trim() &&
+      [isinCol, unitsCol, openDateCol, closeDateCol].every((c) => c < 0 || !(row[c] ?? "").trim());
+    if (blankPosition) continue;
     let symbol: string;
     let direction: "BUY" | "SELL" | undefined;
     // The cell that makes a closed position unreadable (#467, #468): kept as
@@ -225,8 +231,6 @@ function parseClosedPositions(
         symbol = parsed.symbol;
         direction = parsed.direction;
       } else {
-        // An empty Action with nothing else is no position: skipped.
-        if (!actionStr.trim()) continue;
         symbol = actionStr.trim();
         cell = unreadableCell(headers[actionCol] ?? "Action", actionStr);
       }

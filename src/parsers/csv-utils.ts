@@ -119,10 +119,9 @@ export function isReadableTradeDate(date: string): boolean {
  * The cell that makes a row unreadable, as the user sees it in the file:
  * `Type: "BUY - STOP"`, `date: null`, `ISIN: ""`. A missing cell reads `—`.
  */
-export function unreadableCell(column: string, value: unknown): string {
+export function unreadableCell(column: string, value: string | number | boolean | null | undefined): string {
   if (value === undefined) return `${column}: —`;
-  const text = typeof value === "string" ? value.trim() : value;
-  const shown = JSON.stringify(text) ?? String(text);
+  const shown = JSON.stringify(typeof value === "string" ? value.trim() : value);
   return `${column}: ${shown.length > 42 ? `${shown.slice(0, 40)}…"` : shown}`;
 }
 
@@ -148,7 +147,7 @@ export function unreadableTrade(
   cell: string,
 ): Trade {
   const dated = isReadableTradeDate(row.tradeDate);
-  const security = row.isin ? (row.symbol ? `${row.symbol} (${row.isin})` : row.isin) : row.symbol || "—";
+  const security = row.isin ? (row.symbol ? `${row.symbol} (${row.isin})` : row.isin) : row.symbol || row.description || "—";
   return {
     ...quantityUnknownTrade({ ...row, tradeDate: dated ? row.tradeDate : "", buySell: row.buySell ?? "BUY" }),
     unreadableRow: `${security}${dated ? ` ${row.tradeDate}` : ""} [${cell}]`,
@@ -164,12 +163,15 @@ export function unreadableTrade(
  *
  * Then give each kept row whose date the file does not give the earliest
  * readable date of the same file (its trades, and `otherDates`, such as its
- * cash rows'). The engine needs a real date for every trade; the earliest one
- * puts the row before every window the file reaches, where the one-purchase
- * evidence reads it as a trade that may be any shares held at the window
- * start (and with an ISIN, the date does not matter: the security is
- * "unverified" anyway). The row still books nothing, and its warning shows no
- * date. A file with no readable date at all is refused.
+ * cash rows'), and mark it `undatedRow`. The engine needs a real date for
+ * every trade. `finalizeMergedStatement` moves the row again, to the earliest
+ * date of the whole upload: every sale then falls on or after it, so the row
+ * stands before or inside each sale's anti-churning window, where the
+ * one-purchase evidence reads it as a trade that may be any shares held at
+ * the window start, never after another broker's year-end list (with an ISIN,
+ * the date does not matter: the security is "unverified" anyway). The row
+ * still books nothing, and its warning shows no date. A file with no readable
+ * date at all is refused.
  */
 export function dateUndatedTrades(
   broker: string,
@@ -195,6 +197,7 @@ export function dateUndatedTrades(
   for (const t of undated) {
     t.tradeDate = earliest;
     t.settlementDate = earliest;
+    t.undatedRow = true;
   }
 }
 

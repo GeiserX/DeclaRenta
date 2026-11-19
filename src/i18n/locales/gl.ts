@@ -1112,6 +1112,10 @@ const gl: TranslationKeys = {
   "parser.trade_row_unreadable.hint": "Entre corchetes vai a cela que falta, está baleira, non se pode ler ou trae un tipo de operación que DeclaRenta non recoñece. DeclaRenta non suma nin resta accións, unidades nin diñeiro por esas filas, así que as ganancias e perdas deses valores non son fiables, e non aplica a excepción de compra única da regra dos 2 meses a un valor que poida ser o dunha delas. Se unha fila é unha compra ou unha venda real, corrixe esa cela no ficheiro do broker e volve subilo.",
   "revolut.bad_fx_rate": "Omitíronse {{count}} ingreso(s) ou retirada(s) de efectivo do extracto de Revolut porque o seu tipo de cambio (FX Rate) non é válido: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Só os ingresos e as retiradas de efectivo usan esa columna; as compras, as vendas e os dividendos calcúlanse co tipo do BCE e non se omiten. Adoita deberse a unha cela de tipo de cambio non numérica, negativa ou igual a cero na exportación. Volve descargar o Trading Account Statement completo desde a app de Revolut para que eses movementos se inclúan.",
+  "revolut.holding_size_unknown": "O extracto de Revolut non permite saber cantas accións ou unidades tes ao final de {{count}} valor(es): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Unha fila de cada un non se pode ler ou non di cantas accións ou unidades move (outro aviso nomea esa fila). DeclaRenta mostra só a parte que si se pode ler, que pode ser 0. Para os modelos 720 e 721, toma o número e o valor desas posicións do extracto de Revolut e engádeos a man.",
+  "trading212.split_not_applied": "Trading 212: non se aplicaron {{count}} fila(s) de desdobramento ou agrupación de accións (Stock split): {{rows}}.",
+  "trading212.split_not_applied.hint": "DeclaRenta non cambia por elas o número de accións nin o custo por acción deses valores, así que as ganancias e perdas das vendas posteriores deses valores poden non ser correctas. Comproba esas vendas.",
 };
 
 export default gl;

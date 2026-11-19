@@ -1114,6 +1114,10 @@ const eu: TranslationKeys = {
   "parser.trade_row_unreadable.hint": "Kortxete artean dago falta den, hutsik dagoen, irakur ezin den edo DeclaRentak ezagutzen ez duen eragiketa mota bat duen gelaxka. DeclaRentak ez du akziorik, unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik; beraz, balio horien irabaziak eta galerak ez dira fidagarriak, eta ez du aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena errenkada horietako batena izan daitekeen balio bati. Errenkada bat benetako erosketa edo salmenta bada, zuzendu gelaxka hori brokerraren fitxategian eta igo berriro.",
   "revolut.bad_fx_rate": "Revoluteko laburpeneko {{count}} diru-sarrera edo diru-erretiratze baztertu dira, haien truke-tasa (FX Rate) baliozkoa ez delako: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Diru-sarrerek eta diru-erretiratzeek bakarrik erabiltzen dute zutabe hori; erosketak, salmentak eta dibidenduak EBZren truke-tasarekin kalkulatzen dira, eta ez dira baztertzen. Normalean esportazioko truke-tasaren gelaxka zenbakia ez delako, negatiboa delako edo zero delako gertatzen da. Deskargatu berriro Trading Account Statement osoa Revolut aplikaziotik, mugimendu horiek sar daitezen.",
+  "revolut.holding_size_unknown": "Revoluteko laburpenak ez du esaten zenbat akzio edo unitate dituzun amaieran {{count}} baloretan: {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Bakoitzaren errenkada bat ezin da irakurri, edo ez du esaten zenbat akzio edo unitate mugitzen dituen (beste abisu batek izendatzen du). DeclaRentak irakur daitekeen zatia bakarrik erakusten du, eta 0 izan daiteke. 720 eta 721 ereduetarako, hartu posizio horien kopurua eta balioa Revoluteko laburpenetik eta gehitu eskuz.",
+  "trading212.split_not_applied": "Trading 212: akzioen zatiketa edo bilketako {{count}} errenkada (Stock split) ez dira aplikatu: {{rows}}.",
+  "trading212.split_not_applied.hint": "DeclaRentak ez ditu haiengatik balore horien akzio kopurua eta akzio bakoitzeko kostua aldatzen; beraz, balore horien ondorengo salmenten irabaziak eta galerak baliteke zuzenak ez izatea. Egiaztatu salmenta horiek.",
 };
 
 export default eu;

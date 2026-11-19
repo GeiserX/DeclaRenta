@@ -137,6 +137,15 @@ function isInterestAction(action: string): boolean {
   return /interest on cash/i.test(action);
 }
 
+/**
+ * One leg of a split or a consolidation: "Stock split close" takes the old
+ * shares out, "Stock split open" puts the new ones in. Not applied: named in
+ * trading212.split_not_applied.
+ */
+function isStockSplitAction(action: string): boolean {
+  return /^stock split (open|close)$/i.test(action);
+}
+
 function isSkippedAction(action: string): boolean {
   return /deposit|withdrawal|currency conversion|card debit|spending cashback/i.test(action);
 }
@@ -164,6 +173,8 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Total is in a currency that differs from the instrument's — we can derive
   // neither a per-share price nor usable trade money, so the row is unresolvable.
   let unresolvedPriceSkipped = 0;
+  // Stock split rows, not applied: security, date, action and share count.
+  const splitRows: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -197,16 +208,26 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     const uniqueId = txId || `${tradeDate}-${ticker || action}-${i}`;
 
+    if (isStockSplitAction(action)) {
+      const security = isin ? (ticker ? `${ticker} (${isin})` : isin) : ticker || name || "—";
+      splitRows.push(`${security} ${tradeDate || "—"} [${action}: ${(fields[cols.shares] ?? "").trim() || "—"}]`);
+      continue;
+    }
+
     // A buy or sale row, or a row of an action no branch below handles (a
     // stock split, a share transfer) that names a ticker or an ISIN, is kept as
     // a trade that books nothing when it cannot be read: no Time, no ticker,
     // an unknown action. Dropping it would hide a purchase or a sale (#467).
     // A row of an unknown action that writes a zero share count moves no
-    // shares and stays skipped, as does one that names no security.
+    // shares and stays skipped, as does one that names no security. One that
+    // names its security only by Name is kept when it writes a share count.
     const buy = isBuyAction(action);
     const sell = isSellAction(action);
     const otherAction = !buy && !sell && !isDividendTaxAction(action) && !isDividendAction(action) && !isInterestAction(action);
-    if (otherAction && (!(ticker || isin) || (!quantityUnreadable(fields[cols.shares]) && new Decimal(sharesStr).isZero()))) continue;
+    const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
+    const movesNoShares = !sharesUnreadable && new Decimal(sharesStr).isZero();
+    const named = ticker || isin ? true : name !== "" && !sharesUnreadable;
+    if (otherAction && (!named || movesNoShares)) continue;
     const unreadableCellOf = (): string | undefined => {
       if (!timeRaw) return unreadableCell(headers[cols.time] ?? "Time", timeRaw);
       if (otherAction) return unreadableCell(headers[cols.action] ?? "Action", action);
@@ -386,6 +407,18 @@ function parseTrading212Csv(lines: string[]): Statement {
       message: `Se omitieron ${unresolvedPriceSkipped} operaciones sin precio por acción y con importe en otra divisa.`,
       hint: "Estas filas no tenían precio por acción y su importe (Total) estaba en una divisa distinta a la del instrumento, por lo que no se pudo calcular el valor de la operación. Vuelve a exportar el histórico desde Trading 212 asegurándote de incluir la columna \"Price / share\".",
       context: { skipped: String(unresolvedPriceSkipped) },
+    });
+  }
+
+  if (splitRows.length > 0) {
+    const count = String(splitRows.length);
+    const rows = splitRows.join("; ");
+    parserMessages.push({
+      id: "trading212.split_not_applied",
+      severity: "warning",
+      message: `Trading 212: no se han aplicado ${count} fila(s) de desdoblamiento o agrupación de acciones (Stock split): ${rows}.`,
+      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste por acción de esos valores, así que las ganancias y pérdidas de las ventas posteriores de esos valores pueden no ser correctas. Comprueba esas ventas.",
+      context: { count, rows },
     });
   }
 

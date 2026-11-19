@@ -277,10 +277,14 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
-    // A trade-like row (a readable quantity or price) with no ISIN is still a
-    // purchase or a sale: kept as a trade that books nothing and named, never
-    // dropped (#467). Its side comes from the value or the quantity sign.
-    if (!isin && (!toFiniteDecimal(quantity, "0", false).isZero() || !toFiniteDecimal(price, "0", false).isZero())) {
+    // A trade-like row with no ISIN is still a purchase or a sale: kept as a
+    // trade that books nothing and named, never dropped (#467). Trade-like is
+    // a readable quantity or price, or an order id (a cash line, such as a
+    // deposit, has a value but none of them). Its side comes from the value or
+    // the quantity sign.
+    const noIsinTradeLike = !toFiniteDecimal(quantity, "0", false).isZero() ||
+      !toFiniteDecimal(price, "0", false).isZero() || orderId !== "";
+    if (!isin && noIsinTradeLike) {
       const sell = toFiniteDecimal(value, "0", false).greaterThan(0) || toFiniteDecimal(quantity, "0", false).lessThan(0);
       trades.push(unreadableTrade({
         tradeID: orderId, symbol: product, description: product, isin: "", assetCategory: "STK",

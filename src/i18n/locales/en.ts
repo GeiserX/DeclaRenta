@@ -1110,6 +1110,10 @@ const en: TranslationKeys = {
   "parser.trade_row_unreadable.hint": "The square brackets show the cell that is missing, empty, unreadable or holds a trade type DeclaRenta does not recognise. DeclaRenta adds or removes no shares, units or money for those rows, so the gains and losses of those securities are not reliable, and it does not apply the one-purchase exception of the 2-month rule to a security that may be the one of such a row. If a row is a real purchase or sale, correct that cell in the broker's file and upload it again.",
   "revolut.bad_fx_rate": "{{count}} cash top-up(s) or withdrawal(s) of the Revolut statement were skipped because their exchange rate (FX Rate) is not valid: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Only cash top-ups and withdrawals use that column; purchases, sales and dividends are calculated at the ECB rate and are not skipped. It is usually caused by an exchange rate cell that is not a number, negative or zero in the export. Download the full Trading Account Statement again from the Revolut app so those movements are included.",
+  "revolut.holding_size_unknown": "The Revolut statement does not tell how many shares or units you hold at the end for {{count}} security(ies): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "One row of each cannot be read or does not say how many shares or units it moves (another warning names it). DeclaRenta shows only the part it can read, which may be 0. For Modelo 720 and 721, take the number and the value of those holdings from the Revolut statement and add them by hand.",
+  "trading212.split_not_applied": "Trading 212: {{count}} stock split or consolidation row(s) were not applied: {{rows}}.",
+  "trading212.split_not_applied.hint": "DeclaRenta does not change the number of shares or the cost per share of those securities for them, so the gains and losses of later sales of those securities may not be correct. Check those sales.",
 };
 
 export default en;

@@ -1151,6 +1151,10 @@ const es = {
   "parser.trade_row_unreadable.hint": "Entre corchetes va la celda que falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas, así que las ganancias y pérdidas de esos valores no son fiables, y no aplica la excepción de compra única de la regla de los 2 meses a un valor que pueda ser el de una de ellas. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
   "revolut.bad_fx_rate": "Se ha(n) omitido {{count}} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Solo los ingresos y las retiradas de efectivo usan esa columna; las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. Suele deberse a una celda de tipo de cambio no numérica, negativa o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esos movimientos se incluyan.",
+  "revolut.holding_size_unknown": "El extracto de Revolut no permite saber cuántas acciones o unidades tienes al final de {{count}} valor(es): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Una fila de cada uno no se puede leer o no dice cuántas acciones o unidades mueve (otro aviso la nombra). DeclaRenta muestra solo la parte que sí se puede leer, que puede ser 0. Para los modelos 720 y 721, toma el número y el valor de esas posiciones del extracto de Revolut y añádelos a mano.",
+  "trading212.split_not_applied": "Trading 212: no se han aplicado {{count}} fila(s) de desdoblamiento o agrupación de acciones (Stock split): {{rows}}.",
+  "trading212.split_not_applied.hint": "DeclaRenta no cambia por ellas el número de acciones ni el coste por acción de esos valores, así que las ganancias y pérdidas de las ventas posteriores de esos valores pueden no ser correctas. Comprueba esas ventas.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

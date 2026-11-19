@@ -223,13 +223,13 @@ describe("krakenParser", () => {
       expect(() => krakenParser.parse("col1,col2,col3\na,b,c")).toThrow("no reconocido");
     });
 
-    it("should skip rows with empty txid", () => {
+    it("should book a readable row with an empty txid under a row id (#467)", () => {
       const csv = [
         '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"',
         '"","ORDERID1","XBTEUR","2024-01-15 10:30:00","buy","limit","42000","21000","5","0.5","0","",""',
       ].join("\n");
       const result = krakenParser.parse(csv);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.tradeID, t.buySell, t.quantity])).toEqual([["kraken-row-1", "BUY", "0.5"]]);
     });
 
     it("throws on non-Kraken content with specific message", () => {

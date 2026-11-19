@@ -1112,6 +1112,10 @@ const ca: TranslationKeys = {
   "parser.trade_row_unreadable.hint": "Entre claudàtors hi ha la cel·la que falta, és buida, no es pot llegir o porta un tipus d'operació que DeclaRenta no reconeix. DeclaRenta no suma ni resta accions, unitats ni diners per aquestes files, així que els guanys i les pèrdues d'aquests valors no són fiables, i no aplica l'excepció de compra única de la regla dels 2 mesos a un valor que pugui ser el d'una d'elles. Si una fila és una compra o una venda real, corregeix aquesta cel·la al fitxer del broker i torna'l a pujar.",
   "revolut.bad_fx_rate": "S'han omès {{count}} ingrés(sos) o retirada(es) d'efectiu de l'extracte de Revolut perquè el seu tipus de canvi (FX Rate) no és vàlid: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Només els ingressos i les retirades d'efectiu fan servir aquesta columna; les compres, les vendes i els dividends es calculen amb el tipus del BCE i no s'ometen. Sol passar per una cel·la de tipus de canvi no numèrica, negativa o igual a zero a l'exportació. Torna a descarregar el Trading Account Statement complet des de l'app de Revolut perquè aquests moviments s'hi incloguin.",
+  "revolut.holding_size_unknown": "L'extracte de Revolut no permet saber quantes accions o unitats tens al final de {{count}} valor(s): {{tickers}}.",
+  "revolut.holding_size_unknown.hint": "Una fila de cadascun no es pot llegir o no diu quantes accions o unitats mou (un altre avís la indica). DeclaRenta mostra només la part que sí que es pot llegir, que pot ser 0. Per als models 720 i 721, pren el nombre i el valor d'aquestes posicions de l'extracte de Revolut i afegeix-los a mà.",
+  "trading212.split_not_applied": "Trading 212: no s'han aplicat {{count}} fila(es) de desdoblament o agrupació d'accions (Stock split): {{rows}}.",
+  "trading212.split_not_applied.hint": "DeclaRenta no canvia per elles el nombre d'accions ni el cost per acció d'aquests valors, així que els guanys i les pèrdues de les vendes posteriors d'aquests valors poden no ser correctes. Comprova aquestes vendes.",
 };
 
 export default ca;

@@ -27,6 +27,8 @@ import { flatexParser } from "../../src/parsers/flatex.js";
 import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
 import { krakenParser } from "../../src/parsers/kraken.js";
 import { parseEtoroXlsx } from "../../src/parsers/etoro.js";
+import { buildModelo721Entries } from "../../src/generators/modelo721.js";
+import { checkModelo720Thresholds } from "../../src/generators/modelo720.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -147,6 +149,7 @@ const DG_H = "Date,Time,Product,ISIN,Reference Exchange,Execution Venue,Quantity
 const ET_H = ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"];
 const REV_A = ["Date acquired", "Date sold", "Symbol", "Quantity", "Cost basis", "Gross proceeds", "Gross PnL", "Fees", "Net PnL", "Currency"];
 const REV_CASH = ["2024-11-01T10:00:00.000Z", "", "CASH TOP-UP", "", "", "USD 500", "USD", "1"];
+const KRAKEN_H = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
 
 const cases: Case[] = [
   { broker: "Revolut", label: "type 'BUY - STOP'", row: 'XYZ 20241202 [Type: "BUY - STOP"]', parse: () => revolut(["2024-12-02T10:00:00.000Z", "XYZ", "BUY - STOP", "40", "USD 10", "USD 400", "USD", "0.92"]) },
@@ -155,7 +158,8 @@ const cases: Case[] = [
   { broker: "Revolut", label: "closed position with an empty Symbol", row: '— 20241202 [Symbol: ""]', parse: () => parseRevolutXlsx(xlsx("Sheet1", [REV_A, ["2024-12-02", "2025-02-10", "", "40", "400", "440", "40", "0", "40", "USD"]])) },
   { broker: "Trading 212", label: "empty Ticker with an ISIN", row: `${ISIN} 20241202 [Ticker: ""]`, parse: () => trading212Parser.parse([T212_H, `Market buy,2024-12-02 09:30:00,${ISIN},,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1`].join("\n")) },
   { broker: "Trading 212", label: "empty Time", row: `XYZ (${ISIN}) [Time: ""]`, parse: () => trading212Parser.parse([T212_H, T212_DATED, `Market buy,,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1`].join("\n")) },
-  { broker: "Trading 212", label: "action 'Stock split open'", row: `XYZ (${ISIN}) 20241202 [Action: "Stock split open"]`, parse: () => trading212Parser.parse([T212_H, `Stock split open,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,0,EUR,,t1`].join("\n")) },
+  { broker: "Trading 212", label: "action 'Share transfer in'", row: `XYZ (${ISIN}) 20241202 [Action: "Share transfer in"]`, parse: () => trading212Parser.parse([T212_H, `Share transfer in,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,0,EUR,,t1`].join("\n")) },
+  { broker: "Trading 212", label: "action 'Share transfer in' naming only the Name", row: 'XYZ SA 20241202 [Action: "Share transfer in"]', parse: () => trading212Parser.parse([T212_H, "Share transfer in,2024-12-02 09:30:00,,,XYZ SA,40,10,EUR,1.00,,,0,EUR,,t1"].join("\n")) },
   { broker: "Freedom24", label: "date null", row: `XYZ (${ISIN}) [date: null]`, parse: f24({ ...F24_ROW, date: null }) },
   { broker: "Freedom24", label: "ticker null with an ISIN", row: `${ISIN} 20241202 [ticker: null]`, parse: f24({ ...F24_ROW, ticker: null }) },
   { broker: "Lightyear", label: "empty Ticker with an ISIN", row: `${ISIN} 20241202 [Ticker: ""]`, parse: () => lightyearParser.parse([LY_H, `02/12/2024 09:30:00,OR-1,,${ISIN},Buy,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n")) },
@@ -171,6 +175,12 @@ const cases: Case[] = [
   { broker: "DEGIRO", label: "Date '31-02-2024'", row: `XYZ SA (${ISIN}) [Date: "20240231"]`, parse: () => degiroParser.parse([DG_H, "01-11-2024,09:15,OTHER SA,ES0000009999,MAD,XMAD,1,1.00,EUR,-1.00,EUR,0,EUR,-1.00,EUR,aa0", `31-02-2024,09:15,XYZ SA,${ISIN},MAD,XMAD,40,10.00,EUR,-400.00,EUR,0,EUR,-400.00,EUR,aaa`].join("\n")) },
   { broker: "Trade Republic", label: "date '<b>'", row: `XYZ SA (${ISIN}) [date: "<b>"]`, parse: () => tradeRepublicParser.parse([TR_H, `"2024-11-01T09:30:00.000Z","2024-11-01","DEFAULT","TRADING","BUY","STOCK","OTHER SA","ES0000009999","1","1.000000","-1.00","","","EUR","","","","Buy","tx-0","","","",""`, `"<b>","<b>","DEFAULT","TRADING","BUY","STOCK","XYZ SA","${ISIN}","40","10.000000","-400.00","","","EUR","","","","Buy","tx-1","","","",""`].join("\n")) },
   { broker: "Flatex", label: "Buchtag '02.13.2024'", row: `XYZ SA (${ISIN}) [Buchtag: "20241302"]`, parse: () => flatexParser.parse([FX_H, "1;01.11.2024;01.11.2024;ES0000009999;OTHER SA;1;Stk.;Ausführung ORDER Kauf ES0000009999 0;0;1,00;EUR;x", `1;02.13.2024;02.13.2024;${ISIN};XYZ SA;40;Stk.;Ausführung ORDER Kauf ${ISIN} 1;1;10,00;EUR;***xxx Depot`].join("\n")) },
+  { broker: "Revolut", label: "BUY - MARKET with an empty Ticker", row: '— 20241202 [Ticker: ""]', parse: () => revolut(["2024-12-02T10:00:00Z", "", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "0.92"]) },
+  { broker: "eToro", label: "empty Action with an ISIN, units and dates", row: `${ISIN} 20241202 [Action: ""]`, parse: () => parseEtoroXlsx(xlsx("Closed Positions", [ET_H, ["", "400", "40", "10", "11", "40", "02/12/2024", "10/02/2025", "Stocks", "1", ISIN]])) },
+  { broker: "DEGIRO", label: "empty ISIN, Quantity and Price, with a Value and an Order ID", row: 'XYZ SA 20241202 [ISIN: ""]', parse: () => degiroParser.parse([DG_H, "02-12-2024,09:15,XYZ SA,,MAD,XMAD,,,EUR,-400.00,EUR,0,EUR,-400.00,EUR,aaa"].join("\n")) },
+  { broker: "Scalable Capital", label: "type 'Security transfer' with no ISIN", row: 'XYZ SA 20241202 [type: "Security transfer"]', parse: () => scalableParser.parse([SC_H, "2024-12-02;09:15;Executed;REF001;XYZ SA;Security;Security transfer;;40;10,00;-400,00;0;0;EUR"].join("\n")) },
+  { broker: "Flatex", label: "a Depotübertrag Eingang with no ISIN", row: 'XYZ SA 20241202 [ISIN: ""]', parse: () => flatexParser.parse([FX_H, "1;02.12.2024;02.12.2024;;XYZ SA;40;Stk.;Depotübertrag Eingang;1;10,00;EUR;***xxx Depot"].join("\n")) },
+  { broker: "Trade Republic", label: "trading type 'SAVINGS_PLAN_REVERSAL' with no symbol", row: 'XYZ SA 20241202 [type: "SAVINGS_PLAN_REVERSAL"]', parse: () => tradeRepublicParser.parse([TR_H, `"2024-12-02T09:30:00.000Z","2024-12-02","DEFAULT","TRADING","SAVINGS_PLAN_REVERSAL","STOCK","XYZ SA","","40","10.000000","-400.00","","","EUR","","","","Buy","tx-1","","","",""`].join("\n")) },
   { broker: "eToro", label: "Action 'XYZ' (no Buy or Sell)", row: `XYZ (${ISIN}) 20241202 [Action: "XYZ"]`, parse: () => parseEtoroXlsx(xlsx("Closed Positions", [ET_H, ["XYZ", "400", "40", "10", "11", "40", "02/12/2024", "10/02/2025", "Stocks", "1", ISIN]])) },
 ];
 
@@ -226,28 +236,130 @@ describe("#467 a trade row that cannot be read is kept as a trade that books not
     expect([parsed.trades, unreadableRows(parsed)]).toEqual([[], undefined]);
     const t212 = trading212Parser.parse([T212_H, "Lending interest,2024-12-02 09:30:00,,,,,,,,,,1,EUR,,l1"].join("\n"));
     expect([t212.trades, unreadableRows(t212)]).toEqual([[], undefined]);
+    // A cash line of no security: a Scalable deposit, a Flatex row with no
+    // ISIN and no Nominal, an eToro line with nothing but a profit.
+    const sc = scalableParser.parse([SC_H, "2024-12-02;09:15;Executed;REF001;Deposit;Cash;Deposit;;;;1000,00;0;0;EUR"].join("\n"));
+    expect([sc.trades, unreadableRows(sc)]).toEqual([[], undefined]);
+    const fx = flatexParser.parse([FX_H, "1;02.12.2024;02.12.2024;;Zinsen;;;Zinsabschluss;1;;EUR;x"].join("\n"));
+    expect([fx.trades, unreadableRows(fx)]).toEqual([[], undefined]);
+    const et = await parseEtoroXlsx(xlsx("Closed Positions", [ET_H, ["", "", "", "", "", "40", "", "", "", "", ""]]));
+    expect([et.trades, unreadableRows(et)]).toEqual([[], undefined]);
+  });
+
+  it.each(METHODS)("[%s] a row with no date and no ISIN stands at the upload's earliest date, never after another broker's year-end list", async (method) => {
+    // Revolut's only readable date (a 2026 top-up) falls after the IBKR list
+    // of 31/12/2025; in that file alone the undated XYZ buy would stand there.
+    const parsed = await revolut(
+      ["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "0.92"],
+      ["2026-01-05T10:00:00Z", "", "CASH TOP-UP", "", "", "USD 100", "USD", "0.92"],
+    );
+    expect(parsed.trades.map((t) => [t.symbol, t.tradeDate, t.undatedRow])).toEqual([["XYZ", "20260105", true]]);
+    expect(issueSale(parsed, "Revolut", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    // A garbage date next to a readable 2026 trade, and a Scalable row with no
+    // ISIN and a day 45, next to a 2026 buy: the same.
+    const garbage = await revolut(
+      ["2025-13-45T10:00:00Z", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "0.92"],
+      ["2026-02-05T10:00:00Z", "AAPL", "BUY - MARKET", "1", "USD 100", "USD 100", "USD", "0.92"],
+    );
+    expect(issueSale(garbage, "Revolut", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    const sc = scalableParser.parse([SC_H, "2026-02-01;09:15;Executed;REF000;OTHER SA;Security;Buy;ES0000009999;1;1,00;-1,00;0;0;EUR", "2024-12-45;09:15;Executed;REF001;XYZ SA;Security;Buy;;40;10,00;-400,00;0;0;EUR"].join("\n"));
+    expect(issueSale(sc, "Scalable Capital", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+  });
+
+  it("the move to the upload's earliest date leaves the parsed file's own trade as it was", async () => {
+    const parsed = await revolut(
+      ["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "0.92"],
+      ["2026-01-05T10:00:00Z", "", "CASH TOP-UP", "", "", "USD 100", "USD", "0.92"],
+    );
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parseIbkrFlexXml(IB_ISSUE), "Interactive Brokers");
+    mergeStatement(statement, parsed, "Revolut");
+    const merged = finalizeMergedStatement(statement);
+    expect(merged.trades.find((t) => t.undatedRow)?.tradeDate).toBe("20250301");
+    expect(parsed.trades[0]!.tradeDate).toBe("20260105");
+  });
+
+  it("Trading 212: a stock split is not applied and is named, not called unreadable", () => {
+    const parsed = trading212Parser.parse([T212_H,
+      `Stock split close,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,10,10,EUR,1.00,,,0,EUR,,s1`,
+      `Stock split open,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,40,2.5,EUR,1.00,,,0,EUR,,s2`].join("\n"));
+    expect([parsed.trades, unreadableRows(parsed)]).toEqual([[], undefined]);
+    const warning = parsed.parserMessages?.find((m) => m.id === "trading212.split_not_applied");
+    expect([warning?.severity, warning?.context?.count, warning?.context?.rows]).toEqual([
+      "warning", "2", `XYZ (${ISIN}) 20250303 [Stock split close: 10]; XYZ (${ISIN}) 20250303 [Stock split open: 40]`,
+    ]);
+  });
+
+  it.each(METHODS)("[%s] Kraken: a readable trade with an empty txid is booked: the sale gains 1000 €", (method) => {
+    const parsed = krakenParser.parse([KRAKEN_H,
+      `"T1","O1","XETHZEUR","2024-03-15 10:30:00","buy","limit","2000.00","2000.00","0","1.0","0.0","",""`,
+      `"","O2","XETHZEUR","2024-09-20 14:00:00","sell","market","3000.00","3000.00","0","1.0","0.0","",""`].join("\n"));
+    expect(parsed.trades.map((t) => [t.tradeID, t.buySell, t.quantity])).toEqual([["T1", "BUY", "1"], ["kraken-row-2", "SELL", "-1"]]);
+    expect(run([[parsed, "Kraken"]], 2024, method).capitalGains.netGainLoss.toFixed(2)).toBe("1000.00");
+  });
+
+  it("Kraken: a trade row with no pair names no coin: kept as a row that books nothing, named", () => {
+    const parsed = krakenParser.parse([KRAKEN_H, `"T9","O9","","2024-03-15 10:30:00","buy","limit","2000.00","2000.00","0","1.0","0.0","",""`].join("\n"));
+    expect(parsed.trades.map((t) => [t.symbol, t.quantityUnknown])).toEqual([["", true]]);
+    expect(unreadableRows(parsed)).toBe('— 20240315 [pair: ""]');
   });
 
   it("controls: a row of an unknown type that writes a zero quantity moves no shares and stays skipped", async () => {
     expect((await revolut(["2024-12-02T10:00:00.000Z", "XYZ", "CUSTODY FEE", "0", "", "USD -1", "USD", "1"])).trades).toEqual([]);
-    expect(trading212Parser.parse([T212_H, `Stock split open,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,0,10,EUR,1.00,,,0,EUR,,t1`].join("\n")).trades).toEqual([]);
+    expect(trading212Parser.parse([T212_H, `Share transfer in,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,0,10,EUR,1.00,,,0,EUR,,t1`].join("\n")).trades).toEqual([]);
     expect(scalableParser.parse([SC_H, `2024-12-02;09:15;Executed;REF001;XYZ SA;Security;Taxes;${ISIN};0;0;-3,00;0;0;EUR`].join("\n")).trades).toEqual([]);
   });
 });
 
 describe("#470 sibling: a Revolut crypto buy of unknown size leaves a holding of unknown size", () => {
-  it("the inferred BTC holding is flagged, never the readable 0.1 as if complete", async () => {
+  it("the inferred BTC holding keeps the readable 0.1, flagged and named, never as if complete", async () => {
     const parsed = await revolut(
       ["2025-03-01T10:00:00Z", "BTC", "BUY - MARKET", "0.1", "USD 60000", "USD 6000", "USD", "1"],
       ["2025-04-01T10:00:00Z", "BTC", "BUY - MARKET", "", "USD 60000", "USD 50000", "USD", "1"],
       ["2025-04-02T10:00:00Z", "ETH", "BUY - MARKET", "2", "USD 2000", "USD 4000", "USD", "1"],
     );
     expect(parsed.openPositions.map((p) => [p.symbol, p.assetCategory, p.quantity, p.quantityUnknown ?? false])).toEqual([
-      ["BTC", "CRYPTO", "0", true],
+      ["BTC", "CRYPTO", "0.1", true],
       ["ETH", "CRYPTO", "2", false],
     ]);
     expect(parsed.trades.find((t) => t.quantityUnknown)?.quantity).toBe("0");
     expect(parsed.parserMessages?.map((m) => m.id)).toContain("parser.crypto_quantity_unknown");
+    const warning = parsed.parserMessages?.find((m) => m.id === "revolut.holding_size_unknown");
+    expect([warning?.severity, warning?.context?.tickers]).toEqual(["warning", "BTC"]);
+  });
+
+  it("the flagged holdings still reach the Modelo 721 and 720 as holdings to value by hand", async () => {
+    const btc = await revolut(
+      ["2025-02-01T10:00:00Z", "BTC", "BUY - MARKET", "1", "USD 60000", "USD 60000", "USD", "0.92"],
+      ["2025-03-01T10:00:00Z", "BTC", "BUY - MARKET", "", "USD 60000", "USD 60000", "USD", "0.92"],
+    );
+    const m721 = buildModelo721Entries(btc.openPositions, rates(), "2025-12-31");
+    expect([m721.positions.length, m721.unvaluedCount]).toEqual([1, 1]);
+    const aapl = await revolut(
+      ["2025-02-01T10:00:00Z", "AAPL", "BUY - MARKET", "100", "USD 200", "USD 20000", "USD", "0.92"],
+      ["2025-03-01T10:00:00Z", "AAPL", "BUY - STOP", "100", "USD 200", "USD 20000", "USD", "0.92"],
+    );
+    expect(aapl.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown ?? false])).toEqual([["AAPL", "100", true]]);
+    expect(checkModelo720Thresholds(aapl.openPositions, rates(), 2025).values.unvalued).toBe(1);
+  });
+
+  it("a DIVIDEND TAX (CORRECTION) is no trade: the holding stays readable, and no holding is invented after a full sale", async () => {
+    const held = await revolut(
+      ["2025-01-10T10:00:00Z", "AAPL", "BUY - MARKET", "10", "USD 100", "USD 1000", "USD", "1.03"],
+      ["2025-05-15T10:00:00Z", "AAPL", "DIVIDEND", "", "", "USD 2.10", "USD", "1.12"],
+      ["2025-05-15T10:00:01Z", "AAPL", "DIVIDEND TAX (CORRECTION)", "", "", "USD 0.37", "USD", "1.12"],
+      ["2025-05-15T10:00:02Z", "AAPL", "DIVIDEND TAX (CORRECTION)", "", "", "USD -0.37", "USD", "1.12"],
+    );
+    expect(held.openPositions.map((p) => [p.symbol, p.quantity, p.costBasisMoney, p.quantityUnknown ?? false])).toEqual([["AAPL", "10", "1000.00", false]]);
+    expect(held.trades.map((t) => t.quantityUnknown ?? false)).toEqual([false]);
+    expect(unreadableRows(held)).toBeUndefined();
+    const sold = await revolut(
+      ["2025-01-10T10:00:00Z", "MSFT", "BUY - MARKET", "10", "USD 400", "USD 4000", "USD", "1.03"],
+      ["2025-03-10T10:00:00Z", "MSFT", "SELL - MARKET", "10", "USD 410", "USD 4100", "USD", "1.08"],
+      ["2025-05-15T10:00:00Z", "MSFT", "SPINOFF", "", "", "USD 0.37", "USD", "1.12"],
+    );
+    // A row of unknown type gives no side: it never makes a holding by itself.
+    expect(sold.openPositions).toEqual([]);
   });
 
   it("an unreadable sale row also leaves the holding unknown; a ticker with only an unknown sale gets none", async () => {
@@ -256,7 +368,13 @@ describe("#470 sibling: a Revolut crypto buy of unknown size leaves a holding of
       ["2025-04-01T10:00:00Z", "BTC", "SELL - MARKET", "abc", "USD 60000", "USD 600", "USD", "1"],
       ["2025-04-02T10:00:00Z", "ETH", "SELL - MARKET", "", "USD 2000", "USD 4000", "USD", "1"],
     );
+    expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown ?? false])).toEqual([["BTC", "0.1", true]]);
+  });
+
+  it("a buy of unknown size with nothing readable left still makes a flagged holding, named", async () => {
+    const parsed = await revolut(["2025-04-01T10:00:00Z", "BTC", "BUY - MARKET", "", "USD 60000", "USD 600", "USD", "1"]);
     expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown ?? false])).toEqual([["BTC", "0", true]]);
+    expect(parsed.parserMessages?.find((m) => m.id === "revolut.holding_size_unknown")?.context?.tickers).toBe("BTC");
   });
 });
 

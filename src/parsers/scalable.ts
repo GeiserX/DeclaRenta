@@ -173,13 +173,17 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     // handles (a security transfer, a corporate action) of an ISIN, is kept
     // as a trade that books nothing and named: dropping it would hide a
     // purchase or a sale (#467). A row of an unknown type that writes a zero
-    // share count moves no shares and stays skipped.
+    // share count moves no shares and stays skipped. With no ISIN, a row of an
+    // unknown type is kept only when it writes a share count (a cash row,
+    // such as a deposit or a fee, writes none).
     const sellType = SELL_TYPES.some((t) => type.includes(t));
     const buyType = BUY_TYPES.some((t) => type.includes(t));
     const otherType = !sellType && !buyType && !DIVIDEND_TYPES.some((d) => type.includes(d));
-    const movesNoShares = !quantityUnreadable(fields[cols.shares]) && parseFloat(parseNumber(shares)) === 0;
+    const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
+    const movesNoShares = !sharesUnreadable && parseFloat(parseNumber(shares)) === 0;
     const cell = (sellType || buyType) && !isin ? unreadableCell(headers[cols.isin] ?? "isin", isin)
-      : otherType && isin && !movesNoShares ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
+      : otherType && (isin ? !movesNoShares : !sharesUnreadable && !movesNoShares)
+        ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
       : undefined;
     if (cell !== undefined) {
       trades.push(unreadableTrade({

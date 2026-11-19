@@ -152,8 +152,12 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     };
 
     if (!isin) {
-      // A Kauf or Verkauf with no ISIN is still a purchase or a sale.
-      if (buyText || sellText) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
+      // A Kauf or Verkauf with no ISIN is still a purchase or a sale, and so
+      // may be a row of another text that names a security and moves shares
+      // (a transfer in or out): kept unreadable. A row with neither is no
+      // trade (a separator or a cash line).
+      const movesNamedShares = name !== "" && !qtyUnknown && !qtyNum.isZero();
+      if (buyText || sellText || movesNamedShares) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
       continue;
     }
     if (qtyNum.isZero() && !qtyUnknown) continue;
