@@ -30,6 +30,9 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 
@@ -128,11 +131,32 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const isin = (fields[isinCol] ?? "").trim();
     const info = infoCol >= 0 ? (fields[infoCol] ?? "").trim() : "";
     const price = parseNumber(fields[priceCol] ?? "0");
-
+    const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
+    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
+    const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
     const qtyNum = toFiniteDecimal(fields[qtyCol] ?? "0");
     // An empty or unreadable Nominal is no "0" (see below).
     const qtyUnknown = quantityUnreadable(fields[qtyCol]);
-    if (!isin || (qtyNum.isZero() && !qtyUnknown)) continue;
+    // The side comes from the booking text, Kauf or Verkauf (#468); only a
+    // file with no Buchungsinformationen column leaves the Nominal's sign.
+    const buyText = infoCol >= 0 ? BUY_RE.test(info) : !qtyUnknown && qtyNum.isPositive();
+    const sellText = infoCol >= 0 ? SELL_RE.test(info) && !buyText : !qtyUnknown && qtyNum.isNegative();
+    // A row that cannot be read is kept as a trade that books nothing and
+    // named, never dropped or booked by the sign alone (#467, #468).
+    const keepUnreadable = (cell: string): void => {
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+        tradeDate, ...(buyText || sellText ? { buySell: sellText ? "SELL" as const : "BUY" as const } : {}), exchange: "",
+      }, cell));
+    };
+
+    if (!isin) {
+      // A Kauf or Verkauf with no ISIN is still a purchase or a sale.
+      if (buyText || sellText) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
+      continue;
+    }
+    if (qtyNum.isZero() && !qtyUnknown) continue;
 
     // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
     if (/lagerstellenwechsel/i.test(info)) {
@@ -140,39 +164,41 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (non-tradeable conversions, rights). A row whose
-    // Kurs is empty or unreadable is still a buy or sale when its booking text
-    // says Kauf or Verkauf (below); a written zero Kurs is always skipped.
+    // Skip zero-price rows (non-tradeable conversions, rights): a written zero
+    // Kurs is always skipped. A row whose Kurs is empty or unreadable is kept.
     const priceDec = toFiniteDecimal(price);
-    const tradeText = BUY_RE.test(info) || SELL_RE.test(info);
-    const priceUnknown = tradeText && quantityUnreadable(fields[priceCol]);
+    const priceUnknown = quantityUnreadable(fields[priceCol]);
     if (priceDec.isZero() && !priceUnknown) continue;
+
+    // A row whose text is neither Kauf nor Verkauf (a transfer in or out, a
+    // corporate action) is no purchase or sale the parser can book: the sign
+    // of its Nominal alone booked it as one (#468). A Kauf with a negative
+    // Nominal contradicts itself (a Verkauf with a positive one is a sale:
+    // the count may be unsigned).
+    if (!buyText && !sellText) {
+      keepUnreadable(unreadableCell(headers[infoCol] ?? "Buchungsinformationen", info));
+      continue;
+    }
+    if (buyText && qtyNum.isNegative()) {
+      keepUnreadable(unreadableCell(headers[qtyCol] ?? "Nominal", fields[qtyCol] ?? ""));
+      continue;
+    }
+    const isSell = sellText;
 
     // A buy or sale whose Nominal or Kurs is empty or unreadable: keep it as a
     // trade of unknown quantity for the anti-churning evidence (#453). With no
     // price FIFO cannot book its shares, so it books none, as with no Nominal.
-    // Its direction comes from the Nominal's sign or the booking text.
     if (qtyUnknown || priceUnknown) {
-      const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
-      const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
       trades.push(quantityUnknownTrade({
-        tradeID: txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "",
+        tradeID: orderId,
         symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
-        tradeDate: convertDateDMYDot(fields[dateCol] ?? ""),
-        buySell: qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info)) ? "SELL" : "BUY", exchange: "",
+        tradeDate, buySell: isSell ? "SELL" : "BUY", exchange: "",
       }));
       continue;
     }
 
-    // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
-    const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
     const absQty = qtyNum.abs();
     const tradeMoney = absQty.mul(priceDec).toFixed();
-
-    const tradeDate = convertDateDMYDot(fields[dateCol] ?? "");
-    const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
-    const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
-    const orderId = txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "";
     // Broker order id embedded in the Buchungsinformationen text — used after
     // merge to recover the commission from the matching Kontoumsätze cash leg.
     const orderKey = extractOrderKey(info);
@@ -217,6 +243,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       });
     }
   }
+  dateUndatedTrades("Flatex", trades, [], "Buchtag");
   parserMessages.push(...tradeQuantityUnknownMessages("Flatex", trades));
 
   return {

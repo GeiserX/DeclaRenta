@@ -184,8 +184,9 @@ describe("results tables escape broker-supplied dates", () => {
   it("a short markup date, which the date formatters return unchanged, is shown as text", async () => {
     // Fewer than 8 characters: the casilla and annex formatters skip their
     // slicing and hand the raw string back, so only esc() stands in the way.
-    // The IBKR parser now refuses a date that is not yyyyMMdd, so the raw
-    // string comes in through Freedom24, whose parser passes it along.
+    // The IBKR parser refuses a date that is not yyyyMMdd. Freedom24 keeps the
+    // row as an unreadable trade that books nothing (#467), so the raw string
+    // reaches the page only in the warning that names the row, as text.
     const freedom24Trade = (operation: string, date: string, p: number) => ({
       operation, ticker: "ACME.EU", isin: "XX0000000001", date, q: 10, p, curr_c: "EUR",
       amount: String(10 * p), commission: "0",
@@ -201,7 +202,7 @@ describe("results tables escape broker-supplied dates", () => {
 
     const { casillas, annex } = expectNoInjectedResults();
     expect(document.querySelector("#wizard-step-3 style")).toBeNull();
-    expect(casillas.textContent).toContain("<style>");
-    expect(annex.textContent).toContain("<style>");
+    expect(casillas.textContent).toContain('ACME (XX0000000001) [date: "<style>"]');
+    expect(annex.textContent).not.toContain("<style>");
   });
 });

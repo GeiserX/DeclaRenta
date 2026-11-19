@@ -13,7 +13,16 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
+import {
+  toFiniteDecimal,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  isReadableTradeDate,
+  dateUndatedTrades,
+} from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // JSON structure types
@@ -103,9 +112,9 @@ function parseFreedom24(input: string): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
-  // Rows dropped because a structurally-valid JSON had a malformed row shape
-  // (e.g. operation/ticker/date not a string). We skip-and-warn instead of
-  // letting a TypeError abort the whole parse.
+  // Corporate-action rows dropped because a structurally-valid JSON had a
+  // malformed row shape (e.g. type_id/ticker/date not a string). We
+  // skip-and-warn instead of letting a TypeError abort the whole parse.
   let skippedMalformed = 0;
 
   // Parse trades
@@ -114,17 +123,15 @@ function parseFreedom24(input: string): Statement {
     const t = rawTrades[i]!;
     // The JSON is cast, not validated: a malformed row could carry non-string
     // operation/ticker/date and crash .toLowerCase()/.split()/.slice(). Guard
-    // each and skip the row rather than aborting the whole file.
-    const operation = typeof t.operation === "string" ? t.operation.toLowerCase() : "";
-    if (!operation) { skippedMalformed++; continue; }
-    const ticker = typeof t.ticker === "string" ? t.ticker : "";
-    if (!ticker) { skippedMalformed++; continue; }
+    // each. A row of trades.detailed is a trade even when one of them cannot
+    // be read: it is kept as a trade that books nothing and named, never
+    // dropped (#467).
+    const operation = typeof t.operation === "string" ? t.operation.trim().toLowerCase() : "";
+    const ticker = typeof t.ticker === "string" ? t.ticker.trim() : "";
     const dateRaw = typeof t.date === "string" ? t.date.trim() : "";
-    if (!dateRaw) { skippedMalformed++; continue; }
-
     const tradeDate = convertFreedom24Date(dateRaw);
     const { symbol, exchange } = parseSymbol(ticker);
-    const isin = t.isin ?? "";
+    const isin = typeof t.isin === "string" ? t.isin.trim() : "";
     const quantity = str(t.q);
     const price = str(t.p);
     const currency = t.curr_c || "USD";
@@ -132,12 +139,29 @@ function parseFreedom24(input: string): Statement {
     const amount = str(t.amount);
     const isSell = operation === "sell";
 
+    const cell = !isReadableTradeDate(tradeDate) ? unreadableCell("date", t.date)
+      : !ticker ? unreadableCell("ticker", t.ticker)
+      : operation !== "buy" && operation !== "sell" ? unreadableCell("operation", t.operation)
+      : undefined;
+    // An operation that is neither a buy nor a sale with a written zero
+    // quantity moves no shares: skipped.
+    const otherOperation = operation !== "buy" && operation !== "sell";
+    if (otherOperation && !quantityUnreadable(t.q) && toFiniteDecimal(quantity).isZero()) continue;
+    if (cell !== undefined) {
+      trades.push(unreadableTrade({
+        tradeID: `freedom24-${tradeDate}-${i}`,
+        symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+        ...(operation === "buy" || operation === "sell" ? { buySell: isSell ? "SELL" as const : "BUY" as const } : {}),
+        exchange: t.exchange || exchange,
+      }, cell));
+      continue;
+    }
+
     const qtyDec = toFiniteDecimal(quantity).abs();
     if (qtyDec.isZero()) {
-      // An empty or unreadable quantity is no "0": keep a buy or sell row as a
-      // trade of unknown quantity for the anti-churning evidence (#453). Any
-      // other operation (a transfer, a deposit) is no trade and stays skipped.
-      if ((operation === "buy" || operation === "sell") && quantityUnreadable(t.q)) {
+      // An empty or unreadable quantity is no "0": keep the buy or sell row as
+      // a trade of unknown quantity for the anti-churning evidence (#453).
+      if (quantityUnreadable(t.q)) {
         trades.push(quantityUnknownTrade({
           tradeID: `freedom24-${tradeDate}-${i}`,
           symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
@@ -240,11 +264,12 @@ function parseFreedom24(input: string): Statement {
     parserMessages.push({
       id: "freedom24.row_skipped_malformed",
       severity: "warning" as const,
-      message: `Se ha(n) omitido ${skippedMalformed} fila(s) de Freedom24 con un formato no válido.`,
-      hint: "Suele deberse a filas incompletas o corruptas en el JSON exportado (campos \"operation\", \"type_id\", \"date\" o \"ticker\" vacíos o de tipo incorrecto). Si faltan operaciones, vuelve a descargar el informe JSON completo desde Freedom24.",
+      message: `Se ha(n) omitido ${skippedMalformed} fila(s) de dividendos o cupones de Freedom24 con un formato no válido.`,
+      hint: "Suele deberse a filas incompletas o corruptas en el JSON exportado (campos \"type_id\", \"date\" o \"ticker\" vacíos o de tipo incorrecto). Si faltan dividendos, vuelve a descargar el informe JSON completo desde Freedom24.",
       context: { count: String(skippedMalformed) },
     });
   }
+  dateUndatedTrades("Freedom24", trades, cashTransactions.map((c) => c.dateTime), "date");
   parserMessages.push(...tradeQuantityUnknownMessages("Freedom24", trades));
 
   return {

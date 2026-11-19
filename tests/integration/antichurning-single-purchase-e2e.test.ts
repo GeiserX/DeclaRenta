@@ -1694,10 +1694,15 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       expectUnverified(await report("Flatex", flatex("", `Ausführung ORDER Kauf ${ISIN} 1`, "")));
     });
 
-    it("controls: an explicit zero Kurs, a custody transfer, a row with no buy or sale text: skipped", () => {
+    it("controls: an explicit zero Kurs and a custody transfer: skipped", () => {
       expect(flatex("", `Ausführung ORDER Kauf ${ISIN} 1`, "0,00").trades).toEqual([]);
       expect(flatex("", `Lagerstellenwechsel in ${ISIN}`, "").trades).toEqual([]);
-      expect(flatex("", `Einbuchung ${ISIN}`, "").trades).toEqual([]);
+    });
+
+    it("a row with no buy or sale text is kept as an unreadable row, never dropped (#468)", () => {
+      const parsed = flatex("", `Einbuchung ${ISIN}`, "");
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.trades[0]?.unreadableRow).toBe(`XYZ SA (${ISIN}) 20241202 [Buchungsinformationen: "Einbuchung ${ISIN}"]`);
     });
   });
 
@@ -1728,10 +1733,15 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       corporate_actions: { detailed: [] },
     }));
 
-    it.each(["transfer", "deposit"])("operation %j with no quantity: no trade, no warning", (operation) => {
+    it.each(["transfer", "deposit"])("operation %j with no quantity: kept as an unreadable row, never a buy (#468)", (operation) => {
       const parsed = f24(operation, "");
-      expect(parsed.trades).toEqual([]);
-      expect(parsed.parserMessages?.some((m) => m.id === "parser.trade_quantity_unknown") ?? false).toBe(false);
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.trades[0]?.unreadableRow).toBe(`XYZ (${ISIN}) 20241202 [operation: "${operation}"]`);
+      expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["parser.trade_row_unreadable"]);
+    });
+
+    it.each(["transfer", "deposit"])("operation %j with a written 0: moves no shares, skipped", (operation) => {
+      expect(f24(operation, "0").trades).toEqual([]);
     });
 
     it("control: a sell with no quantity is kept as a SELL", () => {
@@ -1808,12 +1818,16 @@ describe("(m) a buy or sale with a readable quantity but no readable price is ev
       expect(flags(flatex("-5", "", `Ausführung ORDER Verkauf ${ISIN} 1`))).toEqual([["SELL", "0", true]]);
     });
 
-    it("controls: a written price is a second purchase; a written zero Kurs, a custody transfer and a row with no Kauf/Verkauf text are skipped", () => {
+    it("controls: a written price is a second purchase; a written zero Kurs and a custody transfer are skipped", () => {
       twoPurchases(report("Flatex", flatex("5", "9,00")));
       expect(flatex("5", "0,00").trades).toEqual([]);
       expect(flatex("5", "", `Lagerstellenwechsel in ${ISIN}`).trades).toEqual([]);
-      expect(flatex("5", "", `Einbuchung ${ISIN}`).trades).toEqual([]);
       expectApplied(report("Flatex", flatex("5", "0,00")));
+    });
+
+    it("a row with no Kauf/Verkauf text is kept as an unreadable row (#468): not applied", () => {
+      expect(flags(flatex("5", "", `Einbuchung ${ISIN}`))).toEqual([["BUY", "0", true]]);
+      expectUnverified(report("Flatex", flatex("5", "", `Einbuchung ${ISIN}`)));
     });
   });
 

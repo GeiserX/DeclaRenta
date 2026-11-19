@@ -1,7 +1,7 @@
 /**
- * A trade row a parser cannot read is kept, never dropped (#466, #467). Every
- * case runs the real broker input through the real parser and
- * generateTaxReport, in the three FX methods.
+ * A trade row a parser cannot read is kept, never dropped and never booked as
+ * a buy (#466, #467, #468). Every case runs the real broker input through the
+ * real parser and generateTaxReport, in the three FX methods.
  *
  * - #466: Revolut checked its FX Rate cell before it knew the row type, so a
  *   bad cell deleted a sale or a dividend that never reads it.
@@ -9,6 +9,8 @@
  *   type was dropped, so the anti-churning one-purchase exception (#453) was
  *   applied with no proof. It is now a trade that books nothing
  *   (`quantityUnknown`, `unreadableRow`), named by `parser.trade_row_unreadable`.
+ * - #468: Freedom24, Kraken, IBKR, Flatex and eToro booked a row whose type was
+ *   neither a buy nor a sale as a buy (or a long position).
  */
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
@@ -18,10 +20,13 @@ import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { degiroParser } from "../../src/parsers/degiro.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
 import { trading212Parser } from "../../src/parsers/trading212.js";
+import { freedom24Parser } from "../../src/parsers/freedom24.js";
 import { lightyearParser } from "../../src/parsers/lightyear.js";
 import { scalableParser } from "../../src/parsers/scalable.js";
 import { flatexParser } from "../../src/parsers/flatex.js";
 import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
+import { krakenParser } from "../../src/parsers/kraken.js";
+import { parseEtoroXlsx } from "../../src/parsers/etoro.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -128,12 +133,18 @@ interface Case {
 }
 const T212_H = "Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Notes,ID";
 const T212_DATED = "Dividend (Ordinary),2024-11-01 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.92,,,2.35,USD,,div1";
+const f24 = (row: Record<string, unknown>) => (): Statement => freedom24Parser.parse(JSON.stringify({
+  trades: { detailed: [{ date: "2024-11-01 10:00:00", ticker: "OTHER.EU", isin: "ES0000009999", operation: "buy", p: 1, q: 1, curr_c: "EUR", commission: 0, amount: 1 }, row] },
+  corporate_actions: { detailed: [] },
+}));
+const F24_ROW = { date: "2024-12-02 10:00:00", ticker: "XYZ.EU", isin: ISIN, operation: "buy", p: 10, q: 40, curr_c: "EUR", commission: 0, amount: 400 };
 const LY_H = "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.";
 const LY_DATED = "01/11/2024 09:00:00,DV-1,AAPL,US0378331005,Dividend,,USD,,5,0.92,0,5,0";
 const SC_H = "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency";
 const FX_H = "Nummer;Buchtag;Valuta;ISIN;Bezeichnung;Nominal;;Buchungsinformationen;TA-Nr.;Kurs;;Depot";
 const TR_H = '"datetime","date","account_type","category","type","asset_class","name","symbol","shares","price","amount","fee","tax","currency","original_amount","original_currency","fx_rate","description","transaction_id","counterparty_name","counterparty_iban","payment_reference","mcc_code"';
 const DG_H = "Date,Time,Product,ISIN,Reference Exchange,Execution Venue,Quantity,Price,,Value,,Transaction and/or third,,Total,,Order ID";
+const ET_H = ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"];
 const REV_A = ["Date acquired", "Date sold", "Symbol", "Quantity", "Cost basis", "Gross proceeds", "Gross PnL", "Fees", "Net PnL", "Currency"];
 const REV_CASH = ["2024-11-01T10:00:00.000Z", "", "CASH TOP-UP", "", "", "USD 500", "USD", "1"];
 
@@ -145,17 +156,22 @@ const cases: Case[] = [
   { broker: "Trading 212", label: "empty Ticker with an ISIN", row: `${ISIN} 20241202 [Ticker: ""]`, parse: () => trading212Parser.parse([T212_H, `Market buy,2024-12-02 09:30:00,${ISIN},,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1`].join("\n")) },
   { broker: "Trading 212", label: "empty Time", row: `XYZ (${ISIN}) [Time: ""]`, parse: () => trading212Parser.parse([T212_H, T212_DATED, `Market buy,,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1`].join("\n")) },
   { broker: "Trading 212", label: "action 'Stock split open'", row: `XYZ (${ISIN}) 20241202 [Action: "Stock split open"]`, parse: () => trading212Parser.parse([T212_H, `Stock split open,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,0,EUR,,t1`].join("\n")) },
+  { broker: "Freedom24", label: "date null", row: `XYZ (${ISIN}) [date: null]`, parse: f24({ ...F24_ROW, date: null }) },
+  { broker: "Freedom24", label: "ticker null with an ISIN", row: `${ISIN} 20241202 [ticker: null]`, parse: f24({ ...F24_ROW, ticker: null }) },
   { broker: "Lightyear", label: "empty Ticker with an ISIN", row: `${ISIN} 20241202 [Ticker: ""]`, parse: () => lightyearParser.parse([LY_H, `02/12/2024 09:30:00,OR-1,,${ISIN},Buy,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n")) },
   { broker: "Lightyear", label: "empty Date", row: `XYZ (${ISIN}) [Date: ""]`, parse: () => lightyearParser.parse([LY_H, LY_DATED, `,OR-1,XYZ,${ISIN},Buy,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n")) },
   { broker: "Lightyear", label: "type 'Transfer in'", row: `XYZ (${ISIN}) 20241202 [Type: "Transfer in"]`, parse: () => lightyearParser.parse([LY_H, `02/12/2024 09:30:00,OR-1,XYZ,${ISIN},Transfer in,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n")) },
   { broker: "Scalable Capital", label: "type 'Security transfer'", row: `XYZ SA (${ISIN}) 20241202 [type: "Security transfer"]`, parse: () => scalableParser.parse([SC_H, `2024-12-02;09:15;Executed;REF001;XYZ SA;Security;Security transfer;${ISIN};40;10,00;-400,00;0;0;EUR`].join("\n")) },
   { broker: "Scalable Capital", label: "empty ISIN", row: 'XYZ SA 20241202 [isin: ""]', parse: () => scalableParser.parse([SC_H, "2024-12-02;09:15;Executed;REF001;XYZ SA;Security;Buy;;40;10,00;-400,00;0;0;EUR"].join("\n")) },
+  { broker: "Flatex", label: "a Kauf with an empty ISIN", row: 'XYZ SA 20241202 [ISIN: ""]', parse: () => flatexParser.parse([FX_H, `1;02.12.2024;02.12.2024;;XYZ SA;40;Stk.;Ausführung ORDER Kauf ${ISIN} 1;1;10,00;EUR;***xxx Depot`].join("\n")) },
   { broker: "Trade Republic", label: "empty amount", row: `XYZ SA (${ISIN}) 20241202 [amount: ""]`, parse: () => tradeRepublicParser.parse([TR_H, `"2024-12-02T09:30:00.000Z","2024-12-02","DEFAULT","TRADING","BUY","STOCK","XYZ SA","${ISIN}","40","10.000000","","","","EUR","","","","Buy","tx-1","","","",""`].join("\n")) },
   { broker: "Trade Republic", label: "trading type 'SAVINGS_PLAN_REVERSAL'", row: `XYZ SA (${ISIN}) 20241202 [type: "SAVINGS_PLAN_REVERSAL"]`, parse: () => tradeRepublicParser.parse([TR_H, `"2024-12-02T09:30:00.000Z","2024-12-02","DEFAULT","TRADING","SAVINGS_PLAN_REVERSAL","STOCK","XYZ SA","${ISIN}","40","10.000000","-400.00","","","EUR","","","","Buy","tx-1","","","",""`].join("\n")) },
   { broker: "DEGIRO", label: "empty ISIN", row: 'XYZ SA 20241202 [ISIN: ""]', parse: () => degiroParser.parse([DG_H, "02-12-2024,09:15,XYZ SA,,MAD,XMAD,40,10.00,EUR,-400.00,EUR,0,EUR,-400.00,EUR,aaa"].join("\n")) },
   { broker: "Scalable Capital", label: "date '2024-12-45'", row: `XYZ SA (${ISIN}) [date: "20241245"]`, parse: () => scalableParser.parse([SC_H, "2024-11-01;09:15;Executed;REF000;OTHER SA;Security;Buy;ES0000009999;1;1,00;-1,00;0;0;EUR", `2024-12-45;09:15;Executed;REF001;XYZ SA;Security;Buy;${ISIN};40;10,00;-400,00;0;0;EUR`].join("\n")) },
   { broker: "DEGIRO", label: "Date '31-02-2024'", row: `XYZ SA (${ISIN}) [Date: "20240231"]`, parse: () => degiroParser.parse([DG_H, "01-11-2024,09:15,OTHER SA,ES0000009999,MAD,XMAD,1,1.00,EUR,-1.00,EUR,0,EUR,-1.00,EUR,aa0", `31-02-2024,09:15,XYZ SA,${ISIN},MAD,XMAD,40,10.00,EUR,-400.00,EUR,0,EUR,-400.00,EUR,aaa`].join("\n")) },
   { broker: "Trade Republic", label: "date '<b>'", row: `XYZ SA (${ISIN}) [date: "<b>"]`, parse: () => tradeRepublicParser.parse([TR_H, `"2024-11-01T09:30:00.000Z","2024-11-01","DEFAULT","TRADING","BUY","STOCK","OTHER SA","ES0000009999","1","1.000000","-1.00","","","EUR","","","","Buy","tx-0","","","",""`, `"<b>","<b>","DEFAULT","TRADING","BUY","STOCK","XYZ SA","${ISIN}","40","10.000000","-400.00","","","EUR","","","","Buy","tx-1","","","",""`].join("\n")) },
+  { broker: "Flatex", label: "Buchtag '02.13.2024'", row: `XYZ SA (${ISIN}) [Buchtag: "20241302"]`, parse: () => flatexParser.parse([FX_H, "1;01.11.2024;01.11.2024;ES0000009999;OTHER SA;1;Stk.;Ausführung ORDER Kauf ES0000009999 0;0;1,00;EUR;x", `1;02.13.2024;02.13.2024;${ISIN};XYZ SA;40;Stk.;Ausführung ORDER Kauf ${ISIN} 1;1;10,00;EUR;***xxx Depot`].join("\n")) },
+  { broker: "eToro", label: "Action 'XYZ' (no Buy or Sell)", row: `XYZ (${ISIN}) 20241202 [Action: "XYZ"]`, parse: () => parseEtoroXlsx(xlsx("Closed Positions", [ET_H, ["XYZ", "400", "40", "10", "11", "40", "02/12/2024", "10/02/2025", "Stocks", "1", ISIN]])) },
 ];
 
 describe("#467 a trade row that cannot be read is kept as a trade that books nothing, never dropped", () => {
@@ -241,5 +257,124 @@ describe("#470 sibling: a Revolut crypto buy of unknown size leaves a holding of
       ["2025-04-02T10:00:00Z", "ETH", "SELL - MARKET", "", "USD 2000", "USD 4000", "USD", "1"],
     );
     expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown ?? false])).toEqual([["BTC", "0", true]]);
+  });
+});
+
+describe("#468 a row whose type is neither a buy nor a sale is never booked as a buy", () => {
+  // Freedom24 issue example: buy 10 ACME at 150 USD (15/03/2024), then a row
+  // of 10 at 175 USD (20/09/2024), at 1.10 USD/EUR.
+  const f24json = (rows: { date: string; op: string; p: string; q: string; amount: string }[]): Statement => freedom24Parser.parse(JSON.stringify({
+    report: { trades: { detailed: rows.map((r) => ({ date: r.date, ticker: "ACME.US", isin: "US0000000001", operation: r.op, p: r.p, q: r.q, curr_c: "USD", commission: "0", amount: r.amount, exchange: "NYSE" })) }, corporate_actions: { detailed: [] }, cash_flows: { detailed: [] } },
+  }));
+  const buy = { date: "2024-03-15 09:30:00", op: "buy", p: "150.00", q: "10", amount: "-1500.00" };
+
+  describe.each(["sale", "sell_short", "transfer"])("Freedom24 operation %j", (op) => {
+    it.each(METHODS)("[%s] is no second purchase: kept as a row that books nothing, named", (method) => {
+      const parsed = f24json([buy, { date: "2024-09-20 14:00:00", op, p: "175.00", q: "10", amount: "1750.00" }]);
+      expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "10", false], ["BUY", "0", true]]);
+      expect(unreadableRows(parsed)).toBe(`ACME (US0000000001) 20240920 [operation: "${op}"]`);
+      expect(run([[parsed, "Freedom24"]], 2024, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+
+  it.each([" sell", "sell\n", "SELL"])("Freedom24 operation %j is read as a sell once trimmed: the 275 € gain", (op) => {
+    for (const method of METHODS) {
+      const parsed = f24json([buy, { date: "2024-09-20 14:00:00", op, p: "175.00", q: "10", amount: "1750.00" }]);
+      expect(run([[parsed, "Freedom24"]], 2024, method).capitalGains.netGainLoss.toFixed(2)).toBe("275.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] Freedom24: a 'transfer' row after a loss sale no longer blocks the 550 € loss", (method) => {
+    const rows = [
+      buy,
+      { date: "2024-11-01 14:00:00", op: "sell", p: "100.00", q: "10", amount: "1000.00" },
+      { date: "2024-11-22 10:00:00", op: "transfer", p: "100.00", q: "10", amount: "1000.00" },
+    ];
+    const r = run([[f24json(rows), "Freedom24"]], 2024, method);
+    expect([r.capitalGains.netGainLoss.toFixed(2), r.capitalGains.blockedLosses.toFixed(2)]).toEqual(["-550.00", "0.00"]);
+  });
+
+  // Kraken: a row whose type is "" or "settle", dated before a buy of 1 ETH at
+  // 2000 € and a sale at 3000 €. Read as a buy at 1000 €, FIFO took it first.
+  const kh = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
+  describe.each(["", "settle", " Margin "])("Kraken type %j", (type) => {
+    it.each(METHODS)("[%s] is no purchase: the sale gains 1000 €, not 2000 €", (method) => {
+      const parsed = krakenParser.parse([kh,
+        `"T0","O0","XETHZEUR","2024-02-01 10:30:00","${type}","market","1000.00","1000.00","0","1.0","0.0","",""`,
+        `"T1","O1","XETHZEUR","2024-03-15 10:30:00","buy","limit","2000.00","2000.00","0","1.0","0.0","",""`,
+        `"T2","O2","XETHZEUR","2024-09-20 14:00:00","sell","market","3000.00","3000.00","0","1.0","0.0","",""`].join("\n"));
+      expect(parsed.trades[0]!.quantityUnknown).toBe(true);
+      expect(unreadableRows(parsed)).toBe(`ETH 20240201 [type: ${JSON.stringify(type.trim())}]`);
+      expect(run([[parsed, "Kraken"]], 2024, method).capitalGains.netGainLoss.toFixed(2)).toBe("1000.00");
+    });
+  });
+
+  it("Kraken: a crypto-quoted pair of unknown type keeps a row for each coin", () => {
+    const parsed = krakenParser.parse([kh, `"T0","O0","XETHXXBT","2024-02-01 10:30:00","settle","market","0.05","0.05","0","1.0","0.0","",""`].join("\n"));
+    expect(parsed.trades.map((t) => [t.symbol, t.quantityUnknown])).toEqual([["ETH", true], ["BTC", true]]);
+  });
+
+  // IBKR: buy 10 at 150 USD, then a sale of 10 at 175 USD with no buySell.
+  const ibkr = (sellAttr: string, sellQty = "-10"): string => {
+    const t = (id: string, d: string, q: string, p: number, side: string): string =>
+      `<Trade tradeID="${id}" accountId="U1" symbol="XYZ" description="XYZ" conid="1" isin="US0000000003" assetCategory="STK" currency="USD" tradeDate="${d}" settlementDate="${d}" quantity="${q}" tradePrice="${p}" tradeMoney="${Number(q) * p}" proceeds="${-Number(q) * p}" cost="1500" fifoPnlRealized="0" fxRateToBase="1" ${side} openCloseIndicator="${Number(q) > 0 ? "O" : "C"}" exchange="NYSE" ibCommissionCurrency="USD" ibCommission="0" taxes="0" multiplier="1" />`;
+    return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20240101" toDate="20241231" period="Custom"><Trades>${t("1", "20240315", "10", 150, 'buySell="BUY"')}${t("2", "20240920", sellQty, 175, sellAttr)}</Trades><CashTransactions /><CorporateActions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+  };
+  it.each(METHODS)("[%s] IBKR: a trade with no buySell takes its side from the quantity sign: the 275 € gain", (method) => {
+    for (const attr of ["", 'buySell=""', 'buySell="SELL"']) {
+      const parsed = parseIbkrFlexXml(ibkr(attr));
+      expect(parsed.trades.map((t) => t.buySell)).toEqual(["BUY", "SELL"]);
+      expect(run([[parsed, "Interactive Brokers"]], 2024, method).capitalGains.netGainLoss.toFixed(2)).toBe("275.00");
+    }
+  });
+
+  it("IBKR: with no buySell and no signed quantity the side is unknown, never BUY", () => {
+    expect(parseIbkrFlexXml(ibkr("", "0")).trades[1]!.buySell).toBe("");
+    expect(parseIbkrFlexXml(ibkr("", "")).trades[1]!.buySell).toBe("");
+  });
+
+  // eToro Spanish export: a short closed position, open 200, close 150, 10 units.
+  const etoroEs = (direction: string): Promise<Statement> => {
+    const H = ["ID de posición", "Acción", "Long / Short", "Importe", "Unidades", "Fecha de apertura", "Fecha de cierre", "Apalancamiento",
+      "Comisiones de diferencial (USD)", "Diferencial de mercado (USD)", "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)",
+      "Tipo de cambio al cierre (USD)", "Tasa de apertura", "Tasa de cierre", "Tasa de Take Profit", "Tasa de Stop Loss",
+      "Comisiones nocturnas y dividendos", "Copiado desde", "Tipo", "ISIN", "Notas"];
+    return parseEtoroXlsx(xlsx("Posiciones cerradas", [H,
+      ["1", "Acme (ACME)", direction, "2000", "10", "15/03/2024 09:30:00", "20/09/2024 14:00:00", "1", "0", "0", "500", "450", "1", "1", "200", "150", "0", "0", "0", "-", "Acciones", "US0000000004", ""]]));
+  };
+  it.each(METHODS)("[%s] eToro: an unknown Long / Short value is no long position: no 550 € loss, named", async (method) => {
+    for (const direction of ["Corto", "Sell"]) {
+      const parsed = await etoroEs(direction);
+      expect(parsed.trades.every((t) => t.quantityUnknown === true)).toBe(true);
+      expect(unreadableRows(parsed)).toContain(`[Long / Short: "${direction}"]`);
+      expect(run([[parsed, "eToro"]], 2024, method).capitalGains.disposals).toEqual([]);
+    }
+    expect(run([[await etoroEs("Short"), "eToro"]], 2024, method).capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+  });
+
+  // Flatex: buy 10 at 150 €, then a row of the security that is neither Kauf
+  // nor Verkauf. Its Nominal's sign alone booked it as a sale or a buy.
+  const flatex = (...rows: string[]): Statement => flatexParser.parse([FX_H,
+    "1;15.03.2024;15.03.2024;US0000000002;ACME INC.;10;Stk.;Ausführung ORDER Kauf US0000000002 0;100;150,00;EUR;x", ...rows].join("\n"));
+  it.each(METHODS)("[%s] Flatex: a transfer out is no sale and a transfer in no repurchase", (method) => {
+    for (const info of ["Depotübertrag Ausgang US0000000002", "Ausbuchung Kapitalmaßnahme US0000000002"]) {
+      const parsed = flatex(`1;20.09.2024;20.09.2024;US0000000002;ACME INC.;-10;Stk.;${info};101;175,00;EUR;x`);
+      expect(unreadableRows(parsed)).toBe(`ACME INC. (US0000000002) 20240920 [Buchungsinformationen: "${info}"]`);
+      expect(run([[parsed, "Flatex"]], 2024, method).capitalGains.disposals).toEqual([]);
+    }
+    for (const info of ["Depotübertrag Eingang US0000000002", "Einbuchung Kapitalmaßnahme US0000000002"]) {
+      const r = run([[flatex(
+        "1;01.11.2024;01.11.2024;US0000000002;ACME INC.;-10;Stk.;Ausführung ORDER Verkauf US0000000002 1;101;100,00;EUR;x",
+        `1;22.11.2024;22.11.2024;US0000000002;ACME INC.;10;Stk.;${info};102;100,00;EUR;x`,
+      ), "Flatex"]], 2024, method);
+      expect([r.capitalGains.netGainLoss.toFixed(2), r.capitalGains.blockedLosses.toFixed(2)]).toEqual(["-500.00", "0.00"]);
+    }
+  });
+
+  it("Flatex: a Verkauf with a positive Nominal stays a sale; a Kauf with a negative one is unreadable", () => {
+    const sale = flatex("1;20.09.2024;20.09.2024;US0000000002;ACME INC.;10;Stk.;Ausführung ORDER Verkauf US0000000002 1;101;175,00;EUR;x");
+    expect(sale.trades.map((t) => [t.buySell, t.quantity])).toEqual([["BUY", "10"], ["SELL", "-10"]]);
+    const odd = flatex("1;20.09.2024;20.09.2024;US0000000002;ACME INC.;-10;Stk.;Ausführung ORDER Kauf US0000000002 1;101;175,00;EUR;x");
+    expect(unreadableRows(odd)).toBe('ACME INC. (US0000000002) 20240920 [Nominal: "-10"]');
   });
 });

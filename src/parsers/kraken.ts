@@ -23,6 +23,10 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -237,6 +241,22 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     if (assumedQuote) unrecognizedPairs.set(pair, `${base}/${quote}`);
     const tradeDate = krakenDate(timeStr);
     const tradeTime = timeOfDay(timeStr);
+    // A type that is neither buy nor sell (empty, "settle", a margin
+    // settlement) is no purchase: it was booked as one (#468). The row is
+    // kept as a trade that books nothing, for each coin it names, and named.
+    if (type !== "buy" && type !== "sell") {
+      const cell = unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "");
+      const legs = [{ id: txid, symbol: base, currency: quote }];
+      if (!isFiat(quote)) legs.push({ id: `${txid}-${quote}`, symbol: quote, currency: base });
+      for (const leg of legs) {
+        trades.push(unreadableTrade({
+          tradeID: leg.id, symbol: leg.symbol, description: `${base}/${quote}`, isin: "", assetCategory: "CRYPTO",
+          currency: leg.currency, tradeDate, tradeTime, exchange: "KRAKEN",
+        }, cell));
+      }
+      continue;
+    }
+
     const isSell = type === "sell";
 
     trades.push({
@@ -300,10 +320,12 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     }
   }
 
+  dateUndatedTrades("Kraken", trades, [], "time");
+
   // A pair we couldn't split with certainty (no known quote suffix) was split by
   // a guess — warn so the user knows that trade may be mis-valued and can verify
   // it (skip-and-warn, three-tier message policy).
-  const parserMessages: TaxMessage[] = unrecognizedPairs.size > 0
+  const parserMessages: TaxMessage[] = [...(unrecognizedPairs.size > 0
     ? [{
         id: "kraken.unrecognized_pair",
         severity: "warning" as const,
@@ -311,7 +333,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la moneda o la divisa de cotización no son las indicadas, corrige su valor manualmente.",
         context: { count: String(unrecognizedPairs.size) },
       }]
-    : [];
+    : []), ...tradeQuantityUnknownMessages("Kraken", trades)];
 
   return {
     accountId: "",

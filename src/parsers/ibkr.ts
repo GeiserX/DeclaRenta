@@ -376,7 +376,7 @@ function mapTrade(raw: Record<string, string>): Trade {
     // Canonical "BUY"/"SELL" after trimming and upper-casing. Cancel rows
     // ("SELL (Ca.)") never get here; any other value passes through and
     // FifoEngine skips it with a warning instead of treating it as a sale.
-    buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
+    buySell: tradeSide(raw.buySell, quantity),
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
     // The listing market, not the venue: it decides the anti-churning window (#452).
@@ -393,6 +393,21 @@ function mapTrade(raw: Record<string, string>): Trade {
     underlyingIsin: underlyingIsinOf(raw) || undefined,
     ibOrderID: raw.ibOrderID || undefined,
   };
+}
+
+/**
+ * A trade's side: its `buySell` when the row gives one, else the sign of its
+ * quantity (#468). A missing `buySell` is no "BUY": a sale read as a buy
+ * vanished, or covered a short that never existed. With neither a side nor a
+ * signed quantity it is "", which FifoEngine skips and names
+ * (`fifo.unknown_direction`); a row of unknown quantity books nothing anyway.
+ */
+function tradeSide(buySell: string | undefined, quantity: string | undefined): Trade["buySell"] {
+  const side = (buySell ?? "").trim().toUpperCase();
+  if (side) return side as Trade["buySell"];
+  const qty = quantity === undefined ? new Decimal(0) : new Decimal(quantity);
+  if (qty.isZero()) return "" as Trade["buySell"];
+  return qty.isNegative() ? "SELL" : "BUY";
 }
 
 /** IBKR notes code for a cancelled execution. */

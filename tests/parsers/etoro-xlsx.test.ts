@@ -332,7 +332,12 @@ describe("eToro XLSX parsing", () => {
       });
 
       const result = await parseEtoroXlsx(data);
-      expect(result.trades).toHaveLength(0);
+      // Kept as its two legs, which book nothing, and named (#467).
+      expect(result.trades.map((t) => [t.symbol, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+        ["INVALID ACTION", "20250315", "0", true, "0", 'INVALID ACTION (US0378331005) 20250315 [Action: "INVALID ACTION"]'],
+        ["INVALID ACTION", "20250920", "0", true, "0", 'INVALID ACTION (US0378331005) 20250920 [Action: "INVALID ACTION"]'],
+      ]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.count).toBe("2");
     });
 
     it("keeps both legs of a row with NaN units as trades of unknown quantity, moving no share or money (#453)", async () => {

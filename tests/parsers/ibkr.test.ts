@@ -465,7 +465,9 @@ describe("parseIbkrFlexXml", () => {
     expect(trade.symbol).toBe("XYZ");
     expect(trade.isin).toBe("");
     expect(trade.quantity).toBe("0");
-    expect(trade.buySell).toBe("BUY");
+    // No buySell and no quantity: no side, never a default BUY (#468).
+    expect(trade.buySell).toBe("");
+    expect(trade.quantityUnknown).toBe(true);
     expect(trade.fxRateToBase).toBe("1");
 
     const pos = result.openPositions[0]!;
