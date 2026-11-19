@@ -43,7 +43,7 @@ import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
 import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
-import { readPositionNumber } from "./ecb.js";
+import { hasSignConflict, readPositionNumber } from "./ecb.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -173,6 +173,8 @@ export interface AccountStatement {
     symbol: string;
     assetCategory: string;
     quantity: string;
+    /** The row's value, read only for its sign (`hasSignConflict`). */
+    positionValue?: string;
     fromTrades?: boolean;
     quantityUnknown?: boolean;
   }[];
@@ -1465,7 +1467,11 @@ function buildEvidenceCheck(
         listedBy.set(key, ids);
       }
       ids.add(id);
-      const qty = pos.quantityUnknown ? null : readQuantity(pos.quantity);
+      // A quantity and a value of opposite signs contradict each other: the
+      // row says neither "held" nor "short", so it is unreadable, never the 0
+      // a clamp of its quantity would give (#470, the rule of the forms).
+      const conflict = hasSignConflict({ quantity: pos.quantity, positionValue: pos.positionValue ?? "", quantityUnknown: pos.quantityUnknown === true });
+      const qty = pos.quantityUnknown || conflict ? null : readQuantity(pos.quantity);
       const prev = list.get(key);
       list.set(key, prev === null || qty === null ? null : (prev ?? new Decimal(0)).plus(qty));
     }

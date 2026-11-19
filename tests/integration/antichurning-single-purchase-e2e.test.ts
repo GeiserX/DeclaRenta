@@ -931,6 +931,40 @@ describe("(g) IBKR writes the held quantity as `position`", () => {
   });
 });
 
+describe("(g) a list row that contradicts itself is unreadable evidence, never 0 (#470)", () => {
+  // The trades leave 0. A row whose quantity and value have opposite signs
+  // says neither "held" nor "short": clamping its quantity to 0 would match the
+  // trades and apply the exception on a list that proves nothing.
+  const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
+  const run = (attrs: Record<string, string>, method: FxMethod = "monodivisa"): TaxReport =>
+    mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow(attrs)] }])]], method);
+
+  it.each(METHODS)("[%s] -50 units worth +500: not applied", (method) => {
+    expectUnverified(run({ position: "-50", positionValue: "500" }, method));
+  });
+
+  it("50 units worth -500: not applied", () => {
+    expectUnverified(run({ position: "50", positionValue: "-500" }));
+  });
+
+  it("control: a real short (-50 worth -500) holds no share: applied", () => {
+    expectApplied(run({ position: "-50", positionValue: "-500" }));
+  });
+
+  // Round 4: a 0 that no readable value of 0 confirms is unknown, not 0.
+  it.each([["N/A"], ["NaN"], [""], ["60,000"]])("position=\"0\" with positionValue=%j: not applied", (value) => {
+    expectUnverified(run({ position: "0", positionValue: value }));
+  });
+
+  it("position=\"0\" with no positionValue column: not applied", () => {
+    expectUnverified(run({ position: "0", positionValue: NONE }));
+  });
+
+  it.each([["0.00"], ["-0"]])("control: position=\"0\" with positionValue=%j proves zero: applied", (value) => {
+    expectApplied(run({ position: "0", positionValue: value }));
+  });
+});
+
 describe("(g) a list row that may be the security under another name proves nothing", () => {
   // 50 held since 2024, never sold in the window: the 31/12/2026 list has 50
   // after the 100 bought and 100 sold since the window start.
