@@ -43,6 +43,7 @@ import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
 import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
+import { readPositionNumber } from "./ecb.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -1531,14 +1532,12 @@ function coversDaysOnce(periods: readonly [number, number][], start: number, end
   return reach >= end;
 }
 
-/** A holdings quantity, or null when it is missing or unreadable. */
+/**
+ * A holdings quantity, or null when it is missing or unreadable: the one rule
+ * every reader of an open position's fields uses (`readPositionNumber`, #470).
+ */
 function readQuantity(quantity: string): Decimal | null {
-  try {
-    const qty = new Decimal(quantity.trim());
-    return qty.isFinite() ? qty : null;
-  } catch {
-    return null;
-  }
+  return readPositionNumber(quantity);
 }
 
 /**

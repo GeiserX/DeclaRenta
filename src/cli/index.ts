@@ -22,6 +22,7 @@ import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { isValidIsin } from "../engine/antichurning-window.js";
+import { cashAverageOf, cashEndingOf, holdsCash } from "../engine/ecb.js";
 import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
 import {
   checkModelo720Thresholds,
@@ -665,7 +666,7 @@ program
         }
 
         const missingAverage = (statement.cashBalances ?? []).filter(
-          (cb) => new Decimal(cb.endingCash).greaterThan(0) && !cb.averageQ4Cash,
+          (cb) => holdsCash(cb) && cashEndingOf(cb) !== null && cashAverageOf(cb) === null,
         );
         if (missingAverage.length > 0) {
           console.error(
@@ -679,14 +680,21 @@ program
             `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
           );
         }
+        // A cash balance the export gives no number for is unknown, never 0 EUR (#470).
+        const unreadableCash = (statement.cashBalances ?? []).filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
+        if (unreadableCash.length > 0) {
+          console.error(
+            `Aviso: ${unreadableCash.length} saldo(s) en efectivo sin un saldo final legible (${unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ")}). No cuentan como 0 EUR ni se incluyen en el fichero: toma su saldo del extracto de fin de año del bróker y decláralos a mano.`,
+          );
+        }
 
         if (!output720) {
           if (omissions.length > 0) {
             console.error("No se ha generado ningún registro. Revisa los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
           } else if (thresholds.accounts.exceeds) {
             console.error("Tus cuentas superan 50.000 EUR, pero ninguna trae la media del cuarto trimestre, así que no se ha generado el fichero. Declara esas cuentas a mano en el Modelo 720.");
-          } else if (thresholds.values.unvalued > 0) {
-            console.error("No se ha generado ningún registro. Valora las posiciones del aviso anterior antes de concluir que no debes presentar el Modelo 720.");
+          } else if (thresholds.values.unvalued > 0 || thresholds.accounts.unvalued > 0) {
+            console.error("No se ha generado ningún registro. Valora las posiciones y los saldos de los avisos anteriores antes de concluir que no debes presentar el Modelo 720.");
           } else {
             console.error("Posiciones en el extranjero por debajo de 50.000 EUR. No es necesario presentar Modelo 720.");
           }

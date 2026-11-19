@@ -431,6 +431,7 @@ const ca: TranslationKeys = {
   "m720.category_exceeded": "Supera 50.000 € — obligatori declarar",
   "m720.category_not_exceeded": "Per sota del llindar",
   "m720.category_undetermined": "No es pot determinar: {{count}} posició(ns) sense valorar",
+  "m720.category_undetermined_cash": "No es pot determinar: {{count}} saldo(s) en efectiu sense valorar",
   "m720.no_positions": "Puja un informe amb posicions obertes al Model 100 per analitzar el Model 720.",
   "m720.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen les teves posicions ni saldos a 31 de desembre, així que no se sumen aquí. Comprova a l'extracte de final d'any de {{brokers}} si el saldo dels teus comptes o el valor de les teves accions i fons a l'estranger supera els 50.000 €.",
   "m720.positions_title": "Posicions declarables",
@@ -440,13 +441,14 @@ const ca: TranslationKeys = {
   "m720.q4_average": "Mitjana Q4",
   "m720.cash_missing_average":
     "Alguns saldos no inclouen la mitjana del quart trimestre obligatòria per als comptes del Model 720. El seu saldo a 31 de desembre sí que compta per al llindar de 50.000 €, però aquests comptes no s'inclouen al fitxer generat: afegeix-los a mà, amb el seu saldo mitjà del quart trimestre, abans de presentar.",
+  "m720.cash_unvalued": "El fitxer no porta un saldo final llegible per a {{count}} saldo(s) en efectiu: {{accounts}}. No compten com a 0 €: pren el saldo de l'extracte de final d'any del bròker. Fins aleshores no es pot saber si els teus comptes superen els 50.000 €, i aquests comptes no s'inclouen al fitxer generat: declara'ls a mà.",
   "m720.omitted_title":
     "Aquests béns no caben al fitxer i els has de declarar a mà al formulari del Model 720:",
   "m720.omitted_no_isin":
     "no té ISIN; al formulari s'identifica amb «Z» més el codi del país de l'emissor",
   "m720.omitted_no_country":
     "falta el país on està dipositat o situat",
-  "m720.omitted_quantity_unknown": "el fitxer no dona el seu nombre de valors; pren-lo de l'extracte de final d'any del bròker",
+  "m720.omitted_quantity_unknown": "el fitxer no porta un nombre de valors vàlid (falta, no es llegeix o és un 0 al costat d'un valor); pren-lo de l'extracte de final d'any del bròker",
   "m720.omitted_no_account":
     "falta el número de compte",
   "m720.omitted_invalid_code":
@@ -493,7 +495,7 @@ const ca: TranslationKeys = {
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
-  "d6.quantity_unknown": "El fitxer no dona el nombre de títols de {{count}} posició(ns): {{holdings}}. No són 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
+  "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 al costat d'un valor): {{holdings}}. No són 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
   "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
@@ -532,7 +534,7 @@ const ca: TranslationKeys = {
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
-  "m721.quantity_unknown": "El fitxer no dona el nombre d'unitats de {{count}} criptomoneda(es): {{coins}}. No són 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
+  "m721.quantity_unknown": "El fitxer no porta un nombre d'unitats vàlid per a {{count}} criptomoneda(es) (falta, no es llegeix o és un 0 al costat d'un valor): {{coins}}. No són 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
@@ -1118,9 +1120,13 @@ const ca: TranslationKeys = {
   "parser.crypto_position_quantity_unknown": "IBKR no dona un nombre d'unitats llegible per a {{count}} posició(ns) de criptomonedes: {{holdings}}.",
   "parser.crypto_position_quantity_unknown.hint": "DeclaRenta no s'inventa les seves unitats: el Model 721 les mostra com a desconegudes, i si tampoc no hi ha el seu valor les compta com a sense valorar, així que no pot concloure que no l'hagis de presentar. Pren les unitats de l'extracte de final d'any d'IBKR, o comprova que la secció Open Positions de la Flex Query inclou la quantitat i torna-la a exportar.",
   "parser.open_position_zero_with_value": "IBKR dona 0 accions per a {{count}} posició(ns) oberta(es) que sí que tenen un valor diferent de 0: {{holdings}}.",
-  "parser.open_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'accions, així que es tracta com a desconegut, mai com a 0: el Model 720 i el D-6 les mostren sense nombre de valors i et demanen que l'escriguis a mà, i el seu valor sí que compta per al llindar del 720. Pren el nombre de l'extracte de final d'any d'IBKR.",
+  "parser.open_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'accions, així que es tracta com a desconegut, mai com a 0. Amb un valor positiu, el Model 720 i el D-6 mostren la posició sense nombre de valors i et demanen que l'escriguis a mà, i el seu valor compta per al llindar del 720. Amb un valor negatiu és una posició curta (accions que deus, no que tens), i el 720 i el D-6 no la inclouen. Pren el nombre de l'extracte de final d'any d'IBKR.",
   "parser.crypto_position_zero_with_value": "IBKR dona 0 unitats per a {{count}} posició(ns) de criptomonedes que sí que tenen un valor diferent de 0: {{holdings}}.",
-  "parser.crypto_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'unitats, així que es tracta com a desconegut, mai com a 0: el Model 721 mostra les seves unitats com a desconegudes, i el seu valor sí que compta per al llindar. Pren les unitats de l'extracte de final d'any d'IBKR.",
+  "parser.crypto_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'unitats, així que es tracta com a desconegut, mai com a 0. Amb un valor positiu, el Model 721 mostra les seves unitats com a desconegudes i el seu valor compta per al llindar. Amb un valor negatiu és una posició curta (criptomonedes que deus, no que tens), i el 721 no la inclou. Pren les unitats de l'extracte de final d'any d'IBKR.",
+  "parser.open_position_sign_conflict": "IBKR dona un nombre d'accions o unitats i un valor de signe contrari per a {{count}} posició(ns) oberta(es): {{holdings}}.",
+  "parser.open_position_sign_conflict.hint": "Una quantitat positiva amb un valor negatiu, o al revés, es contradiu: DeclaRenta no sap si és una posició llarga o curta, així que no la valora. Els models 720, 721 i D-6 la compten com a sense valorar i no poden concloure que no els hagis de presentar. Pren la quantitat i el valor de l'extracte de final d'any d'IBKR.",
+  "parser.cash_balance_unreadable": "IBKR no dona un saldo final llegible per a {{count}} saldo(s) en efectiu: {{accounts}}.",
+  "parser.cash_balance_unreadable.hint": "DeclaRenta no el compta com a 0 €: el Model 720 el mostra com a sense valorar i no pot concloure que no hagis de declarar els teus comptes. Pren el saldo de l'extracte de final d'any d'IBKR, o comprova que la secció Cash Report de la Flex Query inclou el saldo final (Ending Cash) i torna a exportar-la.",
   "parser.trade_quantity_unknown": "{{broker}} no dona un nombre d'accions o un preu llegible per a {{count}} operació(ns): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta accions per elles, així que els guanys i les pèrdues d'aquest valor no són fiables i no s'aplica l'excepció de compra única de la regla dels 2 mesos. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
   "parser.crypto_quantity_unknown": "{{broker}} no dona un nombre d'unitats o un preu llegible per a {{count}} operació(ns) amb criptomonedes: {{trades}}.",

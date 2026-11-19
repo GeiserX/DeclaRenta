@@ -21,6 +21,7 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
+import { cashEndingOf, hasSignConflict, holdsCash, readPositionNumber } from "../engine/ecb.js";
 import { tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 const parser = new XMLParser({
@@ -258,14 +259,14 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
             id: "parser.crypto_position_zero_with_value",
             severity: "warning",
             message: `IBKR da 0 unidades para ${count} posición(es) de criptomonedas que sí tienen un valor distinto de 0: ${holdings}.`,
-            hint: "Un 0 junto a un valor no es un número de unidades, así que se trata como desconocido, nunca como 0: el Modelo 721 muestra sus unidades como desconocidas, y su valor sí cuenta para el umbral. Toma las unidades del extracto de fin de año de IBKR.",
+            hint: "Un 0 junto a un valor no es un número de unidades, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 721 muestra sus unidades como desconocidas y su valor cuenta para el umbral. Con un valor negativo es una posición corta (criptomonedas que debes, no que tienes), y el 721 no la incluye. Toma las unidades del extracto de fin de año de IBKR.",
             context: { count, holdings },
           }
         : {
             id: "parser.open_position_zero_with_value",
             severity: "warning",
             message: `IBKR da 0 acciones para ${count} posición(es) abierta(s) que sí tienen un valor distinto de 0: ${holdings}.`,
-            hint: "Un 0 junto a un valor no es un número de acciones, así que se trata como desconocido, nunca como 0: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y su valor sí cuenta para el umbral del 720. Toma el número del extracto de fin de año de IBKR.",
+            hint: "Un 0 junto a un valor no es un número de acciones, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 720 y el D-6 muestran la posición sin número de valores y te piden que lo escribas a mano, y su valor cuenta para el umbral del 720. Con un valor negativo es una posición corta (acciones que debes, no que tienes), y el 720 y el D-6 no la incluyen. Toma el número del extracto de fin de año de IBKR.",
             context: { count, holdings },
           });
     }
@@ -288,6 +289,36 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
           hint: "DeclaRenta no inventa su número de acciones: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y si tampoco viene su valor las cuentan como sin valorar. Toma el número del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
           context: { count, holdings },
         });
+  }
+
+  // A quantity and a value of opposite signs contradict each other: the 720,
+  // the 721 and the D-6 count the holding as held and unvalued (#470).
+  const conflicting = openPositions.filter(hasSignConflict);
+  if (conflicting.length > 0) {
+    const count = String(conflicting.length);
+    const holdings = conflicting.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    parserMessages.push({
+      id: "parser.open_position_sign_conflict",
+      severity: "warning",
+      message: `IBKR da un número de acciones o unidades y un valor de signo contrario para ${count} posición(es) abierta(s): ${holdings}.`,
+      hint: "Una cantidad positiva con un valor negativo, o al revés, se contradice: DeclaRenta no sabe si es una posición larga o corta, así que no la valora. Los modelos 720, 721 y D-6 la cuentan como sin valorar y no pueden concluir que no debas presentarlos. Toma la cantidad y el valor del extracto de fin de año de IBKR.",
+      context: { count, holdings },
+    });
+  }
+
+  // A cash balance with no number ("", "N/A", no endingCash column) is unknown,
+  // never 0 €: the 720 accounts category counts it unvalued (#470).
+  const unreadableCash = cashBalances.filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
+  if (unreadableCash.length > 0) {
+    const count = String(unreadableCash.length);
+    const accounts = unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ");
+    parserMessages.push({
+      id: "parser.cash_balance_unreadable",
+      severity: "warning",
+      message: `IBKR no da un saldo final legible para ${count} saldo(s) en efectivo: ${accounts}.`,
+      hint: "DeclaRenta no lo cuenta como 0 €: el Modelo 720 lo muestra como sin valorar y no puede concluir que no debas declarar tus cuentas. Toma el saldo del extracto de fin de año de IBKR, o comprueba que la sección Cash Report de la Flex Query incluye el saldo final (Ending Cash) y vuelve a exportarla.",
+      context: { count, accounts },
+    });
   }
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
@@ -813,20 +844,17 @@ function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, 
   return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
 }
 
-/** Whether an IBKR attribute is a plain decimal number. */
-function isNumberText(text: string | undefined): boolean {
-  return /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(text ?? "");
-}
-
 /**
  * An Open Positions row whose quantity is an explicit 0 while its value is a
  * number other than 0: the 0 contradicts the value, so it is no share count
  * (#470). The parser flags it `quantityUnknown` and warns with its own wording.
+ * Both fields are read with the generators' own reader (`readPositionNumber`),
+ * so "1e5" is a value here as it is in the 720, and "NaN" is none.
  */
 function isZeroWithValue(raw: Record<string, string>): boolean {
-  const rawQuantity = raw.position ?? raw.quantity;
-  return isNumberText(rawQuantity) && Number(rawQuantity) === 0
-    && isNumberText(raw.positionValue) && Number(raw.positionValue) !== 0;
+  const value = readPositionNumber(raw.positionValue);
+  return readPositionNumber(raw.position ?? raw.quantity)?.isZero() === true
+    && value !== null && !value.isZero();
 }
 
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
@@ -837,8 +865,10 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
   // An explicit 0 next to a value that is not 0 contradicts itself: the 0 is
   // no share count, so it is unknown too, never 0 units in the 720/721 (#470).
+  // A quantity is a number by the generators' own rule (`readPositionNumber`):
+  // "7e2" is 700 shares, "NaN" or "N/A" is unknown.
   const rawQuantity = raw.position ?? raw.quantity;
-  const quantityUnknown = !isNumberText(rawQuantity) || isZeroWithValue(raw);
+  const quantityUnknown = readPositionNumber(rawQuantity) === null || isZeroWithValue(raw);
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -846,7 +876,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity,
+    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity.trim(),
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",

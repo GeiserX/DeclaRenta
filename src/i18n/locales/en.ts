@@ -430,6 +430,7 @@ const en: TranslationKeys = {
   "m720.category_exceeded": "Exceeds 50,000 EUR — filing required",
   "m720.category_not_exceeded": "Below threshold",
   "m720.category_undetermined": "Cannot be determined: {{count}} position(s) not valued",
+  "m720.category_undetermined_cash": "Cannot be determined: {{count}} cash balance(s) not valued",
   "m720.no_positions": "Upload a report with open positions in Modelo 100 to analyze Modelo 720.",
   "m720.brokers_without_holdings": "The {{brokers}} data you uploaded has no positions or balances at 31 December, so they are not counted here. Check the year-end statement from {{brokers}} to see whether your foreign account balances or your foreign shares and funds exceed €50,000.",
   "m720.positions_title": "Declarable positions",
@@ -439,13 +440,14 @@ const en: TranslationKeys = {
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
     "Some balances do not include the Q4 average required for Modelo 720 account records. Their 31 December balance does count toward the 50,000 EUR threshold, but those accounts are left out of the generated file: add them by hand, with their Q4 average balance, before filing.",
+  "m720.cash_unvalued": "The file has no readable ending balance for {{count}} cash balance(s): {{accounts}}. They do not count as 0 EUR: take the balance from the broker's year-end statement. Until then it cannot be known whether your accounts pass 50,000 EUR, and those accounts are left out of the generated file: declare them by hand.",
   "m720.omitted_title":
     "These assets do not fit in the file, so declare them by hand in the Modelo 720 form:",
   "m720.omitted_no_isin":
     "it has no ISIN; the form identifies it with “Z” plus the issuer's country code",
   "m720.omitted_no_country":
     "the country where it is deposited or located is missing",
-  "m720.omitted_quantity_unknown": "the file gives no number of securities; take it from the broker's year-end statement",
+  "m720.omitted_quantity_unknown": "the file has no valid number of securities (missing, unreadable, or a 0 next to a value); take it from the broker's year-end statement",
   "m720.omitted_no_account":
     "the account number is missing",
   "m720.omitted_invalid_code":
@@ -493,7 +495,7 @@ const en: TranslationKeys = {
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
-  "d6.quantity_unknown": "The file gives no number of securities for {{count}} position(s): {{holdings}}. They are not 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
+  "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 next to a value): {{holdings}}. They are not 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
   "d6.deadline": "Deadline: January 1 – 31 of the following year",
@@ -533,7 +535,7 @@ const en: TranslationKeys = {
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
-  "m721.quantity_unknown": "The file gives no number of units for {{count}} cryptocurrency(ies): {{coins}}. They are not 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
+  "m721.quantity_unknown": "The file has no valid number of units for {{count}} cryptocurrency(ies) (missing, unreadable, or a 0 next to a value): {{coins}}. They are not 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",
@@ -1116,9 +1118,13 @@ const en: TranslationKeys = {
   "parser.crypto_position_quantity_unknown": "IBKR gives no readable number of units for {{count}} crypto position(s): {{holdings}}.",
   "parser.crypto_position_quantity_unknown.hint": "DeclaRenta does not invent their units: the Modelo 721 shows them as unknown, and if their value is missing too it counts them as unvalued, so it cannot conclude that you do not have to file. Take the units from the IBKR year-end statement, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
   "parser.open_position_zero_with_value": "IBKR gives 0 shares for {{count}} open position(s) that do have a value other than 0: {{holdings}}.",
-  "parser.open_position_zero_with_value.hint": "A 0 next to a value is no share count, so it is treated as unknown, never as 0: the Modelo 720 and the D-6 show them with no number of securities and ask you to type it by hand, and their value still counts toward the 720 threshold. Take the number from the IBKR year-end statement.",
+  "parser.open_position_zero_with_value.hint": "A 0 next to a value is no share count, so it is treated as unknown, never as 0. With a positive value, the Modelo 720 and the D-6 show the position with no number of securities and ask you to type it by hand, and its value counts toward the 720 threshold. With a negative value it is a short position (shares you owe, not shares you own), and the 720 and the D-6 leave it out. Take the number from the IBKR year-end statement.",
   "parser.crypto_position_zero_with_value": "IBKR gives 0 units for {{count}} crypto position(s) that do have a value other than 0: {{holdings}}.",
-  "parser.crypto_position_zero_with_value.hint": "A 0 next to a value is no number of units, so it is treated as unknown, never as 0: the Modelo 721 shows their units as unknown, and their value still counts toward the threshold. Take the units from the IBKR year-end statement.",
+  "parser.crypto_position_zero_with_value.hint": "A 0 next to a value is no number of units, so it is treated as unknown, never as 0. With a positive value, the Modelo 721 shows its units as unknown and its value counts toward the threshold. With a negative value it is a short position (crypto you owe, not crypto you own), and the 721 leaves it out. Take the units from the IBKR year-end statement.",
+  "parser.open_position_sign_conflict": "IBKR gives a share or unit count and a value of opposite signs for {{count}} open position(s): {{holdings}}.",
+  "parser.open_position_sign_conflict.hint": "A positive quantity with a negative value, or the reverse, contradicts itself: DeclaRenta cannot tell a long position from a short one, so it does not value it. The Modelo 720, 721 and D-6 count it as not valued and cannot conclude that you do not have to file them. Take the quantity and the value from the IBKR year-end statement.",
+  "parser.cash_balance_unreadable": "IBKR gives no readable ending balance for {{count}} cash balance(s): {{accounts}}.",
+  "parser.cash_balance_unreadable.hint": "DeclaRenta does not count it as 0 EUR: the Modelo 720 shows it as not valued and cannot conclude that you do not have to declare your accounts. Take the balance from the IBKR year-end statement, or check that the Cash Report section of the Flex Query includes the ending balance (Ending Cash) and export it again.",
   "parser.trade_quantity_unknown": "{{broker}} gives no readable share count or price for {{count}} trade(s): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
   "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",

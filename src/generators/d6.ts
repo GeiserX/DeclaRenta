@@ -19,7 +19,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -104,9 +104,8 @@ export function generateD6Report(
       const country = p.isin.slice(0, 2).toUpperCase();
       return country !== "ES";
     })
-    // Exclude short positions. A holding whose share count the file does not
-    // give is held unless its value is negative (as heldIsins below, #470).
-    .filter((p) => (p.quantityUnknown === true ? !isNegativePositionValue(p.positionValue) : new Decimal(p.quantity).greaterThan(0)))
+    // Exclude short positions and rows that hold nothing (isD6Holding).
+    .filter(isD6Holding)
     .flatMap((p) => {
       const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
       // No resolvable year-end rate, or no market value in the export → can't
@@ -144,10 +143,7 @@ export function generateD6Report(
     positions
       .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
       .filter((p) => p.isin.slice(0, 2).toUpperCase() !== "ES")
-      .filter((p) =>
-        p.quantityUnknown === true
-          ? !isNegativePositionValue(p.positionValue)
-          : new Decimal(p.quantity).greaterThan(0))
+      .filter(isD6Holding)
       .map((p) => p.isin),
   );
   const previousIsins = new Set(previousYearIsins ?? []);

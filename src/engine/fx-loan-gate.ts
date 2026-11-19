@@ -59,6 +59,7 @@ import Decimal from "decimal.js";
 import type { CashBalance, CashTransaction, CorporateAction, Trade } from "../types/ibkr.js";
 import { FxFifoEngine, type FxEvent } from "./fx-fifo.js";
 import { normalizeDate } from "./dates.js";
+import { readPositionNumber } from "./ecb.js";
 
 /**
  * How far the upload's movements may miss the CashReport's ending balance,
@@ -97,15 +98,10 @@ function parsePeriod(row: CashBalance): Period | null {
   const from = normalizeDate(row.fromDate);
   const to = normalizeDate(row.toDate);
   if (!calendarDate(from) || !calendarDate(to) || from > to) return null;
-  let starting: Decimal;
-  let ending: Decimal;
-  try {
-    starting = new Decimal(row.startingCash);
-    ending = new Decimal(row.endingCash);
-  } catch {
-    return null;
-  }
-  if (!starting.isFinite() || !ending.isFinite()) return null;
+  // The 720's own rule for a balance (`readPositionNumber`, #470): no number, no period.
+  const starting = readPositionNumber(row.startingCash);
+  const ending = readPositionNumber(row.endingCash);
+  if (starting === null || ending === null) return null;
   return {
     accountId: row.accountId,
     brokerSource: row.brokerSource,

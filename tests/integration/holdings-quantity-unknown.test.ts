@@ -163,7 +163,7 @@ describe("#470 Modelo 720: an IBKR stock with no readable quantity", () => {
   it("the web section lists a valued holding with no quantity for manual entry", () => {
     useProfile("m720-content");
     renderSection720(flex(stock("", "70000")), rateMap);
-    expect(document.getElementById("m720-content")!.textContent).toContain("el archivo no da su número de valores");
+    expect(document.getElementById("m720-content")!.textContent).toContain("el archivo no trae un número de valores válido");
   });
 });
 
@@ -389,7 +389,9 @@ describe("#470 an IBKR row whose positionValue is no number, whatever its quanti
     expect(positionValueOf({ positionValue: "" })).toBeNull();
     expect(positionValueOf({ positionValue: "N/A" })).toBeNull();
     expect(positionValueOf({ positionValue: "-12.5" })?.toString()).toBe("-12.5");
-    expect(isShortPosition({ quantity: "5", positionValue: "-1" })).toBe(true);
+    expect(isShortPosition({ quantity: "-5", positionValue: "-1" })).toBe(true);
+    // Opposite signs prove no short: held, with an unknown value (hasSignConflict).
+    expect(isShortPosition({ quantity: "5", positionValue: "-1" })).toBe(false);
     expect(isShortPosition({ quantity: "-5", positionValue: "N/A" })).toBe(true);
     expect(isShortPosition({ quantity: "-5", positionValue: "0" })).toBe(true);
     expect(isShortPosition({ quantity: "5", positionValue: "N/A" })).toBe(false);

@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getQ4AverageRate, hasNoMarketValue, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, holdsCash, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -44,7 +44,13 @@ export interface Modelo720ThresholdResult {
    * is above 0 the category cannot be called below the threshold.
    */
   values: { exceeds: boolean; total: Decimal; unvalued: number };
-  accounts: { exceeds: boolean; total: Decimal };
+  /**
+   * `unvalued`: held cash balances left out of `total` because the export
+   * gives no number for them (`cashEndingOf` null: "", "N/A", no column). The
+   * balance may be positive, so while it is above 0 the category cannot be
+   * called below the threshold (#470).
+   */
+  accounts: { exceeds: boolean; total: Decimal; unvalued: number };
   realEstate: { exceeds: boolean; total: Decimal };
 }
 
@@ -66,18 +72,22 @@ export function isHeldSecurity(p: OpenPosition): boolean {
 
 /**
  * A cash balance in EUR. The Q4 average is null when the statement does not
- * carry it (IBKR's cash report has no such field): the 31-Dec balance still
- * counts toward the obligation, but the record cannot be written without it.
+ * carry it (IBKR's cash report has no such field) or gives no number for it:
+ * the 31-Dec balance still counts toward the obligation, but the record cannot
+ * be written without it. Undefined when the balance cannot be valued: no
+ * resolvable rate, or no number for the balance (`cashEndingOf`).
  */
 function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal | null } | undefined {
   const yearEnd = `${year}-12-31`;
   const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
+  const ending = cashEndingOf(cb);
   // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
   // for manual review) rather than crash the threshold check / file generation.
-  if (ecbRate === null) return undefined;
+  if (ecbRate === null || ending === null) return undefined;
+  const average = cashAverageOf(cb);
   return {
-    ending: new Decimal(cb.endingCash).mul(ecbRate),
-    averageQ4: cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate) : null,
+    ending: ending.mul(ecbRate),
+    averageQ4: average === null ? null : average.mul(ecbRate),
   };
 }
 
@@ -90,11 +100,18 @@ function cashCategoryTotals(
   cashBalances: CashBalance[] | undefined,
   rateMap: EcbRateMap,
   year: number,
-): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean } {
+): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean; unvalued: number } {
   let endingTotal = new Decimal(0);
   let averageTotal = new Decimal(0);
+  let unvalued = 0;
   for (const cb of cashBalances ?? []) {
-    if (!new Decimal(cb.endingCash).greaterThan(0)) continue;
+    if (!holdsCash(cb)) continue;
+    // A held balance the export gives no number for: unknown, never 0 € and
+    // never dropped; counted so the verdict says it cannot tell (#470).
+    if (cashEndingOf(cb) === null) {
+      unvalued++;
+      continue;
+    }
     const values = cashValuesEur(cb, rateMap, year);
     if (!values) continue;
     endingTotal = endingTotal.plus(values.ending);
@@ -104,6 +121,7 @@ function cashCategoryTotals(
     endingTotal,
     averageTotal,
     exceeds: endingTotal.greaterThan(THRESHOLD) || averageTotal.greaterThan(THRESHOLD),
+    unvalued,
   };
 }
 
@@ -151,7 +169,7 @@ export function checkModelo720Thresholds(
 
   return {
     values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal, unvalued },
-    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal) },
+    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal), unvalued: cash.unvalued },
     realEstate: { exceeds: realEstateTotal.greaterThan(THRESHOLD), total: realEstateTotal },
   };
 }
@@ -360,7 +378,8 @@ export function checkModelo720SuccessiveYear(
   // Only which ISINs were sold matters here, so no disposals are needed.
   const sold = findCancelledSecurities(positions, previous.securities, year, undefined);
   const heldAccounts = new Set(
-    (cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0)).map((cb) => accountCode(cb).code),
+    // An unknown balance may be positive: the account is held, not missing.
+    (cashBalances ?? []).filter(holdsCash).map((cb) => accountCode(cb).code),
   );
   const missingAccounts = [...new Set(previous.accounts)].filter((code) => !heldAccounts.has(code));
 
@@ -470,8 +489,10 @@ function plan720(
   // average and the tool never invents it (the web section asks the user to
   // add that account by hand).
   const previousAccounts = new Set(config.previousYearAccounts ?? []);
+  // A balance with no number cannot be written either: the threshold counts it
+  // unvalued and the caller warns, naming the account (#470).
   const cashEntries = (cashBalances ?? [])
-    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
+    .filter(holdsCash)
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
       return values?.averageQ4

@@ -330,9 +330,17 @@ describe("buildModelo721Entries — 721 valuation source of truth", () => {
 
   it("excludes positions with non-positive value and no units held", () => {
     const zero = makePosition({ quantity: "0", positionValue: "0" });
-    const negative = makePosition({ positionValue: "-100" });
+    const negative = makePosition({ quantity: "-1.5", positionValue: "-100" });
     const { positions } = buildModelo721Entries([zero, negative], rateMap, yearEnd);
     expect(positions).toHaveLength(0);
+  });
+
+  it("keeps a coin whose units and value have opposite signs, unvalued (#470)", () => {
+    // 1.5 units worth -100 contradicts itself: neither a holding worth 100 nor a short.
+    const conflict = makePosition({ quantity: "1.5", positionValue: "-100" });
+    const { positions, unvaluedCount } = buildModelo721Entries([conflict], rateMap, yearEnd);
+    expect(positions.map((p) => p.valuationEur)).toEqual([null]);
+    expect(unvaluedCount).toBe(1);
   });
 
   it("counts a held coin with no market value as unvalued, not as 0 €", () => {

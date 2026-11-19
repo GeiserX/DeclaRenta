@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, holdsCash, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import {
   isHeldSecurity,
   checkModelo720SuccessiveYear,
@@ -179,7 +179,7 @@ export function renderSection720(
     }))}</div>`
     : "";
 
-  const hasCashBalances = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash).greaterThan(0));
+  const hasCashBalances = (statement.cashBalances ?? []).some(holdsCash);
   // With nothing held, last year's file still matters: what it declared was sold (C).
   if (statement.openPositions.length === 0 && !hasCashBalances && !previous720) {
     container.innerHTML = `${missingNotice || `<p class="muted">${t("m720.no_positions")}</p>`}${previous720CardHtml(year)}`;
@@ -239,16 +239,18 @@ export function renderSection720(
       total: thresholds.values.total,
       exceeds: thresholds.values.exceeds,
       unvalued: thresholds.values.unvalued,
+      undeterminedKey: "m720.category_undetermined",
       successive: successive?.values,
       sold: sold.length,
     });
   }
-  if (thresholds.accounts.total.greaterThan(0) || successive?.accounts.declaredBefore) {
+  if (thresholds.accounts.total.greaterThan(0) || thresholds.accounts.unvalued > 0 || successive?.accounts.declaredBefore) {
     categories.push({
       label: t("m720.category_c"),
       total: thresholds.accounts.total,
       exceeds: thresholds.accounts.exceeds,
-      unvalued: 0,
+      unvalued: thresholds.accounts.unvalued,
+      undeterminedKey: "m720.category_undetermined_cash",
       successive: successive?.accounts,
       sold: 0,
     });
@@ -341,11 +343,17 @@ export function renderSection720(
     }
   }
 
-  // Cash balances table (Category C — Cuentas)
-  const cashBalances = (statement.cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0));
+  // Cash balances table (Category C — Cuentas). A balance the export gives no
+  // number for is held and shown as «—», never 0 € and never dropped (#470).
+  const cashBalances = (statement.cashBalances ?? []).filter(holdsCash);
   if (cashBalances.length > 0) {
-    const missingAverage = cashBalances.some((cb) => !cb.averageQ4Cash);
+    const unreadable = cashBalances.filter((cb) => cashEndingOf(cb) === null);
+    const missingAverage = cashBalances.some((cb) => cashEndingOf(cb) !== null && cashAverageOf(cb) === null);
     html += `<h3>${t("m720.cash_title")}</h3>
+    ${unreadable.length > 0 ? `<div class="banner banner-warning m720-cash-unvalued">${esc(t("m720.cash_unvalued", {
+      count: String(unreadable.length),
+      accounts: unreadable.map((cb) => `${cb.accountId} (${cb.currency})`).join(", "),
+    }))}</div>` : ""}
     ${missingAverage ? `<div class="banner banner-warning">${t("m720.cash_missing_average")}</div>` : ""}
     <div class="table-wrapper"><table>
       <thead><tr>
@@ -353,8 +361,10 @@ export function renderSection720(
       </tr></thead>
       <tbody>${cashBalances.map((cb) => {
         const ecbRate = lookupPositionRate(rateMap, dateForRates, cb.currency);
-        const val = ecbRate === null ? "—" : fmtEur(new Decimal(cb.endingCash).mul(ecbRate));
-        const avg = ecbRate !== null && cb.averageQ4Cash ? fmtEur(new Decimal(cb.averageQ4Cash).mul(ecbRate)) : "—";
+        const ending = cashEndingOf(cb);
+        const average = cashAverageOf(cb);
+        const val = ecbRate === null || ending === null ? "—" : fmtEur(ending.mul(ecbRate));
+        const avg = ecbRate !== null && ending !== null && average !== null ? fmtEur(average.mul(ecbRate)) : "—";
         return `<tr><td>${esc(cb.currency)}</td><td>${val}</td><td>${avg}</td></tr>`;
       }).join("")}</tbody>
     </table></div>`;
@@ -424,6 +434,8 @@ interface Modelo720CategoryView {
   total: Decimal;
   exceeds: boolean;
   unvalued: number;
+  /** The "cannot tell" line for this category: positions for V, cash balances for C. */
+  undeterminedKey: "m720.category_undetermined" | "m720.category_undetermined_cash";
   successive?: Modelo720SuccessiveCategory;
   sold: number;
 }
@@ -434,7 +446,7 @@ interface Modelo720CategoryView {
  */
 function categoryStatusHtml(cat: Modelo720CategoryView): string {
   // Holdings left out of the total: the category cannot be called below 50,000 € or not up 20,000 €.
-  const undetermined = esc(t("m720.category_undetermined", { count: String(cat.unvalued) }));
+  const undetermined = esc(t(cat.undeterminedKey, { count: String(cat.unvalued) }));
   const s = cat.successive;
   if (!s?.declaredBefore) {
     return cat.exceeds
@@ -505,13 +517,18 @@ function generate720File(): void {
   const obligedByLastFiling = !!successive
     && (successive.values.mandatory || successive.accounts.mandatory || successive.accounts.missing.length > 0);
   if (!thresholds.values.exceeds && !thresholds.accounts.exceeds && !obligedByLastFiling) {
-    // A holding with no value in euros may be what passes the threshold, so the
-    // answer is "value it first", never "you are not obliged".
-    if (thresholds.values.unvalued > 0) {
-      showNotGeneratedBanner(
-        "warning",
-        `<p>${esc(t("m720.positions_unvalued", { count: String(thresholds.values.unvalued) }))}</p>`,
-      );
+    // A holding or a cash balance with no value in euros may be what passes
+    // the threshold, so the answer is "value it first", never "you are not obliged".
+    if (thresholds.values.unvalued > 0 || thresholds.accounts.unvalued > 0) {
+      const unreadableCash = (cachedStatement.cashBalances ?? []).filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
+      const parts = [
+        thresholds.values.unvalued > 0 ? `<p>${esc(t("m720.positions_unvalued", { count: String(thresholds.values.unvalued) }))}</p>` : "",
+        unreadableCash.length > 0 ? `<p>${esc(t("m720.cash_unvalued", {
+          count: String(unreadableCash.length),
+          accounts: unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", "),
+        }))}</p>` : "",
+      ];
+      showNotGeneratedBanner("warning", parts.join(""));
       return;
     }
     const amount = fmtEur(Decimal.max(thresholds.values.total, thresholds.accounts.total));

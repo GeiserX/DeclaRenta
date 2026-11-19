@@ -12,9 +12,8 @@
  * holdings when ANY of its files has them (e.g. Degiro transactions + account).
  */
 
-import Decimal from "decimal.js";
 import type { Statement } from "../types/broker.js";
-import { positionValueOf } from "../engine/ecb.js";
+import { holdsCash, positionValueOf } from "../engine/ecb.js";
 
 /** One parsed file and the broker that parsed it. */
 export interface ParsedExport {
@@ -41,7 +40,9 @@ interface BrokerFacts {
 
 function factsOf(statement: Statement): BrokerFacts {
   const positions = statement.openPositions;
-  const positiveCash = (statement.cashBalances ?? []).some((cb) => new Decimal(cb.endingCash || 0).greaterThan(0));
+  // A balance the export gives no number for may be positive: it is a holding
+  // the 720 section shows as unvalued, never 0 € (#470).
+  const positiveCash = (statement.cashBalances ?? []).some(holdsCash);
   return {
     anyHoldings: positions.length > 0 || positiveCash,
     cryptoActivity:

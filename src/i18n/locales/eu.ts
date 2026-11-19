@@ -431,6 +431,7 @@ const eu: TranslationKeys = {
   "m720.category_exceeded": "50.000 € gainditzen du — aitorpena derrigorrezkoa",
   "m720.category_not_exceeded": "Atalasearen azpitik",
   "m720.category_undetermined": "Ezin da zehaztu: {{count}} posizio baloratu gabe",
+  "m720.category_undetermined_cash": "Ezin da zehaztu: {{count}} eskudiru saldo baloratu gabe",
   "m720.no_positions": "Igo posizio irekiak dituen txostena 100 Ereduan 720 Eredua aztertzeko.",
   "m720.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko posizioak eta saldoak jasotzen, eta, beraz, ez dira hemen batzen. Egiaztatu {{brokers}}(r)en urte amaierako laburpenean atzerriko kontuen saldoak edo atzerriko akzio eta funtsen balioak 50.000 € gainditzen dituen.",
   "m720.positions_title": "Aitortu beharreko posizioak",
@@ -440,13 +441,14 @@ const eu: TranslationKeys = {
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
     "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Abenduaren 31ko saldoa 50.000 €-ko atalaserako kontatzen da, baina kontu horiek ez dira sortutako fitxategian sartzen: gehitu itzazu eskuz, laugarren hiruhilekoko batez besteko saldoarekin, aurkeztu aurretik.",
+  "m720.cash_unvalued": "Fitxategiak ez du azken saldo irakurgarririk {{count}} eskudiru saldotarako: {{accounts}}. Ez dira 0 €-tzat hartzen: hartu saldoa brokerraren urte amaierako laburpenetik. Bitartean ezin da jakin zure kontuek 50.000 € gainditzen dituzten, eta kontu horiek ez dira sortutako fitxategian sartzen: aitortu itzazu eskuz.",
   "m720.omitted_title":
     "Ondasun hauek ez dira fitxategian sartzen, eta eskuz aitortu behar dituzu 720 Ereduaren inprimakian:",
   "m720.omitted_no_isin":
     "ez du ISINik; inprimakian «Z» eta jaulkitzailearen herrialde-kodea erabiliz identifikatzen da",
   "m720.omitted_no_country":
     "gordailuan edo kokatuta dagoen herrialdea falta da",
-  "m720.omitted_quantity_unknown": "fitxategiak ez du haren balore kopururik ematen; hartu brokerraren urte amaierako laburpenetik",
+  "m720.omitted_quantity_unknown": "fitxategiak ez du balore kopuru baliodunik (falta da, ezin da irakurri edo balio baten ondoko 0 bat da); hartu brokerraren urte amaierako laburpenetik",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
@@ -493,7 +495,7 @@ const eu: TranslationKeys = {
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
-  "d6.quantity_unknown": "Fitxategiak ez du {{count}} posizioren titulu kopururik ematen: {{holdings}}. Ez dira 0: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
+  "d6.quantity_unknown": "Fitxategiak ez du titulu kopuru baliodunik {{count}} posiziotarako (falta da, ezin da irakurri edo balio baten ondoko 0 bat da): {{holdings}}. Ez dira 0: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
   "d6.deadline": "Epea: urtarrilaren 1etik 31ra hurrengo urtean",
@@ -532,7 +534,7 @@ const eu: TranslationKeys = {
     "AEATen formatu ofiziala XML da (HFP/886/2023 Agindua). DeclaRentak berrikuspen orientagarria bakarrik erakusten du: sorrera ofiziala desgaituta dago balioztatutako XMLa inplementatu arte.",
   "m721.positions_unvalued":
     "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
-  "m721.quantity_unknown": "Fitxategiak ez du {{count}} kriptomonetaren unitate kopururik ematen: {{coins}}. Ez dira 0: hartu unitateak exchangearen edo brokerraren urte amaierako laburpenetik eta idatzi eskuz 721 ereduan.",
+  "m721.quantity_unknown": "Fitxategiak ez du unitate kopuru baliodunik {{count}} kriptomonetatarako (falta da, ezin da irakurri edo balio baten ondoko 0 bat da): {{coins}}. Ez dira 0: hartu unitateak exchangearen edo brokerraren urte amaierako laburpenetik eta idatzi eskuz 721 ereduan.",
   "m721.empty_title": "Ez dago kriptomoneda posiziorik kargatuta",
   "m721.empty_description":
     "721 Eredua aitorpen informatibo nahitaezkoa da atzerriko exchange-etan 50.000 € baino gehiagoko kriptomonedak badituzu. Igo zure brokerraren txostena 100 Ereduaren atalean, DeclaRentak automatikoki kalkulatu dezan atalasea gainditzen duzun. Epea: urtarrilaren 1etik martxoaren 31ra.",
@@ -1120,9 +1122,13 @@ const eu: TranslationKeys = {
   "parser.crypto_position_quantity_unknown": "IBKRk ez du unitate kopuru irakurgarririk ematen kriptomoneten {{count}} posiziotarako: {{holdings}}.",
   "parser.crypto_position_quantity_unknown.hint": "DeclaRentak ez ditu haien unitateak asmatzen: 721 ereduak ezezagun gisa erakusten ditu, eta haien balioa ere ez badago, baloratu gabekotzat hartzen ditu; beraz, ezin du ondorioztatu aurkeztu behar ez duzunik. Hartu unitateak IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Open Positions atalak kopurua duela eta esportatu berriro.",
   "parser.open_position_zero_with_value": "IBKRk 0 akzio ematen ditu {{count}} posizio irekitarako, baina 0 ez den balio bat dute: {{holdings}}.",
-  "parser.open_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da akzio kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat: 720 ereduak eta D-6ak balore kopururik gabe erakusten dituzte eta eskuz idazteko eskatzen dizute, eta haien balioa 720ren atalaserako zenbatzen da. Hartu kopurua IBKRren urte amaierako laburpenetik.",
+  "parser.open_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da akzio kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat. Balio positiboarekin, 720 ereduak eta D-6ak posizioa balore kopururik gabe erakusten dute eta eskuz idazteko eskatzen dizute, eta haren balioa 720ren atalaserako zenbatzen da. Balio negatiboarekin posizio motza da (zor dituzun akzioak, ez dituzunak), eta 720ak eta D-6ak ez dute sartzen. Hartu kopurua IBKRren urte amaierako laburpenetik.",
   "parser.crypto_position_zero_with_value": "IBKRk 0 unitate ematen ditu kriptomoneten {{count}} posiziotarako, baina 0 ez den balio bat dute: {{holdings}}.",
-  "parser.crypto_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da unitate kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat: 721 ereduak haien unitateak ezezagun gisa erakusten ditu, eta haien balioa atalaserako zenbatzen da. Hartu unitateak IBKRren urte amaierako laburpenetik.",
+  "parser.crypto_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da unitate kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat. Balio positiboarekin, 721 ereduak haren unitateak ezezagun gisa erakusten ditu eta haren balioa atalaserako zenbatzen da. Balio negatiboarekin posizio motza da (zor dituzun kriptomonetak, ez dituzunak), eta 721ak ez du sartzen. Hartu unitateak IBKRren urte amaierako laburpenetik.",
+  "parser.open_position_sign_conflict": "IBKRk akzio edo unitate kopuru bat eta aurkako zeinuko balio bat ematen ditu {{count}} posizio irekitarako: {{holdings}}.",
+  "parser.open_position_sign_conflict.hint": "Kopuru positibo bat balio negatibo batekin, edo alderantziz, kontraesana da: DeclaRentak ez daki posizio luzea ala motza den; beraz, ez du baloratzen. 720, 721 eta D-6 ereduek baloratu gabe zenbatzen dute, eta ezin dute ondorioztatu aurkeztu behar ez dituzunik. Hartu kopurua eta balioa IBKRren urte amaierako laburpenetik.",
+  "parser.cash_balance_unreadable": "IBKRk ez du azken saldo irakurgarririk ematen {{count}} eskudiru saldotarako: {{accounts}}.",
+  "parser.cash_balance_unreadable.hint": "DeclaRentak ez du 0 €-tzat hartzen: 720 ereduak baloratu gabe erakusten du, eta ezin du ondorioztatu zure kontuak aitortu behar ez dituzunik. Hartu saldoa IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Cash Report atalak azken saldoa (Ending Cash) duela eta esportatu berriro.",
   "parser.trade_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du akzio kopuru edo prezio irakurgarririk ematen {{count}} eragiketatarako: {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRentak ez du akziorik gehitzen edo kentzen haiengatik; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
   "parser.crypto_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du unitate kopuru edo prezio irakurgarririk ematen kriptomonetekin egindako {{count}} eragiketatarako: {{trades}}.",
