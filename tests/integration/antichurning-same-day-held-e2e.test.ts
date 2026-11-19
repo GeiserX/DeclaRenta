@@ -27,9 +27,12 @@ import type { EcbRateMap } from "../../src/types/ecb.js";
 // −1,166.67 to −1,500 (DGT −1,166.67). These cases pin the DGT's figures, so
 // that change turns them red.
 //
-// The stand-in has two real gaps, pinned at the end as `it.fails` on the DGT's
-// figure: it needs an older lot inside the window, and the sale-day buy stays
-// unused, so a later sale can use the same shares again.
+// The stand-in has three real gaps, pinned at the end as `it.fails` on the
+// DGT's figure: (a) the held count must land on an earlier buy day inside the
+// window whose shares no earlier sale has used; (b) the sale-day buy stays
+// unused, so a later sale can use the same shares again; (c) the stood-in lot
+// is only partly held, so it goes last, after the post-sale buys, and the sale
+// uses a later purchase the DGT leaves for the next sale.
 //
 // Every case runs through the REAL parsers (IBKR Flex XML, DEGIRO CSV) and
 // generateTaxReport, in the three FX methods.
@@ -185,7 +188,7 @@ describe("the definitive test: a sale rebought the same day keeps the loss pendi
 
 // ---------------------------------------------------------------------------
 // KNOWN GAPS of the stand-in. Counting a sale-day buy for its own held shares
-// closes both, but it also moves a committed fixture (see the design doc,
+// closes all three, but it also moves a committed fixture (see the design doc,
 // "Known limitations"), so it waits for a decision.
 // ---------------------------------------------------------------------------
 describe("known gaps: the stand-in needs an older lot in the window, and can use the sale-day shares twice", () => {
@@ -221,5 +224,119 @@ describe("known gaps: the stand-in needs an older lot in the window, and can use
     const r = ibkr(twice, "monodivisa");
     expect(sumOn(r, "2025-03-20", "blockedLossEur").toFixed(2)).toBe("0.00");
     expect(sumOn(r, "2025-03-20", "reintegratedLossEur").toFixed(2)).toBe("25.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap (a), wider: an older lot inside the window is not enough. The held count
+// goes to the newest earlier buy day, and if an earlier sale already used that
+// day's shares, nothing stands in for the sale-day buy. Two effects: the loss
+// is not blocked, and a sale with a same-day rebuy counts as definitive and
+// releases.
+// ---------------------------------------------------------------------------
+describe("known gap (a): the held count lands on a lot an earlier sale used", () => {
+  // Buy 100 on 01/03 and 100 on 02/03. On 03/03 sell 100 at −100: FIFO sells
+  // 01/03, and 02/03 (still held) replaces it, 100 blocked. On 10/03 sell 100 at
+  // −100 (FIFO sells 02/03) and buy 50 the same day. For the DGT the 50 are a
+  // rebuy (V0571-21): 50 blocked, and the other 50 sold shares are definitive
+  // and release 50 of the 03/03 loss (fiscal −100). The engine hands the 50
+  // held shares to 02/03, which 03/03 used, so 10/03 blocks nothing and its 100
+  // definitive shares release all of 03/03 (fiscal −200).
+  const used: Row[] = [
+    ["20250301", "BUY", 100, 10],
+    ["20250302", "BUY", 100, 10],
+    ["20250303", "SELL", 100, 9],
+    ["20250310", "SELL", 100, 9],
+    ["20250310", "BUY", 50, 9],
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] engine: 10/03 blocks 0 and releases 100 (IBKR and DEGIRO)`, () => {
+      for (const r of [ibkr(used, method), degiro(used, method)]) {
+        expect(sumOn(r, "2025-03-03", "blockedLossEur").toFixed(2)).toBe("100.00");
+        expect(sumOn(r, "2025-03-10", "blockedLossEur").toFixed(2)).toBe("0.00");
+        expect(sumOn(r, "2025-03-10", "reintegratedLossEur").toFixed(2)).toBe("100.00");
+        expect(fiscal(r)).toBe("-200.00");
+      }
+    });
+  }
+
+  it.fails("known gap: the DGT blocks 50 on 10/03 and releases 50 (fiscal −100)", () => {
+    const r = ibkr(used, "monodivisa");
+    expect(sumOn(r, "2025-03-10", "blockedLossEur").toFixed(2)).toBe("50.00");
+    expect(sumOn(r, "2025-03-10", "reintegratedLossEur").toFixed(2)).toBe("50.00");
+    expect(fiscal(r)).toBe("-100.00");
+  });
+
+  // The V0571-21 layout without the unused pre-sale buy that saves it in the
+  // consulta. Buy 100 on 01/12/2024. On 05/03/2025 sell 50 at −50, rebought by
+  // 50 on 08/03 (50 blocked, pending). On 20/03 sell all 100 at +100 and buy 300
+  // the same day. For the DGT the 300 make the sale not definitive (V0571-21):
+  // release 0, fiscal 100. The engine hands the held shares to 08/03, which
+  // 05/03 used, and 01/12/2024 is outside the window, so 20/03 is definitive and
+  // releases the 50 (fiscal 50).
+  const definitive: Row[] = [
+    ["20241201", "BUY", 100, 10],
+    ["20250305", "SELL", 50, 9],
+    ["20250308", "BUY", 50, 10],
+    ["20250320", "SELL", 100, 11],
+    ["20250320", "BUY", 300, 11],
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] engine: the 20/03 sale counts as definitive and releases 50 (IBKR and DEGIRO)`, () => {
+      for (const r of [ibkr(definitive, method), degiro(definitive, method)]) {
+        expect(sumOn(r, "2025-03-05", "blockedLossEur").toFixed(2)).toBe("50.00");
+        expect(sumOn(r, "2025-03-20", "reintegratedLossEur").toFixed(2)).toBe("50.00");
+        expect(fiscal(r)).toBe("50.00");
+      }
+    });
+  }
+
+  it.fails("known gap: the DGT keeps the 50 pending, a sale rebought the same day is not definitive (fiscal 100)", () => {
+    const r = ibkr(definitive, "monodivisa");
+    expect(sumOn(r, "2025-03-20", "reintegratedLossEur").toFixed(2)).toBe("0.00");
+    expect(fiscal(r)).toBe("100.00");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap (c): the stood-in lot goes last. Buy 100 on 01/03. On 10/03 sell 100 at
+// −100 and buy 50; on 15/03 buy 100; on 20/03 sell 50 at −50 (FIFO sells the 50
+// of 10/03). For the DGT the 10/03 sale takes the oldest unused purchases: the
+// 50 bought that day (V0571-21), then 50 of 15/03 (100 blocked). The 20/03 sale
+// then finds 50 of 15/03 unused and still held (V3282-18 A): 50 blocked,
+// nothing definitive, nothing released (fiscal 0). The engine hands the 50 held
+// shares to the sold 01/03 lot, which is partly held and so goes after the
+// post-sale buys (step 4): 10/03 takes all 100 of 15/03. On 20/03 the held count
+// goes to 15/03, which is used, so the sale is definitive: its 50 are deducted
+// and release 50 of the 10/03 loss (fiscal −100).
+// ---------------------------------------------------------------------------
+describe("known gap (c): the stood-in lot goes after the post-sale buys", () => {
+  const order: Row[] = [
+    ["20250301", "BUY", 100, 10],
+    ["20250310", "SELL", 100, 9],
+    ["20250310", "BUY", 50, 9],
+    ["20250315", "BUY", 100, 9],
+    ["20250320", "SELL", 50, 8],
+  ];
+
+  for (const method of METHODS) {
+    it(`[${method}] engine: 10/03 takes all of 15/03, so 20/03 is deducted and releases 50 (IBKR and DEGIRO)`, () => {
+      for (const r of [ibkr(order, method), degiro(order, method)]) {
+        expect(sumOn(r, "2025-03-10", "blockedLossEur").toFixed(2)).toBe("100.00");
+        expect(trail(r, "2025-03-10")).toEqual(["20250315"]);
+        expect(sumOn(r, "2025-03-20", "blockedLossEur").toFixed(2)).toBe("0.00");
+        expect(sumOn(r, "2025-03-20", "reintegratedLossEur").toFixed(2)).toBe("50.00");
+        expect(fiscal(r)).toBe("-100.00");
+      }
+    });
+  }
+
+  it.fails("known gap: the DGT blocks 50 on 20/03 and releases nothing (fiscal 0)", () => {
+    const r = ibkr(order, "monodivisa");
+    expect(sumOn(r, "2025-03-20", "blockedLossEur").toFixed(2)).toBe("50.00");
+    expect(sumOn(r, "2025-03-20", "reintegratedLossEur").toFixed(2)).toBe("0.00");
+    expect(fiscal(r)).toBe("0.00");
   });
 });
