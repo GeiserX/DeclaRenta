@@ -262,6 +262,23 @@ describe("bindAntichurningWindowPanel: one write per Save, and failures shown", 
     expect(storage.getItem(KEY)).not.toBeNull();
   });
 
+  it("an unreadable storage at Save shows the error instead of «Guardado», and does not rerun", () => {
+    // The panel rendered with a saved 1 year; the storage then turns unreadable.
+    // Setting the row back to automatic gives an empty mapping, which must not
+    // pass for "nothing changed" just because the read fell back to {}.
+    storage.setItem(KEY, JSON.stringify({ [ISIN]: 12 }));
+    const getItem = vi.spyOn(storage, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    pick(ISIN, "auto");
+    click(".antichurning-window-save");
+    expect(reruns).toBe(0);
+    expect(error().hidden).toBe(false);
+    expect(saved().hidden).toBe(true);
+    getItem.mockRestore();
+    expect(JSON.parse(storage.getItem(KEY)!)).toEqual({ [ISIN]: 12 });
+  });
+
   it("a later good Save hides the earlier error", () => {
     const setItem = vi.spyOn(storage, "setItem").mockImplementationOnce(() => {
       throw new DOMException("full", "QuotaExceededError");

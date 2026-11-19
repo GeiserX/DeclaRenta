@@ -23,11 +23,19 @@ function tr(key: string, params?: Record<string, string>): string {
 
 /** The saved per-ISIN windows, with anything malformed dropped. */
 export function getWindowOverrides(): Record<string, WindowMonths> {
+  return readWindowOverrides() ?? {};
+}
+
+/**
+ * The saved per-ISIN windows, or null when the browser refuses the read
+ * (storage blocked). Malformed content reads as no saved window.
+ */
+function readWindowOverrides(): Record<string, WindowMonths> | null {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(WINDOW_STORAGE_KEY);
   } catch {
-    return {};
+    return null;
   }
   if (!raw) return {};
   try {
@@ -122,7 +130,7 @@ export function renderAntichurningWindowPanel(securities: readonly AntichurningS
 
 /**
  * Save writes every row's choice in one write and reruns the report; Clear
- * removes every saved window and reruns. When the browser refuses the write,
+ * removes every saved window and reruns. When the browser refuses the read or the write,
  * the panel says so, keeps the old settings and does not rerun.
  */
 export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () => void): void {
@@ -143,7 +151,13 @@ export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () =
     onSave();
   });
   container.querySelector<HTMLButtonElement>(".antichurning-window-save")?.addEventListener("click", () => {
-    const before = getWindowOverrides();
+    // An unreadable storage cannot say what is saved, and a write would drop
+    // the windows of ISINs outside this panel: report the failure instead.
+    const before = readWindowOverrides();
+    if (before === null) {
+      show("antichurning_window.save_error");
+      return;
+    }
     const next = new Map(Object.entries(before));
     for (const select of container.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
       const isin = (select.dataset.isin ?? "").trim().toUpperCase();
