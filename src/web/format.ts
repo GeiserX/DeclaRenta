@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
 import { normalizeDate } from "../engine/dates.js";
-import { hasPrintableDigits } from "../engine/ecb.js";
 
 /** "-1234.5" → "-1.234,5"; a negative zero ("-0", "-0.00") loses its sign. */
 function spanishNumber(str: string): string {
@@ -24,14 +23,29 @@ export function fmtEur(d: Decimal | number, decimals = 2): string {
 }
 
 /**
+ * The most digits a number may have when written in full. Real data never
+ * comes near it: the engine computes at 20 significant digits, so a split,
+ * a merger or a spin-off gives a count such as 0.041133333333333333333 (21
+ * decimals). Only an absurd exponent passes it, and that is never expanded:
+ * in full, "1e-1000000000" is a billion characters and the page runs out of
+ * memory (CodeRabbit on #470).
+ */
+const MAX_PRINTED_DIGITS = 60;
+
+/** Whether `d` written with `decimals` decimals has at most {@link MAX_PRINTED_DIGITS} digits. */
+function printsInFull(d: Decimal, decimals: number): boolean {
+  return Math.max(d.e + 1, 1) + decimals <= MAX_PRINTED_DIGITS;
+}
+
+/**
  * Format a quantity of units in full, in Spanish format, with no trailing zeros
  * and never in exponent notation: 5e-8 → "0,00000005", 1234.5 → "1.234,5".
- * A count past 20 integer digits or 20 decimals (`hasPrintableDigits`) is «—»:
- * in full, "1e-1000000000" is a billion characters.
+ * A count whose full text has more than 60 digits (an absurd exponent, never
+ * a count from real data or from the engine) is «—».
  */
 export function fmtQty(q: Decimal.Value): string {
   const quantity = new Decimal(q);
-  if (quantity.isFinite() && !hasPrintableDigits(quantity)) return "—";
+  if (quantity.isFinite() && !printsInFull(quantity, quantity.decimalPlaces())) return "—";
   return spanishNumber(quantity.toFixed());
 }
 

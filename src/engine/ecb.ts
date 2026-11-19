@@ -298,7 +298,9 @@ export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionVal
  * writes one character per digit: a readable "1e-1000000000" would become a
  * string of a billion characters and exhaust the memory of the page or the
  * report (CodeRabbit on #470). A count that fails this has no valid count
- * (`d6ShareCount`) and is shown as «—» (`fmtQty`), never expanded.
+ * (`d6ShareCount`). This reads the broker's own text: a count the engine
+ * computes (a split, a merger) may carry more decimals and is shown in full
+ * (`fmtQty` bounds only the printed length).
  */
 export function hasPrintableDigits(quantity: Decimal): boolean {
   return quantity.decimalPlaces() <= 20 && quantity.abs().lessThan("1e20");
