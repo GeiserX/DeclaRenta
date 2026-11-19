@@ -45,6 +45,8 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   cashRowsUnidentifiedMessages,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -182,6 +184,8 @@ function parseTrading212Csv(lines: string[]): Statement {
   let unresolvedPriceSkipped = 0;
   // Dividend and withholding rows with no ticker and no ISIN (#467).
   const unidentifiedCash: string[] = [];
+  // Dividend and interest rows whose Total cannot be read (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -289,6 +293,14 @@ function parseTrading212Csv(lines: string[]): Statement {
         fxRateToBase: "1",
         type: "Withholding Tax",
       });
+      continue;
+    }
+
+    // A dividend or interest row whose Total cannot be read is no zero: it is
+    // not booked and is named, never dropped with no word (#467).
+    if ((isDividendAction(action) || isInterestAction(action)) && quantityUnreadable(fields[cols.total])) {
+      unreadableIncome.push(cashIncomeRowText(action, isDividendAction(action) ? security || "—" : "", cashCurrency, tradeDate,
+        [unreadableCell(headers[cols.total] ?? "Total", fields[cols.total])]));
       continue;
     }
 
@@ -442,6 +454,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     ...tradeQuantityUnknownMessages("Trading 212", trades),
     ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
     ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedCash),
+    ...cashIncomeAmountUnreadableMessages("Trading 212", unreadableIncome),
   );
 
   return {

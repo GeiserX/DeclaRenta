@@ -656,6 +656,22 @@ práctico Renta 2025. The decisions, each pinned in
       0 with no word, even with a readable Subtotal (now used); a Total of
       "abc" stopped the whole report with a `DecimalError`; and the Kraken
       reward was booked as 0 units.
+    - Dividends and interest whose amount cannot be read: a Lightyear
+      Dividend or Distribution whose `Gross Amount` cannot be read, a
+      Lightyear Interest or Reward whose `Net Amt.` and `Gross Amount`
+      both cannot be read, a Trading 212 Dividend or Interest on cash whose
+      `Total` cannot be read, a Scalable Interest or Distribution whose
+      `amount` cannot be read, and a Trade Republic DIVIDEND (its
+      `original_amount` when it has one), INTEREST_PAYMENT or
+      TAX_OPTIMIZATION whose `amount` cannot be read, is not booked, and
+      neither is its withholding. `parser.cash_income_amount_unreadable`
+      names each row by type, security, currency, date, tax and cell.
+      Before, Lightyear, Scalable and Trade Republic booked such a
+      dividend at 0 with its withholding (a deduction for income the
+      report did not count), Trading 212 dropped such a dividend or
+      interest with no word, Lightyear and Scalable such interest, and
+      Trade Republic booked such interest as 0 and dropped a tax
+      optimisation. A written 0 stays an explicit zero with no warning.
     - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
       whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
       number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each

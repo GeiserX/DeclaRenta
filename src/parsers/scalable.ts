@@ -32,6 +32,8 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   cashRowsUnidentifiedMessages,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -114,6 +116,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   let interestWithholdingRows = 0;
   // Distribution rows with no ISIN (#467).
   const unidentifiedCash: string[] = [];
+  // Interest and distribution rows whose amount cannot be read (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -147,6 +151,16 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     // description risks sweeping a security named "…Interest…ETF". This branch
     // MUST stay ABOVE the `if (!isin) continue` guard below: interest rows carry
     // no ISIN, so the guard would silently drop them before classification.
+    // An interest or distribution row whose amount cannot be read is no
+    // zero: neither it nor its tax is booked, and it is named (#467).
+    const isIncome = INTEREST_TYPES.some((k) => type.includes(k)) || DIVIDEND_TYPES.some((d) => type.includes(d));
+    if (isIncome && quantityUnreadable(fields[cols.amount])) {
+      const taxShown = new Decimal(tax).isZero() ? "" : `${headers[cols.tax] ?? "tax"} ${tax}`;
+      const security = isin ? `${description || "—"} (${isin})` : description;
+      unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), security, currency || "EUR", tradeDate,
+        [unreadableCell(headers[cols.amount] ?? "amount", fields[cols.amount])], taxShown));
+      continue;
+    }
     if (INTEREST_TYPES.some((k) => type.includes(k))) {
       // Sign decides the IRPF treatment (split downstream by type, abs()'d):
       //   positive → interest credited → Casilla 0027 (Art. 25.2 LIRPF)
@@ -332,6 +346,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     ...tradeQuantityUnknownMessages("Scalable Capital", trades),
     ...dropUndatedCash("Scalable Capital", cashTransactions, headers[cols.date] ?? "date"),
     ...cashRowsUnidentifiedMessages("Scalable Capital", unidentifiedCash),
+    ...cashIncomeAmountUnreadableMessages("Scalable Capital", unreadableIncome),
   );
 
   return {

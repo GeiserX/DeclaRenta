@@ -45,6 +45,8 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   cashRowsUnidentifiedMessages,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 
 
@@ -197,6 +199,8 @@ function parseLightyearCsv(lines: string[]): Statement {
   const unknownTypes = new Map<string, number>();
   // Dividend rows with no ticker and no ISIN (#467).
   const unidentifiedCash: string[] = [];
+  // Dividend and income rows whose amount cannot be read (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -274,6 +278,14 @@ function parseLightyearCsv(lines: string[]): Statement {
       // With no ticker the dividend goes by its ISIN; with neither it is
       // named, never dropped with no word (#467).
       const security = ticker || isin;
+      // A Gross Amount that cannot be read is no zero: the dividend and its
+      // withholding are not booked, and the row is named (#467).
+      if (quantityUnreadable(fields[cols.grossAmount])) {
+        const tax = new Decimal(taxAmount).isZero() ? "" : `${headers[cols.taxAmount] ?? "Tax Amt."} ${taxAmount}`;
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), security || "—", currency, tradeDate,
+          [unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount])], tax));
+        continue;
+      }
       if (!security) {
         const tax = new Decimal(taxAmount).isZero() ? "" : ` (${headers[cols.taxAmount] ?? "Tax Amt."} ${taxAmount})`;
         if (!new Decimal(grossAmount).isZero()) unidentifiedCash.push(`${(fields[cols.type] ?? "").trim()} ${grossAmount} ${currency}${tax} ${tradeDate || "—"}`);
@@ -319,7 +331,15 @@ function parseLightyearCsv(lines: string[]): Statement {
 
     // Interest and Reward → cash transactions (income)
     if (INCOME_TYPES.has(txType)) {
-
+      // Net Amt., else Gross Amount. With neither readable the row is not
+      // booked as 0 or dropped with no word: it is named (#467).
+      if (quantityUnreadable(fields[cols.netAmount]) && quantityUnreadable(fields[cols.grossAmount])) {
+        unreadableIncome.push(cashIncomeRowText((fields[cols.type] ?? "").trim(), ticker, currency, tradeDate, [
+          unreadableCell(headers[cols.netAmount] ?? "Net Amt.", fields[cols.netAmount]),
+          unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount]),
+        ]));
+        continue;
+      }
       const amountRaw = new Decimal(netAmount);
       const amountDec = amountRaw.isZero() ? new Decimal(grossAmount) : amountRaw;
 
@@ -467,6 +487,7 @@ function parseLightyearCsv(lines: string[]): Statement {
     ...tradeQuantityUnknownMessages("Lightyear", trades),
     ...dropUndatedCash("Lightyear", cashTransactions, headers[cols.date] ?? "Date"),
     ...cashRowsUnidentifiedMessages("Lightyear", unidentifiedCash),
+    ...cashIncomeAmountUnreadableMessages("Lightyear", unreadableIncome),
   );
 
   return {

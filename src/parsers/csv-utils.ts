@@ -312,6 +312,36 @@ export function cryptoIncomeAmountUnreadableMessages(broker: string, rows: reado
 }
 
 /**
+ * How a dividend, interest or other cash income row whose amount cannot be
+ * read is named: "type security currency date (tax) [cells]", each part only
+ * when the row has it (#467).
+ */
+export function cashIncomeRowText(type: string, security: string, currency: string, date: string, cells: readonly string[], tax = ""): string {
+  const head = [type, security, currency, date || "—"].filter((part) => part !== "").join(" ");
+  return `${head}${tax ? ` (${tax})` : ""} [${cells.join(", ")}]`;
+}
+
+/**
+ * The warning naming every dividend, interest or other cash income row whose
+ * amount the file does not let the parser read: `rows` from
+ * {@link cashIncomeRowText} (#467). Booked, it would be income of 0, or a
+ * withholding with no income behind it, so neither is booked, and the row is
+ * never dropped with no word: the user adds it by hand.
+ */
+export function cashIncomeAmountUnreadableMessages(broker: string, rows: readonly string[]): TaxMessage[] {
+  if (rows.length === 0) return [];
+  const count = String(rows.length);
+  const list = rows.join("; ");
+  return [{
+    id: "parser.cash_income_amount_unreadable",
+    severity: "warning",
+    message: `${broker}: ${count} dividendo(s), interés(es) u otro(s) ingreso(s) no tienen un importe legible y no se calculan: ${list}.`,
+    hint: "Entre corchetes va la celda del importe tal como está en el archivo. Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe y la retención a mano en Renta Web.",
+    context: { broker, count, rows: list },
+  }];
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none; one naming every

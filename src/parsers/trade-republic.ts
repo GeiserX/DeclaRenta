@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, corporateActionTrade, markUndatedTrades, dropUndatedCash } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, corporateActionTrade, markUndatedTrades, dropUndatedCash, cashIncomeRowText, cashIncomeAmountUnreadableMessages } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -128,6 +128,8 @@ function parseTrCsv(lines: string[]): Statement {
   let corporateActionRows = 0;
   const deliveryIsins = new Set<string>();
   let deliveryRows = 0;
+  // Dividend, interest and tax-optimisation rows whose amount cannot be read (#467).
+  const unreadableIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -249,6 +251,20 @@ function parseTrCsv(lines: string[]): Statement {
         multiplier: "1",
       });
       continue;
+    }
+
+    // A dividend, interest or tax-optimisation row whose amount cannot be
+    // read is no zero: neither it nor its withholding is booked, and it is
+    // named (#467). A dividend reads original_amount when it has one.
+    if (category === "CASH" && (type === "DIVIDEND" || type === "INTEREST_PAYMENT" || type === "TAX_OPTIMIZATION")) {
+      const amountCol = type === "DIVIDEND" && originalAmount && originalCurrency ? cols.originalAmount : cols.amount;
+      if (quantityUnreadable(fields[amountCol])) {
+        const security = type === "DIVIDEND" ? (symbol ? (name ? `${name} (${symbol})` : symbol) : name || "—") : "";
+        const taxShown = type === "DIVIDEND" && tax !== 0 ? `${headers[cols.tax] ?? "tax"} ${taxStr}` : "";
+        unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), security, type === "DIVIDEND" ? originalCurrency || currency : currency, tradeDate,
+          [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], taxShown));
+        continue;
+      }
     }
 
     // --- CASH: DIVIDEND ---
@@ -403,6 +419,7 @@ function parseTrCsv(lines: string[]): Statement {
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Trade Republic", trades.filter((t) => t.corporateActionRow === undefined)),
     ...dropUndatedCash("Trade Republic", cashTransactions, headers[cols.date] ?? "date"),
+    ...cashIncomeAmountUnreadableMessages("Trade Republic", unreadableIncome),
   );
 
   return {

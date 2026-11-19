@@ -1758,7 +1758,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
-    "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable",
+    "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
@@ -2070,5 +2070,82 @@ describe("#467 crypto income whose amount cannot be read is named, never booked 
     const esText = es as Record<string, string>;
     expect(emitted.message).toBe(esText["parser.crypto_income_amount_unreadable"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
     expect(emitted.hint).toBe(esText["parser.crypto_income_amount_unreadable.hint"]);
+  });
+});
+
+describe("#467 a dividend or interest row whose amount cannot be read is named, never booked as 0 or dropped with no word", () => {
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const ID = "parser.cash_income_amount_unreadable";
+  // Each row: a parse of one row, the broker, and the text that names it.
+  // A dividend's withholding is not booked either: with no dividend it would
+  // be a deduction for income the report does not count.
+  const cases: [string, () => Statement, string, string][] = [];
+  for (const cell of ["abc", ""]) {
+    cases.push(
+      [`Lightyear Dividend, Gross Amount ${JSON.stringify(cell)}`, () => lightyearParser.parse([LY_H, `16/12/2025 06:02:35,DD-1,GOOG,US02079K1079,Dividend,,USD,,${cell},,,${cell},2.11`].join("\n")),
+        "Lightyear", `Dividend GOOG USD 20251216 (Tax Amt. 2.11) [Gross Amount: ${JSON.stringify(cell)}]`],
+      [`Lightyear Dividend with no security, Gross Amount ${JSON.stringify(cell)}`, () => lightyearParser.parse([LY_H, `16/12/2025 06:02:35,DD-1,,,Dividend,,USD,,${cell},,,${cell},2.11`].join("\n")),
+        "Lightyear", `Dividend — USD 20251216 (Tax Amt. 2.11) [Gross Amount: ${JSON.stringify(cell)}]`],
+      [`Lightyear Interest, both amounts ${JSON.stringify(cell)}`, () => lightyearParser.parse([LY_H, `16/12/2025 06:02:35,IN-1,,,Interest,,EUR,,${cell},,,${cell},`].join("\n")),
+        "Lightyear", `Interest EUR 20251216 [Net Amt.: ${JSON.stringify(cell)}, Gross Amount: ${JSON.stringify(cell)}]`],
+      [`Lightyear Reward, both amounts ${JSON.stringify(cell)}`, () => lightyearParser.parse([LY_H, `16/12/2025 06:02:35,RW-1,,,Reward,,EUR,,${cell},,,${cell},`].join("\n")),
+        "Lightyear", `Reward EUR 20251216 [Net Amt.: ${JSON.stringify(cell)}, Gross Amount: ${JSON.stringify(cell)}]`],
+      [`Trading 212 Dividend, Total ${JSON.stringify(cell)}`, () => trading212Parser.parse([T212_H, `Dividend (Ordinary),2025-03-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.92,,,${cell},USD,,div001`].join("\n")),
+        "Trading 212", `Dividend (Ordinary) AAPL USD 20250315 [Total: ${JSON.stringify(cell)}]`],
+      [`Trading 212 Interest on cash, Total ${JSON.stringify(cell)}`, () => trading212Parser.parse([T212_H, `Interest on cash,2025-03-15 00:00:00,,,,,,,,,,${cell},EUR,,int001`].join("\n")),
+        "Trading 212", `Interest on cash EUR 20250315 [Total: ${JSON.stringify(cell)}]`],
+      [`Scalable Interest, amount ${JSON.stringify(cell)}`, () => scalableParser.parse([SC_H, `2025-12-31;23:59;Executed;REF004;KKT-Abschluss;Cash;Interest;;0;0;${cell};0;0;EUR`].join("\n")),
+        "Scalable Capital", `Interest KKT-Abschluss EUR 20251231 [amount: ${JSON.stringify(cell)}]`],
+      [`Scalable Distribution, amount ${JSON.stringify(cell)}`, () => scalableParser.parse([SC_H, `2025-09-01;08:00;Executed;REF003;Acme World ETF;Security;Distribution;XX0000000001;0;0;${cell};0;-2,33;EUR`].join("\n")),
+        "Scalable Capital", `Distribution Acme World ETF (XX0000000001) EUR 20250901 (tax -2.33) [amount: ${JSON.stringify(cell)}]`],
+      [`Scalable Distribution with no ISIN, amount ${JSON.stringify(cell)}`, () => scalableParser.parse([SC_H, `2025-09-01;08:00;Executed;REF003;Acme World ETF;Security;Distribution;;0;0;${cell};0;-2,33;EUR`].join("\n")),
+        "Scalable Capital", `Distribution Acme World ETF EUR 20250901 (tax -2.33) [amount: ${JSON.stringify(cell)}]`],
+      [`Trade Republic INTEREST_PAYMENT, amount ${JSON.stringify(cell)}`, () => tradeRepublicParser.parse([TR_H, `"2025-01-01T00:53:12.791610Z","2025-01-01","DEFAULT","CASH","INTEREST_PAYMENT","","","","","","${cell}","","0.00","EUR","","","","Interest payment Booking","tx-int-001","","","",""`].join("\n")),
+        "Trade Republic", `INTEREST_PAYMENT EUR 20250101 [amount: ${JSON.stringify(cell)}]`],
+      [`Trade Republic DIVIDEND, amount ${JSON.stringify(cell)}`, () => tradeRepublicParser.parse([TR_H, `"2025-03-14T10:00:00.000Z","2025-03-14","DEFAULT","CASH","DIVIDEND","STOCK","Apple Inc","US0378331005","","","${cell}","","-0.35","EUR","","","","Dividend","tx-div-001","","","",""`].join("\n")),
+        "Trade Republic", `DIVIDEND Apple Inc (US0378331005) EUR 20250314 (tax -0.35) [amount: ${JSON.stringify(cell)}]`],
+      [`Trade Republic TAX_OPTIMIZATION, amount ${JSON.stringify(cell)}`, () => tradeRepublicParser.parse([TR_H, `"2025-01-02T00:00:00.000Z","2025-01-02","DEFAULT","CASH","TAX_OPTIMIZATION","","","","","","${cell}","","","EUR","","","","Tax optimisation","tx-opt-001","","","",""`].join("\n")),
+        "Trade Republic", `TAX_OPTIMIZATION EUR 20250102 [amount: ${JSON.stringify(cell)}]`],
+    );
+  }
+  describe.each(cases)("%s", (_label, parse, broker, rows) => {
+    it.each(METHODS)("[%s] no income and no withholding are booked, the report runs, and the row is named by its cell", (method) => {
+      const parsed = parse();
+      expect(parsed.cashTransactions).toEqual([]);
+      const r = run([[parsed, broker]], 2025, method);
+      expect([r.dividends.grossIncome.toFixed(2), r.dividends.entries.length, r.interest.earned.toFixed(2)]).toEqual(["0.00", 0, "0.00"]);
+      expect(message(r.messages, ID)?.context).toEqual({ broker, count: "1", rows });
+    });
+  });
+
+  // Controls: the same rows with a readable amount are booked, and a written
+  // zero stays an explicit zero, with no warning.
+  const readable: [string, () => Statement, string, string][] = [
+    ["Lightyear Dividend", () => lightyearParser.parse([LY_H, "16/12/2025 06:02:35,DD-1,GOOG,US02079K1079,Dividend,,USD,,14.09,,,11.98,2.11"].join("\n")), "Lightyear", "Dividends 14.09"],
+    ["Lightyear Interest with only a Net Amt.", () => lightyearParser.parse([LY_H, "16/12/2025 06:02:35,IN-1,,,Interest,,EUR,,,,0,5.00,0"].join("\n")), "Lightyear", "Broker Interest Received 5"],
+    ["Trading 212 Dividend", () => trading212Parser.parse([T212_H, "Dividend (Ordinary),2025-03-15 00:00:00,US0378331005,AAPL,Apple Inc,,,USD,0.92,,,2.35,USD,,div001"].join("\n")), "Trading 212", "Dividends 2.35"],
+    ["Scalable Interest", () => scalableParser.parse([SC_H, "2025-12-31;23:59;Executed;REF004;KKT-Abschluss;Cash;Interest;;0;0;7,45;0;0;EUR"].join("\n")), "Scalable Capital", "Broker Interest Received 7.45"],
+    ["Trade Republic INTEREST_PAYMENT", () => tradeRepublicParser.parse([TR_H, `"2025-01-01T00:53:12.791610Z","2025-01-01","DEFAULT","CASH","INTEREST_PAYMENT","","","","","","64.640000","","0.00","EUR","","","","Interest payment Booking","tx-int-001","","","",""`].join("\n")), "Trade Republic", "Broker Interest Received 64.64"],
+  ];
+  it.each(readable)("control: %s with a readable amount is booked and nothing is named", (_label, parse, _broker, first) => {
+    const parsed = parse();
+    expect(`${parsed.cashTransactions[0]?.type} ${parsed.cashTransactions[0]?.amount}`).toBe(first);
+    expect(message(parsed.parserMessages, ID)).toBeUndefined();
+  });
+  it("control: a Lightyear Interest of 0 and a Trading 212 interest of 0 stay skipped with no warning", () => {
+    expect(lightyearParser.parse([LY_H, "15/01/2025,REF001,,,Interest,,EUR,,,,0,0,0"].join("\n")).parserMessages ?? []).toEqual([]);
+    expect(trading212Parser.parse([T212_H, "Interest on cash,2025-03-15 00:00:00,,,,,,,,,,0,EUR,,int001"].join("\n")).parserMessages ?? []).toEqual([]);
+  });
+
+  it("the warning exists in the five locales, names the rows, and the parser emits the Spanish text", () => {
+    expect(isTranslationKey(ID) && isTranslationKey(`${ID}.hint`)).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale[ID]).toContain("{{rows}}");
+      expect(locale[ID]).toContain("{{broker}}");
+    }
+    const emitted = message(trading212Parser.parse([T212_H, "Interest on cash,2025-03-15 00:00:00,,,,,,,,,,abc,EUR,,int001"].join("\n")).parserMessages, ID)!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText[ID]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText[`${ID}.hint`]);
   });
 });
