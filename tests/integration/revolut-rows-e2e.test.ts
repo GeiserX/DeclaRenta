@@ -5,6 +5,8 @@
  *
  * - A lone thousands comma ("USD 1,500", "1,000") was read as a decimal
  *   point: a sale of 1500 USD became 1.50 USD.
+ * - A dividend whose Total Amount cannot be read was dropped with no word,
+ *   with or without a ticker.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -40,6 +42,9 @@ async function report(rows: string[][], method: FxMethod, header = H): Promise<T
   const merged = mergeStatement(createEmptyStatement(), await parse(rows, header), "Revolut");
   return generateTaxReport(finalizeMergedStatement(merged), rates(), 2025, reportOptionsForMethod(method));
 }
+
+const msg = (s: Statement, id: string): string | undefined =>
+  s.parserMessages?.find((m) => m.id === id)?.context?.rows;
 
 // Buy 10 AAPL at 100 USD, sell them at 150 USD. At 1.10 the report shows a
 // transmission of 1650, an acquisition of 1100 and a gain of 550.
@@ -88,5 +93,47 @@ describe("Revolut numbers: a comma is a thousands separator, never a decimal poi
     const s = await parse([["2025-02-03T10:00:00Z", "SAP", "BUY - MARKET", "3", "EUR 15,61", "EUR 46,83", "EUR", "1"]]);
     expect(s.trades[0]!.tradePrice).toBe("15.61");
     expect(s.trades[0]!.cost).toBe("-46.83");
+  });
+});
+
+describe("Revolut dividends whose Total Amount cannot be read are named, never dropped with no word", () => {
+  const dividend = (total: string, ticker = "AAPL") =>
+    ["2025-05-15T10:00:00Z", ticker, "DIVIDEND", "", "", total, "USD", "1.1"];
+
+  it.each(METHODS)("[%s] control: a readable dividend of USD 110 is 121 €", async (method) => {
+    const r = await report([dividend("USD 110")], method);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("121.00");
+  });
+
+  it.each(METHODS)("[%s] an unreadable, empty or currency-only Total Amount is named and not booked", async (method) => {
+    for (const total of ["USD abc", "", "USD"]) {
+      const s = await parse([dividend(total)]);
+      expect(s.cashTransactions, total).toEqual([]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), total)
+        .toBe(`DIVIDEND AAPL USD 20250515 [Total Amount: ${JSON.stringify(total)}]`);
+      expect(s.parserMessages?.some((m) => m.id === "revolut.dividends_net"), total).toBe(false);
+      const r = await report([dividend(total)], method);
+      expect(r.dividends.grossIncome.toFixed(2), total).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] with no ticker, an unreadable Total Amount is named too; a readable one stays unidentified", async (method) => {
+    for (const total of ["USD abc", "", "USD"]) {
+      const s = await parse([dividend(total, "")]);
+      expect(msg(s, "parser.cash_income_amount_unreadable"), total)
+        .toBe(`DIVIDEND USD 20250515 [Ticker: "", Total Amount: ${JSON.stringify(total)}]`);
+      expect(msg(s, "parser.cash_row_unidentified"), total).toBeUndefined();
+      const r = await report([dividend(total, "")], method);
+      expect(r.dividends.grossIncome.toFixed(2), total).toBe("0.00");
+    }
+    expect(msg(await parse([dividend("USD 110", "")]), "parser.cash_row_unidentified")).toBe("DIVIDEND USD 110 20250515");
+  });
+
+  it("a written zero stays the file's word: skipped with no message, with or without a ticker", async () => {
+    for (const ticker of ["AAPL", ""]) {
+      const s = await parse([dividend("USD 0", ticker)]);
+      expect(s.cashTransactions).toEqual([]);
+      expect(s.parserMessages).toBeUndefined();
+    }
   });
 });

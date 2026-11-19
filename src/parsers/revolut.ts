@@ -43,6 +43,8 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   cashRowsUnidentifiedMessages,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
   corporateActionTrade,
   isoDateCells,
   slashDateOrder,
@@ -388,6 +390,8 @@ function parseTransactionLog(
   const dividendTaxRows: string[] = [];
   // DIVIDEND rows with no ticker: type, amount and date (#467).
   const unidentifiedCash: string[] = [];
+  // DIVIDEND rows whose Total Amount has no number (#467).
+  const amountUnreadable: string[] = [];
 
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
@@ -477,6 +481,16 @@ function parseTransactionLog(
     // named, so the user knows where it went.
     if (TXN_TYPE_DIVIDEND_TAX.test(type)) {
       dividendTaxRows.push(`${ticker || "—"} ${isReadableTradeDate(tradeDate) ? tradeDate : dateStr || "—"} ${totalRaw || "—"}`);
+      continue;
+    }
+    // A dividend whose Total Amount has no number (blank, currency only,
+    // text) is no 0: it is not booked and is named, so the user adds it by
+    // hand (#467). Booked, it was income of 0; it was dropped with no word.
+    // A written zero stays the file's word and is skipped.
+    if (TXN_TYPE_DIVIDEND.test(type) && totalRead === undefined) {
+      const cells = [unreadableCell(headers[cols.total] ?? "Total Amount", totalRaw)];
+      if (!ticker) cells.unshift(unreadableCell(headers[cols.ticker] ?? "Ticker", ""));
+      amountUnreadable.push(cashIncomeRowText(type, ticker, currencyRaw, isReadableTradeDate(tradeDate) ? tradeDate : dateStr, cells));
       continue;
     }
     // A dividend with no ticker names no security: named, never dropped with
@@ -792,6 +806,7 @@ function parseTransactionLog(
     ...tradeQuantityUnknownMessages("Revolut", trades),
     ...dropUndatedCash("Revolut", cashTransactions, headers[cols.date] ?? "Date"),
     ...cashRowsUnidentifiedMessages("Revolut", unidentifiedCash),
+    ...cashIncomeAmountUnreadableMessages("Revolut", amountUnreadable),
   );
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
