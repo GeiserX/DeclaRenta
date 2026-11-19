@@ -83,8 +83,9 @@ unit:
    buys, uncapped, because they are genuine replacement lots; last, the rest of
    the lot the sale itself transmits. A full exit with no later repurchase
    therefore absorbs `0`, while a full exit followed by a later repurchase still
-   absorbs the post-sale quantity. A buy on the sale day is skipped (no
-   intraday time). This runs for **every loss sale**, and for a
+   absorbs the post-sale quantity. A buy on the sale day counts as the newest
+   pre-sale purchase, for its own held shares (see "Pick order", step 3). This
+   runs for **every loss sale**, and for a
    **gain sale while losses are pending**: the definitive test applies
    «con independencia de que determinen ganancias o pérdidas patrimoniales» and
    uses «los mismos criterios» as the block (V3282-18), and a rebuy counted there
@@ -271,54 +272,31 @@ transmission that releases them.
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
   reward receipts are no repurchase (reward lots stay out of
   `washSaleTrades`), the less strict choice, which no source settles.
-- **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
-  This now also covers the definitive test: the DGT treats a buy on the sale day
-  as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
-  engine releases on such a sale. In V0571-21 itself the engine still gets the
-  DGT's answer, because an unused pre-sale buy also absorbs that sale. The
-  held-shares walk skips the same-day buys but `holdingAfter` counts them, so
-  an older lot stands in for a same-day rebuy (V2481-20: the 14/04 lot stands
-  in for the 880 bought on 20/04, and counting same-day buys gives the same
-  figure). Three gaps remain, each pinned as `it.fails` on the DGT's figure in
-  `tests/integration/antichurning-same-day-held-e2e.test.ts`, with the engine
-  figure beside it in all three FX methods. (a) The held count must land on an
-  earlier buy day inside the window whose shares no earlier sale has used: it
-  goes to the newest earlier buy day, and if that day is outside the window or
-  used, nothing stands in. Buy 100, sell them at a loss on 10/03 and buy 50
-  the same day blocks 50 when the 100 were bought on 01/03/2025 and 0 when they
-  were bought on 01/12/2024; the DGT blocks 50 in both. The loss goes
-  unblocked also with the older lot inside the window: buy 100 on 01/03 and
-  100 on 02/03, sell 100 on 03/03 at −100 (02/03 replaces it), then sell 100 on
-  10/03 at −100 and buy 50 the same day; the held count lands on 02/03, which
-  03/03 used, so 10/03 blocks 0 and releases 100 (fiscal −200), where the DGT
-  blocks 50 and releases 50 (fiscal −100). And a sale with a same-day rebuy
-  still counts as definitive: in the V0571-21 layout without the unused
-  pre-sale buy (buy 100 on 01/12/2024, sell 50 on 05/03/2025 at −50 rebought on
-  08/03, sell all 100 on 20/03 at +100 and buy 300 the same day) the engine
-  releases 50 (fiscal 50), where the DGT releases nothing (fiscal 100). (b) The
-  stood-in lot is used up, not the sale-day buy, so a later sale can use the
-  same shares again: sell 25 more at a loss on 20/03 and the engine blocks 25,
-  where the DGT deducts them and releases 25 of the 10/03 loss. The trail then
-  names the stood-in lot. (c) The stood-in lot is only partly held, so step 4
-  puts it after the post-sale buys, and the sale takes a later purchase the
-  DGT leaves for the next sale. Buy 100 on 01/03; on 10/03 sell 100 at −100 and
-  buy 50; on 15/03 buy 100; on 20/03 sell 50 at −50. The engine gives 10/03 all
-  100 of 15/03, so on 20/03 the held count lands on a used day: 20/03 is
-  deducted and releases 50 (fiscal −100). The DGT gives 10/03 the 50 bought that
-  day and 50 of 15/03 (oldest unused first), so 20/03 finds 50 of 15/03 still
-  held: 50 blocked, nothing released (fiscal 0). Counting a sale-day buy for
-  its own held shares, as the newest day of the walk, closes all three and
-  keeps every consulta figure, but it moves `degiro-transactions-sample.csv`
-  2021: buy 2 and sell 1 the same day with nothing held before becomes a
-  single purchase the CSV cannot prove, and the #453 fail-safe blocks 49.02
-  with the "unverified" warning. It waits for a decision.
+- **Sale-day buys (closed by the #454 follow-up).** A buy on the sale day
+  counts for its own held shares (V0571-21; see "Pick order", step 3). The
+  stand-in it replaced had three gaps, now pinned on the DGT's figures in
+  `tests/integration/antichurning-same-day-held-e2e.test.ts` (IBKR and DEGIRO,
+  all three FX methods). (a) The rebuy was missed when no unused older lot was
+  in the window: buy 100, sell them at a loss on 10/03 and buy 50 the same day
+  blocked 0 when the 100 were bought on 01/12/2024; now 50. With the older lot
+  used (buy 100 on 01/03 and 100 on 02/03, sell 100 on 03/03 at −100, then
+  sell 100 on 10/03 at −100 and buy 50), 10/03 blocked 0 and released 100
+  (fiscal −200); now 50 blocked, 50 released (−100). A sale with a same-day
+  rebuy counted as definitive (buy 100 on 01/12/2024, sell 50 on 05/03/2025 at
+  −50 rebought on 08/03, sell all 100 on 20/03 at +100 and buy 300): released
+  50 (fiscal 50); now 0 (fiscal 100). (b) The sale-day shares were used twice:
+  sell 25 more at a loss on 20/03 blocked 25; now deducted, releasing 25 of
+  the 10/03 loss. (c) The stood-in lot went after the post-sale buys: buy 100
+  on 01/03; on 10/03 sell 100 at −100 and buy 50; on 15/03 buy 100; on 20/03
+  sell 50 at −50 gave fiscal −100; now 10/03 takes its 50 and 50 of 15/03, and
+  20/03 blocks the other 50 of 15/03 (fiscal 0).
 - **V2481-20** (engine 1,751.73, DGT 1,767; `it.fails` on the DGT's figure).
   The 23/04 sales leave no shares, so no purchase before them counts (V3282-18
   A, situation 1): they take the 1,880 of 27/04 and 40 of the 1,900 of 06/05.
   Only 1,860 are left for the 1,880 shares sold on 29/04, so 20 are definitive
   and release 20 × 672/880 = 15.27. The DGT says only that the 06/05 purchase
   prevents the release and does not count the 40 shares. Neither the pick
-  order nor the same-day exclusion changes this figure.
+  order nor the sale-day rule changes this figure.
 - **Multiple sales, one repurchase**: budget consumed **chronologically**
   (earliest sale day first, gain sales with pending losses included), the most
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
@@ -443,20 +421,27 @@ the order it follows is derived from those names:
    engine reads the held shares as FIFO leaves them: the newest `holdingAfter`
    shares, handed to the buy days before the sale, newest first.
 
-   **The sale day.** `holdingAfter` includes the sale day's own buys, and the
-   walk skips that day (no time of day). So the shares a sale-day buy holds go
-   to the newest earlier buy day, even one FIFO sold: an older lot stands in for
-   the sale-day rebuy. The DGT counts a sale-day buy as a rebuy (V0571-21: the
-   7,000 bought on 11/08 make that sale not definitive), and the stand-in is how
-   the engine reaches that. Taking the sale-day buys off the count (proposed in
-   the review of #454) is wrong: buy 100 on 01/03 and 40 on 05/03, sell 100 at a
-   loss and buy 50 on 10/03 gives 40 blocked, where the DGT blocks 90 (05/03
-   and the 50 of 10/03; situation 3 gives min(90 held, 140 bought) = 90 too),
-   and V2481-20 falls to 1,088.08, V0571-21 to −1,500. The stand-in has three
-   gaps (see "Known limitations"): the held count must land on an earlier buy
-   day inside the window that no earlier sale used, the sale-day buy stays
-   unused for a later sale, and the stood-in lot is only partly held, so step
-   4 puts it after the post-sale buys.
+   **The sale day.** Brokers give no time of day, but FIFO sells the oldest
+   shares first, so the shares bought on the sale day are the newest ones held
+   after it. The walk therefore starts at the sale day: its buys take the first
+   part of `holdingAfter` and count for their own held shares, and a sale uses
+   them like any other purchase (after the older held days, before the
+   post-sale buys; last when they are only partly held, step 4). The DGT counts
+   a sale-day buy as a rebuy (V0571-21: the 7,000 bought on 11/08 make that
+   sale not definitive). Buy 100 on 01/03 and 40 on 05/03, sell 100 at a loss
+   and buy 50 on 10/03: 90 blocked (05/03 and the 50 of 10/03; situation 3
+   gives min(90 held, 140 bought) = 90 too). Taking the sale-day buys off the
+   count instead (proposed in the review of #454) gives 40 there, and V2481-20
+   1,088.08, V0571-21 −1,500. Crypto never reaches the sale day: its window
+   starts at the sale (art. 33.5.e), so its walk is empty. For the
+   one-purchase exception a sale-day buy is still a second purchase.
+
+   Up to the #454 follow-up the walk skipped the sale day while `holdingAfter`
+   counted its buys, so an older lot, even one FIFO sold, stood in for the
+   sale-day rebuy. That stand-in missed the rebuy when no unused older lot was
+   in the window, left the sale-day buy for a later sale to use again, and,
+   because the stood-in lot was only partly held, put it after the post-sale
+   buys. The cases are in "Known limitations" (closed).
 4. **The rest of the lot the sale transmits comes last, after the post-sale
    purchases.** V3282-18 gives the 20/02 sale «las 2.000 acciones adquiridas el
    15 de marzo», not the 2,000 left of the 15/02 lot it sells from; V1760-23
@@ -491,6 +476,12 @@ The repurchase dates now match the DGT's on V3282-18 (20/02 ← 15/03, 26/03 ←
 0.66.13 got the figures there with other purchases. V2481-20 keeps a gap of
 15.27 (see "Known limitations"). No committed fixture changed in any FX method:
 their few blocked losses have a post-sale rebuy and no pre-sale alternative.
+The sale-day rule (#454 follow-up) keeps every figure in this table; on
+V2481-20 the 20/04 sale now takes the 880 bought that day (was 14/04) and the
+22/04 sale the 905 of 21/04. It moves one fixture,
+`degiro-transactions-sample.csv` 2021: THETA buy 2 and sell 1 on 14/04 with
+nothing held before is one purchase the CSV cannot prove, so the #453
+fail-safe blocks 49.02 (24.51 with two owners) with the "unverified" warning.
 
 ## Migration note (issue #451)
 

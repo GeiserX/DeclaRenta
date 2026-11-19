@@ -406,7 +406,10 @@ describe("detectWashSales", () => {
     // MSFT: only two buys, both far from the June sale (Jan and Dec) → no repurchase in window.
     trades.push(makeTrade(MSFT, "2025-01-05", "BUY"));
     trades.push(makeTrade(MSFT, "2025-12-20", "BUY"));
-    // TSLA: a single buy on the exact sell date (same-day lot, must NOT count as a repurchase).
+    // TSLA: a single buy on the exact sell date. It is held after the sale, so it
+    // counts as a repurchase (DGT V0571-21: a buy on the sale day is a rebuy).
+    // As the only purchase of the window it meets the one-purchase exception,
+    // but no file proves the empty start, so it is not applied (fail safe).
     trades.push(makeTrade(TSLA, "2025-06-15", "BUY"));
     // Pad with unrelated SELLs and exempt-category noise to push the op count past 50.
     for (let i = 0; i < 40; i++) {
@@ -422,7 +425,7 @@ describe("detectWashSales", () => {
       makeDisposal({ isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
       // 1: MSFT loss in June → NOT blocked (nearest buys are Jan/Dec, outside 2mo).
       makeDisposal({ isin: MSFT, symbol: "MSFT", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
-      // 2: TSLA loss in June → NOT blocked (only buy is same-day → excluded).
+      // 2: TSLA loss in June → blocked by the same-day buy (V0571-21).
       makeDisposal({ isin: TSLA, symbol: "TSLA", sellDate: "2025-06-15", gainLossEur: new Decimal(-100) }),
       // 3: AAPL GAIN in June → never blocked regardless of repurchases.
       makeDisposal({ isin: AAPL, symbol: "AAPL", sellDate: "2025-06-15", gainLossEur: new Decimal(50) }),
@@ -432,7 +435,9 @@ describe("detectWashSales", () => {
 
     const result = detectWashSales(disposals, trades);
     const blocked = result.map((d) => d.washSaleBlocked);
-    expect(blocked).toEqual([true, false, false, false, true]);
+    expect(blocked).toEqual([true, false, true, false, true]);
+    expect(result[2]!.washSaleRepurchaseDates).toEqual(["2025-06-15"]);
+    expect(result[2]!.washSaleSinglePurchase).toBe("unverified");
   });
 });
 
@@ -885,10 +890,12 @@ describe("definitive transmission: the pending-loss queue (#451)", () => {
     expect(result[2]!.reintegratedLossEur.toFixed(2)).toBe("40.00");
   });
 
-  it("documented limit: a same-day rebuy does not stop the release (no intraday times; V0571-21 says it should)", () => {
+  it("a same-day rebuy keeps the sale from being definitive (V0571-21)", () => {
     // The DGT treats a buy on the sale day as a rebuy (V0571-21, 11/08/2020), so
-    // the 06-01 sale would not be definitive. Brokers give no intraday order, so
-    // the engine skips same-day buys for blocking and for the definitive test.
+    // the 06-01 sale is not definitive and the 02-01 loss stays pending. The 10
+    // bought on 06-01 are the shares held after it (FIFO sold the 02-10 lot), so
+    // they count for their own held shares. Up to the #454 follow-up the engine
+    // skipped them and released the 100 here.
     const disposals = [
       makeDisposal({ isin: AAPL, acquireDate: "2025-01-02", sellDate: "2025-02-01", quantity: new Decimal(10), gainLossEur: new Decimal(-100) }),
       makeDisposal({ isin: AAPL, acquireDate: "2025-02-10", sellDate: "2025-06-01", quantity: new Decimal(10), gainLossEur: new Decimal(20) }),
@@ -901,7 +908,39 @@ describe("definitive transmission: the pending-loss queue (#451)", () => {
       makeTrade(AAPL, "2025-06-01", "BUY", "10"),
     ];
     const result = detectWashSales(disposals, trades);
-    expect(result[1]!.reintegratedLossEur.toFixed(2)).toBe("100.00");
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("100.00");
+    expect(result[1]!.reintegratedLossEur.toFixed(2)).toBe("0.00");
+    expect(result[1]!.washSaleReleasedFromDates).toBeUndefined();
+  });
+
+  it("a same-day rebuy in another account blocks: the patrimony is the taxpayer's, not the account's", () => {
+    // Bought on 01-02 (outside the 2-month window), all 10 sold at −100 on 06-01
+    // in U1, and 4 bought the same day in U2. The 4 are held after the sale, so
+    // 4 of the 10 sold shares are replaced (V0571-21). Before the #454 follow-up
+    // this needed an older lot inside the window and blocked nothing.
+    const disposals = [makeDisposal({ isin: AAPL, acquireDate: "2025-01-02", sellDate: "2025-06-01", quantity: new Decimal(10), gainLossEur: new Decimal(-100) })];
+    const trades = [
+      makeTrade(AAPL, "2025-01-02", "BUY", "10"),
+      makeTrade(AAPL, "2025-06-01", "SELL", "10"),
+      { ...makeTrade(AAPL, "2025-06-01", "BUY", "4"), accountId: "U2", tradeID: "2" },
+    ];
+    const result = detectWashSales(disposals, trades);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("40.00");
+    expect(result[0]!.washSaleRepurchaseDates).toEqual(["2025-06-01"]);
+  });
+
+  it("a split on the sale day: the sale-day buy and the sale are in the same post-split units", () => {
+    // Buy 10, a 10-for-1 split on 04-10, and the same day sell all 100 at −1,000
+    // and buy 30. The 30 are the shares held after the day: 300 blocked.
+    const disposals = [makeDisposal({ isin: AAPL, acquireDate: "2025-03-01", sellDate: "2025-04-10", quantity: new Decimal(100), gainLossEur: new Decimal(-1000) })];
+    const trades = [
+      makeTrade(AAPL, "2025-03-01", "BUY", "10"),
+      makeTrade(AAPL, "2025-04-10", "SELL", "100"),
+      makeTrade(AAPL, "2025-04-10", "BUY", "30"),
+    ];
+    const result = detectWashSales(disposals, trades, [makeSplit(AAPL, "2025-04-10")]);
+    expect(result[0]!.blockedLossEur.toFixed(2)).toBe("300.00");
+    expect(result[0]!.washSaleRepurchaseDates).toEqual(["2025-04-10"]);
   });
 
   it("leaves the release trail unset when a sale releases nothing", () => {
@@ -1167,6 +1206,10 @@ describe("crypto uses art. 33.5.e: only a rebuy in the year after the sale (#457
     // Bought more than a year before, so only the same-day buy could block.
     const sale = lossSale("CRYPTO", "BTC", "2025-06-01", "2024-01-02");
     expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2025-06-01", "SELL"), btc("2025-06-01", "BUY")])).toBe("0.00");
+    // Mirror, letter g: the same rows of an unlisted share block, because a
+    // security's window looks back and a sale-day buy counts (V0571-21).
+    const share = lossSale("STK", "PRIVCO", "2025-06-01", "2024-01-02");
+    expect(blocked(share, [privco("2024-01-02", "BUY"), privco("2025-06-01", "SELL"), privco("2025-06-01", "BUY")])).toBe("100.00");
   });
 
   it("the same coin bought at another exchange is the same element", () => {

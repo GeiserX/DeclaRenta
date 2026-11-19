@@ -176,12 +176,13 @@ interface PendingLoss {
  * Per homogeneous key the pass keeps (a) a FIFO budget of in-window repurchase
  * quantities and (b) a queue of pending losses, oldest first, counted in shares.
  * For each (key, sell day) in date order, over all of that day's disposals:
- *  1. ABSORB — take the in-window repurchases not yet used (a buy ON the sell
- *     date is the lot being sold, excluded): for loss lots always, for gain lots
- *     only while losses are pending (they need them for the definitive test).
- *     The DGT's order (#454): oldest first, so the purchases before the sale
- *     (each only for its shares still held after it) come before those after
- *     it, and the rest of the lot the sale transmits comes last.
+ *  1. ABSORB — take the in-window repurchases not yet used: for loss lots
+ *     always, for gain lots only while losses are pending (they need them for
+ *     the definitive test). The DGT's order (#454): oldest first, so the
+ *     purchases before the sale and on the sale day (each only for its shares
+ *     still held after it; the sale day's buys are the newest of them) come
+ *     before those after it, and the rest of the lot the sale transmits comes
+ *     last.
  *     The purchases of the 2 months BEFORE the sale do not count when they are
  *     one buy operation and no shares were held at the window's start (the
  *     one-purchase exception, DGT V3282-18); the purchases after it always do.
@@ -516,11 +517,10 @@ export function detectWashSales(
       const windowStart = looksBack(first.assetCategory) ? addMonths(sellDate, -months).getTime() : sellTime;
       const windowEnd = addMonths(sellDate, months).getTime();
 
-      // Consume repurchase quantity from in-window buys, excluding any buy on the
-      // sell day (brokers give no intraday time; see the design doc). Absorbed ≤
-      // `need`. The DGT's order (#454) is the oldest purchase no earlier sale has
-      // used: the purchases of the 2 months before the sale first, oldest first,
-      // then those of the 2 months after it, oldest first. V3282-18 gives the
+      // Consume repurchase quantity from in-window buys. Absorbed ≤ `need`. The
+      // DGT's order (#454) is the oldest purchase no earlier sale has used: the
+      // purchases of the 2 months before the sale and of the sale day first,
+      // oldest first, then those of the 2 months after it, oldest first. V3282-18 gives the
       // 26/03 sale the 20/03 purchase, not 24/03 or the later 28/03; V0248-18
       // gives the 25/04 sale 3,000 of the 5,000 of 18/03, not the 3,000 of 31/03.
       //
@@ -529,7 +529,13 @@ export function detectWashSales(
       // day that fully exits the position deducts the loss in full (situation 1).
       // FIFO keeps the newest shares: the `holdingAfter` shares left are the
       // newest bought, so walking the pre-sale buy days newest first, each day holds
-      // what is left of that count. A buy only partly held is the lot the sale
+      // what is left of that count. The sale day's own buys are part of the
+      // count and of the walk, as its newest day: FIFO sells the oldest shares
+      // first, so the shares bought on the sale day are the newest ones held
+      // after it, whatever the time of day. The DGT counts such a buy as a
+      // rebuy (V0571-21, 11/08/2020: the 7,000 bought on the sale day make it
+      // not definitive), for its own held shares, and it is used up like any
+      // other purchase. A buy only partly held is the lot the sale
       // itself transmits. It still counts (situation 3, and the one-purchase
       // exception exists because it would), but last, after the post-sale buys:
       // V3282-18 gives the 20/02 sale the 15/03 purchase, not the rest of the
@@ -537,12 +543,23 @@ export function detectWashSales(
       // 06/05 purchase, not the rest of the 04/05 lot.
       let remainingToAbsorb = need;
       // buyEvents is sorted by time, so each pass walks only its slice of the
-      // window, found by binary search: [windowStart, sellTime) for pre-sale buys,
-      // (sellTime, windowEnd] for post-sale ones. Same-day buys are outside both.
-      // The held buys are the newest ones, so the walk stops where the count
-      // runs out and the pre-sale passes start there (`preFrom`).
-      const preTo = firstIndexAtOrAfter(buyEvents, sellTime);
+      // window, found by binary search: [windowStart, sellTime] for the buys up
+      // to the sale day included, (sellTime, windowEnd] for post-sale ones. The
+      // held buys are the newest ones, so the walk stops where the count runs
+      // out and the pre-sale passes start there (`preFrom`).
+      //
+      // Crypto (#457) looks forward only: its window starts at the sale, and a
+      // buy on the sale day is no reacquisition «dentro del año siguiente a la
+      // fecha de dicha transmisión», so its walk stays empty.
+      //
+      // Before #454's follow-up the walk stopped before the sale day and the
+      // day's held shares were credited to an older lot. That missed the rebuy
+      // when no older lot was in the window or an earlier sale had used it,
+      // left the sale-day shares for a later sale to use again, and put the
+      // stood-in lot after the post-sale buys (step 4), so the sale took a later
+      // purchase the DGT leaves for the next sale.
       const windowFrom = firstIndexAtOrAfter(buyEvents, windowStart);
+      const preTo = windowStart < sellTime ? firstIndexAfter(buyEvents, sellTime) : windowFrom;
       // The buys of one day are one purchase here: brokers give no time of day,
       // and some list one order as several fills (DEGIRO, one row per fill with
       // one «ID Orden»). So the held count, and whether a buy is the lot the
