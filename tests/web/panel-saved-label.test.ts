@@ -122,6 +122,18 @@ const lotsPanel = () => step3().querySelector<HTMLElement>(".manual-opening-lots
 const cryptoPanel = () =>
   step3().querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel):not(.antichurning-window-panel)");
 const label = (panel: HTMLElement | null, selector: string) => panel!.querySelector<HTMLElement>(selector)!;
+/**
+ * On screen: not `hidden` and not inside a closed <details>. A label without
+ * `hidden` inside a collapsed panel is still invisible (the redrawn panel is
+ * often the collapsed stored-prices or stored-lots one).
+ */
+function shown(el: HTMLElement): boolean {
+  if (el.hidden) return false;
+  for (let d = el.parentElement?.closest("details"); d; d = d.parentElement?.closest("details")) {
+    if (!d.open) return false;
+  }
+  return true;
+}
 const windowLabel = () => label(windowPanel(), ".antichurning-window-saved");
 const lotsLabel = () => label(lotsPanel(), ".manual-opening-lots-saved-msg");
 const cryptoLabel = () => label(cryptoPanel(), ".crypto-rates-saved-msg");
@@ -165,7 +177,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     await redrawn(windowPanel, before, "rerun after Save");
-    expect(windowLabel().hidden).toBe(false);
+    expect(shown(windowLabel())).toBe(true);
     // Only the panel that was saved says so.
     expect(lotsLabel().hidden).toBe(true);
     expect(cryptoLabel().hidden).toBe(true);
@@ -181,7 +193,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     first.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
     first.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     const second = await redrawn(windowPanel, first, "rerun after Save");
-    expect(windowLabel().hidden).toBe(false);
+    expect(shown(windowLabel())).toBe(true);
     second.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
     await redrawn(windowPanel, second, "rerun after Clear");
     expect(windowLabel().hidden).toBe(true);
@@ -192,7 +204,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     first.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
     first.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     const second = await redrawn(windowPanel, first, "rerun after Save");
-    expect(windowLabel().hidden).toBe(false);
+    expect(shown(windowLabel())).toBe(true);
     refuseWrites = true;
     second.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "12";
     second.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
@@ -207,7 +219,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     before.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
     before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     await waitFor(() => step3().querySelector(".crypto-rates-stored-panel"), "saved prices panel");
-    expect(cryptoLabel().hidden).toBe(false);
+    expect(shown(cryptoLabel())).toBe(true);
     expect(windowLabel().hidden).toBe(true);
     expect(lotsLabel().hidden).toBe(true);
 
@@ -226,7 +238,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     before.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
     before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     const stored = await waitFor(() => step3().querySelector<HTMLElement>(".crypto-rates-stored-panel"), "saved prices panel");
-    expect(cryptoLabel().hidden).toBe(false);
+    expect(shown(cryptoLabel())).toBe(true);
     stored.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
     await redrawn(cryptoPanel, stored, "rerun after Clear");
     expect(step3().querySelector(".crypto-rates-stored-panel")).toBeNull();
@@ -241,7 +253,7 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     field(before, "pricePerShare").value = "100";
     before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
     const second = await redrawn(lotsPanel, before, "rerun after Save");
-    expect(lotsLabel().hidden).toBe(false);
+    expect(shown(lotsLabel())).toBe(true);
     expect(windowLabel().hidden).toBe(true);
     expect(cryptoLabel().hidden).toBe(true);
 
@@ -265,12 +277,51 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(before.querySelector<HTMLElement>(".manual-opening-lots-error-msg")!.hidden).toBe(false);
   });
 
+  it("crypto prices: a write the browser refuses saves nothing, shows the error, no «Guardado» and no rerun", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    refuseWrites = true;
+    before.querySelector<HTMLInputElement>(".crypto-rate-input")!.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cryptoPanel()).toBe(before); // no rerun
+    expect(cryptoLabel().hidden).toBe(true);
+    const error = before.querySelector<HTMLElement>(".crypto-rates-error-msg")!;
+    expect(error.hidden).toBe(false);
+    expect(error.getAttribute("role")).toBe("alert");
+    expect(localStorage.getItem("declarenta_manual_rates")).toBeNull();
+    // The browser accepts the next write: saved, error gone, «Guardado» on the redrawn panel.
+    refuseWrites = false;
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await waitFor(() => step3().querySelector(".crypto-rates-stored-panel"), "saved prices panel");
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(cryptoPanel()!.querySelector<HTMLElement>(".crypto-rates-error-msg")!.hidden).toBe(true);
+  });
+
+  it("opening lots: a write the browser refuses saves nothing, shows the error, no «Guardado» and no rerun", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    const field = (p: HTMLElement, f: string) => p.querySelector<HTMLInputElement>(`[data-field='${f}']`)!;
+    field(before, "acquireDate").value = `${YEAR}-01-15`;
+    field(before, "quantity").value = "10";
+    field(before, "pricePerShare").value = "100";
+    refuseWrites = true;
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(lotsPanel()).toBe(before); // no rerun: the typed row stays
+    expect(field(before, "quantity").value).toBe("10");
+    expect(lotsLabel().hidden).toBe(true);
+    const error = before.querySelector<HTMLElement>(".manual-opening-lots-error-msg")!;
+    expect(error.hidden).toBe(false);
+    // The app runs in its own module copy and locale; the storage error replaces the invalid-row text.
+    expect(error.textContent).toMatch(/storage|almacenamiento/);
+    expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
+  });
+
   it("a year change after a Save redraws the panels without «Guardado»", async () => {
     const before = await waitFor(windowPanel, "window panel");
     before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     const second = await redrawn(windowPanel, before, "rerun after Save");
-    expect(windowLabel().hidden).toBe(false);
+    expect(shown(windowLabel())).toBe(true);
     // Another year and back through the results year select: plain reruns, no Save.
     const pick = async (year: string) => {
       const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
@@ -311,11 +362,26 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     expect(parse(renderAntichurningWindowPanel([security], { saved: true })).querySelector<HTMLElement>(".antichurning-window-saved")!.hidden).toBe(false);
   });
 
+  it("anti-churning window saved back to «auto»: the panel that would stay closed opens to show «Guardado»", () => {
+    const twoMonths = { ...security, months: 2, autoMonths: 2, listingExchanges: ["BME"] } as AntichurningSecurity;
+    const closed = parse(renderAntichurningWindowPanel([twoMonths])).querySelector<HTMLDetailsElement>("details")!;
+    expect(closed.open).toBe(false);
+    const saved = parse(renderAntichurningWindowPanel([twoMonths], { saved: true }));
+    expect(saved.querySelector<HTMLDetailsElement>("details")!.open).toBe(true);
+    expect(shown(saved.querySelector<HTMLElement>(".antichurning-window-saved")!)).toBe(true);
+  });
+
   it("crypto prices", () => {
     vi.stubGlobal("localStorage", memoryStorage());
     const unresolved = [{ symbol: "BTC", description: "BTC", date: "2025-04-01", quantity: "1", currency: "SOL" }] as UnresolvedValuation[];
     expect(parse(renderManualRatesPanel(unresolved)).querySelector<HTMLElement>(".crypto-rates-saved-msg")!.hidden).toBe(true);
     expect(parse(renderManualRatesPanel(unresolved, { saved: true })).querySelector<HTMLElement>(".crypto-rates-saved-msg")!.hidden).toBe(false);
+    // Nothing left to value: the collapsed saved-prices list opens only after a Save.
+    localStorage.setItem("declarenta_manual_rates", JSON.stringify([{ currency: "SOL", date: "2025-04-01", eurPerUnit: "100" }]));
+    expect(parse(renderManualRatesPanel([])).querySelector<HTMLDetailsElement>(".crypto-rates-stored-panel")!.open).toBe(false);
+    const stored = parse(renderManualRatesPanel([], { saved: true }));
+    expect(stored.querySelector<HTMLDetailsElement>(".crypto-rates-stored-panel")!.open).toBe(true);
+    expect(shown(stored.querySelector<HTMLElement>(".crypto-rates-saved-msg")!)).toBe(true);
     vi.unstubAllGlobals();
   });
 
@@ -334,6 +400,15 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     }
     expect(plain.querySelector<HTMLElement>(".manual-opening-lots-saved-msg")!.hidden).toBe(true);
     expect(parse(renderManualOpeningLotsPanel([msg], { saved: true })).querySelector<HTMLElement>(".manual-opening-lots-saved-msg")!.hidden).toBe(false);
+    // The issue resolved: the panel is drawn from the stored lots and stays closed, except after a Save.
+    localStorage.setItem(
+      "declarenta_manual_opening_lots",
+      JSON.stringify([{ symbol: "ACME", description: "ACME", isin: "XX0000000001", assetCategory: "STK", currency: "EUR", acquireDate: "2025-01-15", quantity: "10", pricePerShare: "100" }]),
+    );
+    expect(parse(renderManualOpeningLotsPanel([])).querySelector<HTMLDetailsElement>(".manual-opening-lots-panel")!.open).toBe(false);
+    const stored = parse(renderManualOpeningLotsPanel([], { saved: true }));
+    expect(stored.querySelector<HTMLDetailsElement>(".manual-opening-lots-panel")!.open).toBe(true);
+    expect(shown(stored.querySelector<HTMLElement>(".manual-opening-lots-saved-msg")!)).toBe(true);
     vi.unstubAllGlobals();
   });
 });

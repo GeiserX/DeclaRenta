@@ -58,13 +58,18 @@ function readStored(): StoredManualRate[] {
   }
 }
 
-/** Persist the array back to localStorage. */
-function writeStored(entries: StoredManualRate[]): void {
+/**
+ * Persist the array back to localStorage in one write. Returns false when the
+ * browser refuses it (storage full or blocked), so the panel does not claim a
+ * save that did not happen (#472).
+ */
+function writeStored(entries: StoredManualRate[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
-    /* storage unavailable/full — manual rates simply won't persist */
+    return false;
   }
+  return true;
 }
 
 function readStoredOpeningLots(): StoredManualOpeningLot[] {
@@ -82,12 +87,14 @@ function readStoredOpeningLots(): StoredManualOpeningLot[] {
   }
 }
 
-function writeStoredOpeningLots(entries: StoredManualOpeningLot[]): void {
+/** One write; false when the browser refuses it (storage full or blocked, #472). */
+function writeStoredOpeningLots(entries: StoredManualOpeningLot[]): boolean {
   try {
     localStorage.setItem(OPENING_LOTS_STORAGE_KEY, JSON.stringify(entries));
   } catch {
-    /* storage unavailable/full — manual opening lots simply won't persist */
+    return false;
   }
+  return true;
 }
 
 /**
@@ -121,22 +128,38 @@ export function clearManualOpeningLots(): void {
 }
 
 /**
- * Persist a single manual EUR-per-unit quote for a currency+date pair.
- * Returns true if the quote was valid and stored, false if it was rejected
- * (e.g. non-numeric/non-positive rate) so callers can avoid showing a false
- * "saved" state or reprocessing the report for nothing.
+ * Persist several manual EUR-per-unit quotes in ONE write, so a refused write
+ * leaves the old prices whole. `saved` counts the valid quotes (an invalid
+ * one, e.g. non-numeric or non-positive, is skipped); `written` is false when
+ * the browser refused the write, and then nothing was saved (#472).
  */
-export function setManualRate(currency: string, date: string, eurPerUnit: string): boolean {
+export function saveManualRates(quotes: readonly ManualRateQuote[]): { saved: number; written: boolean } {
   // Normalize the key exactly as lookups do (upper-case + stablecoin→fiat +
   // date to YYYY-MM-DD) and canonicalize the rate to dot-decimal, so a
   // hand-typed "sol"/"USDT"/"142,50" matches and parses at lookup time and
   // re-saving the same row upserts instead of duplicating.
-  const norm = normalizeManualQuote({ currency, date, eurPerUnit });
-  if (norm === null) return false;
-  const entries = readStored().filter((e) => !(e.currency === norm.currency && e.date === norm.date));
-  entries.push({ currency: norm.currency, date: norm.date, eurPerUnit: norm.eurPerUnit });
-  writeStored(entries);
-  return true;
+  let entries = readStored();
+  let saved = 0;
+  for (const quote of quotes) {
+    const norm = normalizeManualQuote(quote);
+    if (norm === null) continue;
+    entries = entries.filter((e) => !(e.currency === norm.currency && e.date === norm.date));
+    entries.push({ currency: norm.currency, date: norm.date, eurPerUnit: norm.eurPerUnit });
+    saved++;
+  }
+  if (saved === 0) return { saved: 0, written: true };
+  return writeStored(entries) ? { saved, written: true } : { saved: 0, written: false };
+}
+
+/**
+ * Persist a single manual EUR-per-unit quote for a currency+date pair.
+ * Returns true if the quote was valid and stored, false if it was rejected
+ * (e.g. non-numeric/non-positive rate) or the browser refused the write, so
+ * callers can avoid showing a false "saved" state or reprocessing the report
+ * for nothing.
+ */
+export function setManualRate(currency: string, date: string, eurPerUnit: string): boolean {
+  return saveManualRates([{ currency, date, eurPerUnit }]).saved === 1;
 }
 
 function openingLotIdentityKey(
@@ -156,21 +179,42 @@ function openingLotIdentityKey(
   ].join("|");
 }
 
+/**
+ * Replace the saved lots of each group in ONE write, so a refused write leaves
+ * the old lots whole. `saved` counts the stored lots (a group emptied of its
+ * saved lots counts 1, as a change); `written` is false when the browser
+ * refused the write, and then nothing was saved (#472).
+ */
+export function saveManualOpeningLotGroups(
+  groups: readonly { groupKey: string; lots: ManualOpeningLot[] }[],
+): { saved: number; written: boolean } {
+  let entries = readStoredOpeningLots();
+  let saved = 0;
+  for (const { groupKey, lots } of groups) {
+    const existing = entries.filter((lot) => manualOpeningLotKey(lot) !== groupKey);
+    const hadGroupEntries = existing.length !== entries.length;
+    const validLots = coerceManualOpeningLots(lots);
+    if (validLots.length === 0) {
+      if (hadGroupEntries) {
+        entries = existing;
+        saved += 1;
+      }
+      continue;
+    }
+    const deduped = new Map<string, ManualOpeningLot>();
+    for (const lot of validLots) {
+      deduped.set(openingLotIdentityKey(lot), lot);
+    }
+    entries = [...existing, ...deduped.values()];
+    saved += deduped.size;
+  }
+  if (saved === 0) return { saved: 0, written: true };
+  return writeStoredOpeningLots(entries) ? { saved, written: true } : { saved: 0, written: false };
+}
+
+/** Replace one group's saved lots; returns the lots stored, 0 when invalid or the write is refused. */
 export function setManualOpeningLots(groupKey: string, lots: ManualOpeningLot[]): number {
-  const existingAll = readStoredOpeningLots();
-  const existing = existingAll.filter((lot) => manualOpeningLotKey(lot) !== groupKey);
-  const hadGroupEntries = existing.length !== existingAll.length;
-  const validLots = coerceManualOpeningLots(lots);
-  if (validLots.length === 0) {
-    if (hadGroupEntries) writeStoredOpeningLots(existing);
-    return hadGroupEntries ? 1 : 0;
-  }
-  const deduped = new Map<string, ManualOpeningLot>();
-  for (const lot of validLots) {
-    deduped.set(openingLotIdentityKey(lot), lot);
-  }
-  writeStoredOpeningLots([...existing, ...deduped.values()]);
-  return deduped.size;
+  return saveManualOpeningLotGroups([{ groupKey, lots }]).saved;
 }
 
 function storedOpeningLotsFor(groupKey: string): ManualOpeningLot[] {
@@ -290,7 +334,9 @@ function storedRatesList(stored: StoredManualRate[]): string {
 function renderStoredRatesPanel(stored: StoredManualRate[], saved: boolean): string {
   const rows = storedRateRows(stored);
 
-  return `<details class="crypto-rates-panel crypto-rates-stored-panel">
+  // A Save that values the last swap redraws this collapsed list: open it so
+  // «Guardado» is on screen (#472).
+  return `<details class="crypto-rates-panel crypto-rates-stored-panel"${saved ? " open" : ""}>
     <summary class="crypto-rates-stored-summary">
       <span class="crypto-rates-stored-summary-text">${esc(tr("crypto_rates.stored_title"))}</span>
       <span class="crypto-rates-stored-summary-count">${stored.length}</span>
@@ -310,6 +356,7 @@ function renderStoredRatesPanel(stored: StoredManualRate[], saved: boolean): str
         ${renderClearRatesButton()}
       </div>
       <span class="crypto-rates-saved-msg"${saved ? "" : " hidden"}>${esc(tr("crypto_rates.saved"))}</span>
+      <span class="crypto-rates-error-msg" role="alert" hidden>${esc(tr("crypto_rates.save_error"))}</span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
     </div>
   </details>`;
@@ -378,6 +425,7 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[], { save
       ${stored.length > 0 ? renderClearRatesButton() : ""}
     </div>
     <span class="crypto-rates-saved-msg"${saved ? "" : " hidden"}>${esc(tr("crypto_rates.saved"))}</span>
+    <span class="crypto-rates-error-msg" role="alert" hidden>${esc(tr("crypto_rates.save_error"))}</span>
     <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
   </div>`;
 }
@@ -455,7 +503,9 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
     )
     .join("");
 
-  return `<details class="manual-opening-lots-panel crypto-rates-panel"${hasActiveIssues ? " open" : ""}>
+  // A Save that covers the last missing lot redraws the panel from the stored
+  // lots, which stays closed: open it so «Guardado» is on screen (#472).
+  return `<details class="manual-opening-lots-panel crypto-rates-panel"${hasActiveIssues || saved ? " open" : ""}>
     <summary class="manual-opening-lots-summary">
       <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
       <span class="manual-opening-lots-summary-count">${issues.length}</span>
@@ -494,20 +544,24 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
 
   btn.addEventListener("click", () => {
     const inputs = [...container.querySelectorAll<HTMLInputElement>(".crypto-rate-input")];
-    let savedCount = 0;
+    const quotes: ManualRateQuote[] = [];
     for (const input of inputs) {
       const value = input.value.trim();
       if (!value) continue;
       const currency = input.dataset.currency ?? "";
       const date = input.dataset.date ?? "";
       if (!currency || !date) continue;
-      // Only count entries that actually persisted (valid, parseable rate), so
-      // an invalid input doesn't fake a "saved" state or trigger a no-op rerun.
-      if (setManualRate(currency, date, value)) savedCount++;
+      quotes.push({ currency, date, eurPerUnit: value });
     }
+    // Only count entries that actually persisted (valid, parseable rate, and a
+    // write the browser accepted), so an invalid input or a refused write
+    // doesn't fake a "saved" state or trigger a no-op rerun.
+    const { saved: savedCount, written } = saveManualRates(quotes);
 
     const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
     if (msg) msg.hidden = savedCount === 0;
+    const errorMsg = container.querySelector<HTMLElement>(".crypto-rates-error-msg");
+    if (errorMsg) errorMsg.hidden = written;
 
     if (savedCount > 0) onSave("save");
   });
@@ -565,7 +619,6 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
   if (!btn) return;
 
   btn.addEventListener("click", () => {
-    let savedCount = 0;
     const groups = [...container.querySelectorAll<HTMLElement>(".manual-opening-lot-group")];
     const toSave: { groupKey: string; lots: ManualOpeningLot[] }[] = [];
     let invalidRows = 0;
@@ -611,7 +664,12 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
 
     const msg = container.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
     const errorMsg = container.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
-    if (errorMsg) errorMsg.hidden = invalidRows === 0;
+    const showError = (key: "opening_lots.row_invalid" | "opening_lots.save_error" | null): void => {
+      if (!errorMsg) return;
+      errorMsg.hidden = key === null;
+      if (key !== null) errorMsg.textContent = tr(key);
+    };
+    showError(invalidRows > 0 ? "opening_lots.row_invalid" : null);
     // Save nothing while a row is flagged: saving recalculates and re-renders
     // the panel, which would wipe the row the user still has to fix.
     if (invalidRows > 0) {
@@ -619,9 +677,10 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
       return;
     }
 
-    for (const { groupKey, lots } of toSave) {
-      savedCount += setManualOpeningLots(groupKey, lots);
-    }
+    // One write for every group: a refused write saves nothing, says so and
+    // does not rerun, so the rows the user typed stay on screen (#472).
+    const { saved: savedCount, written } = saveManualOpeningLotGroups(toSave);
+    if (!written) showError("opening_lots.save_error");
 
     if (msg) msg.hidden = savedCount === 0;
 

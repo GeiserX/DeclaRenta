@@ -766,6 +766,8 @@ const es = {
   "crypto_rates.placeholder": "p. ej. 142,50",
   "crypto_rates.save_btn": "Guardar y recalcular",
   "crypto_rates.saved": "Guardado",
+  "crypto_rates.save_error":
+    "El navegador no ha dejado guardar los precios: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
   "crypto_rates.stored_title": "Precios manuales guardados",
   "crypto_rates.stored_description":
@@ -795,6 +797,8 @@ const es = {
   "opening_lots.save_btn": "Guardar lotes y recalcular",
   "opening_lots.clear_btn": "Borrar lotes guardados",
   "opening_lots.saved": "Guardado",
+  "opening_lots.save_error":
+    "El navegador no ha dejado guardar los lotes: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
   "opening_lots.row_invalid":
     "Revisa las filas marcadas: indica la fecha de compra y una cantidad y un precio mayores que cero (p. ej. 1.234,56). No se ha guardado nada.",
   "opening_lots.recalculate_hint": "Los lotes manuales se guardan en tu navegador y el informe se recalcula.",

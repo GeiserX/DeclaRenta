@@ -108,7 +108,9 @@ export function renderAntichurningWindowPanel(
 ): string {
   if (!securities || securities.length === 0) return "";
   const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || s.source === "user");
-  return `<details class="antichurning-window-panel crypto-rates-panel"${open ? " open" : ""}>
+  // A Save back to «auto» can leave no reason to open: open it anyway so
+  // «Guardado» is on screen (#472).
+  return `<details class="antichurning-window-panel crypto-rates-panel"${open || saved ? " open" : ""}>
     <summary class="crypto-rates-stored-summary">
       <span class="crypto-rates-stored-summary-text">${esc(tr("antichurning_window.title"))}</span>
       <span class="crypto-rates-stored-summary-count">${securities.length}</span>

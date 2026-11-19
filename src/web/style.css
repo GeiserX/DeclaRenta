@@ -3207,6 +3207,7 @@ footer a:hover {
 }
 
 .manual-opening-lots-error-msg,
+.crypto-rates-error-msg,
 .antichurning-window-error {
   display: block;
   margin-top: 0.5rem;
@@ -3217,6 +3218,7 @@ footer a:hover {
 
 .crypto-rates-saved-msg[hidden],
 .manual-opening-lots-error-msg[hidden],
+.crypto-rates-error-msg[hidden],
 .antichurning-window-error[hidden] {
   display: none;
 }
