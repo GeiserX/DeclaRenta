@@ -139,7 +139,7 @@ describe("Renta Web guide consistency", () => {
     }
     // The Spanish text report.ts writes into the message is the es locale's.
     const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
-    const pinned = "(2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente)";
+    const pinned = "(2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente; en las criptomonedas, solo el año siguiente a la venta)";
     expect(source).toContain(pinned);
     expect(es["report.antichurning_window_past_data"]).toContain(pinned);
 
@@ -301,5 +301,108 @@ describe("Renta Web guide consistency", () => {
       expect(doc(p), p).toMatch(/salvo la que solo cierra una posición corta/);
       expect(doc(p), p).not.toMatch(/bloquea siempre/);
     }
+  });
+
+  it("gives crypto only the year after the sale (art. 33.5.e), in the 5 locales, report.ts, the docs and the engine (#457)", () => {
+    // Letter e counts only a reacquisition «dentro del año siguiente a la fecha
+    // de dicha transmisión»: a buy before the sale never blocks a crypto loss.
+    const yearAfter = {
+      es: /cripto[^.;]*año siguiente a la venta/,
+      en: /crypto[^.;]*year after the sale/,
+      ca: /cripto[^.;]*any següent a la venda/,
+      eu: /kripto[^.;]*salmentaren ondorengo urte/,
+      gl: /cripto[^.;]*ano seguinte á venda/,
+    };
+    const sameCoin = {
+      es: /mismo valor o la misma criptomoneda/,
+      en: /same security or the same coin/,
+      ca: /mateix valor o la mateixa criptomoneda/,
+      eu: /Balio bera edo kriptomoneta bera/,
+      gl: /mesmo valor ou a mesma criptomoeda/,
+    };
+    const beforeSale = {
+      es: /anteriores a la venta no cuentan/,
+      en: /before the sale do not/,
+      ca: /anteriors a la venda no compten/,
+      eu: /salmentaren aurreko[^.]*ez dute balio/,
+      gl: /anteriores á venda non contan/,
+    };
+    const keys = ["casilla.blocked_losses", "annex.wash_hint", "guide_rw.blocked_losses_hint", "report.antichurning_window_past_data"] as const;
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      for (const key of keys) expect(locale[key], `${name} ${key}`).toMatch(yearAfter[name]);
+      expect(locale["report.antichurning_window_open_at_filing.hint"], name).toMatch(sameCoin[name]);
+      for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
+        expect(locale[key], `${name} ${key}`).toMatch(beforeSale[name]);
+      }
+    }
+    // report.ts writes the Spanish text itself; it must say the same as es.ts.
+    const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
+    expect(source).toContain("En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta");
+    expect(es["report.antichurning_window_past_data.hint"]).toContain("En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta");
+    expect(source).toContain("Si compras el mismo valor o la misma criptomoneda antes del");
+
+    // The old claim that the engine gives crypto ±1 year must not come back.
+    const oldClaim = /DeclaRenta les aplica ±1 año|engine (gives it|applies) ±1 year|criptomonedas[^.\n]*±12 meses|±12 meses[^.\n]*criptomonedas|#457, not handled/;
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const texts = {
+      casillas: doc("casillas.md"),
+      faq: doc("faq.md"),
+      modelos: doc("modelos-fiscales.md"),
+      design: doc("design/antichurning-proportional.md"),
+      claude: readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8"),
+      engine: readFileSync(new URL("../../src/engine/wash-sale.ts", import.meta.url), "utf8"),
+    };
+    for (const [name, text] of Object.entries(texts)) {
+      expect(text, name).not.toMatch(oldClaim);
+      expect(text, name).toMatch(/33\.5\.e/);
+    }
+    // Crypto = letter e is a deduction from the DGT's doctrine, not a holding.
+    for (const name of ["casillas", "faq", "design"] as const) {
+      expect(texts[name], name).toMatch(/V0525-25/);
+      expect(texts[name], name).toMatch(/V1613-25/);
+    }
+    expect(texts.casillas).toMatch(/ninguna consulta[^.]*criptomonedas[^.]*33\.5/i);
+    // Rewards do not count as a reacquisition: a documented choice.
+    expect(texts.casillas).toMatch(/staking[^.]*no cuentan como recompra|no cuentan como recompra[^.]*staking/);
+  });
+
+  it("tells users who filed crypto with 0.66.13 or earlier to correct that year, or the loss is never deducted (#457)", () => {
+    // 0.66.13 let a buy before the sale block a crypto loss and released it in a
+    // later year. The new engine deducts it in the year of the sale and no later
+    // year releases it: without a correction the loss is lost.
+    const neverDeducted = {
+      es: /criptomonedas[^]*0\.66\.13[^]*solicitud de rectificación\); si no, no se deduce nunca/,
+      en: /crypto[^]*0\.66\.13[^]*«solicitud de rectificación»\); otherwise it is never deducted/,
+      ca: /criptomonedes[^]*0\.66\.13[^]*sol·licitud de rectificació\); si no, no es dedueix mai/,
+      eu: /Kriptomonetetan[^]*0\.66\.13[^]*zuzenketa-eskaera\); bestela, ez da inoiz kentzen/,
+      gl: /criptomoedas[^]*0\.66\.13[^]*solicitude de rectificación\); se non, non se deduce nunca/,
+    };
+    const twice = { es: /dos veces/, en: /twice/, ca: /dues vegades/, eu: /bi aldiz/, gl: /dúas veces/ };
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(neverDeducted[name]);
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(twice[name]);
+    }
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const casillas = doc("casillas.md");
+    expect(casillas).toContain('!!! warning "Criptomonedas: si declaraste con la versión 0.66.13 o anterior"');
+    expect(casillas).toMatch(/0\.66\.13[^]*Si no lo corriges, esa pérdida no se deduce nunca[^]*no la deduzcas dos veces/);
+    expect(doc("faq.md")).toMatch(/criptomonedas, si declaraste un año con la versión 0\.66\.13 o anterior[^.]*no se deduce nunca/);
+  });
+
+  it("does not claim the definitive test never releases a crypto loss early (#457)", () => {
+    // The #451 test never releases earlier than "any later sale releases", but it
+    // can release before the reacquired coins are sold (a later definitive sale
+    // of older lots). The docs must say that, not an absolute "never early".
+    const files = {
+      casillas: readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8"),
+      design: readFileSync(new URL("../../docs/design/antichurning-proportional.md", import.meta.url), "utf8"),
+      claude: readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8"),
+    };
+    for (const [name, text] of Object.entries(files)) {
+      expect(text, name).not.toMatch(/nunca adelanta la pérdida|never releases early/);
+    }
+    expect(files.casillas).toMatch(/puede liberarla antes de que vendas las unidades recompradas/);
+    expect(files.design).toMatch(/can release before the reacquired units\s+are sold/);
+    expect(files.claude).toMatch(/can release before the reacquired units are sold/);
   });
 });

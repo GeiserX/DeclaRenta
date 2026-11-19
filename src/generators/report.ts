@@ -1224,8 +1224,8 @@ export function generateTaxReport(
       allMessages.push({
         id,
         severity: "warning",
-        message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
-        hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año, así que revisa también tus compras hasta un año después de cada venta (issue #452). Si no compraste, el cálculo ya es correcto.`,
+        message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente; en las criptomonedas, solo el año siguiente a la venta) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
+        hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año, así que revisa también tus compras hasta un año después de cada venta (issue #452). En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta y, como muy tarde, hasta el ${base.windowEnd}; las anteriores a la venta no cuentan. Si no compraste, el cálculo ya es correcto.`,
         context: base,
       });
     } else {
@@ -1234,7 +1234,7 @@ export function generateTaxReport(
         id,
         severity: "warning",
         message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning termina el ${ctx.windowEnd} como muy tarde: después del ${ctx.deadline}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker (${ctx.lastDate}). Cuando presentes la declaración, ese plazo seguirá abierto.`,
-        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
+        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
         context: ctx,
       });
     }

@@ -883,6 +883,7 @@ describe("Revolut stock tickers that are also crypto symbols", () => {
   const STOCK_TICKERS = [
     "META", "U", "H", "M", "S", "W", "BILL", "AMP", "TEL", "BIO",
     "IP", "VVV", "BEAM", "MET", "GT", "LIT", "CASH",
+    "CVX", "STX", "ADI", "BDX", "CFG",
   ];
 
   it.each(STOCK_TICKERS)("classifies %s as STK in the transaction log", async (ticker) => {
@@ -906,6 +907,20 @@ describe("Revolut stock tickers that are also crypto symbols", () => {
     expect(report.capitalGains.disposals).toHaveLength(2);
     expect(blocks.listedShares.transmissionValue.toFixed(2)).toBe("1080.00");
     expect(blocks.otherElements.transmissionValue.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(["CVX", "STX", "ADI", "BDX", "CFG"])("keeps the pre-sale anti-churning block of %s, a listed share (#457)", async (ticker) => {
+    // Crypto gets only the year after the sale (art. 33.5.e). A listed share
+    // typed CRYPTO lost the block of a buy before the loss sale that is still
+    // held after it (letter f: 2 months before or after).
+    const data = buildRevolutWorkbook([
+      ["2024-12-01", "2025-06-02", ticker, "1", "200", "100", "-100", "0", "-100", "EUR"],
+      ["2025-05-01", "2026-01-12", ticker, "1", "150", "160", "10", "0", "10", "EUR"],
+    ]);
+    const parsed = await parseRevolutXlsx(data);
+    expect(parsed.trades.every((t) => t.assetCategory === "STK")).toBe(true);
+    const report = generateTaxReport(toFlex(parsed), new Map(), 2025);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("100.00");
   });
 
   it("still classifies real coins (BTC, ETH) as CRYPTO", async () => {

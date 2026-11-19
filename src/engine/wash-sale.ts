@@ -1,5 +1,5 @@
 /**
- * Anti-churning rule detector (Art. 33.5.f/g LIRPF) — PROPORTIONAL blocking.
+ * Anti-churning rule detector (Art. 33.5.e/f/g LIRPF) — PROPORTIONAL blocking.
  *
  * Spanish tax law blocks capital losses if homogeneous securities are
  * repurchased within:
@@ -11,9 +11,13 @@
  * - **1 year** before or after the sale — for securities admitted to neither
  *   (33.5.g): unlisted shares, OTC-only securities, shares listed only on a
  *   third-country market with no equivalence decision (London, SIX, Toronto).
- * Crypto is no «valor o participación»: the law applies 33.5.e to it (only a
- * repurchase in the year after the sale counts); the engine gives it ±1 year
- * (#457).
+ * Crypto is no «valor o participación» (DGT V0525-25, V0648-24), so letters f
+ * and g do not reach it; the engine applies 33.5.e to it (#457): only a
+ * repurchase of the same coin, on any exchange, in the year after the sale
+ * counts (de fecha a fecha, end day included), never a buy before the sale.
+ * No consulta names crypto and art. 33.5 together: this is a deduction from
+ * that doctrine and from V1613-25 (letter e, «y no las letras f) y g)», for
+ * dollars), not a holding.
  *
  * The block is **proportional to the repurchased quantity** ("por paquetes",
  * DGT V0913-08): sell 100 at a loss, rebuy 30 → only the loss on 30 is deferred,
@@ -71,6 +75,8 @@ interface BuyEvent {
   time: number;
   /** Normalized YYYY-MM-DD of the buy (display trail of the block). */
   date: string;
+  /** Shares this buy added to the long position (what a cover buy does not cover). */
+  qty: Decimal;
   /** Remaining repurchased quantity not yet used to block a loss (the consumable budget). */
   remainingQty: Decimal;
 }
@@ -176,7 +182,7 @@ interface PendingLoss {
 /**
  * Detect wash sales: compute PROPORTIONAL blocked losses and release pending
  * losses on definitive transmissions, in ONE chronological pass (Art. 33.5.f/g
- * LIRPF).
+ * LIRPF; 33.5.e for crypto, whose window holds only the year after the sale).
  *
  * Per homogeneous key the pass keeps (a) a FIFO budget of in-window repurchase
  * quantities and (b) a queue of pending losses, oldest first, counted in shares.
@@ -184,6 +190,9 @@ interface PendingLoss {
  *  1. ABSORB — take the in-window repurchases not yet used (a buy ON the sell
  *     date is the lot being sold, excluded): for loss lots always, for gain lots
  *     only while losses are pending (they need them for the definitive test).
+ *     The DGT's order (#454): oldest first, so the purchases before the sale
+ *     (each only for its shares still held after it) come before those after
+ *     it, and the rest of the lot the sale transmits comes last.
  *     The purchases of the 2 months BEFORE the sale do not count when they are
  *     one buy operation and no shares were held at the window's start (the
  *     one-purchase exception, DGT V3282-18); the purchases after it always do.
@@ -316,7 +325,7 @@ export function detectWashSales(
           events = [];
           buysByAsset.set(key, events);
         }
-        events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: repurchased });
+        events.push({ time, date: normalizeDay(trade.tradeDate), qty: repurchased, remainingQty: repurchased });
       }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
@@ -511,37 +520,92 @@ export function detectWashSales(
     if (buyEvents && need.greaterThan(0)) {
       const first = result[idxs[0]!]!;
       const months = windowMonths(first.assetCategory, first.isin);
-      const windowStart = addMonths(sellDate, -months).getTime();
+      // Art. 33.5.e (#457): for crypto only a buy in the year after the sale
+      // counts, so its window starts at the sale and the pre-sale pass is empty.
+      const windowStart = looksBack(first.assetCategory) ? addMonths(sellDate, -months).getTime() : sellTime;
       const windowEnd = addMonths(sellDate, months).getTime();
 
       // Consume repurchase quantity from in-window buys, excluding any buy on the
-      // sell day (the lot being sold, not a repurchase). Absorbed ≤ `need`.
+      // sell day (brokers give no intraday time; see the design doc). Absorbed ≤
+      // `need`. The DGT's order (#454) is the oldest purchase no earlier sale has
+      // used: the purchases of the 2 months before the sale first, oldest first,
+      // then those of the 2 months after it, oldest first. V3282-18 gives the
+      // 26/03 sale the 20/03 purchase, not 24/03 or the later 28/03; V0248-18
+      // gives the 25/04 sale 3,000 of the 5,000 of 18/03, not the 3,000 of 31/03.
       //
-      // Order matters. A POST-sale buy is a genuine surviving replacement, so it
-      // remains uncapped and is consumed first. A PRE-sale buy can only block the
-      // portion that still remains after this sale day; if the day fully exits the
-      // position, DGT V3282-18(1) allows the loss in full because no homogeneous
-      // shares remain in the patrimony.
+      // A PRE-sale buy counts only for its shares still held after the sale day
+      // (V3282-18 A: «únicamente, las compras que supongan una recompra»), so a
+      // day that fully exits the position deducts the loss in full (situation 1).
+      // FIFO keeps the newest shares: the `holdingAfter` shares left are the
+      // newest bought, so walking the pre-sale buy days newest first, each day holds
+      // what is left of that count. A buy only partly held is the lot the sale
+      // itself transmits. It still counts (situation 3, and the one-purchase
+      // exception exists because it would), but last, after the post-sale buys:
+      // V3282-18 gives the 20/02 sale the 15/03 purchase, not the rest of the
+      // 15/02 lot it sells from, and V1760-23 gives the 05/05 and 09/05 sales the
+      // 06/05 purchase, not the rest of the 04/05 lot.
       let remainingToAbsorb = need;
       // buyEvents is sorted by time, so each pass walks only its slice of the
-      // window, found by binary search: (sellTime, windowEnd] forward for post-sale
-      // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
-      // outside both slices.
-      // With `commit` false it only measures what it would take.
-      const consume = (from: number, to: number, step: 1 | -1, maxQty: Decimal, commit = true): Decimal => {
-        let remainingBudget = maxQty;
+      // window, found by binary search: [windowStart, sellTime) for pre-sale buys,
+      // (sellTime, windowEnd] for post-sale ones. Same-day buys are outside both.
+      // The held buys are the newest ones, so the walk stops where the count
+      // runs out and the pre-sale passes start there (`preFrom`).
+      const preTo = firstIndexAtOrAfter(buyEvents, sellTime);
+      const windowFrom = firstIndexAtOrAfter(buyEvents, windowStart);
+      // The buys of one day are one purchase here: brokers give no time of day,
+      // and some list one order as several fills (DEGIRO, one row per fill with
+      // one «ID Orden»). So the held count, and whether a buy is the lot the
+      // sale transmits, is decided per day, never per row: otherwise the rows
+      // FIFO left untouched would count as fully held and come before the
+      // post-sale buys, and the year would depend on the fill layout.
+      // `heldOfDay` maps a day's first row to the shares that day still holds.
+      const dayOf = new Map<number, number>();
+      const heldOfDay = new Map<number, Decimal>();
+      let partlyFrom = -1;
+      let partlyTo = -1;
+      let preFrom = preTo;
+      let stillHeld = holdingAfter(key, sellTime);
+      for (let i = preTo - 1; i >= windowFrom && stillHeld.greaterThan(0); ) {
+        const time = buyEvents[i]!.time;
+        let first = i;
+        while (first - 1 >= windowFrom && buyEvents[first - 1]!.time === time) first--;
+        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, time, sellTime);
+        let bought = new Decimal(0);
+        for (let k = first; k <= i; k++) {
+          bought = bought.plus(buyEvents[k]!.qty.mul(conversion.num).div(conversion.den));
+          dayOf.set(k, first);
+        }
+        const held = Decimal.min(bought, stillHeld);
+        stillHeld = stillHeld.minus(held);
+        heldOfDay.set(first, held);
+        preFrom = first;
+        if (held.greaterThan(0) && held.lessThan(bought)) {
+          partlyFrom = first;
+          partlyTo = i + 1;
+        }
+        i = first - 1;
+      }
+      // Walks [from, to) oldest first, skipping [skipFrom, skipTo); a pre-sale
+      // day gives at most its shares held after the sale. With `commit` false it
+      // only measures what it would take.
+      const consume = (from: number, to: number, commit = true, skipFrom = -1, skipTo = -1): Decimal => {
         let left = remainingToAbsorb;
-        for (let i = from; i !== to; i += step) {
+        const takenOfDay = new Map<number, Decimal>();
+        for (let i = from; i < to && left.greaterThan(0); i++) {
           const ev = buyEvents[i]!;
-          if (left.lessThanOrEqualTo(0)) break;
-          if (remainingBudget.lessThanOrEqualTo(0)) break;
-          if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
+          if ((i >= skipFrom && i < skipTo) || ev.remainingQty.lessThanOrEqualTo(0)) continue;
           const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
-          const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
+          let availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
+          const day = dayOf.get(i);
+          if (i < preTo) {
+            if (day === undefined) continue;
+            const capLeft = heldOfDay.get(day)!.minus(takenOfDay.get(day) ?? 0);
+            availableAtSell = Decimal.min(availableAtSell, capLeft);
+          }
           if (availableAtSell.lessThanOrEqualTo(0)) continue;
-          const take = Decimal.min(availableAtSell, left, remainingBudget);
+          const take = Decimal.min(availableAtSell, left);
           left = left.minus(take);
-          remainingBudget = remainingBudget.minus(take);
+          if (day !== undefined) takenOfDay.set(day, (takenOfDay.get(day) ?? new Decimal(0)).plus(take));
           if (!commit) continue;
           ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
           consumed.push({ date: ev.date, qty: take });
@@ -550,32 +614,36 @@ export function detectWashSales(
         if (commit) remainingToAbsorb = left;
         return taken;
       };
-      // post-sale repurchases first (surviving replacements). The one-purchase
-      // exception never reaches them: «sin perjuicio de que las recompras
-      // efectuadas en el plazo de los dos meses posteriores a la transmisión
-      // impidan también la imputación» (V3282-18, B).
-      consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1, need);
-      // FIFO leaves the newest pre-sale lots behind after a partial sale, so take
-      // capped pre-sale repurchases newest-first, from the lots that survive.
-      const preFrom = firstIndexAtOrAfter(buyEvents, sellTime) - 1;
-      const preTo = firstIndexAtOrAfter(buyEvents, windowStart) - 1;
-      const preCap = holdingAfter(key, sellTime);
-      // The one-purchase exception lifts only this pre-sale rule, and the
-      // doctrine states it for the 2-month window of letter f only: the 1-year
-      // window (letter g, crypto) keeps the rule. Checked only where the
-      // pre-sale purchases would take something, so a sale it cannot change
+      // The one-purchase exception lifts the pre-sale rule (both pre-sale
+      // passes), and the doctrine states it for the 2-month window of letter f
+      // only: the 1-year window (letter g, crypto) keeps the rule. Checked only
+      // where a pre-sale pass would take something, so a sale it cannot change
       // carries no mark. The same test decides whether a sale is definitive
       // («los mismos criterios», V3282-18), because loss and gain lots share
       // this absorption.
-      let skipPreSale = false;
-      if (months === 2 && consume(preFrom, preTo, -1, preCap, false).greaterThan(0)) {
-        const status = singlePurchase(key, windowStart, sellTime);
-        if (status) {
-          for (const idx of idxs) if (!isShortAt(idx)) result[idx]!.washSaleSinglePurchase = status;
+      let preStatus: "applied" | "unverified" | null | undefined;
+      const preSaleRuleApplies = (): boolean => {
+        if (months !== 2) return true;
+        if (preStatus === undefined) {
+          preStatus = singlePurchase(key, windowStart, sellTime);
+          if (preStatus) {
+            for (const idx of idxs) if (!isShortAt(idx)) result[idx]!.washSaleSinglePurchase = preStatus;
+          }
         }
-        skipPreSale = status === "applied";
+        return preStatus !== "applied";
+      };
+      if (consume(preFrom, preTo, false, partlyFrom, partlyTo).greaterThan(0) && preSaleRuleApplies()) {
+        consume(preFrom, preTo, true, partlyFrom, partlyTo);
       }
-      if (!skipPreSale) consume(preFrom, preTo, -1, preCap);
+      // The post-sale repurchases. The one-purchase exception never reaches
+      // them: «sin perjuicio de que las recompras efectuadas en el plazo de los
+      // dos meses posteriores a la transmisión impidan también la imputación»
+      // (V3282-18, B).
+      consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd));
+      // Last, the rest of the lot the sale transmits: every row of that day.
+      if (partlyFrom >= 0 && consume(partlyFrom, partlyTo, false).greaterThan(0) && preSaleRuleApplies()) {
+        consume(partlyFrom, partlyTo);
+      }
       dayAbsorbed = need.minus(remainingToAbsorb);
     }
 
@@ -1239,11 +1307,11 @@ function buyQtyConversionToSellUnits(
  *  - **1 year (12 months)** on neither (unlisted shares, OTC-only securities
  *    such as OTC Markets / pink sheets, shares listed only on the London Stock
  *    Exchange, SIX or Toronto).
- * Crypto gets 12 months here; the law applies 33.5.e to it, which counts only
- * a repurchase in the year after the sale (#457, not handled).
+ * Crypto gets 12 months too, but under 33.5.e: the window runs from the sale to
+ * 12 months after it and never looks back (`looksBack`, #457).
  *
  * We have no reliable "is listed" flag from the brokers, so we use a heuristic:
- *  - CRYPTO → always unlisted (12 months).
+ *  - CRYPTO → 12 months, after the sale only (33.5.e).
  *  - STK/FUND/BOND WITH a real ISIN → treated as listed (2 months).
  *  - Anything else with NO ISIN → treated as unlisted (12 months).
  *
@@ -1260,6 +1328,16 @@ function windowMonths(assetCategory: string, isin: string): number {
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
   return isin ? 2 : 12;
+}
+
+/**
+ * Whether the window also reaches back before the sale. Letters f and g count
+ * «valores homogéneos» bought in the months «anteriores o posteriores»; letter e,
+ * which applies to crypto, counts only a reacquisition «dentro del año siguiente
+ * a la fecha de dicha transmisión» (#457).
+ */
+function looksBack(assetCategory: string): boolean {
+  return assetCategory !== "CRYPTO";
 }
 
 function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {

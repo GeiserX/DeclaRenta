@@ -26,6 +26,11 @@ const STOCK_TICKER_CONFLICTS = new Set([
   "GT", "IP",
   "AMP", "BIO", "LIT", "MET", "TEL", "VVV",
   "BEAM", "BILL", "CASH", "META",
+  // S&P 500 members whose ticker is also a coin symbol (Chevron, Seagate,
+  // Analog Devices, Becton Dickinson, Citizens Financial). Crypto has the
+  // art. 33.5.e window (#457), so a share typed CRYPTO loses its pre-sale
+  // anti-churning block as well as its 0328/720 placement.
+  "ADI", "BDX", "CFG", "CVX", "STX",
 ]);
 
 async function fetchPage(page: number): Promise<string[]> {

@@ -77,12 +77,14 @@ For each sale day of a key (chronological). FIFO splits one sale into one
 disposal per lot, and same-day sales have no intraday order, so the day is one
 unit:
 1. **Absorb.** Over the day's sold quantity, take the in-window homogeneous
-   repurchases that no earlier transmission used: POST-sale buys first, uncapped, because they are genuine
-   replacement lots; then PRE-sale buys newest-first, only up to the
-   remaining-position budget `holdingAfter`. A full exit with no later
-   repurchase therefore absorbs `0`, while a full exit followed by a later
-   repurchase still absorbs the post-sale quantity. A buy on the sale day is the
-   lot being sold and is skipped. This runs for **every loss sale**, and for a
+   repurchases that no earlier transmission used, oldest first (the DGT's
+   order, see "Pick order" below): PRE-sale buys, each only for its shares still
+   held after the sale (the newest `holdingAfter` shares, FIFO); then POST-sale
+   buys, uncapped, because they are genuine replacement lots; last, the rest of
+   the lot the sale itself transmits. A full exit with no later repurchase
+   therefore absorbs `0`, while a full exit followed by a later repurchase still
+   absorbs the post-sale quantity. A buy on the sale day is skipped (no
+   intraday time). This runs for **every loss sale**, and for a
    **gain sale while losses are pending**: the definitive test applies
    «con independencia de que determinen ganancias o pérdidas patrimoniales» and
    uses «los mismos criterios» as the block (V3282-18), and a rebuy counted there
@@ -248,31 +250,43 @@ transmission that releases them.
   to neither kind of market: one traded only on OTC Markets, or listed only on
   the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
   the engine 2 months (#452).
-- **Crypto window.** The engine gives crypto ±1 year. Crypto is no «valor o
-  participación», so letters f and g do not apply: art. 33.5.e («elementos
-  patrimoniales») counts only a repurchase within the year after the sale, so
-  a buy before the sale should not block (#457, not handled here).
+- **Crypto window (handled).** Crypto is no «valor o participación» (DGT
+  V0648-24, V0525-25), so letters f and g do not apply. The engine applies art.
+  33.5.e: only a repurchase of the same coin (the `CRYPTO:<SYMBOL>` key, any
+  exchange) in the year after the sale counts, de fecha a fecha with the end
+  day included, and a buy before the sale or on the sale day never blocks
+  (`looksBack` in `wash-sale.ts`, #457). The window end, the past-data warning
+  and the 30 June split did not move. This is a deduction, not a holding: no
+  consulta names crypto and art. 33.5 together; V1613-25 applies letter e
+  «y no las letras f) y g)» to dollars, the closest fungible non-security.
+  Open points it leaves: (A) letter e has its own release sentence («se
+  integrará cuando se produzca la posterior transmisión del elemento
+  patrimonial», without the f/g «que permanezcan»); the engine keeps the #451
+  definitive test. It never releases earlier than the reading "any later sale
+  releases", which is not built. It can release before the reacquired units
+  are sold: a later definitive sale of older units releases the loss while
+  the rebought coin is still held. The reading "the sale of the reacquired
+  element" (FIFO lot identification, V1550-25) would release nothing until
+  those units are sold. (B) A partial reacquisition stays
+  proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
+  reward receipts are no repurchase (reward lots stay out of
+  `washSaleTrades`), the less strict choice, which no source settles.
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
   engine releases on such a sale. In V0571-21 itself the engine still gets the
-  DGT's answer, because an unused pre-sale buy also absorbs that sale.
-- **Rebuy pick order**: post-sale buys first, then pre-sale newest-first. The
-  DGT picks the earliest unused buy, pre-sale before post-sale (V0248-18,
-  V3282-18, V1760-23). Three consultas show the gap; each is a known-gap test
-  (`it.fails` on the DGT's figure, the engine's figure in a comment):
-  - **V0248-18**, the cleanest proof, with no same-day buy: the engine lets the
-    25/04 and 28/04 gain sales take the 28/05 buy, so the 29/05 sale has 1,000
-    definitive shares and releases 400 (2017: engine 500, DGT 900).
-  - **V0754-26** matches only when every rebuy follows its sale. With each
-    rebuy a few days before its sale (the consulta allows both), each sale takes
-    the next sale's rebuy and 2025 releases 385 (engine −775, DGT 0).
-  - **V2481-20** (engine 1,079.44, DGT 1,767): mostly the same-day exclusion
-    above. The 22/04 loss is rebought the same day; counting same-day buys gives
-    1,751.73, so 672.29 of the 687.56 released comes from that, and the last
-    15.27 from the pick order.
-  The totals match on V3282-18, V0571-21, V1760-23 and V0754-26 with post-sale
-  rebuys. Tracked apart from #451.
+  DGT's answer, because an unused pre-sale buy also absorbs that sale. The
+  held-shares count of the pre-sale buys skips the same-day buys too, so an
+  older lot can stand in for a same-day rebuy (V2481-20: the 14/04 lot stands
+  in for the 880 bought on 20/04, and counting same-day buys gives the same
+  figure).
+- **V2481-20** (engine 1,751.73, DGT 1,767; `it.fails` on the DGT's figure).
+  The 23/04 sales leave no shares, so no purchase before them counts (V3282-18
+  A, situation 1): they take the 1,880 of 27/04 and 40 of the 1,900 of 06/05.
+  Only 1,860 are left for the 1,880 shares sold on 29/04, so 20 are definitive
+  and release 20 × 672/880 = 15.27. The DGT says only that the 06/05 purchase
+  prevents the release and does not count the 40 shares. Neither the pick
+  order nor the same-day exclusion changes this figure.
 - **Multiple sales, one repurchase**: budget consumed **chronologically**
   (earliest sale day first, gain sales with pending losses included), the most
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
@@ -390,6 +404,66 @@ práctico Renta 2025. The decisions, each pinned in
 No committed fixture changed: the only fixtures where the pre-sale pass blocks
 or keeps a sale non-definitive are `revolut-sample.xlsx` (BTC, 1-year window)
 and `trading212-v2-sample.csv` (ALFA, two buys in the window).
+
+## Pick order (issue #454)
+
+Up to 0.66.13 the engine took post-sale buys first, then pre-sale buys newest
+first, capped by `holdingAfter`. The DGT names the purchase each sale takes, and
+the order it follows is derived from those names:
+
+1. **Oldest unused purchase first, so the purchases before the sale come before
+   those after it.** V3282-18 gives the 26/03 sale «las 2.000 acciones
+   adquiridas el 20 de marzo», not 24/03 nor the later 28/03; the 31/03 sale
+   gets 24/03 and the 05/04 sale 28/03 («al haberse tenido en cuenta ya las
+   adquisiciones de 15 de marzo de 2017, de 20 de marzo de 2017 y de 24 de marzo
+   de 2017»). V0248-18: the 16/02 sale takes the 2,000 of 15/02, 25/04 takes
+   3,000 of the 5,000 of 18/03, so 28/04 finds «5000 acciones (2.000, 3.000)»
+   and 29/05 «(3000, 4.000) … 7.000».
+2. **A purchase already used by an earlier sale is out** («sólo deberán
+   tenerse en cuenta … las compras de acciones que a su vez no hayan sido
+   consideradas previamente recompras», V0248-18, V3282-18; one purchase cannot
+   block two losses, V0913-08, V2481-20). Unchanged.
+3. **A pre-sale purchase counts only for its shares still held after the
+   sale** (rule A: «únicamente, las compras que supongan una recompra»;
+   situation 3: «un número de acciones … igual al saldo de las existentes
+   después»). V1760-23: the 10/05 sale finds the 06/05 shares used and the
+   04/05 shares sold, so its repurchase is the 10/06 purchase, after it. The
+   engine reads the held shares as FIFO leaves them: the newest `holdingAfter`
+   shares bought before the sale day.
+4. **The rest of the lot the sale transmits comes last, after the post-sale
+   purchases.** V3282-18 gives the 20/02 sale «las 2.000 acciones adquiridas el
+   15 de marzo», not the 2,000 left of the 15/02 lot it sells from; V1760-23
+   gives the 05/05 and 09/05 sales the 06/05 purchase, not the rest of the 04/05
+   lot. That rest still counts (situation 3; the one-purchase exception exists
+   because it would), so it is used when nothing else covers the sale.
+
+   The buys of one day are one purchase for steps 3 and 4. Brokers give no time
+   of day, and DEGIRO lists one order as one row per fill with one «ID Orden».
+   So the engine counts the held shares per buy day, and when that day is only
+   partly held, every row of the day goes last. Per row, the fills FIFO did not
+   touch would count as fully held and come before the post-sale purchases, and
+   the year would depend on how the broker split the order: buy 100 on 01/03,
+   sell 50 on 10/03, buy 50 on 15/03, sell 50 on 20/03 gives −200 as one row
+   and gave −40 as fills of 60 + 40.
+
+The same order runs the definitive test of #451 («los mismos criterios»), and
+the one-purchase exception lifts both pre-sale steps (1 and 4).
+
+Figures it reproduces, each pinned in
+`tests/integration/antichurning-definitive-e2e.test.ts`:
+
+| Consulta | 0.66.13 | Now | DGT |
+|---|---|---|---|
+| V0248-18 (2017) | 500 | 900 | 900 |
+| V0754-26, rebuys before the sales (2025 / 2026) | −775 / −1,331 | 0 / −942 | 0 / −942 |
+| V2481-20 (2020) | 1,079.44 | 1,751.73 | 1,767 |
+| V3282-18, V1760-23, V0571-21, V0046-20, V0913-08, V1294-22, V0754-26 (rebuys after) | DGT | DGT | — |
+
+The repurchase dates now match the DGT's on V3282-18 (20/02 ← 15/03, 26/03 ←
+20/03) and V1760-23 (05/05 and 09/05 ← 06/05, 10/05 ← 10/06, 17/06 ← 20/06);
+0.66.13 got the figures there with other purchases. V2481-20 keeps a gap of
+15.27 (see "Known limitations"). No committed fixture changed in any FX method:
+their few blocked losses have a post-sale rebuy and no pre-sale alternative.
 
 ## Migration note (issue #451)
 
