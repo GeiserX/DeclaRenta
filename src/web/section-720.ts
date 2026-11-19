@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, holdsCash, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, heldCashBalances, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import {
   isHeldSecurity,
   checkModelo720SuccessiveYear,
@@ -19,6 +19,7 @@ import {
   modelo720PositionCountry,
   readPrevious720,
   readPrevious720Totals,
+  unvaluedCashBalances,
   type Modelo720SuccessiveCategory,
   type Previous720Totals,
 } from "../generators/modelo720.js";
@@ -179,7 +180,7 @@ export function renderSection720(
     }))}</div>`
     : "";
 
-  const hasCashBalances = (statement.cashBalances ?? []).some(holdsCash);
+  const hasCashBalances = heldCashBalances(statement.cashBalances).length > 0;
   // With nothing held, last year's file still matters: what it declared was sold (C).
   if (statement.openPositions.length === 0 && !hasCashBalances && !previous720) {
     container.innerHTML = `${missingNotice || `<p class="muted">${t("m720.no_positions")}</p>`}${previous720CardHtml(year)}`;
@@ -344,15 +345,16 @@ export function renderSection720(
   }
 
   // Cash balances table (Category C — Cuentas). A balance the export gives no
-  // number for is held and shown as «—», never 0 € and never dropped (#470).
-  const cashBalances = (statement.cashBalances ?? []).filter(holdsCash);
+  // number for, or in a currency with no year-end rate, is held and shown as
+  // «—», never 0 € and never dropped (#470).
+  const cashBalances = heldCashBalances(statement.cashBalances);
   if (cashBalances.length > 0) {
-    const unreadable = cashBalances.filter((cb) => cashEndingOf(cb) === null);
-    const missingAverage = cashBalances.some((cb) => cashEndingOf(cb) !== null && cashAverageOf(cb) === null);
+    const unvalued = unvaluedCashBalances(statement.cashBalances, rateMap, year);
+    const missingAverage = cashBalances.some((cb) => !unvalued.includes(cb) && cashAverageOf(cb) === null);
     html += `<h3>${t("m720.cash_title")}</h3>
-    ${unreadable.length > 0 ? `<div class="banner banner-warning m720-cash-unvalued">${esc(t("m720.cash_unvalued", {
-      count: String(unreadable.length),
-      accounts: unreadable.map((cb) => `${cb.accountId} (${cb.currency})`).join(", "),
+    ${unvalued.length > 0 ? `<div class="banner banner-warning m720-cash-unvalued">${esc(t("m720.cash_unvalued", {
+      count: String(unvalued.length),
+      accounts: unvalued.map((cb) => `${cb.accountId} (${cb.currency})`).join(", "),
     }))}</div>` : ""}
     ${missingAverage ? `<div class="banner banner-warning">${t("m720.cash_missing_average")}</div>` : ""}
     <div class="table-wrapper"><table>
@@ -520,7 +522,7 @@ function generate720File(): void {
     // A holding or a cash balance with no value in euros may be what passes
     // the threshold, so the answer is "value it first", never "you are not obliged".
     if (thresholds.values.unvalued > 0 || thresholds.accounts.unvalued > 0) {
-      const unreadableCash = (cachedStatement.cashBalances ?? []).filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
+      const unreadableCash = unvaluedCashBalances(cachedStatement.cashBalances, cachedRateMap, cachedYear);
       const parts = [
         thresholds.values.unvalued > 0 ? `<p>${esc(t("m720.positions_unvalued", { count: String(thresholds.values.unvalued) }))}</p>` : "",
         unreadableCash.length > 0 ? `<p>${esc(t("m720.cash_unvalued", {

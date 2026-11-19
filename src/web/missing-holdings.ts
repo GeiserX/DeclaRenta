@@ -13,7 +13,8 @@
  */
 
 import type { Statement } from "../types/broker.js";
-import { holdsCash, positionValueOf } from "../engine/ecb.js";
+import { heldCashBalances } from "../engine/ecb.js";
+import { isModelo721Holding } from "../generators/modelo721.js";
 
 /** One parsed file and the broker that parsed it. */
 export interface ParsedExport {
@@ -42,18 +43,16 @@ function factsOf(statement: Statement): BrokerFacts {
   const positions = statement.openPositions;
   // A balance the export gives no number for may be positive: it is a holding
   // the 720 section shows as unvalued, never 0 € (#470).
-  const positiveCash = (statement.cashBalances ?? []).some(holdsCash);
+  const positiveCash = heldCashBalances(statement.cashBalances).length > 0;
   return {
     anyHoldings: positions.length > 0 || positiveCash,
     cryptoActivity:
       statement.trades.some((tr) => tr.assetCategory === "CRYPTO") ||
       positions.some((p) => p.assetCategory === "CRYPTO") ||
       statement.cashTransactions.some((c) => c.type === "Crypto Reward Income"),
-    // A crypto position with no value (0, or no number) is not counted: it is
-    // no valued holding.
-    cryptoHoldings: positions.some(
-      (p) => p.assetCategory === "CRYPTO" && (positionValueOf(p)?.greaterThan(0) ?? false),
-    ),
+    // Same filter as buildModelo721Entries (`isModelo721Holding`): a coin the
+    // 721 lists, valued or not, is a holding, so no notice contradicts it.
+    cryptoHoldings: positions.some(isModelo721Holding),
     securitiesActivity: statement.trades.some((tr) => SECURITY_CATEGORIES.has(tr.assetCategory)),
     securitiesHoldings: positions.some((p) => SECURITY_CATEGORIES.has(p.assetCategory)),
   };
@@ -64,7 +63,8 @@ function factsOf(statement: Statement): BrokerFacts {
  * export has no holdings the model could use.
  *
  * - 720: the broker's files have no open positions and no positive cash balance.
- * - 721: the broker's files have crypto activity but no valued crypto position.
+ * - 721: the broker's files have crypto activity but no crypto position the
+ *   721 lists (`isModelo721Holding`).
  *   Brokers with no crypto at all are left out, so a Degiro user is not told
  *   to check a crypto threshold.
  * - D-6: the broker's files have securities trades but no securities position.

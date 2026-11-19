@@ -55,6 +55,19 @@ export interface Modelo721Valuation {
 }
 
 /**
+ * A coin the Modelo 721 counts as held: a crypto position with a positive
+ * value, or one held with no market value (`hasNoMarketValue`: no number, 0
+ * with units, or a quantity and value of opposite signs), which is unvalued,
+ * never 0 €. `buildModelo721Entries` and the web's missing-holdings notice use
+ * this one filter, so the notice never says the data has no crypto next to a
+ * coin the 721 lists (#470).
+ */
+export function isModelo721Holding(p: OpenPosition): boolean {
+  if (!CRYPTO_CATEGORIES.has(p.assetCategory)) return false;
+  return (positionValueOf(p)?.greaterThan(0) ?? false) || hasNoMarketValue(p);
+}
+
+/**
  * Build valued Modelo 721 entries from open positions — the single source of
  * truth for 721 crypto valuation (web section and any future generator consume this).
  *
@@ -81,12 +94,11 @@ export function buildModelo721Entries(
   let totalValueEur = new Decimal(0);
 
   for (const p of openPositions) {
-    if (!CRYPTO_CATEGORIES.has(p.assetCategory)) continue;
+    if (!isModelo721Holding(p)) continue;
     // A coin held with no market value in the export is unvalued, not 0 €.
     const noMarketValue = hasNoMarketValue(p);
     // A value that is no number ("", "N/A") is no value (`positionValueOf`).
     const value = positionValueOf(p);
-    if (!(value?.greaterThan(0) ?? false) && !noMarketValue) continue;
 
     const rate = noMarketValue || value === null ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
     const valuationEur = rate === null || value === null ? null : value.mul(rate);

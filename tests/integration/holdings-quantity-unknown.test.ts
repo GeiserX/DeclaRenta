@@ -20,7 +20,7 @@ import { generateD6Report } from "../../src/generators/d6.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import { renderSection720 } from "../../src/web/section-720.js";
 import { renderSectionD6 } from "../../src/web/section-d6.js";
-import { hasNoMarketValue, holdsNothing, isNegativePositionValue, isShortPosition, positionValueOf } from "../../src/engine/ecb.js";
+import { hasNoMarketValue, holdsNothing, isShortPosition, positionValueOf } from "../../src/engine/ecb.js";
 import { findMissingHoldings } from "../../src/web/missing-holdings.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -176,10 +176,10 @@ describe("#470 D-6: an IBKR stock with no readable quantity", () => {
     expect(generateD6Report(flex(stock("", "-70000")).openPositions, rateMap, 2025, "X", "12345678Z").unvaluedCount).toBe(0);
   });
 
-  it("the web section lists it with «—» shares and a banner naming it (control: position 700)", () => {
+  it("the web section lists it with «—» shares, leaves it out of the total as the generator does, and a banner names it (control: position 700)", () => {
     useProfile("d6-content");
     renderSectionD6(flex(stock("", "70000")), rateMap);
-    expect(rows("d6-content")).toEqual(["US0000000001 | ACME CORP | US | — | 59.500,00"]);
+    expect(rows("d6-content")).toEqual(["US0000000001 | ACME CORP | US | — | —"]);
     expect(document.querySelector("#d6-content .d6-quantity-unknown")?.textContent).toContain("ACME (US0000000001)");
     expect([...document.querySelectorAll("#d6-content .aforix-field-value")].map((e) => e.textContent)).not.toContain("0");
 
@@ -212,13 +212,14 @@ describe("#470 D-6: an IBKR stock with neither a readable quantity nor a readabl
     });
   }
 
-  it("hasNoMarketValue reads an unreadable value as no value, and isNegativePositionValue proves no short from it", () => {
+  it("hasNoMarketValue reads an unreadable value as no value, and isShortPosition proves no short from it", () => {
     expect(hasNoMarketValue({ quantity: "0", positionValue: "", quantityUnknown: true })).toBe(true);
     expect(hasNoMarketValue({ quantity: "0", positionValue: "N/A", quantityUnknown: true })).toBe(true);
     expect(hasNoMarketValue({ quantity: "5", positionValue: "N/A" })).toBe(true);
-    expect(isNegativePositionValue("")).toBe(false);
-    expect(isNegativePositionValue("N/A")).toBe(false);
-    expect(isNegativePositionValue("-1")).toBe(true);
+    expect(isShortPosition({ quantity: "0", positionValue: "", quantityUnknown: true })).toBe(false);
+    expect(isShortPosition({ quantity: "0", positionValue: "N/A", quantityUnknown: true })).toBe(false);
+    expect(isShortPosition({ quantity: "0", positionValue: "-0", quantityUnknown: true })).toBe(false);
+    expect(isShortPosition({ quantity: "0", positionValue: "-1", quantityUnknown: true })).toBe(true);
   });
 });
 
@@ -367,8 +368,9 @@ describe("#470 an IBKR row whose positionValue is no number, whatever its quanti
           const text = document.getElementById("m721-content")!.textContent;
           expect(text).toContain("No se puede determinar");
           expect(text).not.toContain("No estás obligado");
-          // Not a valued crypto holding for the "brokers without holdings" notice.
-          expect(findMissingHoldings([{ broker: "IBKR", statement: flex(coin("BTC", "BITCOIN", position, value)) }]).m721).toEqual(["IBKR"]);
+          // The 721 lists it, so the "brokers without holdings" notice does not
+          // say the data has no crypto (`isModelo721Holding`).
+          expect(findMissingHoldings([{ broker: "IBKR", statement: flex(coin("BTC", "BITCOIN", position, value)) }]).m721).toEqual([]);
         });
       }
 

@@ -21,7 +21,7 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
-import { cashEndingOf, hasSignConflict, holdsCash, readPositionNumber } from "../engine/ecb.js";
+import { cashEndingOf, hasSignConflict, heldCashBalances, readPositionNumber } from "../engine/ecb.js";
 import { tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 const parser = new XMLParser({
@@ -247,8 +247,10 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   // warning for securities (720, D-6) and one for crypto (721). An explicit 0
   // next to a value that is not 0 is unknown too, but the file does give a
   // number: it gets its own wording, so the warning never says it is unreadable.
+  // Only rows a form reads are named (`isFormHolding`): the warnings say what
+  // the 720, the D-6 or the 721 do with them, which is false for an option.
   for (const crypto of [false, true]) {
-    const flagged = openPositions.filter((p) => p.quantityUnknown && (p.assetCategory === "CRYPTO") === crypto);
+    const flagged = openPositions.filter((p) => p.quantityUnknown && isFormHolding(p) && (p.assetCategory === "CRYPTO") === crypto);
     const holdingsOf = (rows: OpenPosition[]): string => rows.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
     const zeros = flagged.filter((p) => zeroWithValue.has(p));
     if (zeros.length > 0) {
@@ -291,9 +293,10 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
         });
   }
 
-  // A quantity and a value of opposite signs contradict each other: the 720,
-  // the 721 and the D-6 count the holding as held and unvalued (#470).
-  const conflicting = openPositions.filter(hasSignConflict);
+  // A quantity and a value of opposite signs contradict each other: the 720
+  // and the D-6 (securities) or the 721 (crypto) count the holding as held and
+  // unvalued (#470). An option or a future is in no form, so it is not named.
+  const conflicting = openPositions.filter((p) => isFormHolding(p) && hasSignConflict(p));
   if (conflicting.length > 0) {
     const count = String(conflicting.length);
     const holdings = conflicting.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
@@ -301,14 +304,14 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       id: "parser.open_position_sign_conflict",
       severity: "warning",
       message: `IBKR da un número de acciones o unidades y un valor de signo contrario para ${count} posición(es) abierta(s): ${holdings}.`,
-      hint: "Una cantidad positiva con un valor negativo, o al revés, se contradice: DeclaRenta no sabe si es una posición larga o corta, así que no la valora. Los modelos 720, 721 y D-6 la cuentan como sin valorar y no pueden concluir que no debas presentarlos. Toma la cantidad y el valor del extracto de fin de año de IBKR.",
+      hint: "Una cantidad positiva con un valor negativo, o al revés, se contradice: DeclaRenta no sabe si es una posición larga o corta, así que no la valora. El Modelo 720 y el D-6 (acciones, fondos y bonos) o el Modelo 721 (criptomonedas) la cuentan como sin valorar y no pueden concluir que no debas presentarlos. Toma la cantidad y el valor del extracto de fin de año de IBKR.",
       context: { count, holdings },
     });
   }
 
   // A cash balance with no number ("", "N/A", no endingCash column) is unknown,
   // never 0 €: the 720 accounts category counts it unvalued (#470).
-  const unreadableCash = cashBalances.filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
+  const unreadableCash = heldCashBalances(cashBalances).filter((cb) => cashEndingOf(cb) === null);
   if (unreadableCash.length > 0) {
     const count = String(unreadableCash.length);
     const accounts = unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ");
@@ -842,6 +845,15 @@ function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, 
   const summarized = new Set(rows.filter((raw) => level(raw) === LEVEL_OF_DETAIL_SUMMARY).map(id));
   if (summarized.size === 0) return rows;
   return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
+}
+
+/**
+ * An open position one of the holdings forms reads: a stock, fund or bond (the
+ * 720 and the D-6) or a coin (the 721). Options, futures, cash and warrant rows
+ * are in none of them, so the holdings warnings never name them.
+ */
+function isFormHolding(p: OpenPosition): boolean {
+  return p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND" || p.assetCategory === "CRYPTO";
 }
 
 /**

@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, holdsCash, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, heldCashBalances, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -45,10 +45,10 @@ export interface Modelo720ThresholdResult {
    */
   values: { exceeds: boolean; total: Decimal; unvalued: number };
   /**
-   * `unvalued`: held cash balances left out of `total` because the export
-   * gives no number for them (`cashEndingOf` null: "", "N/A", no column). The
-   * balance may be positive, so while it is above 0 the category cannot be
-   * called below the threshold (#470).
+   * `unvalued`: held cash balances left out of `total` because they cannot be
+   * valued in euros (`unvaluedCashBalances`): the export gives no number for
+   * them, or their currency has no year-end rate. The balance may be large, so
+   * while it is above 0 the category cannot be called below the threshold (#470).
    */
   accounts: { exceeds: boolean; total: Decimal; unvalued: number };
   realEstate: { exceeds: boolean; total: Decimal };
@@ -81,14 +81,26 @@ function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { en
   const yearEnd = `${year}-12-31`;
   const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
   const ending = cashEndingOf(cb);
-  // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
-  // for manual review) rather than crash the threshold check / file generation.
+  // No resolvable rate or no number → cannot value this balance in EUR: the
+  // threshold counts it unvalued and the callers name it (`unvaluedCashBalances`),
+  // rather than crash the threshold check / file generation.
   if (ecbRate === null || ending === null) return undefined;
   const average = cashAverageOf(cb);
   return {
     ending: ending.mul(ecbRate),
     averageQ4: average === null ? null : average.mul(ecbRate),
   };
+}
+
+/**
+ * The held cash balances (`heldCashBalances`) the 720 cannot value in euros:
+ * the export gives no number for the balance, or its currency has no year-end
+ * rate (IBKR's CNH, or a rate the ECB fetch did not return). Each is unknown,
+ * never 0 € and never dropped: the accounts category counts it unvalued, and
+ * the web section and the CLI name its account and currency (#470).
+ */
+export function unvaluedCashBalances(cashBalances: CashBalance[] | undefined, rateMap: EcbRateMap, year: number): CashBalance[] {
+  return heldCashBalances(cashBalances).filter((cb) => cashValuesEur(cb, rateMap, year) === undefined);
 }
 
 /**
@@ -104,16 +116,14 @@ function cashCategoryTotals(
   let endingTotal = new Decimal(0);
   let averageTotal = new Decimal(0);
   let unvalued = 0;
-  for (const cb of cashBalances ?? []) {
-    if (!holdsCash(cb)) continue;
-    // A held balance the export gives no number for: unknown, never 0 € and
-    // never dropped; counted so the verdict says it cannot tell (#470).
-    if (cashEndingOf(cb) === null) {
+  for (const cb of heldCashBalances(cashBalances)) {
+    const values = cashValuesEur(cb, rateMap, year);
+    // A held balance with no number or no rate: unknown, never 0 € and never
+    // dropped; counted so the verdict says it cannot tell (#470).
+    if (!values) {
       unvalued++;
       continue;
     }
-    const values = cashValuesEur(cb, rateMap, year);
-    if (!values) continue;
     endingTotal = endingTotal.plus(values.ending);
     if (values.averageQ4) averageTotal = averageTotal.plus(values.averageQ4);
   }
@@ -203,22 +213,35 @@ export interface Previous720Security {
  * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
  * no broker export gives us), a security or account whose country is unknown,
  * a security whose share count the export does not give (`quantityUnknown`: the
- * record would write 0 in «Número de valores», #470), an account with no
+ * record would write 0 in «Número de valores», #470) or is below 0.005, which
+ * that field's two decimals round to 0 (`quantity_below_hundredth`), an account with no
  * account code, or a sale of a security whose clave,
  * subclave or country in last year's file is not a valid code (a file written
  * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130)
  * and that this year's sale trade cannot correct.
  */
 export type Modelo720Omission =
-  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown"; position: OpenPosition }
+  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth"; position: OpenPosition }
   | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
   | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
 
-function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | null {
+function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | null {
   if (p.isin.trim() === "") return "no_isin";
   if (modelo720PositionCountry(p) === null) return "no_country";
   if (p.quantityUnknown === true) return "quantity_unknown";
+  const quantity = readPositionNumber(p.quantity);
+  if (quantity !== null && writesZeroUnits(quantity)) return "quantity_below_hundredth";
   return null;
+}
+
+/**
+ * Whether «Número de valores» (463-474, two decimals, rounded half up) would
+ * read 0 for this many units: fewer than 0.005, such as an IBKR fractional
+ * remainder of 0.0034 shares. The 720 never writes a held security with 0
+ * units (#470).
+ */
+function writesZeroUnits(quantity: Decimal): boolean {
+  return quantity.abs().toDecimalPlaces(2, Decimal.ROUND_HALF_UP).isZero();
 }
 
 /** 144 + 156-189: "I" and the compact IBAN, or "O" and the broker's own account number. */
@@ -379,7 +402,7 @@ export function checkModelo720SuccessiveYear(
   const sold = findCancelledSecurities(positions, previous.securities, year, undefined);
   const heldAccounts = new Set(
     // An unknown balance may be positive: the account is held, not missing.
-    (cashBalances ?? []).filter(holdsCash).map((cb) => accountCode(cb).code),
+    heldCashBalances(cashBalances).map((cb) => accountCode(cb).code),
   );
   const missingAccounts = [...new Set(previous.accounts)].filter((code) => !heldAccounts.has(code));
 
@@ -489,10 +512,9 @@ function plan720(
   // average and the tool never invents it (the web section asks the user to
   // add that account by hand).
   const previousAccounts = new Set(config.previousYearAccounts ?? []);
-  // A balance with no number cannot be written either: the threshold counts it
-  // unvalued and the caller warns, naming the account (#470).
-  const cashEntries = (cashBalances ?? [])
-    .filter(holdsCash)
+  // A balance with no number or no rate cannot be written either: the
+  // threshold counts it unvalued and the caller warns, naming the account (#470).
+  const cashEntries = heldCashBalances(cashBalances)
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
       return values?.averageQ4
@@ -618,6 +640,19 @@ function acquisitionTranches(
   if (left.greaterThan(0) || byDate.size === 0) byDate.set("", (byDate.get("") ?? new Decimal(0)).plus(left));
 
   const dates = [...byDate.keys()].sort();
+  // A tranche of fewer than 0.005 units would write 0 in «Número de valores»
+  // (`writesZeroUnits`): merge it into the next tranche by date (the one
+  // before, for the last). Those units then carry that tranche's date, a
+  // difference below what the field's two decimals can show; the units and
+  // the value still add up (#470).
+  for (;;) {
+    const tiny = dates.length > 1 ? dates.findIndex((date) => writesZeroUnits(byDate.get(date)!)) : -1;
+    if (tiny === -1) break;
+    const into = dates[tiny === dates.length - 1 ? tiny - 1 : tiny + 1]!;
+    byDate.set(into, byDate.get(into)!.plus(byDate.get(dates[tiny]!)!));
+    byDate.delete(dates[tiny]!);
+    dates.splice(tiny, 1);
+  }
   let written = new Decimal(0);
   return dates.map((date, i) => {
     const trancheQuantity = byDate.get(date)!;

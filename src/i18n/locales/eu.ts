@@ -441,7 +441,7 @@ const eu: TranslationKeys = {
   "m720.q4_average": "Q4 batez bestekoa",
   "m720.cash_missing_average":
     "Saldo batzuek ez dute 720 Ereduko kontuetarako beharrezkoa den laugarren hiruhilekoko batez bestekoa. Abenduaren 31ko saldoa 50.000 €-ko atalaserako kontatzen da, baina kontu horiek ez dira sortutako fitxategian sartzen: gehitu itzazu eskuz, laugarren hiruhilekoko batez besteko saldoarekin, aurkeztu aurretik.",
-  "m720.cash_unvalued": "Fitxategiak ez du azken saldo irakurgarririk {{count}} eskudiru saldotarako: {{accounts}}. Ez dira 0 €-tzat hartzen: hartu saldoa brokerraren urte amaierako laburpenetik. Bitartean ezin da jakin zure kontuek 50.000 € gainditzen dituzten, eta kontu horiek ez dira sortutako fitxategian sartzen: aitortu itzazu eskuz.",
+  "m720.cash_unvalued": "Ezin dira eurotan baloratu {{count}} eskudiru saldo: {{accounts}}. Fitxategiak ez du azken saldo irakurgarririk, edo ez dago EBZren kanbio-tasarik haien dibisarako. Ez dira 0 €-tzat hartzen: hartu saldoa eurotan brokerraren urte amaierako laburpenetik. Bitartean ezin da jakin zure kontuek 50.000 € gainditzen dituzten, eta kontu horiek ez dira sortutako fitxategian sartzen: aitortu itzazu eskuz.",
   "m720.omitted_title":
     "Ondasun hauek ez dira fitxategian sartzen, eta eskuz aitortu behar dituzu 720 Ereduaren inprimakian:",
   "m720.omitted_no_isin":
@@ -449,6 +449,7 @@ const eu: TranslationKeys = {
   "m720.omitted_no_country":
     "gordailuan edo kokatuta dagoen herrialdea falta da",
   "m720.omitted_quantity_unknown": "fitxategiak ez du balore kopuru baliodunik (falta da, ezin da irakurri edo balio baten ondoko 0 bat da); hartu brokerraren urte amaierako laburpenetik",
+  "m720.omitted_quantity_below_hundredth": "balore kopurua 0,01 baino txikiagoa da, eta fitxategiak bi hamartar baino ez ditu onartzen, beraz 0 idatziko luke; hartu brokerraren urte amaierako laburpenetik",
   "m720.omitted_no_account":
     "kontu-zenbakia falta da",
   "m720.omitted_invalid_code":
@@ -494,7 +495,7 @@ const eu: TranslationKeys = {
   "d6.brokers_without_holdings": "Igo dituzun {{brokers}}(r)en datuek ez dituzte abenduaren 31ko baloreak jasotzen, eta, beraz, ez dira hemen agertzen. Kontsultatu {{brokers}}(r)en urte amaierako laburpenean.",
   "d6.positions_title": "Aitortu beharreko posizioak",
   "d6.positions_unvalued":
-    "{{count}} posizio ezin izan dira eurotan baloratu (ez dago merkatu-preziorik edo kanbio-tasarik haien monetarako ekitaldi-amaieran) eta totaletik kanpo utzi dira. Kalkulatu haien euro-balioa eta sartu eskuz.",
+    "{{count}} posizio ezin izan dira eurotan baloratu edo ez dute titulu kopuru baliodunik (ez dago merkatu-preziorik, kanbio-tasarik haien monetarako ekitaldi-amaieran edo titulu kopururik) eta totaletik kanpo utzi dira. Sartu eskuz, haien euro-balioarekin eta titulu kopuruarekin.",
   "d6.quantity_unknown": "Fitxategiak ez du titulu kopuru baliodunik {{count}} posiziotarako (falta da, ezin da irakurri edo balio baten ondoko 0 bat da): {{holdings}}. Ez dira 0: hartu kopurua brokerraren urte amaierako laburpenetik eta idatzi eskuz D-6an.",
   "d6.cancellations_title": "Baliogabetzeak",
   "d6.generate_btn": "D-6 gida sortu",
@@ -1126,7 +1127,7 @@ const eu: TranslationKeys = {
   "parser.crypto_position_zero_with_value": "IBKRk 0 unitate ematen ditu kriptomoneten {{count}} posiziotarako, baina 0 ez den balio bat dute: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "Balio baten ondoko 0 bat ez da unitate kopurua; beraz, ezezagutzat hartzen da, inoiz ez 0tzat. Balio positiboarekin, 721 ereduak haren unitateak ezezagun gisa erakusten ditu eta haren balioa atalaserako zenbatzen da. Balio negatiboarekin posizio motza da (zor dituzun kriptomonetak, ez dituzunak), eta 721ak ez du sartzen. Hartu unitateak IBKRren urte amaierako laburpenetik.",
   "parser.open_position_sign_conflict": "IBKRk akzio edo unitate kopuru bat eta aurkako zeinuko balio bat ematen ditu {{count}} posizio irekitarako: {{holdings}}.",
-  "parser.open_position_sign_conflict.hint": "Kopuru positibo bat balio negatibo batekin, edo alderantziz, kontraesana da: DeclaRentak ez daki posizio luzea ala motza den; beraz, ez du baloratzen. 720, 721 eta D-6 ereduek baloratu gabe zenbatzen dute, eta ezin dute ondorioztatu aurkeztu behar ez dituzunik. Hartu kopurua eta balioa IBKRren urte amaierako laburpenetik.",
+  "parser.open_position_sign_conflict.hint": "Kopuru positibo bat balio negatibo batekin, edo alderantziz, kontraesana da: DeclaRentak ez daki posizio luzea ala motza den; beraz, ez du baloratzen. 720 eta D-6 ereduek (akzioak, funtsak eta bonuak) edo 721 ereduak (kriptomonedak) baloratu gabe zenbatzen dute, eta ezin dute ondorioztatu aurkeztu behar ez dituzunik. Hartu kopurua eta balioa IBKRren urte amaierako laburpenetik.",
   "parser.cash_balance_unreadable": "IBKRk ez du azken saldo irakurgarririk ematen {{count}} eskudiru saldotarako: {{accounts}}.",
   "parser.cash_balance_unreadable.hint": "DeclaRentak ez du 0 €-tzat hartzen: 720 ereduak baloratu gabe erakusten du, eta ezin du ondorioztatu zure kontuak aitortu behar ez dituzunik. Hartu saldoa IBKRren urte amaierako laburpenetik, edo egiaztatu Flex Queryko Cash Report atalak azken saldoa (Ending Cash) duela eta esportatu berriro.",
   "parser.trade_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du akzio kopuru edo prezio irakurgarririk ematen {{count}} eragiketatarako: {{trades}}.",

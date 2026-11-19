@@ -441,7 +441,7 @@ const gl: TranslationKeys = {
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
     "Algúns saldos non inclúen a media do cuarto trimestre obrigatoria para as contas do Modelo 720. O seu saldo a 31 de decembro si conta para o limiar de 50.000 €, pero esas contas non se inclúen no ficheiro xerado: engádeas a man, co seu saldo medio do cuarto trimestre, antes de presentar.",
-  "m720.cash_unvalued": "O ficheiro non trae un saldo final lexible para {{count}} saldo(s) en efectivo: {{accounts}}. Non contan como 0 €: toma o saldo do extracto de fin de ano do bróker. Ata entón non se pode saber se as túas contas superan os 50.000 €, e esas contas non se inclúen no ficheiro xerado: declaraas a man.",
+  "m720.cash_unvalued": "Non se poden valorar en euros {{count}} saldo(s) en efectivo: {{accounts}}. O ficheiro non trae un saldo final lexible ou non hai tipo de cambio do BCE para a súa divisa. Non contan como 0 €: toma o saldo en euros do extracto de fin de ano do bróker. Ata entón non se pode saber se as túas contas superan os 50.000 €, e esas contas non se inclúen no ficheiro xerado: declaraas a man.",
   "m720.omitted_title":
     "Estes bens non caben no ficheiro e debes declaralos a man no formulario do Modelo 720:",
   "m720.omitted_no_isin":
@@ -449,6 +449,7 @@ const gl: TranslationKeys = {
   "m720.omitted_no_country":
     "falta o país onde está depositado ou situado",
   "m720.omitted_quantity_unknown": "o ficheiro non trae un número de valores válido (falta, non se le ou é un 0 xunto a un valor); tómao do extracto de fin de ano do bróker",
+  "m720.omitted_quantity_below_hundredth": "o seu número de valores é inferior a 0,01 e o ficheiro só admite dous decimais, así que escribiría 0; tómao do extracto de fin de ano do bróker",
   "m720.omitted_no_account":
     "falta o número de conta",
   "m720.omitted_invalid_code":
@@ -494,7 +495,7 @@ const gl: TranslationKeys = {
   "d6.brokers_without_holdings": "Os datos de {{brokers}} que subiches non inclúen os teus valores a 31 de decembro, así que non aparecen aquí. Consúltaos no extracto de fin de ano de {{brokers}}.",
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
+    "{{count}} posición(s) non se puideron valorar en euros ou non traen un número de títulos válido (sen prezo de mercado, sen tipo de cambio para a súa moeda ao peche do exercicio ou sen número de títulos) e excluíronse do total. Inclúeas a man co seu valor en euros e o seu número de títulos.",
   "d6.quantity_unknown": "O ficheiro non trae un número de títulos válido para {{count}} posición(s) (falta, non se le ou é un 0 xunto a un valor): {{holdings}}. Non son 0: toma o número do extracto de fin de ano do bróker e escríbeo a man no D-6.",
   "d6.cancellations_title": "Cancelacións",
   "d6.generate_btn": "Xerar guía D-6",
@@ -1124,7 +1125,7 @@ const gl: TranslationKeys = {
   "parser.crypto_position_zero_with_value": "IBKR dá 0 unidades para {{count}} posición(s) de criptomoedas que si teñen un valor distinto de 0: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "Un 0 xunto a un valor non é un número de unidades, así que se trata como descoñecido, nunca como 0. Cun valor positivo, o Modelo 721 mostra as súas unidades como descoñecidas e o seu valor conta para o limiar. Cun valor negativo é unha posición curta (criptomoedas que debes, non que tes), e o 721 non a inclúe. Toma as unidades do extracto de fin de ano de IBKR.",
   "parser.open_position_sign_conflict": "IBKR dá un número de accións ou unidades e un valor de signo contrario para {{count}} posición(s) aberta(s): {{holdings}}.",
-  "parser.open_position_sign_conflict.hint": "Unha cantidade positiva cun valor negativo, ou ao revés, contradise: DeclaRenta non sabe se é unha posición longa ou curta, así que non a valora. Os modelos 720, 721 e D-6 cóntana como sen valorar e non poden concluír que non teñas que presentalos. Toma a cantidade e o valor do extracto de fin de ano de IBKR.",
+  "parser.open_position_sign_conflict.hint": "Unha cantidade positiva cun valor negativo, ou ao revés, contradise: DeclaRenta non sabe se é unha posición longa ou curta, así que non a valora. O modelo 720 e o D-6 (accións, fondos e bonos) ou o modelo 721 (criptomoedas) cóntana como sen valorar e non poden concluír que non teñas que presentalos. Toma a cantidade e o valor do extracto de fin de ano de IBKR.",
   "parser.cash_balance_unreadable": "IBKR non dá un saldo final lexible para {{count}} saldo(s) en efectivo: {{accounts}}.",
   "parser.cash_balance_unreadable.hint": "DeclaRenta non o conta como 0 €: o Modelo 720 móstrao como sen valorar e non pode concluír que non teñas que declarar as túas contas. Toma o saldo do extracto de fin de ano de IBKR, ou comproba que a sección Cash Report da Flex Query inclúe o saldo final (Ending Cash) e volve exportala.",
   "parser.trade_quantity_unknown": "{{broker}} non dá un número de accións ou un prezo lexible para {{count}} operación(s): {{trades}}.",

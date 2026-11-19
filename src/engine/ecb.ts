@@ -355,20 +355,16 @@ export function isShortPosition(p: Pick<OpenPosition, "quantity" | "positionValu
   return p.quantityUnknown !== true && readPositionNumber(p.quantity)?.isNegative() === true;
 }
 
-/** Whether a position value is a negative number (a short). An unreadable value proves no short. */
-export function isNegativePositionValue(value: string): boolean {
-  return readPositionNumber(value)?.isNegative() === true;
-}
-
 /**
  * A row the D-6 counts as held: a positive share count; a share count the file
- * does not give, unless the value is negative (a short, as in the 720's
- * `isHeldSecurity`); or a quantity and a value of opposite signs, which is held
- * with an unknown value, never left out as a short (`hasSignConflict`, #470).
- * The D-6 generator and the web D-6 table share it, so they cannot drift apart.
+ * does not give, unless the row is a short (`isShortPosition`, the 720's own
+ * sign rule: a negative value other than 0; "-0" has no sign); or a quantity
+ * and a value of opposite signs, which is held with an unknown value, never
+ * left out as a short (`hasSignConflict`, #470). The D-6 generator and the web
+ * D-6 table share it, so they cannot drift apart.
  */
 export function isD6Holding(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
-  if (p.quantityUnknown === true) return !isNegativePositionValue(p.positionValue);
+  if (p.quantityUnknown === true) return !isShortPosition(p);
   if (hasSignConflict(p)) return true;
   return readPositionNumber(p.quantity)?.greaterThan(0) ?? false;
 }
@@ -396,15 +392,26 @@ export function cashAverageOf(cb: Pick<CashBalance, "averageQ4Cash">): Decimal |
 }
 
 /**
- * A cash balance the Modelo 720 accounts category holds: a positive balance,
- * or one whose balance is unknown (`cashEndingOf` null), which may be
+ * The cash balances the Modelo 720 accounts category holds. A balance is held
+ * when it is positive, or when it is unknown (`cashEndingOf` null): it may be
  * positive, so it is held and «sin valorar», never dropped. A balance of 0 or
- * below holds nothing. IBKR's BASE_SUMMARY row with an unknown balance holds
- * nothing of its own: its currency rows are the balances.
+ * below holds nothing.
+ *
+ * IBKR's BASE_SUMMARY row is the sum of an account's currency rows in its base
+ * currency, no balance of its own, so it is skipped when the account has
+ * currency rows. With none (a Flex Query exporting only the base summary) it
+ * is the only balance the file gives for that account, so it is kept: with no
+ * exchange rate for "BASE_SUMMARY" the 720 counts it «sin valorar», never 0 €
+ * (#470).
  */
-export function holdsCash(cb: Pick<CashBalance, "currency" | "endingCash" | "endingCashMissing">): boolean {
-  const ending = cashEndingOf(cb);
-  return ending === null ? cb.currency !== CASH_SUMMARY_CURRENCY : ending.greaterThan(0);
+export function heldCashBalances(cashBalances: readonly CashBalance[] | undefined): CashBalance[] {
+  const all = cashBalances ?? [];
+  const withCurrencyRows = new Set(all.filter((cb) => cb.currency !== CASH_SUMMARY_CURRENCY).map((cb) => cb.accountId));
+  return all.filter((cb) => {
+    if (cb.currency === CASH_SUMMARY_CURRENCY && withCurrencyRows.has(cb.accountId)) return false;
+    const ending = cashEndingOf(cb);
+    return ending === null || ending.greaterThan(0);
+  });
 }
 
 /**

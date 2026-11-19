@@ -22,7 +22,7 @@ import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
 import { isValidIsin } from "../engine/antichurning-window.js";
-import { cashAverageOf, cashEndingOf, holdsCash } from "../engine/ecb.js";
+import { cashAverageOf, heldCashBalances } from "../engine/ecb.js";
 import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
 import {
   checkModelo720Thresholds,
@@ -31,6 +31,7 @@ import {
   generateModelo720,
   modelo720DeclarationId,
   readPrevious720,
+  unvaluedCashBalances,
 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
@@ -648,7 +649,8 @@ program
           const why = {
             no_isin: "no tiene ISIN (el fichero pediría «Z» más el país del emisor)",
             no_country: "no tiene un código de país válido",
-            quantity_unknown: "no tiene un número de valores legible en el archivo (tómalo del extracto de fin de año del bróker)",
+            quantity_unknown: "no tiene un número de valores válido (falta, no se lee o es un 0 junto a un valor; tómalo del extracto de fin de año del bróker)",
+            quantity_below_hundredth: "tiene un número de valores inferior a 0,01, y el fichero solo admite dos decimales (escribiría 0)",
             no_account: "no tiene número de cuenta",
             invalid_code: "tiene una clave, subclave o país que el fichero no admite",
           }[o.reason];
@@ -665,8 +667,9 @@ program
           );
         }
 
-        const missingAverage = (statement.cashBalances ?? []).filter(
-          (cb) => holdsCash(cb) && cashEndingOf(cb) !== null && cashAverageOf(cb) === null,
+        const unvaluedCash = unvaluedCashBalances(statement.cashBalances, rateMap, opts.year);
+        const missingAverage = heldCashBalances(statement.cashBalances).filter(
+          (cb) => !unvaluedCash.includes(cb) && cashAverageOf(cb) === null,
         );
         if (missingAverage.length > 0) {
           console.error(
@@ -680,11 +683,11 @@ program
             `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
           );
         }
-        // A cash balance the export gives no number for is unknown, never 0 EUR (#470).
-        const unreadableCash = (statement.cashBalances ?? []).filter((cb) => holdsCash(cb) && cashEndingOf(cb) === null);
-        if (unreadableCash.length > 0) {
+        // A cash balance with no number, or in a currency with no year-end
+        // rate, is unknown, never 0 EUR (#470).
+        if (unvaluedCash.length > 0) {
           console.error(
-            `Aviso: ${unreadableCash.length} saldo(s) en efectivo sin un saldo final legible (${unreadableCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ")}). No cuentan como 0 EUR ni se incluyen en el fichero: toma su saldo del extracto de fin de año del bróker y decláralos a mano.`,
+            `Aviso: ${unvaluedCash.length} saldo(s) en efectivo sin valorar en euros (${unvaluedCash.map((cb) => `${cb.accountId} (${cb.currency})`).join(", ")}): el archivo no trae un saldo final legible o no hay tipo de cambio del BCE para su divisa. No cuentan como 0 EUR ni se incluyen en el fichero: toma su saldo en euros del extracto de fin de año del bróker y decláralos a mano.`,
           );
         }
 
@@ -786,7 +789,7 @@ program
 
         if (report.unvaluedCount > 0) {
           console.error(
-            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado, sin número de títulos legible o sin tipo de cambio al cierre del ejercicio. No se incluyen en la guía: completa su valor en euros y su número de títulos y decláralas a mano.`,
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado, sin número de títulos válido o sin tipo de cambio al cierre del ejercicio. No se incluyen en las posiciones de la guía, que las nombra: completa su valor en euros y su número de títulos y decláralas a mano.`,
           );
         }
         // Positions declared last year and sold since must still be cancelled.

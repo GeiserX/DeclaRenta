@@ -96,7 +96,7 @@ export function generateD6Report(
 ): D6Report {
   const yearEnd = `${year}-12-31`;
 
-  let unvaluedCount = 0;
+  const unvalued: { isin: string; description: string }[] = [];
   const d6Positions: D6Position[] = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
@@ -114,7 +114,7 @@ export function generateD6Report(
       // (tested first: its value may be unreadable text).
       const value = positionValueOf(p);
       if (ecbRate === null || p.quantityUnknown === true || hasNoMarketValue(p) || value === null) {
-        unvaluedCount++;
+        unvalued.push({ isin: p.isin, description: p.description });
         return [];
       }
       const valueEur = value.mul(ecbRate);
@@ -192,6 +192,17 @@ export function generateD6Report(
     guide.push(``);
   }
 
+  // A held holding with no value or no share count has no entry above: name
+  // it, so the guide never drops a holding without a word (#470).
+  if (unvalued.length > 0) {
+    guide.push(`SIN VALORAR O SIN Nº DE TÍTULOS (añádelas a mano en AFORIX con su valor en euros y su número de títulos)`);
+    guide.push(``);
+    for (const u of unvalued) {
+      guide.push(`  ${u.isin}  ${u.description}`);
+    }
+    guide.push(``);
+  }
+
   if (cancelled.length > 0) {
     guide.push(`CANCELACIONES (posiciones declaradas el año anterior ya no mantenidas)`);
     guide.push(``);
@@ -207,6 +218,7 @@ export function generateD6Report(
   guide.push(`PASO 4: Revisar, firmar y presentar`);
   guide.push(`  Total posiciones activas:  ${d6Positions.length}`);
   guide.push(`  Total cancelaciones:       ${cancelled.length}`);
+  if (unvalued.length > 0) guide.push(`  Sin valorar (a mano):      ${unvalued.length}`);
   guide.push(`  Valor total:               ${totalValue.toFixed(2)} EUR`);
   guide.push(`  → Firmar electrónicamente la declaración en AFORIX`);
   guide.push(`  → Subir el fichero firmado (.aforixd) en eAFORIX:`);
@@ -224,7 +236,7 @@ export function generateD6Report(
     cancelled,
     totalPositions: d6Positions.length,
     totalValueEur: totalValue.toFixed(2),
-    unvaluedCount,
+    unvaluedCount: unvalued.length,
     guide,
   };
 }

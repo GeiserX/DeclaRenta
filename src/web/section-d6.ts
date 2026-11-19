@@ -33,8 +33,14 @@ function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): De
   return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
 }
 
-/** The holding's EUR value, or null when it has no rate or no readable value (never 0 €). */
+/**
+ * The holding's EUR value, or null when it has no rate, no readable value or
+ * no share count (never 0 €). The D-6 generator's rule: an AFORIX entry needs
+ * both the share count and the value, so a holding missing either is left out
+ * of the total and counted to declare by hand, on screen as in the guide (#470).
+ */
 function positionValueEur(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  if (p.quantityUnknown === true) return null;
   const rate = positionRate(rateMap, yearEnd, p);
   const value = positionValueOf(p);
   return rate === null || value === null ? null : value.mul(rate);

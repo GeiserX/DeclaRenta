@@ -440,7 +440,7 @@ const en: TranslationKeys = {
   "m720.q4_average": "Q4 average",
   "m720.cash_missing_average":
     "Some balances do not include the Q4 average required for Modelo 720 account records. Their 31 December balance does count toward the 50,000 EUR threshold, but those accounts are left out of the generated file: add them by hand, with their Q4 average balance, before filing.",
-  "m720.cash_unvalued": "The file has no readable ending balance for {{count}} cash balance(s): {{accounts}}. They do not count as 0 EUR: take the balance from the broker's year-end statement. Until then it cannot be known whether your accounts pass 50,000 EUR, and those accounts are left out of the generated file: declare them by hand.",
+  "m720.cash_unvalued": "{{count}} cash balance(s) cannot be valued in euros: {{accounts}}. The file has no readable ending balance, or there is no ECB exchange rate for the currency. They do not count as 0 EUR: take the balance in euros from the broker's year-end statement. Until then it cannot be known whether your accounts pass 50,000 EUR, and those accounts are left out of the generated file: declare them by hand.",
   "m720.omitted_title":
     "These assets do not fit in the file, so declare them by hand in the Modelo 720 form:",
   "m720.omitted_no_isin":
@@ -448,6 +448,7 @@ const en: TranslationKeys = {
   "m720.omitted_no_country":
     "the country where it is deposited or located is missing",
   "m720.omitted_quantity_unknown": "the file has no valid number of securities (missing, unreadable, or a 0 next to a value); take it from the broker's year-end statement",
+  "m720.omitted_quantity_below_hundredth": "its number of securities is below 0.01 and the file takes only two decimals, so it would write 0; take it from the broker's year-end statement",
   "m720.omitted_no_account":
     "the account number is missing",
   "m720.omitted_invalid_code":
@@ -494,7 +495,7 @@ const en: TranslationKeys = {
   "d6.brokers_without_holdings": "The {{brokers}} data you uploaded has no securities positions at 31 December, so they do not appear here. Look them up in the year-end statement from {{brokers}}.",
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
-    "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
+    "{{count}} position(s) could not be valued in euros or have no valid number of securities (no market price, no exchange rate for their currency at year-end, or no number of securities) and were excluded from the total. Include them by hand with their euro value and their number of securities.",
   "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 next to a value): {{holdings}}. They are not 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
@@ -1122,7 +1123,7 @@ const en: TranslationKeys = {
   "parser.crypto_position_zero_with_value": "IBKR gives 0 units for {{count}} crypto position(s) that do have a value other than 0: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "A 0 next to a value is no number of units, so it is treated as unknown, never as 0. With a positive value, the Modelo 721 shows its units as unknown and its value counts toward the threshold. With a negative value it is a short position (crypto you owe, not crypto you own), and the 721 leaves it out. Take the units from the IBKR year-end statement.",
   "parser.open_position_sign_conflict": "IBKR gives a share or unit count and a value of opposite signs for {{count}} open position(s): {{holdings}}.",
-  "parser.open_position_sign_conflict.hint": "A positive quantity with a negative value, or the reverse, contradicts itself: DeclaRenta cannot tell a long position from a short one, so it does not value it. The Modelo 720, 721 and D-6 count it as not valued and cannot conclude that you do not have to file them. Take the quantity and the value from the IBKR year-end statement.",
+  "parser.open_position_sign_conflict.hint": "A positive quantity with a negative value, or the reverse, contradicts itself: DeclaRenta cannot tell a long position from a short one, so it does not value it. The Modelo 720 and the D-6 (stocks, funds and bonds) or the Modelo 721 (cryptocurrencies) count it as not valued and cannot conclude that you do not have to file them. Take the quantity and the value from the IBKR year-end statement.",
   "parser.cash_balance_unreadable": "IBKR gives no readable ending balance for {{count}} cash balance(s): {{accounts}}.",
   "parser.cash_balance_unreadable.hint": "DeclaRenta does not count it as 0 EUR: the Modelo 720 shows it as not valued and cannot conclude that you do not have to declare your accounts. Take the balance from the IBKR year-end statement, or check that the Cash Report section of the Flex Query includes the ending balance (Ending Cash) and export it again.",
   "parser.trade_quantity_unknown": "{{broker}} gives no readable share count or price for {{count}} trade(s): {{trades}}.",
