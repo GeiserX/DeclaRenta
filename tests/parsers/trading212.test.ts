@@ -267,7 +267,7 @@ describe("trading212Parser", () => {
       expect(result.parserMessages).toBeUndefined();
     });
 
-    it("should skip a buy with no price and a Total in a different currency, and report it once", () => {
+    it("should skip a buy with no price and a Total in a different currency, report it once, and keep it as evidence only", () => {
       const csv = [
         HEADER,
         // price empty, instrument currency USD, Total in EUR → unresolvable value
@@ -277,14 +277,14 @@ describe("trading212Parser", () => {
       ].join("\n");
       const result = trading212Parser.parse(csv);
 
-      // Only the resolvable MSFT row becomes a trade
-      expect(result.trades).toHaveLength(1);
-      expect(result.trades[0]!.symbol).toBe("MSFT");
+      // Only the resolvable MSFT row becomes a trade that books shares. The
+      // AAPL buy stays as a trade that books nothing (quantity "0", every
+      // amount "0"), so the anti-churning evidence still sees a purchase (#453).
+      expect(result.trades.map((t) => [t.symbol, t.quantity, t.quantityUnknown ?? false])).toEqual([["AAPL", "0", true], ["MSFT", "5", false]]);
+      expect(result.trades[0]!.cost).toBe("0");
 
-      expect(result.parserMessages).toBeDefined();
-      expect(result.parserMessages).toHaveLength(1);
+      expect(result.parserMessages?.map((m) => m.id)).toEqual(["parser.trading212.unresolved_price_skipped", "parser.trade_quantity_unknown"]);
       const msg = result.parserMessages![0]!;
-      expect(msg.id).toBe("parser.trading212.unresolved_price_skipped");
       expect(msg.severity).toBe("warning");
       expect(msg.context?.skipped).toBe("1");
     });

@@ -30,7 +30,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -250,8 +250,7 @@ function parseTrades(
 
   // Every money/quantity cell is finiteness-guarded via toFiniteDecimal; the
   // only message is the one naming the trades of unknown quantity.
-  const unknownQuantities = tradeQuantityUnknownMessage("Revolut", trades);
-  return { trades, parserMessages: unknownQuantities ? [unknownQuantities] : [] };
+  return { trades, parserMessages: tradeQuantityUnknownMessages("Revolut", trades) };
 }
 
 // ---------------------------------------------------------------------------
@@ -614,8 +613,7 @@ function parseTransactionLog(
     });
   }
 
-  const unknownQuantities = tradeQuantityUnknownMessage("Revolut", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Revolut", trades));
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
 

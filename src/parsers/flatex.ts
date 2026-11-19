@@ -29,7 +29,7 @@ import {
   stripBom,
   quantityUnknownTrade,
   quantityUnreadable,
-  tradeQuantityUnknownMessage,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 
@@ -140,24 +140,26 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (non-tradeable conversions, rights). A row with
-    // neither Nominal nor Kurs is still a buy or sale when its booking text
+    // Skip zero-price rows (non-tradeable conversions, rights). A row whose
+    // Kurs is empty or unreadable is still a buy or sale when its booking text
     // says Kauf or Verkauf (below); a written zero Kurs is always skipped.
     const priceDec = toFiniteDecimal(price);
     const tradeText = BUY_RE.test(info) || SELL_RE.test(info);
-    if (priceDec.isZero() && !(qtyUnknown && tradeText && quantityUnreadable(fields[priceCol]))) continue;
+    const priceUnknown = tradeText && quantityUnreadable(fields[priceCol]);
+    if (priceDec.isZero() && !priceUnknown) continue;
 
-    // A buy or sale whose Nominal is empty or unreadable: keep it as a trade of
-    // unknown quantity for the anti-churning evidence (#453). Its direction
-    // comes from the booking text only.
-    if (qtyUnknown) {
+    // A buy or sale whose Nominal or Kurs is empty or unreadable: keep it as a
+    // trade of unknown quantity for the anti-churning evidence (#453). With no
+    // price FIFO cannot book its shares, so it books none, as with no Nominal.
+    // Its direction comes from the Nominal's sign or the booking text.
+    if (qtyUnknown || priceUnknown) {
       const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
       const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
       trades.push(quantityUnknownTrade({
         tradeID: txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "",
         symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
         tradeDate: convertDateDMYDot(fields[dateCol] ?? ""),
-        buySell: SELL_RE.test(info) && !BUY_RE.test(info) ? "SELL" : "BUY", exchange: "",
+        buySell: qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info)) ? "SELL" : "BUY", exchange: "",
       }));
       continue;
     }
@@ -215,8 +217,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       });
     }
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("Flatex", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Flatex", trades));
 
   return {
     accountId: "",

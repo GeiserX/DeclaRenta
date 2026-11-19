@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -365,8 +365,7 @@ function parseTrCsv(lines: string[]): Statement {
       context: { count: String(deliveryRows), isins },
     });
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("Trade Republic", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Trade Republic", trades));
 
   return {
     accountId: "",

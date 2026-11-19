@@ -28,7 +28,7 @@ import {
   timeOfDay,
   quantityUnknownTrade,
   quantityUnreadable,
-  tradeQuantityUnknownMessage,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -288,11 +288,11 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     }
 
     // Skip zero-price rows (rights assignments, non-tradeable conversions). A
-    // row with neither quantity nor price is still a buy or sale when it has
-    // an order id or a value (#453); a written zero price is always skipped.
-    const priceUnreadable = quantityUnreadable(fields[cols.price]);
+    // row whose price is empty or unreadable is still a buy or sale when it
+    // has an order id or a value (#453); a written zero price is always skipped.
     const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
-    if ((price === "0" || price === "0.0000") && !(quantityUnknown && priceUnreadable && tradeEvidence)) continue;
+    const priceUnknown = quantityUnreadable(fields[cols.price]) && tradeEvidence;
+    if ((price === "0" || price === "0.0000") && !priceUnknown) continue;
 
     // Determine buy/sell: negative local value = you paid = buy; or negative
     // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a
@@ -312,8 +312,9 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     let tradeValue = value;
     let tradeFxRate = fxRate;
     const fractional = normalizeFractionalCurrency(tradeCurrency);
-    if (quantityUnknown) {
-      // Its direction comes from the value only; it moves no share or money.
+    if (quantityUnknown || priceUnknown) {
+      // With no quantity or no price FIFO cannot book its shares: it moves no
+      // share or money. Its direction comes from the value or the quantity sign.
       trades.push(quantityUnknownTrade({
         tradeID: orderId,
         symbol: product, description: product, isin, assetCategory: "STK", currency: fractional.currency,
@@ -417,8 +418,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("DEGIRO", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("DEGIRO", trades));
 
   return {
     accountId: "",

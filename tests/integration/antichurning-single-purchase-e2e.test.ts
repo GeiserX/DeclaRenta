@@ -1609,11 +1609,12 @@ describe("(l) an IBKR cancellation next to a row with an unreadable quantity", (
     expect(parsed.parserMessages?.some((m) => m.id === "parser.cancelled_trades_unmatched")).toBe(true);
   });
 
-  it("a cancellation whose own quantity is unreadable: no crash, dropped alone", () => {
+  it("a cancellation whose own quantity is unreadable and no execution id ties: no crash, dropped alone, and the warning does not say the original is outside the file", () => {
     const badCancel = cancel.replace('quantity="30"', 'quantity="abc"');
     const parsed = parseIbkrFlexXml(file([raw('tradeID="8" transactionID="8" buySell="SELL" quantity="-30" openCloseIndicator="C"'), badCancel]));
     expect(parsed.trades.map((t) => t.tradeID)).toEqual(["8"]);
-    expect(parsed.parserMessages?.some((m) => m.id === "parser.cancelled_trades_unmatched")).toBe(true);
+    expect(parsed.parserMessages?.map((m) => m.id)).toContain("parser.cancelled_trades_unreadable");
+    expect(parsed.parserMessages?.some((m) => m.id === "parser.cancelled_trades_unmatched")).toBe(false);
   });
 
   it("control: a readable pair still cancels out, next to an unreadable row", () => {
@@ -1741,5 +1742,181 @@ describe("(l) other parsers: an earlier guard, a currency-only cell, a non-trade
       ["2024-12-02T10:00:00.000Z", "XYZ", "BUY - MARKET", "$", "EUR 10", "EUR 400", "EUR", "1"],
     ]));
     expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+  });
+});
+
+describe("(m) a buy or sale with a readable quantity but no readable price is evidence, not a dropped row", () => {
+  // The IBKR issue file plus one more purchase of the security on 03/02, inside
+  // the 15/01 – 15/03 window, at another broker. With a price it is a second
+  // purchase (no exception); with no readable price the parser used to drop it
+  // silently, and the exception was applied to a two-purchase window.
+  const ib = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+  const report = (name: string, statement: Statement, method: FxMethod = "monodivisa"): TaxReport => {
+    const merged = createEmptyStatement();
+    mergeStatement(merged, parseIbkrFlexXml(ib), IB);
+    mergeStatement(merged, statement, name);
+    return generateTaxReport(finalizeMergedStatement(merged), rates(), 2025, reportOptionsForMethod(method));
+  };
+  const flags = (s: Statement): [string, string, boolean][] => s.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false]);
+  const flatex = (nominal: string, kurs: string, info = `Ausführung ORDER Kauf ${ISIN} 1`): Statement => flatexParser.parse([
+    "Nummer;Buchtag;Valuta;ISIN;Bezeichnung;Nominal;;Buchungsinformationen;TA-Nr.;Kurs;;Depot",
+    `1;03.02.2025;03.02.2025;${ISIN};XYZ SA;${nominal};Stk.;${info};1;${kurs};EUR;***xxx Depot`,
+  ].join("\n"));
+  const degiro = (qty: string, price: string, value: string, orderId = "aaa"): Statement => degiroParser.parse([
+    "Date,Time,Product,ISIN,Reference Exchange,Execution Venue,Quantity,Price,,Value,,Transaction and/or third,,Total,,Order ID",
+    `03-02-2025,09:15,XYZ SA,${ISIN},MAD,XMAD,${qty},${price},EUR,${value},EUR,0,EUR,${value},EUR,${orderId}`,
+  ].join("\n"));
+  const t212 = (price: string, currency = "USD"): Statement => trading212Parser.parse([
+    "Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Notes,ID",
+    `Market buy,2025-02-03 09:30:00,${ISIN},XYZ,XYZ SA,5,${price},${currency},1.00,,,45.00,EUR,,t212-1`,
+  ].join("\n"));
+  // Two purchases in the window: no exception to prove, the whole loss of the
+  // 15/03 sale is blocked (95 when FIFO gives it the 5 shares bought at 9).
+  const twoPurchases = (r: TaxReport): void => {
+    const loss = r.capitalGains.disposals.filter((d) => sameDay(d.sellDate, "2025-03-15")).reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0));
+    expect(loss.isNegative()).toBe(true);
+    expect(blockedOn(r, "2025-03-15")).toBe(loss.neg().toFixed(2));
+    expect(ids(r)).toEqual([]);
+  };
+
+  describe("Flatex: a Kauf of 5 with a blank or unreadable Kurs", () => {
+    it.each(["", "abc", "€"])("Kurs %j: kept as a trade that books nothing, and warned", (kurs) => {
+      const parsed = flatex("5", kurs);
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context).toMatchObject({ broker: "Flatex", count: "1" });
+    });
+
+    it.each(METHODS)("[%s] next to the IBKR issue file: not applied, the 100 stays blocked", (method) => {
+      expectUnverified(report("Flatex", flatex("5", ""), method));
+    });
+
+    it("a Verkauf with a negative Nominal and a blank Kurs is kept as a SELL", () => {
+      expect(flags(flatex("-5", "", `Ausführung ORDER Verkauf ${ISIN} 1`))).toEqual([["SELL", "0", true]]);
+    });
+
+    it("controls: a written price is a second purchase; a written zero Kurs, a custody transfer and a row with no Kauf/Verkauf text are skipped", () => {
+      twoPurchases(report("Flatex", flatex("5", "9,00")));
+      expect(flatex("5", "0,00").trades).toEqual([]);
+      expect(flatex("5", "", `Lagerstellenwechsel in ${ISIN}`).trades).toEqual([]);
+      expect(flatex("5", "", `Einbuchung ${ISIN}`).trades).toEqual([]);
+      expectApplied(report("Flatex", flatex("5", "0,00")));
+    });
+  });
+
+  describe("DEGIRO: a buy of 5 with a blank price", () => {
+    it("kept as a trade that books nothing, its side from the value, and warned", () => {
+      const parsed = degiro("5", "", "-45,00");
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(flags(degiro("-5", "", "45,00"))).toEqual([["SELL", "0", true]]);
+      expect(parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context).toMatchObject({ broker: "DEGIRO", count: "1" });
+    });
+
+    it.each(METHODS)("[%s] next to the IBKR issue file: not applied, the 100 stays blocked", (method) => {
+      expectUnverified(report("DEGIRO", degiro("5", "", "-45,00"), method));
+    });
+
+    it("the same with no order id but a value: kept", () => {
+      expect(flags(degiro("5", "", "-45,00", ""))).toEqual([["BUY", "0", true]]);
+    });
+
+    it("controls: a written price is a second purchase; a written zero price (rights) and a row with no order id and no value are skipped", () => {
+      twoPurchases(report("DEGIRO", degiro("5", "9,00", "-45,00")));
+      expect(degiro("5", "0", "0").trades).toEqual([]);
+      expect(degiro("5", "", "", "").trades).toEqual([]);
+      expectApplied(report("DEGIRO", degiro("5", "0", "0")));
+    });
+  });
+
+  describe("Trading 212: a buy of 5 with no price and a Total in another currency", () => {
+    it("still counted in the skip warning, and kept as a trade that books nothing", () => {
+      const parsed = t212("");
+      expect(flags(parsed)).toEqual([["BUY", "0", true]]);
+      expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["parser.trading212.unresolved_price_skipped", "parser.trade_quantity_unknown"]);
+    });
+
+    it.each(METHODS)("[%s] next to the IBKR issue file: not applied, the 100 stays blocked", (method) => {
+      expectUnverified(report("Trading 212", t212(""), method));
+    });
+
+    it("control: the same buy with its price is a second purchase", () => {
+      twoPurchases(report("Trading 212", t212("9.00", "EUR")));
+    });
+  });
+});
+
+describe("(m) an IBKR cancellation whose quantity is unreadable pairs by its execution id", () => {
+  const row = (attrs: string): string =>
+    `<Trade accountId="U1" symbol="XYZ" description="XYZ SA" conid="4531" isin="${ISIN}" assetCategory="STK" currency="EUR" settlementDate="20250210" fifoPnlRealized="0" fxRateToBase="1" exchange="BME" ibCommissionCurrency="EUR" taxes="0" multiplier="1" ${attrs} />`;
+  const file = (rows: string[]): string =>
+    `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="Custom"><Trades>${rows.join("")}</Trades><CashTransactions /><CorporateActions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+  // Buy 30 at 9 on 10/01; sell 30 at 12 on 10/02 (execution E2), which IBKR cancels.
+  const buy = row('tradeID="1" transactionID="1" tradeDate="20250110" buySell="BUY" quantity="30" tradePrice="9" tradeMoney="270" proceeds="-270" cost="270" ibCommission="0" openCloseIndicator="O" ibExecID="E1" ibOrderID="O1"');
+  const sell = row('tradeID="2" transactionID="2" tradeDate="20250210" buySell="SELL" quantity="-30" tradePrice="12" tradeMoney="-360" proceeds="360" cost="-270" ibCommission="0" openCloseIndicator="C" ibExecID="E2" ibOrderID="O2"');
+  const cancel = (q: string, exec = "E2"): string =>
+    row(`tradeID="3" transactionID="3" tradeDate="20250210" transactionType="TradeCancel" buySell="SELL (Ca.)" quantity="${q}" tradePrice="12" tradeMoney="360" proceeds="-360" cost="270" ibCommission="0" openCloseIndicator="C" ibExecID="${exec}" ibOrderID="O2"`);
+  const run = (rows: string[], method: FxMethod) =>
+    generateTaxReport(finalizeMergedStatement(mergeStatement(createEmptyStatement(), parseIbkrFlexXml(file(rows)), IB)), rates(), 2025, reportOptionsForMethod(method));
+
+  it.each(["abc", ""])("cancel quantity %j with the sale's ibExecID: both rows dropped, no disposal", (q) => {
+    const parsed = parseIbkrFlexXml(file([buy, sell, cancel(q)]));
+    expect(parsed.trades.map((t) => t.tradeID)).toEqual(["1"]);
+    expect(parsed.parserMessages?.map((m) => m.id)).toContain("parser.cancelled_trades");
+    for (const method of METHODS) expect(run([buy, sell, cancel(q)], method).capitalGains.disposals).toEqual([]);
+  });
+
+  it("the sale's quantity unreadable and the cancel readable, same ibExecID: both dropped", () => {
+    const parsed = parseIbkrFlexXml(file([buy, sell.replace('quantity="-30"', 'quantity="abc"'), cancel("30")]));
+    expect(parsed.trades.map((t) => t.tradeID)).toEqual(["1"]);
+  });
+
+  it("an unreadable cancel whose ibExecID matches nothing: dropped alone, with the unreadable warning, never the 'outside this file' one", () => {
+    const parsed = parseIbkrFlexXml(file([buy, sell, cancel("abc", "E9")]));
+    expect(parsed.trades.map((t) => t.tradeID)).toEqual(["1", "2"]);
+    const msgs = parsed.parserMessages?.map((m) => m.id) ?? [];
+    expect(msgs).toContain("parser.cancelled_trades_unreadable");
+    expect(msgs).not.toContain("parser.cancelled_trades_unmatched");
+  });
+
+  it("controls: a readable cancel still pairs with no ibExecID at all; another execution's sale is not taken by an unreadable cancel", () => {
+    const noExec = (r: string): string => r.replace(/ ibExecID="[^"]*"/, "");
+    expect(parseIbkrFlexXml(file([buy, noExec(sell), noExec(cancel("30"))])).trades.map((t) => t.tradeID)).toEqual(["1"]);
+    expect(parseIbkrFlexXml(file([buy, noExec(sell), noExec(cancel("abc"))])).trades.map((t) => t.tradeID)).toEqual(["1", "2"]);
+  });
+});
+
+describe("(m) a quantity-less crypto trade gets the crypto warning, not the 2-month one", () => {
+  const cryptoTrade = (id: string, date: string, side: "BUY" | "SELL", qty: string | null, price: number): string => {
+    const q = qty === null ? "" : ` quantity="${side === "BUY" ? qty : `-${qty}`}"`;
+    const money = new Decimal(qty ?? "1").mul(price);
+    return `<Trade tradeID="${id}" accountId="U1" symbol="BTC" description="Bitcoin" isin="" assetCategory="CRYPTO" currency="EUR" tradeDate="${date}" settlementDate="${date}"${q} tradePrice="${price}" tradeMoney="${side === "BUY" ? money : money.neg()}" proceeds="${side === "BUY" ? money.neg() : money}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}" exchange="PAXOS" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" multiplier="1" />`;
+  };
+  // Buy 1 BTC at 200 in 2024, sell it on 01/06/2025 at 100 (−100), rebuy on 01/07 with no quantity.
+  const xml = (rebuy: string | null): string => `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20240101" toDate="20251231" period="Custom"><Trades>${[
+    cryptoTrade("c1", "20240110", "BUY", "1", 200),
+    cryptoTrade("c2", "20250601", "SELL", "1", 100),
+    cryptoTrade("c3", "20250701", "BUY", rebuy, 100),
+    `<Trade tradeID="s1" accountId="U1" symbol="XYZ" description="XYZ SA" conid="4531" isin="${ISIN}" assetCategory="STK" currency="EUR" tradeDate="20250801" settlementDate="20250801" tradePrice="10" tradeMoney="0" proceeds="0" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="BME" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" multiplier="1" />`,
+  ].join("")}</Trades><CashTransactions /><CorporateActions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+
+  it("the parser splits the warning: the share row in the shared one, the coin in the crypto one, which names art. 33.5.e and no one-purchase exception", () => {
+    const parsed = parseIbkrFlexXml(xml(null));
+    const share = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
+    const coin = parsed.parserMessages?.find((m) => m.id === "parser.crypto_quantity_unknown");
+    expect(share?.context).toMatchObject({ broker: "IBKR", count: "1", trades: `XYZ (${ISIN}) 20250801` });
+    expect(coin?.context).toMatchObject({ broker: "IBKR", count: "1", trades: "BTC 20250701" });
+    expect(coin?.hint).toContain("33.5.e");
+    expect(coin?.hint).not.toContain("compra única");
+  });
+
+  it.each(METHODS)("[%s] the report deducts the loss (no units to tie it to) and carries the crypto warning", (method) => {
+    const r = mergedFiles([[IB, xml(null)]], method);
+    expect(blockedOn(r, "2025-06-01")).toBe("0.00");
+    expect(r.messages.some((m) => m.id === "parser.crypto_quantity_unknown")).toBe(true);
+  });
+
+  it("control: a readable rebuy of 1 coin blocks the 100 and gives no crypto warning", () => {
+    const r = mergedFiles([[IB, xml("1")]]);
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(r.messages.some((m) => m.id === "parser.crypto_quantity_unknown")).toBe(false);
   });
 });

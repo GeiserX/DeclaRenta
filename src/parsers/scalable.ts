@@ -23,7 +23,7 @@ import {
   timeOfDay,
   quantityUnknownTrade,
   quantityUnreadable,
-  tradeQuantityUnknownMessage,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -267,8 +267,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       context: { count: String(interestWithholdingRows) },
     });
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("Scalable Capital", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Scalable Capital", trades));
 
   return {
     accountId: "",

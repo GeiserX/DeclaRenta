@@ -21,7 +21,7 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
-import { tradeQuantityUnknownMessage } from "./csv-utils.js";
+import { tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -105,6 +105,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let orderLevelDetailDuplicatesSkipped = 0;
   let cancelledPairsDropped = 0;
   let cancelledUnmatchedDropped = 0;
+  let cancelledUnreadableDropped = 0;
 
   for (const stmt of statements) {
     // A row without an Account ID (the column is optional in Trades and in
@@ -115,9 +116,10 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     const rawTrades = (ensureArray(stmt.Trades?.Trade) as Record<string, string>[]).map(withAccount);
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
-    const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
+    const { kept, pairedCount, unmatchedCount, unreadableCount } = dropCancelledExecutions(filteredRawTrades);
     cancelledPairsDropped += pairedCount;
     cancelledUnmatchedDropped += unmatchedCount;
+    cancelledUnreadableDropped += unreadableCount;
     const stmtTrades = kept.map(mapTrade);
     const { merged, mergedGroupCount, sourceFillCount } = mergeExecutionsByOrder(stmtTrades);
     trades.push(...merged);
@@ -221,6 +223,16 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     });
   }
 
+  if (cancelledUnreadableDropped > 0) {
+    parserMessages.push({
+      id: "parser.cancelled_trades_unreadable",
+      severity: "warning",
+      message: `Se omitieron ${cancelledUnreadableDropped} anulaciones de IBKR sin una cantidad o un precio legible, sin poder emparejarlas con la operación que anulan.`,
+      hint: "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
+      context: { count: String(cancelledUnreadableDropped) },
+    });
+  }
+
   // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
   // the D-6 and the 720 then show a holding whose value is known with 0
   // shares, or leave it out: say which holdings to check by hand.
@@ -239,8 +251,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
   // say which trades to check.
-  const unreadableTradesMessage = tradeQuantityUnknownMessage("IBKR", trades);
-  if (unreadableTradesMessage) parserMessages.push(unreadableTradesMessage);
+  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades));
 
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
@@ -414,25 +425,30 @@ function cancelledTransactionId(cancel: Record<string, string>): string {
  * ibOrderID and tradeDate, and only the link says which one was cancelled.
  * Exports without that column fall back to a heuristic: same instrument,
  * currency, price and direction, exactly opposite quantity, with a matching
- * ibExecID, ibOrderID or tradeDate breaking ties.
+ * ibExecID, ibOrderID or tradeDate breaking ties. A quantity or price that is
+ * missing or no number on either row is compared through the ibExecID alone:
+ * the pair needs the same execution id (#453).
  *
  * A cancel row with no original in this statement (the fill is outside the
  * export's period) is dropped alone and counted separately so the user is
- * warned. It is never flipped into an opposite-direction trade: that would
- * create a lot or a disposal that never happened.
+ * warned; one whose own quantity or price is unreadable and that no ibExecID
+ * pairs is counted apart, since its original may be in the file. It is never
+ * flipped into an opposite-direction trade: that would create a lot or a
+ * disposal that never happened.
  */
 function dropCancelledExecutions(
   rows: Record<string, string>[],
-): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number } {
+): { kept: Record<string, string>[]; pairedCount: number; unmatchedCount: number; unreadableCount: number } {
   const cancelIdx: number[] = [];
   rows.forEach((raw, i) => {
     if (isCancelRow(raw)) cancelIdx.push(i);
   });
-  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0 };
+  if (cancelIdx.length === 0) return { kept: rows, pairedCount: 0, unmatchedCount: 0, unreadableCount: 0 };
 
   const dropped = new Set<number>(cancelIdx);
   let pairedCount = 0;
   let unmatchedCount = 0;
+  let unreadableCount = 0;
   for (const ci of cancelIdx) {
     const cancel = rows[ci]!;
     const origId = cancelledTransactionId(cancel);
@@ -447,25 +463,31 @@ function dropCancelledExecutions(
       continue;
     }
     const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
-    // Read every quantity and price without throwing: an unreadable one
-    // (`new Decimal("abc")` throws) matches nothing, so a cancel row with one is
-    // dropped alone and an ordinary row with one goes on to mapTrade, which
-    // keeps it as a trade of unknown quantity (#453).
+    // Read every quantity and price without throwing (`new Decimal("abc")`
+    // throws). When a quantity or price on either side is unreadable, only the
+    // fill's own execution id (ibExecID) can tie the pair; with none, an
+    // ordinary row goes on to mapTrade, which keeps it as a trade of unknown
+    // quantity, and the cancel row is dropped alone (#453).
     const cancelQty = readableQuantity(cancel.quantity);
     const price = finitePrice(cancel.tradePrice);
     let best = -1;
     let bestScore = -1;
     rows.forEach((o, oi) => {
-      if (dropped.has(oi) || cancelQty === undefined || price === undefined) return;
+      if (dropped.has(oi)) return;
       const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
       if (!sameInstrument || (o.currency ?? "") !== (cancel.currency ?? "")) return;
       if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
+      const sameExec = !!o.ibExecID && o.ibExecID === cancel.ibExecID;
       const qty = readableQuantity(o.quantity);
-      if (qty === undefined || !new Decimal(qty).eq(new Decimal(cancelQty).neg())) return;
+      if (qty === undefined || cancelQty === undefined) {
+        if (!sameExec) return;
+      } else if (!new Decimal(qty).eq(new Decimal(cancelQty).neg())) return;
       const oPrice = finitePrice(o.tradePrice);
-      if (oPrice === undefined || !oPrice.eq(price)) return;
+      if (oPrice === undefined || price === undefined) {
+        if (!sameExec) return;
+      } else if (!oPrice.eq(price)) return;
       const score =
-        (o.ibExecID && o.ibExecID === cancel.ibExecID ? 4 : 0) +
+        (sameExec ? 4 : 0) +
         (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
         (o.tradeDate === cancel.tradeDate ? 1 : 0);
       if (score > bestScore) {
@@ -476,11 +498,14 @@ function dropCancelledExecutions(
     if (best >= 0) {
       dropped.add(best);
       pairedCount++;
+    } else if (cancelQty === undefined || price === undefined) {
+      // Not "the original is outside this file": it may be here, unpaired.
+      unreadableCount++;
     } else {
       unmatchedCount++;
     }
   }
-  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount };
+  return { kept: rows.filter((_, i) => !dropped.has(i)), pairedCount, unmatchedCount, unreadableCount };
 }
 
 /**

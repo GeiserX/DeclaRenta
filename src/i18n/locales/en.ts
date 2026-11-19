@@ -1102,10 +1102,14 @@ const en: TranslationKeys = {
   "parser.cancelled_trades.hint": 'IBKR marks a cancelled execution with a reversing row ("(Ca.)"). The original trade and its cancellation were discarded: they never became a real purchase or sale.',
   "parser.cancelled_trades_unmatched": "{{count}} IBKR cancellation rows were skipped because the original trade is not in this file.",
   "parser.cancelled_trades_unmatched.hint": "The cancelled trade falls outside this Flex Query's period. If you load it from another file, it will still count as real: export a period that includes both the trade and its cancellation in the same file.",
+  "parser.cancelled_trades_unreadable": "{{count}} IBKR cancellation rows with no readable quantity or price were skipped without pairing them with the trade they cancel.",
+  "parser.cancelled_trades_unreadable.hint": "If the cancelled trade is in this file, DeclaRenta still counts it as a real purchase or sale. Make sure the Flex Query exports the quantity, the price and the execution ID (IB Execution ID) of every trade and export it again.",
   "parser.open_position_quantity_unknown": "IBKR gives no readable share count for {{count}} open position(s): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta counts them as 0 shares: the Modelo 720 includes them with their value, but with 0 in «Número de valores», and the D-6 leaves them out. Check these holdings in the 720 and the D-6 by hand, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
-  "parser.trade_quantity_unknown": "{{broker}} gives no readable share count for {{count}} trade(s): {{trades}}.",
-  "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity of every trade and export it again.",
+  "parser.trade_quantity_unknown": "{{broker}} gives no readable share count or price for {{count}} trade(s): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
+  "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",
+  "parser.crypto_quantity_unknown.hint": "DeclaRenta adds or removes no units for them, so the gains and losses of that cryptocurrency are not reliable. If one of them is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it because it does not know how many units you bought back. Make sure the exported file has the quantity and the price of every trade and export it again.",
 };
 
 export default en;

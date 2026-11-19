@@ -67,8 +67,10 @@ export function quantityUnreadable(cell: string | number | null | undefined, par
 /**
  * The trade a parser keeps for a buy or sale row whose quantity cell is
  * missing or unreadable ({@link quantityUnreadable}), where it would skip a
- * written "0". It carries the row's identity (security, day, direction) and
- * nothing else: quantity "0" with `quantityUnknown`, every amount "0". So it
+ * written "0", or whose price cell is, where it would skip a written zero
+ * price (Flatex, DEGIRO, Trading 212). It carries the row's identity
+ * (security, day, direction) and nothing else: quantity "0" with
+ * `quantityUnknown`, every amount "0". So it
  * moves no number (FIFO skips it, the FX engines see no money) and only tells
  * the anti-churning one-purchase exception that the upload cannot prove it
  * for that security (#453).
@@ -101,22 +103,36 @@ export function quantityUnknownTrade(
 }
 
 /**
- * One warning naming every trade whose quantity the file does not give, or
- * undefined when there is none. Shared by every parser (`broker` is the name
- * shown to the user), with one translation key.
+ * The warnings naming every trade whose quantity or price the file does not
+ * give: one for shares and other securities, one for crypto (whose rule is
+ * art. 33.5.e, with no one-purchase exception), or none. Shared by every
+ * parser (`broker` is the name shown to the user), one translation key each.
  */
-export function tradeQuantityUnknownMessage(broker: string, trades: readonly Trade[]): TaxMessage | undefined {
+export function tradeQuantityUnknownMessages(broker: string, trades: readonly Trade[]): TaxMessage[] {
   const unreadable = trades.filter((t) => t.quantityUnknown);
-  if (unreadable.length === 0) return undefined;
-  const count = String(unreadable.length);
-  const list = unreadable.map((t) => `${t.isin ? `${t.symbol} (${t.isin})` : t.symbol} ${t.tradeDate}`).join(", ");
-  return {
-    id: "parser.trade_quantity_unknown",
-    severity: "warning",
-    message: `${broker} no da un número de acciones legible para ${count} operación(es): ${list}.`,
-    hint: "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad de cada operación y vuelve a exportarlo.",
-    context: { broker, count, trades: list },
-  };
+  const messages: TaxMessage[] = [];
+  for (const crypto of [false, true]) {
+    const group = unreadable.filter((t) => (t.assetCategory === "CRYPTO") === crypto);
+    if (group.length === 0) continue;
+    const count = String(group.length);
+    const list = group.map((t) => `${t.isin ? `${t.symbol} (${t.isin})` : t.symbol} ${t.tradeDate}`).join(", ");
+    messages.push(crypto
+      ? {
+          id: "parser.crypto_quantity_unknown",
+          severity: "warning",
+          message: `${broker} no da un número de unidades o un precio legible para ${count} operación(es) con criptomonedas: ${list}.`,
+          hint: "DeclaRenta no suma ni resta unidades por ellas, así que las ganancias y pérdidas de esa criptomoneda no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea porque no sabe cuántas unidades recompraste. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
+          context: { broker, count, trades: list },
+        }
+      : {
+          id: "parser.trade_quantity_unknown",
+          severity: "warning",
+          message: `${broker} no da un número de acciones o un precio legible para ${count} operación(es): ${list}.`,
+          hint: "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
+          context: { broker, count, trades: list },
+        });
+  }
+  return messages;
 }
 
 // ---------------------------------------------------------------------------

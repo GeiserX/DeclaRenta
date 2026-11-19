@@ -37,7 +37,7 @@ import {
   timeOfDay,
   quantityUnknownTrade,
   quantityUnreadable,
-  tradeQuantityUnknownMessage,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 
 
@@ -401,8 +401,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       context: { count: String(unknownCount), types },
     });
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("Lightyear", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Lightyear", trades));
 
   return {
     accountId: "",

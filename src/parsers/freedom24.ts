@@ -13,7 +13,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
+import { toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
 // JSON structure types
@@ -245,8 +245,7 @@ function parseFreedom24(input: string): Statement {
       context: { count: String(skippedMalformed) },
     });
   }
-  const unknownQuantities = tradeQuantityUnknownMessage("Freedom24", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("Freedom24", trades));
 
   return {
     accountId: "",

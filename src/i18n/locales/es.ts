@@ -1143,10 +1143,14 @@ const es = {
   "parser.cancelled_trades.hint": 'IBKR marca una ejecución cancelada con una fila de anulación ("(Ca.)"). La operación original y su anulación se han descartado: nunca llegaron a ser una compra o venta real.',
   "parser.cancelled_trades_unmatched": "Se omitieron {{count}} anulaciones de IBKR sin la operación original en este archivo.",
   "parser.cancelled_trades_unmatched.hint": "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
+  "parser.cancelled_trades_unreadable": "Se omitieron {{count}} anulaciones de IBKR sin una cantidad o un precio legible, sin poder emparejarlas con la operación que anulan.",
+  "parser.cancelled_trades_unreadable.hint": "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
   "parser.open_position_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} posición(es) abierta(s): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
-  "parser.trade_quantity_unknown": "{{broker}} no da un número de acciones legible para {{count}} operación(es): {{trades}}.",
-  "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad de cada operación y vuelve a exportarlo.",
+  "parser.trade_quantity_unknown": "{{broker}} no da un número de acciones o un precio legible para {{count}} operación(es): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
+  "parser.crypto_quantity_unknown": "{{broker}} no da un número de unidades o un precio legible para {{count}} operación(es) con criptomonedas: {{trades}}.",
+  "parser.crypto_quantity_unknown.hint": "DeclaRenta no suma ni resta unidades por ellas, así que las ganancias y pérdidas de esa criptomoneda no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea porque no sabe cuántas unidades recompraste. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

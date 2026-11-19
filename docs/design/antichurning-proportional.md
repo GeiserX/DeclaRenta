@@ -428,8 +428,18 @@ práctico Renta 2025. The decisions, each pinned in
     only when it has an order id or a value, and a written zero price (a
     conversion, a rights assignment) is always skipped. Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
-    crypto row of unknown quantity is no repurchase either: FIFO holds no lot
-    for it, so no loss is tied to its coins. With an ISIN, the row makes that security "unverified":
+    buy or sale with a readable quantity but a blank or unreadable price is
+    kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with an order id
+    or a value, a Trading 212 buy with no price and a Total in another
+    currency): FIFO cannot book shares with no cost, and a dropped row would
+    hide a second purchase. An IBKR cancellation whose quantity or price is
+    unreadable pairs with its fill only by the same `ibExecID`; with none it
+    is dropped alone, and its warning does not claim the original is outside
+    the file. A crypto row of unknown quantity is no repurchase either: FIFO
+    holds no lot for it, so no loss is tied to its coins. Its warning is the
+    crypto one: it says that a crypto loss before such a rebuy may have to
+    wait (art. 33.5.e) and that DeclaRenta does not block it, and it does not
+    name the one-purchase exception, which crypto does not have. With an ISIN, the row makes that security "unverified":
     it may be a second purchase, or a purchase and a sale that leave the list
     unchanged. With no ISIN, it is an unidentified trade with no holding to
     walk, like one with neither ISIN nor symbol: before the window or in the

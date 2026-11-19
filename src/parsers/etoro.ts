@@ -21,7 +21,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
 type WorkBook = import("xlsx").WorkBook;
@@ -366,8 +366,7 @@ function parseClosedPositions(
     });
   }
 
-  const unknownQuantities = tradeQuantityUnknownMessage("eToro", trades);
-  if (unknownQuantities) parserMessages.push(unknownQuantities);
+  parserMessages.push(...tradeQuantityUnknownMessages("eToro", trades));
 
   return trades;
 }
