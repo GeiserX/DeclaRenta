@@ -16,6 +16,8 @@
  * - A header the detection accepts ("Price per share (USD)") was not found
  *   by the column lookup: every trade was priced 0, or the file gave an
  *   empty statement with no word.
+ * - The currency in front of an amount was ignored: "EUR 1500" with a
+ *   Currency of USD was booked as 1500 USD.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -288,5 +290,39 @@ describe("Revolut headers: the lookup finds every column the detection accepts",
     await expect(parseRevolutXlsx(workbook(noCurrency))).rejects.toThrow("Revolut XLSX: faltan columnas obligatorias (Currency)");
     const noSymbol = [HC.filter((h) => h !== "Symbol"), closed().filter((_, i) => i !== 2)];
     await expect(parseRevolutXlsx(workbook(noSymbol))).rejects.toThrow("Revolut XLSX: faltan columnas obligatorias (Symbol)");
+  });
+});
+
+describe("Revolut amounts whose currency disagrees with the Currency column are never booked in the wrong currency", () => {
+  const withCurrency = (row: string[], currency: string) => row.map((c, i) => (i === 6 ? currency : c));
+  const dividend = (total: string, currency = "USD") => ["2025-05-15T10:00:00Z", "AAPL", "DIVIDEND", "", "", total, currency, "1.1"];
+
+  it.each(METHODS)("[%s] a sale written in EUR with a Currency of USD is named and books nothing", async (method) => {
+    for (const [price, total, cells] of [
+      ["EUR 150", "EUR 1500", 'Currency: "USD", Price per share: "EUR 150", Total Amount: "EUR 1500"'],
+      ["USD 150", "EUR 1500", 'Currency: "USD", Total Amount: "EUR 1500"'],
+    ] as const) {
+      const s = await parse([BUY, sell(price, total)]);
+      expect(msg(s, "parser.trade_row_unreadable"), total).toBe(`AAPL 20250603 [${cells}]`);
+      expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown]), total).toEqual([["AAPL", true]]);
+      const r = await report([BUY, sell(price, total)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), total).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a dividend of \"GBP 100\" with a Currency of USD is named and not booked", async (method) => {
+    const s = await parse([dividend("GBP 100")]);
+    expect(s.cashTransactions).toEqual([]);
+    expect(msg(s, "parser.cash_income_amount_unreadable")).toBe('DIVIDEND AAPL USD 20250515 [Currency: "USD", Total Amount: "GBP 100"]');
+    const r = await report([dividend("GBP 100")], method);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it.each(METHODS)("[%s] an empty Currency cell takes the currency written in front of the amounts", async (method) => {
+    const r = await report([withCurrency(BUY, ""), withCurrency(sell(), "")], method);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    const d = await report([dividend("USD 110", "")], method);
+    expect(d.dividends.grossIncome.toFixed(2)).toBe("121.00");
+    expect((await parse([dividend("USD 110", "")])).cashTransactions[0]!.currency).toBe("USD");
   });
 });

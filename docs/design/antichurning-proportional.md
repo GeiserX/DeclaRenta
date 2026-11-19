@@ -583,6 +583,11 @@ práctico Renta 2025. The decisions, each pinned in
       "Price per share (USD)" or "Gross proceeds (USD)" is read (every
       trade was priced 0, or the file came out empty). A detected sheet
       with a required column missing is refused, naming the column.
+      A buy, sale or dividend whose Total Amount or Price per share is
+      written in another currency than its Currency cell ("EUR 1500" with
+      USD) is not booked and is named with those cells (it was booked in
+      the Currency cell's currency). An empty Currency cell takes the
+      currency in front of the amounts.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

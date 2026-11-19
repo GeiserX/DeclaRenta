@@ -461,14 +461,25 @@ function parseTransactionLog(
 
     const type = (row[cols.type] ?? "").trim();
     const ticker = (row[cols.ticker] ?? "").trim();
-    const currencyRaw = (row[cols.currency] ?? "").trim();
+    const currencyCell = (row[cols.currency] ?? "").trim();
 
     const totalRaw = (row[cols.total] ?? "").trim();
     // Money goes through readRevolutNumber, so a garbled cell can never yield
     // NaN/Infinity (which would poison cost basis), mirroring the parseTrades
     // path. totalRead is undefined when the cell has no number.
-    const totalRead = readRevolutNumber(totalRaw).amount;
+    const { currency: totalCurrency, amount: totalRead } = readRevolutNumber(totalRaw);
     const totalAmountDec = totalRead ?? new Decimal(0);
+    // The currency written in front of the Total Amount or the Price per
+    // share fills an empty Currency cell. One that disagrees with the
+    // Currency cell was ignored, so "EUR 1500" with Currency USD was booked
+    // as 1500 USD with no word (#467): a buy, a sale or a dividend with such
+    // a cell is not booked and is named with the cells below.
+    const priceCurrency = readRevolutNumber(row[cols.price]).currency;
+    const currency = currencyCell || totalCurrency || priceCurrency;
+    const currencyMismatch = ([[cols.price, priceCurrency, "Price per share"], [cols.total, totalCurrency, "Total Amount"]] as const)
+      .filter(([, prefix]) => prefix !== "" && prefix !== currency)
+      .map(([col, , name]) => unreadableCell(headers[col] ?? name, row[col]));
+    if (currencyMismatch.length > 0) currencyMismatch.unshift(unreadableCell(headers[cols.currency] ?? "Currency", currencyCell));
 
     // Cash flows: CASH TOP-UP, CASH WITHDRAWAL
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
@@ -498,11 +509,11 @@ function parseTransactionLog(
         symbol: "",
         description: type,
         isin: "",
-        currency: currencyRaw,
+        currency,
         dateTime: tradeDate,
         settleDate: tradeDate,
         amount: totalAmountDec.toString(),
-        fxRateToBase: currencyRaw === "EUR" ? "1" : new Decimal(1).div(fxRate).toString(),
+        fxRateToBase: currency === "EUR" ? "1" : new Decimal(1).div(fxRate).toString(),
         type: "Deposits/Withdrawals",
       });
       continue;
@@ -514,7 +525,7 @@ function parseTransactionLog(
     // as the closed-positions format keeps a row with no symbol.
     if (!ticker && TXN_TYPE_ANY_TRADE.test(type)) {
       trades.push(unreadableTrade({
-        tradeID: `revolut-row-${tradeDate}--${i}`, symbol: "", isin: "", assetCategory: "STK", currency: currencyRaw,
+        tradeID: `revolut-row-${tradeDate}--${i}`, symbol: "", isin: "", assetCategory: "STK", currency,
         tradeDate, exchange: "REVOLUT", buySell: /^SELL/i.test(type) ? "SELL" : "BUY",
       }, unreadableCell(headers[cols.ticker] ?? "Ticker", "")));
       continue;
@@ -529,11 +540,12 @@ function parseTransactionLog(
     // A dividend whose Total Amount has no number (blank, currency only,
     // text) is no 0: it is not booked and is named, so the user adds it by
     // hand (#467). Booked, it was income of 0; it was dropped with no word.
-    // A written zero stays the file's word and is skipped.
-    if (TXN_TYPE_DIVIDEND.test(type) && totalRead === undefined) {
-      const cells = [unreadableCell(headers[cols.total] ?? "Total Amount", totalRaw)];
+    // So is one written in another currency than its Currency cell. A
+    // written zero stays the file's word and is skipped.
+    if (TXN_TYPE_DIVIDEND.test(type) && (totalRead === undefined || currencyMismatch.length > 0)) {
+      const cells = currencyMismatch.length > 0 ? currencyMismatch : [unreadableCell(headers[cols.total] ?? "Total Amount", totalRaw)];
       if (!ticker) cells.unshift(unreadableCell(headers[cols.ticker] ?? "Ticker", ""));
-      amountUnreadable.push(cashIncomeRowText(type, ticker, currencyRaw, isReadableTradeDate(tradeDate) ? tradeDate : dateStr, cells));
+      amountUnreadable.push(cashIncomeRowText(type, ticker, currency, isReadableTradeDate(tradeDate) ? tradeDate : dateStr, cells));
       continue;
     }
     // A dividend with no ticker names no security: named, never dropped with
@@ -572,10 +584,10 @@ function parseTransactionLog(
     const keepUnreadable = (cell: string): void => {
       trades.push(unreadableTrade({
         tradeID: `revolut-row-${tradeDate}-${ticker}-${i}`,
-        symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
+        symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency, tradeDate,
         exchange: "REVOLUT", ...(buy || sell ? { buySell: sell ? "SELL" as const : "BUY" as const } : {}),
       }, cell));
-      markUnknownSize(ticker, currencyRaw, buy);
+      markUnknownSize(ticker, currency, buy);
     };
     const movesNoMoney = totalRaw === "" || totalRead?.isZero() === true;
     if (otherType && !quantityMissing && qtyDec.isZero() &&
@@ -598,10 +610,10 @@ function parseTransactionLog(
     if (TXN_TYPE_SPLIT.test(type) && (!isReadableTradeDate(tradeDate) || signedQtyDec.isZero())) {
       trades.push(corporateActionTrade({
         tradeID: `revolut-split-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
-        assetCategory: detectAssetCategory(ticker), currency: currencyRaw,
+        assetCategory: detectAssetCategory(ticker), currency,
         tradeDate: isReadableTradeDate(tradeDate) ? tradeDate : dateStr, exchange: "REVOLUT",
       }, type, quantityCell));
-      markUnknownSize(ticker, currencyRaw, false);
+      markUnknownSize(ticker, currency, false);
       continue;
     }
     if (!dateStr && !TXN_TYPE_DIVIDEND.test(type)) continue;
@@ -615,7 +627,7 @@ function parseTransactionLog(
           symbol: ticker,
           description: `Dividend - ${ticker}`,
           isin: "",
-          currency: currencyRaw,
+          currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
           amount: totalAmountDec.toString(),
@@ -639,7 +651,7 @@ function parseTransactionLog(
         symbol: ticker,
         description: `${ticker} STOCK SPLIT ${signedQtyDec.toString()} SHARES`,
         isin: "",
-        currency: currencyRaw,
+        currency,
         reportDate: tradeDate,
         dateTime: tradeDate,
         quantity: signedQtyDec.toString(),
@@ -662,10 +674,10 @@ function parseTransactionLog(
       if (quantityMissing) {
         trades.push(quantityUnknownTrade({
           tradeID: `revolut-${buy ? "buy" : "sell"}-${tradeDate}-${ticker}-${i}`,
-          symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
+          symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency, tradeDate,
           buySell: buy ? "BUY" : "SELL", exchange: "REVOLUT",
         }));
-        markUnknownSize(ticker, currencyRaw, buy);
+        markUnknownSize(ticker, currency, buy);
       }
       continue;
     }
@@ -681,6 +693,10 @@ function parseTransactionLog(
     // Lightyear, Flatex, DEGIRO and Freedom24. Any other price makes the row
     // one that books nothing, named by its Price per share cell. Either way
     // the ticker's holding is of unknown size.
+    if (currencyMismatch.length > 0) {
+      keepUnreadable(currencyMismatch.join(", "));
+      continue;
+    }
     const priceRead = readRevolutNumber(row[cols.price]).amount;
     let pricePerShareDec = priceRead ?? new Decimal(0);
     if (!pricePerShareDec.greaterThan(0)) {
@@ -689,10 +705,10 @@ function parseTransactionLog(
       } else if (priceRead?.isZero() === true) {
         trades.push(corporateActionTrade({
           tradeID: `revolut-action-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
-          assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate, exchange: "REVOLUT",
+          assetCategory: detectAssetCategory(ticker), currency, tradeDate, exchange: "REVOLUT",
           buySell: buy ? "BUY" : "SELL",
         }, `${headers[cols.price] ?? "Price per share"} ${priceStr}`, quantityCell));
-        markUnknownSize(ticker, currencyRaw, buy);
+        markUnknownSize(ticker, currency, buy);
         continue;
       } else {
         keepUnreadable(unreadableCell(headers[cols.price] ?? "Price per share", row[cols.price]));
@@ -714,7 +730,7 @@ function parseTransactionLog(
         description: ticker,
         isin: "",
         assetCategory,
-        currency: currencyRaw,
+        currency,
         tradeDate,
         settlementDate: tradeDate,
         quantity: qtyStr,
@@ -727,14 +743,14 @@ function parseTransactionLog(
         buySell: "BUY",
         openCloseIndicator: "O",
         exchange: "REVOLUT",
-        commissionCurrency: currencyRaw,
+        commissionCurrency: currency,
         commission: "0",
         taxes: "0",
         multiplier: "1",
       });
 
       const pos = positions.get(ticker) ?? {
-        symbol: ticker, currency: currencyRaw, assetCategory,
+        symbol: ticker, currency, assetCategory,
         netQty: new Decimal(0), totalCost: new Decimal(0),
       };
       pos.netQty = pos.netQty.plus(qtyDec);
@@ -748,7 +764,7 @@ function parseTransactionLog(
         description: ticker,
         isin: "",
         assetCategory,
-        currency: currencyRaw,
+        currency,
         tradeDate,
         settlementDate: tradeDate,
         quantity: `-${qtyStr}`,
@@ -761,7 +777,7 @@ function parseTransactionLog(
         buySell: "SELL",
         openCloseIndicator: "C",
         exchange: "REVOLUT",
-        commissionCurrency: currencyRaw,
+        commissionCurrency: currency,
         commission: "0",
         taxes: "0",
         multiplier: "1",
