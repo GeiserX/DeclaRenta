@@ -182,6 +182,8 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa y movimientos de fondos.
 
+Las compraventas se leen solo del archivo Trades. Si subes también el libro mayor (Ledgers) para las recompensas de staking, sube el archivo Trades de las mismas fechas. DeclaRenta avisa de cada compraventa del libro mayor que no está en ningún archivo Trades subido.
+
 **Limitaciones:** Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente. También lee los pares escritos con barra (BTC/EUR). Solo los códigos antiguos de Kraken (XXBT, XETH, ZEUR…) pierden su prefijo X o Z. Una moneda cuyo nombre empieza por X o Z (ZETA, XAUT, XTZ) se lee tal cual.
 
 ### Trade Republic

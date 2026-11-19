@@ -691,6 +691,11 @@ práctico Renta 2025. The decisions, each pinned in
       so it matched no BTC lot, reward or rebuy. It is now split at the
       slash; a slash pair that is not two sides, or whose quote is no known
       currency or coin, is named by `kraken.unrecognized_pair`.
+      A ledger (Ledgers CSV) row of type `trade` books nothing: trades
+      come from the Trades CSV, whose txid is the ledger refid. A ledger
+      uploaded with no Trades CSV lost a sale with no word. At merge time,
+      `kraken.ledger_trade_not_booked` names each ledger trade, by refid,
+      date and legs, that no Kraken trade of the upload books.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

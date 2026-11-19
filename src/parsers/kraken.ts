@@ -434,13 +434,16 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
 
   const cashTransactions: CashTransaction[] = [];
   // Rows of a type this parser does not read, by type. Trades come from the
-  // Trades CSV; deposits, withdrawals, transfers and Earn allocations only move
-  // the user's own coins, so none of those is counted.
+  // Trades CSV (and are named at merge time when none books them); deposits,
+  // withdrawals, transfers and Earn allocations only move the user's own
+  // coins, so none of those is counted.
   const ignoredTypes = new Map<string, number>();
   // Staking rewards whose asset cell names no coin, named (#467).
   const unidentifiedIncome: string[] = [];
   // Staking rewards whose amount cell cannot be read, named (#467).
   const unreadableIncome: string[] = [];
+  // Trade rows by refid: the date and each leg, "XXBT -0.1" (#467).
+  const ledgerTrades = new Map<string, { date: string; legs: string[] }>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -507,7 +510,16 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         taxBucket: "ahorro",
         rewardQuantity: netAmount.abs().toString(),
       });
-    } else if (!["trade", "deposit", "withdrawal", "transfer", "earn"].includes(type)) {
+    } else if (type === "trade") {
+      // Trades are read from the Trades CSV, whose txid is this refid.
+      // `finalizeMergedStatement` names each one no Kraken trade books (#467).
+      const refid = (fields[cols.refid] ?? "").trim() || txid;
+      const tradeDate = krakenDate(timeStr);
+      const entry = ledgerTrades.get(refid) ?? { date: "", legs: [] };
+      if (!entry.date && isReadableTradeDate(tradeDate)) entry.date = tradeDate;
+      entry.legs.push(`${asset || "—"} ${(fields[cols.amount] ?? "").trim() || "—"}`);
+      ledgerTrades.set(refid, entry);
+    } else if (!["deposit", "withdrawal", "transfer", "earn"].includes(type)) {
       const key = type || "(vacío)";
       ignoredTypes.set(key, (ignoredTypes.get(key) ?? 0) + 1);
     }
@@ -535,6 +547,9 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(parserMessages.length > 0 ? { parserMessages } : {}),
+    ...(ledgerTrades.size > 0
+      ? { krakenLedgerTrades: [...ledgerTrades].map(([refid, t]) => ({ refid, row: `${refid} ${t.date || "—"} [${t.legs.join(", ")}]` })) }
+      : {}),
   };
 }
 

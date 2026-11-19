@@ -48,6 +48,7 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
   target.parserWarnings = [...(target.parserWarnings ?? []), ...(source.parserWarnings ?? [])];
   target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
+  if (source.krakenLedgerTrades) target.krakenLedgerTrades = [...(target.krakenLedgerTrades ?? []), ...source.krakenLedgerTrades];
   target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
   target.holdingsBySource = [
     ...(target.holdingsBySource ?? []),
@@ -129,6 +130,7 @@ export function yearEndHoldings(statement: Statement, year: number): Statement {
 
 export function finalizeMergedStatement(statement: Statement): Statement {
   reconcileOrderLegs(statement);
+  nameUnbookedKrakenLedgerTrades(statement);
   dateUndatedRowsAtUploadStart(statement);
 
   // Same-day trades go by time of day, then keep the parser's row order (the
@@ -150,6 +152,30 @@ export function finalizeMergedStatement(statement: Statement): Statement {
     normalizeDate(a.date).localeCompare(normalizeDate(b.date)),
   );
   return statement;
+}
+
+/**
+ * A Kraken ledger names each trade by refid, the txid of its row in the
+ * Trades CSV, and the ledger parser books none of them. A ledger uploaded
+ * with no Trades CSV that has the trade lost a sale or a purchase with no
+ * word (#467): each trade no Kraken trade of the upload books is named.
+ */
+function nameUnbookedKrakenLedgerTrades(statement: Statement): void {
+  const pending = statement.krakenLedgerTrades;
+  delete statement.krakenLedgerTrades;
+  if (!pending?.length) return;
+  const booked = new Set(statement.trades.filter((t) => t.exchange === "KRAKEN").map((t) => t.tradeID));
+  const rows = new Map(pending.filter((p) => !booked.has(p.refid)).map((p) => [p.refid, p.row]));
+  if (rows.size === 0) return;
+  const count = String(rows.size);
+  const text = [...rows.values()].join("; ");
+  addInfoMessage(statement, {
+    id: "kraken.ledger_trade_not_booked",
+    severity: "warning",
+    message: `Kraken: ${count} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: ${text}.`,
+    hint: "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
+    context: { count, rows: text },
+  });
 }
 
 /**

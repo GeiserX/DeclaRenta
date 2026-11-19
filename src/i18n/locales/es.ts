@@ -1058,6 +1058,10 @@ const es = {
     "Operaciones de Flatex sin comisión calculada: {{trades}}. El apunte de caja está en una moneda distinta a la de la operación.",
   "flatex.commission.cross_currency.hint":
     "La comisión de esas operaciones se ha dejado en 0. Consulta su importe en la liquidación de la orden en Flatex y tenlo en cuenta al revisar la declaración: se suma al valor de adquisición en las compras y se resta del valor de transmisión en las ventas.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: {{count}} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":

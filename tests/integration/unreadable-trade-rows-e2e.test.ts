@@ -3368,4 +3368,57 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       expect(parsed.trades[0]!.symbol).not.toContain("/");
     });
   });
+
+  describe("ledger trade rows with no Trades CSV", () => {
+    // A ledger-only upload: 0.1 BTC sold for 9000 € on 01/03/2025. The ledger
+    // parser books no trades (they come from the Trades CSV, whose txid is
+    // the ledger refid), so the sale vanished with no word.
+    const KL_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+    const ledger = (...rows: string[]): Statement => krakenParser.parse([KL_H, ...rows].join("\n"));
+    const saleLegs = [
+      `"L1","TR1","2025-03-01 10:00:00","trade","","currency","XXBT","-0.1000000000","0","0"`,
+      `"L2","TR1","2025-03-01 10:00:00","trade","","currency","ZEUR","9000.0000","0","9000"`,
+    ];
+    const ROWS = "TR1 20250301 [XXBT -0.1000000000, ZEUR 9000.0000]";
+    const notBooked = (r: TaxReport): TaxMessage | undefined => r.messages.find((m) => m.id === "kraken.ledger_trade_not_booked");
+
+    it.each(METHODS)("[%s] each trade is named by refid, date and legs, and nothing is booked", (method) => {
+      const parsed = ledger(...saleLegs, `"L3","TR2","2025-04-01 10:00:00","trade","","currency","ZEUR","-500","0","8500"`,
+        `"L4","TR2","bad","trade","","currency","XETH","0.2","0","0.2"`);
+      expect([parsed.trades, parsed.cashTransactions, parsed.parserMessages]).toEqual([[], [], undefined]);
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect(notBooked(r)?.severity).toBe("warning");
+      expect(notBooked(r)?.context).toEqual({ count: "2", rows: `${ROWS}; TR2 20250401 [ZEUR -500, XETH 0.2]` });
+      expect([net(r), r.capitalGains.disposals.length]).toEqual(["0.00", 0]);
+    });
+
+    it.each(METHODS)("[%s] control: with the Trades CSV that books TR1 nothing is named and the sale gains 6000 €", (method) => {
+      const trades = kraken(krBuy, krSell("90000.00").replace('"T2"', '"TR1"'));
+      const r = run([[ledger(...saleLegs), "Kraken"], [trades, "Kraken"]], 2025, method);
+      expect(notBooked(r)).toBeUndefined();
+      expect(net(r)).toBe("6000.00");
+    });
+
+    it.each(METHODS)("[%s] a Trades CSV that does not book TR1 leaves it named", (method) => {
+      const r = run([[kraken(krBuy), "Kraken"], [ledger(...saleLegs), "Kraken"]], 2025, method);
+      expect(notBooked(r)?.context).toEqual({ count: "1", rows: ROWS });
+    });
+
+    it("two ledger files with the same trade name it once", () => {
+      const r = run([[ledger(...saleLegs), "Kraken"], [ledger(...saleLegs), "Kraken"]], 2025, "multidivisa");
+      expect(notBooked(r)?.context).toEqual({ count: "1", rows: ROWS });
+    });
+
+    it("the warning is the es locale and exists in the five locales", () => {
+      const m = notBooked(run([[ledger(...saleLegs), "Kraken"]], 2025, "multidivisa"))!;
+      const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+      expect(m.message).toBe(fill((es as Record<string, string>)["kraken.ledger_trade_not_booked"]!));
+      expect(m.hint).toBe((es as Record<string, string>)["kraken.ledger_trade_not_booked.hint"]);
+      expect(isTranslationKey("kraken.ledger_trade_not_booked") && isTranslationKey("kraken.ledger_trade_not_booked.hint")).toBe(true);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale["kraken.ledger_trade_not_booked"]).toContain("{{rows}}");
+        expect(locale["kraken.ledger_trade_not_booked.hint"]).toContain("Trades");
+      }
+    });
+  });
 });

@@ -24,6 +24,13 @@ export interface FlexStatement {
    */
   pendingOrderLegs?: OrderLeg[];
   /**
+   * Kraken ledger rows of type "trade", one per refid, as `refid` and the
+   * text that names it (#467). The ledger parser books no trades: they come
+   * from the Trades CSV, whose txid is the refid. `finalizeMergedStatement`
+   * names each one that no Kraken trade of the upload books, then drops it.
+   */
+  krakenLedgerTrades?: { refid: string; row: string }[];
+  /**
    * Optional EUR-per-unit valuation hints derived from a broker-supplied EUR
    * value column (e.g. a user-added `EUR_Value` column in a Binance Transaction
    * History CSV). Fed into the crypto-valuation pre-pass as a manual-rate source

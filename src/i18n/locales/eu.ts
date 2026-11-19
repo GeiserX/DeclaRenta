@@ -1023,6 +1023,10 @@ const eu: TranslationKeys = {
     "Komisio kalkulaturik gabeko Flatex eragiketak: {{trades}}. Kutxa-idazpena eragiketarena ez den beste txanpon batean dago.",
   "flatex.commission.cross_currency.hint":
     "Eragiketa horien komisioa 0an utzi da. Kontsultatu haren zenbatekoa Flatex-eko aginduaren likidazioan eta kontuan hartu aitorpena berrikustean: erosketetan eskuratze-balioari gehitzen zaio eta salmentetan transmisio-baliotik kentzen da.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: liburu nagusiko (Ledgers) {{count}} salerosketa ez daude igotako eragiketa-fitxategi batean ere (Trades), eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRentak Krakeneko erosketak eta salmentak eragiketa-fitxategitik (Trades) bakarrik irakurtzen ditu. Errenkada bakoitzak eragiketaren refid-a eta data ditu. Kortxete artean daude liburu nagusian mugitzen dituen monetak eta zenbatekoak. Deskargatu Krakenetik data horietako Trades fitxategia (History → Export → Trades), eta igo ezazu liburu nagusiarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":

@@ -1021,6 +1021,10 @@ const gl: TranslationKeys = {
     "Operacións de Flatex sen comisión calculada: {{trades}}. O apuntamento de caixa está nunha moeda distinta á da operación.",
   "flatex.commission.cross_currency.hint":
     "A comisión desas operacións deixouse en 0. Consulta o seu importe na liquidación da orde en Flatex e tena en conta ao revisar a declaración: súmase ao valor de adquisición nas compras e réstase do valor de transmisión nas vendas.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: {{count}} compravenda(s) do libro maior (Ledgers) non están en ningún ficheiro de operacións (Trades) subido e non se calculan: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRenta le as compras e as vendas de Kraken só do ficheiro de operacións (Trades). Cada fila trae o refid da operación e a súa data. Entre corchetes van as moedas e os importes que move no libro maior. Descarga de Kraken o ficheiro Trades desas datas (History → Export → Trades) e súbeo xunto co libro maior. Sen el, pode faltar unha venda na túa declaración, ou o custo dunha compra.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":

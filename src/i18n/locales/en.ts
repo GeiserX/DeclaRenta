@@ -1019,6 +1019,10 @@ const en: TranslationKeys = {
     "Flatex trades without a calculated commission: {{trades}}. The cash entry is in a different currency from the trade.",
   "flatex.commission.cross_currency.hint":
     "The commission of those trades has been left at 0. Look up its amount in the order's settlement note in Flatex and take it into account when reviewing the return: it is added to the acquisition value on purchases and subtracted from the transfer value on sales.",
+  "kraken.ledger_trade_not_booked":
+    "Kraken: {{count}} trade(s) of the ledger (Ledgers) are in no uploaded trades file (Trades) and are not calculated: {{rows}}.",
+  "kraken.ledger_trade_not_booked.hint":
+    "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":
