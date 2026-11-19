@@ -24,6 +24,8 @@ import {
   quantityUnreadable,
   unreadableCell,
   unreadableTrade,
+  isReadableTradeDate,
+  cryptoIncomeUnidentifiedMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -173,6 +175,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   // Currency (e.g. ETH-BTC): only the base coin's leg is emitted.
   let cryptoQuoteCount = 0;
   const cryptoQuotePairs = new Set<string>();
+  // Income rows (staking, rewards...) whose Asset is empty, named (#467).
+  const unidentifiedIncome: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -220,7 +224,15 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       }, asset ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty) : unreadableCell(headers[cols.asset] ?? "Asset", "")));
       if (txType !== "convert") continue;
     }
-    if (!asset && txType !== "convert") continue;
+    // An income row with no Asset says no coin: it is not booked under a
+    // guessed one, but named by type, amount, date and cell, never skipped
+    // with no word (#467). Another row with no Asset is a type this parser
+    // does not read, and is counted with the unknown types below.
+    if (!asset && INCOME_BUCKETS[txType]) {
+      const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
+      unidentifiedIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} (${total || subtotal} ${spotCurrency || "EUR"}) ${shownDate} [${unreadableCell(headers[cols.asset] ?? "Asset", "")}]`);
+      continue;
+    }
 
     // Crypto reward income (staking/rewards → ahorro; learning → base general).
     // These are NOT foreign dividends — no issuer/withholding country and not in
@@ -386,6 +398,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   const parserMessages: TaxMessage[] = [
     ...tradeQuantityUnknownMessages("Coinbase", trades),
     ...dropUndatedCash("Coinbase", cashTransactions, headers[cols.timestamp] ?? "Timestamp"),
+    ...cryptoIncomeUnidentifiedMessages("Coinbase", unidentifiedIncome),
   ];
   // "rewards income" is treated as savings-base income by default, but it can
   // also cover promotional cashback that is legally base-general. Nudge the user

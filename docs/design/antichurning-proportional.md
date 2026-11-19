@@ -636,6 +636,17 @@ práctico Renta 2025. The decisions, each pinned in
       books the coin it received when its Notes name it. Before, the row
       was skipped with no word: a sale vanished with its gain, and a rebuy
       could not show that an art. 33.5.e check was missing.
+    - Crypto income whose coin cannot be read: a Coinbase Staking Income,
+      Rewards Income, Learning Reward, Inflation Reward or Coinbase Earn
+      row with an empty `Asset`, and a Kraken staking or Earn reward with
+      an empty `asset`, is not booked under a guessed coin.
+      `parser.crypto_income_unidentified` names each row by type, amount,
+      date and cell. Before, the Coinbase row was skipped with no word, so
+      the income could go undeclared; the Kraken row was booked under an
+      empty coin and only counted as unvalued income. Another Coinbase
+      type with an empty `Asset` is now counted by
+      `coinbase.unknown_types_skipped` like the same type with a coin.
+      Binance names such a row with `binance.unparseable_coin`.
     - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
       whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
       number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each

@@ -272,6 +272,26 @@ export function cashRowsUnidentifiedMessages(broker: string, rows: readonly stri
 }
 
 /**
+ * The warning naming every crypto income row (staking, rewards, learning
+ * rewards) whose coin the file does not give: `rows` are "type amount date
+ * [cell]" (#467). The coin sets the income's value and the cost of the coins
+ * received, so the row is not booked under a guessed coin, and is never
+ * dropped with no word: the user adds it by hand.
+ */
+export function cryptoIncomeUnidentifiedMessages(broker: string, rows: readonly string[]): TaxMessage[] {
+  if (rows.length === 0) return [];
+  const count = String(rows.length);
+  const list = rows.join("; ");
+  return [{
+    id: "parser.crypto_income_unidentified",
+    severity: "warning",
+    message: `${broker}: ${count} ingreso(s) en criptomonedas no dicen qué criptomoneda recibiste y no se calculan: ${list}.`,
+    hint: "Entre corchetes va la celda de la criptomoneda. Sin ella, DeclaRenta no sabe qué recibiste. Tampoco sabe qué coste darle cuando la vendas. Por eso no suma ese ingreso y no se inventa la criptomoneda. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del exchange y vuelve a subirlo. También puedes añadir el ingreso a mano en Renta Web.",
+    context: { broker, count, rows: list },
+  }];
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none; one naming every

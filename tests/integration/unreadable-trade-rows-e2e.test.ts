@@ -1678,6 +1678,75 @@ describe("#467 Binance spot: several coins bought in one window never move one o
   });
 });
 
+describe("#467 crypto income whose coin cannot be read is named, never skipped with no word", () => {
+  const CB_H = "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+  const KR_H = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const incomeEntries = (r: TaxReport): number => r.interest.entries.length + r.generalGains.entries.length;
+  // 0.5 ETH received on 01/03/2025, worth 1000 € by Coinbase's own Total.
+  const cbIncome = (type: string, asset: string): Statement => coinbaseParser.parse([CB_H, `2025-03-01T10:00:00Z,${type},${asset},0.5,EUR,2000,1000,1000,0,`].join("\n"));
+
+  describe.each(["Staking Income", "Rewards Income", "Learning Reward", "Inflation Reward", "Coinbase Earn"])("Coinbase %s", (type) => {
+    describe.each(["", "  "])("with Asset %j", (asset) => {
+      it.each(METHODS)("[%s] is not booked under a guessed coin, and the row is named by its type, amount, date and cell", (method) => {
+        const parsed = cbIncome(type, asset);
+        expect(parsed.cashTransactions).toEqual([]);
+        const r = run([[parsed, "Coinbase"]], 2025, method);
+        expect(incomeEntries(r)).toBe(0);
+        const warning = message(r.messages, "parser.crypto_income_unidentified");
+        expect(warning?.context).toEqual({ broker: "Coinbase", count: "1", rows: `${type} 0.5 (1000 EUR) 20250301 [Asset: ""]` });
+      });
+    });
+
+    it.each(METHODS)("[%s] control: with Asset ETH it is booked as income and nothing is named", (method) => {
+      const parsed = cbIncome(type, "ETH");
+      expect(parsed.cashTransactions.map((c) => [c.symbol, c.amount])).toEqual([["ETH", "1000"]]);
+      const r = run([[parsed, "Coinbase"]], 2025, method);
+      expect(incomeEntries(r)).toBe(1);
+      expect(message(r.messages, "parser.crypto_income_unidentified")).toBeUndefined();
+    });
+  });
+
+  it("a Coinbase row of a type it does not read is counted with its type also when its Asset is empty", () => {
+    for (const asset of ["ETH", ""]) {
+      expect(message(cbIncome("Airdrop", asset).parserMessages, "coinbase.unknown_types_skipped")?.context).toEqual({ count: "1", types: "Airdrop (1)" });
+    }
+  });
+
+  const krLedger = (row: string): Statement => krakenParser.parse([KR_H, row].join("\n"));
+  const krCases: [string, string, string][] = [
+    ["staking", `"L1","R1","2025-03-01 00:00:00","staking","","currency","","0.5","0","5"`, `staking 0.5 20250301 [asset: ""]`],
+    ["Earn reward", `"L1","R1","2025-03-01 00:00:00","earn","reward","currency","  ","0.5","0","5"`, `earn reward 0.5 20250301 [asset: ""]`],
+  ];
+  describe.each(krCases)("Kraken %s with no asset", (_label, row, rows) => {
+    it.each(METHODS)("[%s] is not booked under an empty coin, and the row is named", (method) => {
+      const parsed = krLedger(row);
+      expect(parsed.cashTransactions).toEqual([]);
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect(incomeEntries(r)).toBe(0);
+      expect(message(r.messages, "parser.crypto_income_unidentified")?.context).toEqual({ broker: "Kraken", count: "1", rows });
+    });
+  });
+
+  it("control: a Kraken staking reward of XETH is booked on ETH and nothing is named", () => {
+    const parsed = krLedger(`"L1","R1","2025-03-01 00:00:00","staking","","currency","XETH","0.5","0","5"`);
+    expect(parsed.cashTransactions.map((c) => [c.symbol, c.amount])).toEqual([["ETH", "0.5"]]);
+    expect(message(parsed.parserMessages, "parser.crypto_income_unidentified")).toBeUndefined();
+  });
+
+  it("the warning exists in the five locales, names the rows, and the parser emits the Spanish text", () => {
+    expect(isTranslationKey("parser.crypto_income_unidentified") && isTranslationKey("parser.crypto_income_unidentified.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["parser.crypto_income_unidentified"]).toContain("{{rows}}");
+      expect(locale["parser.crypto_income_unidentified"]).toContain("{{broker}}");
+    }
+    const emitted = message(cbIncome("Staking Income", "").parserMessages, "parser.crypto_income_unidentified")!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText["parser.crypto_income_unidentified"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText["parser.crypto_income_unidentified.hint"]);
+  });
+});
+
 describe("#467 Freedom24: a withholding larger than its dividend is never booked", () => {
   const f24 = (...rows: Record<string, unknown>[]): Statement => freedom24Parser.parse(JSON.stringify({
     trades: { detailed: [] }, corporate_actions: { detailed: rows },
