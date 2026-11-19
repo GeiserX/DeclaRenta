@@ -1153,7 +1153,7 @@ const eu: TranslationKeys = {
   "parser.crypto_income_unidentified": "{{broker}}: kriptomonetetako {{count}} diru-sarrerak ez dute esaten zein kriptomoneta jaso zenuen, eta ez dira kalkulatzen: {{rows}}.",
   "parser.crypto_income_unidentified.hint": "Kortxete artean dago kriptomonetaren gelaxka. Hura gabe, DeclaRentak ez daki zer jaso zenuen. Ez daki saltzean zer kostu eman behar dion ere. Horregatik, ez du diru-sarrera hori batzen, eta ez du kriptomonetarik asmatzen. Aitortzen duzun urteko diru-sarrera bada, aitortu egin behar duzu hala ere. Zuzendu errenkada exchange-aren fitxategian eta igo berriro. Diru-sarrera eskuz ere gehi dezakezu Renta Web-en.",
   "revolut.dividend_tax_correction": "Revoluteko laburpenak dibidendu baten atxikipenaren {{count}} zuzenketa dakartza (DIVIDEND TAX (CORRECTION)), eta DeclaRentak ez ditu batzen: {{rows}}.",
-  "revolut.dividend_tax_correction.hint": "Errenkada hauekin Revolutek dagoeneko kobratutako dibidendu baten atxikipena zuzentzen du. DeclaRentak Revoluteko dibidenduak zenbateko garbian inportatzen ditu eta ez du laburpen honetako atxikipena irakurtzen; beraz, ezta haren zuzenketa ere. Hartu dibidendu gordina eta azken atxikipena, zuzenduta, Revoluteko urteko txosten fiskaletik.",
+  "revolut.dividend_tax_correction.hint": "Errenkada hauekin Revolutek dagoeneko kobratutako dibidendu baten atxikipena zuzentzen du. DeclaRentak Revoluteko dibidenduak zenbateko garbian inportatzen ditu. Ez du laburpen honetako atxikipena irakurtzen, ezta haren zuzenketa ere. Hartu dibidendu gordina eta azken atxikipena, zuzenduta, Revoluteko urteko txosten fiskaletik.",
 };
 
 export default eu;

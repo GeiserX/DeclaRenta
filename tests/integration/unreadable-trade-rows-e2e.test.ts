@@ -776,6 +776,12 @@ describe("#467 Revolut DIVIDEND TAX (CORRECTION) rows are named, so the user kno
   it.each(METHODS)("[%s] the rows move no number", async (method) => {
     expect(numbers(run([[await file(true), "Revolut"]], 2025, method))).toBe(numbers(run([[await file(false), "Revolut"]], 2025, method)));
   });
+
+  it("the hint is plain short sentences in the five locales, with no clause joined by a semicolon", () => {
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["revolut.dividend_tax_correction.hint"]).not.toContain(";");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
