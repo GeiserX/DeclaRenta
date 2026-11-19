@@ -1077,10 +1077,6 @@ const eu: TranslationKeys = {
     "Coinbase-ren Advanced Trade-ko {{count}} eragiketa balorazio-monetaz bestelako moneta batean ordaindu edo kobratu d(ir)a ({{pairs}}); erositako edo saldutako kriptomoneta soilik erregistratu da, ez kontrapartidako moneta.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "Bikote horietan kotizazio-moneta ere eskualdatzen duzu (erostean) edo eskuratzen duzu (saltzean), beste kriptomoneta bat edo dibisa bat izan, eta eragiketa horrek ere tributatzen du. Gehitu eskuz moneta horren salmenta edo erosketa, eragiketaren euro-balio berberarekin, haren irabazia eta eskuratze-kostua bat etor daitezen.",
-  "trade_republic.trade_skipped_no_amount":
-    "Trade Republic-en erosketa-salmentako {{count}} eragiketa baztertu d(ir)a zenbateko erabilgarririk gabe.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    'Normalean esportazioan errenkada osatugabeei zor zaie ("amount" zutabea hutsik edo zenbakizkoa ez dena). Eragiketak falta badira, deskargatu berriro transakzioen CSV osoa Trade Republic-etik.',
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: ez dira aplikatu {{isins}} baloreen ekintza korporatiboko {{count}} mugimendu (fusioa, trukea, split-a).",
   "trade_republic.corporate_action_not_applied.hint":
@@ -1114,6 +1110,8 @@ const eu: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRentak ez du akziorik gehitzen edo kentzen haiengatik; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
   "parser.crypto_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du unitate kopuru edo prezio irakurgarririk ematen kriptomonetekin egindako {{count}} eragiketatarako: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRentak ez du unitaterik gehitzen edo kentzen haiengatik; beraz, kriptomoneta horren irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen, ez dakielako zenbat unitate berrerosi dituzun. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
+  "parser.trade_row_unreadable": "{{broker}} brokerraren fitxategiko {{count}} eragiketa-errenkada ezin dira irakurri, eta ez dira kalkulatzen: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "Kortxete artean dago falta den, hutsik dagoen, irakur ezin den edo DeclaRentak ezagutzen ez duen eragiketa mota bat duen gelaxka. DeclaRentak ez du akziorik, unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik; beraz, balio horien irabaziak eta galerak ez dira fidagarriak, eta ez du aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena errenkada horietako batena izan daitekeen balio bati. Errenkada bat benetako erosketa edo salmenta bada, zuzendu gelaxka hori brokerraren fitxategian eta igo berriro.",
   "revolut.bad_fx_rate": "Revoluteko laburpeneko {{count}} diru-sarrera edo diru-erretiratze baztertu dira, haien truke-tasa (FX Rate) baliozkoa ez delako: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Diru-sarrerek eta diru-erretiratzeek bakarrik erabiltzen dute zutabe hori; erosketak, salmentak eta dibidenduak EBZren truke-tasarekin kalkulatzen dira, eta ez dira baztertzen. Normalean esportazioko truke-tasaren gelaxka zenbakia ez delako, negatiboa delako edo zero delako gertatzen da. Deskargatu berriro Trading Account Statement osoa Revolut aplikaziotik, mugimendu horiek sar daitezen.",
 };

@@ -102,8 +102,21 @@ export function quantityUnknownTrade(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Unreadable trade rows: kept, never dropped (#467, #468)
+// ---------------------------------------------------------------------------
+
+/** Whether a parsed trade date is a real calendar day written YYYYMMDD. */
+export function isReadableTradeDate(date: string): boolean {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(date);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const day = new Date(Date.UTC(y, mo - 1, d));
+  return day.getUTCFullYear() === y && day.getUTCMonth() === mo - 1 && day.getUTCDate() === d;
+}
+
 /**
- * A cell that makes a row unreadable, as the user sees it in the file:
+ * The cell that makes a row unreadable, as the user sees it in the file:
  * `Type: "BUY - STOP"`, `date: null`, `ISIN: ""`. A missing cell reads `—`.
  */
 export function unreadableCell(column: string, value: unknown): string {
@@ -114,13 +127,87 @@ export function unreadableCell(column: string, value: unknown): string {
 }
 
 /**
+ * The trade a parser keeps for a row that looks like a trade but cannot be
+ * read (#467, #468): a bad or empty date, no ticker or ISIN, an operation type
+ * that is neither a buy nor a sale (never booked as a buy), no amount. A
+ * dropped row would hide a purchase or a sale: the anti-churning one-purchase
+ * exception (#453) would then be applied with no proof, and a sale would
+ * vanish. So the row is kept as {@link quantityUnknownTrade}: it moves no
+ * share and no money, counts as no repurchase, and makes the one-purchase
+ * evidence of its security (or of every security, with no ISIN) "unverified".
+ * `cell` names what could not be read ({@link unreadableCell}).
+ * `parser.trade_row_unreadable` lists every such row. `buySell` is the side
+ * when the row gives one, else a placeholder: nothing reads it.
+ *
+ * A row whose date cannot be read keeps `tradeDate` "" until
+ * {@link dateUndatedTrades} gives it a date the engine can process.
+ */
+export function unreadableTrade(
+  row: Pick<Trade, "tradeID" | "symbol" | "isin" | "assetCategory" | "currency" | "tradeDate" | "exchange"> &
+    Partial<Pick<Trade, "description" | "tradeTime" | "accountId" | "buySell">>,
+  cell: string,
+): Trade {
+  const dated = isReadableTradeDate(row.tradeDate);
+  const security = row.isin ? (row.symbol ? `${row.symbol} (${row.isin})` : row.isin) : row.symbol || "—";
+  return {
+    ...quantityUnknownTrade({ ...row, tradeDate: dated ? row.tradeDate : "", buySell: row.buySell ?? "BUY" }),
+    unreadableRow: `${security}${dated ? ` ${row.tradeDate}` : ""} [${cell}]`,
+  };
+}
+
+/**
+ * First, turn every trade whose date the parser could not read (not a real
+ * YYYYMMDD day: "2024-13-45", "<style>") into an unreadable row named by
+ * `dateColumn` ({@link unreadableTrade}): a lot with no real date could fall
+ * outside the anti-churning window it belongs to and prove the one-purchase
+ * exception (#453, #467).
+ *
+ * Then give each kept row whose date the file does not give the earliest
+ * readable date of the same file (its trades, and `otherDates`, such as its
+ * cash rows'). The engine needs a real date for every trade; the earliest one
+ * puts the row before every window the file reaches, where the one-purchase
+ * evidence reads it as a trade that may be any shares held at the window
+ * start (and with an ISIN, the date does not matter: the security is
+ * "unverified" anyway). The row still books nothing, and its warning shows no
+ * date. A file with no readable date at all is refused.
+ */
+export function dateUndatedTrades(
+  broker: string,
+  trades: Trade[],
+  otherDates: readonly string[] = [],
+  dateColumn = "Date",
+): void {
+  for (let i = 0; i < trades.length; i++) {
+    const t = trades[i]!;
+    if (t.unreadableRow !== undefined || isReadableTradeDate(t.tradeDate)) continue;
+    trades[i] = unreadableTrade({
+      tradeID: t.tradeID, accountId: t.accountId, symbol: t.symbol, description: t.description, isin: t.isin,
+      assetCategory: t.assetCategory, currency: t.currency, tradeDate: "", exchange: t.exchange, buySell: t.buySell,
+    }, unreadableCell(dateColumn, t.tradeDate));
+  }
+  const undated = trades.filter((t) => t.unreadableRow !== undefined && t.tradeDate === "");
+  if (undated.length === 0) return;
+  const dates = [...trades.map((t) => t.tradeDate), ...otherDates].filter(isReadableTradeDate).sort();
+  const earliest = dates[0];
+  if (earliest === undefined) {
+    throw new Error(`${broker}: ninguna operación del archivo tiene una fecha legible. Vuelve a exportarlo.`);
+  }
+  for (const t of undated) {
+    t.tradeDate = earliest;
+    t.settlementDate = earliest;
+  }
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
- * art. 33.5.e, with no one-purchase exception), or none. Shared by every
- * parser (`broker` is the name shown to the user), one translation key each.
+ * art. 33.5.e, with no one-purchase exception), or none; and one naming every
+ * trade row the file does not let the parser read (`unreadableRow`). Shared by
+ * every parser (`broker` is the name shown to the user), one translation key
+ * each.
  */
 export function tradeQuantityUnknownMessages(broker: string, trades: readonly Trade[]): TaxMessage[] {
-  const unreadable = trades.filter((t) => t.quantityUnknown);
+  const unreadable = trades.filter((t) => t.quantityUnknown && t.unreadableRow === undefined);
   const messages: TaxMessage[] = [];
   for (const crypto of [false, true]) {
     const group = unreadable.filter((t) => (t.assetCategory === "CRYPTO") === crypto);
@@ -142,6 +229,18 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
           hint: "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
           context: { broker, count, trades: list },
         });
+  }
+  const rows = trades.flatMap((t) => (t.unreadableRow === undefined ? [] : [t.unreadableRow]));
+  if (rows.length > 0) {
+    const count = String(rows.length);
+    const list = rows.join("; ");
+    messages.push({
+      id: "parser.trade_row_unreadable",
+      severity: "warning",
+      message: `${broker}: ${count} fila(s) de operación no se pueden leer y no se calculan: ${list}.`,
+      hint: "Entre corchetes va la celda que falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas, así que las ganancias y pérdidas de esos valores no son fiables, y no aplica la excepción de compra única de la regla de los 2 meses a un valor que pueda ser el de una de ellas. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
+      context: { broker, count, rows: list },
+    });
   }
   return messages;
 }

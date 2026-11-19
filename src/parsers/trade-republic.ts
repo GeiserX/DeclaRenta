@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, dateUndatedTrades } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -122,7 +122,6 @@ function parseTrCsv(lines: string[]): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
-  let skippedNoAmount = 0;
   // Rows that move securities without a trade (mergers, free shares, transfers
   // in). They are not imported, so the user is told which ISINs to review.
   const corporateActionIsins = new Set<string>();
@@ -158,6 +157,22 @@ function parseTrCsv(lines: string[]): Statement {
     const originalAmount = field(fields, cols.originalAmount);
     const originalCurrency = field(fields, cols.originalCurrency);
 
+    // --- TRADING of another type (#467): a row of the trading category that
+    // names a security but is neither a buy nor a sale is kept as a trade that
+    // books nothing and named, never dropped. One that writes a zero share
+    // count moves no shares and stays skipped.
+    if (category === "TRADING" && type !== "BUY" && type !== "SELL") {
+      if (symbol && !(!quantityUnreadable(fields[cols.shares]) && shares === 0)) {
+        const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
+        trades.push(unreadableTrade({
+          tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
+          symbol: isCrypto ? symbol : name, description: name, isin: isCrypto ? "" : symbol,
+          assetCategory: mapAssetCategory(assetClass), currency, tradeDate, exchange: "TRADE_REPUBLIC",
+        }, unreadableCell(headers[cols.type] ?? "type", field(fields, cols.type))));
+      }
+      continue;
+    }
+
     // --- TRADING: BUY / SELL ---
     if (category === "TRADING" && (type === "BUY" || type === "SELL")) {
       // An empty or unreadable share count is no "0": keep the row as a trade
@@ -177,10 +192,16 @@ function parseTrCsv(lines: string[]): Statement {
       const isSell = type === "SELL";
       const absAmountDec = toFiniteDecimal(amountStr).abs();
       // A real BUY/SELL with no usable amount (missing/garbage) would produce a
-      // 0-cost / 0-proceeds trade (phantom gain). Skip it and count it instead of
-      // aborting the whole file, mirroring the Degiro skip-and-warn pattern.
+      // 0-cost / 0-proceeds trade (phantom gain). It is kept as a trade that
+      // books nothing and named: dropped, it hid a purchase or a sale (#467).
       if (absAmountDec.isZero()) {
-        skippedNoAmount++;
+        trades.push(unreadableTrade({
+          tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
+          symbol: mapAssetCategory(assetClass) === "CRYPTO" ? symbol : name, description: name,
+          isin: mapAssetCategory(assetClass) === "CRYPTO" ? "" : symbol,
+          assetCategory: mapAssetCategory(assetClass), currency, tradeDate, buySell: isSell ? "SELL" : "BUY",
+          exchange: "TRADE_REPUBLIC",
+        }, unreadableCell(headers[cols.amount] ?? "amount", field(fields, cols.amount))));
         continue;
       }
       const absSharesDec = toFiniteDecimal(sharesStr).abs();
@@ -336,15 +357,6 @@ function parseTrCsv(lines: string[]): Statement {
   }
 
   const parserMessages: TaxMessage[] = [];
-  if (skippedNoAmount > 0) {
-    parserMessages.push({
-      id: "trade_republic.trade_skipped_no_amount",
-      severity: "warning",
-      message: `Se ha(n) omitido ${skippedNoAmount} operación(es) de compraventa de Trade Republic sin importe utilizable.`,
-      hint: "Suele deberse a filas incompletas en la exportación (columna \"amount\" vacía o no numérica). Si faltan operaciones, vuelve a descargar el CSV de transacciones completo desde Trade Republic.",
-      context: { count: String(skippedNoAmount) },
-    });
-  }
   if (corporateActionRows > 0) {
     const isins = [...corporateActionIsins].join(", ");
     parserMessages.push({
@@ -365,6 +377,7 @@ function parseTrCsv(lines: string[]): Statement {
       context: { count: String(deliveryRows), isins },
     });
   }
+  dateUndatedTrades("Trade Republic", trades, cashTransactions.map((c) => c.dateTime), "date");
   parserMessages.push(...tradeQuantityUnknownMessages("Trade Republic", trades));
 
   return {

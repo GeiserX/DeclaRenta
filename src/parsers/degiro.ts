@@ -29,6 +29,9 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -274,6 +277,19 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
+    // A trade-like row (a readable quantity or price) with no ISIN is still a
+    // purchase or a sale: kept as a trade that books nothing and named, never
+    // dropped (#467). Its side comes from the value or the quantity sign.
+    if (!isin && (!toFiniteDecimal(quantity, "0", false).isZero() || !toFiniteDecimal(price, "0", false).isZero())) {
+      const sell = toFiniteDecimal(value, "0", false).greaterThan(0) || toFiniteDecimal(quantity, "0", false).lessThan(0);
+      trades.push(unreadableTrade({
+        tradeID: orderId, symbol: product, description: product, isin: "", assetCategory: "STK",
+        currency: normalizeFractionalCurrency(currency || "EUR").currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" : "BUY", exchange,
+      }, unreadableCell(headers[cols.isin] ?? "ISIN", isin)));
+      continue;
+    }
+
     // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
     // is kept as a trade of unknown quantity (below, #453).
     const quantityUnknown = isin !== "" && quantityUnreadable(fields[cols.quantity]);
@@ -422,6 +438,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
+  dateUndatedTrades("DEGIRO", trades);
   parserMessages.push(...tradeQuantityUnknownMessages("DEGIRO", trades));
 
   return {

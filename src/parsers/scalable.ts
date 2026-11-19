@@ -24,6 +24,9 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +169,28 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
+    // A buy or sale row with no ISIN, or a row of a type no branch below
+    // handles (a security transfer, a corporate action) of an ISIN, is kept
+    // as a trade that books nothing and named: dropping it would hide a
+    // purchase or a sale (#467). A row of an unknown type that writes a zero
+    // share count moves no shares and stays skipped.
+    const sellType = SELL_TYPES.some((t) => type.includes(t));
+    const buyType = BUY_TYPES.some((t) => type.includes(t));
+    const otherType = !sellType && !buyType && !DIVIDEND_TYPES.some((d) => type.includes(d));
+    const movesNoShares = !quantityUnreadable(fields[cols.shares]) && parseFloat(parseNumber(shares)) === 0;
+    const cell = (sellType || buyType) && !isin ? unreadableCell(headers[cols.isin] ?? "isin", isin)
+      : otherType && isin && !movesNoShares ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
+      : undefined;
+    if (cell !== undefined) {
+      trades.push(unreadableTrade({
+        tradeID: reference || `scalable-row-${tradeDate}-${isin}-${i}`,
+        symbol: description, description, isin, assetCategory: /etf|fund/.test(assetType) ? "FUND" : "STK",
+        currency: currency || "EUR", tradeDate, tradeTime,
+        ...(sellType || buyType ? { buySell: sellType ? "SELL" as const : "BUY" as const } : {}), exchange: "XETR",
+      }, cell));
+      continue;
+    }
+
     if (!isin) continue;
 
     // Distributions → cash transactions (dividends)
@@ -267,6 +292,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       context: { count: String(interestWithholdingRows) },
     });
   }
+  dateUndatedTrades("Scalable Capital", trades, [], "date");
   parserMessages.push(...tradeQuantityUnknownMessages("Scalable Capital", trades));
 
   return {

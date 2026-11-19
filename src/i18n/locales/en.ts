@@ -1073,10 +1073,6 @@ const en: TranslationKeys = {
     "{{count}} Coinbase Advanced Trade fill(s) were paid or received in a currency other than the valuation currency ({{pairs}}); only the crypto bought or sold was recorded, not the counterpart currency.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "In these pairs you also dispose of (when buying) or acquire (when selling) the quote currency, whether another crypto or a fiat currency, and that is taxable too. Add the sale or purchase of that currency manually, for the same euro value as the trade, so its gain and acquisition cost add up.",
-  "trade_republic.trade_skipped_no_amount":
-    "{{count}} Trade Republic buy/sell operation(s) without a usable amount were skipped.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    'This is usually caused by incomplete rows in the export (an empty or non-numeric "amount" column). If operations are missing, re-download the full transactions CSV from Trade Republic.',
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: {{count}} corporate action row(s) (merger, exchange, split) for {{isins}} were not applied.",
   "trade_republic.corporate_action_not_applied.hint":
@@ -1110,6 +1106,8 @@ const en: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
   "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta adds or removes no units for them, so the gains and losses of that cryptocurrency are not reliable. If one of them is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it because it does not know how many units you bought back. Make sure the exported file has the quantity and the price of every trade and export it again.",
+  "parser.trade_row_unreadable": "{{broker}}: {{count}} trade row(s) cannot be read and are not calculated: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "The square brackets show the cell that is missing, empty, unreadable or holds a trade type DeclaRenta does not recognise. DeclaRenta adds or removes no shares, units or money for those rows, so the gains and losses of those securities are not reliable, and it does not apply the one-purchase exception of the 2-month rule to a security that may be the one of such a row. If a row is a real purchase or sale, correct that cell in the broker's file and upload it again.",
   "revolut.bad_fx_rate": "{{count}} cash top-up(s) or withdrawal(s) of the Revolut statement were skipped because their exchange rate (FX Rate) is not valid: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Only cash top-ups and withdrawals use that column; purchases, sales and dividends are calculated at the ECB rate and are not skipped. It is usually caused by an exchange rate cell that is not a number, negative or zero in the export. Download the full Trading Account Statement again from the Revolut app so those movements are included.",
 };

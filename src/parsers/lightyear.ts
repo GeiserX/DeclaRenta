@@ -38,6 +38,9 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 
 
@@ -207,9 +210,36 @@ function parseLightyearCsv(lines: string[]): Statement {
     const netAmount = toFiniteDecimalString(fields[cols.netAmount] ?? "0");
     const taxAmount = toFiniteDecimalString(fields[cols.taxAmount] ?? "0");
 
+    const tradeDate = dateRaw ? convertLightyearDate(dateRaw) : "";
+    const tradeTime = dateRaw ? timeOfDay(dateRaw) : undefined;
+
+    // A buy or sale row, or a row of a type no branch below handles (a
+    // transfer in, a split) that names a ticker or an ISIN, is kept as a trade
+    // that books nothing when it cannot be read: no date, no ticker, an
+    // unknown type. Dropping it would hide a purchase or a sale (#467). A row
+    // of an unknown type that writes a zero quantity moves no shares and stays
+    // skipped; one that names no security is only listed by its type.
+    const tradeType = txType === "buy" || txType === "sell";
+    const otherType = !tradeType && !SKIP_TYPES.has(txType) && !DIVIDEND_TYPES.has(txType) &&
+      !INCOME_TYPES.has(txType) && txType !== "conversion";
+    const namesSecurity = ticker !== "" || isin !== "";
+    const movesNoShares = !quantityUnreadable(fields[cols.quantity]) && new Decimal(quantityStr).isZero();
+    if (tradeType || (otherType && namesSecurity && !movesNoShares)) {
+      const cell = !dateRaw ? unreadableCell(headers[cols.date] ?? "Date", dateRaw)
+        : otherType ? unreadableCell(headers[cols.type] ?? "Type", fields[cols.type] ?? "")
+        : !ticker ? unreadableCell(headers[cols.ticker] ?? "Ticker", ticker)
+        : undefined;
+      if (cell !== undefined) {
+        trades.push(unreadableTrade({
+          tradeID: `lightyear-row-${reference || `${tradeDate}-${ticker || isin}-${i}`}`,
+          symbol: ticker, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+          ...(tradeType ? { buySell: txType === "sell" ? "SELL" as const : "BUY" as const } : {}), exchange: "LIGHTYEAR",
+        }, cell));
+        continue;
+      }
+    }
+    // Any other row with no date stays skipped, as before.
     if (!dateRaw) continue;
-    const tradeDate = convertLightyearDate(dateRaw);
-    const tradeTime = timeOfDay(dateRaw);
 
     // Skip non-taxable transactions
     if (SKIP_TYPES.has(txType)) continue;
@@ -340,7 +370,6 @@ function parseLightyearCsv(lines: string[]): Statement {
       if (rawType) unknownTypes.set(rawType, (unknownTypes.get(rawType) ?? 0) + 1);
       continue;
     }
-    if (!ticker) continue;
 
     const qtyDec = new Decimal(quantityStr).abs();
     if (qtyDec.isZero()) {
@@ -401,6 +430,7 @@ function parseLightyearCsv(lines: string[]): Statement {
       context: { count: String(unknownCount), types },
     });
   }
+  dateUndatedTrades("Lightyear", trades, cashTransactions.map((c) => c.dateTime));
   parserMessages.push(...tradeQuantityUnknownMessages("Lightyear", trades));
 
   return {

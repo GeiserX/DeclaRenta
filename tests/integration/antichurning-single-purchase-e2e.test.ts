@@ -1484,7 +1484,9 @@ describe("(k) every share parser keeps a trade row with no readable quantity as 
       for (const t of parsed.trades) {
         expect([t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds, t.cost, t.commission, t.taxes]).toEqual(["0", true, "0", "0", "0", "0", "0"]);
       }
-      expect(parsed.openPositions).toEqual([]);
+      // Revolut infers holdings from its trades: a purchase of unknown size
+      // leaves one of unknown size, flagged, never a readable count.
+      expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown])).toEqual(broker.name === "Revolut" ? [["XYZ", "0", true]] : []);
       const warning = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
       expect([warning?.severity, warning?.context?.broker, warning?.context?.count]).toEqual(["warning", broker.label, String(parsed.trades.length)]);
     });

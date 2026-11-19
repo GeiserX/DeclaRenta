@@ -1075,10 +1075,6 @@ const ca: TranslationKeys = {
     "{{count}} operació(ns) d'Advanced Trade de Coinbase es van pagar o cobrar en una moneda diferent de la de valoració ({{pairs}}); només s'ha registrat la criptomoneda comprada o venuda, no la moneda de contrapartida.",
   "coinbase.advanced_trade_quote_leg_missing.hint":
     "En aquests parells també transmets (en comprar) o adquireixes (en vendre) la moneda de cotització, sigui una altra criptomoneda o una divisa, i aquesta operació també tributa. Afegeix manualment la venda o la compra d'aquesta moneda pel mateix valor en euros de l'operació perquè el seu guany i el seu cost d'adquisició quadrin.",
-  "trade_republic.trade_skipped_no_amount":
-    "S'ha(n) omès {{count}} operació(ns) de compravenda de Trade Republic sense import utilitzable.",
-  "trade_republic.trade_skipped_no_amount.hint":
-    "Sol deure's a files incompletes a l'exportació (columna \"amount\" buida o no numèrica). Si falten operacions, torna a descarregar el CSV de transaccions complet des de Trade Republic.",
   "trade_republic.corporate_action_not_applied":
     "Trade Republic: no s'han aplicat {{count}} moviment(s) d'acció corporativa (fusió, bescanvi, split) de {{isins}}.",
   "trade_republic.corporate_action_not_applied.hint":
@@ -1112,6 +1108,8 @@ const ca: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta accions per elles, així que els guanys i les pèrdues d'aquest valor no són fiables i no s'aplica l'excepció de compra única de la regla dels 2 mesos. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
   "parser.crypto_quantity_unknown": "{{broker}} no dona un nombre d'unitats o un preu llegible per a {{count}} operació(ns) amb criptomonedes: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta no suma ni resta unitats per elles, així que els guanys i les pèrdues d'aquesta criptomoneda no són fiables. Si una d'elles és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja perquè no sap quantes unitats vas recomprar. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
+  "parser.trade_row_unreadable": "{{broker}}: {{count}} fila(es) d'operació no es poden llegir i no es calculen: {{rows}}.",
+  "parser.trade_row_unreadable.hint": "Entre claudàtors hi ha la cel·la que falta, és buida, no es pot llegir o porta un tipus d'operació que DeclaRenta no reconeix. DeclaRenta no suma ni resta accions, unitats ni diners per aquestes files, així que els guanys i les pèrdues d'aquests valors no són fiables, i no aplica l'excepció de compra única de la regla dels 2 mesos a un valor que pugui ser el d'una d'elles. Si una fila és una compra o una venda real, corregeix aquesta cel·la al fitxer del broker i torna'l a pujar.",
   "revolut.bad_fx_rate": "S'han omès {{count}} ingrés(sos) o retirada(es) d'efectiu de l'extracte de Revolut perquè el seu tipus de canvi (FX Rate) no és vàlid: {{rows}}.",
   "revolut.bad_fx_rate.hint": "Només els ingressos i les retirades d'efectiu fan servir aquesta columna; les compres, les vendes i els dividends es calculen amb el tipus del BCE i no s'ometen. Sol passar per una cel·la de tipus de canvi no numèrica, negativa o igual a zero a l'exportació. Torna a descarregar el Trading Account Statement complet des de l'app de Revolut perquè aquests moviments s'hi incloguin.",
 };

@@ -30,7 +30,18 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableCell } from "./csv-utils.js";
+import {
+  findColumn,
+  parseNumber,
+  toFiniteDecimal,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  isReadableTradeDate,
+  dateUndatedTrades,
+} from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -150,10 +161,23 @@ function parseTrades(
     if (!row.length || row.every((c) => !c.trim())) continue;
 
     const symbol = (row[symbolCol] ?? "").trim();
-    if (!symbol) continue;
-
     const dateAcquired = parseRevolutDate(row[dateAcqCol] ?? "");
     const dateSold = parseRevolutDate(row[dateSoldCol] ?? "");
+    if (!symbol) {
+      // A closed position with no symbol is still a purchase and a sale of
+      // some shares: keep both legs, which book nothing, so the one-purchase
+      // evidence (#453) cannot be proven with them missing (#467). A row with
+      // no readable date either is no position (a totals line).
+      if (!isReadableTradeDate(dateAcquired) && !isReadableTradeDate(dateSold)) continue;
+      const leg = { symbol: "", isin: "", assetCategory: "STK", currency: (row[currencyCol] ?? "").trim(), exchange: "REVOLUT" } as const;
+      const cell = unreadableCell(headers[symbolCol] ?? "Symbol", "");
+      trades.push(
+        unreadableTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}--${i}`, tradeDate: dateAcquired, buySell: "BUY" }, cell),
+        unreadableTrade({ ...leg, tradeID: `revolut-close-${dateSold}--${i}`, tradeDate: dateSold, buySell: "SELL" }, cell),
+      );
+      continue;
+    }
+
     const quantity = (row[quantityCol] ?? "0").trim();
     const costBasis = costBasisCol >= 0 ? (row[costBasisCol] ?? "0").trim() : "0";
     const grossProceeds = grossProceedsCol >= 0 ? (row[grossProceedsCol] ?? "0").trim() : "0";
@@ -249,7 +273,8 @@ function parseTrades(
   }
 
   // Every money/quantity cell is finiteness-guarded via toFiniteDecimal; the
-  // only message is the one naming the trades of unknown quantity.
+  // only messages name the trades of unknown quantity and the unreadable rows.
+  dateUndatedTrades("Revolut", trades, [], "Date acquired / Date sold");
   return { trades, parserMessages: tradeQuantityUnknownMessages("Revolut", trades) };
 }
 
@@ -319,9 +344,6 @@ function parseTransactionLog(
   // by date and amount: the conversion would be wrong, so they are skipped and
   // named (never default to 1). Only cash rows read the cell (#466).
   const badFxRateRows: string[] = [];
-  // Ticker rows whose `type` is none of BUY/SELL/DIVIDEND/STOCK SPLIT, whatever
-  // their amount (a spin-off or stock merger can carry USD 0) — counted and warned.
-  let skippedUnknownType = 0;
   // DIVIDEND rows imported at the net amount Revolut reports.
   let netDividends = 0;
   // STOCK SPLIT rows with no usable Quantity (shares added).
@@ -338,7 +360,6 @@ function parseTransactionLog(
     if (!row.length || row.every((c) => !c.trim())) continue;
 
     const dateStr = (row[cols.date] ?? "").trim();
-    if (!dateStr) continue;
     const tradeDate = parseRevolutDate(dateStr);
 
     const type = (row[cols.type] ?? "").trim();
@@ -353,6 +374,7 @@ function parseTransactionLog(
 
     // Cash flows: CASH TOP-UP, CASH WITHDRAWAL
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
+      if (!dateStr) continue;
       // FX rate validation, for the only rows that read the cell: it defaults
       // to "1" only when ABSENT (missing column or empty cell), a legitimate
       // case (EUR rows, no FX column). A cell that IS present and parses to a
@@ -398,6 +420,37 @@ function parseTransactionLog(
     const { amount: qtyAmountStr } = parseCcyAmount(quantityStr);
     const signedQtyDec = toFiniteDecimal(qtyAmountStr, "0", false);
     const qtyDec = signedQtyDec.abs();
+
+    // A ticker row that is a buy, a sale or of a type no branch handles (a
+    // spin-off, a stock merger, a stop order) but cannot be read is kept as a
+    // trade that books nothing, never dropped or booked as a buy (#467,
+    // #468). A row of an unknown type that writes a zero quantity moves no
+    // shares and stays skipped.
+    const buy = TXN_TYPE_BUY.test(type);
+    const sell = TXN_TYPE_SELL.test(type);
+    const otherType = !buy && !sell && !TXN_TYPE_DIVIDEND.test(type) && !TXN_TYPE_SPLIT.test(type) &&
+      !TXN_TYPE_ENTITY_TRANSFER.test(type);
+    // Read the Quantity cell as parseCcyAmount does (an optional "CCY " prefix,
+    // then parseNumber), so a blank or currency-only cell is unreadable too.
+    const quantityCell = (row[cols.quantity] ?? "").trim().replace(/^[A-Z]{3}\s+/, "");
+    const keepUnreadable = (cell: string): void => {
+      trades.push(unreadableTrade({
+        tradeID: `revolut-row-${tradeDate}-${ticker}-${i}`,
+        symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
+        exchange: "REVOLUT", ...(buy || sell ? { buySell: sell ? "SELL" as const : "BUY" as const } : {}),
+      }, cell));
+    };
+    if (otherType && !quantityUnreadable(quantityCell) && qtyDec.isZero()) continue;
+    if ((buy || sell || otherType) && !isReadableTradeDate(tradeDate)) {
+      keepUnreadable(unreadableCell(headers[cols.date] ?? "Date", dateStr));
+      continue;
+    }
+    if (otherType) {
+      keepUnreadable(unreadableCell(headers[cols.type] ?? "Type", type));
+      continue;
+    }
+    // A dividend or split row with no date stays skipped, as before.
+    if (!dateStr) continue;
 
     // DIVIDEND: Quantity is empty and the amount is net of withholding.
     if (TXN_TYPE_DIVIDEND.test(type)) {
@@ -451,20 +504,12 @@ function parseTransactionLog(
 
     if (TXN_TYPE_ENTITY_TRANSFER.test(type)) continue;
 
-    if (!TXN_TYPE_BUY.test(type) && !TXN_TYPE_SELL.test(type)) {
-      // Any other ticker row (spin-off, stock merger, ...) is not applied.
-      // Count it whatever its amount so the user knows something is missing.
-      skippedUnknownType++;
-      continue;
-    }
     if (qtyDec.isZero()) {
       // An empty or unreadable quantity is no "0": keep the row as a trade of
       // unknown quantity for the anti-churning evidence (#453). It moves no
-      // share and no money, and no holding is built from it.
-      // Read the cell as parseCcyAmount does (an optional "CCY " prefix, then
-      // parseNumber), so a blank or currency-only cell is unreadable too.
-      if (quantityUnreadable((row[cols.quantity] ?? "").trim().replace(/^[A-Z]{3}\s+/, ""))) {
-        const buy = TXN_TYPE_BUY.test(type);
+      // share and no money, and no holding is built from it (the ticker's
+      // inferred holding is then of unknown size, below).
+      if (quantityUnreadable(quantityCell)) {
         trades.push(quantityUnknownTrade({
           tradeID: `revolut-${buy ? "buy" : "sell"}-${tradeDate}-${ticker}-${i}`,
           symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
@@ -554,11 +599,23 @@ function parseTransactionLog(
     }
   }
 
+  // A ticker with a trade whose size the file does not give (an unreadable
+  // quantity or an unreadable row) has a holding of unknown size: the trades
+  // cannot say it. Its inferred row is kept flagged, quantity "0" with
+  // `quantityUnknown`, never the readable trades' part as if complete; a
+  // purchase of unknown size with nothing readable left still makes one.
+  const unknownSize = new Map<string, Trade>();
+  for (const t of trades) {
+    if (t.quantityUnknown !== true) continue;
+    if (t.buySell === "BUY" || !unknownSize.has(t.symbol)) unknownSize.set(t.symbol, t);
+  }
+
   // Build open positions from symbols with remaining shares
   const openPositions: OpenPosition[] = [];
   for (const pos of Array.from(positions.values())) {
     if (pos.netQty.greaterThan(0.00000001)) {
       const costPerUnit = pos.netQty.greaterThan(0) ? pos.totalCost.div(pos.netQty) : new Decimal(0);
+      const unknown = unknownSize.has(pos.symbol);
       openPositions.push({
         accountId: "",
         symbol: pos.symbol,
@@ -566,16 +623,37 @@ function parseTransactionLog(
         isin: "",
         currency: pos.currency,
         assetCategory: pos.assetCategory,
-        quantity: pos.netQty.toString(),
-        costBasisMoney: pos.totalCost.toFixed(2),
-        costBasisPrice: costPerUnit.toFixed(8),
+        quantity: unknown ? "0" : pos.netQty.toString(),
+        costBasisMoney: unknown ? "0" : pos.totalCost.toFixed(2),
+        costBasisPrice: unknown ? "0" : costPerUnit.toFixed(8),
         markPrice: "0",
         positionValue: "0",
         fifoPnlUnrealized: "0",
         fromTrades: true,
         fxRateToBase: "1",
+        ...(unknown ? { quantityUnknown: true } : {}),
       });
     }
+  }
+  for (const [symbol, t] of unknownSize) {
+    if (!symbol || t.buySell !== "BUY" || openPositions.some((p) => p.symbol === symbol)) continue;
+    openPositions.push({
+      accountId: "",
+      symbol,
+      description: symbol,
+      isin: "",
+      currency: t.currency,
+      assetCategory: t.assetCategory,
+      quantity: "0",
+      costBasisMoney: "0",
+      costBasisPrice: "0",
+      markPrice: "0",
+      positionValue: "0",
+      fifoPnlUnrealized: "0",
+      fromTrades: true,
+      fxRateToBase: "1",
+      quantityUnknown: true,
+    });
   }
 
   const parserMessages: TaxMessage[] = [];
@@ -588,15 +666,6 @@ function parseTransactionLog(
       message: `Se ha(n) omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: ${rows}.`,
       hint: "Solo los ingresos y las retiradas de efectivo usan esa columna; las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. Suele deberse a una celda de tipo de cambio no numérica, negativa o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esos movimientos se incluyan.",
       context: { count, rows },
-    });
-  }
-  if (skippedUnknownType > 0) {
-    parserMessages.push({
-      id: "revolut.unknown_type",
-      severity: "warning" as const,
-      message: `Se ${skippedUnknownType === 1 ? "ha omitido 1 operación" : `han omitido ${skippedUnknownType} operaciones`} del extracto de Revolut por tener un tipo de operación no reconocido.`,
-      hint: "Suele deberse a tipos de operación poco habituales no contemplados por el conversor. Si faltan operaciones en el cálculo, revisa el extracto y añade su información manualmente.",
-      context: { count: String(skippedUnknownType) },
     });
   }
   if (unresolvedSplits > 0) {
@@ -618,6 +687,7 @@ function parseTransactionLog(
     });
   }
 
+  dateUndatedTrades("Revolut", trades, cashTransactions.map((c) => c.dateTime));
   parserMessages.push(...tradeQuantityUnknownMessages("Revolut", trades));
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }

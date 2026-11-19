@@ -39,6 +39,9 @@ import {
   quantityUnknownTrade,
   quantityUnreadable,
   tradeQuantityUnknownMessages,
+  unreadableTrade,
+  unreadableCell,
+  dateUndatedTrades,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -187,13 +190,40 @@ function parseTrading212Csv(lines: string[]): Statement {
     const totalStr = toFiniteDecimalString(fields[cols.total] ?? "0");
     const txId = (fields[cols.id] ?? "").trim();
 
-    if (!timeRaw) continue;
-    const tradeDate = convertTrading212Date(timeRaw);
-    const tradeTime = timeOfDay(timeRaw);
+    const tradeDate = timeRaw ? convertTrading212Date(timeRaw) : "";
+    const tradeTime = timeRaw ? timeOfDay(timeRaw) : undefined;
 
     if (isSkippedAction(action)) continue;
 
     const uniqueId = txId || `${tradeDate}-${ticker || action}-${i}`;
+
+    // A buy or sale row, or a row of an action no branch below handles (a
+    // stock split, a share transfer) that names a ticker or an ISIN, is kept as
+    // a trade that books nothing when it cannot be read: no Time, no ticker,
+    // an unknown action. Dropping it would hide a purchase or a sale (#467).
+    // A row of an unknown action that writes a zero share count moves no
+    // shares and stays skipped, as does one that names no security.
+    const buy = isBuyAction(action);
+    const sell = isSellAction(action);
+    const otherAction = !buy && !sell && !isDividendTaxAction(action) && !isDividendAction(action) && !isInterestAction(action);
+    if (otherAction && (!(ticker || isin) || (!quantityUnreadable(fields[cols.shares]) && new Decimal(sharesStr).isZero()))) continue;
+    const unreadableCellOf = (): string | undefined => {
+      if (!timeRaw) return unreadableCell(headers[cols.time] ?? "Time", timeRaw);
+      if (otherAction) return unreadableCell(headers[cols.action] ?? "Action", action);
+      if ((buy || sell) && !ticker) return unreadableCell(headers[cols.ticker] ?? "Ticker", ticker);
+      return undefined;
+    };
+    const cell = buy || sell || otherAction ? unreadableCellOf() : undefined;
+    if (cell !== undefined) {
+      trades.push(unreadableTrade({
+        tradeID: `trading212-row-${uniqueId}`,
+        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        ...(buy || sell ? { buySell: sell ? "SELL" as const : "BUY" as const } : {}), exchange: "TRADING212",
+      }, cell));
+      continue;
+    }
+    // A dividend or interest row with no Time stays skipped, as before.
+    if (!timeRaw) continue;
 
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
@@ -260,11 +290,8 @@ function parseTrading212Csv(lines: string[]): Statement {
       continue;
     }
 
-    // Buy / Sell trades
-    const buy = isBuyAction(action);
-    const sell = isSellAction(action);
+    // Buy / Sell trades (an unreadable one was kept above)
     if (!buy && !sell) continue;
-    if (!ticker) continue;
 
     const qtyDec = new Decimal(sharesStr).abs();
     if (qtyDec.isZero()) {
@@ -362,6 +389,7 @@ function parseTrading212Csv(lines: string[]): Statement {
     });
   }
 
+  dateUndatedTrades("Trading 212", trades, cashTransactions.map((c) => c.dateTime), "Time");
   parserMessages.push(...tradeQuantityUnknownMessages("Trading 212", trades));
 
   return {

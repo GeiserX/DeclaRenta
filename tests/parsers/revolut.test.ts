@@ -331,12 +331,25 @@ describe("revolutParser", () => {
       expect(statement.parserMessages).toBeUndefined();
     });
 
-    it("should skip rows with empty symbol", async () => {
+    it("keeps both legs of a row with an empty symbol as trades that book nothing, named (#467)", async () => {
       const data = buildRevolutWorkbook([
         ["2025-01-01", "2025-06-01", "", "5", "1000", "1100", "100", "0", "100", "USD"],
       ]);
       const statement = await parseRevolutXlsx(data);
-      expect(statement.trades.length).toBe(0);
+      expect(statement.trades.map((t) => [t.symbol, t.buySell, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+        ["", "BUY", "20250101", "0", true, "0", '— 20250101 [Symbol: ""]'],
+        ["", "SELL", "20250601", "0", true, "0", '— 20250601 [Symbol: ""]'],
+      ]);
+      expect(statement.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.count).toBe("2");
+    });
+
+    it("control: a row with no symbol and no readable date (a totals line) is skipped", async () => {
+      const data = buildRevolutWorkbook([
+        ["2025-01-01", "2025-06-01", "AAPL", "5", "1000", "1100", "100", "0", "100", "USD"],
+        ["Total", "", "", "5", "1000", "1100", "100", "0", "100", ""],
+      ]);
+      const statement = await parseRevolutXlsx(data);
+      expect(statement.trades.map((t) => t.symbol)).toEqual(["AAPL", "AAPL"]);
     });
 
     it("should skip blank rows between data rows", async () => {
@@ -768,7 +781,8 @@ describe("revolutParser — transaction-log format", () => {
       ]);
       const stmt = await parseRevolutXlsx(data);
       expect(stmt.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown, t.tradeMoney, t.cost])).toEqual([["BUY", "0", true, "0", "0"]]);
-      expect(stmt.openPositions).toEqual([]);
+      // The holding it leaves has an unknown size: flagged, never a count.
+      expect(stmt.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown])).toEqual([["AAPL", "0", true]]);
       expect(stmt.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("Revolut");
     });
   });
@@ -1108,12 +1122,18 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     expect(stmt.openPositions[0]!.quantity).toBe("1");
   });
 
-  it("counts any other ticker row it cannot handle, even with a zero amount", async () => {
+  it("keeps any other ticker row it cannot handle as a trade that books nothing, named, even with a zero amount (#467)", async () => {
     const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
       ["2024-06-10T08:00:00Z", "ACME", "SPINOFF", "3", "", "USD 0", "USD", "1.08"],
       ["2024-06-11T08:00:00Z", "ACME", "MERGER - STOCK", "", "", "", "USD", "1.08"],
+      ["2024-06-12T08:00:00Z", "ACME", "CUSTODY FEE", "0", "", "USD -1", "USD", "1.08"],
     ]));
-    const warning = stmt.parserMessages?.find((m) => m.id === "revolut.unknown_type");
-    expect(warning?.context?.count).toBe("2");
+    expect(stmt.trades.map((t) => [t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+      ["0", true, "0", 'ACME 20240610 [Type: "SPINOFF"]'],
+      ["0", true, "0", 'ACME 20240611 [Type: "MERGER - STOCK"]'],
+    ]);
+    const warning = stmt.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable");
+    expect([warning?.severity, warning?.context?.count]).toEqual(["warning", "2"]);
+    expect(stmt.parserMessages?.some((m) => m.id === "revolut.unknown_type")).toBeFalsy();
   });
 });

@@ -76,13 +76,17 @@ describe("lightyearParser - branch coverage", () => {
     expect(result.cashTransactions).toHaveLength(0);
   });
 
-  it("should skip buy with no ticker", () => {
+  it("keeps a buy with no ticker as an unreadable row that books nothing (#467)", () => {
     const input = [
       HEADER,
       "15/01/2025,REF001,,,Buy,10,EUR,100,1000,1,0,1000,0",
+      "15/01/2025,REF002,,US0378331005,Buy,10,EUR,100,1000,1,0,1000,0",
     ].join("\n");
     const result = lightyearParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+      ["", "0", true, "0", '— 20250115 [Ticker: ""]'],
+      ["US0378331005", "0", true, "0", 'US0378331005 20250115 [Ticker: ""]'],
+    ]);
   });
 
   it("should skip buy with zero quantity", () => {
@@ -127,13 +131,29 @@ describe("lightyearParser - branch coverage", () => {
     expect(() => lightyearParser.parse(input)).toThrow("formato de fecha no reconocido");
   });
 
-  it("should skip rows with empty date", () => {
+  it("keeps a buy with an empty date as an unreadable row, on the file's earliest date (#467)", () => {
     const input = [
       HEADER,
+      "20/02/2025,REF002,MSFT,US5949181045,Buy,1,USD,400,400,0.92,0,400,0",
       ",REF001,AAPL,US0378331005,Buy,10,USD,175,1750,0.92,0,1750,0",
+      "10/01/2025,REF003,AAPL,US0378331005,Dividend,,USD,,5,0.92,0,5,0",
     ].join("\n");
     const result = lightyearParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    const kept = result.trades[1]!;
+    expect([kept.symbol, kept.tradeDate, kept.quantity, kept.quantityUnknown, kept.unreadableRow]).toEqual([
+      "AAPL", "20250110", "0", true, 'AAPL (US0378331005) [Date: ""]',
+    ]);
+  });
+
+  it("refuses a file whose only rows have no readable date", () => {
+    const input = [HEADER, ",REF001,AAPL,US0378331005,Buy,10,USD,175,1750,0.92,0,1750,0"].join("\n");
+    expect(() => lightyearParser.parse(input)).toThrow(/ninguna operación del archivo tiene una fecha legible/);
+  });
+
+  it("control: a dividend with an empty date stays skipped", () => {
+    const input = [HEADER, ",REF003,AAPL,US0378331005,Dividend,,USD,,5,0.92,0,5,0"].join("\n");
+    const result = lightyearParser.parse(input);
+    expect([result.trades, result.cashTransactions]).toEqual([[], []]);
   });
 
   it("should use reference as trade ID when available", () => {

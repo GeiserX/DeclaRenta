@@ -28,12 +28,21 @@ describe("degiroParser - Transactions CSV branches", () => {
     expect(result.trades).toHaveLength(0);
   });
 
-  it("should skip rows with no ISIN", () => {
+  it("keeps a trade row with no ISIN as an unreadable row that books nothing (#467)", () => {
     const header = "Fecha;Hora;Producto;ISIN;Centro de ejecución;Número;Precio;EUR;Valor;EUR;Costes de transacción;EUR;Total;EUR;ID Orden";
     const row = "15-01-2025;10:00;SOME PRODUCT;;NASDAQ;10;100;EUR;1000;EUR;0;EUR;1000;EUR;";
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.symbol, t.isin, t.buySell, t.quantity, t.quantityUnknown, t.tradeMoney, t.unreadableRow])).toEqual([
+      ["SOME PRODUCT", "", "SELL", "0", true, "0", 'SOME PRODUCT 20250115 [ISIN: ""]'],
+    ]);
+    expect(result.parserMessages?.map((m) => m.id)).toEqual(["parser.trade_row_unreadable"]);
+  });
+
+  it("control: a line with no ISIN, no quantity and no price (a cash movement) is skipped", () => {
+    const header = "Fecha;Hora;Producto;ISIN;Centro de ejecución;Número;Precio;EUR;Valor;EUR;Costes de transacción;EUR;Total;EUR;ID Orden";
+    const row = "15-01-2025;10:00;INGRESO;;;;;EUR;1000;EUR;0;EUR;1000;EUR;";
+    expect(degiroParser.parse(`${header}\n${row}`).trades).toEqual([]);
   });
 
   it("should handle AutoFX commission column", () => {

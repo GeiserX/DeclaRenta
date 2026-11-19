@@ -122,6 +122,14 @@ export interface Trade {
    * disposal).
    */
   quantityUnknown?: boolean;
+  /**
+   * Set with `quantityUnknown` on a trade row the parser could not read at
+   * all (#467, #468): a bad date, no ticker or ISIN, an operation type that is
+   * neither a buy nor a sale, no amount. It names the row for the user
+   * (security, date, the unreadable cell); `parser.trade_row_unreadable` lists
+   * it. The row books nothing, as with an unreadable quantity.
+   */
+  unreadableRow?: string;
   tradePrice: string;
   tradeMoney: string;
   proceeds: string;
