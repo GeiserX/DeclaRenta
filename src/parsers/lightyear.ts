@@ -144,55 +144,46 @@ function parseLightyearCsv(lines: string[]): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
 
-  // Pre-scan: collect FX conversion fees AND the real EUR principal by timestamp.
-  // Lightyear emits conversion pairs (one leg per currency). The fee can appear
-  // on either leg (often on the EUR leg, which we skip). Group by timestamp
-  // and extract the fee so it can be applied to the non-EUR trade.
-  const conversionFees = new Map<string, { fee: string; currency: string }>();
-  // The EUR leg's |Net Amt.| is the real spread-laden EUR principal Lightyear
-  // actually moved (fee EXCLUDED — the engine applies our -Fee commission on
-  // top). Stored per timestamp so the non-EUR trade can be valued at the real
-  // applied rate instead of ECB (Art. 35.1 LIRPF; issue #253). FCY↔FCY
-  // conversions have no EUR leg → left unset → engine falls back to ECB.
-  const conversionEurAmounts = new Map<string, string>();
-  // Timestamps with MORE THAN ONE EUR conversion leg (two different conversions
-  // in the same second). The pairing key is only second-resolution, so we cannot
-  // tell which non-EUR leg owns which EUR principal — attaching the wrong one
-  // would mis-value an entire conversion into casillas 1633/1637. Such timestamps
-  // are excluded so the engine uses the ECB rate (a correct mid-rate beats a
-  // wrong real principal).
-  const ambiguousEurTimestamps = new Set<string>();
+  // Pre-scan: Lightyear writes a conversion as a pair of rows with the same
+  // timestamp, one leg per currency. The EUR leg's |Net Amt.| is the real
+  // spread-laden EUR principal Lightyear moved (fee EXCLUDED: the engine
+  // applies our -Fee commission on top), so the non-EUR trade can be valued at
+  // the real applied rate instead of ECB (Art. 35.1 LIRPF; issue #253). The
+  // fee can be on either leg (often the EUR leg, which is not booked). Gross is
+  // fee-INCLUSIVE, so a Net that cannot be read gives no principal, never the
+  // Gross. The timestamp is the only key, to the second: a pair is known only
+  // when the second holds exactly two conversion rows, one in EUR and one in
+  // another currency. Any other second (two conversions at once, an FCY↔FCY
+  // one, a leg with no CCY) gets no EUR principal, so the engine uses the ECB
+  // rate, and each leg keeps the fee its own row writes. Pairing by a guess
+  // gave a conversion another one's EUR principal, or both the larger fee
+  // (#467).
+  const conversionLegs = new Map<string, string[][]>();
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
     if (!line) continue;
     const fields = parseCsvLine(line, ",");
-    const txType = (fields[cols.type] ?? "").trim().toLowerCase();
-    if (txType !== "conversion") continue;
+    if ((fields[cols.type] ?? "").trim().toLowerCase() !== "conversion") continue;
     const dateRaw = (fields[cols.date] ?? "").trim();
-    const ccy = (fields[cols.ccy] ?? "EUR").trim();
-
-    // Harvest the EUR leg's real Net Amt. (the fee-excluded principal). No fee
-    // gate — a fee-free conversion still carries a real EUR principal.
-    if (ccy === "EUR") {
-      if (conversionEurAmounts.has(dateRaw)) {
-        // A second EUR leg at this timestamp → ambiguous pairing; drop to ECB.
-        ambiguousEurTimestamps.add(dateRaw);
-      } else {
-        // Use the EUR leg's Net Amt. ONLY — it is the real principal with the fee
-        // EXCLUDED (the engine applies our -Fee commission on top). Gross is
-        // fee-INCLUSIVE, so falling back to it would double-count the fee; if Net
-        // is empty we omit the field and let the engine use ECB instead.
-        const eurNet = toFiniteDecimal(fields[cols.netAmount] ?? "0");
-        if (!eurNet.isZero()) conversionEurAmounts.set(dateRaw, eurNet.abs().toString());
-      }
-    }
-
-    const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0");
-    if (feeDec.isZero()) continue;
-    const existing = conversionFees.get(dateRaw);
-    if (!existing || feeDec.abs().greaterThan(new Decimal(existing.fee).abs())) {
-      conversionFees.set(dateRaw, { fee: feeDec.abs().toString(), currency: ccy });
-    }
+    conversionLegs.set(dateRaw, [...(conversionLegs.get(dateRaw) ?? []), fields]);
+  }
+  const conversionPairs = new Map<string, { realEurAmount?: string; fee?: { fee: string; currency: string } }>();
+  for (const [dateRaw, legs] of conversionLegs) {
+    if (legs.length !== 2) continue;
+    const ccys = legs.map((fields) => (fields[cols.ccy] ?? "").trim());
+    const eur = ccys.indexOf("EUR");
+    const other = ccys[1 - eur];
+    if (eur < 0 || !other || other === "EUR") continue;
+    const eurNet = toFiniteDecimal(legs[eur]![cols.netAmount] ?? "0");
+    let fee: { fee: string; currency: string } | undefined;
+    legs.forEach((fields, k) => {
+      const feeDec = toFiniteDecimal(fields[cols.fee] ?? "0").abs();
+      if (!feeDec.isZero() && (!fee || feeDec.greaterThan(fee.fee))) fee = { fee: feeDec.toString(), currency: ccys[k]! };
+    });
+    conversionPairs.set(dateRaw, {
+      ...(eurNet.isZero() ? {} : { realEurAmount: eurNet.abs().toString() }),
+      ...(fee ? { fee } : {}),
+    });
   }
 
   // Rows of a type no branch handles (e.g. a split or transfer), per raw type.
@@ -373,17 +364,13 @@ function parseLightyearCsv(lines: string[]): Statement {
       const absDec = netDec.abs();
       const isFxBuy = netDec.greaterThan(0);
 
-      // Look up commission from paired leg (fee may be on the EUR row we skip)
-      const pairedFee = conversionFees.get(dateRaw);
-      const commissionVal = pairedFee ? pairedFee.fee : new Decimal(fee).abs().toString();
-      const commCurrency = pairedFee ? pairedFee.currency : currency;
-
-      // Real EUR principal from the paired EUR leg (|Net Amt.|, spread embedded,
-      // fee excluded). Absent for FCY↔FCY conversions, or dropped when >1 EUR leg
-      // shares this timestamp (ambiguous pairing) → omit so the engine uses ECB.
-      const realEurAmount = ambiguousEurTimestamps.has(dateRaw)
-        ? undefined
-        : conversionEurAmounts.get(dateRaw);
+      // The commission and the real EUR principal of a known pair (pre-scan
+      // above): the fee may be on the EUR row, which is not booked. Any other
+      // leg keeps its own fee, and the engine values it at the ECB rate.
+      const pair = conversionPairs.get(dateRaw);
+      const commissionVal = pair?.fee ? pair.fee.fee : new Decimal(fee).abs().toString();
+      const commCurrency = pair?.fee ? pair.fee.currency : currency;
+      const realEurAmount = pair?.realEurAmount;
 
       trades.push({
         tradeID: `lightyear-fx-${reference || `${tradeDate}-${currency}-${i}`}`,

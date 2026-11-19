@@ -98,3 +98,74 @@ describe("Lightyear Price/share: a sale is never booked at 0 or from a raw strin
     }
   });
 });
+
+// Acquire 100 USD on 10/02 and give them back for 80 € on 10/09.
+const FX_DISPOSE = [
+  "10/09/2025 09:00:00,CN-3,USD,,Conversion,,USD,,-100.00,,,-100.00,",
+  "10/09/2025 09:00:00,CN-4,EUR,,Conversion,,EUR,,80.00,,0.00,80.00,",
+];
+
+describe("Lightyear conversions: the EUR principal and the fee pair only one EUR leg with one other leg", () => {
+  const sameSecond = (firstEurNet: string) => [
+    "10/02/2025 09:00:00,CN-1,USD,,Conversion,,USD,,100.00,,,100.00,",
+    `10/02/2025 09:00:00,CN-2,EUR,,Conversion,,EUR,,-95.00,,,${firstEurNet},`,
+    "10/02/2025 09:00:00,CN-5,GBP,,Conversion,,GBP,,50.00,,,50.00,",
+    "10/02/2025 09:00:00,CN-6,EUR,,Conversion,,EUR,,-60.00,,,-60.00,",
+    ...FX_DISPOSE,
+  ];
+
+  it.each(METHODS)("[%s] an unreadable EUR leg in a second with two conversions leaves both at the ECB rate", (method) => {
+    const s = parse(sameSecond("n/a"));
+    for (const id of ["lightyear-fx-CN-1", "lightyear-fx-CN-5"]) {
+      expect(s.trades.find((t) => t.tradeID === id)!.realEurAmount).toBeUndefined();
+    }
+    const control = report(sameSecond("-95.00"), method).fxGains;
+    const r = report(sameSecond("n/a"), method).fxGains;
+    expect(r.netGainLoss.toString()).toBe(control.netGainLoss.toString());
+    expect(r.netGainLoss.toString()).toBe(method === "monodivisa" ? "0" : "-10");
+  });
+
+  const fcyInEurSecond = (usdGbpTime: string) => [
+    "01/02/2025 09:00:00,CN-9,USD,,Conversion,,USD,,500.00,,,500.00,",
+    "01/02/2025 09:00:00,CN-10,EUR,,Conversion,,EUR,,-450.00,,,-450.00,",
+    "10/02/2025 09:00:00,CN-1,GBP,,Conversion,,GBP,,10.00,,,10.00,",
+    "10/02/2025 09:00:00,CN-2,EUR,,Conversion,,EUR,,-12.00,,,-12.00,",
+    `${usdGbpTime},CN-7,USD,,Conversion,,USD,,-500.00,,,-500.00,`,
+    `${usdGbpTime},CN-8,GBP,,Conversion,,GBP,,400.00,,,400.00,`,
+  ];
+
+  it.each(METHODS)("[%s] a USD→GBP conversion in the same second as an EUR→GBP one never takes its 12 € principal", (method) => {
+    const s = parse(fcyInEurSecond("10/02/2025 09:00:00"));
+    expect(s.trades.find((t) => t.tradeID === "lightyear-fx-CN-7")!.realEurAmount).toBeUndefined();
+    const control = report(fcyInEurSecond("10/02/2025 09:00:01"), method).fxGains;
+    const r = report(fcyInEurSecond("10/02/2025 09:00:00"), method).fxGains;
+    expect(r.transmissionValue.toString()).toBe(control.transmissionValue.toString());
+    expect(r.netGainLoss.toString()).toBe("0");
+  });
+
+  it("a single conversion keeps its EUR principal and its fee", () => {
+    const s = parse([
+      "10/02/2025 09:00:00,CN-1,USD,,Conversion,,USD,,100.00,,,100.00,",
+      "10/02/2025 09:00:00,CN-2,EUR,,Conversion,,EUR,,-95.50,,0.50,-95.00,",
+    ]);
+    expect(s.trades[0]!.realEurAmount).toBe("95");
+    expect(s.trades[0]!.commission).toBe("-0.5");
+    expect(s.trades[0]!.commissionCurrency).toBe("EUR");
+  });
+
+  it.each(METHODS)("[%s] two conversions in one second never both take the larger fee", (method) => {
+    const rows = (gbpTime: string) => [
+      "10/02/2025 09:00:00,CN-1,USD,,Conversion,,USD,,100.00,,,100.00,",
+      "10/02/2025 09:00:00,CN-2,EUR,,Conversion,,EUR,,-95.50,,0.50,-95.00,",
+      `${gbpTime},CN-5,GBP,,Conversion,,GBP,,50.00,,,50.00,`,
+      `${gbpTime},CN-6,EUR,,Conversion,,EUR,,-60.20,,0.20,-60.00,`,
+    ];
+    const fees = parse(rows("10/02/2025 09:00:00")).trades.map((t) => t.commission);
+    expect(fees).toEqual(["-0", "-0"]);
+    expect(parse(rows("10/02/2025 09:00:01")).trades.map((t) => t.commission)).toEqual(["-0.5", "-0.2"]);
+    // Both currencies given back later: ECB values (90 € + 60 €) with no fee,
+    // never the 151 € of the 0.50 fee counted twice.
+    const sold = [...rows("10/02/2025 09:00:00"), ...FX_DISPOSE, "11/09/2025 09:00:00,CN-11,GBP,,Conversion,,GBP,,-50.00,,,-50.00,"];
+    expect(report(sold, method).fxGains.acquisitionValue.toString()).toBe(method === "monodivisa" ? "0" : "150");
+  });
+});
