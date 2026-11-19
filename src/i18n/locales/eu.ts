@@ -605,6 +605,7 @@ const eu: TranslationKeys = {
   "annex.title": "Eragiketen eranskina (Anexo C1)",
   "annex.subtitle": "Eragiketen banakako xehetasuna aktibo motaren arabera taldekatuta.",
   "annex.operations": "eragiketa",
+  "annex.not_counted": "ez da batzen",
   "annex.wash_blocked": "Berrerosketagatik blokeatutako galera: {{amount}} EUR (LIRPF 33.5 art.)",
   "annex.wash_dates": "Galera blokeatzen duten balio bereko erosketak: {{dates}}",
   "annex.wash_hint":

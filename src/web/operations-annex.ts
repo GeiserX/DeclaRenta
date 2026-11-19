@@ -95,7 +95,16 @@ export function renderOperationsAnnex(report: TaxSummary): string {
           <tbody>`;
 
     ops.forEach((d, i) => {
-      const cls = d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss";
+      // Each cell shows what the subtotal adds (`finiteDisposalAmounts`), so
+      // the column sums to it. A finite cost next to non-finite proceeds is
+      // shown but not added (no phantom loss): it carries the mark. With only
+      // the cost not finite, the result added is the proceeds: shown as such.
+      const counted = amounts[i]!;
+      const costCell = d.costBasisEur.isFinite() && !d.proceedsEur.isFinite()
+        ? `${fmtEur(d.costBasisEur)} <span class="muted">(${esc(t("annex.not_counted"))})</span>`
+        : amountCell(d.costBasisEur);
+      const result = counted.excluded && d.proceedsEur.isFinite() ? counted.gainLoss : d.gainLossEur;
+      const cls = result.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = washSaleRowAttr(d);
       const optionInfo = d.optionScenario
         ? ` <span class="option-badge">${esc(optionScenarioLabel(d.optionScenario))}${d.putCall ? ` ${d.putCall === "C" ? "Call" : "Put"}` : ""}${d.strike ? ` @${esc(d.strike)}` : ""}</span>`
@@ -113,9 +122,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
-              <td class="num">${amountCell(d.costBasisEur)}</td>
+              <td class="num">${costCell}</td>
               <td class="num">${amountCell(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${amountCell(d.gainLossEur)}</td>
+              <td class="num ${cls}">${result.isFinite() && result.greaterThanOrEqualTo(0) ? "+" : ""}${amountCell(result)}</td>
             </tr>${renderWashSaleDetailRow(d, columnCount)}`;
     });
 

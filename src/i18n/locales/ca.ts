@@ -605,6 +605,7 @@ const ca: TranslationKeys = {
   "annex.title": "Annex d'operacions (Anexo C1)",
   "annex.subtitle": "Detall individual d'operacions agrupades per tipus d'actiu.",
   "annex.operations": "operaci\u00f3(ns)",
+  "annex.not_counted": "no se suma",
   "annex.wash_blocked": "Pèrdua bloquejada per recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compres del mateix valor que la bloquegen: {{dates}}",
   "annex.wash_hint":

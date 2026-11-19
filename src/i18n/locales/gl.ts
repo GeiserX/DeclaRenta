@@ -605,6 +605,7 @@ const gl: TranslationKeys = {
   "annex.title": "Anexo de operaci\u00f3ns (Anexo C1)",
   "annex.subtitle": "Detalle individual de operaci\u00f3ns agrupadas por tipo de activo.",
   "annex.operations": "operaci\u00f3n(s)",
+  "annex.not_counted": "non se suma",
   "annex.wash_blocked": "Perda bloqueada por recompra: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Compras do mesmo valor que a bloquean: {{dates}}",
   "annex.wash_hint":

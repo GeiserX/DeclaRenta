@@ -603,6 +603,7 @@ const en: TranslationKeys = {
   "annex.title": "Operations Annex (Anexo C1)",
   "annex.subtitle": "Individual operations detail grouped by asset type.",
   "annex.operations": "operation(s)",
+  "annex.not_counted": "not added",
   "annex.wash_blocked": "Loss blocked by repurchase: {{amount}} EUR (art. 33.5 LIRPF)",
   "annex.wash_dates": "Purchases of the same security that block it: {{dates}}",
   "annex.wash_hint":

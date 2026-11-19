@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { renderOperationsAnnex } from "../../src/web/operations-annex.js";
+import { setLocale, t } from "../../src/i18n/index.js";
 import { assetLabel } from "../../src/web/asset-labels.js";
 import type { TaxSummary, FifoDisposal } from "../../src/types/tax.js";
 
@@ -203,5 +204,54 @@ describe("renderOperationsAnnex — a sale with a non-finite amount (#469 review
     expect(subtotal).toContain("920,00");
     expect(subtotal).toContain("1.092,00");
     expect(subtotal).toContain("+172,00 EUR");
+  });
+
+  /** The cost and result cells of each row, then the subtotal row's three amounts. */
+  function cells(html: string): { rows: string[][]; subtotal: string[] } {
+    const amounts = (tr: string) => [...tr.matchAll(/<td class="num[^"]*">([\s\S]*?)<\/td>/g)]
+      .map((m) => m[1]!.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+    const body = html.slice(html.indexOf("<tbody>"), html.indexOf("</tbody>"));
+    return {
+      rows: body.split("<tr").slice(1).map(amounts),
+      subtotal: amounts(html.slice(html.indexOf("annex-subtotal"))),
+    };
+  }
+
+  // CodeRabbit on 45c5712: a cost of 920 next to non-finite proceeds is left
+  // out of the subtotal (no phantom loss), but the cell showed 920,00 with no
+  // mark, so the two cost cells read 1.840 against a subtotal of 920.
+  it("marks a finite cost the subtotal leaves out, next to non-finite proceeds", () => {
+    const poisoned = makeDisposal({ symbol: "BAD", proceedsEur: new Decimal(Infinity), gainLossEur: new Decimal(Infinity) });
+    const { rows, subtotal } = cells(renderOperationsAnnex(makeSummary([makeDisposal(), poisoned])));
+    expect(rows).toEqual([
+      ["920,00", "1.092,00", "+172,00"],
+      [`920,00 (${t("annex.not_counted")})`, "—", "—"],
+    ]);
+    expect(subtotal).toEqual(["920,00", "1.092,00", "+172,00 EUR"]);
+  });
+
+  // The mirror: a non-finite cost next to finite proceeds adds the proceeds
+  // as the result (a gain that may be too high, never too low). The result
+  // cell showed «—» while the subtotal added +1.092,00.
+  it("shows the result the subtotal adds when only the cost is not finite", () => {
+    const poisoned = makeDisposal({ symbol: "BAD", costBasisEur: new Decimal(NaN), gainLossEur: new Decimal(NaN) });
+    const { rows, subtotal } = cells(renderOperationsAnnex(makeSummary([makeDisposal(), poisoned])));
+    expect(rows).toEqual([
+      ["920,00", "1.092,00", "+172,00"],
+      ["—", "1.092,00", "+1.092,00"],
+    ]);
+    expect(subtotal).toEqual(["920,00", "2.184,00", "+1.264,00 EUR"]);
+  });
+
+  it("names the mark in the 5 locales", async () => {
+    const texts = new Set<string>();
+    for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {
+      await setLocale(locale);
+      const text = t("annex.not_counted");
+      expect(text).not.toBe("annex.not_counted");
+      texts.add(text);
+    }
+    await setLocale("es");
+    expect(texts.size).toBeGreaterThanOrEqual(4);
   });
 });
