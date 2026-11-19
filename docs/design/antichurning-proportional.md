@@ -606,6 +606,16 @@ práctico Renta 2025. The decisions, each pinned in
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
       reads a German date (DD.MM.YYYY).
+      FIFO values a Lightyear buy or sale at Quantity × `Price/share`. A
+      price that could not be read ("n/a", "-") stopped the report with a
+      `DecimalError`, and an empty, missing or written-zero one sold the
+      shares at 0 €, so a gain became a loss with no word. With no readable
+      or nonzero price the price is now |`Gross Amount`| ÷ `Quantity`, the
+      file's own numbers. With no Gross either, a price that cannot be read
+      makes an unreadable row named by `Price/share`, and a written zero
+      price is a corporate-action row, as in Flatex, DEGIRO and Freedom24.
+      A Lightyear buy or sale with an empty or missing `CCY` (a row cut
+      short) is an unreadable row named by `CCY`; it was read as EUR.
     - Flatex: the side comes from the text (Kauf, Verkauf), never from the
       Nominal's sign alone (#468). A row with neither word is unreadable, so
       a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A

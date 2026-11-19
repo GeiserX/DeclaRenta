@@ -215,11 +215,9 @@ function parseLightyearCsv(lines: string[]): Statement {
     const txType = (fields[cols.type] ?? "").trim().toLowerCase();
     // Money/quantity that feeds tax totals is finiteness-guarded: a malformed
     // cell yields "0", never a non-finite Decimal that silently poisons totals.
-    // The display price is stored verbatim as the lossless parseNumber string
-    // (trailing zeros preserved; never summed).
+    // The price is read where a buy or sale is booked, below.
     const quantityStr = toFiniteDecimalString(fields[cols.quantity] ?? "0");
     const currency = (fields[cols.ccy] ?? "EUR").trim();
-    const pricePerShare = parseNumber(fields[cols.pricePerShare] ?? "0");
     const grossAmount = toFiniteDecimalString(fields[cols.grossAmount] ?? "0");
     const fee = toFiniteDecimalString(fields[cols.fee] ?? "0");
     const netAmount = toFiniteDecimalString(fields[cols.netAmount] ?? "0");
@@ -253,9 +251,12 @@ function parseLightyearCsv(lines: string[]): Statement {
     }
     const quantityEmpty = (fields[cols.quantity] ?? "").trim() === "";
     if (tradeType || (otherType && namesSecurity && !movesNoShares && !quantityEmpty)) {
+      // A buy or sale with no CCY (an empty cell, or a row cut short) is not
+      // read as EUR: its amounts would be booked in the wrong currency (#467).
       const cell = !dateRaw ? unreadableCell(headers[cols.date] ?? "Date", dateRaw)
         : otherType ? unreadableCell(headers[cols.type] ?? "Type", fields[cols.type] ?? "")
         : !ticker ? unreadableCell(headers[cols.ticker] ?? "Ticker", ticker)
+        : !(fields[cols.ccy] ?? "").trim() ? unreadableCell(headers[cols.ccy] ?? "CCY", fields[cols.ccy])
         : undefined;
       if (cell !== undefined) {
         trades.push(unreadableTrade({
@@ -440,7 +441,35 @@ function parseLightyearCsv(lines: string[]): Statement {
     const feeDec = new Decimal(fee).abs();
     const grossDec = new Decimal(grossAmount).abs();
     const netDec = new Decimal(netAmount).abs();
-    const price = pricePerShare || (qtyDec.isZero() ? "0" : grossDec.div(qtyDec).toString());
+    // FIFO values a share trade at quantity × tradePrice, never from Net Amt.
+    // A Price/share it cannot read crashed the report ("n/a"), and an empty,
+    // missing or written-zero one sold the shares at 0 €: a gain became a loss
+    // with no word (#467). Lightyear writes Gross Amount = Quantity ×
+    // Price/share in CCY, so with no price the price is |Gross| ÷ Quantity,
+    // the file's own numbers. A readable price keeps the file's text. With no
+    // Gross either, a written zero price moves shares for no money: a
+    // corporate action not applied, as in Flatex, DEGIRO and Freedom24. A
+    // price that cannot be read makes the row one that books nothing, named
+    // by its Price/share cell (parser.trade_row_unreadable).
+    const priceCell = fields[cols.pricePerShare];
+    const priceReadable = !quantityUnreadable(priceCell) && !toFiniteDecimal(priceCell!).isNegative();
+    if (!priceReadable || toFiniteDecimal(priceCell!).isZero()) {
+      const row = {
+        symbol: ticker, isin, assetCategory: "STK" as const, currency, tradeDate, tradeTime,
+        buySell: isSell ? "SELL" as const : "BUY" as const, exchange: "LIGHTYEAR",
+      };
+      if (grossDec.isZero() && priceReadable) {
+        trades.push(corporateActionTrade({ ...row, tradeID: `lightyear-action-${reference || `${tradeDate}-${ticker}-${i}`}` },
+          `${headers[cols.pricePerShare] ?? "Price/share"} ${priceCell!.trim()}`, fields[cols.quantity] ?? ""));
+        continue;
+      }
+      if (grossDec.isZero()) {
+        trades.push(unreadableTrade({ ...row, tradeID: `lightyear-row-${reference || `${tradeDate}-${ticker}-${i}`}` },
+          unreadableCell(headers[cols.pricePerShare] ?? "Price/share", priceCell)));
+        continue;
+      }
+    }
+    const price = priceReadable && !toFiniteDecimal(priceCell!).isZero() ? parseNumber(priceCell!) : grossDec.div(qtyDec).toString();
 
     trades.push({
       tradeID: `lightyear-${txType}-${reference || `${tradeDate}-${ticker}-${i}`}`,
