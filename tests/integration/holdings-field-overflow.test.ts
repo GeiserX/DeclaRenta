@@ -385,11 +385,13 @@ describe("#470 a share count with more than 20 decimals has no valid share count
       expect(document.getElementById("d6-content")!.textContent).toContain("no se han podido valorar");
     });
 
-    it(`a coin of ${position} units: the web 721 shows «—» for its units, never a long number`, () => {
+    // The web cell bounds the printed length, not the decimals (`fmtQty`, 60
+    // digits in full): 21 decimals print in full, an absurd exponent is «—».
+    it(`a coin of ${position} units: the web 721 never shows a long number`, () => {
       useContainer("m721-content");
       renderSection721(flex(coin("60000").replace('position="1"', `position="${position}"`)), rateMap);
       const row = [...document.querySelectorAll("#m721-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim()))[0]!;
-      expect(row[2]).toBe("—");
+      expect(row[2]).toBe(position === "0.000000000000000000001" ? "0,000000000000000000001" : "—");
       expect(document.getElementById("m721-content")!.innerHTML.length).toBeLessThan(50000);
     });
   }
