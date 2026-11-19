@@ -224,6 +224,10 @@ The Binance "Generate all statements" export (`User_ID,UTC_Time,Account,Operatio
 - **Safe pattern**: `slice(0, 8)` also works (extracts `"20190916"`) but `normalizeDate()` is preferred as it handles all formats
 - **Files affected**: `dividends.ts`, `report.ts` used `slice(0, 10)` — `fifo.ts` was safe because it used `slice(0, 8)` + `normalizeDate()`
 
+### IBKR Open Positions quantity (Hard Trace)
+- IBKR writes the held quantity of an `<OpenPosition>` as `position`, not `quantity` (every real export in `tests/fixtures` has only `position`; `quantity` is the Trades attribute). Up to 0.66.13 `mapOpenPosition` read only `quantity`, so every real row read "0": the D-6 dropped every IBKR holding as "not long", the 720 tranches got 0 shares, and the #453 evidence could never pass. The parser reads `position ?? quantity` and marks a missing or non-numeric one `quantityUnknown`. With the Summary and Lot options both on, IBKR lists each holding as a SUMMARY row plus LOT rows; the parser drops LOT rows that have a SUMMARY row (`dropLotRowsWithSummary`). Pinned in `tests/parsers/ibkr.test.ts` (`ibkr-multicurrency.xml` through the D-6) and the #453 e2e (g) block.
+
+
 ### IBKR Multi-Account Flex Queries
 - When users export a Flex Query covering multiple IBKR accounts, the XML contains multiple `<FlexStatement>` elements inside `<FlexStatements count="N">`
 - The parser merges all accounts' trades, cashTransactions, corporateActions, openPositions, and securitiesInfo into a single combined FlexStatement

@@ -121,7 +121,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
+    openPositions.push(...dropLotRowsWithSummary(ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
     accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "" });
@@ -633,10 +633,28 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
  */
 const IBKR_CUSTODIAN_COUNTRY = "IE";
 
+/**
+ * With both the Summary and the Lot options on, IBKR's Open Positions list
+ * each holding once as a SUMMARY row and again as one LOT row per tax lot.
+ * Keep the SUMMARY row and drop the LOT rows of the same account and
+ * security, so a holding is never counted twice. LOT rows with no SUMMARY row
+ * stay: together they are the holding.
+ */
+function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, string>[] {
+  const id = (raw: Record<string, string>): string => `${raw.accountId ?? ""}|${raw.conid ?? ""}|${raw.isin ?? ""}|${raw.symbol ?? ""}`;
+  const level = (raw: Record<string, string>): string => (raw.levelOfDetail ?? "").toUpperCase();
+  const summarized = new Set(rows.filter((raw) => level(raw) === LEVEL_OF_DETAIL_SUMMARY).map(id));
+  if (summarized.size === 0) return rows;
+  return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
-  // Keep a missing or unreadable quantity apart from an explicit zero: the
-  // "0" default would prove "no shares held" to the one-purchase exception.
-  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(raw.quantity ?? "");
+  // IBKR writes the held quantity as `position`; `quantity` is the older
+  // hand-written form some files use. Keep a missing or unreadable quantity
+  // apart from an explicit zero: the "0" default would prove "no shares held"
+  // to the one-purchase exception (#453).
+  const rawQuantity = raw.position ?? raw.quantity;
+  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -644,7 +662,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: raw.quantity ?? "0",
+    quantity: rawQuantity ?? "0",
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",
