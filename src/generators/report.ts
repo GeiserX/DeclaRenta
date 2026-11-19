@@ -813,6 +813,11 @@ export function generateTaxReport(
     {
       dataStart: fromDay && (firstFileTrade === "" || fromDay < firstFileTrade) ? fromDay : firstFileTrade,
       startBySource,
+      // Each file's end-of-period holdings: the only proof that no share came
+      // from before the files (an unmerged statement is one file).
+      snapshots: statement.holdingsBySource
+        ? statement.holdingsBySource.map((src) => ({ source: src.brokerSource, toDate: src.toDate, positions: src.openPositions }))
+        : [{ toDate: statement.toDate, positions: statement.openPositions }],
     },
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
@@ -1251,15 +1256,15 @@ export function generateTaxReport(
         id: "report.antichurning_single_purchase",
         severity: "info",
         message: `En ${ctx.count} venta(s) de ${ctx.year}, la compra de los 2 meses anteriores no cuenta como recompra: fue la única compra de ese valor en ese plazo y al empezar el plazo no tenías acciones de ese valor (excepción de compra única, DGT V3282-18). Esa compra no bloquea su pérdida ni impide que la venta libere pérdidas pendientes.`,
-        hint: `DeclaRenta solo ve los ficheros subidos. Si al empezar el plazo (el primero empieza el ${ctx.windowStart}) tenías acciones de ese valor en otro bróker o cuenta que no has subido, la excepción no se aplica: sube también esos ficheros y calcula de nuevo. Una compra en los 2 meses posteriores a la venta sigue bloqueando la pérdida.`,
+        hint: `DeclaRenta solo ve los ficheros subidos. Si al empezar el plazo (el primero empieza el ${ctx.windowStart}) tenías acciones de ese valor en otro bróker o cuenta que no has subido, o después las traspasaste a otra entidad, la excepción no se aplica: sube también esos ficheros y calcula de nuevo. Una compra en los 2 meses posteriores a la venta sigue bloqueando la pérdida.`,
         context: ctx,
       });
     } else {
       allMessages.push({
         id: "report.antichurning_single_purchase_unverified",
         severity: "warning",
-        message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos empiezan después del inicio del plazo (el primero empieza el ${ctx.windowStart}) y no muestran si entonces tenías acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
-        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). Sube también tus ficheros desde antes del ${ctx.windowStart} y calcula de nuevo.`,
+        message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran: deben empezar antes del ${ctx.windowStart} e incluir las posiciones a fin de periodo de cada bróker que opera ese valor (en IBKR, la sección Open Positions de la Flex Query), sin más acciones de las que explican sus operaciones. Un fichero que solo incluye operaciones no basta.`,
         context: ctx,
       });
     }

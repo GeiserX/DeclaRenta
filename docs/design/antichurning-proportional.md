@@ -278,8 +278,8 @@ transmission that releases them.
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
   tiebreak).
 - **Single-purchase exception** (V3282-18 A, AEAT Manual 2025; #453): see
-  "One-purchase exception" below. Fail safe where the upload cannot show the
-  holding at the window start.
+  "One-purchase exception" below. Fail safe where the upload cannot prove the
+  zero holding at the window start.
 - **Single-year files**: if the user omits prior-year buys, `holdingAfter` can
   understate the real position and is clamped at zero. This is the same data
   window limitation the FIFO engine already surfaces elsewhere; this fix does
@@ -323,22 +323,43 @@ práctico Renta 2025. The decisions, each pinned in
   to the sale day included: a same-day buy has no intraday order, so it counts
   as a second purchase (fail safe).
 - **No shares at the window start.** "At the start" is before the first day of
-  the window: the split-adjusted trade position over the days before it must be
+  the window: the split-adjusted long position over the days before it must be
   zero, and FIFO must hold no lot that entered before it (scrip, merger,
   spin-off lots). The trades are the merged upload, all brokers and the manual
-  opening lots. A key whose trade position goes negative anywhere (a sale of
-  shares the upload never shows, or a short) never gets the exception.
-- **Fail safe on coverage.** Holdings from before the upload are invisible. The
-  upload covers a key from its start: the statement `fromDate` (IBKR), else the
-  first trade of the files (never a manual opening lot). With several merged
-  brokers the key is covered from the latest start among the brokers that trade
-  it (`HoldingsSource.fromDate`, else each broker's first trade of any
-  security). A window that starts before that is "unverified": the exception is
-  not applied and `report.antichurning_single_purchase_unverified` warns. A
-  CSV broker has no statement start, so its coverage begins at its first trade.
-  A holding at a broker or account the user did not upload stays invisible: the
-  info message `report.antichurning_single_purchase` says so whenever the
-  exception is applied.
+  opening lots. The long position counts held shares only: a SELL "O" opens a
+  short and takes none, and a cover buy adds only what it does not cover. So a
+  short opened and covered before the window changes nothing. When the upload
+  itself shows shares at the window start, the answer is null (no mark).
+- **Fail safe: the upload must prove the zero.** A file's start date proves
+  nothing about shares bought before it, at the same broker or any other. The
+  exception is "applied" only when all of these hold, and "unverified" (not
+  applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
+  - The upload reaches back to the window start: the statement `fromDate`
+    (IBKR), else the first trade of the files (never a manual opening lot).
+    With several brokers, the latest start among the brokers that trade the key
+    (`HoldingsSource.fromDate`, else each broker's first trade of any
+    security). Shares sold before the files are invisible.
+  - The long position never goes negative (a sale of shares the upload never
+    shows bought).
+  - The end-of-period holdings explain the trades (`buildSnapshotCheck`).
+    Without transfers, the shares a broker lists at its period end are the
+    shares it held before the files plus what its trades moved. So per broker,
+    listed holding minus the trade position at its `toDate` is the holding from
+    before the files. Summed over the brokers it must equal the manual opening
+    lots, which are declared holdings from before the files. A share moved
+    between two uploaded brokers cancels out. Each broker's latest non-empty
+    list counts (all its files ending that day, summed). An empty list cannot be
+    told apart from a file without the section, so it counts as no list. A
+    broker that trades the key with no list, or no list at all, proves nothing.
+    Only IBKR (OpenPositions) gives such lists today. Revolut's list is built
+    by its parser from the file's own trades (`OpenPosition.fromTrades`), so it
+    always matches them and is ignored. A transactions CSV (DEGIRO, Trade
+    Republic and the rest) therefore always gets "unverified".
+  Left invisible on purpose: a broker or account the user did not upload, and
+  shares that left a listed broker without a trade (a transfer out, which the
+  IBKR parser does not read) before its `toDate`. The info message
+  `report.antichurning_single_purchase` names both whenever the exception is
+  applied.
 - **Definitive test.** Gain lots with pending losses share the absorption, so
   the exception decides the definitive test too («deberán observarse los mismos
   criterios»).

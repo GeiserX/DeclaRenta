@@ -241,6 +241,12 @@ export interface OpenPosition {
    */
   custodianCountry?: string;
   brokerSource?: string;
+  /**
+   * The parser built this row from the file's own trades (Revolut's transaction
+   * log), so it is no holding the broker reported. The anti-churning
+   * one-purchase exception (#453) cannot use it as proof of no earlier shares.
+   */
+  fromTrades?: boolean;
 }
 
 export interface SecurityInfo {

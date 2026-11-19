@@ -543,6 +543,7 @@ function parseTransactionLog(
         markPrice: "0",
         positionValue: "0",
         fifoPnlUnrealized: "0",
+        fromTrades: true,
         fxRateToBase: "1",
       });
     }

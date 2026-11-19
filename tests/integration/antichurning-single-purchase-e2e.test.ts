@@ -25,21 +25,46 @@ import type { EcbRateMap } from "../../src/types/ecb.js";
 const METHODS: FxMethod[] = ["multidivisa", "tradicional-divisa", "monodivisa"];
 const ISIN = "ES0000004531";
 
-/** [date YYYYMMDD, side, quantity, price, extra XML attributes] */
-type Row = [date: string, side: "BUY" | "SELL", qty: number, price: number, extra?: string];
+/** [date YYYYMMDD, side, quantity, price, extra XML attributes, openCloseIndicator] */
+type Row = [date: string, side: "BUY" | "SELL", qty: number, price: number, extra?: string, oci?: "O" | "C"];
 
 let tradeSeq = 0;
-function tradeXml([date, side, qty, price, extra = ""]: Row, currency: string, isin = ISIN): string {
+function tradeXml([date, side, qty, price, extra = "", oci]: Row, currency: string, isin = ISIN): string {
   const signed = side === "BUY" ? qty : -qty;
   const money = new Decimal(qty).mul(price);
   tradeSeq++;
-  return `<Trade tradeID="${tradeSeq}" accountId="U1" symbol="XYZ" description="XYZ SA" conid="4531" isin="${isin}" assetCategory="STK" currency="${currency}" tradeDate="${date}" settlementDate="${date}" quantity="${signed}" tradePrice="${price}" tradeMoney="${side === "BUY" ? money : money.neg()}" proceeds="${side === "BUY" ? money.neg() : money}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}" exchange="BME" ibCommissionCurrency="${currency}" ibCommission="0" taxes="0" multiplier="1" ${extra} />`;
+  return `<Trade tradeID="${tradeSeq}" accountId="U1" symbol="XYZ" description="XYZ SA" conid="4531" isin="${isin}" assetCategory="STK" currency="${currency}" tradeDate="${date}" settlementDate="${date}" quantity="${signed}" tradePrice="${price}" tradeMoney="${side === "BUY" ? money : money.neg()}" proceeds="${side === "BUY" ? money.neg() : money}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${oci ?? (side === "BUY" ? "O" : "C")}" exchange="BME" ibCommissionCurrency="${currency}" ibCommission="0" taxes="0" multiplier="1" ${extra} />`;
 }
 
-function ibkrXml(rows: Row[], { fromDate = "20240101", toDate = "20251231", currency = "EUR", isin = ISIN, actions = "" } = {}): string {
+function openPositionXml(isin: string, quantity: number | string, currency: string): string {
+  return `<OpenPosition accountId="U1" symbol="XYZ" description="XYZ SA" isin="${isin}" currency="${currency}" assetCategory="STK" quantity="${quantity}" costBasisMoney="0" costBasisPrice="0" markPrice="10" positionValue="0" fifoPnlUnrealized="0" fxRateToBase="1" />`;
+}
+
+/**
+ * An IBKR Flex statement. Its OpenPositions list what the rows leave held (as
+ * IBKR does at the period end), plus `heldBefore` shares bought before the file;
+ * `positions` replaces that list (`[]` = no OpenPositions in the query) and
+ * `otherPositions` adds holdings of other securities.
+ */
+function ibkrXml(
+  rows: Row[],
+  {
+    fromDate = "20240101",
+    toDate = "20251231",
+    currency = "EUR",
+    isin = ISIN,
+    actions = "",
+    heldBefore = 0,
+    positions = undefined as [isin: string, qty: number][] | undefined,
+    otherPositions = [] as [isin: string, qty: number][],
+  } = {},
+): string {
+  const net = rows.reduce((sum, [, side, qty]) => sum + (side === "BUY" ? qty : -qty), heldBefore);
+  const listed = positions ?? (net > 0 ? [[isin, net] as [string, number]] : []);
+  const op = [...listed, ...otherPositions].map(([i, q]) => openPositionXml(i, q, currency)).join("");
   return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="${fromDate}" toDate="${toDate}" period="Custom"><Trades>${rows
     .map((r) => tradeXml(r, currency, isin))
-    .join("")}</Trades><CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    .join("")}</Trades><CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions>${op}</OpenPositions><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
 }
 
 function rates(): EcbRateMap {
@@ -236,13 +261,18 @@ describe("(c) the fills of one order are one purchase", () => {
     return generateTaxReport(statement, rates(), 2025, reportOptionsForMethod("monodivisa"));
   };
 
-  it("DEGIRO: two fills with one «ID Orden» are one purchase", () => {
+  // A DEGIRO transactions file lists no holdings, so it cannot prove that no
+  // share was held at the window start: the exception is never applied (fail
+  // safe), but the "unverified" mark shows the two fills counted as one purchase.
+  it("DEGIRO: two fills with one «ID Orden» are one purchase (unverified: the file lists no holdings)", () => {
     const r = degiro([
       '01-03-2025,10:00,XYZ SA,ES0000004531,MAD,XMAD,60,"10,00",EUR,"-600,00",EUR,"0,00",EUR,"-600,00",EUR,aaa-111',
       '01-03-2025,10:00,XYZ SA,ES0000004531,MAD,XMAD,40,"10,00",EUR,"-400,00",EUR,"0,00",EUR,"-400,00",EUR,aaa-111',
       '15-03-2025,10:00,XYZ SA,ES0000004531,MAD,XMAD,-50,"8,00",EUR,"400,00",EUR,"0,00",EUR,"400,00",EUR,bbb-222',
     ]);
-    expect(blockedOn(r, "2025-03-15")).toBe("0.00");
+    expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBe("unverified");
+    expect(ids(r)).toEqual([UNVERIFIED]);
   });
 
   it("DEGIRO: two orders on the same day are two purchases", () => {
@@ -252,6 +282,8 @@ describe("(c) the fills of one order are one purchase", () => {
       '15-03-2025,10:00,XYZ SA,ES0000004531,MAD,XMAD,-50,"8,00",EUR,"400,00",EUR,"0,00",EUR,"400,00",EUR,bbb-222',
     ]);
     expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBeUndefined();
+    expect(ids(r)).toEqual([]);
   });
 });
 
@@ -322,10 +354,11 @@ describe("(d) no shares at the window start, as far as the upload can show", () 
     expect(ids(r)).toEqual([APPLIED]);
   });
 
-  it("a later sale of more shares than the upload shows (held from before it): never applied", () => {
+  it("a later sale of more shares than the upload shows (held from before it): not applied, warning", () => {
     const r = run(ibkrXml([...issue, ["20251201", "SELL", 150, 10]], { fromDate: "20250101" }), 2025);
     expect(blockedOn(r, "2025-03-15")).toBe("100.00");
-    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBeUndefined();
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBe("unverified");
+    expect(ids(r)).toEqual([UNVERIFIED]);
   });
 
   it("shares FIFO holds without a BUY when the window starts (a scrip dividend): the loss stays blocked", () => {
@@ -347,6 +380,154 @@ describe("(d) no shares at the window start, as far as the upload can show", () 
     });
     expect(blockedOn(r, "2025-03-15")).toBe("100.00");
     expect(ids(r)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (d) Shares bought before the files. A file's start date proves nothing about
+// them: only a holdings list that the trades explain does. IBKR lists the
+// period-end holdings (OpenPositions); a list with more shares than the trades
+// leave means shares from before the files, at any uploaded broker. A file
+// with no holdings list explains nothing. Either way the exception is withheld.
+// ---------------------------------------------------------------------------
+describe("(d) shares from before the files are never taken as zero", () => {
+  // Window of the 01/06 sale: 01/04 – 01/06, inside the file (from 01/01/2025).
+  const rows: Row[] = [
+    ["20250501", "BUY", 100, 10],
+    ["20250601", "SELL", 50, 8],
+  ];
+  const merged = (files: [string, string][], method: FxMethod = "monodivisa"): TaxReport => {
+    const statement = createEmptyStatement();
+    for (const [name, xml] of files) mergeStatement(statement, parseIbkrFlexXml(xml), name);
+    return generateTaxReport(finalizeMergedStatement(statement), rates(), 2025, reportOptionsForMethod(method));
+  };
+
+  it.each(METHODS)("[%s] the year-end holding (250) exceeds what the trades leave (50): 200 held from before, the 100 stays blocked", (method) => {
+    const r = run(ibkrXml(rows, { fromDate: "20250101", heldBefore: 200 }), 2025, method);
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-06-01"))!.washSaleSinglePurchase).toBe("unverified");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it.each(METHODS)("[%s] positive control: the same file whose holding (50) the trades explain: applied", (method) => {
+    const r = run(ibkrXml(rows, { fromDate: "20250101" }), 2025, method);
+    expect(blockedOn(r, "2025-06-01")).toBe("0.00");
+    expect(ids(r)).toEqual([APPLIED]);
+  });
+
+  it("a file without holdings (no OpenPositions in the query), even if the shares from before are later partly sold: not applied", () => {
+    const r = run(ibkrXml([...rows, ["20251001", "SELL", 30, 10]], { fromDate: "20250101", positions: [] }), 2025);
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it.each(METHODS)("[%s] a second broker sells 20 it held since before its file (merged position never negative): not applied", (method) => {
+    const r = merged(
+      [
+        ["Interactive Brokers", ibkrXml(rows, { fromDate: "20250101" })],
+        [
+          "Otro bróker",
+          ibkrXml([["20250701", "SELL", 20, 10]], { fromDate: "20250101", positions: [], otherPositions: [["ES0000000002", 5]] }),
+        ],
+      ],
+      method,
+    );
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it("the same second broker with no holdings list at all: not applied", () => {
+    const r = merged([
+      ["Interactive Brokers", ibkrXml(rows, { fromDate: "20250101" })],
+      ["Otro bróker", ibkrXml([["20250701", "SELL", 20, 10]], { fromDate: "20250101", positions: [] })],
+    ]);
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it("a broker that lists the security but never trades it in the upload: not applied", () => {
+    const r = merged([
+      ["Interactive Brokers", ibkrXml(rows, { fromDate: "20250101" })],
+      ["Otro bróker", ibkrXml([], { fromDate: "20250101", positions: [[ISIN, 20]] })],
+    ]);
+    expect(blockedOn(r, "2025-06-01")).toBe("100.00");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it("shares moved between two uploaded brokers cancel out (bought at one, sold at the other): applied", () => {
+    // IBKR keeps nothing of XYZ (it lists another security); the 50 it moved to
+    // Otro bróker are sold there. Held before the files: (0 − 50) + (0 + 50) = 0.
+    const r = merged([
+      ["Interactive Brokers", ibkrXml(rows, { fromDate: "20250101", positions: [], otherPositions: [["ES0000000002", 5]] })],
+      [
+        "Otro bróker",
+        ibkrXml([["20250701", "SELL", 50, 10]], { fromDate: "20250101", positions: [], otherPositions: [["ES0000000003", 5]] }),
+      ],
+    ]);
+    expect(blockedOn(r, "2025-06-01")).toBe("0.00");
+    expect(ids(r)).toEqual([APPLIED]);
+  });
+});
+
+describe("(d) a holdings list the parser built from the file's own trades proves nothing", () => {
+  const issueRows: Row[] = [
+    ["20250301", "BUY", 100, 10],
+    ["20250315", "SELL", 50, 8],
+  ];
+  const withList = (fromTrades: boolean): TaxReport => {
+    const parsed = parseIbkrFlexXml(ibkrXml(issueRows));
+    for (const pos of parsed.openPositions) pos.fromTrades = fromTrades;
+    const statement = finalizeMergedStatement(mergeStatement(createEmptyStatement(), parsed, "Interactive Brokers"));
+    return generateTaxReport(statement, rates(), 2025, reportOptionsForMethod("monodivisa"));
+  };
+
+  it("rows marked fromTrades (Revolut's transaction log): not applied", () => {
+    const r = withList(true);
+    expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it("control: the same rows reported by the broker: applied", () => {
+    const r = withList(false);
+    expect(blockedOn(r, "2025-03-15")).toBe("0.00");
+    expect(ids(r)).toEqual([APPLIED]);
+  });
+});
+
+describe("(d) a manual opening lot explains the holdings it adds", () => {
+  it("the purchase is a manual opening lot and the file lists the 50 left: applied", () => {
+    // The file shows only the sale; the manual lot of 100 on 01/03 is the one
+    // purchase. Held before the files: (50 listed + 50 sold) − 100 manual = 0.
+    const xml = ibkrXml([["20250315", "SELL", 50, 8]], { positions: [[ISIN, 50]] });
+    const statement = finalizeMergedStatement(mergeStatement(createEmptyStatement(), parseIbkrFlexXml(xml), "Interactive Brokers"));
+    const r = generateTaxReport(statement, rates(), 2025, {
+      ...reportOptionsForMethod("monodivisa"),
+      manualOpeningLots: [
+        { symbol: "XYZ", description: "XYZ SA", isin: ISIN, assetCategory: "STK", currency: "EUR", acquireDate: "2025-03-01", quantity: "100", pricePerShare: "10" },
+      ],
+    });
+    expect(blockedOn(r, "2025-03-15")).toBe("0.00");
+    expect(ids(r)).toEqual([APPLIED]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A short sale is no share held: a short opened and covered long before the
+// window neither counts as a holding nor as a sale of shares from before the
+// files.
+// ---------------------------------------------------------------------------
+describe("a short opened and covered before the window", () => {
+  const rows: Row[] = [
+    ["20240601", "SELL", 50, 12, "", "O"],
+    ["20240701", "BUY", 50, 11, "", "C"],
+    ["20250301", "BUY", 100, 10],
+    ["20250315", "SELL", 50, 8],
+  ];
+
+  it.each(METHODS)("[%s] no shares at the 2025 window start: applied, nothing blocked", (method) => {
+    const r = run(ibkrXml(rows, { fromDate: "20240101" }), 2025, method);
+    expect(blockedOn(r, "2025-03-15")).toBe("0.00");
+    expect(ids(r)).toEqual([APPLIED]);
   });
 });
 
