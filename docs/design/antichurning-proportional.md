@@ -585,7 +585,10 @@ práctico Renta 2025. The decisions, each pinned in
       one-purchase check may be affected. Before, it was only counted. A
       dividend whose `tax_amount` is written but is no finite number is
       booked with no withholding (the user loses a deduction, never
-      underpays), and `freedom24.tax_amount_unreadable` names the cell.
+      underpays), and `freedom24.tax_amount_unreadable` names the cell. A
+      readable `tax_amount` larger than the dividend's `amount` ("1e400",
+      or "1.234,56" on 500) is treated the same way: it went to box 0597
+      with no cap for a Spanish security.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
@@ -623,7 +626,23 @@ práctico Renta 2025. The decisions, each pinned in
       for each coin. Before, it was booked as a buy, so FIFO could take its
       price as the cost of a later sale (#468). A readable row with no txid
       is booked under a row id (it was dropped with its gain); a row with no
-      pair is kept unreadable.
+      pair is kept unreadable. A buy or sale whose `vol` (or, for a
+      crypto-quoted pair, `cost`) cannot be read keeps an unreadable row for
+      each coin. Before, it was booked as zero units and FIFO dropped it
+      with its gain and no word.
+    - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
+      `Quantity Transacted` cannot be read is an unreadable row, named by
+      that cell (with no Asset, by its type and quantity). A Convert still
+      books the coin it received when its Notes name it. Before, the row
+      was skipped with no word: a sale vanished with its gain, and a rebuy
+      could not show that an art. 33.5.e check was missing.
+    - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
+      whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
+      number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each
+      coin. Before, the first was skipped and the second booked as zero
+      units, both with no word.
+    - `parser.trade_row_unreadable` says in its hint that a crypto row may
+      be a repurchase whose art. 33.5.e check DeclaRenta cannot make.
     - IBKR: a trade with no `buySell` takes its side from the quantity's
       sign; with no signed quantity, the side is unknown (""), never BUY.
     - Binance Transaction History: a row with no readable `UTC_Time` (empty,
@@ -648,7 +667,16 @@ práctico Renta 2025. The decisions, each pinned in
       or Strategy leg was only counted by `binance.unhandled_operation`,
       which now counts only operations no phase knows. The window stays at
       1 s: every leg pair in the fixtures shares one second, and the code
-      already handles legs written 1 s apart.
+      already handles legs written 1 s apart. When several coins are bought
+      with one fiat in one window, each received row is paired with a fiat
+      row by order when their counts match (one payment per fill), and each
+      coin gets the sum of its own payments. Before, two fills of one coin
+      and one order of another split the total equally, so one coin took
+      the other's cost (ETH cost 5050 € instead of 100 €) with no word.
+      When the counts do not match, the window is booked as before (by
+      coin when that count matches, else an equal split; the total paid
+      stays exact), and `binance.spot_cost_split` names every leg of the
+      window with the art. 33.5.e caveat.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such
