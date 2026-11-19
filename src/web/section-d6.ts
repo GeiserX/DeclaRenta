@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -31,6 +31,13 @@ function effectiveYearEnd(year: number): string {
  */
 function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
   return hasNoMarketValue(p) ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+}
+
+/** The holding's EUR value, or null when it has no rate or no readable value (never 0 €). */
+function positionValueEur(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
+  const rate = positionRate(rateMap, yearEnd, p);
+  const value = positionValueOf(p);
+  return rate === null || value === null ? null : value.mul(rate);
 }
 
 /** The share count shown, or "—" when the export does not give it (#470): never 0. */
@@ -150,9 +157,9 @@ export function renderSectionD6(
   // surfaced via the warning banner below).
   let unvaluedCount = 0;
   const totalValue = positions.reduce((sum, p) => {
-    const rate = positionRate(rateMap, yearEnd, p);
-    if (rate === null) { unvaluedCount++; return sum; }
-    return sum.plus(new Decimal(p.positionValue).mul(rate));
+    const valueEur = positionValueEur(rateMap, yearEnd, p);
+    if (valueEur === null) { unvaluedCount++; return sum; }
+    return sum.plus(valueEur);
   }, new Decimal(0));
   html += `<p><strong>${t("d6.total_value", { amount: fmtEur(totalValue) })}</strong></p>`;
   if (unvaluedCount > 0) {
@@ -176,8 +183,8 @@ export function renderSectionD6(
     </tr></thead>
     <tbody>${positions
       .map((p) => {
-        const rate = positionRate(rateMap, yearEnd, p);
-        const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
+        const valueEur = positionValueEur(rateMap, yearEnd, p);
+        const val = valueEur === null ? "—" : fmtEur(valueEur);
         return `<tr>
         <td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td>
         <td>${esc(p.isin.slice(0, 2))}</td><td>${unitsCell(p)}</td><td>${val}</td>
@@ -270,8 +277,8 @@ function renderAforixGuide(
   // Position fields
   for (let i = 0; i < positions.length; i++) {
     const p = positions[i]!;
-    const rate = positionRate(rateMap, yearEnd, p);
-    const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
+    const valueEur = positionValueEur(rateMap, yearEnd, p);
+    const val = valueEur === null ? "—" : fmtEur(valueEur);
     html += `<p style="margin-top:1rem;font-weight:600">${t("d6.aforix_position_of", { index: String(i + 1), total: String(positions.length) })}</p>`;
     html += aforixField(t("table.isin"), p.isin);
     html += aforixField("Denominación", p.description);

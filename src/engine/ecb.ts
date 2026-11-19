@@ -285,17 +285,39 @@ export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionVal
   if (p.quantityUnknown !== true && !new Decimal(p.quantity).greaterThan(0)) return false;
   // A value the export writes as text that is no number ("", "N/A") is no
   // value either: unvalued, never a crash (an IBKR row with both blank).
-  const value = readPositionNumber(p.positionValue);
+  const value = positionValueOf(p);
   return value === null || value.isZero();
 }
 
 /** A position field read as a number, or null when its text is no number ("", "N/A"). */
-function readPositionNumber(text: string): Decimal | null {
+export function readPositionNumber(text: string): Decimal | null {
   try {
     return new Decimal(text);
   } catch {
     return null;
   }
+}
+
+/**
+ * The position's value as the export writes it, or null when that text is no
+ * number (IBKR can write `positionValue=""` or "N/A"). Read every value through
+ * this, never `new Decimal(p.positionValue)`, which throws on such text and
+ * crashed the 720 and the 721 (#470). A held row with no readable value is
+ * unvalued (`hasNoMarketValue`), never 0 €.
+ */
+export function positionValueOf(p: Pick<OpenPosition, "positionValue">): Decimal | null {
+  return readPositionNumber(p.positionValue);
+}
+
+/**
+ * A short (stock owed, not owned). The sign comes from the value when it is a
+ * number other than 0; when the value cannot tell (0, or no number), from a
+ * readable quantity, as the D-6 does. A row with neither proves no short.
+ */
+export function isShortPosition(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  const value = positionValueOf(p);
+  if (value !== null && !value.isZero()) return value.isNegative();
+  return p.quantityUnknown !== true && readPositionNumber(p.quantity)?.isNegative() === true;
 }
 
 /** Whether a position value is a negative number (a short). An unreadable value proves no short. */
@@ -304,15 +326,16 @@ export function isNegativePositionValue(value: string): boolean {
 }
 
 /**
- * A row that holds nothing: the export gives 0 units and a value of 0. It is no
- * holding, so the 720 writes no record for it (that record would say 0 in
- * «Número de valores» and 0 €, #470). A 0 with a value that is not 0 is no such
- * row: the IBKR parser flags that 0 as `quantityUnknown`.
+ * A row that holds nothing: the export gives 0 units and a value that is 0 or
+ * no number (nothing contradicts the 0). It is no holding, so the 720 writes no
+ * record for it (that record would say 0 in «Número de valores» and 0 €, #470),
+ * as the D-6 and the 721 leave it out. A 0 with a value that is not 0 is no
+ * such row: the IBKR parser flags that 0 as `quantityUnknown`.
  */
 export function holdsNothing(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
   return p.quantityUnknown !== true
     && readPositionNumber(p.quantity)?.isZero() === true
-    && readPositionNumber(p.positionValue)?.isZero() === true;
+    && positionValueOf(p)?.isZero() !== false;
 }
 
 /**

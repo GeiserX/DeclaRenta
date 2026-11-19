@@ -19,7 +19,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -113,11 +113,12 @@ export function generateD6Report(
       // value in EUR; skip it (never as 0 €) and count it for the caller. With
       // no share count the entry would say 0 shares: skip and count it too
       // (tested first: its value may be unreadable text).
-      if (ecbRate === null || p.quantityUnknown === true || hasNoMarketValue(p)) {
+      const value = positionValueOf(p);
+      if (ecbRate === null || p.quantityUnknown === true || hasNoMarketValue(p) || value === null) {
         unvaluedCount++;
         return [];
       }
-      const valueEur = new Decimal(p.positionValue).mul(ecbRate);
+      const valueEur = value.mul(ecbRate);
 
       return [{
         isin: p.isin,

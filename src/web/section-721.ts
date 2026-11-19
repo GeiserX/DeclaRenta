@@ -9,9 +9,8 @@ import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import type { Statement } from "../types/broker.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { lookupPositionRate } from "../engine/ecb.js";
+import { lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import { buildModelo721Entries } from "../generators/modelo721.js";
-import Decimal from "decimal.js";
 import { fmtEur, fmtQty } from "./format.js";
 import { esc } from "./esc.js";
 import { renderPositionsDateBanner } from "./positions-date.js";
@@ -182,7 +181,7 @@ export function renderSection721(
   // (valuation entries don't carry currency); same crypto filter the generator uses.
   const uniqueCurrencies = [...new Set(
     statement.openPositions
-      .filter((p) => p.assetCategory === "CRYPTO" && new Decimal(p.positionValue).greaterThan(0))
+      .filter((p) => p.assetCategory === "CRYPTO" && (positionValueOf(p)?.greaterThan(0) ?? false))
       .map((p) => p.currency),
   )].filter((c) => c !== "EUR").sort();
   if (uniqueCurrencies.length > 0) {

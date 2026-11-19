@@ -12,7 +12,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -84,19 +84,24 @@ export function buildModelo721Entries(
     if (!CRYPTO_CATEGORIES.has(p.assetCategory)) continue;
     // A coin held with no market value in the export is unvalued, not 0 €.
     const noMarketValue = hasNoMarketValue(p);
-    if (!new Decimal(p.positionValue).greaterThan(0) && !noMarketValue) continue;
+    // A value that is no number ("", "N/A") is no value (`positionValueOf`).
+    const value = positionValueOf(p);
+    if (!(value?.greaterThan(0) ?? false) && !noMarketValue) continue;
 
-    const rate = noMarketValue ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
-    const valuationEur = rate === null ? null : new Decimal(p.positionValue).mul(rate);
+    const rate = noMarketValue || value === null ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
+    const valuationEur = rate === null || value === null ? null : value.mul(rate);
     if (valuationEur === null) {
       unvaluedCount++;
     } else {
       totalValueEur = totalValueEur.plus(valuationEur);
     }
 
-    const acquisitionCostEur = rate === null
+    // Only the disabled fixed-width prototype reads this cost: an unreadable
+    // one is left at 0 there, as an unvalued coin's is, never a crash.
+    const cost = readPositionNumber(p.costBasisMoney || "0");
+    const acquisitionCostEur = rate === null || cost === null
       ? new Decimal(0)
-      : new Decimal(p.costBasisMoney || "0").mul(rate);
+      : cost.mul(rate);
 
     positions.push({
       entry: {

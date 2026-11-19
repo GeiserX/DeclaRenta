@@ -19,7 +19,8 @@ import { generateD6Report } from "../../src/generators/d6.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import { renderSection720 } from "../../src/web/section-720.js";
 import { renderSectionD6 } from "../../src/web/section-d6.js";
-import { hasNoMarketValue, holdsNothing, isNegativePositionValue } from "../../src/engine/ecb.js";
+import { hasNoMarketValue, holdsNothing, isNegativePositionValue, isShortPosition, positionValueOf } from "../../src/engine/ecb.js";
+import { findMissingHoldings } from "../../src/web/missing-holdings.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -281,7 +282,117 @@ describe("#470 an IBKR position of 0 units worth 0 holds nothing", () => {
   it("holdsNothing: only an explicit 0 with a value of 0", () => {
     expect(holdsNothing({ quantity: "0", positionValue: "0" })).toBe(true);
     expect(holdsNothing({ quantity: "0", positionValue: "0", quantityUnknown: true })).toBe(false);
-    expect(holdsNothing({ quantity: "0", positionValue: "" })).toBe(false);
     expect(holdsNothing({ quantity: "5", positionValue: "0" })).toBe(false);
+  });
+});
+
+describe("#470 an IBKR row whose positionValue is no number, whatever its quantity", () => {
+  // Up to 0.66.14 the 720 (isHeldSecurity, the web filter) and the 721
+  // (buildModelo721Entries, the web filter) ran `new Decimal(positionValue)`
+  // and threw on "" or "N/A". A held row with such a value is unvalued
+  // («sin valorar», never 0 €, never dropped); a row of 0 units holds nothing,
+  // and a negative quantity is a short, as in the D-6.
+  const other = stock("10", "1000", "US0000000002");
+  const previous = [{ isin: "US0000000001", claveSubclave: "V1", country: "US" }];
+
+  for (const value of ["", "N/A"]) {
+    describe(`positionValue="${value}"`, () => {
+      for (const position of ["700", ""]) {
+        it(`position="${position}" (held): 720 thresholds, file, previous-year file and web table count it unvalued`, () => {
+          const st = flex(stock(position, value) + other);
+          expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values).toMatchObject({ unvalued: 1, exceeds: false });
+          expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values.total.toString()).toBe("850");
+          const detail = generateModelo720(flex(stock(position, value) + stock("700", "70000", "US0000000002")).openPositions, rateMap, cfg720).split("\n").slice(1);
+          expect(detail).toHaveLength(1);
+          expect(detail[0]!).toContain("US0000000002");
+          // Still held: last year's security gets no C record.
+          const withPrevious = generateModelo720(flex(stock(position, value) + stock("700", "70000", "US0000000002")).openPositions, rateMap, { ...cfg720, previousYearSecurities: previous });
+          expect(withPrevious.split("\n").slice(1).filter((r) => r.includes("US0000000001"))).toEqual([]);
+
+          useProfile("m720-content");
+          renderSection720(st, rateMap);
+          expect(rows("m720-content").find((r) => r.includes("US0000000001"))?.split(" | ").at(-1)).toBe("—");
+          expect(document.getElementById("m720-content")!.textContent).toContain("no se han podido valorar");
+        });
+      }
+
+      it("position=\"0\": holds nothing in the 720 (no record, not unvalued; last year's security gets its C record), as in the D-6", () => {
+        const st = flex(stock("0", value) + other);
+        expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values).toMatchObject({ unvalued: 0 });
+        const withPrevious = generateModelo720(flex(stock("0", value) + stock("700", "70000", "US0000000002")).openPositions, rateMap, { ...cfg720, previousYearSecurities: previous });
+        const acme = withPrevious.split("\n").slice(1).filter((r) => r.includes("US0000000001"));
+        expect(acme).toHaveLength(1);
+        expect(acme[0]![422]).toBe("C");
+        useProfile("m720-content");
+        renderSection720(st, rateMap);
+        expect(rows("m720-content").filter((r) => r.includes("US0000000001"))).toEqual([]);
+        expect(generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z").positions.map((p) => p.isin)).toEqual(["US0000000002"]);
+      });
+
+      it("position=\"-700\": a short, out of the 720 table and thresholds and cancelled, as in the D-6", () => {
+        const st = flex(stock("-700", value) + other);
+        expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values).toMatchObject({ unvalued: 0 });
+        const withPrevious = generateModelo720(flex(stock("-700", value) + stock("700", "70000", "US0000000002")).openPositions, rateMap, { ...cfg720, previousYearSecurities: previous });
+        expect(withPrevious.split("\n").slice(1).filter((r) => r.includes("US0000000001")).map((r) => r[422])).toEqual(["C"]);
+        useProfile("m720-content");
+        renderSection720(st, rateMap);
+        expect(rows("m720-content").filter((r) => r.includes("US0000000001"))).toEqual([]);
+        const d6 = generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z", ["US0000000001"]);
+        expect(d6.cancelled.map((c) => c.isin)).toEqual(["US0000000001"]);
+      });
+
+      it("D-6 generator and web: a held row is counted to value by hand, next to the readable one", () => {
+        const st = flex(stock("700", value) + stock("700", "70000", "US0000000002"));
+        const r = generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z");
+        expect(r.positions.map((p) => p.isin)).toEqual(["US0000000002"]);
+        expect(r.unvaluedCount).toBe(1);
+        useProfile("d6-content");
+        renderSectionD6(st, rateMap);
+        expect(rows("d6-content")).toEqual([
+          "US0000000001 | ACME CORP | US | 700 | —",
+          "US0000000002 | ACME CORP | US | 700 | 59.500,00",
+        ]);
+      });
+
+      for (const position of ["0.6", ""]) {
+        it(`a coin with position="${position}": the 721 keeps it unvalued, and the web verdict is «No se puede determinar»`, () => {
+          const st = flex(coin("BTC", "BITCOIN", position, value) + coin("ETH", "ETHER", "10", "30000"));
+          const v = buildModelo721Entries(st.openPositions, rateMap, "2025-12-31");
+          expect(v.positions.map((p) => [p.entry.assetId, p.valuationEur?.toString() ?? null])).toEqual([["BTC", null], ["ETH", "25500"]]);
+          expect(v.unvaluedCount).toBe(1);
+          useProfile("m721-content");
+          renderSection721(st, rateMap);
+          expect(rows("m721-content")[0]!.split(" | ").at(-1)).toBe("—");
+          const text = document.getElementById("m721-content")!.textContent;
+          expect(text).toContain("No se puede determinar");
+          expect(text).not.toContain("No estás obligado");
+          // Not a valued crypto holding for the "brokers without holdings" notice.
+          expect(findMissingHoldings([{ broker: "IBKR", statement: flex(coin("BTC", "BITCOIN", position, value)) }]).m721).toEqual(["IBKR"]);
+        });
+      }
+
+      it("a coin with position=\"0\" holds nothing in the 721", () => {
+        const v = buildModelo721Entries(flex(coin("BTC", "BITCOIN", "0", value) + coin("ETH", "ETHER", "10", "30000")).openPositions, rateMap, "2025-12-31");
+        expect(v.positions.map((p) => p.entry.assetId)).toEqual(["ETH"]);
+        expect(v.unvaluedCount).toBe(0);
+      });
+
+      it("an unreadable costBasisMoney does not crash the 721 (value known)", () => {
+        const st = flex(coin("BTC", "BITCOIN", "0.6", "60000").replace('costBasisMoney="40000"', `costBasisMoney="${value}"`));
+        expect(buildModelo721Entries(st.openPositions, rateMap, "2025-12-31").totalValueEur.toString()).toBe("51000");
+      });
+    });
+  }
+
+  it("positionValueOf reads a number or null, isShortPosition takes the sign from the value or, when the value cannot tell, the quantity", () => {
+    expect(positionValueOf({ positionValue: "" })).toBeNull();
+    expect(positionValueOf({ positionValue: "N/A" })).toBeNull();
+    expect(positionValueOf({ positionValue: "-12.5" })?.toString()).toBe("-12.5");
+    expect(isShortPosition({ quantity: "5", positionValue: "-1" })).toBe(true);
+    expect(isShortPosition({ quantity: "-5", positionValue: "N/A" })).toBe(true);
+    expect(isShortPosition({ quantity: "-5", positionValue: "0" })).toBe(true);
+    expect(isShortPosition({ quantity: "5", positionValue: "N/A" })).toBe(false);
+    expect(isShortPosition({ quantity: "0", positionValue: "", quantityUnknown: true })).toBe(false);
+    expect(holdsNothing({ quantity: "0", positionValue: "N/A" })).toBe(true);
   });
 });

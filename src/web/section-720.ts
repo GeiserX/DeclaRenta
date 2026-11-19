@@ -7,8 +7,9 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, hasNoMarketValue, holdsNothing, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import {
+  isHeldSecurity,
   checkModelo720SuccessiveYear,
   checkModelo720Thresholds,
   findModelo720Omissions,
@@ -293,11 +294,7 @@ export function renderSection720(
 
   // Positions table (long holdings only: a short is owed, not owned, and the
   // threshold above leaves it out too, as it does a row of 0 units worth 0)
-  const positions = statement.openPositions.filter(
-    (p) => (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-      && !new Decimal(p.positionValue).isNegative()
-      && !holdsNothing(p),
-  );
+  const positions = statement.openPositions.filter(isHeldSecurity);
 
   const declaredIsins = previous720 ? new Set(previous720.previous.securities.map((s) => s.isin)) : null;
   if (positions.length > 0) {
@@ -319,9 +316,10 @@ export function renderSection720(
           rate = lookupPositionRate(rateMap, dateForRates, p.currency);
         }
         // No rate, or no market value in the export: unknown, never 0 €.
-        if (hasNoMarketValue(p)) rate = null;
+        const value = positionValueOf(p);
+        if (hasNoMarketValue(p) || value === null) rate = null;
         if (rate === null) unvaluedCount++;
-        const val = rate === null ? "—" : fmtEur(new Decimal(p.positionValue).mul(rate));
+        const val = rate === null || value === null ? "—" : fmtEur(value.mul(rate));
         const origin = declaredIsins ? `<td>${esc(t(declaredIsins.has(p.isin) ? "m720.origin_m" : "m720.origin_a"))}</td>` : "";
         return `<tr><td class="mono">${esc(p.isin)}</td><td>${esc(p.description)}</td><td>${esc(modelo720PositionCountry(p) ?? "—")}</td><td>${val}</td>${origin}</tr>`;
       }).join("")}</tbody>

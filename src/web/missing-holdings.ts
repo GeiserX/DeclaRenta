@@ -14,6 +14,7 @@
 
 import Decimal from "decimal.js";
 import type { Statement } from "../types/broker.js";
+import { positionValueOf } from "../engine/ecb.js";
 
 /** One parsed file and the broker that parsed it. */
 export interface ParsedExport {
@@ -47,9 +48,10 @@ function factsOf(statement: Statement): BrokerFacts {
       statement.trades.some((tr) => tr.assetCategory === "CRYPTO") ||
       positions.some((p) => p.assetCategory === "CRYPTO") ||
       statement.cashTransactions.some((c) => c.type === "Crypto Reward Income"),
-    // Same filter as buildModelo721Entries: a crypto position with no value is not counted.
+    // A crypto position with no value (0, or no number) is not counted: it is
+    // no valued holding.
     cryptoHoldings: positions.some(
-      (p) => p.assetCategory === "CRYPTO" && new Decimal(p.positionValue || 0).greaterThan(0),
+      (p) => p.assetCategory === "CRYPTO" && (positionValueOf(p)?.greaterThan(0) ?? false),
     ),
     securitiesActivity: statement.trades.some((tr) => SECURITY_CATEGORIES.has(tr.assetCategory)),
     securitiesHoldings: positions.some((p) => SECURITY_CATEGORIES.has(p.assetCategory)),

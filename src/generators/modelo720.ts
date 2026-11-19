@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getQ4AverageRate, hasNoMarketValue, holdsNothing, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -53,12 +53,14 @@ const THRESHOLD = new Decimal(50000);
 
 /**
  * A V-category holding: a long stock, fund or bond. A short position
- * (negative value) is stock the taxpayer owes, not an asset they own. A row of
- * 0 units worth 0 holds nothing (`holdsNothing`): no record with 0 shares.
+ * (`isShortPosition`: negative value, or a negative quantity when the value
+ * cannot tell) is stock the taxpayer owes, not an asset they own. A row of 0
+ * units worth 0 holds nothing (`holdsNothing`): no record with 0 shares. The
+ * web 720 table uses this same filter.
  */
-function isHeldSecurity(p: OpenPosition): boolean {
+export function isHeldSecurity(p: OpenPosition): boolean {
   return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-    && !new Decimal(p.positionValue).isNegative()
+    && !isShortPosition(p)
     && !holdsNothing(p);
 }
 
@@ -135,11 +137,12 @@ export function checkModelo720Thresholds(
     const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
     // Unvaluable position (no resolvable rate, or no market value in the
     // export): excluded from the EUR total and counted, never added as 0 €.
-    if (ecbRate === null || hasNoMarketValue(p)) {
+    const value = positionValueOf(p);
+    if (ecbRate === null || hasNoMarketValue(p) || value === null) {
       unvalued++;
       continue;
     }
-    valuesTotal = valuesTotal.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
+    valuesTotal = valuesTotal.plus(value.abs().mul(ecbRate));
   }
 
   const cash = cashCategoryTotals(cashBalances, rateMap, year);
@@ -437,8 +440,9 @@ function plan720(
       // export): cannot be written to the fixed-width record without an EUR
       // value — skip it. The caller surfaces a warning so the user values and
       // declares it manually.
-      if (ecbRate === null || hasNoMarketValue(p)) return [];
-      const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
+      const value = positionValueOf(p);
+      if (ecbRate === null || hasNoMarketValue(p) || value === null) return [];
+      const valueEur = value.abs().mul(ecbRate);
 
       // One record per acquisition date of the lots held at year end
       const tranches = acquisitionTranches(new Decimal(p.quantity).abs(), valueEur, remainingLots?.get(p.isin));
