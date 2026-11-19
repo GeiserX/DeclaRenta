@@ -243,15 +243,13 @@ describe("renderOperationsAnnex — a sale with a non-finite amount (#469 review
     expect(subtotal).toEqual(["920,00", "2.184,00", "+1.264,00 EUR"]);
   });
 
+  // Catalan writes the impersonal «es suma», never the Spanish «se suma».
   it("names the mark in the 5 locales", async () => {
-    const texts = new Set<string>();
+    const expected = { es: "no se suma", en: "not added", ca: "no es suma", eu: "ez da batzen", gl: "non se suma" } as const;
     for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {
       await setLocale(locale);
-      const text = t("annex.not_counted");
-      expect(text).not.toBe("annex.not_counted");
-      texts.add(text);
+      expect(t("annex.not_counted")).toBe(expected[locale]);
     }
     await setLocale("es");
-    expect(texts.size).toBeGreaterThanOrEqual(4);
   });
 });
