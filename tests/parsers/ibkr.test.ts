@@ -1689,4 +1689,40 @@ describe("IBKR listingExchange (#452: it decides the anti-churning window)", () 
     const cash = st.trades.find((t) => t.symbol === "EUR.USD")!;
     expect("listingExchange" in cash).toBe(false);
   });
+  const order = (listings: string[]) => {
+    const fills = listings
+      .map((listing, i) =>
+        `<Trade tradeID="${i + 1}" ibOrderID="778" accountId="U1" symbol="BP." description="BP PLC" isin="GB0007980591" assetCategory="STK" currency="GBP" tradeDate="20250301" settlementDate="20250305" quantity="5" tradePrice="4" tradeMoney="20" proceeds="-20" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O" exchange="CHIXUK"${listing ? ` listingExchange="${listing}"` : ""} ibCommissionCurrency="GBP" ibCommission="0" taxes="0" />`,
+      )
+      .join("");
+    const xml = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231"><Trades>${fills}</Trades></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const merged = parseIbkrFlexXml(xml).trades;
+    expect(merged).toHaveLength(1);
+    return merged[0]!;
+  };
+
+  it("keeps the first fill's listing that is not empty, when the first fill has none", () => {
+    const t = order(["", "LSE", "LSE"]);
+    expect(t.listingExchange).toBe("LSE");
+    expect("listingExchanges" in t).toBe(false);
+  });
+
+  it("keeps every listing when the fills disagree, so each one votes for the window", () => {
+    const t = order(["LSE", "", "NYSE", "LSE"]);
+    expect(t.listingExchange).toBe("LSE");
+    expect(t.listingExchanges).toEqual(["LSE", "NYSE"]);
+  });
+
+  it("no fill with a listing: the merged trade has none", () => {
+    const t = order(["", ""]);
+    expect("listingExchange" in t).toBe(false);
+  });
+
+  it("a SecurityInfo row keeps its conid and its statement's last day (the period its listing belongs to)", () => {
+    const xml = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="2"><FlexStatement accountId="U1" fromDate="20240101" toDate="20241231"><SecuritiesInfo><SecurityInfo symbol="X" description="X" isin="US0378331005" conid=" 7 " cusip="" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" listingExchange="NYSE" /></SecuritiesInfo></FlexStatement><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231"><SecuritiesInfo><SecurityInfo symbol="X" description="X" isin="US0378331005" cusip="" currency="USD" assetCategory="STK" multiplier="1" subCategory="COMMON" listingExchange="PINK" /></SecuritiesInfo></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const [old, now] = parseIbkrFlexXml(xml).securitiesInfo;
+    expect(old).toMatchObject({ listingExchange: "NYSE", conid: "7", asOf: "20241231" });
+    expect(now).toMatchObject({ listingExchange: "PINK", asOf: "20251231" });
+    expect("conid" in now!).toBe(false);
+  });
 });
