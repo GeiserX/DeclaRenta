@@ -8,7 +8,7 @@
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
-import { fitsModelo720Amount } from "../generators/modelo720.js";
+import { d6ShareCount, fitsModelo720Amount } from "../generators/modelo720.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -42,16 +42,17 @@ function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): De
  * by hand, on screen as in the guide (#470).
  */
 function positionValueEur(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
-  if (p.quantityUnknown === true) return null;
+  if (d6ShareCount(p) === null) return null;
   const rate = positionRate(rateMap, yearEnd, p);
   const value = positionValueOf(p);
   const valueEur = rate === null || value === null ? null : value.mul(rate);
   return valueEur !== null && fitsModelo720Amount(valueEur) ? valueEur : null;
 }
 
-/** The share count shown, or "—" when the export does not give it (#470): never 0. */
+/** The share count shown, or "—" when the holding has no valid one (`d6ShareCount`, #470): never 0. */
 function unitsCell(p: OpenPosition): string {
-  return p.quantityUnknown === true ? "—" : fmtQty(p.quantity);
+  const shares = d6ShareCount(p);
+  return shares === null ? "—" : fmtQty(shares);
 }
 
 let cachedStatement: Statement | null = null;

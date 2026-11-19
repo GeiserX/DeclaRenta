@@ -528,7 +528,7 @@ const es = {
   "d6.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus valores a 31 de diciembre, así que no aparecen aquí. Consúltalos en el extracto de fin de año de {{brokers}}.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros o no traen un número de títulos válido, y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; falta el número de títulos, o es un 0 que su valor no confirma o contradice; el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios. Inclúyelas a mano con su valor en euros y su número de títulos.",
+    "{{count}} posición(es) no se han podido valorar en euros o no traen un número de títulos válido, y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; falta el número de títulos, es un 0 que su valor no confirma o contradice, o tiene más de 10 cifras enteras; el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios. Inclúyelas a mano con su valor en euros y su número de títulos.",
   "d6.quantity_unknown": "El archivo no trae un número de títulos válido para {{count}} posición(es) (falta, no se lee o es un 0 que su valor no confirma): {{holdings}}. No cuentan como 0: toma el número del extracto de fin de año del bróker y escríbelo a mano en el D-6.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",

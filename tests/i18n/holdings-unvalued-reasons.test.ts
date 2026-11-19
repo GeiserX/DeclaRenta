@@ -35,6 +35,17 @@ describe("#470 the unvalued banners say every reason a holding is unvalued", () 
         expect(text).not.toContain("{{");
         for (const fragment of fragments) expect(text, `${locale} ${key}`).toContain(fragment);
       }
+      // The D-6 also names a share count too big for the 720's field (10 integer digits).
+      expect(t("d6.positions_unvalued", { count: "2" })).toContain(D6_COUNT_TOO_BIG[locale]);
     });
   }
 });
+
+/** The D-6's own reason: a share count with more than 10 integer digits. */
+const D6_COUNT_TOO_BIG = {
+  es: "más de 10 cifras enteras",
+  en: "more than 10 integer digits",
+  ca: "més de 10 xifres enteres",
+  eu: "10 zifra oso baino gehiago",
+  gl: "máis de 10 cifras enteiras",
+} as const;

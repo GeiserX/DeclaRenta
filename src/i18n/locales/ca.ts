@@ -497,7 +497,7 @@ const ca: TranslationKeys = {
   "d6.brokers_without_holdings": "Les dades de {{brokers}} que has pujat no inclouen els teus valors a 31 de desembre, així que no apareixen aquí. Consulta'ls a l'extracte de final d'any de {{brokers}}.",
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
-    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid, i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; falta el nombre de títols, o és un 0 que el seu valor no confirma o contradiu; el valor no és un número o té més de 12 xifres enteres en euros; o la quantitat i el valor tenen signes contraris. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
+    "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid, i s'han exclòs del total. El motiu pot ser un d'aquests: falta el preu de mercat o el tipus de canvi de la seva moneda al tancament de l'exercici; falta el nombre de títols, és un 0 que el seu valor no confirma o contradiu, o té més de 10 xifres enteres; el valor no és un número o té més de 12 xifres enteres en euros; o la quantitat i el valor tenen signes contraris. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
   "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{holdings}}. No compten com a 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",

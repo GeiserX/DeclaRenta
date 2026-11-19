@@ -299,6 +299,39 @@ describe("#470 one rule in the three forms: a value too big for the 720 field is
   });
 });
 
+describe("#470 one rule for the share count: a count the 720 field cannot hold has no valid share count in the D-6", () => {
+  // The 720 leaves out a count past 10 integer digits (`quantity_too_large`).
+  // The D-6 wrote the same count as "1e+25" in its guide and JSON. Now it is a
+  // holding with no valid share count: named, counted, out of the total.
+  for (const position of ["1e25", "1e10", "9999999999.995"]) {
+    it(`position="${position}": the D-6 counts it unvalued, names it, and never writes an exponent`, () => {
+      const d6 = generateD6Report(flex(stock(position, "70000") + other).openPositions, rateMap, 2025, "X", "12345678Z");
+      expect(d6.positions.map((p) => p.isin)).toEqual([OTHER]);
+      expect([d6.unvaluedCount, d6.unvalued]).toEqual([1, [{ isin: ACME, description: "ACME CORP" }]]);
+      expect(d6.totalValueEur).toBe("59500.00");
+      expect(d6.guide.join("\n")).not.toMatch(/e\+|\d{16}/);
+    });
+
+    it(`position="${position}": the web D-6 shows «—» for its count and value, and the unvalued banner`, () => {
+      useContainer("d6-content");
+      renderSectionD6(flex(stock(position, "70000") + other), rateMap);
+      const row = [...document.querySelectorAll("#d6-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim())).find((r) => r[0] === ACME)!;
+      expect(row.at(-1)).toBe("—");
+      expect(row).toContain("—");
+      expect(row.join(" ")).not.toMatch(/e\+|\d{3}\.\d{3}\.\d{3}\.\d{3}/);
+      expect(document.getElementById("d6-content")!.textContent).toContain("no se han podido valorar");
+    });
+  }
+
+  it("boundary: 9,999,999,999.99 shares are listed in digits; a tiny count is written in full, never as 5e-8", () => {
+    const fits = generateD6Report(flex(stock("9999999999.99", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([fits.unvaluedCount, fits.positions[0]!.sharesAtYearEnd]).toEqual([0, "9999999999.99"]);
+    const tiny = generateD6Report(flex(stock("0.00000005", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([tiny.unvaluedCount, tiny.positions[0]!.sharesAtYearEnd]).toEqual([0, "0.00000005"]);
+    expect(tiny.guide.join("\n")).toContain("Nº títulos:        0.00000005");
+  });
+});
+
 describe("#470 the 721 library export writes numbers as the 720 does: digits in their width, never an exponent", () => {
   const cfg721 = { ...cfg720, declarationId: "7210000000001", allowPrototypeOutput: true };
   const entry = (valuationEur: string, quantity = "1") => ({

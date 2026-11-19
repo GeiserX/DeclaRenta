@@ -81,6 +81,29 @@ export function fitsModelo720Amount(valueEur: Decimal): boolean {
 }
 
 /**
+ * Whether a share count fits «Número de valores» (up to 9,999,999,999.99). A
+ * count that does not fit is left out of the 720 file (`quantity_too_large`),
+ * and the D-6 treats it as no valid share count: one rule in both forms (#470).
+ */
+export function fitsModelo720Quantity(quantity: Decimal): boolean {
+  return fitsField(quantity, QUANTITY_INTEGER_DIGITS);
+}
+
+/**
+ * The share count a D-6 (AFORIX) entry writes, or null when the holding has no
+ * valid one: the export does not give it (`quantityUnknown`), it is no number,
+ * or it does not fit the 720's «Número de valores» (`fitsModelo720Quantity`),
+ * so the two forms never disagree on a holding. It lives here, not in d6.ts,
+ * because the web D-6 table needs it while it loads the D-6 generator lazily.
+ * The guide, the JSON and the web table share it (#470).
+ */
+export function d6ShareCount(p: Pick<OpenPosition, "quantity" | "quantityUnknown">): Decimal | null {
+  if (p.quantityUnknown === true) return null;
+  const quantity = readPositionNumber(p.quantity);
+  return quantity !== null && fitsModelo720Quantity(quantity) ? quantity : null;
+}
+
+/**
  * A V-category holding: a long stock, fund or bond. A short position
  * (`isShortPosition`: negative value, or a negative quantity when the value
  * cannot tell) is stock the taxpayer owes, not an asset they own. A row of 0
@@ -285,7 +308,7 @@ function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity
   if (quantity !== null && writesZeroUnits(quantity)) return "quantity_below_hundredth";
   // More units than «Número de valores» holds (10 integer digits): never
   // written in exponent form or past the field (#470).
-  if (quantity !== null && !fitsField(quantity, QUANTITY_INTEGER_DIGITS)) return "quantity_too_large";
+  if (quantity !== null && !fitsModelo720Quantity(quantity)) return "quantity_too_large";
   return null;
 }
 

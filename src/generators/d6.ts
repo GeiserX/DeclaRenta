@@ -20,7 +20,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
-import { fitsModelo720Amount } from "./modelo720.js";
+import { d6ShareCount, fitsModelo720Amount } from "./modelo720.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -123,10 +123,12 @@ export function generateD6Report(
       // (tested first: its value may be unreadable text).
       const value = positionValueOf(p);
       const valueEur = ecbRate === null || value === null ? null : value.mul(ecbRate);
+      const shares = d6ShareCount(p);
       // A value too big for the 720's valoración (12 integer digits in euros)
       // is «sin valorar» there; the D-6 follows the same rule, so the two forms
       // never disagree on a holding and no total runs to hundreds of digits.
-      if (valueEur === null || p.quantityUnknown === true || hasNoMarketValue(p) || !fitsModelo720Amount(valueEur)) {
+      // The share count follows the 720's «Número de valores» (`d6ShareCount`).
+      if (valueEur === null || shares === null || hasNoMarketValue(p) || !fitsModelo720Amount(valueEur)) {
         unvalued.push({ isin: p.isin, description: p.description });
         return [];
       }
@@ -136,7 +138,9 @@ export function generateD6Report(
         description: p.description,
         countryCode: p.isin.slice(0, 2).toUpperCase(),
         exchangeCode: exchangeFromIsin(p.isin, p.assetCategory),
-        sharesAtYearEnd: new Decimal(p.quantity).toString(),
+        // toFixed, never toString: decimal.js writes 1e21 and above, and below
+        // 1e-7, in exponent form ("5e-8").
+        sharesAtYearEnd: shares.toFixed(),
         marketValueEur: valueEur.toFixed(2),
         currency: p.currency,
       }];

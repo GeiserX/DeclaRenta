@@ -133,7 +133,7 @@ const UNVALUED_REASONS_720 =
 /** The D-6's reasons (`d6.positions_unvalued`): an AFORIX entry also needs a valid share count. */
 const UNVALUED_REASONS_D6 =
   "El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; " +
-  "falta el número de títulos, o es un 0 que su valor no confirma o contradice; " +
+  "falta el número de títulos, es un 0 que su valor no confirma o contradice, o tiene más de 10 cifras enteras; " +
   "el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios.";
 
 /**
