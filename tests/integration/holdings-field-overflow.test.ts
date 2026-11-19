@@ -238,7 +238,7 @@ describe("#470 a cancellation whose value does not fit valoración 1", () => {
     // CodeRabbit on 45c5712: a sale with no lot (no history) has a blank
     // acquisition date, and proceeds of 1e13 € write 0 in valoración 1. Only
     // the date was named, so the 0 had no explanation.
-    const noLots = { ...sale("1e13"), acquireDate: "2025-03-03", costBasisFcy: new Decimal(0), holdingPeriodDays: 0 } as FifoDisposal;
+    const noLots = { ...sale("1e13"), acquireDate: "2025-03-03", costBasisFcy: new Decimal(0), holdingPeriodDays: 0 };
     const config = { ...cfg720, previousYearSecurities: previous };
     expect(findUndatedExtinctions(flex(other).openPositions, config, [noLots])).toEqual([
       { isin: ACME, missing: "acquisitionDate" },
