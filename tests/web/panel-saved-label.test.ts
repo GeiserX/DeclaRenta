@@ -403,6 +403,8 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
   // the run replaces the locale-drawn panel with the stored value; only an edit
   // in the locale-drawn panel keeps it (#472 review).
   const windowSelect = (p: HTMLElement) => p.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!;
+  // A locale redraw replaces the results strip too: take `strip` after it, or
+  // runLands returns before the rerun lands (#472 review).
   const runLands = (strip: Element | null) =>
     waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after the good Save").then(
       () => new Promise((r) => setTimeout(r, 50)),
@@ -410,13 +412,13 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("an edit, then a locale redraw while a Save reruns: the run shows the stored window, not the stale locale-drawn panel", async () => {
     const before = await waitFor(windowPanel, "window panel");
-    const strip = document.getElementById("results-split");
     windowSelect(before).value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     windowSelect(before).value = "12";
     windowSelect(before).dispatchEvent(new Event("change", { bubbles: true }));
     redrawOnLocaleChange();
     const localeDrawn = windowPanel()!;
+    const strip = document.getElementById("results-split");
     await runLands(strip);
     expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 2 });
     expect(windowPanel()).not.toBe(localeDrawn);
@@ -426,13 +428,13 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("a refused Save, then a locale redraw while a good Save reruns: the run shows the stored window", async () => {
     const before = await waitFor(windowPanel, "window panel");
-    const strip = document.getElementById("results-split");
     windowSelect(before).value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     refuseWrites = true;
     windowSelect(before).value = "12";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     redrawOnLocaleChange();
+    const strip = document.getElementById("results-split");
     await runLands(strip);
     expect(windowSelect(windowPanel()!).value).toBe("2");
     expect(windowPanel()!.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(true);
@@ -441,13 +443,13 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("a typed price, then a locale redraw while a crypto Save reruns: the run shows the saved-prices panel", async () => {
     const before = await waitFor(cryptoPanel, "crypto panel");
-    const strip = document.getElementById("results-split");
     const input = before.querySelector<HTMLInputElement>(".crypto-rate-input")!;
     input.value = "30000";
     before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     input.value = "31000";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     redrawOnLocaleChange();
+    const strip = document.getElementById("results-split");
     await runLands(strip);
     expect(step3().querySelector(".crypto-rates-stored-panel")).not.toBeNull();
     expect(cryptoLabel().hidden).toBe(true);
@@ -455,10 +457,10 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("an edit in the locale-drawn panel while a Save reruns is kept as typed (control)", async () => {
     const before = await waitFor(windowPanel, "window panel");
-    const strip = document.getElementById("results-split");
     windowSelect(before).value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     redrawOnLocaleChange();
+    const strip = document.getElementById("results-split");
     const localeDrawn = windowPanel()!;
     windowSelect(localeDrawn).value = "12";
     windowSelect(localeDrawn).dispatchEvent(new Event("change", { bubbles: true }));
@@ -478,10 +480,10 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("a Save, a locale redraw and an edit of another row: the kept panel shows the saved window and its Save keeps it", async () => {
     const before = await waitFor(windowPanel, "window panel");
-    let strip = document.getElementById("results-split");
     windowSelect(before).value = "2";
     before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     redrawOnLocaleChange();
+    let strip = document.getElementById("results-split");
     const localeDrawn = windowPanel()!;
     expect(windowSelect(localeDrawn).value).toBe("2");
     secondSelect(localeDrawn).value = "12";
@@ -498,14 +500,13 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
 
   it("a Clear, a locale redraw and an edit of another row: the kept panel shows no window and its Save does not restore one", async () => {
     const first = await waitFor(windowPanel, "window panel");
-    let strip = document.getElementById("results-split");
     windowSelect(first).value = "2";
     first.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     const second = await redrawn(windowPanel, first, "rerun after Save");
-    strip = document.getElementById("results-split");
     second.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
     expect(localStorage.getItem("declarenta_antichurning_windows")).toBeNull();
     redrawOnLocaleChange();
+    let strip = document.getElementById("results-split");
     const localeDrawn = windowPanel()!;
     secondSelect(localeDrawn).value = "12";
     secondSelect(localeDrawn).dispatchEvent(new Event("change", { bubbles: true }));
