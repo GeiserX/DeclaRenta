@@ -42,6 +42,8 @@ export interface FlexStatement {
 /** The year-end holdings of one merged file, dated to that file's period end. */
 export interface HoldingsSource {
   accountId: string;
+  /** That file's period start, when it gives one (the anti-churning one-purchase exception reads it). */
+  fromDate?: string;
   toDate: string;
   /** The merged file's broker (`mergeStatement`'s `brokerName`), when given. */
   brokerSource?: string;
@@ -239,6 +241,12 @@ export interface OpenPosition {
    */
   custodianCountry?: string;
   brokerSource?: string;
+  /**
+   * The parser built this row from the file's own trades (Revolut's transaction
+   * log), so it is no holding the broker reported. The anti-churning
+   * one-purchase exception (#453) cannot use it as proof of no earlier shares.
+   */
+  fromTrades?: boolean;
 }
 
 export interface SecurityInfo {

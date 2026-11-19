@@ -294,9 +294,9 @@ transmission that releases them.
   (earliest sale day first, gain sales with pending losses included), the most
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
   tiebreak).
-- **Single-purchase exception** (AEAT Manual 2025, V3282-18 A): not applied; a
-  separate issue. It would feed the definitive test too («los mismos
-  criterios»).
+- **Single-purchase exception** (V3282-18 A, AEAT Manual 2025; #453): see
+  "One-purchase exception" below. Fail safe where the upload cannot prove the
+  zero holding at the window start.
 - **Single-year files**: if the user omits prior-year buys, `holdingAfter` can
   understate the real position and is clamped at zero. This is the same data
   window limitation the FIFO engine already surfaces elsewhere; this fix does
@@ -307,6 +307,86 @@ transmission that releases them.
   the position open (tested). The pre-sale cap still reads the BUY/SELL trades
   only, so after such an action it can understate the position, the same way
   as the single-year limitation above.
+
+## One-purchase exception (issue #453)
+
+V3282-18, rule A) on the purchases of the 2 months before the sale: «No
+obstante, esta regla no resulta de aplicación cuando dentro del plazo de los dos
+meses anteriores a la transmisión sólo se hubiera efectuado una operación de
+compra y, además, al inicio de ese período no se tuvieran acciones o
+participaciones homogéneas.» The same paragraph is in every later consulta that
+repeats the procedure (V0183-23, V0709-24, V0279-25, …) and in the AEAT Manual
+práctico Renta 2025. The decisions, each pinned in
+`tests/integration/antichurning-single-purchase-e2e.test.ts`:
+
+- **Only the pre-sale pass.** The exception lifts rule A) only. Rule B) follows
+  it «sin perjuicio de que las recompras efectuadas en el plazo de los dos meses
+  posteriores a la transmisión impidan también la imputación», and the manual
+  adds «Asimismo, deben tenerse en cuenta las compras posteriores a la venta».
+  So the post-sale pass runs unchanged and a rebuy after the sale still blocks.
+  When the exception holds, the pre-sale buy is not consumed: it was not
+  «considerada recompra» for this sale.
+- **Letter f only.** The doctrine states it inside «el procedimiento para la
+  aplicación de lo previsto en el artículo 33.5.f)», for «los dos meses
+  anteriores». V0183-23 sends US shares to letter g without saying the
+  procedure carries over. The engine applies it to the 2-month window only;
+  the 1-year window (no ISIN, crypto) keeps rule A) whole.
+- **One operation = one order on one day.** IBKR's parser already collapses the
+  executions of one `ibOrderID` per day into one trade; DEGIRO and Flatex write
+  the order id as `tradeID` on each fill. Rows of one broker, account and day
+  with the same `ibOrderID || tradeID` are one operation; a row with no id is
+  its own. A GTC order filled on two days is two purchases (the parser splits it
+  per day too). Every BUY row counts, cover buys included, and the count runs
+  to the sale day included: a same-day buy has no intraday order, so it counts
+  as a second purchase (fail safe).
+- **No shares at the window start.** "At the start" is before the first day of
+  the window: the split-adjusted long position over the days before it must be
+  zero, and FIFO must hold no lot that entered before it (scrip, merger,
+  spin-off lots). The trades are the merged upload, all brokers and the manual
+  opening lots. The long position counts held shares only: a SELL "O" opens a
+  short and takes none, and a cover buy adds only what it does not cover. So a
+  short opened and covered before the window changes nothing. When the upload
+  itself shows shares at the window start, the answer is null (no mark).
+- **Fail safe: the upload must prove the zero.** A file's start date proves
+  nothing about shares bought before it, at the same broker or any other. The
+  exception is "applied" only when all of these hold, and "unverified" (not
+  applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
+  - The upload reaches back to the window start: the statement `fromDate`
+    (IBKR), else the first trade of the files (never a manual opening lot).
+    With several brokers, the latest start among the brokers that trade the key
+    (`HoldingsSource.fromDate`, else each broker's first trade of any
+    security). Shares sold before the files are invisible.
+  - The long position never goes negative (a sale of shares the upload never
+    shows bought).
+  - The end-of-period holdings explain the trades (`buildSnapshotCheck`).
+    Without transfers, the shares a broker lists at its period end are the
+    shares it held before the files plus what its trades moved. So per broker,
+    listed holding minus the trade position at its `toDate` is the holding from
+    before the files. Summed over the brokers it must equal the manual opening
+    lots, which are declared holdings from before the files. A share moved
+    between two uploaded brokers cancels out. Each broker's latest non-empty
+    list counts (all its files ending that day, summed). An empty list cannot be
+    told apart from a file without the section, so it counts as no list. A
+    broker that trades the key with no list, or no list at all, proves nothing.
+    Only IBKR (OpenPositions) gives such lists today. Revolut's list is built
+    by its parser from the file's own trades (`OpenPosition.fromTrades`), so it
+    always matches them and is ignored. A transactions CSV (DEGIRO, Trade
+    Republic and the rest) therefore always gets "unverified".
+  Left invisible on purpose: a broker or account the user did not upload, and
+  shares that left a listed broker without a trade (a transfer out, which the
+  IBKR parser does not read) before its `toDate`. The info message
+  `report.antichurning_single_purchase` names both whenever the exception is
+  applied.
+- **Definitive test.** Gain lots with pending losses share the absorption, so
+  the exception decides the definitive test too («deberán observarse los mismos
+  criterios»).
+- The check runs only where the pre-sale pass would take something, so a sale
+  it cannot change carries no mark (`FifoDisposal.washSaleSinglePurchase`,
+  display only).
+
+No committed fixture changed: the only fixtures where the pre-sale pass blocks
+or keeps a sale non-definitive are `revolut-sample.xlsx` (BTC, 1-year window)
+and `trading212-v2-sample.csv` (ALFA, two buys in the window).
 
 ## Migration note (issue #451)
 

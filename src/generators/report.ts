@@ -24,7 +24,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { loanCurrencies } from "../engine/fx-loan-gate.js";
-import { detectWashSales, salesWithWindowPastData } from "../engine/wash-sale.js";
+import { addMonths, detectWashSales, salesWithWindowPastData } from "../engine/wash-sale.js";
 import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
@@ -32,7 +32,7 @@ import { isEcbResolvable, lookupRateInMap } from "../engine/ecb.js";
 import { resolveCryptoTradeValues, lookupValuationRate, isFiatPriced } from "../engine/crypto-valuation.js";
 import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
-import { formatDateDmy, normalizeDate } from "../engine/dates.js";
+import { formatDateDmy, normalizeDate, parseDate } from "../engine/dates.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
@@ -790,12 +790,35 @@ export function generateTaxReport(
   // before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
+  // How far back the files reach, for the one-purchase exception (#453): the
+  // statement start, or the first trade of the files (never a manual opening
+  // lot, which is dated long before them).
+  const firstFileTrade = statement.trades
+    .map((tr) => normalizeDate(tr.tradeDate.trim()).slice(0, 10))
+    .reduce((min, d) => (min === "" || d < min ? d : min), "");
+  const fromDay = statement.fromDate ? normalizeDate(statement.fromDate.trim()).slice(0, 10) : "";
+  const startBySource = new Map<string, string>();
+  for (const src of statement.holdingsBySource ?? []) {
+    if (!src.brokerSource || !src.fromDate) continue;
+    const start = normalizeDate(src.fromDate).slice(0, 10);
+    const prev = startBySource.get(src.brokerSource);
+    if (!prev || start < prev) startBySource.set(src.brokerSource, start);
+  }
   const allDisposals = detectWashSales(
     fifoEngine.getDisposals(),
     washSaleTrades,
     statement.corporateActions,
     fifoEngine.getSplitRatios(),
     fifoEngine.getRemainingLots(),
+    {
+      dataStart: fromDay && (firstFileTrade === "" || fromDay < firstFileTrade) ? fromDay : firstFileTrade,
+      startBySource,
+      // Each file's end-of-period holdings: the only proof that no share came
+      // from before the files (an unmerged statement is one file).
+      snapshots: statement.holdingsBySource
+        ? statement.holdingsBySource.map((src) => ({ source: src.brokerSource, toDate: src.toDate, positions: src.openPositions }))
+        : [{ toDate: statement.toDate, positions: statement.openPositions }],
+    },
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
@@ -1203,6 +1226,46 @@ export function generateTaxReport(
         severity: "warning",
         message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning termina el ${ctx.windowEnd} como muy tarde: después del ${ctx.deadline}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker (${ctx.lastDate}). Cuando presentes la declaración, ese plazo seguirá abierto.`,
         hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
+        context: ctx,
+      });
+    }
+  }
+
+  // The one-purchase exception of the 2-month rule (#453, DGT V3282-18). One
+  // message per outcome, counted in sales (security and day): "applied" says the
+  // exception rests on the upload showing no shares at the window start;
+  // "unverified" says it was withheld because the upload starts after it.
+  const singlePurchaseSales = new Map<"applied" | "unverified", Map<string, string>>();
+  for (const d of disposals) {
+    const status = d.washSaleSinglePurchase;
+    if (!status) continue;
+    let sales = singlePurchaseSales.get(status);
+    if (!sales) {
+      sales = new Map();
+      singlePurchaseSales.set(status, sales);
+    }
+    const day = normalizeDate(d.sellDate).slice(0, 10);
+    sales.set(`${d.isin || d.symbol}|${day}`, addMonths(parseDate(day), -2).toISOString().slice(0, 10));
+  }
+  for (const status of ["applied", "unverified"] as const) {
+    const sales = singlePurchaseSales.get(status);
+    if (!sales) continue;
+    const windowStart = formatDateDmy([...sales.values()].reduce((min, d) => (d < min ? d : min)));
+    const ctx = { count: String(sales.size), year: yearStr, windowStart };
+    if (status === "applied") {
+      allMessages.push({
+        id: "report.antichurning_single_purchase",
+        severity: "info",
+        message: `En ${ctx.count} venta(s) de ${ctx.year}, la compra de los 2 meses anteriores no cuenta como recompra: fue la única compra de ese valor en ese plazo y al empezar el plazo no tenías acciones de ese valor (excepción de compra única, DGT V3282-18). Esa compra no bloquea su pérdida ni impide que la venta libere pérdidas pendientes.`,
+        hint: `DeclaRenta solo ve los ficheros subidos. Si al empezar el plazo (el primero empieza el ${ctx.windowStart}) tenías acciones de ese valor en otro bróker o cuenta que no has subido, o después las traspasaste a otra entidad, la excepción no se aplica: sube también esos ficheros y calcula de nuevo. Una compra en los 2 meses posteriores a la venta sigue bloqueando la pérdida.`,
+        context: ctx,
+      });
+    } else {
+      allMessages.push({
+        id: "report.antichurning_single_purchase_unverified",
+        severity: "warning",
+        message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran: deben empezar antes del ${ctx.windowStart} e incluir las posiciones a fin de periodo de cada bróker que opera ese valor (en IBKR, la sección Open Positions de la Flex Query), sin más acciones de las que explican sus operaciones. Un fichero que solo incluye operaciones no basta.`,
         context: ctx,
       });
     }

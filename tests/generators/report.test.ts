@@ -443,8 +443,13 @@ describe("generateTaxReport", () => {
       ],
     });
 
+    // The manual lot is the only purchase of the 2 months before the sale, with
+    // no shares when that window began, but the statement lists no holdings, so
+    // the one-purchase exception (#453, DGT V3282-18) cannot be proven and is not
+    // applied: the manual lot blocks the loss, and the mark says why.
     expect(report.capitalGains.disposals).toHaveLength(1);
     expect(report.capitalGains.disposals[0]!.washSaleBlocked).toBe(true);
+    expect(report.capitalGains.disposals[0]!.washSaleSinglePurchase).toBe("unverified");
     expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("91.00");
   });
 
