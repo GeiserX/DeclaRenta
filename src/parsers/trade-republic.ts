@@ -15,6 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, corporateActionTrade, markUndatedTrades, dropUndatedCash, cashIncomeRowText, cashIncomeAmountUnreadableMessages } from "./csv-utils.js";
+import Decimal from "decimal.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -91,6 +92,11 @@ function num(fields: string[], col: number): number {
   return parseFloat(parseNumber(v)) || 0;
 }
 
+/** How a dividend row names its security: `name (ISIN)`, the ISIN or the name. */
+function dividendSecurity(name: string, symbol: string): string {
+  return symbol ? (name ? `${name} (${symbol})` : symbol) : name || "—";
+}
+
 function dateToCompact(dateStr: string): string {
   // normalizeDate returns YYYY-MM-DD; we need YYYYMMDD for internal format
   return normalizeDate(dateStr).replace(/-/g, "");
@@ -130,6 +136,10 @@ function parseTrCsv(lines: string[]): Statement {
   let deliveryRows = 0;
   // Dividend, interest and tax-optimisation rows whose amount cannot be read (#467).
   const unreadableIncome: string[] = [];
+  // Dividends whose tax cell cannot be read (#467).
+  const unreadableTax: string[] = [];
+  // CASH rows of a type the parser does not know that name a security (#467).
+  const unknownCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -154,20 +164,29 @@ function parseTrCsv(lines: string[]): Statement {
     // Numeric values used only for sign/zero comparisons (never as money).
     const amount = num(fields, cols.amount);
     const shares = num(fields, cols.shares);
-    const tax = num(fields, cols.tax);
+    // A tax cell that is written but cannot be read ("-15.00 EUR", "-15abc",
+    // "-Infinity") is no number: it is never booked as a withholding (#467).
+    const taxUnreadable = field(fields, cols.tax) !== "" && quantityUnreadable(fields[cols.tax]);
+    const taxDec = taxUnreadable ? toFiniteDecimal("0") : toFiniteDecimal(taxStr);
     const fxRate = field(fields, cols.fxRate);
     const originalAmount = field(fields, cols.originalAmount);
     const originalCurrency = field(fields, cols.originalCurrency);
+    // A dividend reads original_amount, in original_currency, only when it
+    // has both; else the amount column, in the account currency (#467).
+    const fromOriginal = type === "DIVIDEND" && originalAmount !== "" && originalCurrency !== "";
+    // A row moves shares when it does not write a zero share count and names
+    // an ISIN or writes a share count. With neither, it moves nothing (#467).
+    const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
+    const movesShares = !(!sharesUnreadable && shares === 0) && (symbol !== "" || !sharesUnreadable);
 
     // --- TRADING of another type (#467): a row of the trading category that
     // names a security but is neither a buy nor a sale is kept as a trade that
     // books nothing and named, never dropped. One that writes a zero share
     // count moves no shares and stays skipped. With no ISIN (symbol), one that
-    // names the security only by name is kept when it writes a share count.
+    // writes a share count is kept, with or without a name: as a BUY with no
+    // security is, it is evidence of an unidentified trade.
     if (category === "TRADING" && type !== "BUY" && type !== "SELL") {
-      const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
-      const named = symbol !== "" || (name !== "" && !sharesUnreadable);
-      if (named && !(!sharesUnreadable && shares === 0)) {
+      if (movesShares) {
         const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
         trades.push(unreadableTrade({
           tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
@@ -195,6 +214,19 @@ function parseTrCsv(lines: string[]): Statement {
       if (shares === 0) continue;
 
       const isSell = type === "SELL";
+      // A buy or sale must name its security: crypto by its ticker (symbol),
+      // anything else by its ISIN or its name. Booked under an empty symbol,
+      // unrelated securities shared one FIFO pool and one took another's
+      // cost (#467). It is kept as a row that books nothing, and named.
+      if (mapAssetCategory(assetClass) === "CRYPTO" ? symbol === "" : symbol === "" && name === "") {
+        trades.push(unreadableTrade({
+          tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
+          symbol, description: name, isin: "",
+          assetCategory: mapAssetCategory(assetClass), currency, tradeDate, buySell: isSell ? "SELL" : "BUY",
+          exchange: "TRADE_REPUBLIC",
+        }, unreadableCell(headers[cols.symbol] ?? "symbol", field(fields, cols.symbol))));
+        continue;
+      }
       const absAmountDec = toFiniteDecimal(amountStr).abs();
       // A real BUY/SELL with no usable amount (missing/garbage) would produce a
       // 0-cost / 0-proceeds trade (phantom gain). It is kept as a trade that
@@ -215,9 +247,10 @@ function parseTrCsv(lines: string[]): Statement {
       const absFee = toFiniteDecimal(feeStr).abs();
       const absTax = toFiniteDecimal(taxStr).abs();
       // FIFO values the lot from tradePrice, not amount. When the price column
-      // is empty, take it from amount / shares (amount excludes the fee).
+      // is empty, unreadable or negative, take it from amount / shares (amount
+      // excludes the fee): a negative price sold the shares at a loss (#467).
       const priceDec = toFiniteDecimal(priceStr);
-      const tradePrice = priceDec.isZero() && !absSharesDec.isZero()
+      const tradePrice = (priceDec.isZero() || priceDec.isNegative()) && !absSharesDec.isZero()
         ? absAmountDec.div(absSharesDec).toString()
         : priceStr;
       const assetCategory = mapAssetCategory(assetClass);
@@ -257,11 +290,13 @@ function parseTrCsv(lines: string[]): Statement {
     // read is no zero: neither it nor its withholding is booked, and it is
     // named (#467). A dividend reads original_amount when it has one.
     if (category === "CASH" && (type === "DIVIDEND" || type === "INTEREST_PAYMENT" || type === "TAX_OPTIMIZATION")) {
-      const amountCol = type === "DIVIDEND" && originalAmount && originalCurrency ? cols.originalAmount : cols.amount;
+      const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
       if (quantityUnreadable(fields[amountCol])) {
-        const security = type === "DIVIDEND" ? (symbol ? (name ? `${name} (${symbol})` : symbol) : name || "—") : "";
-        const taxShown = type === "DIVIDEND" && tax !== 0 ? `${headers[cols.tax] ?? "tax"} ${taxStr}` : "";
-        unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), security, type === "DIVIDEND" ? originalCurrency || currency : currency, tradeDate,
+        const security = type === "DIVIDEND" ? dividendSecurity(name, symbol) : "";
+        const taxShown = type !== "DIVIDEND" ? ""
+          : taxUnreadable ? unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])
+          : !taxDec.isZero() ? `${headers[cols.tax] ?? "tax"} ${taxStr}` : "";
+        unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), security, fromOriginal ? originalCurrency : currency, tradeDate,
           [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], taxShown));
         continue;
       }
@@ -275,14 +310,29 @@ function parseTrCsv(lines: string[]): Statement {
       // through toFiniteDecimalString — a literal "NaN"/"Infinity" or unparseable
       // value would otherwise reach `new Decimal(div.amount)` in dividends.ts and
       // poison Casilla 0029. Mirrors the TRADING branch's toFiniteDecimal usage.
-      const divAmount = toFiniteDecimalString(
-        originalAmount && originalCurrency ? originalAmount : amountStr,
-      );
-      const divCurrency = originalCurrency || currency;
+      const divAmount = toFiniteDecimalString(fromOriginal ? originalAmount : amountStr);
+      // The currency of the amount that was read: with no original_amount the
+      // amount is the account currency's, even when original_currency is
+      // written. Booked in USD, 100 EUR were valued at 90.90 € (#467).
+      const divCurrency = fromOriginal ? originalCurrency : currency;
       const fxToBase = fxRate || "1";
       // TR converts a foreign dividend and credits the account currency: the
       // taxpayer never holds the USD, so it must not open an FX lot (#96).
       const brokerConverted = divCurrency !== currency;
+      // A negative dividend reverses one (a storno). Its tax is a refund of
+      // the reversed withholding, whatever its sign: read as a new
+      // withholding, a reversed dividend gave its credit twice (#467).
+      const reversal = new Decimal(divAmount).isNegative();
+      const taxRow = (): string => cashIncomeRowText(field(fields, cols.type), `${dividendSecurity(name, symbol)} ${divAmount}`, divCurrency, tradeDate,
+        [unreadableCell(headers[cols.tax] ?? "tax", fields[cols.tax])]);
+      // A tax cell that cannot be read is no withholding. A dividend is then
+      // booked in full with none, which can only raise the tax; a reversal is
+      // not booked at all, so the dividend it reverses keeps its income. Both
+      // are named (#467).
+      if (taxUnreadable && reversal) {
+        unreadableTax.push(taxRow());
+        continue;
+      }
 
       cashTransactions.push({
         transactionID: txId || `tr-div-${tradeDate}-${symbol}-${i}`,
@@ -299,8 +349,10 @@ function parseTrCsv(lines: string[]): Statement {
         ...(brokerConverted ? { brokerConvertedToBase: true } : {}),
       });
 
-      // Withholding tax (if present)
-      if (tax !== 0) {
+      if (taxUnreadable) unreadableTax.push(taxRow());
+      // Withholding tax (if present). A positive dividend's tax is withheld
+      // whatever its sign (TR writes "-0.07"); a reversal's is refunded.
+      if (!taxDec.isZero()) {
         cashTransactions.push({
           transactionID: txId ? `${txId}-wht` : `tr-div-wht-${tradeDate}-${symbol}-${i}`,
           accountId: "",
@@ -310,7 +362,7 @@ function parseTrCsv(lines: string[]): Statement {
           currency,
           dateTime: tradeDate,
           settleDate: tradeDate,
-          amount: tax > 0 ? toFiniteDecimal(taxStr).abs().neg().toString() : taxStr,
+          amount: reversal ? taxDec.abs().toString() : taxDec.isNegative() ? taxStr : taxDec.neg().toString(),
           fxRateToBase: "1",
           type: "Withholding Tax",
         });
@@ -360,10 +412,11 @@ function parseTrCsv(lines: string[]): Statement {
     }
 
     // --- CORPORATE_ACTION (mergers, ...) / DELIVERY (free shares, ...) ---
-    // Not applied: counted and named below. A row that names its security
-    // (an ISIN, or a name with a share count) and does not write a zero share
-    // count moves shares of it, so it is also kept as a row that books nothing:
-    // evidence of a holding at the anti-churning window start (#453, #467).
+    // Not applied: counted and named below. A row that names an ISIN or
+    // writes a share count, and does not write a zero share count, moves
+    // shares, so it is also kept as a row that books nothing: evidence of a
+    // holding at the anti-churning window start (#453, #467). With no ISIN it
+    // is evidence of an unidentified trade.
     // Even with a readable signed share count the parser books no lot: a
     // delivery in is a lot at the market value of that day (free shares) or at
     // the original cost (a transfer), and a merger carries the old cost to the
@@ -376,9 +429,7 @@ function parseTrCsv(lines: string[]): Statement {
         deliveryRows++;
         if (symbol) deliveryIsins.add(symbol);
       }
-      const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
-      const named = symbol !== "" || (name !== "" && !sharesUnreadable);
-      if (named && !(!sharesUnreadable && shares === 0)) {
+      if (movesShares) {
         const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
         trades.push(corporateActionTrade({
           tradeID: txId || `tr-${category.toLowerCase()}-${tradeDate}-${symbol}-${i}`,
@@ -390,7 +441,31 @@ function parseTrCsv(lines: string[]): Statement {
       continue;
     }
 
-    // Skip: CUSTOMER_INBOUND, CUSTOMER_OUTBOUND, TRANSFER_*
+    // --- A category or CASH type the parser does not know (#467) ---
+    // A CASH row that writes no share count, or a zero one, and names a
+    // security (an ISIN) and an amount may be income (a coupon, a capital
+    // return): it is not booked, since its meaning is unknown, and it is
+    // named. A row that moves shares (a saveback, a stock perk) is kept as a
+    // row that books nothing: evidence of a holding for the anti-churning
+    // exception (#453). Rows with no security (deposits, card payments,
+    // transfers) stay skipped.
+    if (category === "CASH" && (sharesUnreadable || shares === 0)) {
+      const amountCell = field(fields, cols.amount);
+      if (symbol !== "" && amountCell !== "" && !(!quantityUnreadable(amountCell) && amount === 0)) {
+        unknownCash.push(`${field(fields, cols.type)} ${dividendSecurity(name, symbol)} ${quantityUnreadable(amountCell) ? `[${unreadableCell(headers[cols.amount] ?? "amount", amountCell)}]` : amountStr} ${currency} ${tradeDate || "—"}`);
+      }
+      continue;
+    }
+    if (movesShares) {
+      const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
+      trades.push(unreadableTrade({
+        tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
+        symbol: isCrypto ? symbol : name, description: name, isin: isCrypto ? "" : symbol,
+        assetCategory: mapAssetCategory(assetClass), currency, tradeDate, exchange: "TRADE_REPUBLIC",
+      }, category === "CASH"
+        ? unreadableCell(headers[cols.type] ?? "type", field(fields, cols.type))
+        : unreadableCell(headers[cols.category] ?? "category", field(fields, cols.category))));
+    }
   }
 
   const parserMessages: TaxMessage[] = [];
@@ -412,6 +487,26 @@ function parseTrCsv(lines: string[]): Statement {
       message: `Trade Republic: no se han importado ${deliveryRows} entrega(s) de títulos sin compraventa (acciones gratuitas, traspasos) de ${isins}.`,
       hint: "Las acciones gratuitas de una promoción son una ganancia patrimonial de la base general por su valor de mercado el día de la entrega: decláralas aparte y añade ese valor como coste en «Lotes manuales para posiciones transferidas». Si es un traspaso desde otro bróker, añade allí el coste de compra original.",
       context: { count: String(deliveryRows), isins },
+    });
+  }
+  if (unreadableTax.length > 0) {
+    const rows = unreadableTax.join("; ");
+    parserMessages.push({
+      id: "trade_republic.tax_unreadable",
+      severity: "warning",
+      message: `Trade Republic: ${unreadableTax.length} dividendo(s) no tienen una retención (tax) legible y se calculan sin retención: ${rows}.`,
+      hint: "Entre corchetes va la celda de la retención (tax). No es un número. DeclaRenta suma el dividendo completo, pero no sabe cuánto te retuvieron. Así no pagas de menos, pero pierdes la deducción por esa retención (casilla 0588, o 0597 si el valor es español). Si la fila anula un dividendo (un importe negativo), DeclaRenta no la resta y el dividendo anulado sigue sumado. Toma la retención del informe fiscal de Trade Republic y añádela a mano en Renta Web.",
+      context: { count: String(unreadableTax.length), rows },
+    });
+  }
+  if (unknownCash.length > 0) {
+    const rows = unknownCash.join("; ");
+    parserMessages.push({
+      id: "trade_republic.cash_type_not_read",
+      severity: "warning",
+      message: `Trade Republic: ${unknownCash.length} movimiento(s) de dinero de un tipo que DeclaRenta no reconoce no se calculan: ${rows}.`,
+      hint: "Cada fila nombra un valor y trae un importe, pero DeclaRenta no sabe qué es. Puede ser un cupón, un dividendo, una devolución de capital, un interés o una comisión. Por eso no lo suma. Un ingreso del año que declaras tienes que declararlo igualmente. Añádelo a mano en Renta Web. Una comisión que falta solo puede hacerte pagar más.",
+      context: { count: String(unknownCash.length), rows },
     });
   }
   markUndatedTrades(trades, headers[cols.date] ?? "date");

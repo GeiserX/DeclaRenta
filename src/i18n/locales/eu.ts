@@ -1141,6 +1141,14 @@ const eu: TranslationKeys = {
     "Trade Republic: ez dira inportatu {{isins}} baloreen salerosketarik gabeko {{count}} titulu-entrega (doako akzioak, lekualdaketak).",
   "trade_republic.delivery_not_applied.hint":
     "Promozio bateko doako akzioak zerga-oinarri orokorreko ondare-irabazia dira, entrega-eguneko merkatu-balioaren arabera: aitortu itzazu bereiz eta gehitu balio hori kostu gisa «Eskuzko loteak transferitutako posizioentzat» atalean. Beste broker batetik egindako lekualdaketa bada, gehitu bertan jatorrizko erosketa-kostua.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dibidenduk ez dute atxikipen (tax) irakurgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "Kortxete artean dago atxikipenaren gelaxka (tax). Ez da zenbaki bat. DeclaRentak dibidendu osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Errenkadak dibidendu bat baliogabetzen badu (zenbateko negatiboa), DeclaRentak ez du kentzen, eta baliogabetutako dibidendua batuta geratzen da. Hartu atxikipena Trade Republic-en txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: DeclaRentak ezagutzen ez duen motako {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Errenkada bakoitzak balore bat izendatzen du eta zenbateko bat dakar, baina DeclaRentak ez daki zer den. Kupoi bat, dibidendu bat, kapital-itzulketa bat, interes bat edo komisio bat izan daiteke. Horregatik ez du batzen. Aitortzen duzun urteko diru-sarrera bat aitortu behar duzu hala ere. Gehitu eskuz Renta Web-en. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} eragiketa baztertu dira akzioko preziorik gabe eta zenbatekoa beste dibisa batean dutela.",
   "parser.trading212.unresolved_price_skipped.hint":

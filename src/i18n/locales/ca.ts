@@ -1139,6 +1139,14 @@ const ca: TranslationKeys = {
     "Trade Republic: no s'han importat {{count}} entrega(s) de títols sense compravenda (accions gratuïtes, traspassos) de {{isins}}.",
   "trade_republic.delivery_not_applied.hint":
     "Les accions gratuïtes d'una promoció són un guany patrimonial de la base general pel seu valor de mercat el dia de l'entrega: declara-les a part i afegeix aquest valor com a cost a «Lots manuals per a posicions transferides». Si és un traspàs des d'un altre bròquer, afegeix-hi el cost de compra original.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dividend(s) no tenen una retenció (tax) llegible i es calculen sense retenció: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "Entre claudàtors hi ha la cel·la de la retenció (tax). No és un número. DeclaRenta suma el dividend complet, però no sap quant et van retenir. Així no pagues de menys, però perds la deducció per aquesta retenció (casella 0588, o 0597 si el valor és espanyol). Si la fila anul·la un dividend (un import negatiu), DeclaRenta no la resta i el dividend anul·lat continua sumat. Agafa la retenció de l'informe fiscal de Trade Republic i afegeix-la a mà a Renta Web.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: {{count}} moviment(s) de diners d'un tipus que DeclaRenta no reconeix no es calculen: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Cada fila nomena un valor i porta un import, però DeclaRenta no sap què és. Pot ser un cupó, un dividend, una devolució de capital, un interès o una comissió. Per això no el suma. Un ingrés de l'any que declares l'has de declarar igualment. Afegeix-lo a mà a Renta Web. Una comissió que falta només et pot fer pagar més.",
   "parser.trading212.unresolved_price_skipped":
     "S'han omès {{skipped}} operacions sense preu per acció i amb import en una altra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

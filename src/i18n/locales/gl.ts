@@ -1139,6 +1139,14 @@ const gl: TranslationKeys = {
     "Trade Republic: non se importaron {{count}} entrega(s) de títulos sen compravenda (accións gratuítas, traspasos) de {{isins}}.",
   "trade_republic.delivery_not_applied.hint":
     "As accións gratuítas dunha promoción son unha ganancia patrimonial da base xeral polo seu valor de mercado o día da entrega: declaraas á parte e engade ese valor como custo en «Lotes manuais para posicións transferidas». Se é un traspaso desde outro bróker, engade alí o custo de compra orixinal.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dividendo(s) non teñen unha retención (tax) lexible e calcúlanse sen retención: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "Entre corchetes vai a cela da retención (tax). Non é un número. DeclaRenta suma o dividendo completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Se a fila anula un dividendo (un importe negativo), DeclaRenta non a resta e o dividendo anulado segue sumado. Toma a retención do informe fiscal de Trade Republic e engádea a man en Renta Web.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: {{count}} movemento(s) de diñeiro dun tipo que DeclaRenta non recoñece non se calculan: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Cada fila nomea un valor e trae un importe, pero DeclaRenta non sabe que é. Pode ser un cupón, un dividendo, unha devolución de capital, un xuro ou unha comisión. Por iso non o suma. Un ingreso do ano que declaras tes que declaralo igualmente. Engádeo a man en Renta Web. Unha comisión que falta só pode facerche pagar máis.",
   "parser.trading212.unresolved_price_skipped":
     "Omitíronse {{skipped}} operacións sen prezo por acción e con importe noutra divisa.",
   "parser.trading212.unresolved_price_skipped.hint":

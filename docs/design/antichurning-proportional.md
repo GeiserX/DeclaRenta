@@ -695,14 +695,26 @@ práctico Renta 2025. The decisions, each pinned in
       written 0 stays a zero. A positive Habenzinsen, Zinsen or Zinszahlung
       row is interest received (casilla 0027); it was dropped with no word.
       A negative one stays out, which can only raise the tax.
-    - Trade Republic: a buy or sale with no amount; a TRADING row of another
-      type with a symbol, or a name and a share count. A CORPORATE_ACTION or
-      DELIVERY row that names a security and does not write a zero share
-      count is a corporate-action row (above), and its own warning still
-      names it. The file gives a share count and a sign, but not what the
-      action did (a split, a merger, a transfer in), so booking the count
-      could add or remove shares that were never there. The row books
-      nothing and keeps the evidence "unverified".
+    - Trade Republic: a buy or sale with no amount, or that names no
+      security (crypto with no `symbol`, any other with no `symbol` and no
+      `name`), named by that cell: under an empty symbol unrelated
+      securities shared one FIFO pool and one took another's cost. A
+      TRADING row of another type, or a row of a category or CASH type the
+      parser does not know (BENEFITS SAVEBACK, CASH STOCKPERK), that names
+      an ISIN or writes a share count, and does not write a zero one. With
+      no ISIN it is evidence of an unidentified trade. A CORPORATE_ACTION or
+      DELIVERY row that names an ISIN or writes a share count, and does not
+      write a zero one, is a corporate-action row (above), and its own
+      warning still names it. The file gives a share count and a sign, but
+      not what the action did (a split, a merger, a transfer in), so booking
+      the count could add or remove shares that were never there. The row
+      books nothing and keeps the evidence "unverified". A CASH row of an
+      unknown type with no share count that names an ISIN and an amount (a
+      coupon, a capital return) is not booked and is named by
+      `trade_republic.cash_type_not_read`; deposits, card payments and
+      transfers name no ISIN and stay skipped. A negative `price` is
+      |`amount`| ÷ `shares`, as an empty one: it sold the shares at a
+      negative price.
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id. When the product name has the shape of an option
       (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as
@@ -826,6 +838,16 @@ práctico Renta 2025. The decisions, each pinned in
       interest with no word, Lightyear and Scalable such interest, and
       Trade Republic booked such interest as 0 and dropped a tax
       optimisation. A written 0 stays an explicit zero with no warning.
+      A Trade Republic dividend whose written `tax` cannot be read
+      ("-15.00 EUR", "-15abc", "-Infinity") is booked in full with no
+      withholding, which can only raise the tax; a reversal (a negative
+      amount) with such a cell is not booked, so the dividend it reverses
+      keeps its income. `trade_republic.tax_unreadable` names each row.
+      Before, such a cell stopped the report or booked an unlimited
+      withholding. The `tax` of a reversal is a refund, never a new
+      withholding, and a dividend with `original_currency` but no
+      `original_amount` is booked in the account currency, the currency of
+      the amount read.
     - eToro: a dividend whose net amount cannot be read (in the Spanish
       export, the EUR net), and an Interest Payment whose Amount cannot be
       read, is not booked, and neither is that dividend's withholding.

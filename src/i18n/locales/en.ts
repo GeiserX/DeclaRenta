@@ -1137,6 +1137,14 @@ const en: TranslationKeys = {
     "Trade Republic: {{count}} securities delivery row(s) without a trade (free shares, transfers) for {{isins}} were not imported.",
   "trade_republic.delivery_not_applied.hint":
     "Free shares from a promotion are a capital gain in the general tax base at their market value on the delivery date: declare them separately and add that value as the cost under “Manual lots for transferred positions”. If it is a transfer from another broker, add the original purchase cost there.",
+  "trade_republic.tax_unreadable":
+    "Trade Republic: {{count}} dividend(s) have no readable withholding (tax) and are calculated with no withholding: {{rows}}.",
+  "trade_republic.tax_unreadable.hint":
+    "The square brackets show the withholding cell (tax). It is not a number. DeclaRenta adds the full dividend, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). If the row reverses a dividend (a negative amount), DeclaRenta does not subtract it, and the reversed dividend stays added. Take the withholding from the Trade Republic tax report and add it by hand in Renta Web.",
+  "trade_republic.cash_type_not_read":
+    "Trade Republic: {{count}} money movement(s) of a type DeclaRenta does not know are not calculated: {{rows}}.",
+  "trade_republic.cash_type_not_read.hint":
+    "Each row names a security and has an amount, but DeclaRenta does not know what it is. It can be a coupon, a dividend, a return of capital, an interest or a fee. So it does not add it. Income of the year you declare must be declared anyway. Add it by hand in Renta Web. A missing fee can only make you pay more.",
   "parser.trading212.unresolved_price_skipped":
     "{{skipped}} operations without a price per share and with an amount in another currency were skipped.",
   "parser.trading212.unresolved_price_skipped.hint":
