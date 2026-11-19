@@ -234,6 +234,33 @@ describe("#470 a cancellation whose value does not fit valoración 1", () => {
     document.getElementById("m720-previous-clear")?.click();
   });
 
+  it("a sale with no history and a value too big names both fields to complete, in the web and the CLI order", async () => {
+    // CodeRabbit on 45c5712: a sale with no lot (no history) has a blank
+    // acquisition date, and proceeds of 1e13 € write 0 in valoración 1. Only
+    // the date was named, so the 0 had no explanation.
+    const noLots = { ...sale("1e13"), acquireDate: "2025-03-03", costBasisFcy: new Decimal(0), holdingPeriodDays: 0 } as FifoDisposal;
+    const config = { ...cfg720, previousYearSecurities: previous };
+    expect(findUndatedExtinctions(flex(other).openPositions, config, [noLots])).toEqual([
+      { isin: ACME, missing: "acquisitionDate" },
+      { isin: ACME, missing: "value" },
+    ]);
+    const file2024 = generateModelo720(flex(stock("700", "70000", ACME, "EUR")).openPositions, new Map(), { ...cfg720, year: 2024 });
+    const store = new Map<string, string>([["declarenta_profile", JSON.stringify({ nif: "12345678Z", apellidos: "PEREZ", nombre: "JUAN", telefono: "600000000", year: 2025 })]]);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+    document.body.innerHTML = `<div id="m720-content"></div>`;
+    renderSection720(flex(other), rateMap, undefined, [noLots]);
+    const input = document.getElementById("m720-previous-input") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [new File([file2024], "modelo720_2024.txt")] });
+    const before = document.getElementById("m720-content")!.innerHTML;
+    input.dispatchEvent(new Event("change"));
+    for (let i = 0; i < 200 && document.getElementById("m720-content")!.innerHTML === before; i++) await new Promise((r) => setTimeout(r, 5));
+    expect([...document.querySelectorAll(".m720-sold li")].map((li) => li.textContent)).toEqual([
+      `${ACME}: ${t("m720.sold_no_acquisition")}`,
+      `${ACME}: ${t("m720.sold_value_too_large")}`,
+    ]);
+    document.getElementById("m720-previous-clear")?.click();
+  });
+
   it("the web names it, in the 5 locales", async () => {
     const texts = new Set<string>();
     for (const locale of ["es", "en", "ca", "eu", "gl"] as const) {

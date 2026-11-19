@@ -874,6 +874,8 @@ export interface UndatedExtinction {
  *   lot for (no history), so its acquisition date (415-422) is blank.
  * - `value`: the value at the extinction date is too big for valoración 1
  *   (`fitsModelo720Amount`), so the record writes 0 there (#470).
+ * A record can miss both the acquisition date and the value: the ISIN then
+ * comes twice, once per field, so the 0 is never left unexplained.
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
@@ -885,8 +887,10 @@ export function findUndatedExtinctions(
   return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
-    if (tranches.some((t) => t.acquireDate === "")) return [{ isin, missing: "acquisitionDate" }];
-    return tranches.some((t) => !fitsModelo720Amount(t.valueEur)) ? [{ isin, missing: "value" }] : [];
+    const missing: UndatedExtinction[] = [];
+    if (tranches.some((t) => t.acquireDate === "")) missing.push({ isin, missing: "acquisitionDate" });
+    if (tranches.some((t) => !fitsModelo720Amount(t.valueEur))) missing.push({ isin, missing: "value" });
+    return missing;
   });
 }
 

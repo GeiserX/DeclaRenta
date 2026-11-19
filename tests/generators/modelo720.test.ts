@@ -1375,6 +1375,18 @@ describe("Acquisition dates and extinctions from the FIFO run", () => {
     expect(undated).toEqual([{ isin: "IE00BK5BQT80", missing: "acquisitionDate" }]);
   });
 
+  it("names both fields to complete when a sale with no history also has a value too big for valoración 1", () => {
+    // CodeRabbit on 45c5712: 100 x 1e11 € = 1e13 € does not fit 12 integer
+    // digits, so the record writes 0 there. Only the missing acquisition date
+    // was named, and the 0 had no explanation.
+    const { records, undated } = extinctions([sell("2025-03-03", "100", "1e11")]);
+    expect(records).toEqual([["        ", "20250303", "00000000000000"]]);
+    expect(undated).toEqual([
+      { isin: "IE00BK5BQT80", missing: "acquisitionDate" },
+      { isin: "IE00BK5BQT80", missing: "value" },
+    ]);
+  });
+
   it("writes one extinction record per acquisition date sold, when last year's file has one record per date", () => {
     // Last year's file: 100 VWCE held in two lots, so two V records for one ISIN.
     const vwceLot = (acquireDate: string, quantity: number): Lot => ({
