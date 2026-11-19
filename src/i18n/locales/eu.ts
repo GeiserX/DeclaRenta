@@ -1101,6 +1101,10 @@ const eu: TranslationKeys = {
     "eToro-ren {{count}} posizio itxi baztertu dira, onartzen ez den mota batekoak direlako: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRentak oraindik ez ditu eToro-ren posizio mota horiek inportatzen (adib. kriptomonetak). Haien irabazia edo galera ez dago kalkuluan sartuta: gehitu eskuz zure aitorpenean, eToro-k erakusten dituen inbertitutako zenbatekoarekin eta irabaziarekin.",
+  "etoro.columns_not_detected":
+    "eToro: «{{sheet}}» orriko {{columns}} zutabeak ez dira ezagutzen. Orri horretako errenkada bat ere ez da inportatu.",
+  "etoro.columns_not_detected.hint":
+    "eTorok batzuetan zutabeen izenak aldatzen ditu. DeclaRentak ezagutzen ez baditu, ezin ditu orri horretako errenkadak irakurri, eta ez du bat ere batzen. Deskargatu berriro kontuaren XLSX txosten osoa eta igo berriro. Abisuak jarraitzen badu, gehitu eskuz Renta Web-en orri horretako eragiketak, dibidenduak edo interesak.",
   "lightyear.unknown_types":
     "Lightyear-en CSVko {{count}} errenkada baztertu dira, mugimendu mota ezezaguna dutelako: {{types}}.",
   "lightyear.unknown_types.hint":

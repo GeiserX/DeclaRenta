@@ -618,10 +618,21 @@ práctico Renta 2025. The decisions, each pinned in
       a derivative (`OPT`, `FUT`): it is named the same way, but it does not
       stand for every share in the evidence, which derivatives never enter.
       A row of an ISIN with a written zero price is a corporate-action row.
-    - eToro: an unknown direction in the Spanish `Long / Short` column (only
-      `Long` and `Short` are read), or an English Action with no Buy or
-      Sell, or an empty Action on a row with an ISIN, units or dates. Before,
-      an unknown direction was booked as a long position.
+    - eToro: an unknown or empty direction in the `Long / Short` column
+      (only `Long`, `Short`, `Buy` and `Real` are read; `Real` is an
+      unleveraged position, always long), or an English Action with no Buy
+      or Sell, or an empty Action on a row with an ISIN, units or dates.
+      Before, an unknown or empty direction was booked as a long position,
+      so a short's gain became a loss. FIFO values each leg at Units × Open
+      Rate or Close Rate, so a row whose rate cannot be read, or whose rate
+      column is missing, keeps both legs as unreadable rows named by that
+      cell (`Close Rate: —`). Before, a missing Close Rate column booked
+      every sale at 0 (a full loss), and a rate that could not be read went
+      on as text and stopped the report. A rate with a thousands separator
+      or a decimal comma is read as a number. In the Spanish export, a row
+      whose `Tipo de cambio de apertura (USD)` cannot be read, or is 0 or
+      below, is unreadable too: read as USD, a EUR instrument's gain was
+      converted at the dollar's rate.
     - Kraken: a type that is neither `buy` nor `sell` keeps an unreadable row
       for each coin. Before, it was booked as a buy, so FIFO could take its
       price as the cost of a later sale (#468). A readable row with no txid
@@ -695,6 +706,19 @@ práctico Renta 2025. The decisions, each pinned in
       interest with no word, Lightyear and Scalable such interest, and
       Trade Republic booked such interest as 0 and dropped a tax
       optimisation. A written 0 stays an explicit zero with no warning.
+    - eToro: a dividend whose net amount cannot be read (in the Spanish
+      export, the EUR net), and an Interest Payment whose Amount cannot be
+      read, is not booked, and neither is that dividend's withholding.
+      `parser.cash_income_amount_unreadable` names each row. Before, both
+      were dropped with no word. A written 0 stays skipped. A dividend with
+      no withholding is booked at its net as a number: its raw text
+      ("1,234.56") stopped the report. A Dividends or Account Activity
+      sheet whose needed columns are not recognised is named by the error
+      `etoro.columns_not_detected`, like Closed Positions; it dropped every
+      dividend or interest with no word. An undated row is a totals line
+      only when it has no ISIN and its name is exactly `Total` or
+      `Totales`: an undated TotalEnergies dividend is named by
+      `parser.cash_row_undated`, never skipped as a total.
     - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
       interest row whose amount cannot be read, or whose currency cell is
       empty, is not booked, and neither are the withholdings of such a

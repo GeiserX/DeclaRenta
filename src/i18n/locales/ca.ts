@@ -1099,6 +1099,10 @@ const ca: TranslationKeys = {
     "S'han omès {{count}} posició(ns) tancada(es) d'eToro d'un tipus no admès: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRenta encara no importa aquests tipus de posició d'eToro (p. ex. criptomonedes). El seu guany o pèrdua no està inclòs en el càlcul: afegeix-lo a mà a la teva declaració amb l'import invertit i el benefici que mostra eToro.",
+  "etoro.columns_not_detected":
+    "eToro: no es reconeixen les columnes {{columns}} del full «{{sheet}}». No s'ha importat cap fila d'aquest full.",
+  "etoro.columns_not_detected.hint":
+    "eToro canvia de vegades els noms de les columnes. Si DeclaRenta no les reconeix, no pot llegir les files d'aquest full i no en suma cap. Torna a baixar l'informe XLSX complet del compte i torna'l a pujar. Si l'avís continua, afegeix a mà a Renta Web les operacions, els dividends o els interessos d'aquest full.",
   "lightyear.unknown_types":
     "S'han omès {{count}} fila(es) del CSV de Lightyear amb un tipus de moviment no reconegut: {{types}}.",
   "lightyear.unknown_types.hint":

@@ -1099,6 +1099,10 @@ const gl: TranslationKeys = {
     "Omitíronse {{count}} posición(s) pechada(s) de eToro dun tipo non admitido: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRenta aínda non importa estes tipos de posición de eToro (p. ex. criptomoedas). A súa ganancia ou perda non está incluída no cálculo: engádea á man na túa declaración co importe investido e o beneficio que mostra eToro.",
+  "etoro.columns_not_detected":
+    "eToro: non se recoñecen as columnas {{columns}} da folla «{{sheet}}». Non se importou ningunha fila desa folla.",
+  "etoro.columns_not_detected.hint":
+    "eToro cambia ás veces os nomes das columnas. Se DeclaRenta non as recoñece, non pode ler as filas desa folla e non suma ningunha. Volve descargar o informe XLSX completo da conta e súbeo outra vez. Se o aviso segue, engade a man en Renta Web as operacións, os dividendos ou os xuros desa folla.",
   "lightyear.unknown_types":
     "Omitíronse {{count}} fila(s) do CSV de Lightyear cun tipo de movemento non recoñecido: {{types}}.",
   "lightyear.unknown_types.hint":

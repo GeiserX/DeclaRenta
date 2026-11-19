@@ -462,7 +462,9 @@ describe("#468 a row whose type is neither a buy nor a sale is never booked as a
       ["1", "Acme (ACME)", direction, "2000", "10", "15/03/2024 09:30:00", "20/09/2024 14:00:00", "1", "0", "0", "500", "450", "1", "1", "200", "150", "0", "0", "0", "-", "Acciones", "US0000000004", ""]]));
   };
   it.each(METHODS)("[%s] eToro: an unknown Long / Short value is no long position: no 550 € loss, named", async (method) => {
-    for (const direction of ["Corto", "Sell"]) {
+    // An empty cell is no long position either: read as one, a short's gain
+    // became a loss.
+    for (const direction of ["Corto", "Sell", ""]) {
       const parsed = await etoroEs(direction);
       expect(parsed.trades.every((t) => t.quantityUnknown === true)).toBe(true);
       expect(unreadableRows(parsed)).toContain(`[Long / Short: "${direction}"]`);
@@ -1761,6 +1763,7 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
+    "etoro.columns_not_detected",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
   it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 25 words", (_name, locale) => {
@@ -2673,5 +2676,181 @@ describe("#467 DEGIRO: a cash row or a trade the file does not fully give is nam
   it("controls: a written zero quantity, or no readable quantity and no price, order id or value, stays skipped", () => {
     expect(xyz("", "0").trades).toEqual([]);
     expect(xyz("", "").trades).toEqual([]);
+  });
+});
+
+describe("#467 eToro: a row or a sheet the parser cannot read is named, never booked as 0, as dollars, as a loss or a crash", () => {
+  // Realistic rate: 1 USD = 0.92 EUR.
+  const usdRates = (): EcbRateMap => {
+    const map: EcbRateMap = new Map();
+    for (let t = Date.UTC(2024, 0, 1); t <= Date.UTC(2025, 11, 31); t += 86_400_000) {
+      map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "0.92"]]));
+    }
+    return map;
+  };
+  const report = (parsed: Statement, method: FxMethod): TaxReport => {
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parsed, "eToro");
+    return generateTaxReport(finalizeMergedStatement(statement), usdRates(), 2025, reportOptionsForMethod(method));
+  };
+  const message = (s: Statement, id: string): TaxMessage | undefined => s.parserMessages?.find((m) => m.id === id);
+  const ID = "parser.cash_income_amount_unreadable";
+  // 0029 dividends, 0588 deduction, 0027 interest, and the capital gain.
+  const nums = (r: TaxReport): string[] =>
+    [r.dividends.grossIncome, r.doubleTaxation.deduction, r.interest.earned, r.capitalGains.netGainLoss].map((d) => new Decimal(d).toFixed(2));
+  const book = (sheets: [string, string[][]][]): Promise<Statement> => {
+    const wb = XLSX.utils.book_new();
+    for (const [name, rows] of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    return parseEtoroXlsx(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+  };
+
+  const DV = ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"];
+  const dividend = (net: string, wht = "7.50", header = DV): Promise<Statement> =>
+    book([["Dividends", [header, ["15/06/2025", "AAPL", net, wht, AAPL]]]]);
+
+  describe.each(["abc", "", "$"])("a dividend whose Net Dividend Received is %j", (cell) => {
+    it.each(METHODS)("[%s] books neither the dividend nor its withholding, and is named", async (method) => {
+      const parsed = await dividend(cell);
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, ID)?.context).toEqual({ broker: "eToro", count: "1",
+        rows: `Dividends AAPL (${AAPL}) USD 20250615 (Withholding Tax Amount (USD) 7.50) [Net Dividend Received (USD): ${JSON.stringify(cell)}]` });
+      expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] controls: a readable dividend is booked, and a written 0 stays skipped with no warning", async (method) => {
+    expect(nums(report(await dividend("42.50"), method))).toEqual(["46.00", "6.90", "0.00", "0.00"]);
+    const zero = await dividend("0");
+    expect([zero.cashTransactions, zero.parserMessages]).toEqual([[], undefined]);
+  });
+
+  it.each(METHODS)("[%s] a Spanish dividend with an empty EUR net is named by that cell, never dropped with no word", async (method) => {
+    const H = ["Fecha de pago", "Nombre del instrumento", "Dividendo neto recibido (USD)", "Dividendo neto recibido (EUR)",
+      "Importe de la retención tributaria (USD)", "Importe de la retención tributaria (EUR)", "ISIN"];
+    const es = (eur: string): Promise<Statement> => book([["Dividendos", [H, ["15/06/2025", "Apple", "42.50", eur, "7.50", "6.70", AAPL]]]]);
+    expect(nums(report(await es("38.00"), method))).toEqual(["44.70", "6.70", "0.00", "0.00"]);
+    const parsed = await es("");
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(message(parsed, ID)?.context?.rows).toBe(
+      `Dividends Apple (${AAPL}) EUR 20250615 (Importe de la retención tributaria (EUR) 6.70) [Dividendo neto recibido (EUR): ""]`);
+    expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+  });
+
+  describe.each(["$1234.56", "1,234.56", "1.234,56"])("a dividend with no withholding and a net of %j", (cell) => {
+    it.each(METHODS)("[%s] is read as 1234.56, never a raw DecimalError that stops the report", async (method) => {
+      const control = nums(report(await dividend("1234.56", "0"), method));
+      expect(control).toEqual(["1135.80", "0.00", "0.00", "0.00"]);
+      expect(nums(report(await dividend(cell, "0"), method))).toEqual(control);
+      // No withholding column at all, and a withholding rate of 0 %.
+      expect(nums(report(await book([["Dividends", [["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "ISIN"],
+        ["15/06/2025", "AAPL", cell, AAPL]]]]), method))).toEqual(control);
+      expect(nums(report(await book([["Dividends", [["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Rate (%)", "ISIN"],
+        ["15/06/2025", "AAPL", cell, "0 %", AAPL]]]]), method))).toEqual(control);
+    });
+  });
+
+  const AA = ["Date", "Type", "Details", "Amount"];
+  const interest = (amount: string): Promise<Statement> => book([["Account Activity", [AA, ["15/06/2025", "Interest Payment", "", amount]]]]);
+  describe.each(["abc", "", "$"])("an interest payment whose Amount is %j", (cell) => {
+    it.each(METHODS)("[%s] is not booked and is named", async (method) => {
+      const parsed = await interest(cell);
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, ID)?.context?.rows).toBe(`Interest Payment USD 20250615 [Amount: ${JSON.stringify(cell)}]`);
+      expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] controls: a readable interest payment is booked, and a written 0 stays skipped with no warning", async (method) => {
+    expect(nums(report(await interest("42.50"), method))).toEqual(["0.00", "0.00", "39.10", "0.00"]);
+    const zero = await interest("0");
+    expect([zero.cashTransactions, zero.parserMessages]).toEqual([[], undefined]);
+  });
+
+  // English closed position: buy 5 AAPL at 200, sell at 240 (a 200 USD gain, 184 €).
+  const closed = (o: Partial<Record<string, string>> = {}, header = ET_H): Promise<Statement> => {
+    const base: Record<string, string> = { "Action": "Buy AAPL", "Amount": "1000", "Units": "5", "Open Rate": "200", "Close Rate": "240",
+      "Profit(USD)": "200", "Open Date": "15/03/2025 09:30:00", "Close Date": "20/09/2025 14:00:00", "Type": "Stocks", "Leverage": "1", "ISIN": AAPL, ...o };
+    return book([["Closed Positions", [header, ET_H.map((h) => base[h]!)]]]);
+  };
+  describe.each(["Open Rate", "Close Rate"])("a closed position whose %s cannot be read", (column) => {
+    describe.each(["abc", "", "$"])("%j", (cell) => {
+      it.each(METHODS)("[%s] keeps both legs as unreadable rows that book nothing, never a crash or a full loss", async (method) => {
+        const parsed = await closed({ [column]: cell });
+        expect(parsed.trades.every((t) => t.quantityUnknown === true)).toBe(true);
+        expect(unreadableRows(parsed)).toBe(`AAPL (${AAPL}) 20250315 [${column}: ${JSON.stringify(cell)}]; AAPL (${AAPL}) 20250920 [${column}: ${JSON.stringify(cell)}]`);
+        const r = report(parsed, method);
+        expect(r.capitalGains.disposals).toEqual([]);
+        expect(nums(r)).toEqual(["0.00", "0.00", "0.00", "0.00"]);
+      });
+    });
+  });
+
+  it.each(METHODS)("[%s] control: a readable position gains 184 €, and a rate with a thousands separator is read as a number", async (method) => {
+    expect(nums(report(await closed(), method))).toEqual(["0.00", "0.00", "0.00", "184.00"]);
+    const plain = nums(report(await closed({ "Open Rate": "1100", "Close Rate": "1234.56" }), method));
+    expect(plain).toEqual(["0.00", "0.00", "0.00", "618.98"]);
+    for (const cell of ["1,234.56", "1.234,56", "$1234.56"]) {
+      expect(nums(report(await closed({ "Open Rate": "1100", "Close Rate": cell }), method))).toEqual(plain);
+    }
+  });
+
+  describe.each(["Open Rate", "Close Rate"])("a Closed Positions sheet whose %s column is not recognised", (column) => {
+    it.each(METHODS)("[%s] keeps every row unreadable and names the missing column, never a price of 0", async (method) => {
+      const parsed = await closed({}, ET_H.map((h) => h === column ? (column === "Open Rate" ? "Opening Rate" : "Closing Rate") : h));
+      expect(unreadableRows(parsed)).toBe(`AAPL (${AAPL}) 20250315 [${column}: —]; AAPL (${AAPL}) 20250920 [${column}: —]`);
+      expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+
+  // Spanish export: SAP quoted in EUR (FX rate at open 1.08), 10 units, 100 → 150 EUR.
+  const SP_H = ["ID de posición", "Acción", "Long / Short", "Importe", "Unidades", "Fecha de apertura", "Fecha de cierre", "Apalancamiento",
+    "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)", "Tasa de apertura", "Tasa de cierre", "Tipo", "ISIN"];
+  const sap = (fx: string): Promise<Statement> => book([["Posiciones cerradas", [SP_H,
+    ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500", fx, "100", "150", "Acciones", "DE0007164600"]]]]);
+  describe.each(["abc", "", "-", "0"])("a EUR instrument whose FX rate at open is %j", (fx) => {
+    it.each(METHODS)("[%s] is kept unreadable, never booked in dollars (460 € instead of 500 €)", async (method) => {
+      const parsed = await sap(fx);
+      expect(unreadableRows(parsed)).toBe(`SAP (DE0007164600) 20250201 [Tipo de cambio de apertura (USD): ${JSON.stringify(fx)}]; SAP (DE0007164600) 20250615 [Tipo de cambio de apertura (USD): ${JSON.stringify(fx)}]`);
+      expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+  it.each(METHODS)("[%s] control: a readable FX rate at open books the EUR legs, and a rate of 1 the USD legs", async (method) => {
+    const eur = await sap("1.08");
+    expect(eur.trades.map((t) => t.currency)).toEqual(["EUR", "EUR"]);
+    expect(nums(report(eur, method))).toEqual(["0.00", "0.00", "0.00", "500.00"]);
+    const usd = await sap("1");
+    expect(usd.trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+    expect(nums(report(usd, method))).toEqual(["0.00", "0.00", "0.00", "460.00"]);
+  });
+
+  it("a sheet whose needed columns are not recognised is named by an error, in the five locales; a sheet with only a header is not", async () => {
+    const cases: [string, string[][], string, string][] = [
+      ["Dividends", [["Date of Payment", "Instrument Name", "Net Dividend Received", "ISIN"], ["15/06/2025", "AAPL", "42.50", AAPL]], "Dividends", "Net Dividend Received"],
+      ["Dividends", [["Payment Date", "Instrument Name", "Net Dividend Received (USD)", "ISIN"], ["15/06/2025", "AAPL", "42.50", AAPL]], "Dividends", "Date of Payment"],
+      ["Account Activity", [["Date", "Transaction Type", "Details", "Amount"], ["15/06/2025", "Interest Payment", "", "42.50"]], "Account Activity", "Type"],
+      ["Posiciones cerradas", [["Instrumento", "Unidades"], ["SAP", "10"]], "Posiciones cerradas", "Action"],
+    ];
+    for (const [sheet, rows, name, columns] of cases) {
+      const parsed = await book([[sheet, rows]]);
+      expect(parsed.cashTransactions).toEqual([]);
+      const emitted = message(parsed, "etoro.columns_not_detected");
+      expect([emitted?.severity, emitted?.context]).toEqual(["error", { sheet: name, columns }]);
+      expect(emitted?.message).toBe((es as Record<string, string>)["etoro.columns_not_detected"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted?.context?.[k] ?? ""));
+      expect(emitted?.hint).toBe((es as Record<string, string>)["etoro.columns_not_detected.hint"]);
+      expect((await book([[sheet, [rows[0]!]]])).parserMessages).toBeUndefined();
+    }
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["etoro.columns_not_detected"]).toContain("{{sheet}}");
+      expect(locale["etoro.columns_not_detected"]).toContain("{{columns}}");
+      expect(locale["etoro.columns_not_detected.hint"]).toBeTruthy();
+    }
+  });
+
+  it.each(METHODS)("[%s] an undated TotalEnergies dividend is named, not taken for a totals line; a totals line stays skipped", async (method) => {
+    const parsed = await book([["Dividends", [DV, ["", "TotalEnergies", "42.50", "7.50", "FR0000120271"], ["", "Total", "42.50", "7.50", ""], ["", "Totales:", "42.50", "7.50", ""]]]]);
+    expect(parsed.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([["parser.cash_row_undated",
+      'Dividends TotalEnergies (FR0000120271) 50.0000 USD [Date: ""]; Withholding Tax TotalEnergies (FR0000120271) -7.5 USD [Date: ""]']]);
+    expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", "0.00"]);
   });
 });

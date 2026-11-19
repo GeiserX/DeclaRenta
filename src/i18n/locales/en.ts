@@ -1097,6 +1097,10 @@ const en: TranslationKeys = {
     "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
   "etoro.closed_types_skipped.hint":
     "DeclaRenta does not import these eToro position types yet (e.g. crypto). Their gain or loss is not included in the calculation: add it to your return by hand using the invested amount and the profit eToro shows.",
+  "etoro.columns_not_detected":
+    "eToro: the columns {{columns}} of the sheet «{{sheet}}» are not recognised. No row of that sheet was imported.",
+  "etoro.columns_not_detected.hint":
+    "eToro sometimes renames its columns. If DeclaRenta does not recognise them, it cannot read the rows of that sheet and adds none of them. Download the full XLSX account statement from eToro again and upload it. If the warning stays, add the trades, dividends or interest of that sheet by hand in Renta Web.",
   "lightyear.unknown_types":
     "{{count}} Lightyear CSV row(s) with an unrecognized transaction type were skipped: {{types}}.",
   "lightyear.unknown_types.hint":
