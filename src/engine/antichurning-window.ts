@@ -69,6 +69,7 @@ export const NON_EQUIVALENT_LISTINGS: Readonly<Record<string, { equivalent: read
   MEXI: { equivalent: [] },
   B3: { equivalent: [] },
   KRX: { equivalent: [] },
+  BURSAMY: { equivalent: [] }, // Bursa Malaysia
   NXT: { equivalent: [] },
   TASE: { equivalent: [] },
   JSE: { equivalent: [] },

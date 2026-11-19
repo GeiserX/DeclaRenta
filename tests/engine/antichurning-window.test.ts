@@ -68,6 +68,11 @@ describe("resolveIsinWindow: IBKR codes", () => {
   it("Toronto plus NYSE → not open (NYSE is settled letter f)", () => {
     expect(from(["NYSE", "TSE"])).toBeUndefined();
   });
+  it("third-country markets with no decision give 12 from IBKR: Bursa Malaysia (BURSAMY), Korea, Mexico, OTC", () => {
+    for (const code of ["BURSAMY", "KRX", "MEXI", "PINK"]) {
+      expect(from([code]), code).toEqual({ months: 12, source: "ibkr" });
+    }
+  });
   it("LSEETF, the US, ASX, SEHK and EEA codes never give 1 year", () => {
     for (const code of ["LSEETF", "NYSE", "NASDAQ", "ARCA", "ASX", "CHIXAU", "SEHK", "IBIS", "AEB", "SBF", "BM"]) {
       expect(from([code]), code).toBeUndefined();
