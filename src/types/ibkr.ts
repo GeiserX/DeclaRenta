@@ -53,6 +53,11 @@ export interface AccountPeriod {
   toDate: string;
   /** Whether the file has a Trades section for the account: a holdings-only Flex shows no trades for its period. */
   hasTrades: boolean;
+  /**
+   * Whether the file has an Open Positions section for the account. An empty
+   * section lists nothing held at `toDate`; no section lists nothing at all.
+   */
+  hasPositions?: boolean;
 }
 
 /** The year-end holdings of one merged file, dated to that file's period end. */

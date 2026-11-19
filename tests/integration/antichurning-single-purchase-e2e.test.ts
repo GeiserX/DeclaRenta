@@ -64,10 +64,12 @@ function ibkrXml(
 ): string {
   const net = rows.reduce((sum, [, side, qty]) => sum + (side === "BUY" ? qty : -qty), heldBefore);
   const listed = positions ?? (net > 0 ? [[isin, net] as [string, number]] : []);
-  const op = [...listed, ...otherPositions].map(([i, q]) => openPositionXml(i, q, currency)).join("");
+  const all = [...listed, ...otherPositions];
+  // `positions: []` with no other rows: the query has no Open Positions section.
+  const op = positions !== undefined && all.length === 0 ? "" : `<OpenPositions>${all.map(([i, q]) => openPositionXml(i, q, currency)).join("")}</OpenPositions>`;
   return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="${fromDate}" toDate="${toDate}" period="Custom"><Trades>${rows
     .map((r) => tradeXml(r, currency, isin))
-    .join("")}</Trades><CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions>${op}</OpenPositions><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    .join("")}</Trades><CashTransactions /><CorporateActions>${actions}</CorporateActions>${op}<SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
 }
 
 function rates(): EcbRateMap {
@@ -670,15 +672,20 @@ interface Stmt {
   actions?: string;
   /** `false`: the statement has no Trades section (a holdings-only Flex). */
   trades?: false;
+  /** `false`: the statement has no Open Positions section (not in the query). */
+  positionsSection?: false;
+  /** ISIN of the trade rows (`""`: a Flex without the Trades ISIN column). */
+  tradeIsin?: string;
 }
 
 /** An IBKR Flex file with one FlexStatement per entry (a multi-account query). */
 function flexXml(stmts: Stmt[]): string {
   const body = stmts
-    .map(({ account = "U1", fromDate, toDate, rows = [], positions = [], rawPositions = [], actions = "", trades: withTrades }) => {
-      const trades = withTrades === false ? "" : `<Trades>${rows.map((r) => tradeXml(r, "EUR", ISIN, account)).join("")}</Trades>`;
+    .map(({ account = "U1", fromDate, toDate, rows = [], positions = [], rawPositions = [], actions = "", trades: withTrades, positionsSection, tradeIsin = ISIN }) => {
+      const trades = withTrades === false ? "" : `<Trades>${rows.map((r) => tradeXml(r, "EUR", tradeIsin, account)).join("")}</Trades>`;
       const op = positions.map(([isin, qty]) => openPositionXml(isin, qty, "EUR", account)).join("") + rawPositions.join("");
-      return `<FlexStatement accountId="${account}" fromDate="${fromDate}" toDate="${toDate}" period="Custom">${trades}<CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions>${op}</OpenPositions><SecuritiesInfo /></FlexStatement>`;
+      const openPositions = positionsSection === false ? "" : `<OpenPositions>${op}</OpenPositions>`;
+      return `<FlexStatement accountId="${account}" fromDate="${fromDate}" toDate="${toDate}" period="Custom">${trades}<CashTransactions /><CorporateActions>${actions}</CorporateActions>${openPositions}<SecuritiesInfo /></FlexStatement>`;
     })
     .join("");
   return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="${stmts.length}">${body}</FlexStatements></FlexQueryResponse>`;
@@ -985,6 +992,155 @@ describe("(g) the same Flex uploaded twice", () => {
 
   it.each(METHODS)("[%s] every day is in two files: not applied", (method) => {
     const r = mergedFiles([[IB, file], [IB, file]], method);
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (h) Third review of the evidence rule (CodeRabbit on the fork mirror of the
+// second fix). Each gap below let the files "prove" a zero they do not prove,
+// or kept a real proof from counting.
+// ---------------------------------------------------------------------------
+
+describe("(h) an empty `position` attribute is unknown, not zero", () => {
+  it.each(METHODS)("[%s] position=\"\" on the security's row, the trades leave 0: not applied", (method) => {
+    const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
+    expectUnverified(
+      mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: "" })] }])]], method),
+    );
+  });
+});
+
+describe("(h) a trade the upload cannot tie to an ISIN may be this security", () => {
+  // An earlier Flex without the Trades ISIN column shows a buy and a sale of 10
+  // XYZ in February; the later Flex, with the column, the issue example and its
+  // list of 50. The February buy is a second purchase in the window, but its
+  // rows carry no ISIN, so the ISIN's count misses it.
+  const february: Row[] = [
+    ["20250203", "BUY", 10, 10],
+    ["20250210", "SELL", 10, 10],
+  ];
+  const later = flexXml([{ fromDate: "20250301", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+
+  it.each(METHODS)("[%s] the February trades have no ISIN: not applied", (method) => {
+    const earlier = flexXml([{ fromDate: "20250101", toDate: "20250228", rows: february, tradeIsin: "" }]);
+    expectUnverified(mergedFiles([[IB, earlier], [IB, later]], method));
+  });
+
+  it("control: the same February trades with their ISIN are a second purchase: blocked, no message", () => {
+    const earlier = flexXml([{ fromDate: "20250101", toDate: "20250228", rows: february }]);
+    const r = mergedFiles([[IB, earlier], [IB, later]]);
+    expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+    expect(ids(r)).toEqual([]);
+  });
+
+  it("an ISIN-less sale at another broker after the sale, before the lists: not applied", () => {
+    // Otro bróker held 40 since before the window and sells them on 01/06 in a
+    // file without ISINs; its list (another security) then matches its ISIN trades (none).
+    const r = mergedFiles([
+      [IB, flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }])],
+      ["Otro bróker", flexXml([{ fromDate: "20240101", toDate: "20251231", rows: [["20250601", "SELL", 40, 12]], tradeIsin: "", positions: [[OTHER, 5]] }])],
+    ]);
+    expectUnverified(r);
+  });
+
+  it("control: ISIN-less trades before the window start: applied", () => {
+    const earlier = flexXml([
+      { fromDate: "20240101", toDate: "20250228", rows: [["20241203", "BUY", 10, 10], ["20241210", "SELL", 10, 10]], tradeIsin: "" },
+    ]);
+    expectApplied(mergedFiles([[IB, earlier], [IB, later]]));
+  });
+});
+
+describe("(h) each account's own running balance from the window start must not go negative", () => {
+  // IBKR buys 100 and sells 50 at a loss. Otro bróker sells 50 it held before
+  // the window on 01/06, buys 50 on 01/07 and moves them out. Its list (0)
+  // matches its trades since the window start (−50 + 50), and the merged
+  // position never goes negative (IBKR's 50 cover it), but Otro bróker held 50
+  // when the window began.
+  const ib = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+
+  it.each(METHODS)("[%s] Otro bróker sells before it buys: not applied", (method) => {
+    const other = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: [["20250601", "SELL", 50, 12], ["20250701", "BUY", 50, 10]], positions: [[OTHER, 5]] }]);
+    expectUnverified(mergedFiles([[IB, ib], ["Otro bróker", other]], method));
+  });
+
+  it("control: Otro bróker buys before it sells: applied", () => {
+    const other = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: [["20250601", "BUY", 50, 10], ["20250701", "SELL", 50, 12]], positions: [[OTHER, 5]] }]);
+    expectApplied(mergedFiles([[IB, ib], ["Otro bróker", other]]));
+  });
+});
+
+describe("(h) an Open Positions row labeled with another account is that account's", () => {
+  it.each(METHODS)("[%s] a one-account Flex of U1 lists the 50 under U2: not applied", (method) => {
+    const xml = flexXml([{ fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions: [positionRow({ accountId: "U2" })] }]);
+    expectUnverified(mergedFiles([[IB, xml]], method));
+  });
+
+  it("U1 lists its own 50 and the file also lists 50 under U2, which no period covers: not applied", () => {
+    const xml = flexXml([
+      { fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions: [positionRow({ accountId: "U1" }), positionRow({ accountId: "U2" })] },
+    ]);
+    expectUnverified(mergedFiles([[IB, xml]]));
+  });
+
+  it("control: the same row labeled U1: applied", () => {
+    const xml = flexXml([{ fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions: [positionRow({ accountId: "U1" })] }]);
+    expectApplied(mergedFiles([[IB, xml]]));
+  });
+});
+
+describe("(h) an Open Positions row without an Account ID belongs to its FlexStatement", () => {
+  const xml = (row: string): string =>
+    flexXml([
+      { account: "U1", fromDate: "20240101", toDate: "20251231", rows: issueRows, rawPositions: [row] },
+      { account: "U2", fromDate: "20240101", toDate: "20251231", positions: [[OTHER, 5]] },
+    ]);
+
+  it("the parser gives the row U1's account", () => {
+    expect(parseIbkrFlexXml(xml(positionRow({ accountId: NONE }))).openPositions.map((p) => p.accountId)).toEqual(["U1", "U2"]);
+  });
+
+  it.each(METHODS)("[%s] a multi-account Flex whose U1 row has no Account ID: applied", (method) => {
+    expectApplied(mergedFiles([[IB, xml(positionRow({ accountId: NONE }))]], method));
+  });
+
+  it("control: an explicit U2 inside U1's statement stays U2's: not applied", () => {
+    expectUnverified(mergedFiles([[IB, xml(positionRow({ accountId: "U2" }))]]));
+  });
+});
+
+describe("(h) an empty Open Positions section is a list of nothing", () => {
+  // Buy 100 on 01/12, sell 50 at a loss on 15/12, sell the other 50 on
+  // 10/01/2026. The 2025 Flex has no Open Positions section; the January Flex
+  // has one, empty: the account holds nothing on 31/01/2026.
+  const december: Row[] = [
+    ["20251201", "BUY", 100, 10],
+    ["20251215", "SELL", 50, 8],
+  ];
+  const year = flexXml([{ fromDate: "20250101", toDate: "20251231", rows: december, positionsSection: false }]);
+  const january = (rows: Row[], positionsSection?: false): string =>
+    flexXml([{ fromDate: "20260101", toDate: "20260131", rows, ...(positionsSection === false ? { positionsSection } : {}) }]);
+  const sale = (r: TaxReport): { blocked: string; mark: string | undefined } => ({
+    blocked: blockedOn(r, "2025-12-15"),
+    mark: r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-12-15"))!.washSaleSinglePurchase,
+  });
+
+  it.each(METHODS)("[%s] the January Flex sells the rest and its section is empty: applied", (method) => {
+    const r = mergedFiles([[IB, year], [IB, january([["20260110", "SELL", 50, 10]])]], method);
+    expect(sale(r)).toEqual({ blocked: "0.00", mark: "applied" });
+    expect(ids(r)).toEqual([APPLIED]);
+  });
+
+  it("control: the January Flex has no Open Positions section: not applied", () => {
+    const r = mergedFiles([[IB, year], [IB, january([["20260110", "SELL", 50, 10]], false)]]);
+    expect(sale(r)).toEqual({ blocked: "100.00", mark: "unverified" });
+    expect(ids(r)).toEqual([UNVERIFIED]);
+  });
+
+  it("control: an empty section while the trades leave 50: not applied", () => {
+    const r = mergedFiles([[IB, year], [IB, january([])]]);
+    expect(sale(r)).toEqual({ blocked: "100.00", mark: "unverified" });
     expect(ids(r)).toEqual([UNVERIFIED]);
   });
 });

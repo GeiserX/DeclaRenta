@@ -156,6 +156,12 @@ export interface AccountStatement {
    * nothing; it can still give the holdings list.
    */
   hasTrades: boolean;
+  /**
+   * Whether the file has a holdings section for the account (IBKR's
+   * `<OpenPositions>`). With it, no rows is a list of nothing held at
+   * `toDate`; without it (or unknown), no rows is no list.
+   */
+  hasPositions?: boolean;
   /** The account's holdings at `toDate` (IBKR's OpenPositions). */
   positions: readonly {
     isin: string;
@@ -295,14 +301,19 @@ export function detectWashSales(
   // manual opening lots, which FIFO books after the day's reward lots), for
   // the rebought coins still held of a buy day.
   const cryptoBoughtByDay = new Map<string, { all: Decimal; manual: Decimal }>();
+  // Days of the share trades with no ISIN (a Flex without the Trades ISIN
+  // column, a broker that gives none): any of them may be any ISIN's security,
+  // so the one-purchase exception's evidence cannot count them (#453).
+  const unidentifiedTradeTimes: number[] = [];
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
-    if (!key) continue;
     const qty = parseQty(trade.quantity);
     if (qty.lessThanOrEqualTo(0)) continue;
     const d = parseDate(trade.tradeDate);
     const time = d.getTime();
+    if (!trade.isin && trade.assetCategory !== "CRYPTO") unidentifiedTradeTimes.push(time);
+    if (!key) continue;
 
     let positionEvents = positionEventsByAsset.get(key);
     if (!positionEvents) {
@@ -376,7 +387,7 @@ export function detectWashSales(
   }
   const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
   const positionSteps = buildPositionSteps(longEventsByAsset, splitsByAsset);
-  const filesProveNoShares = buildEvidenceCheck(longEventsByAsset, splitsByAsset, coverage.statements ?? []);
+  const filesProveNoShares = buildEvidenceCheck(longEventsByAsset, splitsByAsset, coverage.statements ?? [], unidentifiedTradeTimes);
 
   // Pending-loss queue per key, oldest first. A blocked loss does not belong to
   // one lot: any later definitive transmission of homogeneous shares releases it.
@@ -473,8 +484,10 @@ export function detectWashSales(
   //    shares from before the files);
   //  - for every account that trades or lists the key, a holdings list dated
   //    on or after the sale, reached without a gap in its files from the window
-  //    start, is exactly what its trades since the window start leave
-  //    (`buildEvidenceCheck`). A start date alone proves nothing.
+  //    start, is exactly what its trades since the window start leave, and
+  //    those trades never sell more than they bought before; and no share
+  //    trade without an ISIN falls in that span (`buildEvidenceCheck`). A start
+  //    date alone proves nothing.
   const singlePurchase = (key: string, windowStart: number, sellTime: number): "applied" | "unverified" | null => {
     const ops = buyOpsByAsset.get(key) ?? [];
     const from = firstIndexAtOrAfter(ops, windowStart);
@@ -1239,7 +1252,15 @@ const DAY_MS = 86_400_000;
  *     the key under another name (options, the other exempt categories and
  *     crypto aside; only an ISIN key has the 2-month window);
  *  4. the long holding listed equals what the account's own trades from the
- *     window start to that date leave, split-adjusted to that date's units.
+ *     window start to that date leave, split-adjusted to that date's units,
+ *     and no day of those trades ends with more sold than bought since the
+ *     window start (a sale of shares held at the window start, hidden in the
+ *     end total by a later buy);
+ *  5. no share trade without an ISIN, of any account, falls between the
+ *     window start and the latest of those list dates (or has no readable
+ *     date): it may be this security, a purchase or a sale the ISIN's trades
+ *     miss. No identifier ties such a trade to an ISIN in every file, so
+ *     none is resolved.
  * Then the account held nothing at the window start: its list is that holding
  * plus its trades since. Each account is checked on its own, in its own list's
  * share units, and nothing is offset between accounts: a difference at one
@@ -1247,17 +1268,25 @@ const DAY_MS = 86_400_000;
  * another account shows the opposite one. So a transfer between two uploaded
  * accounts is unverified too (no parser documents transfers), and so is a
  * manual opening lot of the key dated on or after the window start (it belongs
- * to no uploaded account). A list holding nothing at all cannot be told apart
- * from a file without the section, and rows a parser built from the file's own
- * trades (Revolut) always match them: neither is a list. Not visible to any
- * check: shares held at the window start that leave the upload by a transfer
- * before the list date (the "applied" message says so).
+ * to no uploaded account). A list holding nothing at all is a list only when
+ * the file says it has the section (`hasPositions`, an empty IBKR
+ * `<OpenPositions />`); rows a parser built from the file's own trades
+ * (Revolut) always match them and are no list. Not visible to any check:
+ * shares held at the window start that a transfer moves out of the upload
+ * before the list date, or between uploaded accounts and out again (the
+ * "applied" message says so).
  */
 function buildEvidenceCheck(
   longEventsByAsset: ReadonlyMap<string, readonly LongEvent[]>,
   splitsByAsset: ReadonlyMap<string, readonly SplitEvent[]>,
   statements: readonly AccountStatement[],
+  unidentifiedTradeTimes: readonly number[],
 ): (key: string, windowStart: number, sellTime: number) => boolean {
+  const unidentified = unidentifiedTradeTimes
+    .filter((time) => Number.isFinite(time))
+    .sort((a, b) => a - b)
+    .map((time) => ({ time }));
+  const unidentifiedUndated = unidentified.length < unidentifiedTradeTimes.length;
   const dayTime = (date: string | undefined): number =>
     date ? parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime() : Number.NaN;
   /** Per account: the periods its files cover, and its lists by date (null quantity = unreadable). */
@@ -1277,7 +1306,8 @@ function buildEvidenceCheck(
     const to = dayTime(st.toDate);
     if (st.hasTrades && Number.isFinite(from) && Number.isFinite(to) && from <= to) account.periods.push([from, to]);
     const rows = st.positions.filter((pos) => !pos.fromTrades);
-    if (rows.length === 0) continue;
+    // No rows is a list of nothing only when the file has the section.
+    if (rows.length === 0 && (st.positions.length > 0 || !st.hasPositions)) continue;
     const list = new Map<string, Decimal | null>();
     for (const pos of rows) {
       const key = homogeneousKey(pos.isin, pos.symbol, pos.assetCategory);
@@ -1313,6 +1343,7 @@ function buildEvidenceCheck(
       else if (ev.time >= windowStart) return false;
     }
     if (relevant.size === 0) return false;
+    let lastListTime = windowStart;
     for (const id of relevant) {
       const account = accounts.get(id);
       if (!account) return false;
@@ -1329,9 +1360,12 @@ function buildEvidenceCheck(
       }
       // A short position is no share held.
       const held = Decimal.max(listed!, 0);
-      if (!held.minus(longPositionAt(events, splits, id, windowStart, listTime)).abs().lessThan("1e-9")) return false;
+      const explained = longPositionAt(events, splits, id, windowStart, listTime);
+      if (explained === null || !held.minus(explained).abs().lessThan("1e-9")) return false;
+      lastListTime = Math.max(lastListTime, listTime);
     }
-    return true;
+    // A share trade with no ISIN in that span may be this security.
+    return !unidentifiedUndated && firstIndexAtOrAfter(unidentified, windowStart) === firstIndexAfter(unidentified, lastListTime);
   };
 }
 
@@ -1362,14 +1396,18 @@ function readQuantity(quantity: string): Decimal | null {
   }
 }
 
-/** The split-adjusted long position one account's events from `from` leave at the end of `until`, in that day's units. */
+/**
+ * The split-adjusted long position one account's events from `from` leave at
+ * the end of `until`, in that day's units, or null when it ends a day below
+ * zero (a sale of shares held before `from`). Same-day trades have no order.
+ */
 function longPositionAt(
   events: readonly LongEvent[],
   splits: readonly SplitEvent[],
   group: string,
   from: number,
   until: number,
-): Decimal {
+): Decimal | null {
   let position = new Decimal(0);
   let nextSplit = 0;
   const applySplitsUpTo = (time: number): void => {
@@ -1378,10 +1416,11 @@ function longPositionAt(
       nextSplit++;
     }
   };
-  for (const ev of events) {
-    if (!(ev.time >= from && ev.time <= until) || ev.group !== group) continue;
-    applySplitsUpTo(ev.time);
-    position = position.plus(ev.qty);
+  const own = events.filter((ev) => ev.time >= from && ev.time <= until && ev.group === group);
+  for (let i = 0; i < own.length; i++) {
+    applySplitsUpTo(own[i]!.time);
+    position = position.plus(own[i]!.qty);
+    if (own[i + 1]?.time !== own[i]!.time && position.isNegative()) return null;
   }
   applySplitsUpTo(until);
   return position;

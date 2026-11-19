@@ -287,7 +287,14 @@ describe("Renta Web guide consistency", () => {
       eu: /berrikusi dagoeneko aurkeztu dituzun ondorengo urteak ere[^.]*zuzendu urte hori ere/,
       gl: /revisa tamén os anos posteriores que xa presentaches[^.]*corrixe tamén ese ano para quitala/,
     };
-    const shortCover = { es: /posición corta/, en: /short position/, ca: /posició curta/, eu: /posizio motz/, gl: /posición curta/ };
+    // Only a buy that ONLY covers a short is out: one that also leaves long shares is a repurchase.
+    const shortCover = {
+      es: /salvo la que solo cierra una posición corta/,
+      en: /except one that only closes a short position/,
+      ca: /excepte la que només tanca una posició curta/,
+      eu: /posizio motz bat soilik ixten duena izan ezik/,
+      gl: /agás a que só pecha unha posición curta/,
+    };
     const alwaysBlock = /bloquean siempre|always block|sempre bloquegen|beti blokeatzen|bloquean sempre/;
     for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
       const text = locale["guide_rw.blocked_losses_hint"];

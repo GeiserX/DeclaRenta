@@ -121,11 +121,24 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    openPositions.push(...dropLotRowsWithSummary(ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(mapOpenPosition));
+    // A row without an Account ID (the column is optional) belongs to the
+    // FlexStatement it is in; an explicit one is kept, so a mismatch shows.
+    const stmtAccount = (stmt.accountId as string | undefined) ?? "";
+    const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map((raw) =>
+      raw.accountId ? raw : { ...raw, accountId: stmtAccount },
+    );
+    openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
-    // An empty <Trades /> still says "no trades in this period"; no element says nothing.
-    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "", hasTrades: stmt.Trades !== undefined && stmt.Trades !== null });
+    // An empty <Trades /> still says "no trades in this period", and an empty
+    // <OpenPositions /> "nothing held at its end"; no element says nothing.
+    accountPeriods.push({
+      accountId: stmtAccount,
+      fromDate: period.fromDate ?? "",
+      toDate: period.toDate ?? "",
+      hasTrades: stmt.Trades !== undefined && stmt.Trades !== null,
+      hasPositions: stmt.OpenPositions !== undefined && stmt.OpenPositions !== null,
+    });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
@@ -653,7 +666,8 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // IBKR writes the held quantity as `position`; `quantity` is the older
   // hand-written form some files use. Keep a missing or unreadable quantity
   // apart from an explicit zero: the "0" default would prove "no shares held"
-  // to the one-purchase exception (#453).
+  // to the one-purchase exception (#453). An unreadable one still reads "0"
+  // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
   const rawQuantity = raw.position ?? raw.quantity;
   const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
   return {
@@ -663,7 +677,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: rawQuantity ?? "0",
+    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity,
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",

@@ -360,12 +360,24 @@ práctico Renta 2025. The decisions, each pinned in
   applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
   - The long position never goes negative (a sale of shares the upload never
     shows bought).
+  - No share trade without an ISIN (not the exempt categories, not crypto), of
+    any account, falls between the window start and the latest list date the
+    check uses, and none has an unreadable date. Such a trade sits in a
+    symbol-only bucket, so its buy is missing from the ISIN's purchase count
+    and its sale from the reconciliation. No identifier ties it to an ISIN in
+    every file (IBKR's `conid` is optional, other brokers have none), so none
+    is resolved: fail safe.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
-    1. it has a non-empty holdings list dated on or after the sale day; the
-       earliest such date counts (the IBKR parser keeps the SUMMARY row of a
-       holding and drops its LOT rows, so the Summary and Lot options together
-       do not count it twice);
+    1. it has a holdings list dated on or after the sale day; the earliest such
+       date counts (the IBKR parser keeps the SUMMARY row of a holding and
+       drops its LOT rows, so the Summary and Lot options together do not count
+       it twice). An empty list counts only when the file says it has the
+       section (`AccountPeriod.hasPositions`, an empty `<OpenPositions />`);
+       with no section there is no list. Each row goes to the account it
+       names, in a one-account file too; the IBKR parser gives a row without
+       an Account ID its FlexStatement's account, and a row of no listed
+       account forms its own group with no period (so it fails);
     2. its files with a trades section cover every day from the window start
        to that date exactly once: no gap (a hidden trade) and no day in two
        files (merge does not drop duplicated trades, so the same Flex uploaded
@@ -383,7 +395,10 @@ práctico Renta 2025. The decisions, each pinned in
        while Trades has it, and then the row of the shares held is no row of
        the key;
     4. the long holding listed equals what that account's own trades from the
-       window start leave on that date, split-adjusted to that date.
+       window start leave on that date, split-adjusted to that date, and that
+       replay never ends a day below zero (`longPositionAt` answers null): a
+       sale of shares the account held at the window start, which a later buy
+       and a transfer out can hide in the end total and the merged position.
 
     Then the account held nothing at the window start: its list is that
     holding plus its trades since. Each account is checked on its own, in its
@@ -393,15 +408,16 @@ práctico Renta 2025. The decisions, each pinned in
     plus a transfer out of the upload, and no parser documents transfers. So a
     transfer between two uploaded accounts is "unverified", and so is a manual
     opening lot of the key dated on or after the window start (it comes from an
-    account the upload does not hold). An empty list cannot be told apart from
-    a file without the section, so it counts as no list. Only IBKR
+    account the upload does not hold). Only IBKR
     (OpenPositions) gives such lists today. Revolut's list is built by its
     parser from the file's own trades (`OpenPosition.fromTrades`), so it always
     matches them and is ignored. A transactions CSV (DEGIRO, Trade Republic and
     the rest) therefore always gets "unverified".
   Left invisible on purpose: a broker or account the user did not upload, and
   shares held at the window start that a transfer out of the upload (which the
-  IBKR parser does not read) hides before the list date. The info message
+  IBKR parser does not read) hides before the list date, also when they pass
+  through another uploaded account first: the reconciliation catches a
+  transfer only when it leaves a difference in some account. The info message
   `report.antichurning_single_purchase` names both whenever the exception is
   applied.
 - **Definitive test.** Gain lots with pending losses share the absorption, so

@@ -4,6 +4,7 @@ import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { computeCasillaBlocks } from "../../src/generators/casillas.js";
 import { generateD6Report } from "../../src/generators/d6.js";
+import { generateModelo720 } from "../../src/generators/modelo720.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
 function fixture(name: string): string {
@@ -242,6 +243,27 @@ describe("parseIbkrFlexXml", () => {
       ["CA37957M1068", "4500"],
       ["CA5503711080", "250"],
     ]);
+  });
+
+  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it", () => {
+    // position="" with no legacy `quantity`: the parser used to return "", and
+    // new Decimal("") threw in the D-6 (review of #453).
+    const row = (position: string): string =>
+      `<OpenPosition accountId="U1" symbol="AAPL" description="APPLE INC" conid="265598" isin="US0378331005" currency="USD" assetCategory="STK" position="${position}" markPrice="200" positionValue="2000" costBasisMoney="1500" costBasisPrice="150" fifoPnlUnrealized="500" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
+    const xml = (position: string): string =>
+      `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="LastYear"><Trades /><OpenPositions>${row(position)}</OpenPositions></FlexStatement></FlexStatements></FlexQueryResponse>`;
+    const rates: EcbRateMap = new Map([["2025-12-31", new Map([["USD", "1.1"]])]]);
+    const config = { nif: "00000000T", surname: "X", name: "Y", year: 2025, phone: "600000000", contactName: "X Y", declarationId: "7200000000001", isComplementary: false, isReplacement: false };
+
+    for (const position of ["", "abc"]) {
+      const positions = parseIbkrFlexXml(xml(position)).openPositions;
+      expect([positions[0]!.quantity, positions[0]!.quantityUnknown]).toEqual(["0", true]);
+      expect(generateD6Report(positions, rates, 2025, "X", "00000000T").positions).toEqual([]);
+      expect(() => generateModelo720(positions, rates, config)).not.toThrow();
+    }
+    // Control: a readable quantity is listed.
+    const held = parseIbkrFlexXml(xml("10")).openPositions;
+    expect(generateD6Report(held, rates, 2025, "X", "00000000T").positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
   });
 
   it("should parse multiple corporate actions as array", () => {
