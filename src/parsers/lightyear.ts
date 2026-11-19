@@ -192,6 +192,11 @@ function parseLightyearCsv(lines: string[]): Statement {
   const unidentifiedCash: string[] = [];
   // Dividend and income rows whose amount cannot be read (#467).
   const unreadableIncome: string[] = [];
+  // Conversion legs with no readable amount or currency (#467). They are
+  // named with the unreadable trade rows but not booked as trades: a currency
+  // leg is no anti-churning evidence, and the FX engine books every CASH
+  // trade it is given, in its currency.
+  const unreadableConversions: Trade[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -356,10 +361,31 @@ function parseLightyearCsv(lines: string[]): Statement {
     // Lightyear emits a pair: one leg per currency (e.g. USD +64.50, EUR -59.24).
     // Positive gross = acquiring that currency (BUY), negative = spending it (SELL).
     if (txType === "conversion") {
+      // A leg with no CCY became a trade in currency "" (symbol ".EUR") and
+      // stopped the report ("No ECB rate available for non-fiat currency .");
+      // a non-EUR leg whose Net Amt. and Gross Amount both cannot be read was
+      // dropped with no word, and its FX gain or cost with it. Both are named
+      // (parser.trade_row_unreadable), not booked (#467). A written zero
+      // amount stays skipped; an EUR leg is never booked.
+      const leg = { tradeID: `lightyear-fx-${reference || `${tradeDate}-${currency}-${i}`}`, isin: "", assetCategory: "CASH" as const,
+        tradeDate, tradeTime, exchange: "LIGHTYEAR" };
+      if (!(fields[cols.ccy] ?? "").trim()) {
+        unreadableConversions.push(unreadableTrade({ ...leg, symbol: ticker, currency: "" },
+          unreadableCell(headers[cols.ccy] ?? "CCY", fields[cols.ccy])));
+        continue;
+      }
+      if (currency === "EUR") continue;
+      if (quantityUnreadable(fields[cols.netAmount]) && quantityUnreadable(fields[cols.grossAmount])) {
+        unreadableConversions.push(unreadableTrade({ ...leg, symbol: `${currency}.EUR`, currency }, [
+          unreadableCell(headers[cols.netAmount] ?? "Net Amt.", fields[cols.netAmount]),
+          unreadableCell(headers[cols.grossAmount] ?? "Gross Amount", fields[cols.grossAmount]),
+        ].join(", ")));
+        continue;
+      }
       const netRaw = new Decimal(netAmount);
       const netDec = netRaw.isZero() ? new Decimal(grossAmount) : netRaw;
 
-      if (netDec.isZero() || currency === "EUR") continue;
+      if (netDec.isZero()) continue;
 
       const absDec = netDec.abs();
       const isFxBuy = netDec.greaterThan(0);
@@ -500,7 +526,7 @@ function parseLightyearCsv(lines: string[]): Statement {
   }
   markUndatedTrades(trades, headers[cols.date] ?? "Date");
   parserMessages.push(
-    ...tradeQuantityUnknownMessages("Lightyear", trades),
+    ...tradeQuantityUnknownMessages("Lightyear", [...trades, ...unreadableConversions]),
     ...dropUndatedCash("Lightyear", cashTransactions, headers[cols.date] ?? "Date"),
     ...cashRowsUnidentifiedMessages("Lightyear", unidentifiedCash),
     ...cashIncomeAmountUnreadableMessages("Lightyear", unreadableIncome),

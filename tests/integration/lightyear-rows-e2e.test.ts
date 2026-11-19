@@ -169,3 +169,43 @@ describe("Lightyear conversions: the EUR principal and the fee pair only one EUR
     expect(report(sold, method).fxGains.acquisitionValue.toString()).toBe(method === "monodivisa" ? "0" : "150");
   });
 });
+
+describe("Lightyear conversions: a leg with no readable amount or currency is named, never dropped or a crash", () => {
+  const FX_ACQUIRE = [
+    "10/02/2025 09:00:00,CN-1,USD,,Conversion,,USD,,100.00,,,100.00,",
+    "10/02/2025 09:00:00,CN-2,EUR,,Conversion,,EUR,,-95.00,,,-95.00,",
+  ];
+  const dispose = (usd: string) => [
+    `10/09/2025 09:00:00,CN-3,USD,,Conversion,,USD,,${usd},,,${usd},`,
+    "10/09/2025 09:00:00,CN-4,EUR,,Conversion,,EUR,,110.00,,0.00,110.00,",
+  ];
+
+  it.each(METHODS)("[%s] control: a readable dispose leg gives a 15 € FX gain", (method) => {
+    expect(report([...FX_ACQUIRE, ...dispose("-100.00")], method).fxGains.netGainLoss.toString()).toBe(method === "monodivisa" ? "0" : "15");
+  });
+
+  it.each(METHODS)("[%s] a dispose leg whose Net and Gross cannot be read is named", (method) => {
+    for (const usd of ["x", ""]) {
+      const s = parse([...FX_ACQUIRE, ...dispose(usd)]);
+      expect(unreadableRows(s), usd).toBe(`USD.EUR 20250910 [Net Amt.: ${JSON.stringify(usd)}, Gross Amount: ${JSON.stringify(usd)}]`);
+      expect(s.trades.map((t) => t.tradeID)).toEqual(["lightyear-fx-CN-1"]);
+      expect(() => report([...FX_ACQUIRE, ...dispose(usd)], method)).not.toThrow();
+    }
+  });
+
+  it("a leg that writes a zero amount stays skipped with no word", () => {
+    const s = parse([...FX_ACQUIRE, ...dispose("0.00")]);
+    expect(s.trades.map((t) => t.tradeID)).toEqual(["lightyear-fx-CN-1"]);
+    expect(s.parserMessages).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a leg with an empty CCY is named and never becomes a trade in currency \"\"", (method) => {
+    for (const [leg, date] of [["CN-3", "20250910"], ["CN-1", "20250210"]] as const) {
+      const rows = [...FX_ACQUIRE, ...dispose("-100.00")].map((r) => r.replace(`${leg},USD,,Conversion,,USD,`, `${leg},USD,,Conversion,,,`));
+      const s = parse(rows);
+      expect(s.trades.every((t) => t.currency !== "")).toBe(true);
+      expect(unreadableRows(s)).toBe(`USD ${date} [CCY: ""]`);
+      expect(() => report(rows, method)).not.toThrow();
+    }
+  });
+});

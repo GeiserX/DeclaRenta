@@ -616,6 +616,12 @@ práctico Renta 2025. The decisions, each pinned in
       price is a corporate-action row, as in Flatex, DEGIRO and Freedom24.
       A Lightyear buy or sale with an empty or missing `CCY` (a row cut
       short) is an unreadable row named by `CCY`; it was read as EUR.
+      A Lightyear conversion leg with no `CCY`, or a non-EUR one whose
+      `Net Amt.` and `Gross Amount` both cannot be read, is named with the
+      unreadable rows but not kept as a trade: a currency leg is no
+      evidence for this rule, and the FX engine books every CASH trade it
+      gets. The first stopped the report, the second was dropped with no
+      word.
     - Flatex: the side comes from the text (Kauf, Verkauf), never from the
       Nominal's sign alone (#468). A row with neither word is unreadable, so
       a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A
