@@ -1446,3 +1446,118 @@ describe("#467 Freedom24 corporate actions: a dividend with no ticker goes by it
     }
   });
 });
+
+describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read is named, never dropped with no word", () => {
+  // BTC bought on 15/03/2024 for 3000 € and sold on 01/03/2025 for 9000 €: a
+  // 6000 € gain. When the sale's quantity, side or coin cannot be read, the
+  // parser cannot book it, so the row must be named: a silent skip hides the
+  // gain.
+  const CB_H = "Timestamp,Transaction Type,Asset,Quantity Transacted,Spot Price Currency,Spot Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+  const cbBuy = "2024-03-15T10:30:00Z,Buy,BTC,0.1,EUR,30000.00,3000.00,3000.00,0,";
+  const cbSell = (asset: string, qty: string): string => `2025-03-01T10:00:00Z,Sell,${asset},${qty},EUR,90000.00,9000.00,9000.00,0,`;
+  const coinbase = (...rows: string[]): Statement => coinbaseParser.parse([CB_H, ...rows].join("\n"));
+  const BN_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+  const bnBuy = "2024-01-15 10:30:00,BTCEUR,BUY,30000.00,0.1,3000.00,0EUR";
+  const bnSell = (side: string, executed: string): string => `2025-03-01 10:00:00,BTCEUR,${side},90000.00,${executed},9000.00,0EUR`;
+  const binance = (...rows: string[]): Statement => binanceParser.parse([BN_H, ...rows].join("\n"));
+  const KR_H = `"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"`;
+  const krBuy = `"T1","O1","XBTEUR","2024-03-15 10:30:00","buy","limit","30000.00","3000.00","0","0.1","0.0","","L1"`;
+  const krSell = (vol: string): string => `"T2","O2","XBTEUR","2025-03-01 10:00:00","sell","market","90000.00","9000.00","0","${vol}","0.0","","L2"`;
+  const kraken = (...rows: string[]): Statement => krakenParser.parse([KR_H, ...rows].join("\n"));
+
+  const cases: { label: string; broker: string; parse: () => Statement; rows: string }[] = [
+    { label: "Coinbase, Quantity empty", broker: "Coinbase", parse: () => coinbase(cbBuy, cbSell("BTC", "")), rows: 'BTC 20250301 [Quantity Transacted: ""]' },
+    { label: "Coinbase, Quantity 'abc'", broker: "Coinbase", parse: () => coinbase(cbBuy, cbSell("BTC", "abc")), rows: 'BTC 20250301 [Quantity Transacted: "abc"]' },
+    { label: "Coinbase, Asset empty", broker: "Coinbase", parse: () => coinbase(cbBuy, cbSell("", "0.1")), rows: 'Sell 0.1 20250301 [Asset: ""]' },
+    { label: "Binance Trade History, Side empty", broker: "Binance", parse: () => binance(bnBuy, bnSell("", "0.1")), rows: 'BTC 20250301 [Side: ""]' },
+    { label: "Binance Trade History, Side 'SOLD'", broker: "Binance", parse: () => binance(bnBuy, bnSell("SOLD", "0.1")), rows: 'BTC 20250301 [Side: "SOLD"]' },
+    { label: "Binance Trade History, Executed empty", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", "")), rows: 'BTC 20250301 [Executed: ""]' },
+    { label: "Binance Trade History, Executed '1,000.5BTC'", broker: "Binance", parse: () => binance(bnBuy, bnSell("SELL", '"1,000.5BTC"')), rows: 'BTC 20250301 [Executed: "1,000.5BTC"]' },
+    { label: "Kraken trades, vol empty", broker: "Kraken", parse: () => kraken(krBuy, krSell("")), rows: 'BTC 20250301 [vol: ""]' },
+    { label: "Kraken trades, vol 'abc'", broker: "Kraken", parse: () => kraken(krBuy, krSell("abc")), rows: 'BTC 20250301 [vol: "abc"]' },
+  ];
+
+  describe.each(cases)("$label", ({ broker, parse, rows }) => {
+    it.each(METHODS)("[%s] the sale books nothing and parser.trade_row_unreadable names it", (method) => {
+      const parsed = parse();
+      expect(unreadableRows(parsed)).toBe(rows);
+      const r = run([[parsed, broker]], 2025, method);
+      expect(r.capitalGains.disposals).toEqual([]);
+      expect(r.messages.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe(rows);
+    });
+  });
+
+  const controls: [string, () => Statement][] = [
+    ["Coinbase", () => coinbase(cbBuy, cbSell("BTC", "0.1"))],
+    ["Binance", () => binance(bnBuy, bnSell("SELL", "0.1"))],
+    ["Kraken", () => kraken(krBuy, krSell("0.1"))],
+  ];
+  describe.each(controls)("control: %s, the same sale readable", (broker, parse) => {
+    it.each(METHODS)("[%s] gains 6000 € in one disposal, with no parser message", (method) => {
+      const parsed = parse();
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      const r = run([[parsed, broker]], 2025, method);
+      expect([r.capitalGains.netGainLoss.toFixed(2), r.capitalGains.disposals.length]).toEqual(["6000.00", 1]);
+    });
+  });
+
+  it("a crypto-quoted Binance row with no readable side or quantity names both coins", () => {
+    expect(unreadableRows(binance("2025-03-01 10:00:00,ETHBTC,,0.05,1,0.05,0BTC"))).toBe('ETH 20250301 [Side: ""]; BTC 20250301 [Side: ""]');
+    expect(unreadableRows(binance("2025-03-01 10:00:00,ETHBTC,SELL,0.05,,0.05,0BTC"))).toBe('ETH 20250301 [Executed: ""]; BTC 20250301 [Executed: ""]');
+    expect(binance("2025-03-01 10:00:00,ETHBTC,SELL,0.05,,0.05,0BTC").trades.every((t) => t.quantityUnknown)).toBe(true);
+  });
+
+  it("a crypto-quoted Kraken row with no readable vol names both coins", () => {
+    const parsed = kraken(`"T3","O3","XETHXXBT","2025-03-01 10:00:00","sell","market","0.05","0.05","0","","0.0","","L3"`);
+    expect(unreadableRows(parsed)).toBe('ETH 20250301 [vol: ""]; BTC 20250301 [vol: ""]');
+    expect(parsed.trades.every((t) => t.quantityUnknown)).toBe(true);
+  });
+
+  it("a Coinbase Convert whose Quantity cannot be read names the coin given up and still books the coin received", () => {
+    const parsed = coinbase("2025-03-01T10:00:00Z,Convert,BTC,,EUR,90000.00,9000.00,9000.00,0,Converted 0.1 BTC to 3 ETH");
+    expect(unreadableRows(parsed)).toBe('BTC 20250301 [Quantity Transacted: ""]');
+    expect(parsed.trades.filter((t) => !t.quantityUnknown).map((t) => [t.symbol, t.buySell, t.quantity, t.cost])).toEqual([["ETH", "BUY", "3", "9000.00"]]);
+  });
+
+  it("control: a Coinbase row with no Asset that is no buy, sale or convert stays skipped with no word", () => {
+    expect(coinbase("2025-03-01T10:00:00Z,Send,,0.1,EUR,90000.00,9000.00,9000.00,0,").parserMessages ?? []).toEqual([]);
+  });
+
+  // ETH bought on 15/03/2024 for 3000 €, sold on 01/03/2025 for 2000 € (a
+  // 1000 € loss) and bought again on 01/07/2025: the loss waits (art. 33.5.e).
+  // A rebuy row whose coin or quantity cannot be read cannot block it, so the
+  // warning names the row and says the art. 33.5.e result is not reliable.
+  const cbRebuy = (rebuy: string): Statement => coinbase(
+    "2024-03-15T10:30:00Z,Buy,ETH,1,EUR,3000.00,3000.00,3000.00,0,",
+    "2025-03-01T10:00:00Z,Sell,ETH,1,EUR,2000.00,2000.00,2000.00,0,",
+    rebuy,
+  );
+  describe.each([
+    ["Asset empty", "2025-07-01T10:00:00Z,Buy,,1,EUR,2000.00,2000.00,2000.00,0,", 'Buy 1 20250701 [Asset: ""]'],
+    ["Quantity 'abc'", "2025-07-01T10:00:00Z,Buy,ETH,abc,EUR,2000.00,2000.00,2000.00,0,", 'ETH 20250701 [Quantity Transacted: "abc"]'],
+    ["Quantity empty", "2025-07-01T10:00:00Z,Buy,ETH,,EUR,2000.00,2000.00,2000.00,0,", 'ETH 20250701 [Quantity Transacted: ""]'],
+  ])("Coinbase rebuy with %s", (_label, rebuy, rows) => {
+    it.each(METHODS)("[%s] the loss is not blocked, and the warning names the rebuy and art. 33.5.e", (method) => {
+      const r = run([[cbRebuy(rebuy), "Coinbase"]], 2025, method);
+      expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+      const warning = r.messages.find((m) => m.id === "parser.trade_row_unreadable");
+      expect(warning?.context?.rows).toBe(rows);
+      expect(warning?.hint).toContain("33.5.e");
+    });
+  });
+
+  it.each(METHODS)("[%s] control: the same rebuy readable blocks the 1000 € loss", (method) => {
+    const r = run([[cbRebuy("2025-07-01T10:00:00Z,Buy,ETH,1,EUR,2000.00,2000.00,2000.00,0,"), "Coinbase"]], 2025, method);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("1000.00");
+    expect(r.messages.some((m) => m.id === "parser.trade_row_unreadable")).toBe(false);
+  });
+
+  it("the unreadable-row hint says a crypto row makes the art. 33.5.e result unreliable, in the five locales and in the Spanish the parser emits", () => {
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["parser.trade_row_unreadable.hint"]).toContain("33.5.e");
+    }
+    const emitted = coinbase(cbBuy, cbSell("BTC", "")).parserMessages?.find((m) => m.id === "parser.trade_row_unreadable");
+    expect(emitted?.hint).toBe((es as Record<string, string>)["parser.trade_row_unreadable.hint"]);
+  });
+});
+

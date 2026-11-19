@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal, markUndatedTrades, dropUndatedCash, tradeQuantityUnknownMessages, unreadableCell } from "./csv-utils.js";
+import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal, markUndatedTrades, dropUndatedCash, tradeQuantityUnknownMessages, unreadableCell, unreadableTrade, toFiniteDecimalString } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
@@ -1191,6 +1191,16 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
 // Trade History parser (Date(UTC),Pair,Side,Price,Executed,Amount,Fee)
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether an Executed or Amount cell is a number this parser reads: digits and
+ * dots, optionally followed by the coin ("0.1", "285.7CTK"), finite. Anything
+ * else ("", "abc", "1,000.5BTC") was read as 0 units with no word (#467).
+ */
+function readableAmount(cell: string | undefined): boolean {
+  const m = /^([0-9.]+)[A-Za-z]*$/.exec((cell ?? "").trim());
+  return m !== null && toFiniteDecimalString(m[1]!, "", false) !== "";
+}
+
 function parseBinanceCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
   const cols = resolveColumns(headers);
@@ -1224,7 +1234,28 @@ function parseBinanceCsv(lines: string[]): Statement {
     const { symbol, currency } = pair;
 
     const sideLower = (fields[cols.side] ?? "").trim().toLowerCase();
-    if (sideLower !== "buy" && sideLower !== "sell") continue;
+    // A row whose Side is neither BUY nor SELL, whose Executed cannot be read,
+    // or (for a crypto-quoted pair) whose Amount cannot be read, may hide a
+    // gain, a loss or an art. 33.5.e repurchase: it is kept as a trade that
+    // books nothing for each coin it names, and named by its cell, never
+    // skipped with no word or booked as zero units (#467).
+    const badCell = sideLower !== "buy" && sideLower !== "sell" ? cols.side
+      : !readableAmount(fields[cols.executed]) ? cols.executed
+      : !isFiat(currency) && !readableAmount(fields[cols.amount]) ? cols.amount
+      : -1;
+    if (badCell >= 0) {
+      const cell = unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
+      const legs = [{ symbol, currency }];
+      if (!isFiat(currency)) legs.push({ symbol: currency, currency: symbol });
+      const key = occurrenceKey(seenKeys, [dateStr, pairStr, ...[cols.side, cols.price, cols.executed, cols.amount, cols.fee].map((c) => (fields[c] ?? "").trim())].join("|"));
+      for (const leg of legs) {
+        trades.push(unreadableTrade({
+          tradeID: `binance-${tradeDate}-${leg.symbol}-${key}`, symbol: leg.symbol, description: `${symbol}/${currency}`, isin: "",
+          assetCategory: "CRYPTO", currency: leg.currency, tradeDate, tradeTime, exchange: "BINANCE",
+        }, cell));
+      }
+      continue;
+    }
     const isBuy = sideLower === "buy";
 
     // Guard against new Decimal("NaN"/"Infinity") — it does NOT throw and a

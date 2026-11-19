@@ -21,6 +21,9 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   tradeQuantityUnknownMessages,
+  quantityUnreadable,
+  unreadableCell,
+  unreadableTrade,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -195,13 +198,29 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // A row with no readable Timestamp is booked with that date: a trade is
     // then kept as a row that books nothing and an income row is taken out,
     // each named (markUndatedTrades, dropUndatedCash below; #467).
-    if (!asset) continue;
-
     const tradeDate = convertTimestamp(timestamp);
     const tradeTime = timeOfDay(timestamp);
 
     // Skip non-taxable transfers
     if (SKIP_TYPES.includes(txType)) continue;
+
+    // A buy, sale or convert whose Asset or Quantity cannot be read may hide
+    // a gain, a loss or an art. 33.5.e repurchase: it is kept as a trade that
+    // books nothing and named by its cell, never skipped with no word (#467).
+    // A Convert still books the coin it received when Notes name it.
+    const isTrade = SELL_TYPES.includes(txType) || BUY_TYPES.includes(txType) || txType === "convert";
+    const rawType = (fields[cols.transactionType] ?? "").trim();
+    const rawQty = cols.quantity >= 0 ? fields[cols.quantity] : undefined;
+    if (isTrade && (!asset || quantityUnreadable(rawQty))) {
+      trades.push(unreadableTrade({
+        tradeID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
+        symbol: asset, description: `${rawType} ${(rawQty ?? "").trim()}`.trim(), isin: "", assetCategory: "CRYPTO",
+        currency: spotCurrency || "EUR", tradeDate, tradeTime, exchange: "COINBASE",
+        buySell: SELL_TYPES.includes(txType) || txType === "convert" ? "SELL" : "BUY",
+      }, asset ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty) : unreadableCell(headers[cols.asset] ?? "Asset", "")));
+      if (txType !== "convert") continue;
+    }
+    if (!asset && txType !== "convert") continue;
 
     // Crypto reward income (staking/rewards → ahorro; learning → base general).
     // These are NOT foreign dividends — no issuer/withholding country and not in
@@ -241,8 +260,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       const quantityDec = toFiniteDecimal(quantity).abs();
       const feeDec = toFiniteDecimal(fees);
 
-      // Close (sell) the source asset
-      trades.push({
+      // Close (sell) the source asset (kept above when its Asset or Quantity is unreadable)
+      if (asset && !quantityUnreadable(rawQty)) trades.push({
         tradeID: `coinbase-convert-sell-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
         symbol: asset,

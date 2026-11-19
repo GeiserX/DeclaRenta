@@ -26,6 +26,7 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
+  quantityUnreadable,
   markUndatedTrades,
   dropUndatedCash,
 } from "./csv-utils.js";
@@ -266,6 +267,27 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         trades.push(unreadableTrade({
           tradeID: leg.id, symbol: leg.symbol, description: `${base}/${quote}`, isin: "", assetCategory: "CRYPTO",
           currency: leg.currency, tradeDate, tradeTime, exchange: "KRAKEN",
+        }, cell));
+      }
+      continue;
+    }
+
+    // A buy or sale whose vol (or, for a crypto-quoted pair, cost) cannot be
+    // read was booked as zero units, so FIFO dropped it with no word: it may
+    // hide a gain, a loss or an art. 33.5.e repurchase. It is kept as a trade
+    // that books nothing for each coin it names, and named (#467).
+    const badCol = quantityUnreadable(fields[cols.vol]) ? "vol"
+      : !isFiat(quote) && quantityUnreadable(fields[cols.cost]) ? "cost"
+      : "";
+    if (badCol) {
+      const idx = badCol === "vol" ? cols.vol : cols.cost;
+      const cell = unreadableCell(idx >= 0 ? headers[idx]!.trim() : badCol, fields[idx]);
+      const legs = [{ id: rowId, symbol: base, currency: quote, buySell: type === "sell" ? "SELL" as const : "BUY" as const }];
+      if (!isFiat(quote)) legs.push({ id: `${rowId}-${quote}`, symbol: quote, currency: base, buySell: type === "sell" ? "BUY" : "SELL" });
+      for (const leg of legs) {
+        trades.push(unreadableTrade({
+          tradeID: leg.id, symbol: leg.symbol, description: `${base}/${quote}`, isin: "", assetCategory: "CRYPTO",
+          currency: leg.currency, tradeDate, tradeTime, exchange: "KRAKEN", buySell: leg.buySell,
         }, cell));
       }
       continue;

@@ -153,13 +153,14 @@ describe("binanceParser", () => {
       expect(() => binanceParser.parse(csv)).toThrow("vacío");
     });
 
-    it("should skip rows with unknown side", () => {
+    it("keeps a row with an unknown side as a row that books nothing, and names it (#467)", () => {
       const csv = [
         "Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
         "2025-01-15 10:30:00,BTCEUR,TRANSFER,42000.00,0.05,2100.00,0.001BTC",
       ].join("\n");
       const result = binanceParser.parse(csv);
-      expect(result.trades).toHaveLength(0);
+      expect(result.trades.map((t) => [t.symbol, t.quantity, t.quantityUnknown])).toEqual([["BTC", "0", true]]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.trade_row_unreadable")?.context?.rows).toBe('BTC 20250115 [Side: "TRANSFER"]');
     });
 
     it("should return empty cashTransactions and corporateActions", () => {
