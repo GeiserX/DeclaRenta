@@ -522,7 +522,7 @@ export function detectWashSales(
       // (V3282-18 A: «únicamente, las compras que supongan una recompra»), so a
       // day that fully exits the position deducts the loss in full (situation 1).
       // FIFO keeps the newest shares: the `holdingAfter` shares left are the
-      // newest bought, so walking the pre-sale buys newest first, each one holds
+      // newest bought, so walking the pre-sale buy days newest first, each day holds
       // what is left of that count. A buy only partly held is the lot the sale
       // itself transmits. It still counts (situation 3, and the one-purchase
       // exception exists because it would), but last, after the post-sale buys:
@@ -537,34 +537,60 @@ export function detectWashSales(
       // runs out and the pre-sale passes start there (`preFrom`).
       const preTo = firstIndexAtOrAfter(buyEvents, sellTime);
       const windowFrom = firstIndexAtOrAfter(buyEvents, windowStart);
-      const heldAfter = new Map<number, Decimal>();
-      let partlyHeld = -1;
+      // The buys of one day are one purchase here: brokers give no time of day,
+      // and some list one order as several fills (DEGIRO, one row per fill with
+      // one «ID Orden»). So the held count, and whether a buy is the lot the
+      // sale transmits, is decided per day, never per row: otherwise the rows
+      // FIFO left untouched would count as fully held and come before the
+      // post-sale buys, and the year would depend on the fill layout.
+      // `heldOfDay` maps a day's first row to the shares that day still holds.
+      const dayOf = new Map<number, number>();
+      const heldOfDay = new Map<number, Decimal>();
+      let partlyFrom = -1;
+      let partlyTo = -1;
       let preFrom = preTo;
       let stillHeld = holdingAfter(key, sellTime);
-      for (let i = preTo - 1; i >= windowFrom && stillHeld.greaterThan(0); i--) {
-        const ev = buyEvents[i]!;
-        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
-        const bought = ev.qty.mul(conversion.num).div(conversion.den);
+      for (let i = preTo - 1; i >= windowFrom && stillHeld.greaterThan(0); ) {
+        const time = buyEvents[i]!.time;
+        let first = i;
+        while (first - 1 >= windowFrom && buyEvents[first - 1]!.time === time) first--;
+        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, time, sellTime);
+        let bought = new Decimal(0);
+        for (let k = first; k <= i; k++) {
+          bought = bought.plus(buyEvents[k]!.qty.mul(conversion.num).div(conversion.den));
+          dayOf.set(k, first);
+        }
         const held = Decimal.min(bought, stillHeld);
         stillHeld = stillHeld.minus(held);
-        heldAfter.set(i, held);
-        preFrom = i;
-        if (held.greaterThan(0) && held.lessThan(bought)) partlyHeld = i;
+        heldOfDay.set(first, held);
+        preFrom = first;
+        if (held.greaterThan(0) && held.lessThan(bought)) {
+          partlyFrom = first;
+          partlyTo = i + 1;
+        }
+        i = first - 1;
       }
-      // Walks [from, to) oldest first, skipping `skip`; a pre-sale buy gives at
-      // most its shares held after the sale. With `commit` false it only
-      // measures what it would take.
-      const consume = (from: number, to: number, commit = true, skip = -1): Decimal => {
+      // Walks [from, to) oldest first, skipping [skipFrom, skipTo); a pre-sale
+      // day gives at most its shares held after the sale. With `commit` false it
+      // only measures what it would take.
+      const consume = (from: number, to: number, commit = true, skipFrom = -1, skipTo = -1): Decimal => {
         let left = remainingToAbsorb;
+        const takenOfDay = new Map<number, Decimal>();
         for (let i = from; i < to && left.greaterThan(0); i++) {
           const ev = buyEvents[i]!;
-          if (i === skip || ev.remainingQty.lessThanOrEqualTo(0)) continue;
+          if ((i >= skipFrom && i < skipTo) || ev.remainingQty.lessThanOrEqualTo(0)) continue;
           const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
           let availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
-          if (i < preTo) availableAtSell = Decimal.min(availableAtSell, heldAfter.get(i) ?? new Decimal(0));
+          const day = dayOf.get(i);
+          if (i < preTo) {
+            if (day === undefined) continue;
+            const capLeft = heldOfDay.get(day)!.minus(takenOfDay.get(day) ?? 0);
+            availableAtSell = Decimal.min(availableAtSell, capLeft);
+          }
           if (availableAtSell.lessThanOrEqualTo(0)) continue;
           const take = Decimal.min(availableAtSell, left);
           left = left.minus(take);
+          if (day !== undefined) takenOfDay.set(day, (takenOfDay.get(day) ?? new Decimal(0)).plus(take));
           if (!commit) continue;
           ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
           consumed.push({ date: ev.date, qty: take });
@@ -591,17 +617,17 @@ export function detectWashSales(
         }
         return preStatus !== "applied";
       };
-      if (consume(preFrom, preTo, false, partlyHeld).greaterThan(0) && preSaleRuleApplies()) {
-        consume(preFrom, preTo, true, partlyHeld);
+      if (consume(preFrom, preTo, false, partlyFrom, partlyTo).greaterThan(0) && preSaleRuleApplies()) {
+        consume(preFrom, preTo, true, partlyFrom, partlyTo);
       }
       // The post-sale repurchases. The one-purchase exception never reaches
       // them: «sin perjuicio de que las recompras efectuadas en el plazo de los
       // dos meses posteriores a la transmisión impidan también la imputación»
       // (V3282-18, B).
       consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd));
-      // Last, the rest of the lot the sale transmits.
-      if (partlyHeld >= 0 && consume(partlyHeld, partlyHeld + 1, false).greaterThan(0) && preSaleRuleApplies()) {
-        consume(partlyHeld, partlyHeld + 1);
+      // Last, the rest of the lot the sale transmits: every row of that day.
+      if (partlyFrom >= 0 && consume(partlyFrom, partlyTo, false).greaterThan(0) && preSaleRuleApplies()) {
+        consume(partlyFrom, partlyTo);
       }
       dayAbsorbed = need.minus(remainingToAbsorb);
     }

@@ -400,6 +400,15 @@ the order it follows is derived from those names:
    lot. That rest still counts (situation 3; the one-purchase exception exists
    because it would), so it is used when nothing else covers the sale.
 
+   The buys of one day are one purchase for steps 3 and 4. Brokers give no time
+   of day, and DEGIRO lists one order as one row per fill with one «ID Orden».
+   So the engine counts the held shares per buy day, and when that day is only
+   partly held, every row of the day goes last. Per row, the fills FIFO did not
+   touch would count as fully held and come before the post-sale purchases, and
+   the year would depend on how the broker split the order: buy 100 on 01/03,
+   sell 50 on 10/03, buy 50 on 15/03, sell 50 on 20/03 gives −200 as one row
+   and gave −40 as fills of 60 + 40.
+
 The same order runs the definitive test of #451 («los mismos criterios»), and
 the one-purchase exception lifts both pre-sale steps (1 and 4).
 

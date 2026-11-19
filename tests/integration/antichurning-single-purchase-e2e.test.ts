@@ -285,6 +285,48 @@ describe("(c) the fills of one order are one purchase", () => {
     expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBeUndefined();
     expect(ids(r)).toEqual([]);
   });
+
+  // #454: the rest of the lot a sale transmits comes after the post-sale buys.
+  // The fills of that lot are one lot: the rows FIFO left untouched must not
+  // count as fully held and come first. 10/03 sells 50 of the 01/03 purchase
+  // and takes the 15/03 one; 20/03 sells the last 50 of 01/03, finds 15/03 used
+  // and nothing else held, so it is definitive: its own 100 is deductible and
+  // the 100 of 10/03 is released. Fiscal −200, whatever the fill layout.
+  describe("#454: one purchase as one row or as two fills gives the same year", () => {
+    const row = (date: string, qty: number, price: string, value: string, id: string): string =>
+      `${date},10:00,XYZ SA,ES0000004531,MAD,XMAD,${qty},"${price}",EUR,"${value}",EUR,"0,00",EUR,"${value}",EUR,${id}`;
+    const tail = [
+      row("10-03-2025", -50, "8,00", "400,00", "s1"),
+      row("15-03-2025", 50, "10,00", "-500,00", "b2"),
+      row("20-03-2025", -50, "8,00", "400,00", "s2"),
+    ];
+    const layouts = {
+      "one row": [row("01-03-2025", 100, "10,00", "-1000,00", "b1"), ...tail],
+      "two fills": [row("01-03-2025", 60, "10,00", "-600,00", "b1"), row("01-03-2025", 40, "10,00", "-400,00", "b1"), ...tail],
+    };
+    const report = (rows: string[], method: FxMethod): TaxReport => {
+      const csv = [
+        "Fecha,Hora,Producto,ISIN,Centro de referencia,Centro de ejecución,Cantidad,Precio,,Valor,,Costes de transacción y/o terceros,,Total,,ID Orden",
+        ...rows,
+      ].join("\n");
+      const statement = finalizeMergedStatement(mergeStatement(createEmptyStatement(), degiroParser.parse(csv), degiroParser.name));
+      return generateTaxReport(statement, rates(), 2025, reportOptionsForMethod(method));
+    };
+    for (const method of METHODS) {
+      for (const [layout, rows] of Object.entries(layouts)) {
+        it(`[${method}] ${layout}: 10/03 takes 15/03, 20/03 is definitive (fiscal −200, no mark)`, () => {
+          const r = report(rows, method);
+          const on = (date: string) => r.capitalGains.disposals.filter((d) => sameDay(d.sellDate, date));
+          expect(blockedOn(r, "2025-03-10")).toBe("100.00");
+          expect(on("2025-03-10").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2025-03-15"]);
+          expect(blockedOn(r, "2025-03-20")).toBe("0.00");
+          expect(on("2025-03-20").reduce((s, d) => s.plus(d.reintegratedLossEur), new Decimal(0)).toFixed(2)).toBe("100.00");
+          expect(fiscal(r)).toBe("-200.00");
+          expect(r.capitalGains.disposals.every((d) => d.washSaleSinglePurchase === undefined)).toBe(true);
+        });
+      }
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

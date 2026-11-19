@@ -357,6 +357,22 @@ describe("#454: a pre-sale purchase counts only for its shares still held after 
     expect(onDate(before, "2025-02-10", "blockedLossEur")).toBe("50.00");
     expect(before.disposals.filter((d) => d.sellDate === "2025-02-10").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2025-02-05"]);
   });
+
+  it.each(METHODS)("[%s] the buys of one day are one lot: two same-day rows give what one row gives", (method) => {
+    // 10/03 sells 50 of the 01/03 purchase, so the rest of that day's buys is
+    // the lot the sale transmits and comes after the 15/03 purchase, however
+    // many rows the day has. 20/03 sells the last 50 of 01/03 and finds 15/03
+    // used: definitive, its own 100 deductible and 100 of 10/03 released.
+    const tail: Op[] = [sell("2025-03-10", 50, -100), buy("2025-03-15", 50), sell("2025-03-20", 50, -100)];
+    for (const head of [[buy("2025-03-01", 100)], [buy("2025-03-01", 60), buy("2025-03-01", 40)]]) {
+      const r = year([...head, ...tail], 2025, method);
+      expect(onDate(r, "2025-03-10", "blockedLossEur")).toBe("100.00");
+      expect(r.disposals.filter((d) => d.sellDate === "2025-03-10").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2025-03-15"]);
+      expect(onDate(r, "2025-03-20", "blockedLossEur")).toBe("0.00");
+      expect(onDate(r, "2025-03-20", "reintegratedLossEur")).toBe("100.00");
+      expect(r.fiscal).toBe("-200.00");
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
