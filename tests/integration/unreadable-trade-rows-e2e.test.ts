@@ -2529,3 +2529,149 @@ describe("#467 Coinbase: a price, currency or money column that cannot be read i
     });
   });
 });
+
+describe("#467 DEGIRO: a cash row or a trade the file does not fully give is named, never booked as a guess or a crash", () => {
+  // Realistic rates: 1 USD = 0.92 EUR, 1 GBP = 1.17 EUR, 1 JPY = 0.0062 EUR.
+  const realRates = (): EcbRateMap => {
+    const map: EcbRateMap = new Map();
+    for (let t = Date.UTC(2023, 0, 1); t <= Date.UTC(2025, 11, 31); t += 86_400_000) {
+      map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "0.92"], ["GBP", "1.17"], ["JPY", "0.0062"]]));
+    }
+    return map;
+  };
+  const report = (parsed: Statement, method: FxMethod): TaxReport => {
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parsed, "DEGIRO");
+    return generateTaxReport(finalizeMergedStatement(statement), realRates(), 2024, reportOptionsForMethod(method));
+  };
+  const message = (s: Statement, id: string): TaxMessage | undefined => s.parserMessages?.find((m) => m.id === id);
+  const ID = "parser.cash_income_amount_unreadable";
+  const cash = (r: TaxReport): string[] =>
+    [r.dividends.grossIncome, r.doubleTaxation.deduction, r.interest.earned].map((d) => new Decimal(d).toFixed(2));
+  const gains = (r: TaxReport): string[] =>
+    [r.capitalGains.transmissionValue, r.capitalGains.acquisitionValue, r.capitalGains.netGainLoss].map((d) => new Decimal(d).toFixed(2));
+
+  // Account CSV, real layout: the labelled "Variación" column holds the
+  // currency and the unnamed column after it the amount.
+  const AC = "Fecha,Hora,Fecha valor,Producto,ISIN,Descripción,Tipo,Variación,,Saldo,,ID Orden";
+  const arow = (desc: string, amount: string, ccy = "USD", product = "APPLE INC", isin = AAPL): string =>
+    ["12-01-2024", "07:31", "11-01-2024", product, isin, desc, "", ccy, amount, ccy, "100.00", ""].join(",");
+  const account = (...rows: string[]): Statement => degiroParser.parse([AC, ...rows].join("\n"));
+  const dividend = (amount: string, withheld = "-15.00", ccy = "USD"): Statement =>
+    account(arow("Dividendo", amount, ccy), arow("Retención del dividendo", withheld, ccy));
+
+  describe.each(["abc", "", "$"])("a Dividendo amount of %j", (cell) => {
+    it.each(METHODS)("[%s] books neither the dividend nor its withholding, the report runs, and both are named", (method) => {
+      const parsed = dividend(cell);
+      expect(parsed.cashTransactions).toEqual([]);
+      expect(message(parsed, ID)?.context?.rows).toBe(
+        `Dividendo APPLE INC (${AAPL}) USD 20240112 (Retención del dividendo -15.00 USD) [Variación: ${JSON.stringify(cell)}]`);
+      expect(cash(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] control: a readable dividend and withholding are booked, and a written 0 stays a zero with no warning", (method) => {
+    const parsed = dividend("100.00");
+    expect(cash(report(parsed, method))).toEqual(["92.00", "13.80", "0.00"]);
+    expect(parsed.parserMessages).toBeUndefined();
+    const zero = dividend("0", "0");
+    expect(zero.cashTransactions.map((c) => c.amount)).toEqual(["0", "0"]);
+    expect(zero.parserMessages).toBeUndefined();
+  });
+
+  it.each(METHODS)("[%s] a GBX dividend amount of \"abc\" is named, never a raw DecimalError that refuses the file", (method) => {
+    const parsed = dividend("abc", "-36", "GBX");
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(message(parsed, ID)?.context?.rows).toBe(
+      `Dividendo APPLE INC (${AAPL}) GBX 20240112 (Retención del dividendo -0.36 GBP) [Variación: "abc"]`);
+    expect(cash(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+    // Control: 242 and -36 pence are 2.42 and -0.36 GBP.
+    expect(cash(report(dividend("242", "-36", "GBX"), method))).toEqual(["2.83", "0.42", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] a withholding amount of \"abc\" is named, not booked: the dividend stays, with no deduction", (method) => {
+    const parsed = dividend("100.00", "abc");
+    expect(parsed.cashTransactions.map((c) => `${c.type} ${c.amount}`)).toEqual(["Dividends 100.00"]);
+    expect(message(parsed, ID)?.context?.rows).toBe(`Retención del dividendo APPLE INC (${AAPL}) USD 20240112 [Variación: "abc"]`);
+    expect(cash(report(parsed, method))).toEqual(["92.00", "0.00", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] a GBP dividend with an empty currency cell is named, never booked as euros (100 € instead of 117 €)", (method) => {
+    const bat = (ccy: string): Statement => account(arow("Dividendo", "100.00", ccy, "BAT", "GB0002875804"));
+    expect(cash(report(bat("GBP"), method))).toEqual(["117.00", "0.00", "0.00"]);
+    const parsed = bat("");
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(message(parsed, ID)?.context?.rows).toBe(`Dividendo BAT (GB0002875804) 20240112 [Variación, divisa: ""]`);
+    expect(cash(report(parsed, method))).toEqual(["0.00", "0.00", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] a withholding with an empty currency cell is named, not booked as euros", (method) => {
+    const parsed = account(arow("Dividendo", "100.00"), arow("Retención del dividendo", "-15.00", ""));
+    expect(parsed.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual(["Dividends 100.00 USD"]);
+    expect(message(parsed, ID)?.context?.rows).toBe(`Retención del dividendo APPLE INC (${AAPL}) 20240112 [Variación, divisa: ""]`);
+    expect(cash(report(parsed, method))).toEqual(["92.00", "0.00", "0.00"]);
+  });
+
+  describe.each(["flatex Interest", "Interés", "Zinsen", "Rente"])("interest row %j", (desc) => {
+    it.each(METHODS)("[%s] a positive amount is interest received; a negative one stays out; one that cannot be read is named", (method) => {
+      const paid = account(arow(desc, "10.00", "EUR", "", ""), arow("Dividendo", "100.00"));
+      expect(paid.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual(["Broker Interest Received 10.00 EUR", "Dividends 100.00 USD"]);
+      expect(cash(report(paid, method))).toEqual(["92.00", "0.00", "10.00"]);
+      const charged = account(arow(desc, "-1.00", "EUR", "", ""));
+      expect([charged.cashTransactions, charged.parserMessages]).toEqual([[], undefined]);
+      const unreadable = account(arow(desc, "abc", "EUR", "", ""));
+      expect(unreadable.cashTransactions).toEqual([]);
+      expect(message(unreadable, ID)?.context?.rows).toBe(`${desc} EUR 20240112 [Variación: "abc"]`);
+      expect(cash(report(unreadable, method))).toEqual(["0.00", "0.00", "0.00"]);
+    });
+  });
+
+  // Transactions CSV, 19-col layout.
+  const TX = "Fecha,Hora,Producto,ISIN,Bolsa de,Centro de ejecución,Número,Precio,,Valor local,,Valor,,Tipo de cambio,Costes de transacción,,Total,,ID Orden";
+  type Row = { d?: string; q?: string; p?: string; ccy?: string; lv?: string; ev?: string; fx?: string; cc?: string; id?: string };
+  const trow = (r: Row): string => [r.d ?? "10-01-2024", "10:00", "APPLE INC", AAPL, "NDQ", "XNAS", r.q ?? "10", r.p ?? "100.00", r.ccy ?? "USD",
+    r.lv ?? "-1000.00", r.ccy ?? "USD", r.ev ?? "-920.00", "EUR", r.fx ?? "1.0870", "-2.00", r.cc ?? "EUR", "-922.00", "EUR", r.id ?? "aaaa1111-2222-3333-4444-555566667777"].join(",");
+  const SELL: Row = { d: "10-03-2024", q: "-10", p: "120.00", lv: "1200.00", ev: "1104.00", id: "bbbb1111-2222-3333-4444-555566667777" };
+  const pair = (sell: Row, buy: Row = {}): Statement => degiroParser.parse([TX, trow(buy), trow({ ...SELL, ...sell })].join("\n"));
+
+  describe.each([["Valor local", { lv: "abc" }], ["Tipo de cambio", { fx: "abc" }]] as [string, Row][])("a GBX sale with a %s of \"abc\"", (_cell, bad) => {
+    it.each(METHODS)("[%s] is read, never a raw DecimalError: the gain is the control's", (method) => {
+      const gbx = (sell: Row): Statement => pair({ ccy: "GBX", p: "12000", lv: "120000", ...sell }, { ccy: "GBX", p: "10000", lv: "-100000" });
+      expect(gains(report(gbx(bad), method))).toEqual(gains(report(gbx({}), method)));
+      expect(gains(report(gbx({}), method))).toEqual(["1402.00", "1172.00", "230.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] a yen buy with an empty price-currency cell is named, never booked as euros (a loss of 9,929.60 €)", (method) => {
+    const JPY_BUY: Row = { ccy: "JPY", p: "1000", lv: "-10000", ev: "-62.00", fx: "161.29" };
+    const JPY_SELL: Row = { ccy: "JPY", p: "1200", lv: "12000", ev: "74.40", fx: "161.29" };
+    expect(gains(report(pair(JPY_SELL, JPY_BUY), method))).toEqual(["72.40", "64.00", "8.40"]);
+    const parsed = pair(JPY_SELL, { ...JPY_BUY, ccy: "" });
+    expect(unreadableRows(parsed)).toBe(`APPLE INC (${AAPL}) 20240110 [Precio, divisa: ""]`);
+    expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "0", true], ["SELL", "-10", false]]);
+    // The sale has no lot: its whole value is a gain, more tax, never less.
+    expect(gains(report(parsed, method))).toEqual(["72.40", "0.00", "72.40"]);
+  });
+
+  it.each(METHODS)("[%s] an empty costs-currency cell books the commission in EUR, never in the price currency", (method) => {
+    expect(gains(report(pair({ ccy: "GBP", cc: "" }, { ccy: "GBP", cc: "" }), method))).toEqual(["1402.00", "1172.00", "230.00"]);
+    expect(gains(report(pair({ ccy: "GBP" }, { ccy: "GBP" }), method))).toEqual(["1402.00", "1172.00", "230.00"]);
+  });
+
+  // A buy or sale with a readable quantity and an empty price is a trade, with
+  // or without an order id or a value: dropped, it hid a second purchase.
+  const xyz = (price: string, qty = "40", order = ""): Statement => degiroParser.parse([DG_H,
+    `02-12-2024,09:15,XYZ SA,${ISIN},MAD,XMAD,${qty},${price},EUR,,EUR,0,EUR,0,EUR,${order}`].join("\n"));
+  it.each(METHODS)("[%s] an empty price with a readable quantity, no order id and no value is kept and named; the exception is not applied", (method) => {
+    const parsed = xyz("");
+    expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown])).toEqual([["BUY", "0", true]]);
+    expect(message(parsed, "parser.trade_quantity_unknown")?.context?.trades).toBe(`XYZ SA (${ISIN}) 20241202`);
+    expect(issueSale(parsed, "DEGIRO", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    // Control: the same row with an order id was already kept.
+    expect(issueSale(xyz("", "40", "ord1"), "DEGIRO", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+  });
+  it("controls: a written zero quantity, or no readable quantity and no price, order id or value, stays skipped", () => {
+    expect(xyz("", "0").trades).toEqual([]);
+    expect(xyz("", "").trades).toEqual([]);
+  });
+});

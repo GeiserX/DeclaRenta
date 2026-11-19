@@ -437,8 +437,8 @@ práctico Renta 2025. The decisions, each pinned in
     `mapTrade`. Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
     buy or sale with a readable quantity but a blank or unreadable price is
-    kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with an order id
-    or a value, a Trading 212 buy with no price and a Total in another
+    kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with or without
+    an order id or a value, a Trading 212 buy with no price and a Total in another
     currency): FIFO cannot book shares with no cost, and a dropped row would
     hide a second purchase. An IBKR cancellation with an `origTransactionID`
     drops itself and the fill that id names, whatever their quantity or
@@ -695,6 +695,25 @@ práctico Renta 2025. The decisions, each pinned in
       interest with no word, Lightyear and Scalable such interest, and
       Trade Republic booked such interest as 0 and dropped a tax
       optimisation. A written 0 stays an explicit zero with no warning.
+    - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
+      interest row whose amount cannot be read, or whose currency cell is
+      empty, is not booked, and neither are the withholdings of such a
+      dividend (same ISIN, product and date). The same warning names each
+      row by its amount or currency cell. Before, a textual amount stopped
+      the report, an empty one booked a dividend of 0 with its withholding,
+      an empty currency booked a pound or yen amount as euros, and a GBX
+      row with a textual amount refused the file. A positive interest row
+      (flatex Interest, Interés, Zinsen, Rente, Intérêts) is interest
+      received; it was dropped with no word. A negative one stays out,
+      which can only raise the tax.
+    - DEGIRO Transactions CSV: a buy or sale with an empty price-currency
+      cell is an unreadable row named by that cell, never a trade in euros
+      (a yen buy made a loss of thousands). An empty costs-currency cell is
+      EUR, the currency DEGIRO charges in. A GBX trade whose `Valor local`
+      or `Tipo de cambio` cannot be read is booked from its price and
+      quantity, never refused. A row with a readable quantity and a blank
+      or unreadable price is a trade of unknown price even with no order id
+      and no value: dropped, it hid a second purchase in the window.
     - Binance Trade History: a row whose `Side` is neither BUY nor SELL, or
       whose `Executed` (or, for a crypto-quoted pair, `Amount`) is no
       number ("", "abc", "1,000.5BTC"), keeps an unreadable row for each

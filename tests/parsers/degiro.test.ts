@@ -221,17 +221,21 @@ describe("degiroParser", () => {
       expect(result.trades).toHaveLength(0);
     });
 
-    it("should skip non-dividend rows in Account CSV", () => {
+    it("should skip deposits and interest charged, and book interest received, in Account CSV", () => {
       const csv = [
         "Date,Time,Value date,Product,ISIN,Description,FX,Change,,Balance,,Order Id",
         "01-03-2025,00:00,01-03-2025,,,Deposit,,EUR,1000.00,EUR,1000.00,",
         "15-05-2025,00:00,15-05-2025,APPLE INC,US0378331005,Dividend,,USD,2.50,USD,500.00,",
         "20-06-2025,00:00,20-06-2025,,,flatex Interest,,EUR,0.10,EUR,500.10,",
+        "20-07-2025,00:00,20-07-2025,,,flatex Interest,,EUR,-0.05,EUR,500.05,",
       ].join("\n");
 
       const result = degiroParser.parse(csv);
-      expect(result.cashTransactions).toHaveLength(1);
-      expect(result.cashTransactions[0]!.type).toBe("Dividends");
+      expect(result.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual([
+        "Dividends 2.50 USD",
+        "Broker Interest Received 0.10 EUR",
+      ]);
+      expect(result.parserMessages).toBeUndefined();
     });
   });
 

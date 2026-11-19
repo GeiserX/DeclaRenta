@@ -323,7 +323,8 @@ export function cashIncomeRowText(type: string, security: string, currency: stri
 
 /**
  * The warning naming every dividend, interest or other cash income row whose
- * amount the file does not let the parser read: `rows` from
+ * amount, or the currency of that amount, the file does not let the parser
+ * read: `rows` from
  * {@link cashIncomeRowText} (#467). Booked, it would be income of 0, or a
  * withholding with no income behind it, so neither is booked, and the row is
  * never dropped with no word: the user adds it by hand.
@@ -336,7 +337,7 @@ export function cashIncomeAmountUnreadableMessages(broker: string, rows: readonl
     id: "parser.cash_income_amount_unreadable",
     severity: "warning",
     message: `${broker}: ${count} dividendo(s), interés(es) u otro(s) ingreso(s) no tienen un importe legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda del importe tal como está en el archivo. Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe y la retención a mano en Renta Web.",
+    hint: "Entre corchetes va la celda del importe o de su divisa, tal como está en el archivo. Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no lo cuenta como cero. Si es un ingreso del año que declaras, tienes que declararlo igualmente. Corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe y la retención a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }

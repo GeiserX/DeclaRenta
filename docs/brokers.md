@@ -63,7 +63,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Formato:** CSV con cabeceras que incluyen ISIN, cantidad y precio.
 
-**Datos extraídos:** Operaciones de compraventa, dividendos y posiciones.
+**Datos extraídos:** Operaciones de compraventa, dividendos, retenciones e intereses cobrados (CSV de Cuenta).
 
 **Limitaciones:** Degiro no exporta acciones corporativas. Los splits deben reflejarse ya en el historial de operaciones. Si tienes operaciones en varios ejercicios, exporta todos los años.
 
