@@ -165,7 +165,19 @@ function parseTrades(
     // cell can never yield NaN/Infinity (which would poison cost basis). The
     // emitted strings are decimal.js .toString()/.toFixed(), losslessly parsed.
     const absQty = toFiniteDecimal(quantity).abs();
-    if (absQty.isZero()) continue;
+    if (absQty.isZero()) {
+      // An empty or unreadable quantity is no "0": keep both legs as trades of
+      // unknown quantity for the anti-churning evidence (#453), as eToro does.
+      // They move no share and no money. A written 0 is still skipped.
+      if (quantityUnreadable(row[quantityCol])) {
+        const leg = { symbol, isin: "", assetCategory: detectAssetCategory(symbol), currency, exchange: "REVOLUT" } as const;
+        trades.push(
+          quantityUnknownTrade({ ...leg, tradeID: `revolut-open-${dateAcquired}-${symbol}-${i}`, tradeDate: dateAcquired, buySell: "BUY" }),
+          quantityUnknownTrade({ ...leg, tradeID: `revolut-close-${dateSold}-${symbol}-${i}`, tradeDate: dateSold, buySell: "SELL" }),
+        );
+      }
+      continue;
+    }
 
     const assetCategory = detectAssetCategory(symbol);
     // Use absolute values to avoid double-negative if input is already negative
@@ -236,10 +248,10 @@ function parseTrades(
     });
   }
 
-  // The closed-positions summary has no skip-and-warn cases of its own (every
-  // money/quantity cell is finiteness-guarded via toFiniteDecimal); the array is
-  // returned for a uniform Statement shape across both Revolut formats.
-  return { trades, parserMessages: [] };
+  // Every money/quantity cell is finiteness-guarded via toFiniteDecimal; the
+  // only message is the one naming the trades of unknown quantity.
+  const unknownQuantities = tradeQuantityUnknownMessage("Revolut", trades);
+  return { trades, parserMessages: unknownQuantities ? [unknownQuantities] : [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +459,9 @@ function parseTransactionLog(
       // An empty or unreadable quantity is no "0": keep the row as a trade of
       // unknown quantity for the anti-churning evidence (#453). It moves no
       // share and no money, and no holding is built from it.
-      if (!(row[cols.quantity] ?? "").trim() || quantityUnreadable(qtyAmountStr, false)) {
+      // Read the cell as parseCcyAmount does (an optional "CCY " prefix, then
+      // parseNumber), so a blank or currency-only cell is unreadable too.
+      if (quantityUnreadable((row[cols.quantity] ?? "").trim().replace(/^[A-Z]{3}\s+/, ""))) {
         const buy = TXN_TYPE_BUY.test(type);
         trades.push(quantityUnknownTrade({
           tradeID: `revolut-${buy ? "buy" : "sell"}-${tradeDate}-${ticker}-${i}`,

@@ -50,15 +50,17 @@ export function toFiniteDecimal(val: string, fallback = "0", parseEu = true): De
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a trade row's quantity cell is missing, blank or no finite number,
- * read through the same guard as the parser's own quantity
- * ({@link toFiniteDecimalString}, `parseEu` as the parser passes it). Such a
- * row is no explicit zero: it may be a purchase or a sale of any size.
+ * Whether a trade row's quantity cell is missing, blank, only a currency
+ * symbol or no finite number, read through the same guard as the parser's own
+ * quantity ({@link toFiniteDecimalString}, `parseEu` as the parser passes it).
+ * Such a row is no explicit zero: it may be a purchase or a sale of any size.
  */
 export function quantityUnreadable(cell: string | number | null | undefined, parseEu = true): boolean {
   if (cell === undefined || cell === null) return true;
-  const text = String(cell).trim();
-  // parseNumber reads a blank cell as "0": test the blank first.
+  // parseNumber strips currency symbols and reads what is left blank as "0":
+  // test for a blank or currency-only cell ("€", "$") first.
+  const raw = String(cell).trim();
+  const text = parseEu ? raw.replace(/[€$£¥]/g, "").trim() : raw;
   return text === "" || toFiniteDecimalString(text, "", parseEu) === "";
 }
 

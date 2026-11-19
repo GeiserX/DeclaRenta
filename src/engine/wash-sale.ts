@@ -328,7 +328,10 @@ export function detectWashSales(
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
     // A missing or unreadable quantity reads "0" but is no explicit zero: a row
     // with no ISIN may then be any security's trade, with no holding to walk.
-    if (trade.quantityUnknown === true && trade.assetCategory !== "CRYPTO") {
+    // Such a trade is never a repurchase either, crypto included: FIFO books no
+    // lot for it, so no loss may be tied to its coins (the parser warns).
+    if (trade.quantityUnknown === true) {
+      if (trade.assetCategory === "CRYPTO") continue;
       if (trade.isin) unknownQuantityIsins.add(trade.isin);
       else {
         const time = parseDate(trade.tradeDate).getTime();

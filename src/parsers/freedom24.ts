@@ -134,9 +134,10 @@ function parseFreedom24(input: string): Statement {
 
     const qtyDec = toFiniteDecimal(quantity).abs();
     if (qtyDec.isZero()) {
-      // An empty or unreadable quantity is no "0": keep the row as a trade of
-      // unknown quantity for the anti-churning evidence (#453).
-      if (quantityUnreadable(t.q)) {
+      // An empty or unreadable quantity is no "0": keep a buy or sell row as a
+      // trade of unknown quantity for the anti-churning evidence (#453). Any
+      // other operation (a transfer, a deposit) is no trade and stays skipped.
+      if ((operation === "buy" || operation === "sell") && quantityUnreadable(t.q)) {
         trades.push(quantityUnknownTrade({
           tradeID: `freedom24-${tradeDate}-${i}`,
           symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,

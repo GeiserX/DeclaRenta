@@ -322,6 +322,17 @@ function readableQuantity(raw: string | undefined): string | undefined {
   }
 }
 
+/** A trade price as a finite Decimal ("0" when missing or blank), or undefined when it is no number. */
+function finitePrice(raw: string | undefined): Decimal | undefined {
+  const text = raw || "0";
+  try {
+    const price = new Decimal(text);
+    return price.isFinite() ? price : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function mapTrade(raw: Record<string, string>): Trade {
   // Keep a missing or unreadable quantity apart from an explicit zero, as
   // mapOpenPosition does: the "0" default keeps FIFO from crashing, and the
@@ -436,17 +447,23 @@ function dropCancelledExecutions(
       continue;
     }
     const direction = (cancel.buySell ?? "").replace(CANCEL_SUFFIX, "").trim().toUpperCase();
-    const originalQty = new Decimal(cancel.quantity || "0").neg();
-    const price = new Decimal(cancel.tradePrice || "0");
+    // Read every quantity and price without throwing: an unreadable one
+    // (`new Decimal("abc")` throws) matches nothing, so a cancel row with one is
+    // dropped alone and an ordinary row with one goes on to mapTrade, which
+    // keeps it as a trade of unknown quantity (#453).
+    const cancelQty = readableQuantity(cancel.quantity);
+    const price = finitePrice(cancel.tradePrice);
     let best = -1;
     let bestScore = -1;
     rows.forEach((o, oi) => {
-      if (dropped.has(oi)) return;
+      if (dropped.has(oi) || cancelQty === undefined || price === undefined) return;
       const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
       if (!sameInstrument || (o.currency ?? "") !== (cancel.currency ?? "")) return;
       if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
-      if (!new Decimal(o.quantity || "0").eq(originalQty)) return;
-      if (!new Decimal(o.tradePrice || "0").eq(price)) return;
+      const qty = readableQuantity(o.quantity);
+      if (qty === undefined || !new Decimal(qty).eq(new Decimal(cancelQty).neg())) return;
+      const oPrice = finitePrice(o.tradePrice);
+      if (oPrice === undefined || !oPrice.eq(price)) return;
       const score =
         (o.ibExecID && o.ibExecID === cancel.ibExecID ? 4 : 0) +
         (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
@@ -486,7 +503,9 @@ function dropCancelledExecutions(
  * tax-relevant — `fifo.ts` branches on it for cost basis vs proceeds.
  *
  * Trades with no `ibOrderID` pass through un-merged (rare; only carry-forward
- * edge cases — real IBKR data always populates the field).
+ * edge cases — real IBKR data always populates the field), and so does a fill
+ * with no readable quantity (`quantityUnknown`), so the readable fills of its
+ * order still merge and book (#453).
  */
 function mergeExecutionsByOrder(
   trades: Trade[],
@@ -495,7 +514,12 @@ function mergeExecutionsByOrder(
   let ungroupedCounter = 0;
 
   for (const trade of trades) {
-    const key = trade.ibOrderID
+    // A fill with no readable quantity stays out of its order's merge, as its
+    // own flagged trade: merged in, it would leave the order's total unknown,
+    // and FIFO, which skips such a trade, would never book the readable fills
+    // (#453). Alone it books nothing, and the warning and the one-purchase
+    // evidence still see it.
+    const key = trade.ibOrderID && trade.quantityUnknown !== true
       ? `${trade.ibOrderID}|${trade.tradeDate}|${trade.buySell}|${trade.openCloseIndicator}`
       : `__ungrouped_${ungroupedCounter++}__`;
     let bucket = groups.get(key);
@@ -587,8 +611,6 @@ function mergeTradeGroup(group: Trade[]): Trade {
     ...(listings.length > 0 ? { listingExchange: listings[0] } : {}),
     ...(listings.length > 1 ? { listingExchanges: listings } : {}),
     notes: notes.size > 0 ? Array.from(notes).join(";") : undefined,
-    // One fill with no readable quantity leaves the order's total unknown.
-    ...(group.some((t) => t.quantityUnknown) ? { quantityUnknown: true } : {}),
   };
 }
 

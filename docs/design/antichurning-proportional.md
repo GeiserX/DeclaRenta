@@ -418,7 +418,18 @@ práctico Renta 2025. The decisions, each pinned in
     names the rows). Outside IBKR the kept row carries only the security, the
     day and the direction, every amount "0" (`quantityUnknownTrade`), so it
     moves no money, and FIFO skips every such row, so it books no shares (a
-    0-share lot would give the next sale a 0/0 cost). With an ISIN, the row makes that security "unverified":
+    0-share lot would give the next sale a 0/0 cost). An IBKR fill with no
+    readable quantity stays out of its order's merge as its own flagged row,
+    so the readable fills of that order still merge and book their shares and
+    cost. A cell that is blank, only a currency symbol ("€") or no number is
+    unreadable. Only a buy or sale row is kept: a Freedom24 transfer stays
+    skipped, a Flatex row with neither Nominal nor Kurs is kept only when its
+    text says Kauf or Verkauf, a DEGIRO row with neither quantity nor price
+    only when it has an order id or a value, and a written zero price (a
+    conversion, a rights assignment) is always skipped. Revolut's
+    closed-positions format keeps both legs of such a row, as eToro does. A
+    crypto row of unknown quantity is no repurchase either: FIFO holds no lot
+    for it, so no loss is tied to its coins. With an ISIN, the row makes that security "unverified":
     it may be a second purchase, or a purchase and a sale that leave the list
     unchanged. With no ISIN, it is an unidentified trade with no holding to
     walk, like one with neither ISIN nor symbol: before the window or in the

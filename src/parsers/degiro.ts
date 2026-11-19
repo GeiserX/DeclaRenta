@@ -275,7 +275,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
     // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
-    // with a price is kept as a trade of unknown quantity (below, #453).
+    // is kept as a trade of unknown quantity (below, #453).
     const quantityUnknown = isin !== "" && quantityUnreadable(fields[cols.quantity]);
     if (!isin || (quantity === "0" && !quantityUnknown)) {
       // Trade-like row (carries a real quantity or price) dropped for lack of
@@ -287,8 +287,12 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (rights assignments, non-tradeable conversions)
-    if (price === "0" || price === "0.0000") continue;
+    // Skip zero-price rows (rights assignments, non-tradeable conversions). A
+    // row with neither quantity nor price is still a buy or sale when it has
+    // an order id or a value (#453); a written zero price is always skipped.
+    const priceUnreadable = quantityUnreadable(fields[cols.price]);
+    const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
+    if ((price === "0" || price === "0.0000") && !(quantityUnknown && priceUnreadable && tradeEvidence)) continue;
 
     // Determine buy/sell: negative local value = you paid = buy; or negative
     // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a

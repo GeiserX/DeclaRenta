@@ -140,9 +140,12 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (non-tradeable conversions, rights).
+    // Skip zero-price rows (non-tradeable conversions, rights). A row with
+    // neither Nominal nor Kurs is still a buy or sale when its booking text
+    // says Kauf or Verkauf (below); a written zero Kurs is always skipped.
     const priceDec = toFiniteDecimal(price);
-    if (priceDec.isZero()) continue;
+    const tradeText = BUY_RE.test(info) || SELL_RE.test(info);
+    if (priceDec.isZero() && !(qtyUnknown && tradeText && quantityUnreadable(fields[priceCol]))) continue;
 
     // A buy or sale whose Nominal is empty or unreadable: keep it as a trade of
     // unknown quantity for the anti-churning evidence (#453). Its direction

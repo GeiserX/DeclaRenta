@@ -310,12 +310,25 @@ describe("revolutParser", () => {
       expect(statement.trades[0]!.symbol).toBe("TSLA");
     });
 
-    it("should skip rows with NaN quantity", async () => {
+    it("keeps a row with NaN quantity as two trades of unknown quantity, with no money (#453)", async () => {
       const data = buildRevolutWorkbook([
         ["2025-01-01", "2025-06-01", "AAPL", "abc", "1000", "1100", "100", "0", "100", "USD"],
       ]);
       const statement = await parseRevolutXlsx(data);
-      expect(statement.trades.length).toBe(0);
+      expect(statement.trades.map((t) => [t.buySell, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds])).toEqual([
+        ["BUY", "20250101", "0", true, "0", "0"],
+        ["SELL", "20250601", "0", true, "0", "0"],
+      ]);
+      expect(statement.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("Revolut");
+    });
+
+    it("still skips a row with an explicit 0 quantity, with no message", async () => {
+      const data = buildRevolutWorkbook([
+        ["2025-01-01", "2025-06-01", "AAPL", "0", "1000", "1100", "100", "0", "100", "USD"],
+      ]);
+      const statement = await parseRevolutXlsx(data);
+      expect(statement.trades).toEqual([]);
+      expect(statement.parserMessages).toBeUndefined();
     });
 
     it("should skip rows with empty symbol", async () => {

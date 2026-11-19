@@ -8,6 +8,7 @@ import {
   convertDateISO,
   findColumn,
   stripBom,
+  quantityUnreadable,
 } from "../../src/parsers/csv-utils.js";
 
 describe("detectDelimiter", () => {
@@ -203,5 +204,19 @@ describe("stripBom", () => {
 
   it("should leave non-BOM text unchanged", () => {
     expect(stripBom("hello")).toBe("hello");
+  });
+});
+
+describe("quantityUnreadable (#453)", () => {
+  it("a missing, blank, non-numeric or currency-only cell is unreadable", () => {
+    for (const cell of [undefined, null, "", "  ", "abc", "€", "$", " £ ", "¥"]) {
+      expect(quantityUnreadable(cell)).toBe(true);
+      expect(quantityUnreadable(cell, false)).toBe(true);
+    }
+  });
+
+  it("a written number, zero included, is readable", () => {
+    for (const cell of ["0", "0,00", "12", "-3.5", "1.234,5", 7, 0]) expect(quantityUnreadable(cell)).toBe(false);
+    expect(quantityUnreadable("€ 0")).toBe(false);
   });
 });
