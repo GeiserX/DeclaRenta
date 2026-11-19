@@ -53,3 +53,13 @@ describe("elements rendered with `hidden` really hide", () => {
     expect(missing).toEqual([]);
   });
 });
+
+// An input the bind code flags with aria-invalid must look flagged: the crypto
+// prices error says «Revisa los precios marcados», so the row needs the red border
+// the opening-lots inputs already get (#472 review).
+describe("aria-invalid inputs have a visible mark", () => {
+  it.each(["manual-opening-lot-input", "crypto-rate-input"])("%s gets a border rule", (cls) => {
+    const esc = cls.replace(/[-]/g, "\\-");
+    expect(css).toMatch(new RegExp(`\\.${esc}\\[aria-invalid="true"\\][^{]*\\{[^}]*border-color`));
+  });
+});
