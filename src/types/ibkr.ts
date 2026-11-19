@@ -133,9 +133,15 @@ export interface Trade {
   /**
    * IBKR `listingExchange`, trimmed and upper-cased: the market the contract is
    * listed on (e.g. LSE, NYSE, TSE). Decides the anti-churning window (#452).
-   * Only IBKR sets it.
+   * Only IBKR sets it. On an order merged from several fills: the first fill
+   * that has one.
    */
   listingExchange?: string;
+  /**
+   * Every distinct `listingExchange` of a merged order's fills, set only when
+   * the fills disagree, so each one still votes for the window (#452).
+   */
+  listingExchanges?: string[];
   commissionCurrency: string;
   commission: string;
   taxes: string;
@@ -304,6 +310,15 @@ export interface SecurityInfo {
   subCategory: string;
   /** IBKR «Listing Exchange» (stocks only), trimmed and upper-cased (#452). */
   listingExchange?: string;
+  /** IBKR contract id: ties the listing to the trades of the same contract (#452). */
+  conid?: string;
+  /**
+   * Last day of the statement the row came from, as the statement writes it
+   * (YYYYMMDD or YYYY-MM-DD): the listing is
+   * the one of that period, so a later trade of the same contract naming
+   * another code replaces it (#452).
+   */
+  asOf?: string;
   brokerSource?: string;
 }
 

@@ -872,11 +872,11 @@ const en: TranslationKeys = {
   "report.antichurning_window_open_at_filing.hint":
     "Before you file, also upload the file with your trades after {{lastDate}} and calculate again. If you buy the same security or the same coin up to and including {{windowEnd}}, part of the loss on those sales may be blocked, or the sale stops being a definitive transmission («transmisión definitiva») and releases no pending losses. In that case, correct the filed return with a corrective return («autoliquidación rectificativa»).",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta applies the 1-year anti-churning window (art. 33.5.g LIRPF) to {{count}} security(ies), because IBKR shows them only on a market that is neither a regulated market of the European Economic Area nor a market the European Commission declared equivalent: {{list}}.",
+    "DeclaRenta applies the 1-year anti-churning window (art. 33.5.g LIRPF) to the sales of {{count}} security(ies) made on days when IBKR shows them only on a market that is neither a regulated market of the European Economic Area nor a market the European Commission declared equivalent: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR only shows the market of the lines you traded. If the security is also admitted to trading on a regulated market of the European Economic Area (a growth market or another multilateral trading facility is not enough) or on NYSE, Nasdaq, ASX or the Hong Kong Stock Exchange, it gets 2 months: mark it as 2 months in the \"Anti-churning window per security\" panel (on the command line, --antichurning-2m) and calculate again.",
   "report.antichurning_listing_open":
-    "DeclaRenta applies 2 months to {{count}} security(ies) that IBKR shows in Toronto, on TSX Venture, on Aequitas Neo, in Tokyo or in Singapore: {{list}}. A European Commission decision declares that market equivalent to a regulated market, and the DGT accepts that kind of decision (ruling V0778-25), but no ruling confirms it for shares.",
+    "DeclaRenta applies 2 months to the sales of {{count}} security(ies) made on days when IBKR shows them in Toronto, on TSX Venture, on Aequitas Neo, in Tokyo or in Singapore: {{list}}. A European Commission decision declares that market equivalent to a regulated market, and the DGT accepts that kind of decision (ruling V0778-25), but no ruling confirms it for shares.",
   "report.antichurning_listing_open.hint":
     "If you prefer the cautious reading, mark it as 1 year in the \"Anti-churning window per security\" panel (on the command line, --antichurning-1y) and calculate again.",
   "report.antichurning_window_user":
@@ -902,7 +902,7 @@ const en: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 months: admitted on an EEA regulated market or an equivalent one",
   "antichurning_window.opt_1y":
-    "1 year: listed only outside the EEA with no equivalent market (e.g. London from 2021, SIX, OTC)",
+    "1 year: not admitted on an EEA regulated market or an equivalent one (e.g. only on London from 2021, SIX, OTC or BME Growth)",
   "antichurning_window.no_listing":
     "no data",
   "antichurning_window.open_note":
@@ -915,6 +915,10 @@ const en: TranslationKeys = {
     "Saved",
   "antichurning_window.recalculate_hint":
     "The windows are saved in your browser and the report is recalculated.",
+  "antichurning_window.save_error":
+    "The browser did not let DeclaRenta save the windows: its storage may be full or blocked. The report has not changed.",
+  "antichurning_window.clear_error":
+    "The browser did not let DeclaRenta clear the saved windows: its storage may be blocked. The report has not changed.",
   "report.antichurning_single_purchase":
     "In {{count}} sale(s) of {{year}}, the purchase in the 2 months before does not count as a repurchase: it was the only purchase of that security in that window and you held none of it when the window began (the one-purchase exception, DGT V3282-18). That purchase does not block the loss and does not stop the sale from releasing pending losses.",
   "report.antichurning_single_purchase.hint":

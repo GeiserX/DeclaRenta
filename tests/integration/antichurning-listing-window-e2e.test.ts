@@ -272,3 +272,231 @@ describe("#452 committed IBKR fixtures: no letter-g code, so no 1-year reading",
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Follow-ups to #452: a 1-year sale earlier in the year keeps its row, a
+// listing that IBKR replaced on the same contract (conid) before the sale day
+// no longer counts, and the listing survives the merge of an order's fills.
+// ---------------------------------------------------------------------------
+
+/** One IBKR fill. Fills that share `order` (and day and side) are one order. */
+interface Fill {
+  date: string;
+  side: "BUY" | "SELL";
+  qty: number;
+  price: number;
+  listing?: string;
+  conid?: string;
+  order?: string;
+}
+
+interface Stmt {
+  from: string;
+  to: string;
+  fills: Fill[];
+  /** SecurityInfo rows of this statement: listing exchange and conid. */
+  infos?: { listing: string; conid?: string }[];
+}
+
+let fillSeq = 0;
+function fillXml(f: Fill, isin: string): string {
+  const signed = f.side === "BUY" ? f.qty : -f.qty;
+  const money = new Decimal(f.qty).mul(f.price);
+  fillSeq++;
+  const attrs = [
+    f.listing === undefined ? "" : ` listingExchange="${f.listing}"`,
+    f.conid === undefined ? "" : ` conid="${f.conid}"`,
+    f.order === undefined ? "" : ` ibOrderID="${f.order}" levelOfDetail="EXECUTION"`,
+  ].join("");
+  return `<Trade tradeID="F${fillSeq}" accountId="U1" symbol="MOVER" description="MOVER INC" isin="${isin}" assetCategory="STK" currency="EUR" tradeDate="${f.date}" settlementDate="${f.date}" quantity="${signed}" tradePrice="${f.price}" tradeMoney="${f.side === "BUY" ? money : money.neg()}" proceeds="${f.side === "BUY" ? money.neg() : money}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${f.side}" openCloseIndicator="${f.side === "BUY" ? "O" : "C"}" exchange="SMART"${attrs} ibCommissionCurrency="EUR" ibCommission="0" taxes="0" multiplier="1" />`;
+}
+
+function flexXml(stmts: Stmt[], isin: string): string {
+  const body = stmts
+    .map((s) => {
+      const infos = (s.infos ?? [])
+        .map((i) => `<SecurityInfo symbol="MOVER" description="MOVER INC" isin="${isin}"${i.conid === undefined ? "" : ` conid="${i.conid}"`} cusip="" currency="EUR" assetCategory="STK" multiplier="1" subCategory="COMMON" listingExchange="${i.listing}" />`)
+        .join("");
+      return `<FlexStatement accountId="U1" fromDate="${s.from}" toDate="${s.to}" period="Custom"><Trades>${s.fills.map((f) => fillXml(f, isin)).join("")}</Trades><CashTransactions /><CorporateActions /><OpenPositions /><SecuritiesInfo>${infos}</SecuritiesInfo></FlexStatement>`;
+    })
+    .join("");
+  return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="${stmts.length}">${body}</FlexStatements></FlexQueryResponse>`;
+}
+
+const row452 = (r: TaxReport, isin: string) => r.capitalGains.antichurningSecurities?.find((s) => s.isin === isin);
+
+describe("#452 follow-up: a 1-year sale earlier in the year keeps the security's row and warning", () => {
+  // SIX (EBS): Swiss equivalence ran 24/12/2017-30/06/2019. A gain sale on
+  // 01/11/2017 has 1 year; one on 27/12/2017 has 2 months. The row must stay,
+  // so the user sees the 1-year reading and can set it back to 2 months.
+  const SIX = "CH0038863350";
+  const year2017 = (fills: Fill[]) => flexXml([{ from: "20170101", to: "20171231", fills }], SIX);
+
+  it.each(METHODS)("[%s] gain sales on 01/11 (1 year) and 27/12/2017 (2 months): the row shows 1 year from IBKR and the warning names it", (method) => {
+    const r = run(year2017([
+      { date: "20170601", side: "BUY", qty: 2, price: 100, listing: "EBS", conid: "1" },
+      { date: "20171101", side: "SELL", qty: 1, price: 120, listing: "EBS", conid: "1" },
+      { date: "20171227", side: "SELL", qty: 1, price: 130, listing: "EBS", conid: "1" },
+    ]), 2017, method);
+    expect(row452(r, SIX)).toMatchObject({ months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["EBS"] });
+    expect(msg(r, ONE_YEAR)?.message).toContain(`(${SIX}, IBKR: EBS)`);
+  });
+
+  it("the user's 2 months on that security is kept and reported (the row is the way back)", () => {
+    const r = run(year2017([
+      { date: "20170601", side: "BUY", qty: 2, price: 100, listing: "EBS", conid: "1" },
+      { date: "20171101", side: "SELL", qty: 1, price: 120, listing: "EBS", conid: "1" },
+      { date: "20171227", side: "SELL", qty: 1, price: 130, listing: "EBS", conid: "1" },
+    ]), 2017, "multidivisa", { windowMonthsByIsin: { [SIX]: 2 } });
+    expect(row452(r, SIX)).toMatchObject({ months: 2, source: "user", autoMonths: 12 });
+    expect(msg(r, USER)?.context?.twoMonths).toContain(SIX);
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+  });
+
+  it("gain sales that all fall inside the equivalence (2 months) still get no row", () => {
+    const r = run(flexXml([{ from: "20180101", to: "20181231", fills: [
+      { date: "20180101", side: "BUY", qty: 2, price: 100, listing: "EBS", conid: "1" },
+      { date: "20180301", side: "SELL", qty: 1, price: 120, listing: "EBS", conid: "1" },
+      { date: "20181101", side: "SELL", qty: 1, price: 130, listing: "EBS", conid: "1" },
+    ] }], SIX), 2018);
+    expect(row452(r, SIX)).toBeUndefined();
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+  });
+});
+
+describe("#452 follow-up: a listing IBKR replaced on the same contract before the sale day does not count", () => {
+  // IBKR's listingExchange is the contract's primary listing. A share that
+  // left NYSE for OTC Markets (PINK) shows NYSE on its old rows and PINK on
+  // the later ones. On a sale day after the change, only PINK is in force.
+  const US = "US0378331005";
+  const loss = (buyListing: string, saleListing: string, rebuyListing: string, conids: [string?, string?, string?] = ["7", "7", "7"]) =>
+    flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250201", side: "BUY", qty: 1, price: 100, listing: buyListing, ...(conids[0] ? { conid: conids[0] } : {}) },
+      { date: "20250301", side: "SELL", qty: 1, price: 80, listing: saleListing, ...(conids[1] ? { conid: conids[1] } : {}) },
+      { date: "20250801", side: "BUY", qty: 1, price: 85, listing: rebuyListing, ...(conids[2] ? { conid: conids[2] } : {}) },
+    ] }], US);
+
+  it.each(METHODS)("[%s] NYSE on the buy, PINK from the sale on (same conid): 1 year, the 01/08 rebuy blocks the −20", (method) => {
+    const r = run(loss("NYSE", "PINK", "PINK"), 2025, method);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    expect(fiscal(r)).toBe("0.00");
+    expect(row452(r, US)).toMatchObject({ months: 12, source: "ibkr", listingExchanges: ["PINK"] });
+    expect(msg(r, ONE_YEAR)?.message).toContain(`(${US}, IBKR: PINK)`);
+  });
+
+  it("the sale still on NYSE (the change comes after it): 2 months, nothing blocked", () => {
+    const r = run(loss("NYSE", "NYSE", "PINK"), 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+  });
+
+  it("two contracts (two conids) of one ISIN are two listings, not a change: 2 months", () => {
+    const r = run(loss("NYSE", "PINK", "PINK", ["7", "8", "8"]), 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+    expect(row452(r, US)?.listingExchanges).toEqual(["NYSE", "PINK"]);
+  });
+
+  it("rows with no conid cannot show a change: 2 months", () => {
+    const r = run(loss("NYSE", "PINK", "PINK", [undefined, undefined, undefined]), 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+  });
+
+  it("last year's SecurityInfo (NYSE, same conid) belongs to last year: this year's PINK sale gets 1 year", () => {
+    const xml = flexXml([
+      { from: "20240101", to: "20241231", fills: [{ date: "20240601", side: "BUY", qty: 1, price: 100, listing: "NYSE", conid: "7" }], infos: [{ listing: "NYSE", conid: "7" }] },
+      { from: "20250101", to: "20251231", fills: [
+        { date: "20250301", side: "SELL", qty: 1, price: 80, listing: "PINK", conid: "7" },
+        { date: "20250801", side: "BUY", qty: 1, price: 85, listing: "PINK", conid: "7" },
+      ], infos: [{ listing: "PINK", conid: "7" }] },
+    ], US);
+    const r = run(xml, 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    expect(row452(r, US)).toMatchObject({ months: 12, source: "ibkr", listingExchanges: ["PINK"] });
+  });
+
+  it("this year's SecurityInfo naming NYSE on the same contract keeps 2 months (it may still be listed there)", () => {
+    const xml = flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250201", side: "BUY", qty: 1, price: 100, listing: "PINK", conid: "7" },
+      { date: "20250301", side: "SELL", qty: 1, price: 80, listing: "PINK", conid: "7" },
+      { date: "20250801", side: "BUY", qty: 1, price: 85, listing: "PINK", conid: "7" },
+    ], infos: [{ listing: "NYSE", conid: "7" }] }], US);
+    const r = run(xml, 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+  });
+});
+
+describe("#452 follow-up: the listing survives the merge of an order's fills", () => {
+  const order = (id: string, date: string, side: "BUY" | "SELL", price: number, listings: [string | undefined, string | undefined]): Fill[] =>
+    listings.map((listing) => ({ date, side, qty: 1, price, conid: "9452", order: id, ...(listing === undefined ? {} : { listing }) }));
+
+  it.each(METHODS)("[%s] every order's first fill has no listingExchange and the second says LSE: 1 year", (method) => {
+    const r = run(flexXml([{ from: "20250101", to: "20251231", fills: [
+      ...order("1", "20250201", "BUY", 100, [undefined, "LSE"]),
+      ...order("2", "20250301", "SELL", 80, [undefined, "LSE"]),
+      ...order("3", "20250801", "BUY", 85, [undefined, "LSE"]),
+    ] }], ISIN), 2025, method);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("40.00");
+    expect(row452(r, ISIN)).toMatchObject({ months: 12, source: "ibkr", listingExchanges: ["LSE"] });
+  });
+
+  it("fills of one order that disagree (LSE and NYSE) keep both listings: 2 months", () => {
+    const r = run(flexXml([{ from: "20250101", to: "20251231", fills: [
+      ...order("1", "20250201", "BUY", 100, ["LSE", "LSE"]),
+      ...order("2", "20250301", "SELL", 80, ["LSE", "NYSE"]),
+      ...order("3", "20250801", "BUY", 85, ["LSE", "LSE"]),
+    ] }], ISIN), 2025);
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+    expect(msg(r, ONE_YEAR)).toBeUndefined();
+    expect(row452(r, ISIN)?.listingExchanges).toEqual(["LSE", "NYSE"]);
+  });
+});
+
+describe("#452 follow-up: a Toronto loss sale keeps its open-point notice when a later sale of the ISIN reads 1 year", () => {
+  // The row describes the last 1-year sale day, but the March loss sale was
+  // cut to 2 months by the EMIR decision 2016/2273, which always comes with
+  // the open-point notice. The notice names the codes in force on 01/03: TSE,
+  // and PINK, which first shows after that day and so still counts.
+  const CA = "CA0000000001";
+  const xml = (lossListing: string) =>
+    flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250102", side: "BUY", qty: 2, price: 100, listing: lossListing, conid: "5" },
+      { date: "20250301", side: "SELL", qty: 1, price: 80, listing: lossListing, conid: "5" },
+      { date: "20250901", side: "SELL", qty: 1, price: 130, listing: "PINK", conid: "5" },
+    ] }], CA);
+
+  it.each(METHODS)("[%s] TSE loss sale on 01/03, PINK gain sale on 01/09 (one conid): 1-year row with the open notice for TSE", (method) => {
+    const r = run(xml("TSE"), 2025, method);
+    expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["PINK"], openDecision: "2016/2273", openListingExchanges: ["PINK", "TSE"] });
+    expect(msg(r, ONE_YEAR)?.message).toContain(`(${CA}, IBKR: PINK)`);
+    expect(msg(r, OPEN)?.message).toContain(`(${CA}, IBKR: PINK, TSE, 2016/2273)`);
+    // Both notices name the ISIN, so each one speaks of the sales of its own days.
+    expect(msg(r, ONE_YEAR)?.message).toContain("a las ventas de 1 valor(es) hechas en días en que IBKR solo los muestra");
+    expect(msg(r, OPEN)?.message).toContain("a las ventas de 1 valor(es) hechas en días en que IBKR los muestra en Toronto");
+    // The March loss sale is 2 months either way. The buy on 02/01 is the only
+    // purchase in them, nothing was held on 01/01, and the empty Open Positions
+    // at 31/12 reconciles with the trades, so the one-purchase exception (#453)
+    // applies and nothing is blocked.
+    expect(r.capitalGains.disposals.find((d) => d.sellDate.replace(/-/g, "") === "20250301")?.washSaleSinglePurchase).toBe("applied");
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
+  });
+
+  it("the loss sale on NYSE instead: no open notice", () => {
+    const r = run(xml("NYSE"), 2025);
+    expect(row452(r, CA)?.openDecision).toBeUndefined();
+    expect(msg(r, OPEN)).toBeUndefined();
+  });
+
+  it("a Toronto gain sale before a 1-year gain sale gets no open notice (nothing to release)", () => {
+    const r = run(flexXml([{ from: "20250101", to: "20251231", fills: [
+      { date: "20250102", side: "BUY", qty: 2, price: 100, listing: "TSE", conid: "5" },
+      { date: "20250301", side: "SELL", qty: 1, price: 120, listing: "TSE", conid: "5" },
+      { date: "20250901", side: "SELL", qty: 1, price: 130, listing: "PINK", conid: "5" },
+    ] }], CA), 2025);
+    expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", listingExchanges: ["PINK"] });
+    expect(row452(r, CA)?.openDecision).toBeUndefined();
+    expect(msg(r, OPEN)).toBeUndefined();
+  });
+});

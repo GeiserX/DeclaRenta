@@ -1277,7 +1277,7 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.antichurning_one_year_ibkr",
       severity: "warning",
-      message: `DeclaRenta aplica a ${ctx.count} valor(es) el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF), porque IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: ${ctx.list}.`,
+      message: `DeclaRenta aplica el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF) a las ventas de ${ctx.count} valor(es) hechas en días en que IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: ${ctx.list}.`,
       hint: `IBKR solo muestra el mercado de las líneas que has operado. Si el valor también está admitido a negociación en un mercado regulado del Espacio Económico Europeo (no basta un mercado de crecimiento ni otro sistema multilateral de negociación) o en NYSE, Nasdaq, ASX o la Bolsa de Hong Kong, le corresponden 2 meses: márcalo con 2 meses en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-2m) y calcula de nuevo.`,
       context: ctx,
     });
@@ -1286,12 +1286,12 @@ export function generateTaxReport(
   if (openListing.length > 0) {
     const ctx = {
       count: String(openListing.length),
-      list: openListing.map((s) => `${s.symbol || s.isin} (${s.isin}, IBKR: ${s.listingExchanges.join(", ")}, ${s.openDecision})`).join("; "),
+      list: openListing.map((s) => `${s.symbol || s.isin} (${s.isin}, IBKR: ${(s.openListingExchanges ?? s.listingExchanges).join(", ")}, ${s.openDecision})`).join("; "),
     };
     allMessages.push({
       id: "report.antichurning_listing_open",
       severity: "info",
-      message: `DeclaRenta aplica 2 meses a ${ctx.count} valor(es) que IBKR muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: ${ctx.list}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.`,
+      message: `DeclaRenta aplica 2 meses a las ventas de ${ctx.count} valor(es) hechas en días en que IBKR los muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: ${ctx.list}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.`,
       hint: `Si prefieres el criterio prudente, márcalo con 1 año en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-1y) y calcula de nuevo.`,
       context: ctx,
     });

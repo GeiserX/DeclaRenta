@@ -874,11 +874,11 @@ const ca: TranslationKeys = {
   "report.antichurning_window_open_at_filing.hint":
     "Abans de presentar-la, puja també el fitxer amb les teves operacions posteriors al {{lastDate}} i torna a calcular. Si compres el mateix valor o la mateixa criptomoneda fins al {{windowEnd}} inclòs, part de la pèrdua d'aquestes vendes pot quedar bloquejada, o la venda deixa de ser una transmissió definitiva i no allibera pèrdues pendents. En aquest cas, corregeix la declaració presentada amb una autoliquidació rectificativa.",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta aplica a {{count}} valor(s) el termini d'1 any de la regla anti-churning (art. 33.5.g LIRPF), perquè IBKR només els mostra en un mercat que no és un mercat regulat de l'Espai Econòmic Europeu ni un mercat declarat equivalent per la Comissió Europea: {{list}}.",
+    "DeclaRenta aplica el termini d'1 any de la regla anti-churning (art. 33.5.g LIRPF) a les vendes de {{count}} valor(s) fetes en dies en què IBKR només els mostra en un mercat que no és un mercat regulat de l'Espai Econòmic Europeu ni un mercat declarat equivalent per la Comissió Europea: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR només mostra el mercat de les línies que has operat. Si el valor també està admès a negociació en un mercat regulat de l'Espai Econòmic Europeu (no n'hi ha prou amb un mercat de creixement ni amb un altre sistema multilateral de negociació) o a NYSE, Nasdaq, ASX o la Borsa de Hong Kong, li corresponen 2 mesos: marca'l amb 2 mesos al tauler «Termini anti-churning per valor» (a la línia d'ordres, --antichurning-2m) i torna a calcular.",
   "report.antichurning_listing_open":
-    "DeclaRenta aplica 2 mesos a {{count}} valor(s) que IBKR mostra a Toronto, TSX Venture, Aequitas Neo, Tòquio o Singapur: {{list}}. Una decisió de la Comissió Europea declara aquest mercat equivalent a un mercat regulat, i la DGT accepta aquest tipus de decisió (consulta V0778-25), però cap consulta ho confirma per a accions.",
+    "DeclaRenta aplica 2 mesos a les vendes de {{count}} valor(s) fetes en dies en què IBKR els mostra a Toronto, TSX Venture, Aequitas Neo, Tòquio o Singapur: {{list}}. Una decisió de la Comissió Europea declara aquest mercat equivalent a un mercat regulat, i la DGT accepta aquest tipus de decisió (consulta V0778-25), però cap consulta ho confirma per a accions.",
   "report.antichurning_listing_open.hint":
     "Si prefereixes el criteri prudent, marca'l amb 1 any al tauler «Termini anti-churning per valor» (a la línia d'ordres, --antichurning-1y) i torna a calcular.",
   "report.antichurning_window_user":
@@ -904,7 +904,7 @@ const ca: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 mesos: admès en un mercat regulat de l'EEE o en un d'equivalent",
   "antichurning_window.opt_1y":
-    "1 any: només cotitza fora de l'EEE i sense mercat equivalent (p. ex. Londres des del 2021, SIX, OTC)",
+    "1 any: no admès en un mercat regulat de l'EEE ni en un d'equivalent (p. ex. només a Londres des del 2021, SIX, OTC o BME Growth)",
   "antichurning_window.no_listing":
     "sense dada",
   "antichurning_window.open_note":
@@ -917,6 +917,10 @@ const ca: TranslationKeys = {
     "Desat",
   "antichurning_window.recalculate_hint":
     "Els terminis es desen al teu navegador i l'informe es recalcula.",
+  "antichurning_window.save_error":
+    "El navegador no ha deixat desar els terminis: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "antichurning_window.clear_error":
+    "El navegador no ha deixat esborrar els terminis desats: el seu emmagatzematge pot estar bloquejat. L'informe no ha canviat.",
   "report.antichurning_single_purchase":
     "En {{count}} venda(es) de {{year}}, la compra dels 2 mesos anteriors no compta com a recompra: va ser l'única compra d'aquest valor en aquest termini i en començar el termini no tenies accions d'aquest valor (excepció de compra única, DGT V3282-18). Aquesta compra no bloqueja la pèrdua ni impedeix que la venda alliberi pèrdues pendents.",
   "report.antichurning_single_purchase.hint":

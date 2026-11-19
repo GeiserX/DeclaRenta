@@ -911,11 +911,11 @@ const es = {
   "report.antichurning_window_open_at_filing.hint":
     "Antes de presentar, sube también el fichero con tus operaciones posteriores al {{lastDate}} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda hasta el {{windowEnd}} inclusive, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.",
   "report.antichurning_one_year_ibkr":
-    "DeclaRenta aplica a {{count}} valor(es) el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF), porque IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: {{list}}.",
+    "DeclaRenta aplica el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF) a las ventas de {{count}} valor(es) hechas en días en que IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: {{list}}.",
   "report.antichurning_one_year_ibkr.hint":
     "IBKR solo muestra el mercado de las líneas que has operado. Si el valor también está admitido a negociación en un mercado regulado del Espacio Económico Europeo (no basta un mercado de crecimiento ni otro sistema multilateral de negociación) o en NYSE, Nasdaq, ASX o la Bolsa de Hong Kong, le corresponden 2 meses: márcalo con 2 meses en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-2m) y calcula de nuevo.",
   "report.antichurning_listing_open":
-    "DeclaRenta aplica 2 meses a {{count}} valor(es) que IBKR muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: {{list}}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.",
+    "DeclaRenta aplica 2 meses a las ventas de {{count}} valor(es) hechas en días en que IBKR los muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: {{list}}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.",
   "report.antichurning_listing_open.hint":
     "Si prefieres el criterio prudente, márcalo con 1 año en el panel «Plazo anti-churning por valor» (en la línea de comandos, --antichurning-1y) y calcula de nuevo.",
   "report.antichurning_window_user":
@@ -941,7 +941,7 @@ const es = {
   "antichurning_window.opt_2m":
     "2 meses: admitido en un mercado regulado del EEE o en uno equivalente",
   "antichurning_window.opt_1y":
-    "1 año: solo cotiza fuera del EEE y sin mercado equivalente (p. ej. Londres desde 2021, SIX, OTC)",
+    "1 año: no admitido en un mercado regulado del EEE ni en uno equivalente (p. ej. solo en Londres desde 2021, SIX, OTC o BME Growth)",
   "antichurning_window.no_listing":
     "sin dato",
   "antichurning_window.open_note":
@@ -954,6 +954,10 @@ const es = {
     "Guardado",
   "antichurning_window.recalculate_hint":
     "Los plazos se guardan en tu navegador y el informe se recalcula.",
+  "antichurning_window.save_error":
+    "El navegador no ha dejado guardar los plazos: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
+  "antichurning_window.clear_error":
+    "El navegador no ha dejado borrar los plazos guardados: su almacenamiento puede estar bloqueado. El informe no ha cambiado.",
   "report.antichurning_single_purchase":
     "En {{count}} venta(s) de {{year}}, la compra de los 2 meses anteriores no cuenta como recompra: fue la única compra de ese valor en ese plazo y al empezar el plazo no tenías acciones de ese valor (excepción de compra única, DGT V3282-18). Esa compra no bloquea su pérdida ni impide que la venta libere pérdidas pendientes.",
   "report.antichurning_single_purchase.hint":

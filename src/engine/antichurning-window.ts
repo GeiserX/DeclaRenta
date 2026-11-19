@@ -12,10 +12,12 @@
  * in this order:
  *  1. A per-ISIN value the user set (2 or 12). It wins over everything.
  *  2. IBKR's `listingExchange` (Trades and Financial Instrument Information).
- *     It gives 1 year only when EVERY IBKR code of the ISIN is a market that is
- *     neither an EEA regulated market nor named in an equivalence decision on
- *     the sale day. Any other code, or a misspelt one, gets no vote, so a
- *     second listing anywhere keeps 2 months.
+ *     It gives 1 year only when EVERY IBKR code of the ISIN in force on the
+ *     sale day is a market that is neither an EEA regulated market nor named
+ *     in an equivalence decision on that day. Any other code, or a misspelt
+ *     one, gets no vote, so a second listing anywhere keeps 2 months. A code
+ *     stops being in force only when a later row of the SAME contract (conid),
+ *     dated on or before the sale day, names another code (`listingsOn`).
  *  3. Otherwise today's heuristic in `wash-sale.ts`: 2 months with an ISIN,
  *     12 without one.
  * Crypto is letter e (#457) and never reaches this module.
@@ -117,12 +119,23 @@ export const OPEN_EQUIVALENT_LISTINGS: Readonly<Record<string, string>> = {
   SGX: "2016/2270", // Singapore Exchange Securities Trading Limited https://eur-lex.europa.eu/legal-content/ES/TXT/HTML/?uri=CELEX:32016D2270
 };
 
+/** One IBKR listing code seen on a row of an ISIN. */
+export interface ListingVote {
+  code: string;
+  /** IBKR contract id. Without it the vote is never replaced: it counts on every day. */
+  conid?: string;
+  /** YYYY-MM-DD: the trade day, or the last day of the statement a SecurityInfo row came from. */
+  date?: string;
+}
+
 /** What DeclaRenta knows about one ISIN's window. */
 export interface IsinWindow {
   /** The user's value, when set. */
   user?: WindowMonths;
   /** Every IBKR listing code of the ISIN, sorted and unique. */
   listings: readonly string[];
+  /** The rows behind `listings`, with contract and date. Absent: every code counts on every day. */
+  votes?: readonly ListingVote[];
 }
 
 /** One ISIN's resolved window on a sale day. */
@@ -153,34 +166,72 @@ export function coerceWindowOverrides(raw: unknown): Map<string, WindowMonths> {
 
 /**
  * The window data of every ISIN: IBKR's listing codes from the trades and the
- * Financial Instrument Information rows, and the user's values. Rows without
- * an ISIN, without a code, or of a category with no anti-churning rule (and
- * crypto) give no code.
+ * Financial Instrument Information rows, each with its contract (conid) and
+ * date, and the user's values. Rows without an ISIN, without a code, or of a
+ * category with no anti-churning rule (and crypto) give no code. A merged
+ * order whose fills named different codes votes for each (`listingExchanges`).
  */
 export function collectIsinWindows(
   trades: readonly Trade[],
   securitiesInfo: readonly SecurityInfo[] = [],
   overrides?: unknown,
 ): Map<string, IsinWindow> {
-  const codes = new Map<string, Set<string>>();
-  const vote = (isin: string, assetCategory: string, listing: string | undefined): void => {
-    if (!isin || !listing || NO_LISTING_VOTE.has(assetCategory)) return;
-    let set = codes.get(isin);
-    if (!set) {
-      set = new Set();
-      codes.set(isin, set);
+  const votes = new Map<string, Map<string, ListingVote>>();
+  const vote = (isin: string, assetCategory: string, code: string | undefined, conid: string | undefined, date: string | undefined): void => {
+    if (!isin || !code || NO_LISTING_VOTE.has(assetCategory)) return;
+    const day = date ? normalizeDate(date.trim()).slice(0, 10) : undefined;
+    let byKey = votes.get(isin);
+    if (!byKey) {
+      byKey = new Map();
+      votes.set(isin, byKey);
     }
-    set.add(listing);
+    byKey.set(`${code}\u0000${conid ?? ""}\u0000${day ?? ""}`, { code, ...(conid ? { conid } : {}), ...(day ? { date: day } : {}) });
   };
-  for (const t of trades) vote(t.isin, t.assetCategory, t.listingExchange);
-  for (const s of securitiesInfo) vote(s.isin, s.assetCategory, s.listingExchange);
+  for (const t of trades) {
+    for (const code of t.listingExchanges ?? [t.listingExchange]) vote(t.isin, t.assetCategory, code, t.conid, t.tradeDate);
+  }
+  for (const s of securitiesInfo) vote(s.isin, s.assetCategory, s.listingExchange, s.conid, s.asOf);
 
   const out = new Map<string, IsinWindow>();
-  for (const [isin, set] of codes) out.set(isin, { listings: [...set].sort() });
+  for (const [isin, byKey] of votes) {
+    const list = [...byKey.values()];
+    out.set(isin, { listings: [...new Set(list.map((v) => v.code))].sort(), votes: list });
+  }
   for (const [isin, months] of coerceWindowOverrides(overrides)) {
-    out.set(isin, { listings: out.get(isin)?.listings ?? [], user: months });
+    const w = out.get(isin);
+    out.set(isin, { listings: w?.listings ?? [], ...(w?.votes ? { votes: w.votes } : {}), user: months });
   }
   return out;
+}
+
+/**
+ * The IBKR codes of an ISIN in force on a sale day (YYYY-MM-DD). IBKR's
+ * `listingExchange` is the contract's primary listing, so when a later row of
+ * the same contract names another code, the listing changed (a share that
+ * left NYSE for OTC Markets shows NYSE, then PINK). A code drops out on the
+ * sale day only when every row of that contract naming it is older than the
+ * contract's latest row on or before that day. Everything else counts: rows
+ * of another contract (a second line of the same ISIN is a second listing),
+ * rows with no conid or no date, and codes first seen after the sale day
+ * (DeclaRenta cannot tell when that listing started).
+ */
+export function listingsOn(w: IsinWindow, day: string): string[] {
+  if (!w.votes) return [...w.listings];
+  const latest = new Map<string, string>();
+  const lastOfCode = new Map<string, string>();
+  for (const v of w.votes) {
+    if (!v.conid || !v.date) continue;
+    if (v.date <= day && v.date > (latest.get(v.conid) ?? "")) latest.set(v.conid, v.date);
+    const key = `${v.conid}\u0000${v.code}`;
+    if (v.date > (lastOfCode.get(key) ?? "")) lastOfCode.set(key, v.date);
+  }
+  const codes = new Set<string>();
+  for (const v of w.votes) {
+    const newest = v.conid && v.date ? latest.get(v.conid) : undefined;
+    if (newest !== undefined && lastOfCode.get(`${v.conid}\u0000${v.code}`)! < newest) continue;
+    codes.add(v.code);
+  }
+  return [...codes].sort();
 }
 
 /** Whether an IBKR code is a letter-g market on a sale day (YYYY-MM-DD). */
@@ -194,7 +245,8 @@ function nonEquivalentOn(code: string, day: string): boolean {
  * The window of one ISIN on a sale day (YYYY-MM-DD), or undefined when neither
  * the user nor IBKR's codes decide it (the caller keeps its heuristic).
  *  - The user's value wins.
- *  - 12 from IBKR only when every code is a letter-g market on that day.
+ *  - 12 from IBKR only when every code in force on that day (`listingsOn`) is
+ *    a letter-g market on that day.
  *  - 2 from IBKR, flagged open, when every code is a letter-g market or an
  *    EMIR-only market and at least one is EMIR-only: the 2 months then rest on
  *    an equivalence decision no consulta has applied to shares.
@@ -202,10 +254,11 @@ function nonEquivalentOn(code: string, day: string): boolean {
 export function resolveIsinWindow(w: IsinWindow | undefined, day: string): ResolvedWindow | undefined {
   if (!w) return undefined;
   if (w.user !== undefined) return { months: w.user, source: "user" };
-  if (w.listings.length === 0) return undefined;
-  if (w.listings.every((code) => nonEquivalentOn(code, day))) return { months: 12, source: "ibkr" };
-  const open = w.listings.filter((code) => Object.hasOwn(OPEN_EQUIVALENT_LISTINGS, code));
-  if (open.length > 0 && w.listings.every((code) => open.includes(code) || nonEquivalentOn(code, day))) {
+  const listings = listingsOn(w, day);
+  if (listings.length === 0) return undefined;
+  if (listings.every((code) => nonEquivalentOn(code, day))) return { months: 12, source: "ibkr" };
+  const open = listings.filter((code) => Object.hasOwn(OPEN_EQUIVALENT_LISTINGS, code));
+  if (open.length > 0 && listings.every((code) => open.includes(code) || nonEquivalentOn(code, day))) {
     const decisions = [...new Set(open.map((code) => OPEN_EQUIVALENT_LISTINGS[code]!))].sort();
     return { months: 2, source: "ibkr", openDecision: decisions.join(", ") };
   }
@@ -217,11 +270,18 @@ export function resolveIsinWindow(w: IsinWindow | undefined, day: string): Resol
  * per ISIN: a loss sale or a released loss in the year, a user value, or a
  * sale in the year whose IBKR reading is 1 year (a gain sale can stop being a
  * «transmisión definitiva» under 1 year, so the user must be able to set it
- * back to 2 months). A gain sale with nothing to release and a 2-month reading
- * is not listed, open decision or not: no window changes its result. Each
- * condition holds whatever window the user picks (a toggle that removes a
- * release adds a user value), so a change of the window never removes a row. The row's months are those of the ISIN's last
- * sale day in the year (31 December when it has none).
+ * back to 2 months). Every sale day of the year is read, so a 1-year sale
+ * before a 2-month one (SIX on 01/11/2017, then inside its equivalence on
+ * 27/12/2017) keeps the row. A gain sale with nothing to release and a
+ * 2-month reading on every sale day is not listed, open decision or not: no
+ * window changes its result. Each condition holds whatever window the user
+ * picks (a toggle that removes a release adds a user value), so a change of
+ * the window never removes a row. The row describes one day: the last sale day
+ * with an IBKR 1-year reading, else the last sale day, else 31 December; its
+ * `listingExchanges` are the codes in force on that day. `openDecision` also
+ * collects every other loss or release sale day with an open 2-month reading,
+ * and `openListingExchanges` names the codes of those days when they differ
+ * from `listingExchanges`.
  *
  * @param yearDisposals - The tax year's disposals, after anti-churning
  * @param windows - The same map `detectWashSales` used
@@ -233,15 +293,16 @@ export function listAntichurningSecurities(
   year: number,
   names: ReadonlyMap<string, { symbol: string; description: string }> = new Map(),
 ): AntichurningSecurity[] {
-  const sold = new Map<string, { symbol: string; description: string; lastDay: string; relevant: boolean }>();
+  // Per ISIN: every sale day, and whether that day has a loss sale or a release.
+  const sold = new Map<string, { symbol: string; description: string; days: Map<string, boolean>; relevant: boolean }>();
   for (const d of yearDisposals) {
     if (!d.isin || NO_LISTING_VOTE.has(d.assetCategory) || d.quantity.isZero()) continue;
     const day = normalizeDate(d.sellDate.trim()).slice(0, 10);
     const relevant = d.gainLossEur.isNegative() || d.reintegratedLossEur.greaterThan(0);
     const prev = sold.get(d.isin);
-    if (!prev) sold.set(d.isin, { symbol: d.symbol, description: d.description, lastDay: day, relevant });
+    if (!prev) sold.set(d.isin, { symbol: d.symbol, description: d.description, days: new Map([[day, relevant]]), relevant });
     else {
-      if (day > prev.lastDay) prev.lastDay = day;
+      prev.days.set(day, (prev.days.get(day) ?? false) || relevant);
       prev.relevant ||= relevant;
     }
   }
@@ -252,10 +313,28 @@ export function listAntichurningSecurities(
   for (const isin of isins) {
     const sale = sold.get(isin);
     const w = windows.get(isin);
-    const day = sale?.lastDay ?? `${year}-12-31`;
-    const auto = resolveIsinWindow(w ? { listings: w.listings } : undefined, day);
-    if (!sale?.relevant && w?.user === undefined && !(sale && auto?.months === 12)) continue;
+    // The automatic reading, without the user's value.
+    const ibkr: IsinWindow | undefined = w ? { listings: w.listings, ...(w.votes ? { votes: w.votes } : {}) } : undefined;
+    const days = [...(sale?.days.keys() ?? [])].sort();
+    const oneYearDay = days.filter((d) => resolveIsinWindow(ibkr, d)?.months === 12).at(-1);
+    if (!sale?.relevant && w?.user === undefined && oneYearDay === undefined) continue;
+    const day = oneYearDay ?? days.at(-1) ?? `${year}-12-31`;
+    const auto = resolveIsinWindow(ibkr, day);
     const resolved = resolveIsinWindow(w, day) ?? { months: 2, source: "default" as const };
+    const listingExchanges = w ? listingsOn(w, day) : [];
+    // The open-point notice: the row's day, plus every loss or release sale
+    // day whose 2 months rest on an EMIR-only decision. A Toronto loss sale
+    // in March keeps its notice when a PINK sale in September gives the row
+    // 1 year; a Toronto gain sale with nothing to release adds none.
+    const decisions = new Set(auto?.openDecision?.split(", ") ?? []);
+    const openCodes = new Set(auto?.openDecision ? listingExchanges : []);
+    for (const d of days) {
+      const open = d !== day && sale?.days.get(d) === true && ibkr ? resolveIsinWindow(ibkr, d)?.openDecision : undefined;
+      if (!open || !ibkr) continue;
+      for (const id of open.split(", ")) decisions.add(id);
+      for (const code of listingsOn(ibkr, d)) openCodes.add(code);
+    }
+    const openListingExchanges = [...openCodes].sort();
     const name = sale ?? names.get(isin);
     rows.push({
       isin,
@@ -264,8 +343,9 @@ export function listAntichurningSecurities(
       months: resolved.months,
       source: resolved.source,
       autoMonths: auto?.months ?? 2,
-      listingExchanges: [...(w?.listings ?? [])],
-      ...(auto?.openDecision ? { openDecision: auto.openDecision } : {}),
+      listingExchanges,
+      ...(decisions.size > 0 ? { openDecision: [...decisions].sort().join(", ") } : {}),
+      ...(decisions.size > 0 && openListingExchanges.join() !== listingExchanges.join() ? { openListingExchanges } : {}),
     });
   }
   return rows.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.isin.localeCompare(b.isin));

@@ -130,7 +130,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
     openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
-    securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
+    securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
     // An empty <Trades /> still says "no trades in this period", and an empty
     // <OpenPositions /> "nothing held at its end"; no element says nothing.
@@ -533,6 +533,9 @@ function mergeTradeGroup(group: Trade[]): Trade {
   let fifoPnl = new Decimal(0);
   const notes = new Set<string>();
   let exchange = first.exchange;
+  // The listing market of every fill: the first one that has it, and all of
+  // them when they disagree, so the window resolver sees each (#452).
+  const listings = [...new Set(group.map((t) => t.listingExchange).filter((code): code is string => !!code))];
 
   for (const t of group) {
     const q = new Decimal(t.quantity);
@@ -581,6 +584,8 @@ function mergeTradeGroup(group: Trade[]): Trade {
     taxes: taxes.toString(),
     fifoPnlRealized: fifoPnl.toString(),
     exchange,
+    ...(listings.length > 0 ? { listingExchange: listings[0] } : {}),
+    ...(listings.length > 1 ? { listingExchanges: listings } : {}),
     notes: notes.size > 0 ? Array.from(notes).join(";") : undefined,
     // One fill with no readable quantity leaves the order's total unknown.
     ...(group.some((t) => t.quantityUnknown) ? { quantityUnknown: true } : {}),
@@ -740,7 +745,9 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   };
 }
 
-function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
+/** `toDate`: the statement's last day; the row's listing is the one of that period (#452). */
+function mapSecurityInfo(raw: Record<string, string>, toDate?: string): SecurityInfo {
+  const asOf = toDate?.trim() ?? "";
   return {
     symbol: raw.symbol ?? "",
     description: raw.description ?? "",
@@ -751,6 +758,8 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
     ...listingExchangeOf(raw),
+    ...(raw.conid?.trim() ? { conid: raw.conid.trim() } : {}),
+    ...(asOf ? { asOf } : {}),
   };
 }
 

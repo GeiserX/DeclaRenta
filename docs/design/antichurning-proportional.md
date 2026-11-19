@@ -254,10 +254,14 @@ transmission that releases them.
   to shares, so that point is open. `src/engine/antichurning-window.ts`
   resolves one window per ISIN: the user's value (`windowMonthsByIsin`, the
   web panel, `--antichurning-1y` / `--antichurning-2m`) wins; else 12 only
-  when every IBKR `listingExchange` of the ISIN (Trades and SecurityInfo) is
-  in `NON_EQUIVALENT_LISTINGS` and outside its equivalence spans on the sale
-  day (London admitted to neither kind of market from 2021, SIX outside its
-  spans, OTC Markets, Japannext, Stock Connect, other third countries); else
+  when every IBKR `listingExchange` of the ISIN (Trades and SecurityInfo) in
+  force on the sale day is in `NON_EQUIVALENT_LISTINGS` and outside its
+  equivalence spans on that day (London admitted to neither kind of market
+  from 2021, SIX outside its spans, OTC Markets, Japannext, Stock Connect,
+  other third countries). A code stops being in force only when a later row
+  of the same contract (conid), dated on or before the sale day, names
+  another code (`listingsOn`: a share that left NYSE for OTC Markets); a
+  SecurityInfo row is dated on its statement's last day; else
   the old heuristic (ISIN → 2, no ISIN → 12). The EMIR-only codes stay at 2
   months with `report.antichurning_listing_open`. The same map reaches
   `detectWashSales` (block and definitive test) and `salesWithWindowPastData`.

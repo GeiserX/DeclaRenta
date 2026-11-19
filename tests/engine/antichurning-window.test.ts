@@ -5,6 +5,7 @@ import {
   collectIsinWindows,
   isValidIsin,
   listAntichurningSecurities,
+  listingsOn,
   NON_EQUIVALENT_LISTINGS,
   OPEN_EQUIVALENT_LISTINGS,
   resolveIsinWindow,
@@ -110,7 +111,7 @@ describe("resolveIsinWindow: the user's value wins", () => {
 describe("collectIsinWindows", () => {
   it("reads Trades and SecurityInfo, sorted and unique", () => {
     const w = collectIsinWindows([trade("LSE"), trade("LSE")], [info("NYSE")]);
-    expect(w.get(ISIN)).toEqual({ listings: ["LSE", "NYSE"] });
+    expect(w.get(ISIN)).toEqual({ listings: ["LSE", "NYSE"], votes: [{ code: "LSE", date: "2025-03-01" }, { code: "NYSE" }] });
   });
   it("a SecurityInfo-only NYSE vote turns a Trades-only LSE 12 into no automatic year", () => {
     expect(resolve(collectIsinWindows([trade("LSE")], []).get(ISIN))?.months).toBe(12);
@@ -125,8 +126,41 @@ describe("collectIsinWindows", () => {
   });
   it("adds the user's values, keeping IBKR's codes for the display", () => {
     const w = collectIsinWindows([trade("LSE")], [], { [ISIN]: 2, "US0378331005": 12 });
-    expect(w.get(ISIN)).toEqual({ listings: ["LSE"], user: 2 });
+    expect(w.get(ISIN)).toEqual({ listings: ["LSE"], votes: [{ code: "LSE", date: "2025-03-01" }], user: 2 });
     expect(w.get("US0378331005")).toEqual({ listings: [], user: 12 });
+  });
+});
+
+describe("listingsOn: the codes in force on a sale day (a later row of the same conid replaces a code)", () => {
+  const dated = (code: string, date: string, conid?: string) => trade(code, { tradeDate: date, ...(conid ? { conid } : {}) });
+  const on = (trades: Trade[], day: string, infos: SecurityInfo[] = []) => listingsOn(collectIsinWindows(trades, infos).get(ISIN)!, day);
+
+  it("same conid: NYSE then PINK. Before the PINK row both count; from it only PINK", () => {
+    const rows = [dated("NYSE", "20250201", "7"), dated("PINK", "20250301", "7")];
+    expect(on(rows, "2025-02-15")).toEqual(["NYSE", "PINK"]);
+    expect(on(rows, "2025-03-01")).toEqual(["PINK"]);
+    expect(on(rows, "2025-12-31")).toEqual(["PINK"]);
+    expect(resolve(collectIsinWindows(rows, []).get(ISIN), "2025-03-01")).toEqual({ months: 12, source: "ibkr" });
+  });
+  it("a code that comes back on a later row of the conid counts again (the rows interleave: no change proven)", () => {
+    const rows = [dated("NYSE", "20250201", "7"), dated("PINK", "20250301", "7"), dated("NYSE", "20250901", "7")];
+    expect(on(rows, "2025-03-01")).toEqual(["NYSE", "PINK"]);
+  });
+  it("two conids, or rows without a conid, never replace each other", () => {
+    expect(on([dated("NYSE", "20250201", "7"), dated("PINK", "20250301", "8")], "2025-12-31")).toEqual(["NYSE", "PINK"]);
+    expect(on([dated("NYSE", "20250201"), dated("PINK", "20250301")], "2025-12-31")).toEqual(["NYSE", "PINK"]);
+  });
+  it("a SecurityInfo row counts from its statement's last day; one with no date or conid counts always", () => {
+    const old = info("NYSE", { conid: "7", asOf: "20241231" });
+    expect(on([dated("PINK", "20250301", "7")], "2025-03-01", [old])).toEqual(["PINK"]);
+    expect(on([dated("PINK", "20250301", "7")], "2025-03-01", [info("NYSE", { conid: "7", asOf: "2025-12-31" })])).toEqual(["NYSE", "PINK"]);
+    expect(on([dated("PINK", "20250301", "7")], "2025-03-01", [info("NYSE", { conid: "7" })])).toEqual(["NYSE", "PINK"]);
+  });
+  it("a merged order whose fills disagree votes for each code", () => {
+    expect(on([trade("LSE", { listingExchanges: ["LSE", "NYSE"] })], "2025-03-01")).toEqual(["LSE", "NYSE"]);
+  });
+  it("a hand-built window with no votes counts every listing", () => {
+    expect(listingsOn({ listings: ["LSE", "NYSE"] }, "2025-03-01")).toEqual(["LSE", "NYSE"]);
   });
 });
 
@@ -203,5 +237,14 @@ describe("listAntichurningSecurities", () => {
     const late = listAntichurningSecurities([disposal({ isin: "CH0038863350", sellDate: "2019-03-01" }), disposal({ isin: "CH0038863350", sellDate: "2019-09-01" })], w, 2019);
     expect(early[0]?.months).toBe(2);
     expect(late[0]?.months).toBe(12);
+  });
+  it("a 1-year gain sale before a 2-month one keeps the row at 1 year (SIX 01/11/2017, then 27/12/2017 inside the equivalence)", () => {
+    const w = collectIsinWindows([trade("EBS", { isin: "CH0038863350" })]);
+    const gain = (sellDate: string) => disposal({ isin: "CH0038863350", sellDate, gainLossEur: new Decimal(5) });
+    expect(listAntichurningSecurities([gain("2017-11-01"), gain("2017-12-27")], w, 2017)).toEqual([
+      expect.objectContaining({ isin: "CH0038863350", months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["EBS"] }),
+    ]);
+    // Both gain sales inside the equivalence: 2 months on every day, no row.
+    expect(listAntichurningSecurities([gain("2018-03-01"), gain("2018-11-01")], w, 2018)).toEqual([]);
   });
 });
