@@ -248,3 +248,25 @@ describe("listAntichurningSecurities", () => {
     expect(listAntichurningSecurities([gain("2018-03-01"), gain("2018-11-01")], w, 2018)).toEqual([]);
   });
 });
+
+// A file can carry the ISIN in lower case. The user's value is stored upper
+// case, so every key point must use the same form: one row per security, and
+// the window the user picked is the one the engine applies (#472 review).
+describe("an ISIN in lower case from a file", () => {
+  const lower = ` ${ISIN.toLowerCase()}`;
+  it("collectIsinWindows keys IBKR's codes and the user's value under one ISIN", () => {
+    const w = collectIsinWindows([trade("LSE", { isin: lower })], [info("NYSE", { isin: lower })], { [ISIN]: 2 });
+    expect([...w.keys()]).toEqual([ISIN]);
+    expect(w.get(ISIN)).toMatchObject({ listings: ["LSE", "NYSE"], user: 2 });
+  });
+  it("listAntichurningSecurities gives one row with the user's value", () => {
+    const w = collectIsinWindows([trade("LSE", { isin: lower })], [], { [ISIN]: 12 });
+    const rows = listAntichurningSecurities([disposal({ isin: lower })], w, 2025);
+    expect(rows).toEqual([expect.objectContaining({ isin: ISIN, months: 12, source: "user", autoMonths: 12, listingExchanges: ["LSE"] })]);
+  });
+  it("a user value with no sale in the year takes the name of a lower-case trade", () => {
+    const names = new Map([[lower, { symbol: "BP", description: "BP PLC" }]]);
+    const rows = listAntichurningSecurities([], collectIsinWindows([], [], { [ISIN]: 12 }), 2025, names);
+    expect(rows).toEqual([expect.objectContaining({ isin: ISIN, symbol: "BP", months: 12, source: "user" })]);
+  });
+});

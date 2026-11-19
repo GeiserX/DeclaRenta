@@ -11,7 +11,7 @@
  */
 
 import { t, type TranslationKey } from "../i18n/index.js";
-import { coerceWindowOverrides, ISIN_SHAPE, type WindowMonths } from "../engine/antichurning-window.js";
+import { canonicalIsin, coerceWindowOverrides, ISIN_SHAPE, type WindowMonths } from "../engine/antichurning-window.js";
 import type { AntichurningSecurity } from "../types/tax.js";
 import { esc } from "./esc.js";
 
@@ -78,7 +78,7 @@ function row(s: AntichurningSecurity, stored: Readonly<Record<string, WindowMont
   // The select shows what is stored, not the report's reading: a locale
   // redraw in the middle of a Save or Clear rerun draws from the report before
   // it, and a run keeps that panel once the user edits it (#472).
-  const months = stored[s.isin];
+  const months = stored[canonicalIsin(s.isin)];
   const value = months === undefined ? "auto" : String(months);
   const option = (v: string, label: string): string =>
     `<option value="${v}"${v === value ? " selected" : ""}>${esc(label)}</option>`;
@@ -125,7 +125,7 @@ export function renderAntichurningWindowPanel(
   </details>`;
   }
   const stored = getWindowOverrides();
-  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || stored[s.isin] !== undefined);
+  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || stored[canonicalIsin(s.isin)] !== undefined);
   // A Save back to «auto» can leave no reason to open: open it anyway so
   // «Guardado» is on screen (#472).
   return `<details class="antichurning-window-panel crypto-rates-panel"${open || saved ? " open" : ""}>
@@ -194,7 +194,7 @@ export function bindAntichurningWindowPanel(container: HTMLElement, onSave: (act
     }
     const next = new Map(Object.entries(before));
     for (const select of container.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
-      const isin = (select.dataset.isin ?? "").trim().toUpperCase();
+      const isin = canonicalIsin(select.dataset.isin);
       if (!ISIN_SHAPE.test(isin)) continue;
       if (select.value === "12" || select.value === "2") next.set(isin, select.value === "12" ? 12 : 2);
       else next.delete(isin);

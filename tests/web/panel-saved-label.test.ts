@@ -1210,6 +1210,15 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     expect(shown(saved.querySelector<HTMLElement>(".antichurning-window-saved")!)).toBe(true);
   });
 
+  it("anti-churning window: a row with the ISIN in lower case shows the window stored for it (#472 review)", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    localStorage.setItem("declarenta_antichurning_windows", JSON.stringify({ [LSE_ISIN]: 2 }));
+    const html = renderAntichurningWindowPanel([{ ...security, isin: LSE_ISIN.toLowerCase(), months: 2, autoMonths: 2, source: "user", listingExchanges: ["BME"] }]);
+    expect(parse(html).querySelector<HTMLSelectElement>(".antichurning-window-select")!.value).toBe("2");
+    expect(parse(html).querySelector<HTMLDetailsElement>("details")!.open).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
   it("anti-churning window with no row: nothing, unless a Save asks for «Guardado»", () => {
     expect(renderAntichurningWindowPanel([])).toBe("");
     expect(renderAntichurningWindowPanel(undefined)).toBe("");
