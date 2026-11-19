@@ -964,8 +964,9 @@ describe("a short cover is not a transmission of held shares, and its buy is not
 
 describe("a zero-share sale is not a total exit", () => {
   // The 01/12 sale closes the position at a loss of 20 and the 10/01 buy blocks
-  // it. A 0-share SELL row on 15/12 (FIFO books it with no lots) transmits
-  // nothing, so it must not release the pending 20.
+  // it. A 0-share SELL row on 15/12 transmits nothing, so it must not release
+  // the pending 20. Since #469 FIFO books no disposal for it at all (it used to
+  // book one of 0 shares with no lots).
   const zeroSell: Trade = {
     ...trade(["2025-12-15", "SELL", 1, 8], 3, "EUR"),
     quantity: "0", tradeMoney: "0", proceeds: "0", cost: "0",
@@ -980,7 +981,7 @@ describe("a zero-share sale is not a total exit", () => {
   for (const method of METHODS) {
     it(`[${method}] 2025: 20 blocked, nothing released (fiscal 0)`, () => {
       const r = yearOf(trades, 2025, method);
-      expect(r.disposals.some((d) => d.sellDate === "2025-12-15" && d.quantity.isZero())).toBe(true);
+      expect(r.disposals.some((d) => d.sellDate === "2025-12-15")).toBe(false);
       expect(r.blocked).toBe("20.00");
       expect(r.reintegrated).toBe("0.00");
       expect(r.fiscal).toBe("0.00");

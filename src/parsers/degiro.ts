@@ -277,7 +277,8 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
     // is kept as a trade of unknown quantity (below, #453).
     const quantityUnknown = isin !== "" && quantityUnreadable(fields[cols.quantity]);
-    if (!isin || (quantity === "0" && !quantityUnknown)) {
+    // Numeric: "0.0" or "0,00" with a readable price is a 0-share row too (#469).
+    if (!isin || (toFiniteDecimal(quantity).isZero() && !quantityUnknown)) {
       // Trade-like row (carries a real quantity or price) dropped for lack of
       // ISIN / amount → suspicious (likely column drift). Plain non-trade lines
       // (deposits/sweeps with no qty and no price) are expected → not counted.

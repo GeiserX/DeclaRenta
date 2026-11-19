@@ -464,21 +464,26 @@ const es = {
   "m720.category_exceeded": "Supera 50.000 € — obligatorio declarar",
   "m720.category_not_exceeded": "Por debajo del umbral",
   "m720.category_undetermined": "No se puede determinar: {{count}} posición(es) sin valorar",
+  "m720.category_undetermined_cash": "No se puede determinar: {{count}} saldo(s) en efectivo sin valorar",
   "m720.no_positions": "Sube un informe con posiciones abiertas en Modelo 100 para analizar el Modelo 720.",
   "m720.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus posiciones ni saldos a 31 de diciembre, así que no se suman aquí. Comprueba en el extracto de fin de año de {{brokers}} si el saldo de tus cuentas o el valor de tus acciones y fondos en el extranjero supera los 50.000 €.",
   "m720.positions_title": "Posiciones declarables",
   "m720.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; el valor no es un número o tiene más de 12 cifras enteras en euros; la cantidad y el valor tienen signos contrarios; o el archivo no da ni la cantidad ni el valor (o da un 0 que ningún valor confirma). Calcula su valor en euros con el extracto de fin de año del bróker e inclúyelas a mano.",
   "m720.cash_title": "Saldos en efectivo (Cuentas)",
   "m720.q4_average": "Media Q4",
   "m720.cash_missing_average":
     "Algunos saldos no incluyen la media del cuarto trimestre, obligatoria para cuentas en el Modelo 720. Su saldo a 31 de diciembre sí cuenta para el umbral de 50.000 €, pero esas cuentas no se incluyen en el fichero generado: añádelas a mano, con su saldo medio del cuarto trimestre, antes de presentar.",
+  "m720.cash_unvalued": "No se pueden valorar en euros {{count}} saldo(s) en efectivo: {{accounts}}. El archivo no trae un saldo final legible o no hay tipo de cambio del BCE para su divisa. No cuentan como 0 €: toma el saldo en euros del extracto de fin de año del bróker. Hasta entonces no se puede saber si tus cuentas superan los 50.000 €, y esas cuentas no se incluyen en el fichero generado: decláralas a mano.",
   "m720.omitted_title":
     "Estos bienes no caben en el fichero y debes declararlos a mano en el formulario del Modelo 720:",
   "m720.omitted_no_isin":
     "no tiene ISIN; en el formulario se identifica con «Z» más el código del país del emisor",
   "m720.omitted_no_country":
     "falta el país donde está depositado o situado",
+  "m720.omitted_quantity_unknown": "el archivo no trae un número de valores válido (falta, no se lee o es un 0 junto a un valor); tómalo del extracto de fin de año del bróker",
+  "m720.omitted_quantity_below_hundredth": "su número de valores es inferior a 0,01 y el fichero solo admite dos decimales, así que escribiría 0; tómalo del extracto de fin de año del bróker",
+  "m720.omitted_quantity_too_large": "su número de valores no cabe en el campo del fichero (más de 10 cifras enteras), así que no se escribe; compruébalo en el extracto de fin de año del bróker",
   "m720.omitted_no_account":
     "falta el número de cuenta",
   "m720.omitted_invalid_code":
@@ -505,6 +510,7 @@ const es = {
   "m720.sold_help": "El fichero los incluye con origen C, con la fecha y el importe de la última venta.",
   "m720.sold_no_date": "no hay ninguna venta en {{year}} de las acciones declaradas: la baja sale sin fecha de extinción y con valoración 0; complétala antes de presentar",
   "m720.sold_no_acquisition": "los datos no incluyen su compra: la baja sale sin fecha de adquisición; complétala antes de presentar",
+  "m720.sold_value_too_large": "su valoración en la fecha de extinción no cabe en el campo del fichero (más de 12 cifras enteras): la baja sale con valoración 0; complétala antes de presentar",
   "m720.generate_btn": "Generar fichero Modelo 720",
   "m720.deadline": "Plazo: 1 enero – 31 marzo del año siguiente",
   "m720.total_value": "Valor total: {{amount}} €",
@@ -525,7 +531,8 @@ const es = {
   "d6.brokers_without_holdings": "Los datos de {{brokers}} que has subido no incluyen tus valores a 31 de diciembre, así que no aparecen aquí. Consúltalos en el extracto de fin de año de {{brokers}}.",
   "d6.positions_title": "Posiciones a declarar",
   "d6.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros o no traen un número de títulos válido, y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; falta el número de títulos, es un 0 que su valor no confirma o contradice, o tiene más de 10 cifras enteras; el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios. Inclúyelas a mano con su valor en euros y su número de títulos.",
+  "d6.quantity_unknown": "El archivo no trae un número de títulos válido para {{count}} posición(es) (falta, no se lee o es un 0 que su valor no confirma): {{holdings}}. No cuentan como 0: toma el número del extracto de fin de año del bróker y escríbelo a mano en el D-6.",
   "d6.cancellations_title": "Cancelaciones",
   "d6.generate_btn": "Generar guía D-6",
   "d6.deadline": "Plazo: 1 – 31 enero del año siguiente",
@@ -563,7 +570,8 @@ const es = {
   "m721.format_notice":
     "El formato oficial de la AEAT es XML (Orden HFP/886/2023). DeclaRenta solo muestra una revisión orientativa: la generación oficial está desactivada hasta implementar el XML validado.",
   "m721.positions_unvalued":
-    "{{count}} posición(es) no se han podido valorar en euros (sin precio de mercado o sin tipo de cambio para su moneda al cierre del ejercicio) y se han excluido del total. Calcula su valor en euros e inclúyelas manualmente.",
+    "{{count}} posición(es) no se han podido valorar en euros y se han excluido del total. El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; el valor no es un número o tiene más de 12 cifras enteras en euros; la cantidad y el valor tienen signos contrarios; o el archivo no da ni la cantidad ni el valor (o da un 0 que ningún valor confirma). Calcula su valor en euros con el extracto de fin de año del exchange o del bróker e inclúyelas a mano.",
+  "m721.quantity_unknown": "El archivo no trae un número de unidades válido para {{count}} criptomoneda(s) (falta, no se lee o es un 0 que su valor no confirma): {{coins}}. No cuentan como 0: toma las unidades del extracto de fin de año del exchange o del bróker y escríbelas a mano en el Modelo 721.",
   "m721.empty_title": "No hay posiciones de criptomonedas",
   "m721.empty_description":
     "El Modelo 721 es una declaración informativa obligatoria si posees criptomonedas en exchanges extranjeros valoradas en más de 50.000 €. Sube tu informe del broker en la sección Modelo 100 para que DeclaRenta calcule automáticamente si superas el umbral. Plazo: 1 de enero – 31 de marzo.",
@@ -828,6 +836,10 @@ const es = {
     "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.",
   "fifo.unknown_direction": '⚠ Operación con dirección desconocida ("{{buySell}}"): {{symbol}} el {{date}}. No se ha procesado.',
   "fifo.unknown_direction.hint": "Solo se procesan compras (BUY) y ventas (SELL). Revisa esta fila en el archivo del broker y, si es una operación real, corrige su dirección.",
+  "fifo.zero_quantity_buy": "⚠ Compra con cantidad 0: {{symbol}}{{isinSuffix}} el {{date}}. No se ha procesado.",
+  "fifo.zero_quantity_buy.hint": "La fila del archivo no compra ninguna unidad, así que no crea ningún lote y su comisión no se cuenta. Si en realidad compraste, revisa la cantidad de esta fila en el archivo del broker.",
+  "fifo.zero_quantity_sell": "⚠ Venta con cantidad 0: {{symbol}}{{isinSuffix}} el {{date}}. No se ha procesado.",
+  "fifo.zero_quantity_sell.hint": "La fila del archivo no vende ninguna unidad, así que no consume ningún lote y su comisión no se cuenta. Si en realidad vendiste, revisa la cantidad de esta fila en el archivo del broker.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",
@@ -1055,6 +1067,10 @@ const es = {
     "Se detectó un valor no finito (NaN/Infinito) en un total calculado; revise los archivos importados.",
   "report.non_finite_total.hint":
     "Es posible que un archivo de bróker tenga un importe corrupto o un formato numérico inesperado. Revise las operaciones de origen.",
+  "report.non_finite_disposal":
+    "{{count}} venta(s) tienen un importe que no es un número (NaN o infinito): {{rows}}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.",
+  "report.non_finite_disposal.hint":
+    "Si falta el valor de transmisión de una venta, DeclaRenta tampoco suma su valor de adquisición, para no crear una pérdida que nada justifica. Si falta el valor de adquisición, suma el de transmisión. Revisa esas operaciones en el fichero del bróker y en los tipos de cambio, y declara su resultado a mano.",
   "flatex.lagerstellenwechsel.unmatched":
     "Traspaso de custodia (Lagerstellenwechsel) sin contrapartida para {{isin}}: {{netQuantity}} títulos.",
   "flatex.lagerstellenwechsel.unmatched.hint":
@@ -1155,7 +1171,21 @@ const es = {
   "parser.cancelled_trades_unreadable": "Se omitieron {{count}} anulaciones de IBKR sin poder emparejarlas con la operación que anulan: falta una cantidad o un precio legible en la anulación o en una operación de este archivo.",
   "parser.cancelled_trades_unreadable.hint": "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
   "parser.open_position_quantity_unknown": "IBKR no da un número de acciones legible para {{count}} posición(es) abierta(s): {{holdings}}.",
-  "parser.open_position_quantity_unknown.hint": "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.open_position_quantity_unknown.hint": "DeclaRenta no inventa su número de acciones: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y si tampoco viene su valor las cuentan como sin valorar. Toma el número del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.crypto_position_quantity_unknown": "IBKR no da un número de unidades legible para {{count}} posición(es) de criptomonedas: {{holdings}}.",
+  "parser.crypto_position_quantity_unknown.hint": "DeclaRenta no inventa sus unidades: el Modelo 721 las muestra como desconocidas, y si tampoco viene su valor las cuenta como sin valorar, así que no puede concluir que no debas presentarlo. Toma las unidades del extracto de fin de año de IBKR, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+  "parser.open_position_zero_with_value": "IBKR da 0 acciones para {{count}} posición(es) abierta(s) que sí tienen un valor distinto de 0: {{holdings}}.",
+  "parser.open_position_zero_with_value.hint": "Un 0 junto a un valor no es un número de acciones, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 720 y el D-6 muestran la posición sin número de valores y te piden que lo escribas a mano, y su valor cuenta para el umbral del 720. Con un valor negativo es una posición corta (acciones que debes, no que tienes), y el 720 y el D-6 no la incluyen. Toma el número del extracto de fin de año de IBKR.",
+  "parser.crypto_position_zero_with_value": "IBKR da 0 unidades para {{count}} posición(es) de criptomonedas que sí tienen un valor distinto de 0: {{holdings}}.",
+  "parser.crypto_position_zero_with_value.hint": "Un 0 junto a un valor no es un número de unidades, así que se trata como desconocido, nunca como 0. Con un valor positivo, el Modelo 721 muestra sus unidades como desconocidas y su valor cuenta para el umbral. Con un valor negativo es una posición corta (criptomonedas que debes, no que tienes), y el 721 no la incluye. Toma las unidades del extracto de fin de año de IBKR.",
+  "parser.open_position_zero_unconfirmed": "IBKR da 0 acciones para {{count}} posición(es) abierta(s) sin un valor legible que lo confirme: {{holdings}}.",
+  "parser.open_position_zero_unconfirmed.hint": "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 720 no escribe su registro de baja (C) y el D-6 no la cancela, y ambos la muestran sin número de valores y sin valorar. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma el número de acciones y su valor; si la vendiste, declara su baja a mano.",
+  "parser.crypto_position_zero_unconfirmed": "IBKR da 0 unidades para {{count}} posición(es) de criptomonedas sin un valor legible que lo confirme: {{holdings}}.",
+  "parser.crypto_position_zero_unconfirmed.hint": "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 721 la muestra con unidades desconocidas y sin valorar, y no puede concluir que no debas presentarlo. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma sus unidades y su valor; si no, no la declares.",
+  "parser.open_position_sign_conflict": "IBKR da un número de acciones o unidades y un valor de signo contrario para {{count}} posición(es) abierta(s): {{holdings}}.",
+  "parser.open_position_sign_conflict.hint": "Una cantidad positiva con un valor negativo, o al revés, se contradice: DeclaRenta no sabe si es una posición larga o corta, así que no la valora. El Modelo 720 y el D-6 (acciones, fondos y bonos) o el Modelo 721 (criptomonedas) la cuentan como sin valorar y no pueden concluir que no debas presentarlos. Toma la cantidad y el valor del extracto de fin de año de IBKR.",
+  "parser.cash_balance_unreadable": "IBKR no da un saldo final legible para {{count}} saldo(s) en efectivo: {{accounts}}.",
+  "parser.cash_balance_unreadable.hint": "DeclaRenta no lo cuenta como 0 €: el Modelo 720 lo muestra como sin valorar y no puede concluir que no debas declarar tus cuentas. Toma el saldo del extracto de fin de año de IBKR, o comprueba que la sección Cash Report de la Flex Query incluye el saldo final (Ending Cash) y vuelve a exportarla.",
   "parser.trade_quantity_unknown": "{{broker}} no da un número de acciones o un precio legible para {{count}} operación(es): {{trades}}.",
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
   "parser.crypto_quantity_unknown": "{{broker}} no da un número de unidades o un precio legible para {{count}} operación(es) con criptomonedas: {{trades}}.",

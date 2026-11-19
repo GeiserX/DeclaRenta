@@ -61,11 +61,11 @@ describe("findMissingHoldings", () => {
     expect(findMissingHoldings([{ broker: "Binance", statement }]).m721).toEqual([]);
   });
 
-  it("names a broker whose only crypto position has no value (the 721 total skips it)", () => {
+  it("does not name a broker whose crypto position has units but no value: the 721 lists it as unvalued (#470)", () => {
     const statement = createEmptyStatement();
     statement.openPositions.push(position({ positionValue: "0" }));
     const missing = findMissingHoldings([{ broker: "Revolut", statement }]);
-    expect(missing.m721).toEqual(["Revolut"]);
+    expect(missing.m721).toEqual([]);
     // It still has a position, so 720 has something to show for it.
     expect(missing.m720).toEqual([]);
   });

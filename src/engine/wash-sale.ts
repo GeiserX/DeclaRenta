@@ -43,6 +43,7 @@ import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
 import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
+import { hasSignConflict, readPositionNumber } from "./ecb.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -172,6 +173,8 @@ export interface AccountStatement {
     symbol: string;
     assetCategory: string;
     quantity: string;
+    /** The row's value, read only for its sign (`hasSignConflict`). */
+    positionValue?: string;
     fromTrades?: boolean;
     quantityUnknown?: boolean;
   }[];
@@ -588,7 +591,15 @@ export function detectWashSales(
     group.idxs.push(idx);
   }
 
-  const isLossAt = (idx: number): boolean => result[idx]!.gainLossEur.lessThan(0);
+  // Only a finite loss can be blocked. A sale with a non-finite proceeds or
+  // cost (a corrupt rate) has no loss the report counts: `finiteDisposalAmounts`
+  // leaves that amount out, so the sale reads as a gain or as nothing. Blocking
+  // its "Infinity" would zero the year's blocked total in guardNonFiniteTotals
+  // and drop every valid blocked loss from the base (#469).
+  const isLossAt = (idx: number): boolean => {
+    const d = result[idx]!;
+    return d.proceedsEur.isFinite() && d.costBasisEur.isFinite() && d.gainLossEur.lessThan(0);
+  };
   // A short cover buys back shares sold short; it transmits no held shares, so
   // it is never a «transmisión definitiva»: it runs no definitive test, releases
   // no pending loss and cannot empty the position. Its own loss still blocks.
@@ -1464,7 +1475,11 @@ function buildEvidenceCheck(
         listedBy.set(key, ids);
       }
       ids.add(id);
-      const qty = pos.quantityUnknown ? null : readQuantity(pos.quantity);
+      // A quantity and a value of opposite signs contradict each other: the
+      // row says neither "held" nor "short", so it is unreadable, never the 0
+      // a clamp of its quantity would give (#470, the rule of the forms).
+      const conflict = hasSignConflict({ quantity: pos.quantity, positionValue: pos.positionValue ?? "", quantityUnknown: pos.quantityUnknown === true });
+      const qty = pos.quantityUnknown || conflict ? null : readQuantity(pos.quantity);
       const prev = list.get(key);
       list.set(key, prev === null || qty === null ? null : (prev ?? new Decimal(0)).plus(qty));
     }
@@ -1531,14 +1546,12 @@ function coversDaysOnce(periods: readonly [number, number][], start: number, end
   return reach >= end;
 }
 
-/** A holdings quantity, or null when it is missing or unreadable. */
+/**
+ * A holdings quantity, or null when it is missing or unreadable: the one rule
+ * every reader of an open position's fields uses (`readPositionNumber`, #470).
+ */
 function readQuantity(quantity: string): Decimal | null {
-  try {
-    const qty = new Decimal(quantity.trim());
-    return qty.isFinite() ? qty : null;
-  } catch {
-    return null;
-  }
+  return readPositionNumber(quantity);
 }
 
 /**

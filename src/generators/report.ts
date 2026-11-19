@@ -34,6 +34,7 @@ import { resolveCryptoTradeValues, lookupValuationRate, isFiatPriced } from "../
 import { buildManualRateMap } from "../engine/manual-rates.js";
 import { buildManualOpeningLotTrades, normalizeManualOpeningLot } from "../engine/manual-opening-lots.js";
 import { formatDateDmy, normalizeDate, parseDate } from "../engine/dates.js";
+import { finiteDisposalAmounts } from "./casillas.js";
 
 const DATE_RE = /\b(\d{4})-\d{2}-\d{2}\b/;
 
@@ -858,8 +859,11 @@ export function generateTaxReport(
   for (const tr of washSaleTrades) if (tr.isin && !securityNames.has(tr.isin)) securityNames.set(tr.isin, { symbol: tr.symbol, description: tr.description });
   const antichurningSecurities = listAntichurningSecurities(disposals, isinWindows, year, securityNames);
 
-  const transmissionValue = disposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
-  const acquisitionValue = disposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+  // A non-finite amount of one sale is left out alone, never the valid amounts
+  // of the rest of the year (`finiteDisposalAmounts`, the casilla boxes' rule);
+  // the sale is named below (`report.non_finite_disposal`).
+  const transmissionValue = disposals.reduce((sum, d) => sum.plus(finiteDisposalAmounts(d).proceeds), new Decimal(0));
+  const acquisitionValue = disposals.reduce((sum, d) => sum.plus(finiteDisposalAmounts(d).cost), new Decimal(0));
   // Anti-churning (Art. 33.5.f/g LIRPF), PROPORTIONAL: blocked = the portion of
   // each loss deferred now (Σ blockedLossEur); reintegrated = previously-deferred
   // losses released this year by definitive transmissions of the same security
@@ -1080,8 +1084,8 @@ export function generateTaxReport(
     fxDisposals = allFxDisposals.filter((d) => d.disposeDate.startsWith(yearStr));
     if (titulares > 1) fxDisposals = fxDisposals.map((d) => splitFxDisposal(d, titulares));
 
-    fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
-    fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
+    fxTransmissionValue = fxDisposals.reduce((sum, d) => sum.plus(finiteDisposalAmounts(d).proceeds), new Decimal(0));
+    fxAcquisitionValue = fxDisposals.reduce((sum, d) => sum.plus(finiteDisposalAmounts(d).cost), new Decimal(0));
 
     // Only show FX warnings when there are FX disposals in the target year.
     // Undated warnings (missing lots summaries) refer to events across all years —
@@ -1508,6 +1512,24 @@ export function generateTaxReport(
     fxTransmissionValue,
     fxAcquisitionValue,
   });
+  // A sale or currency disposal with a non-finite amount: the totals above left
+  // that amount out alone (`finiteDisposalAmounts`). Name each one, so the
+  // user declares its result by hand; never silent (#469 review).
+  const poisonedRows = [
+    ...disposals.filter((d) => finiteDisposalAmounts(d).excluded).map((d) => `${d.symbol || d.isin} (${formatDateDmy(d.sellDate)})`),
+    ...fxDisposals.filter((d) => finiteDisposalAmounts(d).excluded).map((d) => `${d.currency} (${formatDateDmy(d.disposeDate)})`),
+  ];
+  if (poisonedRows.length > 0) {
+    const count = String(poisonedRows.length);
+    const rows = poisonedRows.join(", ");
+    allMessages.push({
+      id: "report.non_finite_disposal",
+      severity: "error",
+      message: `${count} venta(s) tienen un importe que no es un número (NaN o infinito): ${rows}. Ese importe no se suma a las casillas. El resto de las operaciones del año sí se suman.`,
+      hint: "Si falta el valor de transmisión de una venta, DeclaRenta tampoco suma su valor de adquisición, para no crear una pérdida que nada justifica. Si falta el valor de adquisición, suma el de transmisión. Revisa esas operaciones en el fichero del bróker y en los tipos de cambio, y declara su resultado a mano.",
+      context: { count, rows },
+    });
+  }
   if (nonFiniteFields.length > 0) {
     allMessages.push({
       id: "report.non_finite_total",

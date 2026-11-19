@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal } from "./csv-utils.js";
+import { parseCsvLine, quantityUnknownTrade, quantityUnreadable, stripBom, timeOfDay, toFiniteDecimal, tradeQuantityUnknownMessages } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
@@ -140,6 +140,13 @@ function parseAmountWithSuffix(str: string): { amount: string; asset: string } {
   }
 
   return { amount: "0", asset: "" };
+}
+
+/** A blank cell or one {@link parseAmountWithSuffix} cannot read: it returns
+ *  "0" for both, so test the cell itself (#469). */
+function suffixAmountUnreadable(str: string): boolean {
+  const trimmed = str.trim();
+  return !/^[0-9.]+[A-Za-z]*$/.test(trimmed) || quantityUnreadable(parseAmountWithSuffix(trimmed).amount, false);
 }
 
 function parseFee(feeStr: string): { amount: string; asset: string } {
@@ -1169,6 +1176,24 @@ function parseBinanceCsv(lines: string[]): Statement {
 
     const key = occurrenceKey(seenKeys, [dateStr, pairStr, sideLower, ...[cols.price, cols.executed, cols.amount, cols.fee].map((c) => (fields[c] ?? "").trim())].join("|"));
 
+    // A blank or unreadable Executed is no "0" (#469): the row is a trade of
+    // unknown size, named in the warning below; on a crypto-quoted pair the coin
+    // on the other side has no price either. An explicit 0 reaches FIFO, which
+    // names it (a crypto-quoted one is skipped by emitCryptoSwap).
+    if (suffixAmountUnreadable(fields[cols.executed] ?? "")) {
+      const legs = isFiat(currency) ? [{ coin: symbol, sell: !isBuy }] : [{ coin: symbol, sell: !isBuy }, { coin: currency, sell: isBuy }];
+      for (const leg of legs) {
+        trades.push({
+          ...quantityUnknownTrade({
+            tradeID: `binance-${tradeDate}-${leg.coin}-${key}`, symbol: leg.coin, isin: "", assetCategory: "CRYPTO",
+            currency: leg.coin === symbol ? currency : symbol, tradeDate, tradeTime, buySell: leg.sell ? "SELL" : "BUY", exchange: "BINANCE",
+          }),
+          brokerSource: "Binance",
+        });
+      }
+      continue;
+    }
+
     // A crypto-quoted pair (ETHBTC, CTKBTC, SOLUSDT) is a permuta (Art. 37.1.h
     // LIRPF): the coin given up is disposed of and the coin received gets a lot.
     // Route it through the same two-leg emitter as the Transaction History path;
@@ -1232,6 +1257,7 @@ function parseBinanceCsv(lines: string[]): Statement {
       context: { count: String(count), pairs },
     });
   }
+  parserMessages.push(...tradeQuantityUnknownMessages("Binance", trades));
 
   return {
     accountId: "",

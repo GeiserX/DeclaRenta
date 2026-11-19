@@ -161,7 +161,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa en mercado spot.
 
-**Limitaciones:** Solo mercado spot. Operaciones de futuros o derivados no están soportadas. Las distribuciones y staking pueden requerir exportaciones adicionales.
+**Limitaciones:** Solo mercado spot. Operaciones de futuros o derivados no están soportadas. Las distribuciones y staking pueden requerir exportaciones adicionales. Una operación del historial spot con la columna `Executed` vacía o ilegible no suma ni resta unidades: DeclaRenta la nombra en un aviso.
 
 ### Kraken
 
@@ -174,7 +174,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa y movimientos de fondos.
 
-**Limitaciones:** Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente.
+**Limitaciones:** Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente. Una operación con la columna `vol` vacía o ilegible no suma ni resta unidades: DeclaRenta la nombra en un aviso.
 
 ### Trade Republic
 

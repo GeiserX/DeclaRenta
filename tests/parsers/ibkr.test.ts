@@ -4,7 +4,7 @@ import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { generateTaxReport } from "../../src/generators/report.js";
 import { computeCasillaBlocks } from "../../src/generators/casillas.js";
 import { generateD6Report } from "../../src/generators/d6.js";
-import { generateModelo720 } from "../../src/generators/modelo720.js";
+import { findModelo720Omissions, generateModelo720 } from "../../src/generators/modelo720.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { OpenPosition } from "../../src/types/ibkr.js";
 
@@ -246,10 +246,11 @@ describe("parseIbkrFlexXml", () => {
     ]);
   });
 
-  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it, and warns", () => {
+  it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor write it with 0 shares, and warns", () => {
     // position="" with no legacy `quantity`: the parser used to return "", and
     // new Decimal("") threw in the D-6 (review of #453). The value, 60,000 USD,
-    // is above the 720's 50,000 EUR threshold, so the 720 writes its record.
+    // is above the 720's 50,000 EUR threshold, so the 720 must declare it: by
+    // hand, since the file would write 0 in «Número de valores» (#470).
     const row = (position: string): string =>
       `<OpenPosition accountId="U1" symbol="AAPL" description="APPLE INC" conid="265598" isin="US0378331005" currency="USD" assetCategory="STK" position="${position}" markPrice="200" positionValue="60000" costBasisMoney="45000" costBasisPrice="150" fifoPnlUnrealized="15000" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
     const xml = (position: string): string =>
@@ -265,17 +266,19 @@ describe("parseIbkrFlexXml", () => {
       const parsed = parseIbkrFlexXml(xml(position));
       const positions = parsed.openPositions;
       expect([positions[0]!.quantity, positions[0]!.quantityUnknown]).toEqual(["0", true]);
-      // The D-6 leaves it out of its positions, but the broker lists it, so it
-      // is no sale: declared last year, it gets no cancellation.
+      // The D-6 leaves it out of its positions and counts it to declare by
+      // hand, but the broker lists it, so it is no sale: declared last year, it
+      // gets no cancellation.
       const d6 = generateD6Report(positions, rates, 2025, "X", "00000000T", previous);
       expect(d6.positions).toEqual([]);
+      expect(d6.unvaluedCount).toBe(1);
       expect(d6.cancelled).toEqual([]);
-      // The 720 keeps it, with its value and 0 in «Número de valores» (463-474).
+      // The 720 writes no record with 0 in «Número de valores» (463-474): it
+      // lists the holding for manual entry (#470).
       expect(() => generateModelo720(positions, rates, config)).not.toThrow();
-      const record = record720(positions);
-      expect(record?.slice(462, 474)).toBe("000000000000");
-      expect(record?.slice(431, 446)).toMatch(/[1-9]/);
-      // The D-6 leaves it out and the 720 gives it 0 shares: a warning names it.
+      expect(record720(positions)).toBeUndefined();
+      expect(findModelo720Omissions(positions, rates, config).map((o) => o.kind === "position" && o.reason)).toEqual(["quantity_unknown"]);
+      // Neither form can give its share count: a warning names it.
       const warning = parsed.parserMessages?.find((m) => m.id === "parser.open_position_quantity_unknown");
       expect(warning?.severity).toBe("warning");
       expect(warning?.context).toEqual({ count: "1", holdings: "AAPL (US0378331005)" });
@@ -286,8 +289,14 @@ describe("parseIbkrFlexXml", () => {
     expect(generateD6Report(held, rates, 2025, "X", "00000000T", previous).positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
     expect(record720(held)?.slice(462, 474)).toBe("000000001000");
     expect(readable.parserMessages?.some((m) => m.id === "parser.open_position_quantity_unknown") ?? false).toBe(false);
-    // Controls: an explicit 0, or no row at all, is no holding: cancelled.
-    expect(generateD6Report(parseIbkrFlexXml(xml("0")).openPositions, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // Controls: an explicit 0 worth 0, or no row at all, is no holding: cancelled.
+    const zero = parseIbkrFlexXml(xml("0").replace('positionValue="60000"', 'positionValue="0"')).openPositions;
+    expect(generateD6Report(zero, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // An explicit 0 next to a value of 60,000 is no share count (#470): flagged
+    // unknown like a blank one, so it is held, not cancelled.
+    const contradicted = parseIbkrFlexXml(xml("0")).openPositions;
+    expect([contradicted[0]!.quantity, contradicted[0]!.quantityUnknown]).toEqual(["0", true]);
+    expect(generateD6Report(contradicted, rates, 2025, "X", "00000000T", previous).cancelled).toEqual([]);
     expect(generateD6Report([], rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
     // Control: a short holding is no holding, whatever its quantity. With an
     // unreadable quantity the sign comes from its value, as in the 720 (C
@@ -299,8 +308,11 @@ describe("parseIbkrFlexXml", () => {
     const lines720 = (positions: OpenPosition[]): string[] =>
       generateModelo720(positions, rates, { ...config, previousYearSecurities: previousSecurities }).split("\n").filter((line) => line.startsWith("2") && line.slice(131, 143) === "US0378331005");
     expect(lines720(short).map((line) => line[422])).toEqual(["C"]);
-    // And the long one, kept by both: no D-6 cancellation, a 720 M record.
-    expect(lines720(parseIbkrFlexXml(xml("")).openPositions).map((line) => line[422])).toEqual(["M"]);
+    // And the long one, held in both: no D-6 cancellation, no 720 C record.
+    // Its M record would say 0 shares, so it is listed for manual entry (#470).
+    const longUnknown = parseIbkrFlexXml(xml("")).openPositions;
+    expect(lines720(longUnknown)).toEqual([]);
+    expect(findModelo720Omissions(longUnknown, rates, { ...config, previousYearSecurities: previousSecurities }).map((o) => o.kind === "position" && o.reason)).toEqual(["quantity_unknown"]);
   });
 
   it("should parse multiple corporate actions as array", () => {

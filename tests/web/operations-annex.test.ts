@@ -192,3 +192,16 @@ describe("renderOperationsAnnex — cells that must not wrap", () => {
     expect(html).toContain('<span class="cell-symbol" title="A&quot;B&lt;C">A&quot;B&lt;C</span>');
   });
 });
+
+describe("renderOperationsAnnex — a sale with a non-finite amount (#469 review)", () => {
+  it("leaves out only that amount: the subtotal keeps the valid sale and nothing reads NaN", () => {
+    const good = makeDisposal();
+    const poisoned = makeDisposal({ symbol: "BAD", proceedsEur: new Decimal(0), costBasisEur: new Decimal(NaN), gainLossEur: new Decimal(NaN) });
+    const html = renderOperationsAnnex(makeSummary([good, poisoned]));
+    expect(html).not.toMatch(/NaN|Infinity/);
+    const subtotal = html.slice(html.indexOf("annex-subtotal"));
+    expect(subtotal).toContain("920,00");
+    expect(subtotal).toContain("1.092,00");
+    expect(subtotal).toContain("+172,00 EUR");
+  });
+});

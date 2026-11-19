@@ -263,13 +263,15 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         multiplier: "1",
       });
 
-      // Open (buy) the destination asset
-      if (convertMatch) {
+      // Open (buy) the destination asset. Notes are US-formatted: a comma is a
+      // thousands separator ("2,000"). A destination of 0 units is no buy: it
+      // would book an empty lot whose later sale costs 0/0 (#469), so it counts
+      // as an unparsed destination.
+      const destQuantityDec = convertMatch ? toFiniteDecimal(convertMatch[1]!.replace(/,/g, "")).abs() : null;
+      if (convertMatch && destQuantityDec && !destQuantityDec.isZero()) {
         const destAsset = convertMatch[2]!;
-        // Notes are US-formatted: a comma is a thousands separator ("2,000").
-        const destQuantityDec = toFiniteDecimal(convertMatch[1]!.replace(/,/g, "")).abs();
         const subtotalDec = toFiniteDecimal(subtotal).abs();
-        const destPrice = destQuantityDec.isZero() ? "0" : subtotalDec.div(destQuantityDec).toString();
+        const destPrice = subtotalDec.div(destQuantityDec).toString();
 
         trades.push({
           tradeID: `coinbase-convert-buy-${tradeDate}-${destAsset}-${rowId}`,
@@ -298,7 +300,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
           multiplier: "1",
         });
       } else {
-        // No parseable destination in Notes: the acquired coin gets no BUY lot.
+        // No parseable destination in Notes, or one of 0 units: the acquired
+        // coin gets no BUY lot.
         convertNoDestCount++;
       }
       continue;

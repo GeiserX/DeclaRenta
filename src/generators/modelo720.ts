@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { cashAverageOf, cashEndingOf, getQ4AverageRate, hasNoMarketValue, heldCashBalances, holdsNothing, isShortPosition, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -44,7 +44,13 @@ export interface Modelo720ThresholdResult {
    * is above 0 the category cannot be called below the threshold.
    */
   values: { exceeds: boolean; total: Decimal; unvalued: number };
-  accounts: { exceeds: boolean; total: Decimal };
+  /**
+   * `unvalued`: held cash balances left out of `total` because they cannot be
+   * valued in euros (`unvaluedCashBalances`): the export gives no number for
+   * them, or their currency has no year-end rate. The balance may be large, so
+   * while it is above 0 the category cannot be called below the threshold (#470).
+   */
+  accounts: { exceeds: boolean; total: Decimal; unvalued: number };
   realEstate: { exceeds: boolean; total: Decimal };
 }
 
@@ -52,29 +58,123 @@ export interface Modelo720ThresholdResult {
 const THRESHOLD = new Decimal(50000);
 
 /**
- * A V-category holding: a long stock, fund or bond. A short position
- * (negative value) is stock the taxpayer owes, not an asset they own.
+ * The widths of the numeric fields a type-2 record writes: valoración 1 and 2
+ * (432-446, 447-461) carry 12 integer digits and 2 decimals, «Número de
+ * valores» (463-474) 10 integer digits and 2 decimals.
  */
-function isHeldSecurity(p: OpenPosition): boolean {
+const AMOUNT_INTEGER_DIGITS = 12;
+const QUANTITY_INTEGER_DIGITS = 10;
+
+/** Whether a number, rounded half up to cents as the field writes it, has at most `integerDigits` integer digits. */
+function fitsField(value: Decimal, integerDigits: number): boolean {
+  return value.abs().toDecimalPlaces(2, Decimal.ROUND_HALF_UP).lessThan(new Decimal(10).pow(integerDigits));
+}
+
+/**
+ * Whether an amount in euros fits a valoración field (up to 999,999,999,999.99).
+ * A value that does not fit is «sin valorar»: no field is ever written in
+ * exponent form or past its width (a positionValue of "1e999" is a finite
+ * number, #470). The web section uses it for the «—» it shows.
+ */
+export function fitsModelo720Amount(valueEur: Decimal): boolean {
+  return fitsField(valueEur, AMOUNT_INTEGER_DIGITS);
+}
+
+/**
+ * Whether a share count fits «Número de valores» (up to 9,999,999,999.99). A
+ * count that does not fit is left out of the 720 file (`quantity_too_large`),
+ * and the D-6 treats it as no valid share count: one rule in both forms (#470).
+ */
+export function fitsModelo720Quantity(quantity: Decimal): boolean {
+  return fitsField(quantity, QUANTITY_INTEGER_DIGITS);
+}
+
+/**
+ * The share count a D-6 (AFORIX) entry writes, or null when the holding has no
+ * valid one: the export does not give it (`quantityUnknown`), it is no number,
+ * or it does not fit the 720's «Número de valores» (`fitsModelo720Quantity`),
+ * so the two forms never disagree on a holding. It lives here, not in d6.ts,
+ * because the web D-6 table needs it while it loads the D-6 generator lazily.
+ * The guide, the JSON and the web table share it (#470).
+ */
+export function d6ShareCount(p: Pick<OpenPosition, "quantity" | "quantityUnknown">): Decimal | null {
+  if (p.quantityUnknown === true) return null;
+  const quantity = readPositionNumber(p.quantity);
+  return quantity !== null && fitsModelo720Quantity(quantity) ? quantity : null;
+}
+
+/**
+ * A V-category holding: a long stock, fund or bond. A short position
+ * (`isShortPosition`: negative value, or a negative quantity when the value
+ * cannot tell) is stock the taxpayer owes, not an asset they own. A row of 0
+ * units worth 0 holds nothing (`holdsNothing`): no record with 0 shares. The
+ * web 720 table uses this same filter.
+ */
+export function isHeldSecurity(p: OpenPosition): boolean {
   return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-    && !new Decimal(p.positionValue).isNegative();
+    && !isShortPosition(p)
+    && !holdsNothing(p);
+}
+
+/**
+ * A held security's value in euros for the 720, or null when it is «sin
+ * valorar»: no resolvable rate, no market value in the export, or a value too
+ * big for valoración 1 (`fitsModelo720Amount`). The threshold check and the
+ * file share it, so they never disagree on a holding.
+ */
+function securityValueEur(p: OpenPosition, rateMap: EcbRateMap, year: number): Decimal | null {
+  const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
+  const value = positionValueOf(p);
+  if (ecbRate === null || hasNoMarketValue(p) || value === null) return null;
+  const valueEur = value.abs().mul(ecbRate);
+  return fitsModelo720Amount(valueEur) ? valueEur : null;
+}
+
+/**
+ * The held securities (`isHeldSecurity`) the 720 cannot value in euros
+ * (`securityValueEur` is null): no resolvable rate, no market value, a value
+ * that is no number or too big for valoración 1, a quantity and a value of
+ * opposite signs, or neither a quantity nor a value. The threshold counts them
+ * (`values.unvalued`); the CLI names them (#470).
+ */
+export function unvaluedSecurities(positions: OpenPosition[], rateMap: EcbRateMap, year: number): OpenPosition[] {
+  return positions.filter((p) => isHeldSecurity(p) && securityValueEur(p, rateMap, year) === null);
 }
 
 /**
  * A cash balance in EUR. The Q4 average is null when the statement does not
- * carry it (IBKR's cash report has no such field): the 31-Dec balance still
- * counts toward the obligation, but the record cannot be written without it.
+ * carry it (IBKR's cash report has no such field) or gives no number for it:
+ * the 31-Dec balance still counts toward the obligation, but the record cannot
+ * be written without it. Undefined when the balance cannot be valued: no
+ * resolvable rate, or no number for the balance (`cashEndingOf`).
  */
 function cashValuesEur(cb: CashBalance, rateMap: EcbRateMap, year: number): { ending: Decimal; averageQ4: Decimal | null } | undefined {
   const yearEnd = `${year}-12-31`;
   const ecbRate = lookupPositionRate(rateMap, yearEnd, cb.currency);
-  // No resolvable rate → cannot value this balance in EUR; skip it (surfaced
-  // for manual review) rather than crash the threshold check / file generation.
-  if (ecbRate === null) return undefined;
-  return {
-    ending: new Decimal(cb.endingCash).mul(ecbRate),
-    averageQ4: cb.averageQ4Cash ? new Decimal(cb.averageQ4Cash).mul(ecbRate) : null,
-  };
+  const ending = cashEndingOf(cb);
+  // No resolvable rate or no number → cannot value this balance in EUR: the
+  // threshold counts it unvalued and the callers name it (`unvaluedCashBalances`),
+  // rather than crash the threshold check / file generation.
+  if (ecbRate === null || ending === null) return undefined;
+  const average = cashAverageOf(cb);
+  const endingEur = ending.mul(ecbRate);
+  const averageEur = average === null ? null : average.mul(ecbRate);
+  // A balance or an average too big for its valoración is unknown too: never
+  // written in exponent form or past the field (#470).
+  if (!fitsModelo720Amount(endingEur) || (averageEur !== null && !fitsModelo720Amount(averageEur))) return undefined;
+  return { ending: endingEur, averageQ4: averageEur };
+}
+
+/**
+ * The held cash balances (`heldCashBalances`) the 720 cannot value in euros:
+ * the export gives no number for the balance, its currency has no year-end
+ * rate (IBKR's CNH, or a rate the ECB fetch did not return), or the balance or
+ * its Q4 average is too big for its valoración (`fitsModelo720Amount`). Each is unknown,
+ * never 0 € and never dropped: the accounts category counts it unvalued, and
+ * the web section and the CLI name its account and currency (#470).
+ */
+export function unvaluedCashBalances(cashBalances: CashBalance[] | undefined, rateMap: EcbRateMap, year: number): CashBalance[] {
+  return heldCashBalances(cashBalances).filter((cb) => cashValuesEur(cb, rateMap, year) === undefined);
 }
 
 /**
@@ -86,13 +186,18 @@ function cashCategoryTotals(
   cashBalances: CashBalance[] | undefined,
   rateMap: EcbRateMap,
   year: number,
-): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean } {
+): { endingTotal: Decimal; averageTotal: Decimal; exceeds: boolean; unvalued: number } {
   let endingTotal = new Decimal(0);
   let averageTotal = new Decimal(0);
-  for (const cb of cashBalances ?? []) {
-    if (!new Decimal(cb.endingCash).greaterThan(0)) continue;
+  let unvalued = 0;
+  for (const cb of heldCashBalances(cashBalances)) {
     const values = cashValuesEur(cb, rateMap, year);
-    if (!values) continue;
+    // A held balance with no number or no rate: unknown, never 0 € and never
+    // dropped; counted so the verdict says it cannot tell (#470).
+    if (!values) {
+      unvalued++;
+      continue;
+    }
     endingTotal = endingTotal.plus(values.ending);
     if (values.averageQ4) averageTotal = averageTotal.plus(values.averageQ4);
   }
@@ -100,6 +205,7 @@ function cashCategoryTotals(
     endingTotal,
     averageTotal,
     exceeds: endingTotal.greaterThan(THRESHOLD) || averageTotal.greaterThan(THRESHOLD),
+    unvalued,
   };
 }
 
@@ -130,14 +236,15 @@ export function checkModelo720Thresholds(
   let valuesTotal = new Decimal(0);
   let unvalued = 0;
   for (const p of positions.filter(isHeldSecurity)) {
-    const ecbRate = getValuationRate(rateMap, year, p.currency, p.assetCategory);
-    // Unvaluable position (no resolvable rate, or no market value in the
-    // export): excluded from the EUR total and counted, never added as 0 €.
-    if (ecbRate === null || hasNoMarketValue(p)) {
+    // Unvaluable position (no resolvable rate, no market value in the export,
+    // or a value too big for the file): excluded from the EUR total and
+    // counted, never added as 0 €.
+    const valueEur = securityValueEur(p, rateMap, year);
+    if (valueEur === null) {
       unvalued++;
       continue;
     }
-    valuesTotal = valuesTotal.plus(new Decimal(p.positionValue).abs().mul(ecbRate));
+    valuesTotal = valuesTotal.plus(valueEur);
   }
 
   const cash = cashCategoryTotals(cashBalances, rateMap, year);
@@ -146,7 +253,7 @@ export function checkModelo720Thresholds(
 
   return {
     values: { exceeds: valuesTotal.greaterThan(THRESHOLD), total: valuesTotal, unvalued },
-    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal) },
+    accounts: { exceeds: cash.exceeds, total: Decimal.max(cash.endingTotal, cash.averageTotal), unvalued: cash.unvalued },
     realEstate: { exceeds: realEstateTotal.greaterThan(THRESHOLD), total: realEstateTotal },
   };
 }
@@ -179,20 +286,40 @@ export interface Previous720Security {
  * Something the 720 file cannot carry, so the user must declare it by hand:
  * a security with no ISIN (the BOE then wants "Z" + the issuer's country, which
  * no broker export gives us), a security or account whose country is unknown,
- * an account with no account code, or a sale of a security whose clave,
+ * a security whose share count the export does not give (`quantityUnknown`: the
+ * record would write 0 in «Número de valores», #470) or is below 0.005, which
+ * that field's two decimals round to 0 (`quantity_below_hundredth`) or too big
+ * for its 10 integer digits (`quantity_too_large`), an account with no
+ * account code, or a sale of a security whose clave,
  * subclave or country in last year's file is not a valid code (a file written
  * by an older version, which left 103 blank and wrote the ISIN prefix at 129-130)
  * and that this year's sale trade cannot correct.
  */
 export type Modelo720Omission =
-  | { kind: "position"; reason: "no_isin" | "no_country"; position: OpenPosition }
+  | { kind: "position"; reason: "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | "quantity_too_large"; position: OpenPosition }
   | { kind: "cash"; reason: "no_country" | "no_account"; cashBalance: CashBalance }
   | { kind: "cancelled"; reason: "invalid_code"; security: Previous720Security };
 
-function positionOmission(p: OpenPosition): "no_isin" | "no_country" | null {
+function positionOmission(p: OpenPosition): "no_isin" | "no_country" | "quantity_unknown" | "quantity_below_hundredth" | "quantity_too_large" | null {
   if (p.isin.trim() === "") return "no_isin";
   if (modelo720PositionCountry(p) === null) return "no_country";
+  if (p.quantityUnknown === true) return "quantity_unknown";
+  const quantity = readPositionNumber(p.quantity);
+  if (quantity !== null && writesZeroUnits(quantity)) return "quantity_below_hundredth";
+  // More units than «Número de valores» holds (10 integer digits): never
+  // written in exponent form or past the field (#470).
+  if (quantity !== null && !fitsModelo720Quantity(quantity)) return "quantity_too_large";
   return null;
+}
+
+/**
+ * Whether «Número de valores» (463-474, two decimals, rounded half up) would
+ * read 0 for this many units: fewer than 0.005, such as an IBKR fractional
+ * remainder of 0.0034 shares. The 720 never writes a held security with 0
+ * units (#470).
+ */
+function writesZeroUnits(quantity: Decimal): boolean {
+  return quantity.abs().toDecimalPlaces(2, Decimal.ROUND_HALF_UP).isZero();
 }
 
 /** 144 + 156-189: "I" and the compact IBAN, or "O" and the broker's own account number. */
@@ -352,7 +479,8 @@ export function checkModelo720SuccessiveYear(
   // Only which ISINs were sold matters here, so no disposals are needed.
   const sold = findCancelledSecurities(positions, previous.securities, year, undefined);
   const heldAccounts = new Set(
-    (cashBalances ?? []).filter((cb) => new Decimal(cb.endingCash).greaterThan(0)).map((cb) => accountCode(cb).code),
+    // An unknown balance may be positive: the account is held, not missing.
+    heldCashBalances(cashBalances).map((cb) => accountCode(cb).code),
   );
   const missingAccounts = [...new Set(previous.accounts)].filter((code) => !heldAccounts.has(code));
 
@@ -427,13 +555,12 @@ function plan720(
   const entries = positions
     .filter(isHeldSecurity)
     .flatMap((p) => {
-      const ecbRate = getValuationRate(rateMap, config.year, p.currency, p.assetCategory);
-      // Unvaluable position (no resolvable rate, or no market value in the
-      // export): cannot be written to the fixed-width record without an EUR
-      // value — skip it. The caller surfaces a warning so the user values and
-      // declares it manually.
-      if (ecbRate === null || hasNoMarketValue(p)) return [];
-      const valueEur = new Decimal(p.positionValue).abs().mul(ecbRate);
+      // Unvaluable position (no resolvable rate, no market value in the
+      // export, or a value too big for valoración 1): cannot be written to the
+      // fixed-width record without an EUR value — skip it. The caller surfaces
+      // a warning so the user values and declares it manually.
+      const valueEur = securityValueEur(p, rateMap, config.year);
+      if (valueEur === null) return [];
 
       // One record per acquisition date of the lots held at year end
       const tranches = acquisitionTranches(new Decimal(p.quantity).abs(), valueEur, remainingLots?.get(p.isin));
@@ -449,10 +576,16 @@ function plan720(
   // and valued by the last sale of declared shares. Without such a sale the
   // record keeps a blank date and a zero value (see findUndatedExtinctions).
   const cancelled = findCancelledSecurities(positions, config.previousYearSecurities, config.year, disposals);
+  // A tranche value too big for valoración 1 is written as 0, as an undated
+  // extinction is, and findUndatedExtinctions names it to complete (#470).
   const cancelledEntries = cancelled.filter(isRepeatable).flatMap((security) => {
     const tranches = extinctionTranches(security.isin, config.year, disposals);
     return tranches.length > 0
-      ? tranches.map((t) => ({ security: recordOfTranche(security, t.acquireDate, config.previousYearSecurities), ...t }))
+      ? tranches.map((t) => ({
+        security: recordOfTranche(security, t.acquireDate, config.previousYearSecurities),
+        ...t,
+        valueEur: fitsModelo720Amount(t.valueEur) ? t.valueEur : new Decimal(0),
+      }))
       : [{ security, acquireDate: "", sellDate: "", valueEur: new Decimal(0) }];
   });
 
@@ -461,8 +594,9 @@ function plan720(
   // average and the tool never invents it (the web section asks the user to
   // add that account by hand).
   const previousAccounts = new Set(config.previousYearAccounts ?? []);
-  const cashEntries = (cashBalances ?? [])
-    .filter((cb) => new Decimal(cb.endingCash).greaterThan(0))
+  // A balance with no number or no rate cannot be written either: the
+  // threshold counts it unvalued and the caller warns, naming the account (#470).
+  const cashEntries = heldCashBalances(cashBalances)
     .flatMap((cb) => {
       const values = cashValuesEur(cb, rateMap, config.year);
       return values?.averageQ4
@@ -588,6 +722,19 @@ function acquisitionTranches(
   if (left.greaterThan(0) || byDate.size === 0) byDate.set("", (byDate.get("") ?? new Decimal(0)).plus(left));
 
   const dates = [...byDate.keys()].sort();
+  // A tranche of fewer than 0.005 units would write 0 in «Número de valores»
+  // (`writesZeroUnits`): merge it into the next tranche by date (the one
+  // before, for the last). Those units then carry that tranche's date, a
+  // difference below what the field's two decimals can show; the units and
+  // the value still add up (#470).
+  for (;;) {
+    const tiny = dates.length > 1 ? dates.findIndex((date) => writesZeroUnits(byDate.get(date)!)) : -1;
+    if (tiny === -1) break;
+    const into = dates[tiny === dates.length - 1 ? tiny - 1 : tiny + 1]!;
+    byDate.set(into, byDate.get(into)!.plus(byDate.get(dates[tiny]!)!));
+    byDate.delete(dates[tiny]!);
+    dates.splice(tiny, 1);
+  }
   let written = new Decimal(0);
   return dates.map((date, i) => {
     const trancheQuantity = byDate.get(date)!;
@@ -708,10 +855,10 @@ function extinctionTranches(
   }));
 }
 
-/** An extinction record with a field the file leaves blank (see findUndatedExtinctions). */
+/** An extinction record with a field the file leaves blank or at 0 (see findUndatedExtinctions). */
 export interface UndatedExtinction {
   isin: string;
-  missing: "extinctionDate" | "acquisitionDate";
+  missing: "extinctionDate" | "acquisitionDate" | "value";
 }
 
 /**
@@ -723,6 +870,8 @@ export interface UndatedExtinction {
  *   never an invented 31 December.
  * - `acquisitionDate`: the extinction is dated by a sale the upload holds no
  *   lot for (no history), so its acquisition date (415-422) is blank.
+ * - `value`: the value at the extinction date is too big for valoración 1
+ *   (`fitsModelo720Amount`), so the record writes 0 there (#470).
  */
 export function findUndatedExtinctions(
   positions: OpenPosition[],
@@ -734,7 +883,8 @@ export function findUndatedExtinctions(
   return written.map((s) => s.isin).flatMap((isin): UndatedExtinction[] => {
     const tranches = extinctionTranches(isin, config.year, disposals);
     if (tranches.length === 0) return [{ isin, missing: "extinctionDate" }];
-    return tranches.some((t) => t.acquireDate === "") ? [{ isin, missing: "acquisitionDate" }] : [];
+    if (tranches.some((t) => t.acquireDate === "")) return [{ isin, missing: "acquisitionDate" }];
+    return tranches.some((t) => !fitsModelo720Amount(t.valueEur)) ? [{ isin, missing: "value" }] : [];
   });
 }
 
@@ -813,12 +963,17 @@ function numPad(value: string, intLen: number, decLen: number): string {
   // AEAT receives rounded values (not truncated) and any rounding that bumps
   // the integer part (e.g. 1.999 → 2.00) is reflected in the integer field.
   const dec = new Decimal(value).abs().toDecimalPlaces(decLen, Decimal.ROUND_HALF_UP);
-  const intDigits = dec.floor().toString();
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("8.5e+998"), which is shorter than the field and passed this check (#470).
+  const intDigits = dec.floor().toFixed(0);
   if (intDigits.length > intLen) {
     // A rounding carry (or an oversized input) pushed the integer part past the
     // fixed field width. Padding would silently shift every following byte and
-    // corrupt the 500-byte record — fail fast instead.
-    throw new Error(`Modelo 720: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
+    // corrupt the 500-byte record — fail fast instead. The callers keep every
+    // value a detail record writes inside its field (`fitsModelo720Amount`,
+    // `quantity_too_large`), so only the type-1 sums of more than a thousand
+    // records near the 12-digit maximum can still reach this.
+    throw new Error(`Modelo 720: importe ${dec.toFixed()} excede el campo de ${intLen} dígitos enteros`);
   }
   const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).round().toString().padStart(decLen, "0");

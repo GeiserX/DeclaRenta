@@ -12,6 +12,7 @@ import { esc } from "./esc.js";
 import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
+import { finiteDisposalAmounts } from "../generators/casillas.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -22,6 +23,11 @@ const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
 function optionScenarioLabel(scenario: string): string {
   const key = OPTION_SCENARIO_LABELS[scenario];
   return key ? t(key) : scenario;
+}
+
+/** An amount cell: «—» for a non-finite amount, which the boxes leave out (never "NaN"). */
+function amountCell(amount: Decimal): string {
+  return amount.isFinite() ? fmtEur(amount) : "—";
 }
 
 export function renderOperationsAnnex(report: TaxSummary): string {
@@ -52,10 +58,13 @@ export function renderOperationsAnnex(report: TaxSummary): string {
 
   for (const [cat, ops] of groups) {
     const label = assetLabel(cat);
-    const subtotalProceeds = ops.reduce((s, d) => s.plus(d.proceedsEur), new Decimal(0));
-    const subtotalCost = ops.reduce((s, d) => s.plus(d.costBasisEur), new Decimal(0));
+    // The boxes' rule: a non-finite amount of one sale is left out alone, so
+    // the subtotal never reads NaN and matches the casillas (#469 review).
+    const amounts = ops.map(finiteDisposalAmounts);
+    const subtotalProceeds = amounts.reduce((s, a) => s.plus(a.proceeds), new Decimal(0));
+    const subtotalCost = amounts.reduce((s, a) => s.plus(a.cost), new Decimal(0));
     // Rounded to the shown cents, so a subtotal of -0,004 € is not classed as a loss.
-    const subtotalGL = ops.reduce((s, d) => s.plus(d.gainLossEur), new Decimal(0)).toDecimalPlaces(2);
+    const subtotalGL = amounts.reduce((s, a) => s.plus(a.gainLoss), new Decimal(0)).toDecimalPlaces(2);
     const glClass = subtotalGL.greaterThanOrEqualTo(0) ? "gain" : "loss";
 
     // Collapsed by default: the per-operation tables can be hundreds of rows
@@ -104,9 +113,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
-              <td class="num">${fmtEur(d.costBasisEur)}</td>
-              <td class="num">${fmtEur(d.proceedsEur)}</td>
-              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(d.gainLossEur)}</td>
+              <td class="num">${amountCell(d.costBasisEur)}</td>
+              <td class="num">${amountCell(d.proceedsEur)}</td>
+              <td class="num ${cls}">${d.gainLossEur.greaterThanOrEqualTo(0) ? "+" : ""}${amountCell(d.gainLossEur)}</td>
             </tr>${renderWashSaleDetailRow(d, columnCount)}`;
     });
 
