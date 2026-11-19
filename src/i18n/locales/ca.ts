@@ -735,6 +735,8 @@ const ca: TranslationKeys = {
   "crypto_rates.saved": "Desat",
   "crypto_rates.save_error":
     "El navegador no ha deixat desar els preus: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "crypto_rates.clear_error":
+    "El navegador no ha deixat esborrar els preus desats: el seu emmagatzematge pot estar bloquejat. L'informe no ha canviat.",
   "crypto_rates.row_invalid":
     "Revisa els preus marcats: escriu un preu més gran que zero (p. ex. 1.234,56). Per treure els preus desats, fes servir «Esborra els preus desats». No s'ha desat res.",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
@@ -768,6 +770,8 @@ const ca: TranslationKeys = {
   "opening_lots.saved": "Desat",
   "opening_lots.save_error":
     "El navegador no ha deixat desar els lots: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "opening_lots.clear_error":
+    "El navegador no ha deixat esborrar els lots desats: el seu emmagatzematge pot estar bloquejat. L'informe no ha canviat.",
   "opening_lots.row_invalid":
     "Revisa les files marcades: indica la data de compra i una quantitat i un preu més grans que zero (p. ex. 1.234,56). No s'ha desat res.",
   "opening_lots.recalculate_hint": "Els lots manuals es desen al teu navegador i l'informe es recalcula.",

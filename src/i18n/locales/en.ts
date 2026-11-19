@@ -733,6 +733,8 @@ const en: TranslationKeys = {
   "crypto_rates.saved": "Saved",
   "crypto_rates.save_error":
     "The browser did not let DeclaRenta save the prices: its storage may be full or blocked. The report has not changed.",
+  "crypto_rates.clear_error":
+    "The browser did not let DeclaRenta clear the saved prices: its storage may be blocked. The report has not changed.",
   "crypto_rates.row_invalid":
     "Check the highlighted prices: enter a price above zero (e.g. 1,234.56). To remove the saved prices, use «Clear saved prices». Nothing was saved.",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
@@ -766,6 +768,8 @@ const en: TranslationKeys = {
   "opening_lots.saved": "Saved",
   "opening_lots.save_error":
     "The browser did not let DeclaRenta save the lots: its storage may be full or blocked. The report has not changed.",
+  "opening_lots.clear_error":
+    "The browser did not let DeclaRenta clear the saved lots: its storage may be blocked. The report has not changed.",
   "opening_lots.row_invalid":
     "Check the highlighted rows: enter the purchase date and a quantity and price above zero (e.g. 1,234.56). Nothing was saved.",
   "opening_lots.recalculate_hint": "Manual lots are saved in your browser and the report is recalculated.",

@@ -106,25 +106,32 @@ export function getManualRates(): EcbRateMap {
   return buildManualRateMap(readStored());
 }
 
-/** Remove every saved manual crypto price, so the next run values nothing by hand. */
-export function clearManualRates(): void {
+/**
+ * Remove every saved manual crypto price, so the next run values nothing by
+ * hand. Returns false when the browser refuses (storage blocked): the prices
+ * are still saved and still value the swaps (#472 review).
+ */
+export function clearManualRates(): boolean {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    return false;
   }
+  return true;
 }
 
 export function getManualOpeningLots(): ManualOpeningLot[] {
   return readStoredOpeningLots();
 }
 
-export function clearManualOpeningLots(): void {
+/** Remove every saved opening lot. Returns false when the browser refuses (storage blocked, #472 review). */
+export function clearManualOpeningLots(): boolean {
   try {
     localStorage.removeItem(OPENING_LOTS_STORAGE_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    return false;
   }
+  return true;
 }
 
 /**
@@ -532,11 +539,28 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
  * write, then invokes `onSave("save")` (which re-runs the report so the new
  * rates take effect). A price it cannot read, or a saved price left empty,
  * flags its row and saves nothing (#472 review). On clear: drops every saved price and calls
- * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472).
+ * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472). A Clear
+ * the browser refuses says so and does not rerun; a good one empties every
+ * price on screen, because a panel the user edits while the rerun waits stays
+ * on screen and its next Save must not write the cleared prices back (#472 review).
  */
 export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   container.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")?.addEventListener("click", () => {
-    clearManualRates();
+    const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
+    const errorMsg = container.querySelector<HTMLElement>(".crypto-rates-error-msg");
+    if (msg) msg.hidden = true;
+    if (!clearManualRates()) {
+      if (errorMsg) {
+        errorMsg.hidden = false;
+        errorMsg.textContent = tr("crypto_rates.clear_error");
+      }
+      return;
+    }
+    if (errorMsg) errorMsg.hidden = true;
+    container.querySelectorAll<HTMLInputElement>(".crypto-rate-input").forEach((input) => {
+      input.value = "";
+      input.removeAttribute("aria-invalid");
+    });
     onSave("clear");
   });
 
@@ -634,10 +658,27 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (acti
     }
   });
 
+  // A Clear the browser refuses says so and does not rerun. A good one empties
+  // every row on screen: a panel the user edits while the rerun waits stays on
+  // screen, and its next Save must not write the cleared lots back (#472 review).
   const clearBtn = container.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn");
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-      clearManualOpeningLots();
+      const msg = container.querySelector<HTMLElement>(".manual-opening-lots-saved-msg");
+      const errorMsg = container.querySelector<HTMLElement>(".manual-opening-lots-error-msg");
+      if (msg) msg.hidden = true;
+      if (!clearManualOpeningLots()) {
+        if (errorMsg) {
+          errorMsg.hidden = false;
+          errorMsg.textContent = tr("opening_lots.clear_error");
+        }
+        return;
+      }
+      if (errorMsg) errorMsg.hidden = true;
+      container.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
+        input.value = "";
+        input.removeAttribute("aria-invalid");
+      });
       onSave("clear");
     });
   }

@@ -96,6 +96,7 @@ async function openResults(): Promise<void> {
 }
 
 let refuseWrites = false;
+let refuseRemoves = false;
 function memoryStorage(): Storage {
   const store = new Map<string, string>();
   return {
@@ -105,6 +106,7 @@ function memoryStorage(): Storage {
       store.set(key, val);
     },
     removeItem: (key: string) => {
+      if (refuseRemoves) throw new Error("SecurityError");
       store.delete(key);
     },
     clear: () => {
@@ -153,6 +155,7 @@ const redrawn = (panel: () => HTMLElement | null, old: HTMLElement, what: string
 /** Load the real app on the results step; `seed` writes to storage first. */
 async function startApp(seed: () => void = () => {}): Promise<void> {
   refuseWrites = false;
+  refuseRemoves = false;
   vi.resetModules();
   vi.stubGlobal("localStorage", memoryStorage());
   seed();
@@ -777,6 +780,121 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     await new Promise((r) => setTimeout(r, 100));
     expect(cryptoPanel()).not.toBe(crypto);
     expect(cryptoLabel().hidden).toBe(true);
+  });
+});
+
+describe("Clear in each panel (#472 review)", () => {
+  const ETH = { currency: "ETH", date: "2020-01-02", eurPerUnit: "5" };
+  const LOT = { symbol: "ACME", description: "ACME CORP", isin: "XX0000000001", assetCategory: "STK", currency: "EUR", acquireDate: `${YEAR}-01-15`, quantity: "10", pricePerShare: "100" };
+  beforeEach(async () => {
+    await startApp(() => {
+      localStorage.setItem("declarenta_manual_rates", JSON.stringify([ETH]));
+      localStorage.setItem("declarenta_manual_opening_lots", JSON.stringify([LOT]));
+      localStorage.setItem("declarenta_antichurning_windows", JSON.stringify({ [LSE_ISIN]: 2 }));
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const ethInput = (p: HTMLElement) => [...p.querySelectorAll<HTMLInputElement>(".crypto-rate-input")].find((i) => i.dataset.currency === "ETH")!;
+  const solInput = (p: HTMLElement) => [...p.querySelectorAll<HTMLInputElement>(".crypto-rate-input")].find((i) => i.dataset.currency !== "ETH")!;
+  const runLands = async (strip: Element | null) => {
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after Clear");
+    await new Promise((r) => setTimeout(r, 50));
+  };
+
+  // A Clear the browser refuses: the saved values stay in use, so the panel
+  // says so and nothing reruns.
+  it("crypto prices: a refused Clear shows the error and does not rerun", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    refuseRemoves = true;
+    before.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).toBe(before);
+    const error = before.querySelector<HTMLElement>(".crypto-rates-error-msg")!;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toMatch(/borrar los precios|clear the saved prices/);
+    expect(cryptoLabel().hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)).toEqual([ETH]);
+    // The browser lets the retry through: the error goes and the run redraws the panel.
+    refuseRemoves = false;
+    before.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+    expect(error.hidden).toBe(true);
+    await redrawn(cryptoPanel, before, "rerun after Clear");
+    expect(localStorage.getItem("declarenta_manual_rates")).toBeNull();
+  });
+
+  it("opening lots: a refused Clear shows the error and does not rerun", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    refuseRemoves = true;
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(lotsPanel()).toBe(before);
+    const error = before.querySelector<HTMLElement>(".manual-opening-lots-error-msg")!;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toMatch(/borrar los lotes|clear the saved lots/);
+    expect(lotsLabel().hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_opening_lots")!)).toEqual([LOT]);
+    refuseRemoves = false;
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
+    expect(error.hidden).toBe(true);
+    await redrawn(lotsPanel, before, "rerun after Clear");
+    expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
+  });
+
+  // A Clear, then an edit in the same panel while its rerun waits: the run
+  // keeps the edited panel, so the panel must show what is stored now, or its
+  // next Save writes the cleared values back.
+  it("anti-churning window: Clear, then an edit of another row while the rerun waits: the next Save does not restore the cleared window", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    expect(windowSelect(before).value).toBe("2");
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+    expect(windowSelect(before).value).toBe("auto");
+    const second = before.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE2_ISIN}']`)!;
+    second.value = "12";
+    second.dispatchEvent(new Event("change", { bubbles: true }));
+    await runLands(strip);
+    expect(windowPanel()).toBe(before);
+    expect(windowSelect(before).value).toBe("auto");
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE2_ISIN]: 12 });
+  });
+
+  it("anti-churning window: a refused Clear leaves the selects as they were", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    refuseRemoves = true;
+    before.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+    expect(windowSelect(before).value).toBe("2");
+    expect(before.querySelector<HTMLElement>(".antichurning-window-error")!.hidden).toBe(false);
+  });
+
+  it("crypto prices: Clear, then a typed price while the rerun waits: the next Save does not restore the cleared price", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    expect(ethInput(before).value).toBe("5");
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")!.click();
+    expect(ethInput(before).value).toBe("");
+    solInput(before).value = "30000";
+    solInput(before).dispatchEvent(new Event("input", { bubbles: true }));
+    await runLands(strip);
+    expect(cryptoPanel()).toBe(before);
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    expect((JSON.parse(localStorage.getItem("declarenta_manual_rates")!) as { currency: string }[]).map((e) => e.currency)).toEqual(["SOL"]);
+  });
+
+  it("opening lots: Clear, then an added row while the rerun waits: the next Save does not restore the cleared lot", async () => {
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    expect(before.querySelector<HTMLInputElement>("[data-field='quantity']")!.value).toBe("10");
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-clear-btn")!.click();
+    before.querySelector<HTMLButtonElement>(".manual-opening-lot-add")!.click();
+    await runLands(strip);
+    expect(lotsPanel()).toBe(before);
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
   });
 });
 

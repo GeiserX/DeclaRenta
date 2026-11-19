@@ -143,10 +143,13 @@ export function renderAntichurningWindowPanel(
 
 /**
  * Save writes every row's choice in one write and reruns the report; Clear
- * removes every saved window and reruns. When the browser refuses the read or the write,
- * the panel says so, keeps the old settings and does not rerun. `onSave` gets
+ * removes every saved window, sets every select back to automatic and reruns.
+ * When the browser refuses the read or the write, the panel says so, keeps the
+ * old settings and the selects as they were, and does not rerun. `onSave` gets
  * "save" or "clear", so the caller shows «Guardado» in the redrawn panel only
- * after a Save (#472).
+ * after a Save (#472). The selects go back to automatic because a panel the
+ * user edits while the Clear rerun waits stays on screen, and its next Save
+ * must not write the cleared windows back (#472 review).
  */
 export function bindAntichurningWindowPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   const saved = container.querySelector<HTMLElement>(".antichurning-window-saved");
@@ -163,6 +166,9 @@ export function bindAntichurningWindowPanel(container: HTMLElement, onSave: (act
       show("antichurning_window.clear_error");
       return;
     }
+    for (const select of container.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) select.value = "auto";
+    if (saved) saved.hidden = true;
+    if (error) error.hidden = true;
     onSave("clear");
   });
   container.querySelector<HTMLButtonElement>(".antichurning-window-save")?.addEventListener("click", () => {
