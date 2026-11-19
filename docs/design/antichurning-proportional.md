@@ -446,9 +446,11 @@ práctico Renta 2025. The decisions, each pinned in
        marks a missing or non-numeric one `quantityUnknown` instead of reading
        its "0" default (the quantity stays "0" so the D-6 and the 720 do not
        crash). The two forms then differ: the D-6 leaves such a holding out of
-       its positions list (it has no share count), though it never lists it as
-       a cancellation (the broker still lists it, so it was not sold); the
-       Modelo 720 keeps it with its value and 0 in «Número de valores».
+       its positions list (it has no share count), though it never lists a long
+       one as a cancellation (the broker still lists it, so it was not sold);
+       the Modelo 720 keeps it with its value and 0 in «Número de valores». A
+       short one (negative value) is no holding, so both cancel it: without a
+       share count the D-6 reads the sign from the value, as the 720 does.
        `parser.open_position_quantity_unknown` names those holdings so the user
        checks both forms by hand. A list with no row of the key says zero, but only when
        every share row (not the exempt categories, not crypto) of every list in

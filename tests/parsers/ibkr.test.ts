@@ -289,6 +289,18 @@ describe("parseIbkrFlexXml", () => {
     // Controls: an explicit 0, or no row at all, is no holding: cancelled.
     expect(generateD6Report(parseIbkrFlexXml(xml("0")).openPositions, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
     expect(generateD6Report([], rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // Control: a short holding is no holding, whatever its quantity. With an
+    // unreadable quantity the sign comes from its value, as in the 720 (C
+    // record in «Origen del bien», byte 423): both cancel it.
+    const short = parseIbkrFlexXml(xml("").replace('positionValue="60000"', 'positionValue="-60000"').replace('side="Long"', 'side="Short"')).openPositions;
+    expect([short[0]!.quantityUnknown, short[0]!.positionValue]).toEqual([true, "-60000"]);
+    expect(generateD6Report(short, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    const previousSecurities = [{ isin: "US0378331005", claveSubclave: "V1", country: "US", acquireDate: "20230101" }];
+    const lines720 = (positions: OpenPosition[]): string[] =>
+      generateModelo720(positions, rates, { ...config, previousYearSecurities: previousSecurities }).split("\n").filter((line) => line.startsWith("2") && line.slice(131, 143) === "US0378331005");
+    expect(lines720(short).map((line) => line[422])).toEqual(["C"]);
+    // And the long one, kept by both: no D-6 cancellation, a 720 M record.
+    expect(lines720(parseIbkrFlexXml(xml("")).openPositions).map((line) => line[422])).toEqual(["M"]);
   });
 
   it("should parse multiple corporate actions as array", () => {
