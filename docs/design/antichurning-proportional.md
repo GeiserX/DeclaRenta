@@ -566,11 +566,19 @@ práctico Renta 2025. The decisions, each pinned in
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468). In
-      `corporate_actions`, a split, consolidation or merger that names a
-      ticker or an ISIN is a corporate-action row (the JSON gives no share
-      count; it was skipped with no word). A corporate action with no
-      readable `type_id` cannot be told from a dividend or a split: it is
-      skipped and counted by `freedom24.row_skipped_malformed`.
+      `corporate_actions`, every row that is not a dividend or a coupon is
+      a corporate-action row: a split, a consolidation, a merger, a
+      conversion, bonus shares, a maturity, a redemption or any type we do
+      not know. The JSON gives no share count, and these rows were skipped
+      with no word. A row with no ticker and no ISIN is kept too, so every
+      security is "unverified". The not-applied hint says that a row that
+      paid money (a maturity, a redemption) is a sale missing from the
+      report. A dividend whose `amount` is missing, empty, text or not
+      finite is not booked. The engine threw on it and the whole report
+      failed. `freedom24.dividend_amount_unreadable` names it with its cell,
+      or `parser.cash_row_unidentified` with no security. A corporate
+      action with no readable `type_id` cannot be told from a dividend or a
+      split: it is skipped and counted by `freedom24.row_skipped_malformed`.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
@@ -616,7 +624,12 @@ práctico Renta 2025. The decisions, each pinned in
       conversion or trade, so it books nothing and is no trade.
       `binance.unparseable_timestamp` names each row by coin, operation,
       change and the date cell. `binance.unparseable_amount` does the same
-      for a row whose `Change` is no number. Both hints say that the coin's
+      for a row whose `Change` is no number, empty, `NaN` or `Infinity`.
+      An undated row with no readable `Change` is named in the first
+      warning with both cells. `binance.unparseable_coin` names a row with
+      no `Coin` that moves a non-zero amount. A `--` or zero `Change`, and
+      a row with neither a coin nor an amount, move nothing and stay
+      skipped. The hints say that the coin's
       gains, losses and income, and its art. 33.5.e check, are not reliable.
       Before, both warnings gave only a count. A `UTC_Time` of the right
       shape that is no real day ("2025-13-45 10:00:00") is still paired, and
