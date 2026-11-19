@@ -18,6 +18,7 @@ import {
   renderManualRatesPanel,
 } from "../../src/web/manual-rates.js";
 import { renderAntichurningWindowPanel } from "../../src/web/antichurning-window.js";
+import { buildManualRateMap, coerceManualQuotes } from "../../src/engine/manual-rates.js";
 import type { AntichurningSecurity, TaxMessage, UnresolvedValuation } from "../../src/types/tax.js";
 
 const INDEX_HTML = readFileSync(resolve(__dirname, "../../src/web/index.html"), "utf-8");
@@ -1178,6 +1179,53 @@ describe("crypto prices a Save cannot store (#472 review)", () => {
     await redrawn(cryptoPanel, before, "rerun");
     expect(shown(cryptoLabel())).toBe(true);
     expect(stored()).toEqual([{ currency: "ETH", date: "2020-01-02", eurPerUnit: "5" }]);
+  });
+});
+
+describe("a saved crypto price with no number (#472 review)", () => {
+  // Storage can hold an entry whose price is "" (written by hand or by an old
+  // version). It values nothing: buildManualRateMap skips it, so its swap, if
+  // any, stays in the list of swaps to value. A Save of another price must not
+  // be refused for it, and must keep it as it is.
+  const BLANK = { currency: "ETH", date: "2020-01-02", eurPerUnit: "" };
+  beforeEach(async () => {
+    await startApp(() => {
+      localStorage.setItem("declarenta_manual_rates", JSON.stringify([BLANK]));
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("the blank entry values nothing", () => {
+    expect(buildManualRateMap(coerceManualQuotes([BLANK])).size).toBe(0);
+  });
+
+  it("a blank entry for the swap on screen leaves that swap in the list to value", async () => {
+    await startApp(() => {
+      localStorage.setItem("declarenta_manual_rates", JSON.stringify([{ currency: "SOL", date: `${YEAR}-04-01`, eurPerUnit: "" }]));
+    });
+    const panel = await waitFor(cryptoPanel, "crypto panel");
+    expect(panel.classList.contains("crypto-rates-stored-panel")).toBe(false);
+    const sol = panel.querySelector<HTMLInputElement>(".crypto-rate-input[data-currency='SOL']")!;
+    expect(sol.dataset.row).toBe("0");
+    expect(sol.value).toBe("");
+  });
+
+  it("a Save of another price goes through and leaves the blank entry as it was", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const all = [...before.querySelectorAll<HTMLInputElement>(".crypto-rate-input")];
+    const eth = all.find((i) => i.dataset.currency === "ETH")!;
+    const sol = all.find((i) => i.dataset.currency !== "ETH")!;
+    expect(eth.value).toBe("");
+    sol.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    expect(eth.hasAttribute("aria-invalid")).toBe(false);
+    await redrawn(cryptoPanel, before, "rerun after Save");
+    expect(shown(cryptoLabel())).toBe(true);
+    const stored = JSON.parse(localStorage.getItem("declarenta_manual_rates")!) as { currency: string; eurPerUnit: string }[];
+    expect(stored.map((e) => `${e.currency}=${e.eurPerUnit}`).sort()).toEqual(["ETH=", "SOL=30000"]);
   });
 });
 
