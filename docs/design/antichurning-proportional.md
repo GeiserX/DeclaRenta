@@ -539,8 +539,10 @@ práctico Renta 2025. The decisions, each pinned in
       split or cash row (a `SPINOFF`, a `TRANSFER IN`), also with a zero
       quantity when it has an amount (a cash merger), unless it is a fee; a
       buy or sale with no ticker; a closed position with no symbol; a split
-      with no readable date (a corporate-action row, and the holding is of
-      unknown size). Stop and stop-limit orders (`BUY - STOP`,
+      with no readable date, or with a Quantity that is 0, empty or no
+      number (a corporate-action row, and the holding is of unknown size;
+      the dated one was only counted by `revolut.split_unresolved`, which
+      is gone). Stop and stop-limit orders (`BUY - STOP`,
       `SELL - STOP LIMIT`) are buys and sales. The
       `FX Rate` cell is read only on a cash top-up or withdrawal, the only
       rows that use it (#466): a bad cell no longer deletes a sale, a buy or
@@ -578,7 +580,12 @@ práctico Renta 2025. The decisions, each pinned in
       failed. `freedom24.dividend_amount_unreadable` names it with its cell,
       or `parser.cash_row_unidentified` with no security. A corporate
       action with no readable `type_id` cannot be told from a dividend or a
-      split: it is skipped and counted by `freedom24.row_skipped_malformed`.
+      split: it is a corporate-action row named by its `type_id` cell, and
+      `freedom24.row_skipped_malformed` counts it and says the 2-month
+      one-purchase check may be affected. Before, it was only counted. A
+      dividend whose `tax_amount` is written but is no finite number is
+      booked with no withholding (the user loses a deduction, never
+      underpays), and `freedom24.tax_amount_unreadable` names the cell.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
@@ -633,7 +640,15 @@ práctico Renta 2025. The decisions, each pinned in
       gains, losses and income, and its art. 33.5.e check, are not reliable.
       Before, both warnings gave only a count. A `UTC_Time` of the right
       shape that is no real day ("2025-13-45 10:00:00") is still paired, and
-      its trades are undated rows, as in every parser.
+      its trades are undated rows, as in every parser. A Convert, fiat
+      purchase, Strategy or plain spot leg that no other leg pairs within
+      its 1 s window books nothing, and `binance.unpaired_leg` names it by
+      coin, operation, change and time, with the same art. 33.5.e caveat.
+      Before, an unpaired spot leg was dropped with no word, and a Convert
+      or Strategy leg was only counted by `binance.unhandled_operation`,
+      which now counts only operations no phase knows. The window stays at
+      1 s: every leg pair in the fixtures shares one second, and the code
+      already handles legs written 1 s apart.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such
