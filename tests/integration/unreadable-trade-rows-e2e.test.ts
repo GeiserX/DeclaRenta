@@ -3288,4 +3288,43 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       }
     });
   });
+
+  describe("a coin whose code starts with X or Z", () => {
+    // Only Kraken's own legacy codes (XXBT, XETH, ZEUR, ...) carry a prefix.
+    // A real coin that starts with X or Z (ZETA, ZORA, XAUT) lost its first
+    // letter, so a rebuy of ZETA at Binance did not block the Kraken loss
+    // (art. 33.5.e LIRPF) and XUSD was booked as dollars.
+    const BN_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+    const lossAndRebuy = (coin: string): [Statement, string][] => [
+      [kraken(`"T1","O1","${coin}EUR","2024-06-01 10:00:00","buy","limit","2.00","2000.00","0","1000","0.0","",""`,
+        `"T2","O2","${coin}EUR","2025-03-01 10:00:00","sell","market","1.00","1000.00","0","1000","0.0","",""`), "Kraken"],
+      [binanceParser.parse([BN_H, `2025-04-01 10:30:00,${coin}EUR,BUY,1.10,1000,1100.00,0EUR`].join("\n")), "Binance"],
+    ];
+    describe.each(["SOL", "ZETA", "ZORA", "XAUT"])("%s sold at a loss at Kraken and bought back at Binance", (coin) => {
+      it.each(METHODS)("[%s] the loss of 1000 € is blocked on the same coin", (method) => {
+        const r = run(lossAndRebuy(coin), 2025, method);
+        expect(r.capitalGains.disposals.map((d) => d.symbol)).toEqual([coin]);
+        expect([net(r), r.capitalGains.blockedLosses.toFixed(2)]).toEqual(["-1000.00", "1000.00"]);
+      });
+    });
+
+    it.each([
+      ["ZETAEUR", "ZETA", "EUR"], ["ZORAEUR", "ZORA", "EUR"], ["ZBCNEUR", "ZBCN", "EUR"], ["XAUTEUR", "XAUT", "EUR"],
+      ["XDAIEUR", "XDAI", "EUR"], ["XUSDEUR", "XUSD", "EUR"], ["XXBTZEUR", "BTC", "EUR"], ["XETHXXBT", "ETH", "BTC"],
+      ["XXDGZUSD", "DOGE", "USD"], ["XICNXXBT", "ICN", "BTC"], ["XNMCXXBT", "NMC", "BTC"], ["XXVNZEUR", "XVN", "EUR"], ["XTZEUR", "XTZ", "EUR"],
+      ["XTZUSD", "XTZ", "USD"], ["DOTXBT", "DOT", "BTC"], ["XDGEUR", "DOGE", "EUR"], ["XBTUSDT", "BTC", "USDT"],
+    ])("pair %s is %s/%s", (pair, base, quote) => {
+      const parsed = kraken(`"T1","O1","${pair}","2024-06-01 10:00:00","buy","limit","2.00","2000.00","0","1000","0.0","",""`);
+      expect([parsed.trades[0]!.symbol, parsed.trades[0]!.currency]).toEqual([base, quote]);
+      expect(parsed.parserMessages).toBeUndefined();
+    });
+
+    it.each(METHODS)("[%s] an Earn reward in XUSD is a coin, never dollars", (method) => {
+      const parsed = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
+        `"L1","R1","2025-03-01 00:00:00","earn","reward","currency","XUSD","12.5","0","1000"`].join("\n"));
+      expect(parsed.cashTransactions.map((c) => [c.symbol, c.currency])).toEqual([["XUSD", "XUSD"]]);
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect(r.interest.entries).toEqual([]);
+    });
+  });
 });

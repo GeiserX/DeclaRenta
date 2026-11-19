@@ -182,7 +182,7 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Datos extraídos:** Operaciones de compraventa y movimientos de fondos.
 
-**Limitaciones:** Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente.
+**Limitaciones:** Solo operaciones spot. Kraken usa pares propios (como XXBTZEUR) que DeclaRenta normaliza automáticamente. Solo los códigos antiguos de Kraken (XXBT, XETH, ZEUR…) pierden su prefijo X o Z. Una moneda cuyo nombre empieza por X o Z (ZETA, XAUT, XTZ) se lee tal cual.
 
 ### Trade Republic
 

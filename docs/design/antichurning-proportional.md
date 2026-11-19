@@ -681,6 +681,12 @@ práctico Renta 2025. The decisions, each pinned in
       price is now cost ÷ vol, the file's own numbers; a row with neither
       is an unreadable row named by its `price`. A written 0 stays the
       file's word.
+      Only Kraken's legacy codes (XXBT, XETH, ZEUR, XICN, XNMC, XXVN, ...)
+      lose their X or Z prefix. Any other code was cut too, so ZETA became
+      ETA, XAUT became AUT and XUSD became dollars: a rebuy of the same
+      coin at another broker did not block a Kraken loss. A legacy quote
+      (ZEUR, XXBT) is split off only after a legacy base, so Tezos
+      (XTZEUR) is no longer read as XT/ZEUR.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

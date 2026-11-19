@@ -39,8 +39,9 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Well-known Kraken asset codes that use the X/Z prefix convention.
- * Not all Kraken assets follow this pattern (e.g. DOT, ADA use plain names).
+ * Kraken's legacy asset codes, the only ones with an X/Z prefix, and their
+ * short names. Every other code is the coin's own ticker (DOT, ADA, and also
+ * ZETA, ZORA, XAUT, XTZ, whose X or Z is part of the name).
  */
 const KRAKEN_ASSET_MAP: Record<string, string> = {
   XXBT: "BTC",
@@ -55,6 +56,9 @@ const KRAKEN_ASSET_MAP: Record<string, string> = {
   XREP: "REP",
   XDAO: "DAO",
   XMLN: "MLN",
+  XICN: "ICN",
+  XNMC: "NMC",
+  XXVN: "XVN",
   XXDG: "DOGE",
   XDG: "DOGE",
   ETH2: "ETH",
@@ -64,23 +68,21 @@ const KRAKEN_ASSET_MAP: Record<string, string> = {
   ZJPY: "JPY",
   ZCAD: "CAD",
   ZAUD: "AUD",
+  ZKRW: "KRW",
 };
 
-/** Strip Kraken's X/Z prefix and return a clean symbol */
+/** Kraken's legacy code as its short name; any other code as written. */
 function cleanSymbol(raw: string): string {
   // Staked/earning balances carry a suffix (DOT.S, XBT.M, SOL.F, ...), and
   // bonded staking puts the unbonding days before it (DOT28.S, ATOM21.S). Drop
   // both first so the reward lands on the real coin and XTZ.S keeps its X.
   // Digits go only when a suffix is present, so API3 or C98 stay intact.
   const trimmed = raw.trim().toUpperCase().replace(/\d*\.(S|M|F|B|P)$/, "");
-  if (KRAKEN_ASSET_MAP[trimmed]) return KRAKEN_ASSET_MAP[trimmed];
-
-  // For 4+ char symbols starting with X or Z that aren't in the map,
-  // strip the prefix only if the remainder is 3+ chars (avoids stripping XRP → RP)
-  if (trimmed.length >= 4 && (trimmed[0] === "X" || trimmed[0] === "Z")) {
-    return trimmed.slice(1);
-  }
-  return trimmed;
+  // Only a legacy code loses its prefix. A real coin that starts with X or Z
+  // (ZETA, ZORA, XAUT, XUSD) lost its first letter: it could not match the
+  // same coin at another broker, so an art. 33.5.e rebuy was missed, and
+  // XUSD was booked as dollars (#467).
+  return KRAKEN_ASSET_MAP[trimmed] ?? trimmed;
 }
 
 /**
@@ -107,6 +109,9 @@ function splitPair(pair: string): { base: string; quote: string; assumedQuote: b
   for (const suffix of quoteSuffixes) {
     if (p.endsWith(suffix) && p.length > suffix.length) {
       const baseRaw = p.slice(0, p.length - suffix.length);
+      // A legacy quote (ZEUR, XXBT) follows only a legacy base (XXBTZEUR,
+      // XETHXXBT). Tezos is XTZEUR: read as XT/ZEUR it lost its Z (#467).
+      if (/^[XZ]...$/.test(suffix) && !(baseRaw in KRAKEN_ASSET_MAP)) continue;
       return { base: cleanSymbol(baseRaw), quote: cleanSymbol(suffix), assumedQuote: false };
     }
   }
