@@ -5,12 +5,15 @@
  * repurchased within:
  * - **2 calendar months** before or after the sale — for securities admitted
  *   to trading on a regulated market of the European Economic Area (33.5.f) or
- *   on a third-country market the European Commission declared equivalent:
- *   only the US (NYSE, Nasdaq: DGT V0778-25, Implementing Decision (EU)
- *   2017/2320), Australia (2017/2318) and Hong Kong (2017/2319).
+ *   on a third-country market the European Commission declared equivalent
+ *   (DGT V0778-25): the US (NYSE, Nasdaq: Implementing Decision (EU)
+ *   2017/2320), Australia (2017/2318), Hong Kong (2017/2319), and the markets
+ *   of the EMIR decisions (Toronto, Tokyo, Singapore: open for shares).
  * - **1 year** before or after the sale — for securities admitted to neither
  *   (33.5.g): unlisted shares, OTC-only securities, shares listed only on a
- *   third-country market with no equivalence decision (London, SIX, Toronto).
+ *   third-country market with no equivalence decision (London from 2021, SIX
+ *   from July 2019). Which window an ISIN gets comes from the user's per-ISIN
+ *   value or IBKR's listing codes (`antichurning-window.ts`, #452).
  * Crypto is no «valor o participación» (DGT V0525-25, V0648-24), so letters f
  * and g do not reach it; the engine applies 33.5.e to it (#457): only a
  * repurchase of the same coin, on any exchange, in the year after the sale
@@ -39,6 +42,7 @@ import type { Trade, CorporateAction } from "../types/ibkr.js";
 import Decimal from "decimal.js";
 import { normalizeDate, parseDate } from "./dates.js";
 import { compareFifoTradeOrder } from "./fifo.js";
+import { resolveIsinWindow, type IsinWindow } from "./antichurning-window.js";
 
 /** Asset categories exempt from anti-churning (not "valores homogéneos" per Art. 33.5.f/g) */
 const WASH_SALE_EXEMPT: ReadonlySet<string> = new Set(["OPT", "FUT", "FOP", "FSFOP", "CFD", "CASH"]);
@@ -214,6 +218,10 @@ interface PendingLoss {
  *   list. The one-purchase exception applies only when the window start is
  *   inside the upload and the listed holdings are what the trades explain.
  *   Absent start → the first trade of `allTrades`; absent holdings → never applied.
+ * @param windows - Per-ISIN window data (`collectIsinWindows`): the user's value
+ *   and IBKR's listing codes. Pass the SAME map to `salesWithWindowPastData`, so
+ *   the block, the definitive test and the past-data warning use one window.
+ *   Absent → 2 months for every security with an ISIN (#452).
  * @returns Disposals with `blockedLossEur`, `reintegratedLossEur`, `washSaleBlocked`
  *   and the display trails `washSaleRepurchaseDates` / `washSaleReleasedFromDates` set
  */
@@ -224,6 +232,7 @@ export function detectWashSales(
   splitRatios: ReadonlyMap<string, { num: Decimal; den: Decimal }> = new Map(),
   remainingLots?: ReadonlyMap<string, readonly Lot[]>,
   coverage: WashSaleCoverage = {},
+  windows: ReadonlyMap<string, IsinWindow> = new Map(),
 ): FifoDisposal[] {
   // Shares bought back on each (key, day) to close a short, from FIFO's short
   // disposals. They go straight back to the lender and never stay in the
@@ -510,7 +519,7 @@ export function detectWashSales(
     const buyEvents = buysByAsset.get(key);
     if (buyEvents && need.greaterThan(0)) {
       const first = result[idxs[0]!]!;
-      const months = windowMonths(first.assetCategory, first.isin);
+      const months = windowMonths(first.assetCategory, first.isin, windows, sellDate.toISOString().slice(0, 10));
       // Art. 33.5.e (#457): for crypto only a buy in the year after the sale
       // counts, so its window starts at the sale and the pre-sale pass is empty.
       const windowStart = looksBack(first.assetCategory) ? addMonths(sellDate, -months).getTime() : sellTime;
@@ -796,12 +805,14 @@ export function detectWashSales(
  * @param lastLoadedDate - Last date the whole upload covers (YYYY-MM-DD or YYYYMMDD)
  * @param trades - The uploaded trades, with `brokerSource` set by the merge
  * @param endBySource - Statement end per broker, when its files give one
+ * @param windows - The per-ISIN window data passed to `detectWashSales` (#452)
  */
 export function salesWithWindowPastData(
   disposals: readonly FifoDisposal[],
   lastLoadedDate: string,
   trades: readonly Trade[] = [],
   endBySource: ReadonlyMap<string, string> = new Map(),
+  windows: ReadonlyMap<string, IsinWindow> = new Map(),
 ): { key: string; sellDate: string; windowEnd: string; lastDate: string }[] {
   // Day only: a trade date may carry a time ("20250602;101500").
   const dayTime = (date: string): number => parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime();
@@ -846,7 +857,7 @@ export function salesWithWindowPastData(
     if (!openLoss && !d.reintegratedLossEur.greaterThan(0)) continue;
     const sellDate = parseDate(d.sellDate);
     if (!Number.isFinite(sellDate.getTime())) continue;
-    const windowEnd = addMonths(sellDate, windowMonths(d.assetCategory, d.isin));
+    const windowEnd = addMonths(sellDate, windowMonths(d.assetCategory, d.isin, windows, normalizeDay(d.sellDate)));
     const lastTime = coveredUntil(key);
     if (windowEnd.getTime() <= lastTime) continue;
     const day = normalizeDay(d.sellDate);
@@ -1268,28 +1279,31 @@ function buyQtyConversionToSellUnits(
  * trading on a regulated market:
  *  - **2 months** on a regulated market of the European Economic Area, or on a
  *    third-country market the European Commission declared equivalent (the US,
- *    e.g. NYSE and Nasdaq: DGT V0778-25; Australia; Hong Kong).
+ *    e.g. NYSE and Nasdaq: DGT V0778-25; Australia; Hong Kong; the EMIR
+ *    decisions name Toronto, Tokyo and Singapore, open for shares).
  *  - **1 year (12 months)** on neither (unlisted shares, OTC-only securities
  *    such as OTC Markets / pink sheets, shares listed only on the London Stock
- *    Exchange, SIX or Toronto).
+ *    Exchange from 2021 or on SIX from July 2019).
  * Crypto gets 12 months too, but under 33.5.e: the window runs from the sale to
  * 12 months after it and never looks back (`looksBack`, #457).
  *
- * We have no reliable "is listed" flag from the brokers, so we use a heuristic:
- *  - CRYPTO → 12 months, after the sale only (33.5.e).
- *  - STK/FUND/BOND WITH a real ISIN → treated as listed (2 months).
- *  - Anything else with NO ISIN → treated as unlisted (12 months).
+ * Order (#452):
+ *  - CRYPTO → 12 months, after the sale only (33.5.e). Nothing overrides it.
+ *  - The ISIN's resolved window on the sale day (`resolveIsinWindow`): the
+ *    user's value, else 12 when every IBKR listing code of the ISIN is a
+ *    letter-g market that day.
+ *  - Otherwise a heuristic: WITH a real ISIN → treated as listed (2 months);
+ *    with NO ISIN → treated as unlisted (12 months).
  *
- * LIMITATION (#452): a real ISIN does not guarantee admission to a regulated or
- * equivalent market (some ISIN-bearing instruments trade only OTC, or only on a
- * third-country market with no equivalence decision such as the London Stock
- * Exchange, where the statute gives 1 year and we apply 2 months), and conversely a few
- * listed instruments may arrive without an ISIN. This is a conservative
- * approximation; precise classification would require per-instrument market
- * admission data we do not collect.
+ * LIMITATION: with no IBKR code and no user value, a security with an ISIN
+ * gets 2 months even if it trades only OTC or only in London (the report and
+ * the guide point to the per-ISIN setting), and a listed security that arrives
+ * without an ISIN gets 12.
  */
-function windowMonths(assetCategory: string, isin: string): number {
+function windowMonths(assetCategory: string, isin: string, windows: ReadonlyMap<string, IsinWindow>, sellDay: string): number {
   if (assetCategory === "CRYPTO") return 12;
+  const resolved = isin ? resolveIsinWindow(windows.get(isin), sellDay) : undefined;
+  if (resolved) return resolved.months;
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
   return isin ? 2 : 12;

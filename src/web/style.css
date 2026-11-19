@@ -3253,8 +3253,13 @@ footer a:hover {
   font-weight: 600;
 }
 
-.manual-opening-lots-panel {
+.manual-opening-lots-panel,
+.antichurning-window-panel {
   margin: 1.5rem 0;
+}
+
+.antichurning-window-select {
+  max-width: 100%;
 }
 
 .manual-opening-lots-summary,

@@ -21,6 +21,7 @@ import type { EcbRateMap } from "../types/ecb.js";
 import { formatDateDmy, positionsDateMismatch } from "../engine/dates.js";
 import { buildEcbRateMap, deriveEcbNeeds } from "../engine/ecb-orchestrator.js";
 import { buildManualRateMap, coerceManualQuotes } from "../engine/manual-rates.js";
+import { ISIN_SHAPE } from "../engine/antichurning-window.js";
 import { generateTaxReport, reportOptionsForMethod } from "../generators/report.js";
 import {
   checkModelo720Thresholds,
@@ -213,6 +214,31 @@ function resolveFxMethod(fxMethod: FxMethod, monodivisa: boolean, cmd: Command):
   return "monodivisa";
 }
 
+/**
+ * The per-ISIN anti-churning windows of `--antichurning-1y` and
+ * `--antichurning-2m` (#452). Values may also be comma-separated. A value that
+ * is not an ISIN, or an ISIN in both flags, stops the run.
+ */
+function windowOverridesFromFlags(oneYear: string[] = [], twoMonths: string[] = []): Record<string, 2 | 12> {
+  const out = new Map<string, 2 | 12>();
+  const add = (values: string[], months: 2 | 12, flag: string): void => {
+    for (const value of values.flatMap((v) => v.split(","))) {
+      const isin = value.trim().toUpperCase();
+      if (isin === "") continue;
+      if (!ISIN_SHAPE.test(isin)) {
+        throw new Error(`${flag}: «${value.trim()}» no es un ISIN válido (2 letras, 9 letras o cifras y 1 cifra de control, p. ej. GB0007980591).`);
+      }
+      if (out.has(isin) && out.get(isin) !== months) {
+        throw new Error(`El ISIN ${isin} está a la vez en --antichurning-1y y en --antichurning-2m. Ponlo solo en uno.`);
+      }
+      out.set(isin, months);
+    }
+  };
+  add(oneYear, 12, "--antichurning-1y");
+  add(twoMonths, 2, "--antichurning-2m");
+  return Object.fromEntries(out);
+}
+
 program
   .command("convert")
   .description(`Convert broker reports to Modelo 100 casilla values. Supports: ${BROKER_NAMES}`)
@@ -252,6 +278,14 @@ program
     "Volcar la traza de movimientos del motor FX (acuñar/aparcar/desaparcar/descartar/convertir) para auditoría. Sin valor → stderr; con ruta → fichero.",
   )
   .addOption(new Option("--fx-trace-format <format>", "Formato de la traza FX").choices(["jsonl", "csv"]).default("jsonl"))
+  .option(
+    "--antichurning-1y <isins...>",
+    "Regla anti-churning: aplica 1 año (art. 33.5.g LIRPF) a estos ISIN, porque no están admitidos a negociación en un mercado regulado del Espacio Económico Europeo ni en un mercado equivalente (p. ej. solo cotizan en Londres desde 2021, en SIX o en OTC Markets). Gana sobre el mercado que muestra IBKR",
+  )
+  .option(
+    "--antichurning-2m <isins...>",
+    "Regla anti-churning: aplica 2 meses (art. 33.5.f LIRPF) a estos ISIN, porque están admitidos en un mercado regulado del Espacio Económico Europeo o en uno equivalente (NYSE, Nasdaq, ASX, Bolsa de Hong Kong…). Gana sobre el mercado que muestra IBKR",
+  )
   .action(
     async (opts: {
       input: string[];
@@ -267,9 +301,12 @@ program
       cryptoRates?: string;
       fxTrace?: string | boolean;
       fxTraceFormat?: string;
+      antichurning1y?: string[];
+      antichurning2m?: string[];
     }, cmd: Command) => {
       try {
         const fxMethod = resolveFxMethod(opts.fxMethod, opts.monodivisa === true, cmd);
+        const windowMonthsByIsin = windowOverridesFromFlags(opts.antichurning1y, opts.antichurning2m);
         console.error(`DeclaRenta v${pkg.version} - Ejercicio ${opts.year}, ${opts.input.length} fichero(s)...`);
         console.error(`  Método: ${FX_METHOD_NAMES[fxMethod]}`);
 
@@ -323,6 +360,7 @@ program
           titulares: opts.titulares,
           manualRates,
           fxTrace: opts.fxTrace !== undefined && opts.fxTrace !== false,
+          windowMonthsByIsin,
         });
         if (opts.titulares && opts.titulares > 1) {
           console.error(`  Titulares: ${opts.titulares} (importes divididos por contribuyente)`);
@@ -810,7 +848,7 @@ function printSummary(report: ReturnType<typeof generateTaxReport>) {
     console.error(`    Ganancia/Pérdida neta:             ${blocks.otherElements.netGainLoss.toFixed(2)} EUR`);
   }
   if (report.capitalGains.blockedLosses.greaterThan(0)) {
-    console.error(`    ⚠ Pérdidas bloqueadas (2 meses):   ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
+    console.error(`    ⚠ Pérdidas bloqueadas (anti-churning): ${report.capitalGains.blockedLosses.toFixed(2)} EUR`);
   }
   if (report.capitalGains.reintegratedLosses.greaterThan(0)) {
     console.error(

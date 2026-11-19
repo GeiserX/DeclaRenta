@@ -254,6 +254,23 @@ export interface FifoDisposal {
   acquireBrokerSource?: string;
 }
 
+/** One security's anti-churning window (LIRPF 33.5.f/g), as the report applied it (#452). */
+export interface AntichurningSecurity {
+  isin: string;
+  symbol: string;
+  description: string;
+  /** Window in calendar months: 2 (letter f) or 12 (letter g). */
+  months: 2 | 12;
+  /** `user`: set by the user; `ibkr`: IBKR's listing codes decided it; `default`: 2 months for any ISIN. */
+  source: "default" | "ibkr" | "user";
+  /** The months the automatic reading gives (IBKR's codes, else the default), whatever the user set. */
+  autoMonths: 2 | 12;
+  /** Every IBKR listing code of the ISIN, sorted. Empty when IBKR gave none. */
+  listingExchanges: string[];
+  /** The EMIR equivalence decision a 2-month IBKR reading rests on (open for shares), e.g. "2016/2273". */
+  openDecision?: string;
+}
+
 /** Dividend received from a foreign security */
 export interface DividendEntry {
   isin: string;
@@ -420,6 +437,14 @@ export interface TaxSummary {
     reintegratedLosses: Decimal;
     /** Individual disposals */
     disposals: FifoDisposal[];
+    /**
+     * The anti-churning window of each security the user may want to check or
+     * set (#452): an ISIN with a loss sale or a released loss in the year, a
+     * user value, or a sale with an IBKR 1-year reading. A change of the
+     * window never removes a row. Crypto and the exempt categories
+     * (options, futures, CFDs, cash) are never listed.
+     */
+    antichurningSecurities?: AntichurningSecurity[];
   };
 
   /** Dividends: Rendimientos del capital mobiliario (Casillas 0029-0034) */

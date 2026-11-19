@@ -38,6 +38,7 @@ export {
 // Engine
 export { FifoEngine } from "./engine/fifo.js";
 export { detectWashSales } from "./engine/wash-sale.js";
+export { collectIsinWindows } from "./engine/antichurning-window.js";
 export { fetchEcbRates, getEcbRate, getQ4AverageRate } from "./engine/ecb.js";
 export { buildEcbRateMap, deriveEcbNeeds } from "./engine/ecb-orchestrator.js";
 export { buildManualRateMap } from "./engine/manual-rates.js";

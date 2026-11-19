@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
-import { detectWashSales, addMonths } from "../../src/engine/wash-sale.js";
+import { detectWashSales, addMonths, salesWithWindowPastData } from "../../src/engine/wash-sale.js";
+import { collectIsinWindows, type IsinWindow } from "../../src/engine/antichurning-window.js";
 import { parseDate } from "../../src/engine/dates.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
 import type { CorporateAction, Trade } from "../../src/types/ibkr.js";
@@ -1188,5 +1189,74 @@ describe("one-purchase exception (#453): position steps", () => {
     const disposals = [makeDisposal({ sellDate: "2025-03-15", acquireDate: "2025-03-01", quantity: new Decimal(50) })];
     const result = detectWashSales(disposals, trades);
     expect(result).toHaveLength(1);
+  });
+});
+
+describe("per-ISIN window (#452): one map feeds the block, the definitive test and the past-data warning", () => {
+  const ISIN = "GB0007980591";
+  // The issue example: buy 01/02/2025 at 100, sell 01/03 at 80, rebuy 01/08 at 85, 1 share.
+  const loss = () => [makeDisposal({ isin: ISIN, sellDate: "2025-03-01", acquireDate: "2025-02-01", quantity: new Decimal(1), gainLossEur: new Decimal(-20), proceedsEur: new Decimal(80), costBasisEur: new Decimal(100) })];
+  const trades = [makeTrade(ISIN, "2025-02-01", "BUY", "1"), makeTrade(ISIN, "2025-03-01", "SELL", "1"), makeTrade(ISIN, "2025-08-01", "BUY", "1")];
+  const run = (windows?: Map<string, IsinWindow>) => detectWashSales(loss(), trades, [], new Map(), undefined, {}, windows)[0]!;
+
+  it("with no map the 01/08 rebuy is 5 months away: −20 deductible, 0 blocked (the old figure, the control)", () => {
+    expect(run().blockedLossEur.toFixed(2)).toBe("0.00");
+    expect(run(new Map()).blockedLossEur.toFixed(2)).toBe("0.00");
+  });
+
+  it("with the ISIN at 12 months the rebuy blocks the whole −20", () => {
+    expect(run(collectIsinWindows([], [], { [ISIN]: 12 })).blockedLossEur.toFixed(2)).toBe("20.00");
+  });
+
+  it("an IBKR London-only reading gives 12 months for a 2025 sale", () => {
+    const lse = trades.map((t) => ({ ...t, listingExchange: "LSE" }));
+    expect(run(collectIsinWindows(lse, [])).blockedLossEur.toFixed(2)).toBe("20.00");
+  });
+
+  it("a gain sale while a loss is pending: the rebuy 5 months later keeps it pending under 12 months, not under 2", () => {
+    const disposals = () => [
+      makeDisposal({ isin: ISIN, sellDate: "2025-03-01", acquireDate: "2025-02-01", quantity: new Decimal(1), gainLossEur: new Decimal(-20) }),
+      makeDisposal({ isin: ISIN, sellDate: "2025-06-01", acquireDate: "2025-03-15", quantity: new Decimal(1), gainLossEur: new Decimal(10) }),
+    ];
+    const tr = [
+      makeTrade(ISIN, "2025-02-01", "BUY", "1"),
+      makeTrade(ISIN, "2025-03-01", "SELL", "1"),
+      makeTrade(ISIN, "2025-03-15", "BUY", "1"),
+      makeTrade(ISIN, "2025-06-01", "SELL", "1"),
+      makeTrade(ISIN, "2025-11-01", "BUY", "1"),
+    ];
+    const two = detectWashSales(disposals(), tr, [], new Map(), undefined, {}, new Map());
+    expect(two[1]!.reintegratedLossEur.toFixed(2)).toBe("20.00");
+    const year = detectWashSales(disposals(), tr, [], new Map(), undefined, {}, collectIsinWindows([], [], { [ISIN]: 12 }));
+    expect(year[0]!.blockedLossEur.toFixed(2)).toBe("20.00");
+    expect(year[1]!.reintegratedLossEur.toFixed(2)).toBe("0.00");
+  });
+
+  // Mirror: whatever map is passed, a rebuy on day X blocks exactly when the
+  // past-data window ends on or after X. If one function got the map and the
+  // other did not, the 12-month cases below would disagree.
+  it.each([
+    ["no map", undefined],
+    ["user 12", { user: 12 as const, listings: [] }],
+    ["user 2 over LSE", { user: 2 as const, listings: ["LSE"] }],
+    ["IBKR LSE", { listings: ["LSE"] }],
+    ["IBKR LSE + NYSE", { listings: ["LSE", "NYSE"] }],
+    ["IBKR TSE (open)", { listings: ["TSE"] }],
+  ])("mirror (%s): detectWashSales blocks iff salesWithWindowPastData's window reaches the rebuy", (_name, w) => {
+    const windows = new Map<string, IsinWindow>(w ? [[ISIN, w]] : []);
+    for (const rebuy of ["2025-04-15", "2025-08-01", "2026-02-27"]) {
+      const tr = [makeTrade(ISIN, "2025-02-01", "BUY", "1"), makeTrade(ISIN, "2025-03-01", "SELL", "1"), makeTrade(ISIN, rebuy, "BUY", "1")];
+      const blocked = detectWashSales(loss(), tr, [], new Map(), undefined, {}, windows)[0]!.blockedLossEur.greaterThan(0);
+      const [past] = salesWithWindowPastData(loss(), "2025-03-01", tr.slice(0, 2), new Map(), windows);
+      expect(past, rebuy).toBeDefined();
+      expect(blocked, `${rebuy} vs window end ${past!.windowEnd}`).toBe(past!.windowEnd >= rebuy);
+    }
+  });
+
+  it("crypto ignores the map: a user 2 never shortens its 12 months after the sale", () => {
+    const btc = [makeDisposal({ isin: "", symbol: "BTC", assetCategory: "CRYPTO", sellDate: "2025-03-01", quantity: new Decimal(1), gainLossEur: new Decimal(-20) })];
+    const tr = [{ ...makeTrade("", "2025-08-01", "BUY", "1"), symbol: "BTC", assetCategory: "CRYPTO" as const }];
+    const out = detectWashSales(btc, tr, [], new Map(), undefined, {}, collectIsinWindows([], [], { [ISIN]: 2 }));
+    expect(out[0]!.blockedLossEur.toFixed(2)).toBe("20.00");
   });
 });

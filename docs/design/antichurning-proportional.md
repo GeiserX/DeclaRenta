@@ -238,18 +238,32 @@ transmission that releases them.
 
 ## Known limitations (documented, accepted)
 
-- **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged. Letter
-  f covers a regulated market of the European Economic Area (the EU, Norway,
-  Iceland, Liechtenstein) and any third-country market the European Commission
-  declared equivalent while the decision stands (DGT V0778-25). The decisions
-  in force are Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the
-  other SEC national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong
-  Kong); Switzerland's (2018/2047) expired on 30/06/2019 and the UK has none.
-  So a share listed only on NYSE or Nasdaq gets 2 months under the statute too,
-  and that is no deviation. The deviation is an ISIN-bearing security admitted
-  to neither kind of market: one traded only on OTC Markets, or listed only on
-  the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
-  the engine 2 months (#452).
+- **Window per ISIN (#452).** Letter f covers a regulated market of the
+  European Economic Area (the EU, Norway, Iceland, Liechtenstein) and any
+  third-country market the European Commission declared equivalent while the
+  decision stands (DGT V0778-25). The MiFID II decisions in force are
+  Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the other SEC
+  national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong Kong);
+  Switzerland's (2017/2441, 2018/2047) covered 24/12/2017-30/06/2019, and the
+  UK was EU law until 31/12/2020 and has none since. So a share listed only on
+  NYSE or Nasdaq gets 2 months under the statute too. The EMIR art. 2a
+  decisions 2016/2273 (TSX, TSX Venture, Aequitas Neo), 2016/2271 (Tokyo) and
+  2016/2270 (Singapore) also declare markets equivalent to a regulated market,
+  and V0778-25 accepted that kind of decision for CME; no consulta applies it
+  to shares, so that point is open. `src/engine/antichurning-window.ts`
+  resolves one window per ISIN: the user's value (`windowMonthsByIsin`, the
+  web panel, `--antichurning-1y` / `--antichurning-2m`) wins; else 12 only
+  when every IBKR `listingExchange` of the ISIN (Trades and SecurityInfo) is
+  in `NON_EQUIVALENT_LISTINGS` and outside its equivalence spans on the sale
+  day (London admitted to neither kind of market from 2021, SIX outside its
+  spans, OTC Markets, Japannext, Stock Connect, other third countries); else
+  the old heuristic (ISIN → 2, no ISIN → 12). The EMIR-only codes stay at 2
+  months with `report.antichurning_listing_open`. The same map reaches
+  `detectWashSales` (block and definitive test) and `salesWithWindowPastData`.
+  Remaining limits: a listing IBKR does not show (Shell on Amsterdam) needs
+  the user's 2-month mark; a no-ISIN US listing keeps 12; no warning when a
+  1-year window starts before the upload; which date counts when an
+  equivalence starts or ends inside the window is the sale day (open).
 - **Crypto window (handled).** Crypto is no «valor o participación» (DGT
   V0648-24, V0525-25), so letters f and g do not apply. The engine applies art.
   33.5.e: only a repurchase of the same coin (the `CRYPTO:<SYMBOL>` key, any

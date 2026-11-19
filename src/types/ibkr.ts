@@ -97,7 +97,14 @@ export interface Trade {
   fxRateToBase: string;
   buySell: "BUY" | "SELL";
   openCloseIndicator: "O" | "C" | "C;O";
+  /** Execution venue of the trade (IBKR `exchange`); not the listing market. */
   exchange: string;
+  /**
+   * IBKR `listingExchange`, trimmed and upper-cased: the market the contract is
+   * listed on (e.g. LSE, NYSE, TSE). Decides the anti-churning window (#452).
+   * Only IBKR sets it.
+   */
+  listingExchange?: string;
   commissionCurrency: string;
   commission: string;
   taxes: string;
@@ -258,6 +265,8 @@ export interface SecurityInfo {
   assetCategory: AssetCategory;
   multiplier: string;
   subCategory: string;
+  /** IBKR «Listing Exchange» (stocks only), trimmed and upper-cased (#452). */
+  listingExchange?: string;
   brokerSource?: string;
 }
 

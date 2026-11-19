@@ -28,6 +28,7 @@ describe("library entry exports", () => {
     "buildManualRateMap",
     "reportOptionsForMethod",
     "fxMethodOf",
+    "collectIsinWindows",
   ])("exports %s", (name) => {
     expect(typeof (lib as Record<string, unknown>)[name]).toBe("function");
   });

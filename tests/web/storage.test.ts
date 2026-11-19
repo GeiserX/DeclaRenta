@@ -127,6 +127,7 @@ describe("clearLocalData", () => {
     saveReport(makeStored(2024));
     store.declarenta_manual_rates = JSON.stringify([{ currency: "SOL", date: "2024-04-01", eurPerUnit: "100" }]);
     store.declarenta_manual_opening_lots = JSON.stringify([{ symbol: "ACME", quantity: "10", priceEur: "100" }]);
+    store.declarenta_antichurning_windows = JSON.stringify({ GB0007980591: 12 });
     store.theme = "dark";
     store.locale = "en";
   }
@@ -138,6 +139,7 @@ describe("clearLocalData", () => {
     expect(getProfile().nif).toBe("00000000T");
     expect(store.declarenta_manual_rates).toBeDefined();
     expect(store.declarenta_manual_opening_lots).toBeDefined();
+    expect(store.declarenta_antichurning_windows).toBeDefined();
   });
 
   it("removes the profile, the reports, the manual rates and the opening lots", () => {
@@ -147,6 +149,7 @@ describe("clearLocalData", () => {
     expect(localStorage.getItem("declarenta_reports")).toBeNull();
     expect(localStorage.getItem("declarenta_manual_rates")).toBeNull();
     expect(localStorage.getItem("declarenta_manual_opening_lots")).toBeNull();
+    expect(localStorage.getItem("declarenta_antichurning_windows")).toBeNull();
     expect(getProfile().nif).toBe("");
     expect(getProfile().telefono).toBe("");
     // Display preferences are not user data and survive.
