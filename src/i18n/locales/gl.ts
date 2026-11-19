@@ -496,7 +496,7 @@ const gl: TranslationKeys = {
   "d6.positions_title": "Posicións a declarar",
   "d6.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros ou non traen un número de títulos válido (sen prezo de mercado, sen tipo de cambio para a súa moeda ao peche do exercicio ou sen número de títulos) e excluíronse do total. Inclúeas a man co seu valor en euros e o seu número de títulos.",
-  "d6.quantity_unknown": "O ficheiro non trae un número de títulos válido para {{count}} posición(s) (falta, non se le ou é un 0 xunto a un valor): {{holdings}}. Non son 0: toma o número do extracto de fin de ano do bróker e escríbeo a man no D-6.",
+  "d6.quantity_unknown": "O ficheiro non trae un número de títulos válido para {{count}} posición(s) (falta, non se le ou é un 0 que o seu valor non confirma): {{holdings}}. Non contan como 0: toma o número do extracto de fin de ano do bróker e escríbeo a man no D-6.",
   "d6.cancellations_title": "Cancelacións",
   "d6.generate_btn": "Xerar guía D-6",
   "d6.deadline": "Prazo: 1 – 31 xaneiro do ano seguinte",
@@ -535,7 +535,7 @@ const gl: TranslationKeys = {
     "O formato oficial da AEAT é XML (Orde HFP/886/2023). DeclaRenta só mostra unha revisión orientativa: a xeración oficial está desactivada ata implementar XML validado.",
   "m721.positions_unvalued":
     "{{count}} posición(s) non se puideron valorar en euros (sen prezo de mercado ou sen tipo de cambio para a súa moeda ao peche do exercicio) e excluíronse do total. Calcula o seu valor en euros e inclúeas manualmente.",
-  "m721.quantity_unknown": "O ficheiro non trae un número de unidades válido para {{count}} criptomoeda(s) (falta, non se le ou é un 0 xunto a un valor): {{coins}}. Non son 0: toma as unidades do extracto de fin de ano do exchange ou do bróker e escríbeas a man no Modelo 721.",
+  "m721.quantity_unknown": "O ficheiro non trae un número de unidades válido para {{count}} criptomoeda(s) (falta, non se le ou é un 0 que o seu valor non confirma): {{coins}}. Non contan como 0: toma as unidades do extracto de fin de ano do exchange ou do bróker e escríbeas a man no Modelo 721.",
   "m721.empty_title": "Non hai posicións de criptomoedas",
   "m721.empty_description":
     "O Modelo 721 é unha declaración informativa obrigatoria se posúes criptomoedas en exchanges estranxeiros valoradas en máis de 50.000 €. Sube o teu informe do broker na sección Modelo 100 para que DeclaRenta calcule automaticamente se superas o limiar. Prazo: 1 de xaneiro – 31 de marzo.",
@@ -1124,6 +1124,10 @@ const gl: TranslationKeys = {
   "parser.open_position_zero_with_value.hint": "Un 0 xunto a un valor non é un número de accións, así que se trata como descoñecido, nunca como 0. Cun valor positivo, o Modelo 720 e o D-6 mostran a posición sen número de valores e pídenche que o escribas a man, e o seu valor conta para o limiar do 720. Cun valor negativo é unha posición curta (accións que debes, non que tes), e o 720 e o D-6 non a inclúen. Toma o número do extracto de fin de ano de IBKR.",
   "parser.crypto_position_zero_with_value": "IBKR dá 0 unidades para {{count}} posición(s) de criptomoedas que si teñen un valor distinto de 0: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "Un 0 xunto a un valor non é un número de unidades, así que se trata como descoñecido, nunca como 0. Cun valor positivo, o Modelo 721 mostra as súas unidades como descoñecidas e o seu valor conta para o limiar. Cun valor negativo é unha posición curta (criptomoedas que debes, non que tes), e o 721 non a inclúe. Toma as unidades do extracto de fin de ano de IBKR.",
+  "parser.open_position_zero_unconfirmed": "IBKR dá 0 accións para {{count}} posición(s) aberta(s) sen un valor lexible que o confirme: {{holdings}}.",
+  "parser.open_position_zero_unconfirmed.hint": "Un 0 sen un valor de 0 ao lado pode ser un erro da exportación, así que DeclaRenta non dá a posición por pechada: o Modelo 720 non escribe o seu rexistro de baixa (C) e o D-6 non a cancela, e ambos a mostran sen número de valores e sen valorar. Comproba no extracto de fin de ano de IBKR se aínda a tes: se é así, toma o número de accións e o seu valor; se a vendiches, declara a súa baixa a man.",
+  "parser.crypto_position_zero_unconfirmed": "IBKR dá 0 unidades para {{count}} posición(s) de criptomoedas sen un valor lexible que o confirme: {{holdings}}.",
+  "parser.crypto_position_zero_unconfirmed.hint": "Un 0 sen un valor de 0 ao lado pode ser un erro da exportación, así que DeclaRenta non dá a posición por pechada: o Modelo 721 móstraa con unidades descoñecidas e sen valorar, e non pode concluír que non teñas que presentalo. Comproba no extracto de fin de ano de IBKR se aínda a tes: se é así, toma as súas unidades e o seu valor; se non, non a declares.",
   "parser.open_position_sign_conflict": "IBKR dá un número de accións ou unidades e un valor de signo contrario para {{count}} posición(s) aberta(s): {{holdings}}.",
   "parser.open_position_sign_conflict.hint": "Unha cantidade positiva cun valor negativo, ou ao revés, contradise: DeclaRenta non sabe se é unha posición longa ou curta, así que non a valora. O modelo 720 e o D-6 (accións, fondos e bonos) ou o modelo 721 (criptomoedas) cóntana como sen valorar e non poden concluír que non teñas que presentalos. Toma a cantidade e o valor do extracto de fin de ano de IBKR.",
   "parser.cash_balance_unreadable": "IBKR non dá un saldo final lexible para {{count}} saldo(s) en efectivo: {{accounts}}.",

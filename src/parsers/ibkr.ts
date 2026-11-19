@@ -90,8 +90,10 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const corporateActions: ReturnType<typeof mapCorporateAction>[] = [];
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
   // Rows whose quantity is unknown because an explicit 0 sits next to a value
-  // that is not 0 (they get their own warning, #470).
+  // that is not 0, or next to no readable value at all (each gets its own
+  // warning, #470).
   const zeroWithValue = new Set<OpenPosition>();
+  const zeroUnconfirmed = new Set<OpenPosition>();
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
@@ -139,6 +141,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       const position = mapOpenPosition(raw);
       openPositions.push(position);
       if (isZeroWithValue(raw)) zeroWithValue.add(position);
+      if (isUnconfirmedZero(raw)) zeroUnconfirmed.add(position);
     }
     securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
@@ -247,6 +250,9 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   // warning for securities (720, D-6) and one for crypto (721). An explicit 0
   // next to a value that is not 0 is unknown too, but the file does give a
   // number: it gets its own wording, so the warning never says it is unreadable.
+  // An explicit 0 with no readable value next to it (unreadable text, or no
+  // positionValue column) is unknown too: nothing confirms it, so it gets a
+  // third wording, which says no cancellation is written for it.
   // Only rows a form reads are named (`isFormHolding`): the warnings say what
   // the 720, the D-6 or the 721 do with them, which is false for an option.
   for (const crypto of [false, true]) {
@@ -272,7 +278,27 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
             context: { count, holdings },
           });
     }
-    const unreadable = flagged.filter((p) => !zeroWithValue.has(p));
+    const unconfirmed = flagged.filter((p) => zeroUnconfirmed.has(p));
+    if (unconfirmed.length > 0) {
+      const count = String(unconfirmed.length);
+      const holdings = holdingsOf(unconfirmed);
+      parserMessages.push(crypto
+        ? {
+            id: "parser.crypto_position_zero_unconfirmed",
+            severity: "warning",
+            message: `IBKR da 0 unidades para ${count} posición(es) de criptomonedas sin un valor legible que lo confirme: ${holdings}.`,
+            hint: "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 721 la muestra con unidades desconocidas y sin valorar, y no puede concluir que no debas presentarlo. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma sus unidades y su valor; si no, no la declares.",
+            context: { count, holdings },
+          }
+        : {
+            id: "parser.open_position_zero_unconfirmed",
+            severity: "warning",
+            message: `IBKR da 0 acciones para ${count} posición(es) abierta(s) sin un valor legible que lo confirme: ${holdings}.`,
+            hint: "Un 0 sin un valor de 0 al lado puede ser un error de la exportación, así que DeclaRenta no da la posición por cerrada: el Modelo 720 no escribe su registro de baja (C) y el D-6 no la cancela, y ambos la muestran sin número de valores y sin valorar. Comprueba en el extracto de fin de año de IBKR si aún la tienes: si es así, toma el número de acciones y su valor; si la vendiste, declara su baja a mano.",
+            context: { count, holdings },
+          });
+    }
+    const unreadable = flagged.filter((p) => !zeroWithValue.has(p) && !zeroUnconfirmed.has(p));
     if (unreadable.length === 0) continue;
     const count = String(unreadable.length);
     const holdings = holdingsOf(unreadable);
@@ -869,6 +895,21 @@ function isZeroWithValue(raw: Record<string, string>): boolean {
     && value !== null && !value.isZero();
 }
 
+/**
+ * An Open Positions row whose quantity is an explicit 0 while no readable value
+ * sits next to it: text that is no number ("N/A", "NaN", "60,000", "") or no
+ * positionValue column at all. A written 0 is trusted only when a value of 0
+ * confirms it; otherwise it may be an export error and the holding may still be
+ * there, so the 0 is no share count: the parser flags it `quantityUnknown`, and
+ * the 720 writes no cancellation (C) for it, the D-6 does not cancel it and the
+ * 721 keeps the coin, each «sin valorar» (#470). The missing column counts as
+ * unconfirmed too: the parser's "0" for it is no value the broker gave.
+ */
+function isUnconfirmedZero(raw: Record<string, string>): boolean {
+  return readPositionNumber(raw.position ?? raw.quantity)?.isZero() === true
+    && readPositionNumber(raw.positionValue) === null;
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // IBKR writes the held quantity as `position`; `quantity` is the older
   // hand-written form some files use. Keep a missing or unreadable quantity
@@ -877,10 +918,11 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
   // An explicit 0 next to a value that is not 0 contradicts itself: the 0 is
   // no share count, so it is unknown too, never 0 units in the 720/721 (#470).
+  // So is a 0 that no readable value confirms (`isUnconfirmedZero`).
   // A quantity is a number by the generators' own rule (`readPositionNumber`):
   // "7e2" is 700 shares, "NaN" or "N/A" is unknown.
   const rawQuantity = raw.position ?? raw.quantity;
-  const quantityUnknown = readPositionNumber(rawQuantity) === null || isZeroWithValue(raw);
+  const quantityUnknown = readPositionNumber(rawQuantity) === null || isZeroWithValue(raw) || isUnconfirmedZero(raw);
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",

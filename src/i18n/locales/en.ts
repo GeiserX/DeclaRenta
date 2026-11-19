@@ -496,7 +496,7 @@ const en: TranslationKeys = {
   "d6.positions_title": "Positions to declare",
   "d6.positions_unvalued":
     "{{count}} position(s) could not be valued in euros or have no valid number of securities (no market price, no exchange rate for their currency at year-end, or no number of securities) and were excluded from the total. Include them by hand with their euro value and their number of securities.",
-  "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 next to a value): {{holdings}}. They are not 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
+  "d6.quantity_unknown": "The file has no valid number of securities for {{count}} position(s) (missing, unreadable, or a 0 its value does not confirm): {{holdings}}. They do not count as 0: take the number from the broker's year-end statement and type it by hand in the D-6.",
   "d6.cancellations_title": "Cancellations",
   "d6.generate_btn": "Generate D-6 guide",
   "d6.deadline": "Deadline: January 1 – 31 of the following year",
@@ -536,7 +536,7 @@ const en: TranslationKeys = {
     "The official AEAT format is XML (Orden HFP/886/2023). DeclaRenta only shows an advisory review: official generation is disabled until validated XML output is implemented.",
   "m721.positions_unvalued":
     "{{count}} position(s) could not be valued in euros (no market price, or no exchange rate for their currency at year-end) and were excluded from the total. Compute their euro value and include them manually.",
-  "m721.quantity_unknown": "The file has no valid number of units for {{count}} cryptocurrency(ies) (missing, unreadable, or a 0 next to a value): {{coins}}. They are not 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
+  "m721.quantity_unknown": "The file has no valid number of units for {{count}} cryptocurrency(ies) (missing, unreadable, or a 0 its value does not confirm): {{coins}}. They do not count as 0: take the units from the year-end statement of the exchange or broker and type them by hand in the Modelo 721.",
   "m721.empty_title": "No crypto positions loaded",
   "m721.empty_description":
     "Modelo 721 is a mandatory informative declaration if you hold cryptocurrencies on foreign exchanges valued over 50,000 EUR. Upload your broker report in the Modelo 100 section so DeclaRenta can automatically check if you exceed the threshold. Deadline: January 1 – March 31.",
@@ -1122,6 +1122,10 @@ const en: TranslationKeys = {
   "parser.open_position_zero_with_value.hint": "A 0 next to a value is no share count, so it is treated as unknown, never as 0. With a positive value, the Modelo 720 and the D-6 show the position with no number of securities and ask you to type it by hand, and its value counts toward the 720 threshold. With a negative value it is a short position (shares you owe, not shares you own), and the 720 and the D-6 leave it out. Take the number from the IBKR year-end statement.",
   "parser.crypto_position_zero_with_value": "IBKR gives 0 units for {{count}} crypto position(s) that do have a value other than 0: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "A 0 next to a value is no number of units, so it is treated as unknown, never as 0. With a positive value, the Modelo 721 shows its units as unknown and its value counts toward the threshold. With a negative value it is a short position (crypto you owe, not crypto you own), and the 721 leaves it out. Take the units from the IBKR year-end statement.",
+  "parser.open_position_zero_unconfirmed": "IBKR gives 0 shares for {{count}} open position(s) with no readable value to confirm it: {{holdings}}.",
+  "parser.open_position_zero_unconfirmed.hint": "A 0 without a value of 0 next to it can be an export error, so DeclaRenta does not treat the position as closed: the Modelo 720 writes no cancellation (C) record for it and the D-6 does not cancel it, and both show it with no number of securities and unvalued. Check the IBKR year-end statement to see whether you still hold it: if you do, take the number of shares and its value from it; if you sold it, declare its cancellation by hand.",
+  "parser.crypto_position_zero_unconfirmed": "IBKR gives 0 units for {{count}} crypto position(s) with no readable value to confirm it: {{holdings}}.",
+  "parser.crypto_position_zero_unconfirmed.hint": "A 0 without a value of 0 next to it can be an export error, so DeclaRenta does not treat the position as closed: the Modelo 721 shows it with unknown units and unvalued, and cannot conclude that you do not have to file it. Check the IBKR year-end statement to see whether you still hold it: if you do, take its units and its value from it; if not, do not declare it.",
   "parser.open_position_sign_conflict": "IBKR gives a share or unit count and a value of opposite signs for {{count}} open position(s): {{holdings}}.",
   "parser.open_position_sign_conflict.hint": "A positive quantity with a negative value, or the reverse, contradicts itself: DeclaRenta cannot tell a long position from a short one, so it does not value it. The Modelo 720 and the D-6 (stocks, funds and bonds) or the Modelo 721 (cryptocurrencies) count it as not valued and cannot conclude that you do not have to file them. Take the quantity and the value from the IBKR year-end statement.",
   "parser.cash_balance_unreadable": "IBKR gives no readable ending balance for {{count}} cash balance(s): {{accounts}}.",

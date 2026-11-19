@@ -379,13 +379,13 @@ describe("#470 the unknown-quantity banners are true for a missing quantity and 
     renderSection721(flex(coin("BTC", "BITCOIN", "0", "60000")), rateMap);
     const m721 = document.querySelector("#m721-content .m721-quantity-unknown")!.textContent;
     expect(m721).not.toContain("no da");
-    expect(m721).toContain("un 0 junto a un valor");
+    expect(m721).toContain("un 0 que su valor no confirma");
 
     useProfile("d6-content");
     renderSectionD6(flex(stock("0", "70000")), rateMap);
     const d6 = document.querySelector("#d6-content .d6-quantity-unknown")!.textContent;
     expect(d6).not.toContain("no da");
-    expect(d6).toContain("un 0 junto a un valor");
+    expect(d6).toContain("un 0 que su valor no confirma");
 
     useProfile("m720-content");
     renderSection720(flex(stock("0", "70000")), rateMap);

@@ -83,7 +83,7 @@ describe("#470 Modelo 721: an IBKR coin with no readable quantity", () => {
     expect(rows("m721-content")).toEqual(["BITCOIN | — | — | 51.000,00"]);
     const banner = document.querySelector("#m721-content .m721-quantity-unknown")?.textContent ?? "";
     expect(banner).toContain("BTC");
-    expect(banner).toContain("No son 0");
+    expect(banner).toContain("No cuentan como 0");
   });
 
   it("value missing too: unvalued, kept in the table, and the verdict is «No se puede determinar», not «No estás obligado»", () => {
@@ -318,17 +318,19 @@ describe("#470 an IBKR row whose positionValue is no number, whatever its quanti
         });
       }
 
-      it("position=\"0\": holds nothing in the 720 (no record, not unvalued; last year's security gets its C record), as in the D-6", () => {
+      it("position=\"0\": nothing confirms the 0, so it is unknown and held, as in the D-6 (no C record for last year's security)", () => {
         const st = flex(stock("0", value) + other);
-        expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values).toMatchObject({ unvalued: 0 });
+        expect(st.openPositions[0]!.quantityUnknown).toBe(true);
+        expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values).toMatchObject({ unvalued: 1 });
         const withPrevious = generateModelo720(flex(stock("0", value) + stock("700", "70000", "US0000000002")).openPositions, rateMap, { ...cfg720, previousYearSecurities: previous });
-        const acme = withPrevious.split("\n").slice(1).filter((r) => r.includes("US0000000001"));
-        expect(acme).toHaveLength(1);
-        expect(acme[0]![422]).toBe("C");
+        expect(withPrevious.split("\n").slice(1).filter((r) => r.includes("US0000000001"))).toEqual([]);
         useProfile("m720-content");
         renderSection720(st, rateMap);
-        expect(rows("m720-content").filter((r) => r.includes("US0000000001"))).toEqual([]);
-        expect(generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z").positions.map((p) => p.isin)).toEqual(["US0000000002"]);
+        expect(rows("m720-content").find((r) => r.includes("US0000000001"))?.split(" | ").at(-1)).toBe("—");
+        const d6 = generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z", ["US0000000001"]);
+        expect(d6.positions.map((p) => p.isin)).toEqual(["US0000000002"]);
+        expect(d6.unvaluedCount).toBe(1);
+        expect(d6.cancelled).toEqual([]);
       });
 
       it("position=\"-700\": a short, out of the 720 table and thresholds and cancelled, as in the D-6", () => {
@@ -374,10 +376,10 @@ describe("#470 an IBKR row whose positionValue is no number, whatever its quanti
         });
       }
 
-      it("a coin with position=\"0\" holds nothing in the 721", () => {
+      it("a coin with position=\"0\": nothing confirms the 0, so the 721 keeps it with unknown units, unvalued", () => {
         const v = buildModelo721Entries(flex(coin("BTC", "BITCOIN", "0", value) + coin("ETH", "ETHER", "10", "30000")).openPositions, rateMap, "2025-12-31");
-        expect(v.positions.map((p) => p.entry.assetId)).toEqual(["ETH"]);
-        expect(v.unvaluedCount).toBe(0);
+        expect(v.positions.map((p) => [p.entry.assetId, p.entry.quantityUnknown ?? false, p.valuationEur?.toString() ?? null])).toEqual([["BTC", true, null], ["ETH", false, "25500"]]);
+        expect(v.unvaluedCount).toBe(1);
       });
 
       it("an unreadable costBasisMoney does not crash the 721 (value known)", () => {

@@ -496,7 +496,7 @@ const ca: TranslationKeys = {
   "d6.positions_title": "Posicions a declarar",
   "d6.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros o no porten un nombre de títols vàlid (sense preu de mercat, sense tipus de canvi per a la seva moneda al tancament de l'exercici o sense nombre de títols) i s'han exclòs del total. Inclou-les a mà amb el seu valor en euros i el seu nombre de títols.",
-  "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 al costat d'un valor): {{holdings}}. No són 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
+  "d6.quantity_unknown": "El fitxer no porta un nombre de títols vàlid per a {{count}} posició(ns) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{holdings}}. No compten com a 0: pren el nombre de l'extracte de final d'any del bròker i escriu-lo a mà al D-6.",
   "d6.cancellations_title": "Cancel·lacions",
   "d6.generate_btn": "Generar guia D-6",
   "d6.deadline": "Termini: 1 – 31 gener de l'any següent",
@@ -535,7 +535,7 @@ const ca: TranslationKeys = {
     "El format oficial de l'AEAT és XML (Ordre HFP/886/2023). DeclaRenta només mostra una revisió orientativa: la generació oficial està desactivada fins que s'implementi l'XML validat.",
   "m721.positions_unvalued":
     "{{count}} posició(ns) no s'han pogut valorar en euros (sense preu de mercat o sense tipus de canvi per a la seva moneda al tancament de l'exercici) i s'han exclòs del total. Calcula el seu valor en euros i inclou-les manualment.",
-  "m721.quantity_unknown": "El fitxer no porta un nombre d'unitats vàlid per a {{count}} criptomoneda(es) (falta, no es llegeix o és un 0 al costat d'un valor): {{coins}}. No són 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
+  "m721.quantity_unknown": "El fitxer no porta un nombre d'unitats vàlid per a {{count}} criptomoneda(es) (falta, no es llegeix o és un 0 que el seu valor no confirma): {{coins}}. No compten com a 0: pren les unitats de l'extracte de final d'any de l'exchange o del bròker i escriu-les a mà al Model 721.",
   "m721.empty_title": "No hi ha posicions de criptomonedes",
   "m721.empty_description":
     "El Model 721 és una declaració informativa obligatòria si posseeixes criptomonedes en exchanges estrangers valorades en més de 50.000 €. Puja el teu informe del broker a la secció Model 100 perquè DeclaRenta calculi automàticament si superes el llindar. Termini: 1 de gener – 31 de març.",
@@ -1124,6 +1124,10 @@ const ca: TranslationKeys = {
   "parser.open_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'accions, així que es tracta com a desconegut, mai com a 0. Amb un valor positiu, el Model 720 i el D-6 mostren la posició sense nombre de valors i et demanen que l'escriguis a mà, i el seu valor compta per al llindar del 720. Amb un valor negatiu és una posició curta (accions que deus, no que tens), i el 720 i el D-6 no la inclouen. Pren el nombre de l'extracte de final d'any d'IBKR.",
   "parser.crypto_position_zero_with_value": "IBKR dona 0 unitats per a {{count}} posició(ns) de criptomonedes que sí que tenen un valor diferent de 0: {{holdings}}.",
   "parser.crypto_position_zero_with_value.hint": "Un 0 al costat d'un valor no és un nombre d'unitats, així que es tracta com a desconegut, mai com a 0. Amb un valor positiu, el Model 721 mostra les seves unitats com a desconegudes i el seu valor compta per al llindar. Amb un valor negatiu és una posició curta (criptomonedes que deus, no que tens), i el 721 no la inclou. Pren les unitats de l'extracte de final d'any d'IBKR.",
+  "parser.open_position_zero_unconfirmed": "IBKR dona 0 accions per a {{count}} posició(ns) oberta(es) sense un valor llegible que ho confirmi: {{holdings}}.",
+  "parser.open_position_zero_unconfirmed.hint": "Un 0 sense un valor de 0 al costat pot ser un error de l'exportació, així que DeclaRenta no dona la posició per tancada: el Model 720 no n'escriu el registre de baixa (C) i el D-6 no la cancel·la, i tots dos la mostren sense nombre de valors i sense valorar. Comprova a l'extracte de final d'any d'IBKR si encara la tens: si és així, pren-ne el nombre d'accions i el valor; si la vas vendre, declara'n la baixa a mà.",
+  "parser.crypto_position_zero_unconfirmed": "IBKR dona 0 unitats per a {{count}} posició(ns) de criptomonedes sense un valor llegible que ho confirmi: {{holdings}}.",
+  "parser.crypto_position_zero_unconfirmed.hint": "Un 0 sense un valor de 0 al costat pot ser un error de l'exportació, així que DeclaRenta no dona la posició per tancada: el Model 721 la mostra amb unitats desconegudes i sense valorar, i no pot concloure que no l'hagis de presentar. Comprova a l'extracte de final d'any d'IBKR si encara la tens: si és així, pren-ne les unitats i el valor; si no, no la declaris.",
   "parser.open_position_sign_conflict": "IBKR dona un nombre d'accions o unitats i un valor de signe contrari per a {{count}} posició(ns) oberta(es): {{holdings}}.",
   "parser.open_position_sign_conflict.hint": "Una quantitat positiva amb un valor negatiu, o al revés, es contradiu: DeclaRenta no sap si és una posició llarga o curta, així que no la valora. El model 720 i el D-6 (accions, fons i bons) o el model 721 (criptomonedes) la compten com a sense valorar i no poden concloure que no els hagis de presentar. Pren la quantitat i el valor de l'extracte de final d'any d'IBKR.",
   "parser.cash_balance_unreadable": "IBKR no dona un saldo final llegible per a {{count}} saldo(s) en efectiu: {{accounts}}.",
