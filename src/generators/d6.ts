@@ -20,6 +20,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { fitsModelo720Amount } from "./modelo720.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -47,7 +48,7 @@ export interface D6Report {
   cancelled: D6Cancellation[];
   totalPositions: number;
   totalValueEur: string;
-  /** Held foreign positions left out because they have no year-end rate, no market value or no readable share count (#470): declare them by hand. */
+  /** Held foreign positions left out because they have no year-end rate, no market value, no valid share count or a value too big for the 720's valoración (#470): declare them by hand. */
   unvaluedCount: number;
   guide: string[];
 }
@@ -113,11 +114,14 @@ export function generateD6Report(
       // no share count the entry would say 0 shares: skip and count it too
       // (tested first: its value may be unreadable text).
       const value = positionValueOf(p);
-      if (ecbRate === null || p.quantityUnknown === true || hasNoMarketValue(p) || value === null) {
+      const valueEur = ecbRate === null || value === null ? null : value.mul(ecbRate);
+      // A value too big for the 720's valoración (12 integer digits in euros)
+      // is «sin valorar» there; the D-6 follows the same rule, so the two forms
+      // never disagree on a holding and no total runs to hundreds of digits.
+      if (valueEur === null || p.quantityUnknown === true || hasNoMarketValue(p) || !fitsModelo720Amount(valueEur)) {
         unvalued.push({ isin: p.isin, description: p.description });
         return [];
       }
-      const valueEur = value.mul(ecbRate);
 
       return [{
         isin: p.isin,

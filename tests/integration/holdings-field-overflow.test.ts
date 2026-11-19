@@ -27,6 +27,10 @@ import {
   unvaluedCashBalances,
 } from "../../src/generators/modelo720.js";
 import { renderSection720 } from "../../src/web/section-720.js";
+import { renderSectionD6 } from "../../src/web/section-d6.js";
+import { renderSection721 } from "../../src/web/section-721.js";
+import { generateD6Report } from "../../src/generators/d6.js";
+import { buildModelo721Entries, generateModelo721 } from "../../src/generators/modelo721.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
@@ -241,3 +245,81 @@ describe("#470 a cancellation whose value does not fit valoración 1", () => {
     expect(texts.size).toBe(5);
   });
 });
+
+function coin(value: string, currency = "USD"): string {
+  return `<OpenPosition accountId="U1234567" symbol="BTC" description="BITCOIN" isin="" currency="${currency}" assetCategory="CRYPTO" position="1" markPrice="100000" positionValue="${value}" costBasisMoney="40000" fxRateToBase="0.85" levelOfDetail="SUMMARY" />`;
+}
+
+function useContainer(id: string): void {
+  const profile = JSON.stringify({ year: 2025 });
+  vi.stubGlobal("localStorage", { getItem: (key: string) => (key === "declarenta_profile" ? profile : null) });
+  document.body.innerHTML = `<div id="${id}"></div>`;
+}
+
+describe("#470 one rule in the three forms: a value too big for the 720 field is unvalued in the D-6 and the 721 too", () => {
+  // At 0.85, 1e999 and 2e12 USD do not fit 12 integer digits in euros. The 720
+  // calls them «sin valorar»; the D-6 and the 721 must not print a total of
+  // hundreds of digits next to it.
+  for (const value of ["1e999", "2e12"]) {
+    it(`positionValue="${value}": the D-6 counts it unvalued, names it, and its total stays the other holding's`, () => {
+      const d6 = generateD6Report(flex(stock("700", value) + other).openPositions, rateMap, 2025, "X", "12345678Z");
+      expect(d6.positions.map((p) => p.isin)).toEqual([OTHER]);
+      expect(d6.unvaluedCount).toBe(1);
+      expect(d6.totalValueEur).toBe("59500.00");
+      expect(d6.guide.join("\n")).toContain(`${ACME}  ACME CORP`);
+      expect(d6.guide.join("\n")).not.toMatch(/e\+|\d{16}/);
+    });
+
+    it(`positionValue="${value}": the web D-6 shows «—» and the unvalued banner`, () => {
+      useContainer("d6-content");
+      renderSectionD6(flex(stock("700", value) + other), rateMap);
+      const cells = [...document.querySelectorAll("#d6-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim()));
+      expect(cells.find((r) => r[0] === ACME)?.at(-1)).toBe("—");
+      expect(document.getElementById("d6-content")!.textContent).toContain("no se han podido valorar");
+    });
+
+    it(`a coin worth ${value}: the 721 counts it unvalued, never in the total, and the verdict cannot say «not obliged»`, () => {
+      const v = buildModelo721Entries(flex(coin(value)).openPositions, rateMap, "2025-12-31");
+      expect(v.unvaluedCount).toBe(1);
+      expect(v.totalValueEur.toString()).toBe("0");
+      expect(v.positions[0]!.valuationEur).toBeNull();
+      useContainer("m721-content");
+      renderSection721(flex(coin(value)), rateMap);
+      expect(document.getElementById("m721-content")!.textContent).toContain("No se puede determinar");
+    });
+  }
+
+  it("boundary: 999,999,999,999.99 € is valued in the D-6 and the 721; 999,999,999,999.995 € is not", () => {
+    const fits = generateD6Report(flex(stock("700", "999999999999.99", ACME, "EUR")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([fits.unvaluedCount, fits.totalValueEur]).toEqual([0, "999999999999.99"]);
+    const over = generateD6Report(flex(stock("700", "999999999999.995", ACME, "EUR")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([over.unvaluedCount, over.totalValueEur]).toEqual([1, "0.00"]);
+    expect(buildModelo721Entries(flex(coin("999999999999.99", "EUR")).openPositions, rateMap, "2025-12-31").unvaluedCount).toBe(0);
+    expect(buildModelo721Entries(flex(coin("999999999999.995", "EUR")).openPositions, rateMap, "2025-12-31").unvaluedCount).toBe(1);
+  });
+});
+
+describe("#470 the 721 library export writes numbers as the 720 does: digits in their width, never an exponent", () => {
+  const cfg721 = { ...cfg720, declarationId: "7210000000001", allowPrototypeOutput: true };
+  const entry = (valuationEur: string, quantity = "1") => ({
+    assetId: "BTC", description: "BITCOIN", exchangeName: "", countryCode: "", quantity: new Decimal(quantity),
+    valuationEur: new Decimal(valuationEur), acquisitionCostEur: new Decimal(40000),
+  });
+
+  it("a value that fits is written in digits", () => {
+    const lines = generateModelo721([entry("60000.5")], cfg721).split("\n");
+    for (const line of lines) expect(line).toHaveLength(500);
+    // Valoración (sign and 13 + 2 digits), a blank, then the quantity (9 + 3).
+    expect(lines[1]).toContain(" 000000006000050 000000001000");
+    expect(lines[1]).not.toMatch(/e\+/);
+  });
+
+  it.each([["1e25"], ["1e999"]])("a value of %s throws, never writes an exponent", (value) => {
+    expect(() => generateModelo721([entry(value)], cfg721)).toThrow(/excede el campo/);
+  });
+
+  it("a quantity past its 9 integer digits throws", () => {
+    expect(() => generateModelo721([entry("60000", "1e21")], cfg721)).toThrow(/excede el campo/);
+  });
+});
+

@@ -13,6 +13,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
 import { hasNoMarketValue, lookupPositionRate, positionValueOf, readPositionNumber } from "../engine/ecb.js";
+import { fitsModelo720Amount } from "./modelo720.js";
 
 export interface Modelo721Entry {
   /** Crypto asset identifier (e.g., BTC, ETH) */
@@ -42,13 +43,13 @@ const CRYPTO_CATEGORIES = new Set(["CRYPTO"]);
 /** A valued 721 position plus the per-position EUR valuation for display. */
 export interface Modelo721ValuedPosition {
   entry: Modelo721Entry;
-  /** Year-end EUR valuation, or null when the currency has no resolvable rate. */
+  /** Year-end EUR valuation, or null when it is «sin valorar»: no resolvable rate, no market value, or a value too big for a valoración. */
   valuationEur: Decimal | null;
 }
 
 export interface Modelo721Valuation {
   positions: Modelo721ValuedPosition[];
-  /** Positions whose currency had no resolvable year-end rate (surfaced for manual valuation). */
+  /** Held coins left out of the total (`valuationEur` null), surfaced for manual valuation. */
   unvaluedCount: number;
   /** Sum of all resolvable year-end valuations (EUR). */
   totalValueEur: Decimal;
@@ -101,7 +102,11 @@ export function buildModelo721Entries(
     const value = positionValueOf(p);
 
     const rate = noMarketValue || value === null ? null : lookupPositionRate(rateMap, yearEnd, p.currency);
-    const valuationEur = rate === null || value === null ? null : value.mul(rate);
+    const valued = rate === null || value === null ? null : value.mul(rate);
+    // A value too big for a valoración (12 integer digits in euros) is «sin
+    // valorar», the 720's rule (`fitsModelo720Amount`): one rule in the three
+    // forms, and the 50,000 € verdict never rests on such a number (#470).
+    const valuationEur = valued !== null && fitsModelo720Amount(valued) ? valued : null;
     if (valuationEur === null) {
       unvaluedCount++;
     } else {
@@ -179,8 +184,15 @@ function fixedWidthText(value: string, length: number, alignRight = false): stri
 
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
-  const intPart = dec.floor().toString().padStart(intLen, "0");
-  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toString().padStart(decLen, "0");
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("1e+25"), which padded to the width carried no number. A value past the
+  // field fails fast, as the 720's numPad does, never shifting the record (#470).
+  const intDigits = dec.floor().toFixed(0);
+  if (intDigits.length > intLen) {
+    throw new Error(`Modelo 721: importe ${dec.toFixed()} excede el campo de ${intLen} dígitos enteros`);
+  }
+  const intPart = intDigits.padStart(intLen, "0");
+  const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toFixed(0).padStart(decLen, "0");
   return intPart + fracPart;
 }
 

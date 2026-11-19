@@ -8,6 +8,7 @@
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
 import { hasNoMarketValue, isD6Holding, lookupPositionRate, positionValueOf } from "../engine/ecb.js";
+import { fitsModelo720Amount } from "../generators/modelo720.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -34,16 +35,18 @@ function positionRate(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): De
 }
 
 /**
- * The holding's EUR value, or null when it has no rate, no readable value or
- * no share count (never 0 €). The D-6 generator's rule: an AFORIX entry needs
- * both the share count and the value, so a holding missing either is left out
- * of the total and counted to declare by hand, on screen as in the guide (#470).
+ * The holding's EUR value, or null when it has no rate, no readable value, no
+ * share count, or a value too big for the 720's valoración (never 0 €). The D-6
+ * generator's rule: an AFORIX entry needs both the share count and the value,
+ * so a holding missing either is left out of the total and counted to declare
+ * by hand, on screen as in the guide (#470).
  */
 function positionValueEur(rateMap: EcbRateMap, yearEnd: string, p: OpenPosition): Decimal | null {
   if (p.quantityUnknown === true) return null;
   const rate = positionRate(rateMap, yearEnd, p);
   const value = positionValueOf(p);
-  return rate === null || value === null ? null : value.mul(rate);
+  const valueEur = rate === null || value === null ? null : value.mul(rate);
+  return valueEur !== null && fitsModelo720Amount(valueEur) ? valueEur : null;
 }
 
 /** The share count shown, or "—" when the export does not give it (#470): never 0. */
