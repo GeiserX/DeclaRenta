@@ -1771,9 +1771,12 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     }
   });
 
-  it("the corporate-action warning says who did not apply the rows, in Spanish, in English and in the Spanish the parser emits", () => {
+  it("the corporate-action warning says who did not apply the rows, in the five locales and in the Spanish the parser emits", () => {
     expect((es as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta no ha aplicado");
     expect((en as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta did not apply");
+    expect((ca as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta no ha aplicat");
+    expect((eu as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRentak ez ditu aplikatu");
+    expect((gl as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta non aplicou");
     const parsed = trading212Parser.parse([T212_H,
       `Stock split close,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,10,10,EUR,1.00,,,0,EUR,,s1`,
       `Stock split open,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,40,2.5,EUR,1.00,,,0,EUR,,s2`].join("\n"));
