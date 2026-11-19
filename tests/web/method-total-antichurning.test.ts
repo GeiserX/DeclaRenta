@@ -56,13 +56,12 @@ function strip(report: TaxSummary, method: FxMethod | null) {
   return { root, cells };
 }
 
-/** Every value cell is a finite figure, and every cell but the Total adds up to the Total. */
+/** Every value cell is a finite figure, and the printed cells but the Total add up to the printed Total, to the cent. */
 function expectCellsAddUp(values: string[]) {
   const nums = values.map(parseCell);
   const total = nums[nums.length - 1]!;
   const parts = nums.slice(0, -1).reduce((a, b) => a.plus(b), new Decimal(0));
-  // Each cell is rounded on its own, so the sum can be a cent off.
-  expect(parts.minus(total).abs().lessThanOrEqualTo("0.01")).toBe(true);
+  expect(parts.toFixed(2)).toBe(total.toFixed(2));
 }
 
 async function compareRows(statementName: string, current: FxMethod) {
@@ -116,6 +115,29 @@ describe("results strip Total = the base the cuota uses (#471)", () => {
     expectCellsAddUp(cells.map((c) => c.value));
   });
 
+  it("same-year block and release: the deferral is 0 and its subtitle does not say «de años anteriores»", () => {
+    const report = generateTaxReport(load("ibkr-471-same-year-eur-2025.xml"), rates, 2025);
+    expect(report.capitalGains.blockedLosses.toFixed(2)).toBe("1000.00");
+    expect(report.capitalGains.reintegratedLosses.toFixed(2)).toBe("1000.00");
+    const totals = methodTotals(report);
+    expect(totals.hasDeferred).toBe(true);
+    expect(totals.total.toFixed(2)).toBe("-700.00");
+
+    const { cells } = strip(report, null);
+    expect(cells.map((c) => c.value)).toEqual(["−700,00 €", "0,00 €", "−700,00 €"]);
+    expect(cells[1]!.sub).toBe(t("results.split_deferred_sub"));
+    expect(cells[1]!.sub).not.toMatch(/anteriores/);
+    expectCellsAddUp(cells.map((c) => c.value));
+  });
+
+  it("USD upload under multidivisa: the printed deferral is the Total minus the other printed cells (−432,00 + 0,00 + 864,00 = 432,00)", () => {
+    const report = generateTaxReport(load("ibkr-471-blocked-usd-2025.xml"), rates, 2025, reportOptionsForMethod("multidivisa"));
+    // Each figure on its own rounds to −432,00, 864,01 and 432,00: printed as is, the cells would be a cent off.
+    expect(report.capitalGains.blockedLosses.toDecimalPlaces(2).toFixed(2)).toBe("864.01");
+    const { cells } = strip(report, "multidivisa");
+    expect(cells.map((c) => c.value)).toEqual(["−432,00 €", "0,00 €", "+864,00 €", "+432,00 €"]);
+  });
+
   for (const m of METHODS) {
     it(`USD upload under ${m}: the strip Total matches savingsBalances and the cells add up`, () => {
       const report = generateTaxReport(load("ibkr-471-blocked-usd-2025.xml"), rates, 2025, reportOptionsForMethod(m));
@@ -128,6 +150,8 @@ describe("results strip Total = the base the cuota uses (#471)", () => {
         combinedNetGainLoss(computeCasillaBlocksWithFx(report)).minus(report.fxGains.netGainLoss).toFixed(2),
       );
       expect(totals.deferred.toFixed(2)).toBe(report.capitalGains.blockedLosses.minus(report.capitalGains.reintegratedLosses).toFixed(2));
+      // The printed deferral is within rounding of the exact one.
+      expect(totals.deferredShown.minus(totals.deferred).abs().lessThanOrEqualTo("0.02")).toBe(true);
       // The deferral moves the Total away from the raw net, by exactly the blocked loss.
       expect(totals.total.toFixed(2)).toBe(report.capitalGains.netGainLoss.plus(report.capitalGains.blockedLosses).plus(report.fxGains.netGainLoss).toFixed(2));
       expect(totals.total.minus(totals.securities.plus(totals.fx)).toFixed(2)).toBe(report.capitalGains.blockedLosses.toFixed(2));
@@ -169,6 +193,52 @@ describe("results strip Total = the base the cuota uses (#471)", () => {
     const byLabel = new Map(rows.map((r) => [r.label, r.cells]));
     expect(byLabel.get(t("results.split_deferred"))).toEqual(["−1.000,00", "−1.000,00", "−1.000,00"]);
     expect(byLabel.get(t("results.split_total"))).toEqual(["−500,00", "−500,00", "−500,00"]);
+  });
+
+  it("a non-finite amount prints «—» for every figure and the cuota, never a finite Total (fail-safe)", async () => {
+    // generateTaxReport replaces a non-finite total with 0 and says so
+    // (`report.non_finite_total`); the disposal itself keeps the NaN. The Total
+    // and the cuota then read a zeroed leg, so they must not print a figure.
+    const good = generateTaxReport(load("ibkr-471-blocked-eur-2025.xml"), rates, 2025);
+    const [first, ...rest] = good.capitalGains.disposals;
+    const poisoned: TaxSummary = {
+      ...good,
+      capitalGains: {
+        ...good.capitalGains,
+        disposals: [{ ...first!, costBasisEur: new Decimal(NaN), gainLossEur: new Decimal(NaN) }, ...rest],
+        acquisitionValue: new Decimal(0),
+      },
+      messages: [...good.messages, { id: "report.non_finite_total", severity: "error", message: "x", context: { field: "acquisitionValue" } }],
+    };
+    // Without the guard the Total would be a finite figure here.
+    expect(savingsBalances(poisoned).gains.isFinite()).toBe(true);
+    const totals = methodTotals(poisoned);
+    expect(totals.unreadable).toBe(true);
+    const { cells, root } = strip(poisoned, "multidivisa");
+    expect(cells.length).toBeGreaterThanOrEqual(3);
+    for (const c of cells) expect(c.value).toBe("—");
+    expect(cells[cells.length - 1]!.sub).toBe(t("results.split_unreadable_sub"));
+    expect(text(root)).not.toMatch(/NaN|\d,\d\d/);
+
+    // Only the message (every disposal finite): still unreadable, the guard zeroed a leg.
+    const flagged: TaxSummary = { ...good, messages: poisoned.messages };
+    expect(methodTotals(flagged).unreadable).toBe(true);
+    expect(strip(flagged, null).cells.every((c) => c.value === "—")).toBe(true);
+
+    // The comparison table prints «—» in the column of an unreadable report.
+    const root2 = document.createElement("div");
+    root2.innerHTML = renderMethodCompare();
+    bindMethodCompare(root2, { method: "multidivisa", report: poisoned }, (m) => generateTaxReport(load("ibkr-471-blocked-eur-2025.xml"), rates, 2025, reportOptionsForMethod(m)));
+    const details = root2.querySelector<HTMLDetailsElement>("#method-compare")!;
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    await new Promise((r) => setTimeout(r, 5));
+    const rows = [...root2.querySelectorAll(".method-compare-table tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map(text));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r[0]).toBe("—");
+      expect(r[1]).not.toBe("—");
+    }
   });
 
   it("with no blocked or released loss the strip and the table have no deferral cell", async () => {
