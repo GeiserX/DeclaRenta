@@ -1058,17 +1058,25 @@ const eu: TranslationKeys = {
   "binance.unparseable_coin.hint":
     "Kortxete artean dago txanponaren gelaxka. Hura gabe, DeclaRentak ez daki zein kriptomoneta sartzen edo ateratzen den. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Zure kriptomoneten irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, ez editatu, eta igo berriro.",
   "freedom24.row_skipped_malformed":
-    "Freedom24: mota irakurgarririk (type_id) ez duten ekintza korporatiboen {{count}} errenkada baztertu dira.",
+    "Freedom24: ekintza korporatiboen {{count}} errenkadak ez dute mota irakurgarririk (type_id), eta ez dira kalkulatzen.",
   "freedom24.row_skipped_malformed.hint":
-    "Errenkada horien \"type_id\" eremua hutsik dago edo ez da testua. Beraz, DeclaRentak ez daki dibidendu, kupoi edo beste eragiketa bat diren, eta ez ditu kalkulatzen. Dibidendu edo kupoi bat falta bazaizu, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro.",
+    "Errenkada horien \"type_id\" eremua hutsik dago edo ez da testua. Beraz, DeclaRentak ez daki dibidendu, kupoi edo beste eragiketa bat diren. Ez du haiengatik zenbatekorik batzen. Akzioak mugi ditzakete, eta horregatik aplikatu gabeko eragiketa korporatiboen abisuak ere aipatzen ditu. Beraz, 2 hilabeteko arauaren erosketa bakarraren egiaztapenak huts egin dezake. DeclaRentak ez dio salbuespen hori haien baloreari aplikatzen. Errenkadak balorerik aipatzen ez badu, ez dio inongo baloreri aplikatzen. Dibidendu edo kupoi bat falta bazaizu, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro.",
   "freedom24.dividend_amount_unreadable":
     "Freedom24: {{count}} dibidendu edo kupoik ez dute zenbateko (amount) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
   "freedom24.dividend_amount_unreadable.hint":
     "Kortxete artean dago zenbatekoaren gelaxka (amount). Hura gabe, DeclaRentak ez daki zenbat kobratu zenuen. Beraz, ez du diru-sarrera hori batzen, ezta bere atxikipena ere, eta ez du zenbatekorik asmatzen. Aitortzen duzun urteko diru-sarrera bada, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro. Zenbatekoa eta atxikipena eskuz ere gehi ditzakezu Renta Web-en.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dibidendu edo kupoik ez dute atxikipen (tax_amount) irakurgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "Kortxete artean dago atxikipenaren gelaxka (tax_amount). DeclaRentak diru-sarrera osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Hartu atxikipena Freedom24-ren txosten fiskaletik eta gehitu eskuz Renta Web-en.",
   "binance.unhandled_operation":
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Mugimendu horiek ez dira kalkuluan sartu. Erosketak, salmentak edo diru-sarrerak badira (adib. futuroak, Binance Card bidezko ordainketak, Auto-Invest edo cashback), gehitu eskuz zure aitorpenean eta jakinarazi eragiketaren izena, sar dadin.",
+  "binance.unpaired_leg":
+    "Binance: erosketa, salmenta edo bihurketa mugimenduen {{count}} errenkadak ez dute eragiketaren beste aldea, eta ez dira kalkulatzen: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Binance-ko erosketa edo salmenta bakoitza ordu bereko bi errenkada dira: sartzen den moneta eta ateratzen dena. DeclaRentak ez du aurkitu mugimendu horien beste errenkada. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen haiengatik. Kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen. Alderatu errenkada horiek zure Binance historiarekin, eta gehitu eskuz Renta Web-en falta diren eragiketak.",
   "binance.unsupported_pair":
     "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{pairs}}.",
   "binance.unsupported_pair.hint":

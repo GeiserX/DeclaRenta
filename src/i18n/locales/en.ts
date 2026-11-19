@@ -1054,17 +1054,25 @@ const en: TranslationKeys = {
   "binance.unparseable_coin.hint":
     "The square brackets show the coin cell. Without it, DeclaRenta does not know which cryptocurrency comes in or goes out. So it adds or removes no units and no money for those rows. The gains, losses and income of your cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it. Download the original Binance report again, do not edit it, and upload it.",
   "freedom24.row_skipped_malformed":
-    "Freedom24: {{count}} corporate action row(s) with no readable type (type_id) were skipped.",
+    "Freedom24: {{count}} corporate action row(s) have no readable type (type_id) and are not calculated.",
   "freedom24.row_skipped_malformed.hint":
-    "The \"type_id\" field of those rows is empty or is not text. So DeclaRenta does not know if they are a dividend, a coupon or another operation, and does not calculate them. If a dividend or a coupon is missing, download the full Freedom24 JSON report again and upload it.",
+    "The \"type_id\" field of those rows is empty or is not text. So DeclaRenta does not know if they are a dividend, a coupon or another operation. It adds no amount for them. They may move shares, so the warning about corporate actions not applied also names them. So the one-purchase check of the 2-month rule may be affected: DeclaRenta does not apply that exception to their security, or to any security if the row names none. If a dividend or a coupon is missing, download the full Freedom24 JSON report again and upload it.",
   "freedom24.dividend_amount_unreadable":
     "Freedom24: {{count}} dividend(s) or coupon(s) have no readable amount (amount) and are not calculated: {{rows}}.",
   "freedom24.dividend_amount_unreadable.hint":
     "The square brackets show the amount cell (amount). Without it, DeclaRenta does not know how much you received. So it does not add that income or its withholding, and does not make up an amount. If it is income of the year you declare, download the full Freedom24 JSON report again and upload it. You can also add the amount and the withholding by hand in Renta Web.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) or coupon(s) have no readable withholding (tax_amount) and are calculated with no withholding: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "The square brackets show the withholding cell (tax_amount). DeclaRenta adds the full income, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). Take the withholding from the Freedom24 tax report and add it by hand in Renta Web.",
   "binance.unhandled_operation":
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":
     "These movements are not included in the calculation. If they are purchases, sales or income (e.g. futures, Binance Card payments, Auto-Invest or cashback), add them to your return by hand and report the operation name so it can be supported.",
+  "binance.unpaired_leg":
+    "Binance: {{count}} buy, sell or convert movement(s) have no other side of the operation and are not calculated: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Each Binance buy or sale is two rows with the same time: the coin that comes in and the one that goes out. DeclaRenta did not find the other row of these movements. So it adds or removes no units and no money for them. The gains and losses of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it. Compare those rows with your Binance history and add the missing operations by hand in Renta Web.",
   "binance.unsupported_pair":
     "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
   "binance.unsupported_pair.hint":

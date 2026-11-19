@@ -1106,15 +1106,17 @@ describe("Revolut transaction log: DIVIDEND and STOCK SPLIT rows", () => {
     expect(report.messages.some((m) => m.id === "fifo.split_applied")).toBe(false);
   });
 
-  it("warns when a STOCK SPLIT row has no quantity", async () => {
+  it("keeps a STOCK SPLIT row with no quantity as a row that books nothing, named as not applied (#467)", async () => {
     const stmt = await parseRevolutXlsx(buildTxnLogWorkbook([
       ["2024-06-03T14:00:00Z", "NVDA", "BUY - MARKET", "1", "USD 500", "USD 500", "USD", "1.08"],
       ["2024-06-10T08:00:00Z", "NVDA", "STOCK SPLIT", "", "", "USD 0", "USD", "1.08"],
     ]));
     expect(stmt.corporateActions).toHaveLength(0);
-    const warning = stmt.parserMessages?.find((m) => m.id === "revolut.split_unresolved");
+    const warning = stmt.parserMessages?.find((m) => m.id === "parser.corporate_action_not_applied");
     expect(warning?.severity).toBe("warning");
-    expect(warning?.context?.count).toBe("1");
+    expect(warning?.context?.rows).toBe("NVDA 20240610 [STOCK SPLIT: —]");
+    // The holding keeps the readable share, flagged as of unknown size.
+    expect(stmt.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown])).toEqual([["NVDA", "1", true]]);
   });
 
   it("skips Revolut's own entity-transfer rows quietly", async () => {

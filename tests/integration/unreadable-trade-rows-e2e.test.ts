@@ -1017,6 +1017,35 @@ describe("#467 a Revolut split with no readable date is named, never applied on 
     const r = run([[await file("2025-03-01T10:00:00Z"), "Revolut"]], 2025, method);
     expect(r.messages.map((m) => m.id)).toContain("fifo.split_applied");
   });
+
+  // A dated split whose Quantity is 0, empty or not a number says nothing of
+  // the shares it added: it is kept and named like the undated one, never
+  // only counted.
+  const datedSplit = (quantity: string, ...before: string[][]): Promise<Statement> => revolut(...before,
+    ["2024-12-02T10:00:00Z", "XYZ", "STOCK SPLIT", quantity, "", "EUR 0", "EUR", "1"]);
+
+  it.each([["0", "0"], ["", "—"], ["abc", "abc"]])("dated, Quantity %j: a row that books nothing, named, the holding of unknown size", async (quantity, shown) => {
+    const parsed = await datedSplit(quantity, ["2024-11-01T10:00:00Z", "XYZ", "BUY - MARKET", "10", "EUR 10", "EUR 100", "EUR", "1"]);
+    expect(parsed.corporateActions).toEqual([]);
+    expect(parsed.trades.filter((t) => t.corporateActionRow).map((t) => [t.symbol, t.tradeDate, t.quantity, t.proceeds, t.cost, t.undatedRow])).toEqual([["XYZ", "20241202", "0", "0", "0", undefined]]);
+    expect(messageRows(parsed, "parser.corporate_action_not_applied")).toBe(`XYZ 20241202 [STOCK SPLIT: ${shown}]`);
+    expect(parsed.parserMessages?.map((m) => m.id)).not.toContain("revolut.split_unresolved");
+    // The readable 10 shares stay, flagged: the split's size is unknown.
+    expect(parsed.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown])).toEqual([["XYZ", "10", true]]);
+  });
+
+  describe.each(["0", ""])("dated, Quantity %j, of the security on 02/12/2024 next to the IBKR issue file", (quantity) => {
+    it.each(METHODS)("[%s] the exception is not applied, 100 € stay blocked", async (method) => {
+      expect(issueSale(await datedSplit(quantity), "Revolut", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    });
+  });
+
+  // Revolut writes no ISIN, so a kept row of any ticker leaves every security
+  // "unverified", as the undated split does. The control is the same split
+  // with a readable Quantity: it is applied as a split, so it is no evidence.
+  it.each(METHODS)("[%s] control: the same split with a readable Quantity is applied, and the exception stays applied", async (method) => {
+    expect(issueSale(await datedSplit("10"), "Revolut", method)).toEqual({ blocked: "0.00", singlePurchase: "applied" });
+  });
 });
 
 describe("#467 Binance Transaction History: a row with no readable UTC_Time or Change is named, never only counted", () => {
@@ -1121,6 +1150,71 @@ describe("#467 Binance Transaction History: a row with no readable UTC_Time or C
     expect(message(r.messages, "binance.unparseable_amount")?.context?.rows).toBe('BTC Buy Crypto With Fiat 20250601 [Change: ""]');
   });
 
+  // A trade leg no other leg pairs within 1 s books nothing: it is named by
+  // coin, operation, change and time, never dropped with no word (#467).
+  it("a plain spot Buy and Sell 5 s apart: no trade, and both legs are named", () => {
+    const parsed = binanceParser.parse([TX_H,
+      "1,2025-06-01 10:00:00,Spot,Buy,BTC,0.01,",
+      "1,2025-06-01 10:00:05,Spot,Sell,EUR,-500,",
+    ].join("\n"));
+    expect(parsed.trades).toEqual([]);
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")?.context).toEqual({ count: "2", rows:
+      "BTC Buy 0.01 2025-06-01 10:00:00; EUR Sell -500 2025-06-01 10:00:05" });
+    expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["binance.unpaired_leg"]);
+  });
+
+  it("every leg left without a counterpart is named the same way: a spot sale, a Convert and a Strategy leg", () => {
+    const parsed = binanceParser.parse([TX_H,
+      "1,2025-04-01 12:00:00,Spot,Sell,ETH,-1,",
+      "1,2025-04-01 12:00:00,Spot,Buy,EUR,3000,",
+      "1,2025-04-01 12:00:00,Spot,Sell,SOL,-2,",
+      "1,2025-04-02 12:00:00,Spot,Binance Convert,USDT,-200,",
+      "1,2025-04-02 12:00:00,Spot,Binance Convert,SOL,2,",
+      "1,2025-04-02 12:00:00,Spot,Binance Convert,ETH,0.1,",
+      "1,2025-04-03 12:00:00,Strategy,Transaction Sold,XRP,-10,",
+      "1,2025-04-03 12:00:00,Strategy,Transaction Sold,ADA,-50,",
+      "1,2025-04-03 12:00:00,Strategy,Transaction Revenue,USDT,20,",
+    ].join("\n"));
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")?.context?.rows).toBe(
+      "SOL Sell -2 2025-04-01 12:00:00; ETH Binance Convert 0.1 2025-04-02 12:00:00; ADA Transaction Sold -50 2025-04-03 12:00:00");
+    expect(parsed.parserMessages?.some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+  });
+
+  // BTC bought on 10/01/2024 for 500 €, sold on 01/02/2025 for 300 € (a 200 €
+  // loss), bought again on 01/06/2025 with a plain spot Buy/Sell pair. With
+  // the legs 5 s apart nothing pairs them: the report cannot block the loss,
+  // so the warning names both legs and says why.
+  const spotRebuy = (gap: string): Statement => binanceParser.parse([TX_H,
+    "1,2024-01-10 10:00:00,Spot,Buy,BTC,0.01,",
+    "1,2024-01-10 10:00:00,Spot,Sell,EUR,-500,",
+    "1,2025-02-01 10:00:00,Spot,Sell,BTC,-0.01,",
+    "1,2025-02-01 10:00:00,Spot,Buy,EUR,300,",
+    "1,2025-06-01 10:00:00,Spot,Buy,BTC,0.01,",
+    `1,2025-06-01 10:00:${gap},Spot,Sell,EUR,-300,`,
+  ].join("\n"));
+
+  it.each(METHODS)("[%s] a spot rebuy whose legs do not pair: the warning names both legs and art. 33.5.e", (method) => {
+    const r = run([[spotRebuy("05"), "Binance"]], 2025, method);
+    expect(blocked(r)).toBe("0.00");
+    const warning = message(r.messages, "binance.unpaired_leg");
+    expect(warning?.context?.rows).toBe("BTC Buy 0.01 2025-06-01 10:00:00; EUR Sell -300 2025-06-01 10:00:05");
+    expect(warning?.hint).toContain("33.5.e");
+  });
+
+  it.each(METHODS)("[%s] control: the same rebuy with both legs in one second blocks the 200 € and gives no warning", (method) => {
+    const r = run([[spotRebuy("00"), "Binance"]], 2025, method);
+    expect(blocked(r)).toBe("200.00");
+    expect(r.messages.some((m) => m.id.startsWith("binance."))).toBe(false);
+  });
+
+  it("the unpaired-leg warning exists in the five locales, names the rows and says the art. 33.5.e result is not reliable", () => {
+    expect(isTranslationKey("binance.unpaired_leg") && isTranslationKey("binance.unpaired_leg.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["binance.unpaired_leg"]).toContain("{{rows}}");
+      expect(locale["binance.unpaired_leg.hint"]).toContain("33.5.e");
+    }
+  });
+
   it("the no-coin warning exists in the five locales, names the rows and says the art. 33.5.e result is not reliable", () => {
     expect(isTranslationKey("binance.unparseable_coin") && isTranslationKey("binance.unparseable_coin.hint")).toBe(true);
     for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
@@ -1157,11 +1251,113 @@ describe("#467 Freedom24 corporate actions: a dividend with no ticker goes by it
     expect(warning?.context).toEqual({ count: "2" });
     expect(warning?.hint).toContain("type_id");
     expect(warning?.hint).not.toMatch(/"date"|"ticker"/);
+    expect(warning?.hint).toContain("compra única");
     expect(isTranslationKey("freedom24.row_skipped_malformed") && isTranslationKey("freedom24.row_skipped_malformed.hint")).toBe(true);
-    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+    for (const [locale, rule] of [[es, "compra única"], [en, "one-purchase"], [ca, "compra única"], [eu, "erosketa bakarraren"], [gl, "compra única"]] as [Record<string, string>, string][]) {
       expect(locale["freedom24.row_skipped_malformed"]).toContain("{{count}}");
       expect(locale["freedom24.row_skipped_malformed.hint"]).toContain("type_id");
       expect(locale["freedom24.row_skipped_malformed.hint"]).not.toMatch(/date|ticker/);
+      // The row may move shares: the 2-month one-purchase check may be affected.
+      expect(locale["freedom24.row_skipped_malformed.hint"]).toContain(rule);
+      expect(locale["freedom24.row_skipped_malformed.hint"]).toContain("2");
+    }
+  });
+
+  // A row with no readable type_id may be a split, a merger or a dividend:
+  // it is kept as a corporate action that books nothing, so its security (or,
+  // with none named, every security) is "unverified" (#467).
+  describe.each([["null", null], ["empty", ""], ["a number", 7], ["missing", undefined]])("a corporate action whose type_id is %s", (_label, type_id) => {
+    const typeless = (row: Record<string, unknown> = {}): Statement =>
+      f24ca({ date: "2024-12-02 00:00:00", ticker: "XYZ.EU", isin: ISIN, amount: 0, curr_c: "EUR", type_id, ...row });
+    const cell = type_id === undefined ? "—" : JSON.stringify(type_id);
+
+    it("is kept as a row that books nothing, named as not applied, and still counted", () => {
+      const parsed = typeless();
+      expect(parsed.trades.map((t) => [t.symbol, t.isin, t.quantity, t.proceeds, t.cost, t.quantityUnknown])).toEqual([["XYZ", ISIN, "0", "0", "0", true]]);
+      expect(messageRows(parsed, "parser.corporate_action_not_applied")).toBe(`XYZ (${ISIN}) 20241202 [type_id: ${cell}]`);
+      expect(parsed.parserMessages?.find((m) => m.id === "freedom24.row_skipped_malformed")?.context).toEqual({ count: "1" });
+      expect(parsed.cashTransactions).toEqual([]);
+    });
+
+    it.each(METHODS)("[%s] of the security next to the IBKR issue file: the exception is not applied, 100 € stay blocked", (method) => {
+      expect(issueSale(typeless(), "Freedom24", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    });
+
+    it.each(METHODS)("[%s] with no ticker and no ISIN: every security stays unverified, 100 € blocked", (method) => {
+      expect(issueSale(typeless({ ticker: "", isin: "" }), "Freedom24", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    });
+
+    it.each(METHODS)("[%s] control: of another security, the exception stays applied", (method) => {
+      expect(issueSale(typeless({ ticker: "ABC.EU", isin: "ES0000009999" }), "Freedom24", method)).toEqual({ blocked: "0.00", singlePurchase: "applied" });
+    });
+  });
+
+  // A dividend whose tax_amount cell is written but cannot be read is booked
+  // with no withholding (the user can only lose a deduction, never underpay),
+  // and the cell is named (#467).
+  it.each(METHODS)("[%s] a dividend with an unreadable tax_amount is booked with no withholding, and the cell is named", (method) => {
+    const parsed = f24ca(
+      { ...DIV, tax_amount: "abc" },
+      { ...DIV, ticker: "", tax_amount: "NaN", date: "2025-05-16 00:00:00" },
+      { ...DIV, tax_amount: "Infinity", date: "2025-05-17 00:00:00" },
+      { ...DIV, tax_amount: { v: 1 }, date: "2025-05-18 00:00:00" },
+      { ...DIV, tax_amount: true, date: "2025-05-19 00:00:00" },
+    );
+    expect(messageRows(parsed, "freedom24.tax_amount_unreadable")).toBe([
+      `dividend AAPL (${AAPL}) 500 USD 20250515 [tax_amount: "abc"]`,
+      `dividend ${AAPL} 500 USD 20250516 [tax_amount: "NaN"]`,
+      `dividend AAPL (${AAPL}) 500 USD 20250517 [tax_amount: "Infinity"]`,
+      `dividend AAPL (${AAPL}) 500 USD 20250518 [tax_amount: {"v":1}]`,
+      `dividend AAPL (${AAPL}) 500 USD 20250519 [tax_amount: true]`,
+    ].join("; "));
+    expect(parsed.cashTransactions.map((c) => c.type)).toEqual(["Dividends", "Dividends", "Dividends", "Dividends", "Dividends"]);
+    const r = run([[parsed, "Freedom24"]], 2025, method);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("2750.00");
+    expect(r.messages.find((m) => m.id === "freedom24.tax_amount_unreadable")?.context?.rows).toBe(messageRows(parsed, "freedom24.tax_amount_unreadable"));
+  });
+
+  it("control: a tax_amount that is missing, null, empty or zero gives no warning; a readable one is booked", () => {
+    const parsed = f24ca(
+      { ...DIV, tax_amount: undefined },
+      { ...DIV, tax_amount: null, date: "2025-05-16 00:00:00" },
+      { ...DIV, tax_amount: "", date: "2025-05-17 00:00:00" },
+      { ...DIV, tax_amount: 0, date: "2025-05-18 00:00:00" },
+      { ...DIV, date: "2025-05-19 00:00:00" },
+    );
+    expect(parsed.parserMessages ?? []).toEqual([]);
+    expect(parsed.cashTransactions.map((c) => [c.type, c.amount])).toEqual([
+      ["Dividends", "500"], ["Dividends", "500"], ["Dividends", "500"], ["Dividends", "500"], ["Dividends", "500"], ["Withholding Tax", "-75"],
+    ]);
+  });
+
+  it("an unreadable tax_amount on a row that is not booked is shown in that row's own warning", () => {
+    const parsed = f24ca({ ...DIV, ticker: "", isin: "", tax_amount: "abc" }, { ...DIV, amount: "x", tax_amount: "abc" });
+    expect(messageRows(parsed, "parser.cash_row_unidentified")).toBe('dividend 500 USD [tax_amount: "abc"] 20250515');
+    expect(messageRows(parsed, "freedom24.dividend_amount_unreadable")).toBe(`dividend AAPL (${AAPL}) USD 20250515 [tax_amount: "abc"] [amount: "x"]`);
+    expect(messageRows(parsed, "freedom24.tax_amount_unreadable")).toBeUndefined();
+  });
+
+  it("the Spanish the parsers emit for the new and reworded warnings is the es locale", () => {
+    const fill = (text: string, context: Record<string, string> | undefined): string =>
+      text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => context?.[k] ?? "");
+    const emitted = [
+      ...(f24ca({ ...DIV, type_id: null }, { ...DIV, tax_amount: "abc" }).parserMessages ?? []),
+      ...(binanceParser.parse(["User_ID,UTC_Time,Account,Operation,Coin,Change,Remark", "1,2025-06-01 10:00:00,Spot,Buy,BTC,0.01,"].join("\n")).parserMessages ?? []),
+    ].filter((m) => ["freedom24.row_skipped_malformed", "freedom24.tax_amount_unreadable", "binance.unpaired_leg"].includes(m.id));
+    expect(emitted.map((m) => m.id).sort()).toEqual(["binance.unpaired_leg", "freedom24.row_skipped_malformed", "freedom24.tax_amount_unreadable"]);
+    const esText = es as Record<string, string>;
+    for (const m of emitted) {
+      expect(m.message).toBe(fill(esText[m.id]!, m.context));
+      expect(m.hint).toBe(esText[`${m.id}.hint`]);
+    }
+  });
+
+  it("the unreadable-tax warning exists in the five locales, names the rows and the tax_amount cell", () => {
+    expect(isTranslationKey("freedom24.tax_amount_unreadable") && isTranslationKey("freedom24.tax_amount_unreadable.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["freedom24.tax_amount_unreadable"]).toContain("{{rows}}");
+      expect(locale["freedom24.tax_amount_unreadable.hint"]).toContain("tax_amount");
+      expect(locale["freedom24.tax_amount_unreadable.hint"]).toContain("0588");
     }
   });
 

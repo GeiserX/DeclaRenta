@@ -331,6 +331,11 @@ interface TxRow {
   key: string;
   /** Set once a row has been consumed by a trade/income so it's never reused. */
   parsed: boolean;
+  /** The Operation and Change cells as written, to name the row in a warning. */
+  operationText: string;
+  changeText: string;
+  /** A spot trade leg its window could not pair: it books nothing and is named (#467). */
+  unpaired?: boolean;
 }
 
 /**
@@ -466,6 +471,8 @@ function trimStraddle(rows: TxRow[], startIdx: number, window: TxRow[], predicat
 
 /** Strategy-vocabulary ops (Transaction Sold/Revenue/Buy/Spend/Fee). */
 const STRATEGY_OPS = ["transaction sold", "transaction revenue", "transaction buy", "transaction spend", "transaction fee"];
+/** Every operation whose rows are legs a trade phase pairs with another leg. */
+const PAIRED_TX_OPS = new Set([...TX_CONVERT_OPS, ...STRATEGY_OPS, ...SPOT_TRADE_OPS]);
 
 function parseBinanceTxCsv(lines: string[]): Statement {
   const headers = parseCsvLine(lines[0]!, ",");
@@ -582,6 +589,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
         index: i,
         key: occurrenceKey(seenKeys, [utcTime, account, operation, coin, changeStr, remark].join("|")),
         parsed: false,
+        operationText,
+        changeText: changeStr,
       });
     }
 
@@ -775,13 +784,30 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count, rows },
     });
   }
+  // A trade leg (Convert, fiat purchase, Strategy or plain spot) that no
+  // other leg paired within its ±1 s window books nothing. A missing purchase
+  // or sale of a coin hides a gain, a loss or an art. 33.5.e repurchase, so
+  // each leg is named by coin, operation, change and time, never dropped
+  // with no word or only counted (#467).
+  const unpairedLegs = rows.filter((r) => r.unpaired || (!r.parsed && PAIRED_TX_OPS.has(r.operation)));
+  if (unpairedLegs.length > 0) {
+    const count = String(unpairedLegs.length);
+    const rows = unpairedLegs.map((r) => `${r.coin} ${r.operationText} ${r.changeText} ${r.utcTime}`).join("; ");
+    parserMessages.push({
+      id: "binance.unpaired_leg",
+      severity: "warning",
+      message: `Binance: ${count} movimiento(s) de compra, venta o conversión no tienen la otra parte de la operación y no se calculan: ${rows}.`,
+      hint: "Cada compra o venta de Binance son dos filas con la misma hora: la moneda que entra y la que sale. DeclaRenta no ha encontrado la otra fila de estos movimientos. Por eso no suma ni resta unidades ni dinero por ellos. Las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Compara esas filas con tu historial de Binance y añade a mano en Renta Web las operaciones que falten.",
+      context: { count, rows },
+    });
+  }
   // A row still unparsed after every phase has an Operation no phase handles
   // (futures PnL, card spending, Auto-Invest, cashback...). It is left out of
   // the report, so name each operation with its row count instead of dropping
   // it silently.
   const unhandledOps = new Map<string, number>();
   for (const r of rows) {
-    if (!r.parsed) unhandledOps.set(r.operation, (unhandledOps.get(r.operation) ?? 0) + 1);
+    if (!r.parsed && !PAIRED_TX_OPS.has(r.operation)) unhandledOps.set(r.operation, (unhandledOps.get(r.operation) ?? 0) + 1);
   }
   if (unhandledOps.size > 0) {
     const unhandledCount = [...unhandledOps.values()].reduce((a, b) => a + b, 0);
@@ -1076,7 +1102,11 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
 
   const before = trades.length;
   for (const group of byRemark.values()) {
-    emitBareSpotGroup(trades, group, addHint);
+    // A leg its window could not pair stays consumed (no later window pairs
+    // it across seconds) but is flagged, so it is named (#467).
+    for (const leg of emitBareSpotGroup(trades, group, addHint)) {
+      for (const r of group) if (r.coin === leg.coin && r.change.isNegative() === leg.qty.isNegative()) r.unpaired = true;
+    }
   }
 
   // Attach each fee to the emitted trade whose coin matches the fee coin. The FIFO
@@ -1116,8 +1146,9 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
  * never drop: every bought coin keeps a real, non-zero cost basis. The aggregate fiat
  * spent is exact; only the per-coin split is approximate when the export doesn't link
  * order-to-order — acceptable, and vastly better than a cost-basis-0 phantom gain.
+ * Returns the legs left without a counterpart, so the caller can name them.
  */
-function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): void {
+function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): NetLeg[] {
   const recv = netLegs(rows.filter((r) => r.change.isPositive())).sort((a, b) => a.index - b.index);
   const give = netLegs(rows.filter((r) => r.change.isNegative())).sort((a, b) => a.index - b.index);
 
@@ -1125,8 +1156,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): vo
   // closest-EUR pairing is correct (and merges same-coin multi-fills cleanly).
   const giveSingleFiat = give.length === 1 && isFiat(give[0]!.coin);
   if (recv.length <= 1 || !giveSingleFiat) {
-    pairAndEmit(trades, [...give, ...recv], addHint, "Spot");
-    return;
+    return pairAndEmit(trades, [...give, ...recv], addHint, "Spot");
   }
 
   // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them
@@ -1144,7 +1174,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): vo
       addHint(r.coin, r.date, r.qty, r.eur);
       emitCryptoSwap(trades, sell, r, "Spot");
     }
-    return;
+    return [];
   }
   // Count mismatch (rare): split the total fiat equally across the received coins.
   const totalFiat = give[0]!.qty; // negative
@@ -1154,6 +1184,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): vo
     addHint(r.coin, r.date, r.qty, r.eur);
     emitCryptoSwap(trades, sell, r, "Spot");
   }
+  return [];
 }
 
 // ---------------------------------------------------------------------------

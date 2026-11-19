@@ -1093,17 +1093,25 @@ const es = {
   "binance.unparseable_coin.hint":
     "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
   "freedom24.row_skipped_malformed":
-    "Freedom24: se ha(n) omitido {{count}} fila(s) de acciones corporativas sin un tipo legible (type_id).",
+    "Freedom24: {{count}} fila(s) de acciones corporativas no tienen un tipo legible (type_id) y no se calculan.",
   "freedom24.row_skipped_malformed.hint":
-    "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación, y no las calcula. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
+    "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación. No suma ningún importe por ellas. Pueden mover acciones, así que el aviso de operaciones societarias no aplicadas también las nombra. Por eso la comprobación de compra única de la regla de los 2 meses puede verse afectada: DeclaRenta no aplica esa excepción a su valor, o a ningún valor si la fila no nombra ninguno. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
   "freedom24.dividend_amount_unreadable":
     "Freedom24: {{count}} dividendo(s) o cupón(es) no tienen un importe (amount) legible y no se calculan: {{rows}}.",
   "freedom24.dividend_amount_unreadable.hint":
     "Entre corchetes va la celda del importe (amount). Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no se inventa un importe. Si es un ingreso del año que declaras, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo. También puedes añadir el importe y la retención a mano en Renta Web.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dividendo(s) o cupón(es) no tienen una retención (tax_amount) legible y se calculan sin retención: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "Entre corchetes va la celda de la retención (tax_amount). DeclaRenta suma el ingreso completo, pero no sabe cuánto te retuvieron. Así no pagas de menos, pero pierdes la deducción por esa retención (casilla 0588, o 0597 si el valor es español). Toma la retención del informe fiscal de Freedom24 y añádela a mano en Renta Web.",
   "binance.unhandled_operation":
     "Se han omitido {{count}} movimiento(s) del CSV de Binance con operaciones no reconocidas: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Estos movimientos no se han incluido en el cálculo. Si son compras, ventas o ingresos (p. ej. futuros, pagos con Binance Card, Auto-Invest o cashback), añádelos a mano en tu declaración y comunica el nombre de la operación para que se pueda incorporar.",
+  "binance.unpaired_leg":
+    "Binance: {{count}} movimiento(s) de compra, venta o conversión no tienen la otra parte de la operación y no se calculan: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Cada compra o venta de Binance son dos filas con la misma hora: la moneda que entra y la que sale. DeclaRenta no ha encontrado la otra fila de estos movimientos. Por eso no suma ni resta unidades ni dinero por ellos. Las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Compara esas filas con tu historial de Binance y añade a mano en Renta Web las operaciones que falten.",
   "binance.unsupported_pair":
     "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
   "binance.unsupported_pair.hint":

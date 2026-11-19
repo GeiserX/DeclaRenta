@@ -370,8 +370,6 @@ function parseTransactionLog(
   const badFxRateRows: string[] = [];
   // DIVIDEND rows imported at the net amount Revolut reports.
   let netDividends = 0;
-  // STOCK SPLIT rows with no usable Quantity (shares added).
-  let unresolvedSplits = 0;
   // DIVIDEND TAX (CORRECTION) rows, not booked: ticker, date and amount.
   const dividendTaxRows: string[] = [];
   // DIVIDEND rows with no ticker: type, amount and date (#467).
@@ -514,15 +512,18 @@ function parseTransactionLog(
       keepUnreadable(unreadableCell(headers[cols.type] ?? "Type", type));
       continue;
     }
-    // A split row with no readable date cannot be applied at its day: it is
-    // kept as a row that books nothing, named as not applied, and its holding
-    // is of unknown size (#467), never applied on a false day or dropped. A
+    // A split row with no readable date cannot be applied at its day, and
+    // one whose Quantity is 0, empty or not a number does not say how many
+    // shares it added: either is kept as a row that books nothing, named as
+    // not applied, and its holding is of unknown size (#467), never applied
+    // on a false day or with a false size, and never only counted. A
     // dividend with no readable date is booked with that date and taken out,
     // named with its amount, by dropUndatedCash below (#467).
-    if (TXN_TYPE_SPLIT.test(type) && !isReadableTradeDate(tradeDate)) {
+    if (TXN_TYPE_SPLIT.test(type) && (!isReadableTradeDate(tradeDate) || signedQtyDec.isZero())) {
       trades.push(corporateActionTrade({
         tradeID: `revolut-split-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
-        assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate: dateStr, exchange: "REVOLUT",
+        assetCategory: detectAssetCategory(ticker), currency: currencyRaw,
+        tradeDate: isReadableTradeDate(tradeDate) ? tradeDate : dateStr, exchange: "REVOLUT",
       }, type, quantityCell));
       markUnknownSize(ticker, currencyRaw, false);
       continue;
@@ -556,10 +557,6 @@ function parseTransactionLog(
     // it: the FIFO engine does, from the lots it holds at the split date, and
     // rescales them keeping their cost (Art. 37.1.a LIRPF: not a disposal).
     if (TXN_TYPE_SPLIT.test(type)) {
-      if (signedQtyDec.isZero()) {
-        unresolvedSplits++;
-        continue;
-      }
       corporateActions.push({
         transactionID: `revolut-split-${tradeDate}-${ticker}-${i}`,
         accountId: "",
@@ -752,15 +749,6 @@ function parseTransactionLog(
       message: `Se ha(n) omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: ${rows}.`,
       hint: "Solo los ingresos y las retiradas de efectivo usan esa columna. Las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. La causa suele ser una celda de tipo de cambio que no es un número, es negativa o vale cero. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut y súbelo de nuevo.",
       context: { count, rows },
-    });
-  }
-  if (unresolvedSplits > 0) {
-    parserMessages.push({
-      id: "revolut.split_unresolved",
-      severity: "warning" as const,
-      message: `Se ${unresolvedSplits === 1 ? "ha omitido 1 desdoblamiento (STOCK SPLIT)" : `han omitido ${unresolvedSplits} desdoblamientos (STOCK SPLIT)`} del extracto de Revolut porque la fila no indica cuántas acciones se añadieron.`,
-      hint: "Vuelve a descargar el Trading Account Statement desde la app de Revolut. Si la fila sigue sin cantidad, el número de acciones y el coste de las ventas posteriores de ese valor no serán correctos.",
-      context: { count: String(unresolvedSplits) },
     });
   }
   if (dividendTaxRows.length > 0) {

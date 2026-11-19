@@ -1305,9 +1305,12 @@ describe("binanceParser — Transaction History legs that straddle two ±1s wind
     ].join("\n");
     const result = binanceParser.parse(csv);
     expect(result.trades.filter((t) => t.symbol === "XRP")).toHaveLength(1);
-    const msg = result.parserMessages?.find((m) => m.id === "binance.unhandled_operation");
+    // A leg of a known operation is no unrecognised operation: it is named
+    // by coin, operation, change and time (#467).
+    expect(result.parserMessages?.some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+    const msg = result.parserMessages?.find((m) => m.id === "binance.unpaired_leg");
     expect(msg).toBeDefined();
-    expect(msg!.context).toMatchObject({ count: "1", operations: "transaction sold (1)" });
+    expect(msg!.context).toEqual({ count: "1", rows: "ADA Transaction Sold -50 2025-04-01 12:00:00" });
   });
 
   it("keeps back-to-back Converts apart when each lists its received leg first", () => {
@@ -1397,9 +1400,10 @@ describe("binanceParser — Transaction History legs that straddle two ±1s wind
     ].join("\n");
     const result = binanceParser.parse(csv);
     expect(result.trades.filter((t) => t.buySell === "BUY")).toHaveLength(1);
-    const msg = result.parserMessages?.find((m) => m.id === "binance.unhandled_operation");
+    expect(result.parserMessages?.some((m) => m.id === "binance.unhandled_operation")).toBe(false);
+    const msg = result.parserMessages?.find((m) => m.id === "binance.unpaired_leg");
     expect(msg).toBeDefined();
-    expect(msg!.context).toMatchObject({ count: "1", operations: "binance convert (1)" });
+    expect(msg!.context).toEqual({ count: "1", rows: "ETH Binance Convert 0.1 2025-04-01 12:00:00" });
   });
 
   it("keeps back-to-back fiat purchases apart when each lists its crypto leg first", () => {

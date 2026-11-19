@@ -1056,17 +1056,25 @@ const ca: TranslationKeys = {
   "binance.unparseable_coin.hint":
     "Entre claudàtors hi ha la cel·la de la moneda. Sense ella, DeclaRenta no sap quina criptomoneda entra o surt. Per això no suma ni resta unitats ni diners per aquestes files. Els guanys, les pèrdues i els ingressos de les teves criptomonedes no són fiables. Si una fila és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja. Torna a descarregar l'informe original de Binance, no l'editis i torna'l a pujar.",
   "freedom24.row_skipped_malformed":
-    "Freedom24: s'han omès {{count}} fila(es) d'accions corporatives sense un tipus llegible (type_id).",
+    "Freedom24: {{count}} fila(es) d'accions corporatives no tenen un tipus llegible (type_id) i no es calculen.",
   "freedom24.row_skipped_malformed.hint":
-    "El camp \"type_id\" d'aquestes files és buit o no és text. Per això DeclaRenta no sap si són un dividend, un cupó o una altra operació, i no les calcula. Si et falta un dividend o un cupó, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar.",
+    "El camp \"type_id\" d'aquestes files és buit o no és text. Per això DeclaRenta no sap si són un dividend, un cupó o una altra operació. No suma cap import per elles. Poden moure accions, així que l'avís d'operacions societàries no aplicades també les anomena. Per això la comprovació de compra única de la regla dels 2 mesos pot quedar afectada: DeclaRenta no aplica aquesta excepció al seu valor, o a cap valor si la fila no n'anomena cap. Si et falta un dividend o un cupó, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar.",
   "freedom24.dividend_amount_unreadable":
     "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen un import (amount) llegible i no es calculen: {{rows}}.",
   "freedom24.dividend_amount_unreadable.hint":
     "Entre claudàtors hi ha la cel·la de l'import (amount). Sense ella, DeclaRenta no sap quant vas cobrar. Per això no suma aquest ingrés ni la seva retenció i no s'inventa un import. Si és un ingrés de l'any que declares, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar. També pots afegir l'import i la retenció a mà a Renta Web.",
+  "freedom24.tax_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen una retenció (tax_amount) llegible i es calculen sense retenció: {{rows}}.",
+  "freedom24.tax_amount_unreadable.hint":
+    "Entre claudàtors hi ha la cel·la de la retenció (tax_amount). DeclaRenta suma l'ingrés complet, però no sap quant et van retenir. Així no pagues de menys, però perds la deducció per aquesta retenció (casella 0588, o 0597 si el valor és espanyol). Agafa la retenció de l'informe fiscal de Freedom24 i afegeix-la a mà a Renta Web.",
   "binance.unhandled_operation":
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":
     "Aquests moviments no s'han inclòs en el càlcul. Si són compres, vendes o ingressos (p. ex. futurs, pagaments amb Binance Card, Auto-Invest o cashback), afegeix-los a mà a la teva declaració i comunica el nom de l'operació perquè es pugui incorporar.",
+  "binance.unpaired_leg":
+    "Binance: {{count}} moviment(s) de compra, venda o conversió no tenen l'altra part de l'operació i no es calculen: {{rows}}.",
+  "binance.unpaired_leg.hint":
+    "Cada compra o venda de Binance són dues files amb la mateixa hora: la moneda que entra i la que surt. DeclaRenta no ha trobat l'altra fila d'aquests moviments. Per això no suma ni resta unitats ni diners per ells. Els guanys i les pèrdues d'aquestes criptomonedes no són fiables. Si una fila és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja. Compara aquestes files amb el teu historial de Binance i afegeix a mà a Renta Web les operacions que faltin.",
   "binance.unsupported_pair":
     "S'han omès {{count}} operació(ns) del CSV de Binance amb un parell no reconegut: {{pairs}}.",
   "binance.unsupported_pair.hint":
