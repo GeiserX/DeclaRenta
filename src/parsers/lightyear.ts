@@ -35,6 +35,9 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessage,
 } from "./csv-utils.js";
 
 
@@ -340,7 +343,18 @@ function parseLightyearCsv(lines: string[]): Statement {
     if (!ticker) continue;
 
     const qtyDec = new Decimal(quantityStr).abs();
-    if (qtyDec.isZero()) continue;
+    if (qtyDec.isZero()) {
+      // An empty or unreadable quantity is no "0": keep the row as a trade of
+      // unknown quantity for the anti-churning evidence (#453).
+      if (quantityUnreadable(fields[cols.quantity])) {
+        trades.push(quantityUnknownTrade({
+          tradeID: `lightyear-${txType}-${reference || `${tradeDate}-${ticker}-${i}`}`,
+          symbol: ticker, description: `${isSell ? "Sell" : "Buy"} ${ticker}`, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+          buySell: isSell ? "SELL" : "BUY", exchange: "LIGHTYEAR",
+        }));
+      }
+      continue;
+    }
 
     const feeDec = new Decimal(fee).abs();
     const grossDec = new Decimal(grossAmount).abs();
@@ -387,6 +401,8 @@ function parseLightyearCsv(lines: string[]): Statement {
       context: { count: String(unknownCount), types },
     });
   }
+  const unknownQuantities = tradeQuantityUnknownMessage("Lightyear", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return {
     accountId: "",

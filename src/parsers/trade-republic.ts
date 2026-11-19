@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -160,6 +160,18 @@ function parseTrCsv(lines: string[]): Statement {
 
     // --- TRADING: BUY / SELL ---
     if (category === "TRADING" && (type === "BUY" || type === "SELL")) {
+      // An empty or unreadable share count is no "0": keep the row as a trade
+      // of unknown quantity for the anti-churning evidence (#453).
+      if (quantityUnreadable(fields[cols.shares])) {
+        const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
+        trades.push(quantityUnknownTrade({
+          tradeID: txId || `tr-${tradeDate}-${symbol}-${i}`,
+          symbol: isCrypto ? symbol : name, description: name, isin: isCrypto ? "" : symbol,
+          assetCategory: mapAssetCategory(assetClass), currency, tradeDate,
+          buySell: type === "SELL" ? "SELL" : "BUY", exchange: "TRADE_REPUBLIC",
+        }));
+        continue;
+      }
       if (shares === 0) continue;
 
       const isSell = type === "SELL";
@@ -353,6 +365,8 @@ function parseTrCsv(lines: string[]): Statement {
       context: { count: String(deliveryRows), isins },
     });
   }
+  const unknownQuantities = tradeQuantityUnknownMessage("Trade Republic", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return {
     accountId: "",

@@ -5,10 +5,18 @@ import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { degiroParser } from "../../src/parsers/degiro.js";
 import { parseRevolutXlsx } from "../../src/parsers/revolut.js";
+import { trading212Parser } from "../../src/parsers/trading212.js";
+import { freedom24Parser } from "../../src/parsers/freedom24.js";
+import { lightyearParser } from "../../src/parsers/lightyear.js";
+import { scalableParser } from "../../src/parsers/scalable.js";
+import { flatexParser } from "../../src/parsers/flatex.js";
+import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
+import { parseEtoroXlsx } from "../../src/parsers/etoro.js";
 import * as XLSX from "xlsx";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
+import type { Statement } from "../../src/types/broker.js";
 
 // ===========================================================================
 // Issue #453: the one-purchase exception of the 2-month rule.
@@ -1315,7 +1323,7 @@ describe("(j) a trade row without a readable quantity is missing evidence, not z
       expect(hidden.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", true], ["0", true]]);
       const warning = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
       expect(warning?.severity).toBe("warning");
-      expect(warning?.context).toEqual({ count: "2", trades: "XYZ (ES0000004531) 20250201, XYZ (ES0000004531) 20250210" });
+      expect(warning?.context).toEqual({ broker: "IBKR", count: "2", trades: "XYZ (ES0000004531) 20250201, XYZ (ES0000004531) 20250210" });
     }
     // Control: an explicit zero is a zero, with no flag and no warning.
     const zero = parseIbkrFlexXml(withHidden("0"));
@@ -1323,11 +1331,13 @@ describe("(j) a trade row without a readable quantity is missing evidence, not z
     expect(zero.parserMessages?.some((m) => m.id === "parser.trade_quantity_unknown") ?? false).toBe(false);
   });
 
-  // FIFO books the "0" buy as an empty lot, and the 15/03 sale takes it first
-  // as a 0-share disposal: the mark sits on the sale's real disposal.
+  // FIFO books no shares for the rows (no 0-share lot, so no 0/0 cost on the
+  // 15/03 sale and no non-finite total).
   const expectUnverifiedSale = (r: TaxReport): void => {
     expect(blockedOn(r, "2025-03-15")).toBe("100.00");
-    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15") && !d.quantity.isZero())!.washSaleSinglePurchase).toBe("unverified");
+    expect(r.capitalGains.disposals.find((d) => sameDay(d.sellDate, "2025-03-15"))!.washSaleSinglePurchase).toBe("unverified");
+    expect(r.capitalGains.disposals.some((d) => d.quantity.isZero())).toBe(false);
+    expect(r.messages.some((m) => m.id === "report.non_finite_total")).toBe(false);
     expect(ids(r)).toEqual([UNVERIFIED]);
   };
 
@@ -1363,5 +1373,143 @@ describe("(j) a trade row without a readable quantity is missing evidence, not z
 
   it("control: a row of another ISIN with no quantity: applied", () => {
     expectApplied(mergedFiles([[IB, withHidden(null, OTHER)]]));
+  });
+});
+
+describe("(k) every share parser keeps a trade row with no readable quantity as missing evidence", () => {
+  // The issue example at IBKR, plus one buy of the security on 02/12/2024
+  // (before the 15/01 window start) at another broker. With a readable
+  // quantity the shares are held at the window start (blocked, no exception
+  // message); with an explicit 0 the row is skipped (applied); with an empty
+  // or unreadable quantity the upload cannot prove the exception.
+  const ib = flexXml([{ fromDate: "20240101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+  const xlsx = (sheet: string, rows: string[][]): Uint8Array => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), sheet);
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  };
+  interface Broker {
+    name: string;
+    /** The broker name the parser warning gives. */
+    label: string;
+    /** No ISIN on its trades: a readable holding at the window start is unverified too. */
+    isinLess?: true;
+    parse: (qty: string) => Statement | Promise<Statement>;
+  }
+  const brokers: Broker[] = [
+    {
+      name: "Trading 212", label: "Trading 212",
+      parse: (qty) => trading212Parser.parse([
+        "Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Price / share),Exchange rate,Result,Currency (Result),Total,Currency (Total),Notes,ID",
+        `Market buy,2024-12-02 09:30:00,${ISIN},XYZ,XYZ SA,${qty},10,EUR,1.00,,,400,EUR,,t1`,
+      ].join("\n")),
+    },
+    {
+      name: "Revolut", label: "Revolut", isinLess: true,
+      parse: (qty) => parseRevolutXlsx(xlsx("Sheet1", [
+        ["Date", "Ticker", "Type", "Quantity", "Price per share", "Total Amount", "Currency", "FX Rate"],
+        ["2024-12-02T10:00:00.000Z", "XYZ", "BUY - MARKET", qty, "EUR 10", "EUR 400", "EUR", "1"],
+      ])),
+    },
+    {
+      name: "Freedom24", label: "Freedom24",
+      parse: (qty) => freedom24Parser.parse(JSON.stringify({
+        trades: { detailed: [{ date: "2024-12-02 10:00:00", ticker: "XYZ.EU", isin: ISIN, operation: "buy", p: 10, q: qty, curr_c: "EUR", commission: 0, amount: 400 }] },
+        corporate_actions: { detailed: [] },
+      })),
+    },
+    {
+      name: "Lightyear", label: "Lightyear",
+      parse: (qty) => lightyearParser.parse([
+        "Date,Reference,Ticker,ISIN,Type,Quantity,CCY,Price/share,Gross Amount,FX Rate,Fee,Net Amt.,Tax Amt.",
+        `02/12/2024 09:30:00,OR-1,XYZ,${ISIN},Buy,${qty},EUR,10.00,400.00,,0.00,400.00,`,
+      ].join("\n")),
+    },
+    {
+      name: "Scalable Capital", label: "Scalable Capital",
+      parse: (qty) => scalableParser.parse([
+        "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency",
+        `2024-12-02;09:15;Executed;REF001;XYZ SA;Security;Buy;${ISIN};${qty};10,00;-400,00;0;0;EUR`,
+      ].join("\n")),
+    },
+    {
+      name: "Flatex", label: "Flatex",
+      parse: (qty) => flatexParser.parse([
+        "Nummer;Buchtag;Valuta;ISIN;Bezeichnung;Nominal;;Buchungsinformationen;TA-Nr.;Kurs;;Depot",
+        `1;02.12.2024;02.12.2024;${ISIN};XYZ SA;${qty};Stk.;Ausführung ORDER Kauf ${ISIN} 1;1;10,00;EUR;***xxx Depot`,
+      ].join("\n")),
+    },
+    {
+      name: "Trade Republic", label: "Trade Republic",
+      parse: (qty) => tradeRepublicParser.parse([
+        '"datetime","date","account_type","category","type","asset_class","name","symbol","shares","price","amount","fee","tax","currency","original_amount","original_currency","fx_rate","description","transaction_id","counterparty_name","counterparty_iban","payment_reference","mcc_code"',
+        `"2024-12-02T09:30:00.000Z","2024-12-02","DEFAULT","TRADING","BUY","STOCK","XYZ SA","${ISIN}","${qty}","10.000000","-400.00","","","EUR","","","","Buy","tx-1","","","",""`,
+      ].join("\n")),
+    },
+    {
+      name: "DEGIRO", label: "DEGIRO",
+      parse: (qty) => degiroParser.parse([
+        "Date,Time,Product,ISIN,Reference Exchange,Execution Venue,Quantity,Price,,Value,,Transaction and/or third,,Total,,Order ID",
+        `02-12-2024,09:15,XYZ SA,${ISIN},MAD,XMAD,${qty},10.00,EUR,-400.00,EUR,0,EUR,-400.00,EUR,aaa`,
+      ].join("\n")),
+    },
+    {
+      // A closed position: bought 02/12/2024, sold 10/02/2025 (inside the window).
+      name: "eToro", label: "eToro",
+      parse: (qty) => parseEtoroXlsx(xlsx("Closed Positions", [
+        ["Action", "Amount", "Units", "Open Rate", "Close Rate", "Profit(USD)", "Open Date", "Close Date", "Type", "Leverage", "ISIN"],
+        ["Buy XYZ", "400", qty, "10", "11", "40", "02/12/2024", "10/02/2025", "Stocks", "1", ISIN],
+      ])),
+    },
+  ];
+  const report = async (broker: Broker, qty: string, method: FxMethod = "monodivisa"): Promise<TaxReport> => {
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parseIbkrFlexXml(ib), IB);
+    mergeStatement(statement, await broker.parse(qty), broker.name);
+    return generateTaxReport(finalizeMergedStatement(statement), rates(), 2025, reportOptionsForMethod(method));
+  };
+
+  describe.each(brokers)("$name", (broker) => {
+    it.each(METHODS)("[%s] the buy before the window with an empty quantity: not applied, and FIFO books no shares for it", async (method) => {
+      const r = await report(broker, "", method);
+      expectUnverified(r);
+      expect(r.capitalGains.disposals.some((d) => d.quantity.isZero())).toBe(false);
+      expect(r.messages.some((m) => m.id === "report.non_finite_total")).toBe(false);
+    });
+
+    it.each(["", "abc"])("the parser keeps the row with quantity %j: quantity \"0\", flagged unknown, no money, and warns", async (qty) => {
+      const parsed = await broker.parse(qty);
+      expect(parsed.trades.length).toBeGreaterThan(0);
+      for (const t of parsed.trades) {
+        expect([t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds, t.cost, t.commission, t.taxes]).toEqual(["0", true, "0", "0", "0", "0", "0"]);
+      }
+      expect(parsed.openPositions).toEqual([]);
+      const warning = parsed.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown");
+      expect([warning?.severity, warning?.context?.broker, warning?.context?.count]).toEqual(["warning", broker.label, String(parsed.trades.length)]);
+    });
+
+    it("control: an explicit 0 is skipped as before: applied", async () => {
+      expect((await broker.parse("0")).trades).toEqual([]);
+      expectApplied(await report(broker, "0"));
+    });
+
+    it(broker.isinLess ? "control: a readable 40 held at the window start, with no ISIN: not applied" : "control: a readable 40 held at the window start: blocked", async () => {
+      const r = await report(broker, "40");
+      if (broker.isinLess) expectUnverified(r);
+      else {
+        expect(blockedOn(r, "2025-03-15")).toBe("100.00");
+        expect(ids(r)).toEqual([]);
+      }
+      expect((await broker.parse("40")).parserMessages?.some((m) => m.id === "parser.trade_quantity_unknown") ?? false).toBe(false);
+    });
+  });
+
+  it("Freedom24 with no `q` key at all: kept the same way", () => {
+    const parsed = freedom24Parser.parse(JSON.stringify({
+      trades: { detailed: [{ date: "2024-12-02 10:00:00", ticker: "XYZ.EU", isin: ISIN, operation: "buy", p: 10, curr_c: "EUR", commission: 0, amount: 400 }] },
+      corporate_actions: { detailed: [] },
+    }));
+    expect(parsed.trades.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", true]]);
   });
 });

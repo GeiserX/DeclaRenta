@@ -26,6 +26,9 @@ import {
   normalizeFractionalCurrency,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessage,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -271,7 +274,10 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     const rawFx = cols.fxRate >= 0 ? (fields[cols.fxRate] ?? "").trim() : "";
     const fxRate = rawFx ? parseNumber(rawFx) : "1";
 
-    if (!isin || quantity === "0") {
+    // An empty or unreadable quantity is no "0": a buy or sale row of an ISIN
+    // with a price is kept as a trade of unknown quantity (below, #453).
+    const quantityUnknown = isin !== "" && quantityUnreadable(fields[cols.quantity]);
+    if (!isin || (quantity === "0" && !quantityUnknown)) {
       // Trade-like row (carries a real quantity or price) dropped for lack of
       // ISIN / amount → suspicious (likely column drift). Plain non-trade lines
       // (deposits/sweeps with no qty and no price) are expected → not counted.
@@ -302,6 +308,15 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     let tradeValue = value;
     let tradeFxRate = fxRate;
     const fractional = normalizeFractionalCurrency(tradeCurrency);
+    if (quantityUnknown) {
+      // Its direction comes from the value only; it moves no share or money.
+      trades.push(quantityUnknownTrade({
+        tradeID: orderId,
+        symbol: product, description: product, isin, assetCategory: "STK", currency: fractional.currency,
+        tradeDate, tradeTime, buySell: isSell ? "SELL" : "BUY", exchange,
+      }));
+      continue;
+    }
     if (!fractional.divisor.equals(1)) {
       tradeCurrency = fractional.currency;
       tradePrice = new Decimal(price).div(fractional.divisor).toString();
@@ -398,6 +413,8 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
+  const unknownQuantities = tradeQuantityUnknownMessage("DEGIRO", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return {
     accountId: "",

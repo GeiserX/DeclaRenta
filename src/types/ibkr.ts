@@ -115,7 +115,9 @@ export interface Trade {
   /**
    * The file gave no readable quantity for this trade (`quantity` then holds
    * the "0" default). The anti-churning one-purchase exception (#453) treats
-   * it as missing evidence, never as an explicit zero. Only IBKR sets it.
+   * it as missing evidence, never as an explicit zero. Every share parser
+   * sets it for a buy or sale row whose quantity cell is empty or no number.
+   * FIFO books no shares for it (no lot, no disposal).
    */
   quantityUnknown?: boolean;
   tradePrice: string;

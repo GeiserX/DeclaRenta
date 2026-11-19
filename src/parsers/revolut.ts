@@ -30,7 +30,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -443,7 +443,20 @@ function parseTransactionLog(
       skippedUnknownType++;
       continue;
     }
-    if (qtyDec.isZero()) continue;
+    if (qtyDec.isZero()) {
+      // An empty or unreadable quantity is no "0": keep the row as a trade of
+      // unknown quantity for the anti-churning evidence (#453). It moves no
+      // share and no money, and no holding is built from it.
+      if (!(row[cols.quantity] ?? "").trim() || quantityUnreadable(qtyAmountStr, false)) {
+        const buy = TXN_TYPE_BUY.test(type);
+        trades.push(quantityUnknownTrade({
+          tradeID: `revolut-${buy ? "buy" : "sell"}-${tradeDate}-${ticker}-${i}`,
+          symbol: ticker, isin: "", assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate,
+          buySell: buy ? "BUY" : "SELL", exchange: "REVOLUT",
+        }));
+      }
+      continue;
+    }
 
     const { amount: priceAmountStr } = parseCcyAmount(priceStr);
     const pricePerShareDec = toFiniteDecimal(priceAmountStr, "0", false);
@@ -587,6 +600,8 @@ function parseTransactionLog(
     });
   }
 
+  const unknownQuantities = tradeQuantityUnknownMessage("Revolut", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
 

@@ -202,6 +202,11 @@ export class FifoEngine {
     );
     const sorted = [...trades]
       .filter((t) => {
+        // A trade whose file gives no readable quantity (`quantityUnknown`,
+        // quantity "0") books no shares: a 0-share lot would give the next sale
+        // a 0/0 cost. The parser names it (parser.trade_quantity_unknown); the
+        // anti-churning evidence still reads it (#453).
+        if (t.quantityUnknown === true) return false;
         if (!KNOWN_CATEGORIES.has(t.assetCategory)) {
           this.emit({
             id: "fifo.unknown_category",

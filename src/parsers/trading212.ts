@@ -36,6 +36,9 @@ import {
   normalizeFractionalCurrency,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessage,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -264,7 +267,18 @@ function parseTrading212Csv(lines: string[]): Statement {
     if (!ticker) continue;
 
     const qtyDec = new Decimal(sharesStr).abs();
-    if (qtyDec.isZero()) continue;
+    if (qtyDec.isZero()) {
+      // An empty or unreadable share count is no "0": keep the row as a
+      // trade of unknown quantity for the anti-churning evidence (#453).
+      if (quantityUnreadable(fields[cols.shares])) {
+        trades.push(quantityUnknownTrade({
+          tradeID: `trading212-${buy ? "buy" : "sell"}-${uniqueId}`,
+          symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+          buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
+        }));
+      }
+      continue;
+    }
 
     const priceDec = new Decimal(priceStr).div(priceDivisor);
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
@@ -337,6 +351,9 @@ function parseTrading212Csv(lines: string[]): Statement {
       context: { skipped: String(unresolvedPriceSkipped) },
     });
   }
+
+  const unknownQuantities = tradeQuantityUnknownMessage("Trading 212", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return {
     accountId: "",

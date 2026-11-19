@@ -21,6 +21,7 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
+import { tradeQuantityUnknownMessage } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -238,18 +239,8 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
   // say which trades to check.
-  const unreadableTrades = trades.filter((t) => t.quantityUnknown);
-  if (unreadableTrades.length > 0) {
-    const count = String(unreadableTrades.length);
-    const list = unreadableTrades.map((t) => `${t.isin ? `${t.symbol} (${t.isin})` : t.symbol} ${t.tradeDate}`).join(", ");
-    parserMessages.push({
-      id: "parser.trade_quantity_unknown",
-      severity: "warning",
-      message: `IBKR no da un número de acciones legible para ${count} operación(es): ${list}.`,
-      hint: "DeclaRenta las cuenta con 0 acciones, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que la sección Trades de la Flex Query incluye la cantidad y vuelve a exportarla.",
-      context: { count, trades: list },
-    });
-  }
+  const unreadableTradesMessage = tradeQuantityUnknownMessage("IBKR", trades);
+  if (unreadableTradesMessage) parserMessages.push(unreadableTradesMessage);
 
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;

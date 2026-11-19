@@ -1100,8 +1100,8 @@ const en: TranslationKeys = {
   "parser.cancelled_trades_unmatched.hint": "The cancelled trade falls outside this Flex Query's period. If you load it from another file, it will still count as real: export a period that includes both the trade and its cancellation in the same file.",
   "parser.open_position_quantity_unknown": "IBKR gives no readable share count for {{count}} open position(s): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta counts them as 0 shares: the Modelo 720 includes them with their value, but with 0 in «Número de valores», and the D-6 leaves them out. Check these holdings in the 720 and the D-6 by hand, or make sure the Open Positions section of your Flex Query includes the quantity and export it again.",
-  "parser.trade_quantity_unknown": "IBKR gives no readable share count for {{count}} trade(s): {{trades}}.",
-  "parser.trade_quantity_unknown.hint": "DeclaRenta counts them as 0 shares, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the Trades section of your Flex Query includes the quantity and export it again.",
+  "parser.trade_quantity_unknown": "{{broker}} gives no readable share count for {{count}} trade(s): {{trades}}.",
+  "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity of every trade and export it again.",
 };
 
 export default en;

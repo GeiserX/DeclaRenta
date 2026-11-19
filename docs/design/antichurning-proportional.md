@@ -406,10 +406,15 @@ práctico Renta 2025. The decisions, each pinned in
     account, so any account may sell them: a day's shortfall is taken from
     them first. A trade with neither ISIN nor symbol before the window has no
     holding to walk and also fails.
-  - No share trade has a missing or unreadable quantity. The IBKR parser keeps
-    such a row with quantity "0" and `Trade.quantityUnknown` (an explicit
-    `quantity="0"` stays a zero with no flag, and `parser.trade_quantity_unknown`
-    names the rows). With an ISIN, the row makes that security "unverified":
+  - No share trade has a missing or unreadable quantity. Every share parser
+    (IBKR, DEGIRO, Trade Republic, Trading 212, Revolut, Freedom24, Lightyear,
+    Scalable Capital, Flatex, eToro) keeps such a buy or sale row with
+    quantity "0" and `Trade.quantityUnknown`, where it skips a written "0"
+    (an explicit 0 stays a zero with no flag, and `parser.trade_quantity_unknown`
+    names the rows). Outside IBKR the kept row carries only the security, the
+    day and the direction, every amount "0" (`quantityUnknownTrade`), so it
+    moves no money, and FIFO skips every such row, so it books no shares (a
+    0-share lot would give the next sale a 0/0 cost). With an ISIN, the row makes that security "unverified":
     it may be a second purchase, or a purchase and a sale that leave the list
     unchanged. With no ISIN, it is an unidentified trade with no holding to
     walk, like one with neither ISIN nor symbol: before the window or in the

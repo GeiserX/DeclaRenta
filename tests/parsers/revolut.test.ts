@@ -749,12 +749,14 @@ describe("revolutParser — transaction-log format", () => {
       expect(stmt.openPositions.length).toBe(0);
     });
 
-    it("should skip rows with Infinity quantity", async () => {
+    it("keeps a row with Infinity quantity as a trade of unknown quantity, with no money and no holding (#453)", async () => {
       const data = buildTxnLogWorkbook([
         ["2025-10-20T06:00:00Z", "AAPL", "BUY - MARKET", "Infinity", "USD 150", "USD 750", "USD", "1.08"],
       ]);
       const stmt = await parseRevolutXlsx(data);
-      expect(stmt.trades.length).toBe(0);
+      expect(stmt.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown, t.tradeMoney, t.cost])).toEqual([["BUY", "0", true, "0", "0"]]);
+      expect(stmt.openPositions).toEqual([]);
+      expect(stmt.parserMessages?.find((m) => m.id === "parser.trade_quantity_unknown")?.context?.broker).toBe("Revolut");
     });
   });
 

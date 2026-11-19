@@ -21,7 +21,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal, toFiniteDecimalString, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessage } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
 type WorkBook = import("xlsx").WorkBook;
@@ -250,6 +250,16 @@ function parseClosedPositions(
     const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
 
     const unitsNum = parseFloat(parseNumber(units));
+    // Empty or unreadable units are no "0": keep both legs as trades of
+    // unknown quantity for the anti-churning evidence (#453).
+    if (quantityUnreadable(row[unitsCol])) {
+      const leg = { symbol, isin, assetCategory: assetCat, currency, exchange: "ETORO" } as const;
+      trades.push(
+        quantityUnknownTrade({ ...leg, tradeID: `etoro-open-${openDate}-${symbol}-${i}`, tradeDate: openDate, buySell: direction === "SELL" ? "SELL" : "BUY" }),
+        quantityUnknownTrade({ ...leg, tradeID: `etoro-close-${closeDate}-${symbol}-${i}`, tradeDate: closeDate, buySell: direction === "SELL" ? "BUY" : "SELL" }),
+      );
+      continue;
+    }
     if (unitsNum === 0 || isNaN(unitsNum)) {
       // Symbol resolved (data-bearing row) but units are zero/non-numeric.
       skippedDataRows++;
@@ -355,6 +365,9 @@ function parseClosedPositions(
       context: { count: String(unrecognizedDirection) },
     });
   }
+
+  const unknownQuantities = tradeQuantityUnknownMessage("eToro", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return trades;
 }

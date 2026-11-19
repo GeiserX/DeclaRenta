@@ -27,6 +27,9 @@ import {
   convertDateDMYDot,
   findColumn,
   stripBom,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessage,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 
@@ -127,7 +130,9 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     const price = parseNumber(fields[priceCol] ?? "0");
 
     const qtyNum = toFiniteDecimal(fields[qtyCol] ?? "0");
-    if (!isin || qtyNum.isZero()) continue;
+    // An empty or unreadable Nominal is no "0" (see below).
+    const qtyUnknown = quantityUnreadable(fields[qtyCol]);
+    if (!isin || (qtyNum.isZero() && !qtyUnknown)) continue;
 
     // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
     if (/lagerstellenwechsel/i.test(info)) {
@@ -138,6 +143,21 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     // Skip zero-price rows (non-tradeable conversions, rights).
     const priceDec = toFiniteDecimal(price);
     if (priceDec.isZero()) continue;
+
+    // A buy or sale whose Nominal is empty or unreadable: keep it as a trade of
+    // unknown quantity for the anti-churning evidence (#453). Its direction
+    // comes from the booking text only.
+    if (qtyUnknown) {
+      const name = nameCol >= 0 ? (fields[nameCol] ?? "").trim() : "";
+      const currency = currencyCol >= 0 ? (fields[currencyCol] ?? "EUR").trim() : "EUR";
+      trades.push(quantityUnknownTrade({
+        tradeID: txnCol >= 0 ? (fields[txnCol] ?? "").trim() : "",
+        symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+        tradeDate: convertDateDMYDot(fields[dateCol] ?? ""),
+        buySell: SELL_RE.test(info) && !BUY_RE.test(info) ? "SELL" : "BUY", exchange: "",
+      }));
+      continue;
+    }
 
     // Direction: negative Nominal = sell, positive = buy. Keyword confirms.
     const isSell = qtyNum.isNegative() || (SELL_RE.test(info) && !BUY_RE.test(info));
@@ -192,6 +212,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       });
     }
   }
+  const unknownQuantities = tradeQuantityUnknownMessage("Flatex", trades);
+  if (unknownQuantities) parserMessages.push(unknownQuantities);
 
   return {
     accountId: "",

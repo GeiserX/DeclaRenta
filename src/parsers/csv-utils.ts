@@ -6,6 +6,8 @@
  */
 
 import Decimal from "decimal.js";
+import type { Trade } from "../types/ibkr.js";
+import type { TaxMessage } from "../types/tax.js";
 
 // ---------------------------------------------------------------------------
 // Finiteness-guarded money parsing
@@ -41,6 +43,78 @@ export function toFiniteDecimalString(val: string, fallback = "0", parseEu = tru
 /** Same as {@link toFiniteDecimalString} but returns a Decimal (guaranteed finite). */
 export function toFiniteDecimal(val: string, fallback = "0", parseEu = true): Decimal {
   return new Decimal(toFiniteDecimalString(val, fallback, parseEu));
+}
+
+// ---------------------------------------------------------------------------
+// Trade quantities: missing is not zero (#453)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a trade row's quantity cell is missing, blank or no finite number,
+ * read through the same guard as the parser's own quantity
+ * ({@link toFiniteDecimalString}, `parseEu` as the parser passes it). Such a
+ * row is no explicit zero: it may be a purchase or a sale of any size.
+ */
+export function quantityUnreadable(cell: string | number | null | undefined, parseEu = true): boolean {
+  if (cell === undefined || cell === null) return true;
+  const text = String(cell).trim();
+  // parseNumber reads a blank cell as "0": test the blank first.
+  return text === "" || toFiniteDecimalString(text, "", parseEu) === "";
+}
+
+/**
+ * The trade a parser keeps for a buy or sale row whose quantity cell is
+ * missing or unreadable ({@link quantityUnreadable}), where it would skip a
+ * written "0". It carries the row's identity (security, day, direction) and
+ * nothing else: quantity "0" with `quantityUnknown`, every amount "0". So it
+ * moves no number (FIFO skips it, the FX engines see no money) and only tells
+ * the anti-churning one-purchase exception that the upload cannot prove it
+ * for that security (#453).
+ */
+export function quantityUnknownTrade(
+  row: Pick<Trade, "tradeID" | "symbol" | "isin" | "assetCategory" | "currency" | "tradeDate" | "buySell" | "exchange"> &
+    Partial<Pick<Trade, "description" | "tradeTime" | "accountId">>,
+): Trade {
+  const { description, tradeTime, accountId, ...rest } = row;
+  return {
+    ...rest,
+    accountId: accountId ?? "",
+    description: description || row.symbol,
+    ...(tradeTime ? { tradeTime } : {}),
+    settlementDate: row.tradeDate,
+    quantity: "0",
+    quantityUnknown: true,
+    tradePrice: "0",
+    tradeMoney: "0",
+    proceeds: "0",
+    cost: "0",
+    fifoPnlRealized: "0",
+    fxRateToBase: "1",
+    openCloseIndicator: row.buySell === "SELL" ? "C" : "O",
+    commissionCurrency: row.currency,
+    commission: "0",
+    taxes: "0",
+    multiplier: "1",
+  };
+}
+
+/**
+ * One warning naming every trade whose quantity the file does not give, or
+ * undefined when there is none. Shared by every parser (`broker` is the name
+ * shown to the user), with one translation key.
+ */
+export function tradeQuantityUnknownMessage(broker: string, trades: readonly Trade[]): TaxMessage | undefined {
+  const unreadable = trades.filter((t) => t.quantityUnknown);
+  if (unreadable.length === 0) return undefined;
+  const count = String(unreadable.length);
+  const list = unreadable.map((t) => `${t.isin ? `${t.symbol} (${t.isin})` : t.symbol} ${t.tradeDate}`).join(", ");
+  return {
+    id: "parser.trade_quantity_unknown",
+    severity: "warning",
+    message: `${broker} no da un número de acciones legible para ${count} operación(es): ${list}.`,
+    hint: "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad de cada operación y vuelve a exportarlo.",
+    context: { broker, count, trades: list },
+  };
 }
 
 // ---------------------------------------------------------------------------
