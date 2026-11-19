@@ -16,9 +16,11 @@ import type {
   SecurityInfo,
   CashBalance,
   OptionExercise,
+  AccountPeriod,
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
+import { ISIN_SHAPE } from "../engine/antichurning-window.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -88,6 +90,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
+  const accountPeriods: AccountPeriod[] = [];
 
   // The "Summary" option in the Cash Transactions section makes IBKR emit
   // every cash transaction twice: a DETAIL row (real transactionID, real
@@ -119,9 +122,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    openPositions.push(...ensureArray(stmt.OpenPositions?.OpenPosition).map(mapOpenPosition));
+    openPositions.push(...dropLotRowsWithSummary(ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
+    // An empty <Trades /> still says "no trades in this period"; no element says nothing.
+    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "", hasTrades: stmt.Trades !== undefined && stmt.Trades !== null });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
@@ -220,6 +225,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     securitiesInfo,
     cashBalances: cashBalances.length > 0 ? cashBalances : undefined,
     optionExercises: optionExercises.length > 0 ? optionExercises : undefined,
+    accountPeriods,
     parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
     parserMessages: parserMessages.length > 0 ? parserMessages : undefined,
   };
@@ -249,7 +255,6 @@ function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): vo
   }
 }
 
-const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
 /**
  * IBKR sends the underlying's identifier as underlyingSecurityID (an ISIN, or a
@@ -260,6 +265,12 @@ function underlyingIsinOf(raw: Record<string, string>): string {
   if (raw.underlyingIsin) return raw.underlyingIsin;
   const id = raw.underlyingSecurityID?.trim() ?? "";
   return ISIN_SHAPE.test(id) ? id : "";
+}
+
+/** IBKR `listingExchange`, trimmed and upper-cased; nothing when empty. */
+function listingExchangeOf(raw: Record<string, string>): { listingExchange?: string } {
+  const code = raw.listingExchange?.trim().toUpperCase();
+  return code ? { listingExchange: code } : {};
 }
 
 function mapTrade(raw: Record<string, string>): Trade {
@@ -289,6 +300,8 @@ function mapTrade(raw: Record<string, string>): Trade {
     buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
+    // The listing market, not the venue: it decides the anti-churning window (#452).
+    ...listingExchangeOf(raw),
     commissionCurrency: raw.ibCommissionCurrency ?? "",
     commission: raw.ibCommission ?? "0",
     taxes: raw.taxes ?? "0",
@@ -629,7 +642,28 @@ function mapCorporateAction(raw: Record<string, string>): CorporateAction {
  */
 const IBKR_CUSTODIAN_COUNTRY = "IE";
 
+/**
+ * With both the Summary and the Lot options on, IBKR's Open Positions list
+ * each holding once as a SUMMARY row and again as one LOT row per tax lot.
+ * Keep the SUMMARY row and drop the LOT rows of the same account and
+ * security, so a holding is never counted twice. LOT rows with no SUMMARY row
+ * stay: together they are the holding.
+ */
+function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, string>[] {
+  const id = (raw: Record<string, string>): string => `${raw.accountId ?? ""}|${raw.conid ?? ""}|${raw.isin ?? ""}|${raw.symbol ?? ""}`;
+  const level = (raw: Record<string, string>): string => (raw.levelOfDetail ?? "").toUpperCase();
+  const summarized = new Set(rows.filter((raw) => level(raw) === LEVEL_OF_DETAIL_SUMMARY).map(id));
+  if (summarized.size === 0) return rows;
+  return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
+  // IBKR writes the held quantity as `position`; `quantity` is the older
+  // hand-written form some files use. Keep a missing or unreadable quantity
+  // apart from an explicit zero: the "0" default would prove "no shares held"
+  // to the one-purchase exception (#453).
+  const rawQuantity = raw.position ?? raw.quantity;
+  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",
@@ -637,7 +671,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: raw.quantity ?? "0",
+    quantity: rawQuantity ?? "0",
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",
@@ -645,6 +679,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     fifoPnlUnrealized: raw.fifoPnlUnrealized ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",
     custodianCountry: IBKR_CUSTODIAN_COUNTRY,
+    ...(quantityUnknown ? { quantityUnknown } : {}),
   };
 }
 
@@ -658,6 +693,7 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     assetCategory: (raw.assetCategory ?? "STK") as SecurityInfo["assetCategory"],
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
+    ...listingExchangeOf(raw),
   };
 }
 

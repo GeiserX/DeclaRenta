@@ -25,6 +25,7 @@ import { FifoEngine } from "../engine/fifo.js";
 import { FxFifoEngine } from "../engine/fx-fifo.js";
 import { loanCurrencies } from "../engine/fx-loan-gate.js";
 import { addMonths, detectWashSales, salesWithWindowPastData } from "../engine/wash-sale.js";
+import { collectIsinWindows, listAntichurningSecurities } from "../engine/antichurning-window.js";
 import { calculateDividends, matchWithholdings, withholdingCountry, withholdingEur, type WithholdingMatch } from "../engine/dividends.js";
 import { collapseCorrections } from "../engine/cash-corrections.js";
 import { calculateDoubleTaxation } from "../engine/double-taxation.js";
@@ -475,6 +476,14 @@ export interface ReportOptions {
    * normally and can be split across multiple dates/prices.
    */
   manualOpeningLots?: ManualOpeningLot[];
+
+  /**
+   * The anti-churning window the user set per ISIN (#452): 2 months (LIRPF
+   * 33.5.f) or 12 (33.5.g). It wins over IBKR's listing exchange and over the
+   * default. Untrusted input: a key that is not an ISIN or a value that is not
+   * exactly 2 or 12 is ignored. Crypto keeps its own rule (33.5.e).
+   */
+  windowMonthsByIsin?: Readonly<Record<string, 2 | 12>>;
 }
 
 /** The engine options for one of the three {@link FxMethod}s. */
@@ -488,6 +497,13 @@ const FX_METHOD_NAME_ES: Record<FxMethod, string> = {
   "tradicional-divisa": "Tradicional con divisa",
   monodivisa: "Tradicional sin divisa (monodivisa)",
 };
+
+/** Where the user sets the anti-churning window per security (#452). */
+const WINDOW_PANEL_ES = "«Plazo anti-churning por valor»";
+
+/** The past-data hint's sentence on the window length (#452). */
+const PAST_DATA_WINDOW_NOTE =
+  `Ese plazo es de 1 año en los valores a los que DeclaRenta aplica 1 año (porque IBKR solo los muestra en un mercado sin equivalencia, como Londres desde 2021, SIX u OTC Markets, o porque tú los marcaste) y de 2 meses en los demás valores con ISIN. Si un valor solo cotiza en un mercado así y DeclaRenta le aplica 2 meses, márcalo con 1 año en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-1y) y calcula de nuevo.`;
 
 /** Hint of `report.competitor_reconciliation` (default method). */
 const COMPETITOR_RECONCILIATION_HINT =
@@ -790,38 +806,55 @@ export function generateTaxReport(
   // before. Then keep only the target year's
   // disposals for the figures (a block/release is attributed to the year of the
   // disposal that carries it).
-  // How far back the files reach, for the one-purchase exception (#453): the
-  // statement start, or the first trade of the files (never a manual opening
-  // lot, which is dated long before them).
-  const firstFileTrade = statement.trades
-    .map((tr) => normalizeDate(tr.tradeDate.trim()).slice(0, 10))
-    .reduce((min, d) => (min === "" || d < min ? d : min), "");
-  const fromDay = statement.fromDate ? normalizeDate(statement.fromDate.trim()).slice(0, 10) : "";
-  const startBySource = new Map<string, string>();
-  for (const src of statement.holdingsBySource ?? []) {
-    if (!src.brokerSource || !src.fromDate) continue;
-    const start = normalizeDate(src.fromDate).slice(0, 10);
-    const prev = startBySource.get(src.brokerSource);
-    if (!prev || start < prev) startBySource.set(src.brokerSource, start);
-  }
+  // What each uploaded file shows per account, for the one-purchase exception
+  // (#453): the days it covers and its end-of-period holdings, the only proof
+  // that no share was held at the window start. An unmerged statement is one
+  // file. A multi-account IBKR Flex has one period per account; its holdings
+  // rows go to their own account, and a row of no listed account stays apart
+  // (with no period it can prove nothing).
+  const files = statement.holdingsBySource ?? [
+    {
+      accountId: statement.accountId,
+      fromDate: statement.fromDate,
+      toDate: statement.toDate,
+      openPositions: statement.openPositions,
+      cashBalances: [],
+      ...(statement.accountPeriods ? { accountPeriods: statement.accountPeriods } : {}),
+    },
+  ];
+  const accountStatements = files.flatMap((src) => {
+    // A file with no account periods is a broker export of trades.
+    const periods = src.accountPeriods?.length ? src.accountPeriods : [{ accountId: src.accountId, fromDate: src.fromDate ?? "", toDate: src.toDate, hasTrades: true }];
+    const ids = new Set(periods.map((p) => p.accountId));
+    const own = periods.map((p) => ({
+      source: src.brokerSource,
+      accountId: p.accountId,
+      fromDate: p.fromDate,
+      toDate: p.toDate,
+      hasTrades: p.hasTrades,
+      positions: periods.length === 1 ? src.openPositions : src.openPositions.filter((pos) => pos.accountId === p.accountId),
+    }));
+    const stray = periods.length === 1 ? [] : src.openPositions.filter((pos) => !ids.has(pos.accountId));
+    return stray.length === 0 ? own : [...own, { source: src.brokerSource, accountId: "\u0000unlisted", toDate: src.toDate, hasTrades: false, positions: stray }];
+  });
+  // The anti-churning window of each ISIN (#452): the user's value, else IBKR's
+  // listing exchanges. ONE map feeds the block, the definitive test (both in
+  // detectWashSales) and the past-data warning (salesWithWindowPastData).
+  const isinWindows = collectIsinWindows(washSaleTrades, statement.securitiesInfo, options?.windowMonthsByIsin);
   const allDisposals = detectWashSales(
     fifoEngine.getDisposals(),
     washSaleTrades,
     statement.corporateActions,
     fifoEngine.getSplitRatios(),
     fifoEngine.getRemainingLots(),
-    {
-      dataStart: fromDay && (firstFileTrade === "" || fromDay < firstFileTrade) ? fromDay : firstFileTrade,
-      startBySource,
-      // Each file's end-of-period holdings: the only proof that no share came
-      // from before the files (an unmerged statement is one file).
-      snapshots: statement.holdingsBySource
-        ? statement.holdingsBySource.map((src) => ({ source: src.brokerSource, toDate: src.toDate, positions: src.openPositions }))
-        : [{ toDate: statement.toDate, positions: statement.openPositions }],
-    },
+    { statements: accountStatements },
+    isinWindows,
   );
   let disposals = allDisposals.filter((d) => d.sellDate.startsWith(yearStr));
   if (titulares > 1) disposals = disposals.map((d) => splitDisposal(d, titulares));
+  const securityNames = new Map<string, { symbol: string; description: string }>();
+  for (const tr of washSaleTrades) if (tr.isin && !securityNames.has(tr.isin)) securityNames.set(tr.isin, { symbol: tr.symbol, description: tr.description });
+  const antichurningSecurities = listAntichurningSecurities(disposals, isinWindows, year, securityNames);
 
   const transmissionValue = disposals.reduce((sum, d) => sum.plus(d.proceedsEur), new Decimal(0));
   const acquisitionValue = disposals.reduce((sum, d) => sum.plus(d.costBasisEur), new Decimal(0));
@@ -1188,7 +1221,7 @@ export function generateTaxReport(
     if (!prev || end > prev) endBySource.set(src.brokerSource, end);
   }
   const uncoveredWindows = lastLoadedDate
-    ? salesWithWindowPastData(disposals, lastLoadedDate, washSaleTrades, endBySource)
+    ? salesWithWindowPastData(disposals, lastLoadedDate, washSaleTrades, endBySource, isinWindows)
     : [];
   // The return is due on 30 June of the next year. A window that ends later is
   // still open when the user files, so "if you did not buy" cannot be known yet:
@@ -1216,7 +1249,7 @@ export function generateTaxReport(
         id,
         severity: "warning",
         message: `Hay ${base.count} venta(s) de ${base.year} cuyo plazo de recompra de la regla anti-churning (2 meses; 1 año si el valor no cotiza en un mercado regulado del Espacio Económico Europeo ni en uno equivalente; en las criptomonedas, solo el año siguiente a la venta) termina después de la última fecha que cubren los ficheros subidos de ese bróker (${base.lastDate}). DeclaRenta no ve las compras posteriores a esa fecha.`,
-        hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año, así que revisa también tus compras hasta un año después de cada venta (issue #452). En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta y, como muy tarde, hasta el ${base.windowEnd}; las anteriores a la venta no cuentan. Si no compraste, el cálculo ya es correcto.`,
+        hint: `Si compraste el mismo valor después del ${base.lastDate} y dentro del plazo de esas ventas (como muy tarde, hasta el ${base.windowEnd}), parte de su pérdida puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. Sube también el fichero con las operaciones hasta el ${base.windowEnd} junto a este y calcula de nuevo. ${PAST_DATA_WINDOW_NOTE} En las criptomonedas solo cuentan las compras de la misma criptomoneda, en cualquier exchange, hechas después de la venta y, como muy tarde, hasta el ${base.windowEnd}; las anteriores a la venta no cuentan. Si no compraste, el cálculo ya es correcto.`,
         context: base,
       });
     } else {
@@ -1225,10 +1258,54 @@ export function generateTaxReport(
         id,
         severity: "warning",
         message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning termina el ${ctx.windowEnd} como muy tarde: después del ${ctx.deadline}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker (${ctx.lastDate}). Cuando presentes la declaración, ese plazo seguirá abierto.`,
-        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
+        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda hasta el ${ctx.windowEnd} inclusive, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
         context: ctx,
       });
     }
+  }
+
+  // The per-ISIN anti-churning window (#452). A 1-year reading from IBKR is a
+  // warning with the way back (the panel or --antichurning-2m); a 2-month
+  // reading that rests on an EMIR-only decision is an open point; a window the
+  // user set is listed, so the filed PDF shows which windows were set by hand.
+  const entry = (s: (typeof antichurningSecurities)[number]): string => `${s.symbol || s.isin} (${s.isin}, IBKR: ${s.listingExchanges.join(", ")})`;
+  const oneYearIbkr = antichurningSecurities.filter((s) => s.source === "ibkr" && s.months === 12);
+  if (oneYearIbkr.length > 0) {
+    const ctx = { count: String(oneYearIbkr.length), list: oneYearIbkr.map(entry).join("; ") };
+    allMessages.push({
+      id: "report.antichurning_one_year_ibkr",
+      severity: "warning",
+      message: `DeclaRenta aplica a ${ctx.count} valor(es) el plazo de 1 año de la regla anti-churning (art. 33.5.g LIRPF), porque IBKR solo los muestra en un mercado que no es un mercado regulado del Espacio Económico Europeo ni un mercado declarado equivalente por la Comisión Europea: ${ctx.list}.`,
+      hint: `IBKR solo muestra el mercado de las líneas que has operado. Si el valor también está admitido a negociación en un mercado regulado del Espacio Económico Europeo (no basta un mercado de crecimiento ni otro sistema multilateral de negociación) o en NYSE, Nasdaq, ASX o la Bolsa de Hong Kong, le corresponden 2 meses: márcalo con 2 meses en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-2m) y calcula de nuevo.`,
+      context: ctx,
+    });
+  }
+  const openListing = antichurningSecurities.filter((s) => s.source !== "user" && s.openDecision !== undefined);
+  if (openListing.length > 0) {
+    const ctx = {
+      count: String(openListing.length),
+      list: openListing.map((s) => `${s.symbol || s.isin} (${s.isin}, IBKR: ${s.listingExchanges.join(", ")}, ${s.openDecision})`).join("; "),
+    };
+    allMessages.push({
+      id: "report.antichurning_listing_open",
+      severity: "info",
+      message: `DeclaRenta aplica 2 meses a ${ctx.count} valor(es) que IBKR muestra en Toronto, TSX Venture, Aequitas Neo, Tokio o Singapur: ${ctx.list}. Una decisión de la Comisión Europea declara ese mercado equivalente a un mercado regulado, y la DGT acepta ese tipo de decisión (consulta V0778-25), pero ninguna consulta lo confirma para acciones.`,
+      hint: `Si prefieres el criterio prudente, márcalo con 1 año en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-1y) y calcula de nuevo.`,
+      context: ctx,
+    });
+  }
+  const userOneYear = antichurningSecurities.filter((s) => s.source === "user" && s.months === 12);
+  const userTwoOverIbkr = antichurningSecurities.filter((s) => s.source === "user" && s.months === 2 && s.autoMonths === 12);
+  if (userOneYear.length + userTwoOverIbkr.length > 0) {
+    const names = (rows: typeof antichurningSecurities): string => rows.map((s) => `${s.symbol || s.isin} (${s.isin})`).join("; ") || "—";
+    const ctx = { count: String(userOneYear.length + userTwoOverIbkr.length), oneYear: names(userOneYear), twoMonths: names(userTwoOverIbkr) };
+    allMessages.push({
+      id: "report.antichurning_window_user",
+      severity: "info",
+      message: `Has fijado a mano el plazo de la regla anti-churning de ${ctx.count} valor(es). 1 año: ${ctx.oneYear}. 2 meses, en lugar del año que daba IBKR: ${ctx.twoMonths}.`,
+      hint: `DeclaRenta usa tu plazo en lugar del automático en el bloqueo de pérdidas, en la prueba de transmisión definitiva y en los avisos de plazo. Puedes cambiarlo en el panel ${WINDOW_PANEL_ES} (en la línea de comandos, --antichurning-1y o --antichurning-2m).`,
+      context: ctx,
+    });
   }
 
   // The one-purchase exception of the 2-month rule (#453, DGT V3282-18). One
@@ -1265,7 +1342,7 @@ export function generateTaxReport(
         id: "report.antichurning_single_purchase_unverified",
         severity: "warning",
         message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
-        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran: deben empezar antes del ${ctx.windowStart} e incluir las posiciones a fin de periodo de cada bróker que opera ese valor (en IBKR, la sección Open Positions de la Flex Query), sin más acciones de las que explican sus operaciones. Un fichero que solo incluye operaciones no basta.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrir sus operaciones sin huecos ni días repetidos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, las secciones Trades y Open Positions de la Flex Query, con el campo ISIN), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
         context: ctx,
       });
     }
@@ -1457,6 +1534,7 @@ export function generateTaxReport(
       blockedLosses: t.blockedLosses,
       reintegratedLosses: t.reintegratedLosses,
       disposals,
+      antichurningSecurities,
     },
     dividends: {
       grossIncome: t.grossDividends,

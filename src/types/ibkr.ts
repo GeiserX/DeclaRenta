@@ -37,6 +37,22 @@ export interface FlexStatement {
    * holdings of the files that end on 31 December of the declared year.
    */
   holdingsBySource?: HoldingsSource[];
+  /**
+   * The period of each account in the file (IBKR: one FlexStatement per
+   * account, each with its own dates). The anti-churning one-purchase exception
+   * (#453) checks coverage per account; without it the file is one account
+   * over `fromDate`–`toDate`.
+   */
+  accountPeriods?: AccountPeriod[];
+}
+
+/** One account of a file and the dates that file covers for it. */
+export interface AccountPeriod {
+  accountId: string;
+  fromDate: string;
+  toDate: string;
+  /** Whether the file has a Trades section for the account: a holdings-only Flex shows no trades for its period. */
+  hasTrades: boolean;
 }
 
 /** The year-end holdings of one merged file, dated to that file's period end. */
@@ -49,6 +65,8 @@ export interface HoldingsSource {
   brokerSource?: string;
   openPositions: OpenPosition[];
   cashBalances: CashBalance[];
+  /** That file's `accountPeriods`, when it gives them. */
+  accountPeriods?: AccountPeriod[];
 }
 
 /**
@@ -97,7 +115,14 @@ export interface Trade {
   fxRateToBase: string;
   buySell: "BUY" | "SELL";
   openCloseIndicator: "O" | "C" | "C;O";
+  /** Execution venue of the trade (IBKR `exchange`); not the listing market. */
   exchange: string;
+  /**
+   * IBKR `listingExchange`, trimmed and upper-cased: the market the contract is
+   * listed on (e.g. LSE, NYSE, TSE). Decides the anti-churning window (#452).
+   * Only IBKR sets it.
+   */
+  listingExchange?: string;
   commissionCurrency: string;
   commission: string;
   taxes: string;
@@ -247,6 +272,12 @@ export interface OpenPosition {
    * one-purchase exception (#453) cannot use it as proof of no earlier shares.
    */
   fromTrades?: boolean;
+  /**
+   * The file gave no readable quantity for this row (`quantity` then holds the
+   * "0" default). The one-purchase exception (#453) treats it as missing
+   * evidence, never as an explicit zero.
+   */
+  quantityUnknown?: boolean;
 }
 
 export interface SecurityInfo {
@@ -258,6 +289,8 @@ export interface SecurityInfo {
   assetCategory: AssetCategory;
   multiplier: string;
   subCategory: string;
+  /** IBKR «Listing Exchange» (stocks only), trimmed and upper-cased (#452). */
+  listingExchange?: string;
   brokerSource?: string;
 }
 

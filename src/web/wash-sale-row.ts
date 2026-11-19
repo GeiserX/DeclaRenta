@@ -7,7 +7,8 @@
  *
  * A blocked loss does not belong to the purchase that blocked it: it waits in a
  * queue per security and the next «transmisión definitiva» of that security
- * releases it, oldest first (src/engine/wash-sale.ts). So a blocked row names
+ * releases it, oldest first (src/engine/wash-sale.ts). A crypto loss is the
+ * exception: the sale of the coins its rebuy brought in releases it (art. 33.5.e). So a blocked row names
  * the purchases that blocked it, and a releasing row names the loss sales whose
  * pending loss it releases.
  */
@@ -44,7 +45,10 @@ export function renderWashSaleDetailRow(d: FifoDisposal, colspan: number): strin
   const released = d.reintegratedLossEur.greaterThan(0);
   if (!blocked && !released) return "";
 
-  const releasedText = esc(t("annex.wash_released", { amount: fmtEur(d.reintegratedLossEur) }));
+  // A crypto loss is released by the sale of its rebuy's coins (art. 33.5.e),
+  // not by the definitive test of securities.
+  const crypto = d.assetCategory === "CRYPTO";
+  const releasedText = esc(t(crypto ? "annex.wash_released_crypto" : "annex.wash_released", { amount: fmtEur(d.reintegratedLossEur) }));
   const body: string[] = [];
   if (blocked) {
     const dates = (d.washSaleRepurchaseDates ?? []).map(fmtDay).join(", ");
@@ -55,7 +59,7 @@ export function renderWashSaleDetailRow(d: FifoDisposal, colspan: number): strin
     if (blocked) body.push(`<p>${releasedText}</p>`);
     const from = (d.washSaleReleasedFromDates ?? []).map(fmtDay).join(", ");
     if (from) body.push(`<p>${esc(t("annex.wash_released_dates", { dates: from }))}</p>`);
-    body.push(`<p>${esc(t("annex.wash_released_hint"))}</p>`);
+    body.push(`<p>${esc(t(crypto ? "annex.wash_released_hint_crypto" : "annex.wash_released_hint"))}</p>`);
   }
   const summary = blocked ? esc(t("annex.wash_blocked", { amount: fmtEur(d.blockedLossEur) })) : releasedText;
   const cls = blocked ? "wash-sale-detail" : "wash-sale-detail wash-sale-detail-released";

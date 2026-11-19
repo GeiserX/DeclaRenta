@@ -9,7 +9,7 @@
  */
 
 import { spawnSync } from "child_process";
-import { existsSync, mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { fileURLToPath } from "url";
@@ -123,4 +123,76 @@ describe("declarenta CLI arguments", () => {
       expect(convert).toContain(p.name);
     }
   }, 60_000);
+});
+
+describe("--antichurning-1y / --antichurning-2m (#452)", () => {
+  const ISIN = "GB0007980591";
+  const row = (id: string, date: string, qty: number, price: number) => {
+    const side = qty > 0 ? "BUY" : "SELL";
+    const money = (Math.abs(qty) * price).toFixed(2);
+    return `<Trade tradeID="${id}" accountId="U7654321" symbol="LSEONLY" description="LONDON ONLY PLC" isin="${ISIN}" assetCategory="STK" currency="EUR" tradeDate="${date}" settlementDate="${date}" quantity="${qty}" tradePrice="${price}" tradeMoney="${side === "BUY" ? money : `-${money}`}" proceeds="${side === "BUY" ? `-${money}` : money}" cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}" exchange="LSE" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />`;
+  };
+  // The issue example: buy 01/02/2025 at 100, sell 01/03 at 80, rebuy 01/08 at 85.
+  const ISSUE = `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U7654321" fromDate="20250101" toDate="20251231" period=""><Trades>${row("1", "20250201", 1, 100)}${row("2", "20250301", -1, 80)}${row("3", "20250801", 1, 85)}</Trades></FlexStatement></FlexStatements></FlexQueryResponse>`;
+
+  function convert(extra: string[]) {
+    const dir = mkdtempSync(join(tmpdir(), "declarenta-cli-452-"));
+    const input = join(dir, "flex.xml");
+    const output = join(dir, "out.json");
+    writeFileSync(input, ISSUE);
+    const res = spawnSync(process.execPath, ["--import", "tsx", CLI, "convert", "-i", input, "-o", output, "-y", "2025", ...extra], { cwd: ROOT, encoding: "utf-8" });
+    const json = existsSync(output) ? (JSON.parse(readFileSync(output, "utf-8")) as { resumen: { perdidas_bloqueadas_antichurning: string } }) : undefined;
+    return { status: res.status, stderr: res.stderr, json };
+  }
+
+  it("with no flag the rebuy 5 months later blocks nothing (control)", () => {
+    const res = convert([]);
+    expect(res.status).toBe(0);
+    expect(Number(res.json!.resumen.perdidas_bloqueadas_antichurning)).toBe(0);
+  }, 30_000);
+
+  it("--antichurning-1y applies 1 year: the −20 is blocked (lower case and commas accepted)", () => {
+    const res = convert(["--antichurning-1y", `${ISIN.toLowerCase()},US0378331005`]);
+    expect(res.status).toBe(0);
+    expect(Number(res.json!.resumen.perdidas_bloqueadas_antichurning)).toBe(20);
+  }, 30_000);
+
+  it("--antichurning-2m keeps 2 months", () => {
+    const res = convert(["--antichurning-2m", ISIN]);
+    expect(res.status).toBe(0);
+    expect(Number(res.json!.resumen.perdidas_bloqueadas_antichurning)).toBe(0);
+  }, 30_000);
+
+  it("a value that is not an ISIN stops the run with a Spanish error", () => {
+    const res = convert(["--antichurning-1y", "GB000798059"]);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("no es un ISIN válido");
+    expect(res.json).toBeUndefined();
+  }, 30_000);
+
+  it("a mistyped check digit stops the run, so a typo cannot leave the 1-year block in place", () => {
+    const res = convert(["--antichurning-2m", "GB0007980592"]);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("«GB0007980592» no es un ISIN válido");
+    expect(res.json).toBeUndefined();
+  }, 30_000);
+
+  it("a valid ISIN that is in no file gives a warning and changes nothing", () => {
+    const res = convert(["--antichurning-1y", "US0378331005"]);
+    expect(res.status).toBe(0);
+    expect(res.stderr).toContain("ningún valor de los ficheros tiene el ISIN US0378331005");
+    expect(Number(res.json!.resumen.perdidas_bloqueadas_antichurning)).toBe(0);
+  }, 30_000);
+
+  it("an ISIN that is in the file gives no such warning", () => {
+    const res = convert(["--antichurning-1y", ISIN]);
+    expect(res.status).toBe(0);
+    expect(res.stderr).not.toContain("ningún valor de los ficheros");
+  }, 30_000);
+
+  it("the same ISIN in both flags stops the run", () => {
+    const res = convert(["--antichurning-1y", ISIN, "--antichurning-2m", ISIN]);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("a la vez en --antichurning-1y y en --antichurning-2m");
+  }, 30_000);
 });

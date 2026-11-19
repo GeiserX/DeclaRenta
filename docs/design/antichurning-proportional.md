@@ -239,18 +239,32 @@ transmission that releases them.
 
 ## Known limitations (documented, accepted)
 
-- **Listed/unlisted heuristic** (ISIN-presence → 2 months) unchanged. Letter
-  f covers a regulated market of the European Economic Area (the EU, Norway,
-  Iceland, Liechtenstein) and any third-country market the European Commission
-  declared equivalent while the decision stands (DGT V0778-25). The decisions
-  in force are Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the
-  other SEC national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong
-  Kong); Switzerland's (2018/2047) expired on 30/06/2019 and the UK has none.
-  So a share listed only on NYSE or Nasdaq gets 2 months under the statute too,
-  and that is no deviation. The deviation is an ISIN-bearing security admitted
-  to neither kind of market: one traded only on OTC Markets, or listed only on
-  the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
-  the engine 2 months (#452).
+- **Window per ISIN (#452).** Letter f covers a regulated market of the
+  European Economic Area (the EU, Norway, Iceland, Liechtenstein) and any
+  third-country market the European Commission declared equivalent while the
+  decision stands (DGT V0778-25). The MiFID II decisions in force are
+  Implementing Decisions (EU) 2017/2320 (US: NYSE, Nasdaq and the other SEC
+  national exchanges), 2017/2318 (Australia) and 2017/2319 (Hong Kong);
+  Switzerland's (2017/2441, 2018/2047) covered 24/12/2017-30/06/2019, and the
+  UK was EU law until 31/12/2020 and has none since. So a share listed only on
+  NYSE or Nasdaq gets 2 months under the statute too. The EMIR art. 2a
+  decisions 2016/2273 (TSX, TSX Venture, Aequitas Neo), 2016/2271 (Tokyo) and
+  2016/2270 (Singapore) also declare markets equivalent to a regulated market,
+  and V0778-25 accepted that kind of decision for CME; no consulta applies it
+  to shares, so that point is open. `src/engine/antichurning-window.ts`
+  resolves one window per ISIN: the user's value (`windowMonthsByIsin`, the
+  web panel, `--antichurning-1y` / `--antichurning-2m`) wins; else 12 only
+  when every IBKR `listingExchange` of the ISIN (Trades and SecurityInfo) is
+  in `NON_EQUIVALENT_LISTINGS` and outside its equivalence spans on the sale
+  day (London admitted to neither kind of market from 2021, SIX outside its
+  spans, OTC Markets, Japannext, Stock Connect, other third countries); else
+  the old heuristic (ISIN → 2, no ISIN → 12). The EMIR-only codes stay at 2
+  months with `report.antichurning_listing_open`. The same map reaches
+  `detectWashSales` (block and definitive test) and `salesWithWindowPastData`.
+  Remaining limits: a listing IBKR does not show (Shell on Amsterdam) needs
+  the user's 2-month mark; a no-ISIN US listing keeps 12; no warning when a
+  1-year window starts before the upload; which date counts when an
+  equivalence starts or ends inside the window is the sale day (open).
 - **Crypto window (handled).** Crypto is no «valor o participación» (DGT
   V0648-24, V0525-25), so letters f and g do not apply. The engine applies art.
   33.5.e: only a repurchase of the same coin (the `CRYPTO:<SYMBOL>` key, any
@@ -260,15 +274,25 @@ transmission that releases them.
   and the 30 June split did not move. This is a deduction, not a holding: no
   consulta names crypto and art. 33.5 together; V1613-25 applies letter e
   «y no las letras f) y g)» to dollars, the closest fungible non-security.
-  Open points it leaves: (A) letter e has its own release sentence («se
+  Release (#457 follow-up): letter e has its own release sentence («se
   integrará cuando se produzca la posterior transmisión del elemento
-  patrimonial», without the f/g «que permanezcan»); the engine keeps the #451
-  definitive test. It never releases earlier than the reading "any later sale
-  releases", which is not built. It can release before the reacquired units
-  are sold: a later definitive sale of older units releases the loss while
-  the rebought coin is still held. The reading "the sale of the reacquired
-  element" (FIFO lot identification, V1550-25) would release nothing until
-  those units are sold. (B) A partial reacquisition stays
+  patrimonial», without the f/g «que permanezcan»), and the AEAT Manual
+  integrates the loss when «se transmita el elemento patrimonial adquirido».
+  So a crypto loss does not go into the share-count queue's definitive test.
+  It is tied to the coins of the repurchase that blocked it (tie groups per
+  buy day) and released when FIFO transmits those coins, in proportion to the
+  quantity. A sale of other coins releases nothing, and so does a sell-out
+  before the rebuy arrives (no total exit for crypto). Of one buy day's coins
+  the tied ones go last, and reward coins of that day carry no tie (FIFO
+  books a day's trade coins before its reward coins). A tied coin sold
+  releases its claims even when the coin is bought again in the year after:
+  letter e names that transmission as the moment and has no f/g «definitiva»
+  test, and the new buy can block the new sale's own loss instead. Only loss
+  lots take a rebuy, so a gain sale (of tied or other coins) uses up none that
+  a later loss needs. A crypto release is final, so by itself it raises no
+  past-data or open-at-filing warning. No consulta names crypto and art. 33.5 together; the rule reads the
+  statute and the Manual, and never releases earlier than the law allows.
+  Open points it leaves: (B) A partial reacquisition stays
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
   reward receipts are no repurchase (reward lots stay out of
   `washSaleTrades`), the less strict choice, which no source settles.
@@ -358,30 +382,50 @@ práctico Renta 2025. The decisions, each pinned in
   nothing about shares bought before it, at the same broker or any other. The
   exception is "applied" only when all of these hold, and "unverified" (not
   applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
-  - The upload reaches back to the window start: the statement `fromDate`
-    (IBKR), else the first trade of the files (never a manual opening lot).
-    With several brokers, the latest start among the brokers that trade the key
-    (`HoldingsSource.fromDate`, else each broker's first trade of any
-    security). Shares sold before the files are invisible.
   - The long position never goes negative (a sale of shares the upload never
     shows bought).
-  - The end-of-period holdings explain the trades (`buildSnapshotCheck`).
-    Without transfers, the shares a broker lists at its period end are the
-    shares it held before the files plus what its trades moved. So per broker,
-    listed holding minus the trade position at its `toDate` is the holding from
-    before the files. Summed over the brokers it must equal the manual opening
-    lots, which are declared holdings from before the files. A share moved
-    between two uploaded brokers cancels out. Each broker's latest non-empty
-    list counts (all its files ending that day, summed). An empty list cannot be
-    told apart from a file without the section, so it counts as no list. A
-    broker that trades the key with no list, or no list at all, proves nothing.
-    Only IBKR (OpenPositions) gives such lists today. Revolut's list is built
-    by its parser from the file's own trades (`OpenPosition.fromTrades`), so it
-    always matches them and is ignored. A transactions CSV (DEGIRO, Trade
-    Republic and the rest) therefore always gets "unverified".
+  - `buildEvidenceCheck`, for EVERY account (broker and account id) that
+    trades the key or lists it in any holdings list of the upload:
+    1. it has a non-empty holdings list dated on or after the sale day; the
+       earliest such date counts (the IBKR parser keeps the SUMMARY row of a
+       holding and drops its LOT rows, so the Summary and Lot options together
+       do not count it twice);
+    2. its files with a trades section cover every day from the window start
+       to that date exactly once: no gap (a hidden trade) and no day in two
+       files (merge does not drop duplicated trades, so the same Flex uploaded
+       twice would double them and still match a doubled list). Back-to-back
+       periods qualify. The IBKR parser gives one period per FlexStatement,
+       so each account of a multi-account Flex has its own, and marks the ones
+       without a `<Trades>` element (`AccountPeriod.hasTrades`): a
+       holdings-only Flex covers nothing, though it can give the list;
+    3. every row of the key in that list has a readable quantity. IBKR writes
+       it as `position` (hand-written files may use `quantity`); the parser
+       marks a missing or non-numeric one `quantityUnknown` instead of reading
+       its "0" default. A list with no row of the key says zero, but only when
+       every share row (not the exempt categories, not crypto) of every list in
+       the upload has an ISIN: Open Positions may leave the ISIN field out
+       while Trades has it, and then the row of the shares held is no row of
+       the key;
+    4. the long holding listed equals what that account's own trades from the
+       window start leave on that date, split-adjusted to that date.
+
+    Then the account held nothing at the window start: its list is that
+    holding plus its trades since. Each account is checked on its own, in its
+    own list's share units, so a split between two lists' dates cannot mix
+    units. Nothing is offset between accounts: one account's surplus and
+    another's deficit fit both a transfer between them and shares held before
+    plus a transfer out of the upload, and no parser documents transfers. So a
+    transfer between two uploaded accounts is "unverified", and so is a manual
+    opening lot of the key dated on or after the window start (it comes from an
+    account the upload does not hold). An empty list cannot be told apart from
+    a file without the section, so it counts as no list. Only IBKR
+    (OpenPositions) gives such lists today. Revolut's list is built by its
+    parser from the file's own trades (`OpenPosition.fromTrades`), so it always
+    matches them and is ignored. A transactions CSV (DEGIRO, Trade Republic and
+    the rest) therefore always gets "unverified".
   Left invisible on purpose: a broker or account the user did not upload, and
-  shares that left a listed broker without a trade (a transfer out, which the
-  IBKR parser does not read) before its `toDate`. The info message
+  shares held at the window start that a transfer out of the upload (which the
+  IBKR parser does not read) hides before the list date. The info message
   `report.antichurning_single_purchase` names both whenever the exception is
   applied.
 - **Definitive test.** Gain lots with pending losses share the absorption, so
@@ -494,7 +538,12 @@ Verified case: the issue example filed for 2025 with 0.66.5 deducted 20; the new
 engine releases 25 in 2026 instead of 5. The lifetime total does not change;
 only the year does. The new rule can also move a loss to an earlier year
 (V0046-20, the V1760-23 total exit); there the user can correct the earlier
-return to claim it. The procedure depends on the year: from 2024 on, an
+return to claim it. Whenever the user corrects an earlier year to claim a
+loss (that case, or a loss 0.66.13 and earlier blocked against the
+one-purchase exception, #453), the later years already filed must be checked
+too: where the old version released that same loss and the user deducted it,
+that year is corrected to remove it, so the loss is deducted once. The
+procedure depends on the year: from 2024 on, an
 «autoliquidación rectificativa» in both directions; for 2023 and earlier, an
 «autoliquidación complementaria» to pay more or a «solicitud de rectificación»
 to claim. AEAT, Manual práctico de Renta 2025: «la aplicación efectiva de la
