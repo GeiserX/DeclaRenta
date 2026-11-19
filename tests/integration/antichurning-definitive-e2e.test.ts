@@ -163,6 +163,16 @@ describe("DGT V3282-18: rebought gain sales are not definitive (2017: 900)", () 
     expect(r.blocked).toBe("1100.00");
     expect(r.fiscal).toBe("900.00");
   });
+
+  // #454: the DGT names the purchase each loss takes. 20/02 takes 15/03 (the
+  // rest of the 15/02 lot it sells from comes last); 26/03 takes 20/03, the
+  // oldest unused purchase of the 2 months before, not 24/03 or the later 28/03.
+  it("takes the purchases the DGT names: 20/02 ← 15/03, 26/03 ← 20/03", () => {
+    const r = year(ops, 2017);
+    const trail = (date: string) => r.disposals.filter((d) => d.sellDate === date).flatMap((d) => d.washSaleRepurchaseDates ?? []);
+    expect(trail("2017-02-20")).toEqual(["2017-03-15"]);
+    expect(trail("2017-03-26")).toEqual(["2017-03-20"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -170,14 +180,15 @@ describe("DGT V3282-18: rebought gain sales are not definitive (2017: 900)", () 
 // gain sales are not definitive. The DGT integrates neither loss in 2020
 // (fiscal 1,767) because of the 1,900 shares bought on 06/05.
 //
-// KNOWN GAP. The engine gets the 23/04 sales right (not definitive) but
-// releases 687.56 on 29/04 (fiscal 1,079.44). Most of it, 672.29, comes from
-// the same-day exclusion: the 22/04 loss is rebought the same day (920 shares),
-// but brokers give no intraday times, so the engine skips same-day buys and
-// takes 905 of the 27/04 purchase instead. The 23/04 sales then use 945 of the
-// 06/05 purchase, and only 955 of it are left for the 1,880 shares sold on
-// 29/04. Counting same-day buys would give 1,751.73; the last 15.27 is the
-// rebuy pick order (post-sale buys first). Both are tracked apart from #451.
+// With the DGT's pick order (#454) the engine releases 15.27 on 29/04 (fiscal
+// 1,751.73). 20/04 takes 880 of the 14/04 purchase, 22/04 takes 20/04 and 25
+// of 21/04. The 23/04 sales leave no shares, so no purchase before them counts
+// (V3282-18 A, situation 1): they take the 1,880 of 27/04 and 40 of 06/05.
+// Only 1,860 of 06/05 are left for the 1,880 shares sold on 29/04, so 20 are
+// definitive and release 20 × 672/880 = 15.27. This is not the same-day
+// exclusion: counting same-day buys gives the same figure. The DGT only says
+// the 1,900 of 06/05 prevent the release; it does not count the 40 that the
+// 23/04 sales already need. KNOWN GAP: the last 15.27.
 // ---------------------------------------------------------------------------
 describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
   // The 14/04 and 23/04 sales span several FIFO lots at different stated
@@ -196,7 +207,16 @@ describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
     expect(onDate(r, "2020-04-23", "reintegratedLossEur")).toBe("0.00");
   });
 
-  // Engine today: 29/04 releases 687.56, fiscal 1,079.44 (see above).
+  it("#454: 23/04 and 29/04 use the rebuys in date order: 29/04 releases only 20 shares (15.27, fiscal 1,751.73)", () => {
+    const r = year(ops, 2020);
+    const trail = (date: string) => r.disposals.filter((d) => d.sellDate === date).flatMap((d) => d.washSaleRepurchaseDates ?? []);
+    expect(trail("2020-04-20")).toEqual(["2020-04-14"]);
+    expect([...new Set(trail("2020-04-22"))].sort()).toEqual(["2020-04-20", "2020-04-21"]);
+    expect(onDate(r, "2020-04-29", "reintegratedLossEur")).toBe("15.27");
+    expect(r.fiscal).toBe("1751.73");
+  });
+
+  // Engine: 29/04 releases 15.27, fiscal 1,751.73 (see above).
   it.fails("known gap: the DGT releases nothing in 2020 (fiscal 1,767)", () => {
     const r = year(ops, 2020);
     expect(onDate(r, "2020-04-29", "reintegratedLossEur")).toBe("0.00");
@@ -206,16 +226,14 @@ describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
 
 // ---------------------------------------------------------------------------
 // V0248-18 (05/02/2018): one loss sale (16/02) and three gain sales, each with
-// unused purchases in its window, taken in date order: 25/04 uses the 3,000 of
-// 31/03, 28/04 the 5,000 of 18/03 (2,000 needed), and 29/05 the 3,000 + 4,000
-// left. No sale of 2017 is definitive, so the 800 stays deferred (fiscal 900).
-//
-// KNOWN GAP, rebuy pick order only (no same-day buy is involved). The engine
-// takes post-sale buys first and pre-sale buys newest first: 16/02 takes
-// 18/03, 25/04 takes 28/05, and 28/04 takes 1,000 of 28/05 plus 1,000 of
-// 31/03. Only 2,000 are left for the 3,000 sold on 29/05, so 1,000 of them
-// count as definitive and release 400 (fiscal 500). Taking the earliest
-// unused buy first gives the DGT's answer. Tracked apart from #451.
+// unused purchases in its window, taken oldest first (#454): 16/02 takes the
+// 2,000 of 15/02, 25/04 takes 3,000 of the 5,000 of 18/03, 28/04 the 2,000 left
+// of it («se han recomprado 5000 acciones (2.000, 3.000)»), and 29/05 the 3,000
+// of 31/03 («(3000, 4.000) … 7.000»). No sale of 2017 is definitive, so the 800
+// stays deferred (fiscal 900). No same-day buy is involved. Up to 0.66.13 the
+// engine took post-sale buys first and pre-sale buys newest first: 25/04 took
+// 28/05, only 2,000 were left for the 3,000 sold on 29/05, and 1,000 definitive
+// shares released 400 (fiscal 500).
 // ---------------------------------------------------------------------------
 describe("DGT V0248-18: gain sales use up rebuys in date order (2017: 900)", () => {
   const ops: Op[] = [
@@ -231,11 +249,11 @@ describe("DGT V0248-18: gain sales use up rebuys in date order (2017: 900)", () 
     expect(onDate(r, "2017-04-28", "reintegratedLossEur")).toBe("0.00");
   });
 
-  // Engine today: 29/05 releases 400, fiscal 500 (see above).
-  it.fails("known gap: the DGT releases nothing in 2017 (fiscal 900)", () => {
-    const r = year(ops, 2017);
+  it.each(METHODS)("[%s] the DGT releases nothing in 2017 (fiscal 900); 16/02 takes the 15/02 purchase", (method) => {
+    const r = year(ops, 2017, method);
     expect(r.reintegrated).toBe("0.00");
     expect(r.fiscal).toBe("900.00");
+    expect(r.disposals.filter((d) => d.sellDate === "2017-02-16").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2017-02-15"]);
   });
 });
 
@@ -287,6 +305,58 @@ describe("DGT V1760-23: definitive sales release by share count, and the total e
     const lifetimeReleased = new Decimal(year(ops, 2022).reintegrated).plus(r.reintegrated);
     expect(lifetimeReleased.toFixed(2)).toBe(lifetimeBlocked.toFixed(2));
   });
+
+  // #454: the DGT names each loss's repurchase. 05/05 and 09/05 take the 06/05
+  // purchase, not the rest of the 04/05 lot they sell from; 10/05 finds the
+  // 06/05 shares used and the 04/05 shares sold, so it takes 10/06; 17/06
+  // takes 20/06. Up to 0.66.13 the engine named 10/06 for 09/05, 20/06 for
+  // 10/05 and 06/05 for 17/06 (the figures matched only by chance).
+  it("takes the purchases the DGT names: 05/05 and 09/05 ← 06/05, 10/05 ← 10/06, 17/06 ← 20/06", () => {
+    const r = year(ops, 2022);
+    const trail = (date: string) => [...new Set(r.disposals.filter((d) => d.sellDate === date).flatMap((d) => d.washSaleRepurchaseDates ?? []))];
+    expect(trail("2022-05-05")).toEqual(["2022-05-06"]);
+    expect(trail("2022-05-09")).toEqual(["2022-05-06"]);
+    expect(trail("2022-05-10")).toEqual(["2022-06-10"]);
+    expect(trail("2022-06-17")).toEqual(["2022-06-20"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #454: a purchase before the sale is a repurchase only for its shares still
+// held after the sale (V3282-18 A: «únicamente, las compras que supongan una
+// recompra»), as the V1760-23 10/05 sale shows. Buy 100 on 02/01 and 100 on
+// 20/01; sell 100 on 01/02 at −100 (FIFO sells the 02/01 lot; the 20/01
+// purchase blocks it); sell 50 on 10/02 at −50 (FIFO sells half the 20/01 lot).
+// On 10/02 the 20/01 purchase is used and the 02/01 shares are gone, so no
+// purchase replaces the sale: its loss is deductible and its 50 definitive
+// shares release 50 of the 100 pending. Up to 0.66.13 the engine let the 02/01
+// purchase, sold on 01/02, block the 10/02 loss (fiscal 0).
+// ---------------------------------------------------------------------------
+describe("#454: a pre-sale purchase counts only for its shares still held after the sale", () => {
+  const ops: Op[] = [
+    buy("2025-01-02", 100), buy("2025-01-20", 100),
+    sell("2025-02-01", 100, -100), sell("2025-02-10", 50, -50),
+  ];
+
+  it.each(METHODS)("[%s] 10/02 is definitive: its own 50 deductible, 50 of the 01/02 loss released (−100)", (method) => {
+    const r = year(ops, 2025, method);
+    expect(onDate(r, "2025-02-01", "blockedLossEur")).toBe("100.00");
+    expect(onDate(r, "2025-02-10", "blockedLossEur")).toBe("0.00");
+    expect(onDate(r, "2025-02-10", "reintegratedLossEur")).toBe("50.00");
+    expect(r.fiscal).toBe("-100.00");
+  });
+
+  it("a purchase after the sale still blocks it, and a purchase before it still counts when held", () => {
+    // A rebuy on 15/02 replaces the 10/02 sale: blocked, nothing released.
+    const after = year([...ops, buy("2025-02-15", 50)], 2025);
+    expect(onDate(after, "2025-02-10", "blockedLossEur")).toBe("50.00");
+    expect(onDate(after, "2025-02-10", "reintegratedLossEur")).toBe("0.00");
+    // A purchase on 05/02, still held after 10/02 (FIFO sells the 20/01 lot),
+    // replaces it too.
+    const before = year([...ops.slice(0, 3), buy("2025-02-05", 50), ops[3]!], 2025);
+    expect(onDate(before, "2025-02-10", "blockedLossEur")).toBe("50.00");
+    expect(before.disposals.filter((d) => d.sellDate === "2025-02-10").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2025-02-05"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -330,10 +400,11 @@ describe("DGT V0754-26: 2025 releases nothing; the 2026 definitive sale releases
 // either: «en los dos meses anteriores o posteriores»; the last buy, 14/11,
 // still follows the last sale). The DGT answer is the same: nothing in 2025.
 //
-// KNOWN GAP, rebuy pick order. The engine takes post-sale buys first, so each
-// sale uses the NEXT sale's pre-sale rebuy, and the 06/11 sale finds only 30
-// shares left: 195 definitive shares release 385 in 2025 (fiscal −775), and
-// 2026 gives −1,331 instead of −942. Tracked apart from #451.
+// With the DGT's order (#454) each sale takes its own rebuy, the oldest unused
+// purchase before it. Up to 0.66.13 the engine took post-sale buys first, so
+// each sale used the NEXT sale's rebuy and the 06/11 sale found only 30 shares
+// left: 195 definitive shares released 385 in 2025 (fiscal −775 with the
+// sales' own losses), and 2026 gave −1,331.
 // ---------------------------------------------------------------------------
 describe("DGT V0754-26, rebuys before the sales: 2025 releases nothing", () => {
   const ops: Op[] = [
@@ -347,12 +418,14 @@ describe("DGT V0754-26, rebuys before the sales: 2025 releases nothing", () => {
     sell("2026-02-11", 770, -77),
   ];
 
-  // Engine today: 2025 releases 385 (fiscal −775); 2026 fiscal −1,331.
-  it.fails("known gap: 2025 releases nothing and 2026 gives −942, as with rebuys after the sales", () => {
-    const r2025 = year(ops, 2025);
+  it.each(METHODS)("[%s] 2025 releases nothing and 2026 gives −942, as with rebuys after the sales", (method) => {
+    const r2025 = year(ops, 2025, method);
     expect(r2025.reintegrated).toBe("0.00");
     expect(r2025.fiscal).toBe("0.00");
-    expect(year(ops, 2026).fiscal).toBe("-942.00");
+    const r2026 = year(ops, 2026, method);
+    expect(r2026.reintegrated).toBe("865.00");
+    expect(r2026.fiscal).toBe("-942.00");
+    expect(r2025.disposals.filter((d) => d.sellDate === "2025-08-01").flatMap((d) => d.washSaleRepurchaseDates ?? [])).toEqual(["2025-07-28"]);
   });
 });
 

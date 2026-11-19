@@ -71,6 +71,8 @@ interface BuyEvent {
   time: number;
   /** Normalized YYYY-MM-DD of the buy (display trail of the block). */
   date: string;
+  /** Shares this buy added to the long position (what a cover buy does not cover). */
+  qty: Decimal;
   /** Remaining repurchased quantity not yet used to block a loss (the consumable budget). */
   remainingQty: Decimal;
 }
@@ -173,6 +175,9 @@ interface PendingLoss {
  *  1. ABSORB — take the in-window repurchases not yet used (a buy ON the sell
  *     date is the lot being sold, excluded): for loss lots always, for gain lots
  *     only while losses are pending (they need them for the definitive test).
+ *     The DGT's order (#454): oldest first, so the purchases before the sale
+ *     (each only for its shares still held after it) come before those after
+ *     it, and the rest of the lot the sale transmits comes last.
  *     The purchases of the 2 months BEFORE the sale do not count when they are
  *     one buy operation and no shares were held at the window's start (the
  *     one-purchase exception, DGT V3282-18); the purchases after it always do.
@@ -305,7 +310,7 @@ export function detectWashSales(
           events = [];
           buysByAsset.set(key, events);
         }
-        events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: repurchased });
+        events.push({ time, date: normalizeDay(trade.tradeDate), qty: repurchased, remainingQty: repurchased });
       }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
@@ -506,33 +511,60 @@ export function detectWashSales(
       const windowEnd = addMonths(sellDate, months).getTime();
 
       // Consume repurchase quantity from in-window buys, excluding any buy on the
-      // sell day (the lot being sold, not a repurchase). Absorbed ≤ `need`.
+      // sell day (brokers give no intraday time; see the design doc). Absorbed ≤
+      // `need`. The DGT's order (#454) is the oldest purchase no earlier sale has
+      // used: the purchases of the 2 months before the sale first, oldest first,
+      // then those of the 2 months after it, oldest first. V3282-18 gives the
+      // 26/03 sale the 20/03 purchase, not 24/03 or the later 28/03; V0248-18
+      // gives the 25/04 sale 3,000 of the 5,000 of 18/03, not the 3,000 of 31/03.
       //
-      // Order matters. A POST-sale buy is a genuine surviving replacement, so it
-      // remains uncapped and is consumed first. A PRE-sale buy can only block the
-      // portion that still remains after this sale day; if the day fully exits the
-      // position, DGT V3282-18(1) allows the loss in full because no homogeneous
-      // shares remain in the patrimony.
+      // A PRE-sale buy counts only for its shares still held after the sale day
+      // (V3282-18 A: «únicamente, las compras que supongan una recompra»), so a
+      // day that fully exits the position deducts the loss in full (situation 1).
+      // FIFO keeps the newest shares: the `holdingAfter` shares left are the
+      // newest bought, so walking the pre-sale buys newest first, each one holds
+      // what is left of that count. A buy only partly held is the lot the sale
+      // itself transmits. It still counts (situation 3, and the one-purchase
+      // exception exists because it would), but last, after the post-sale buys:
+      // V3282-18 gives the 20/02 sale the 15/03 purchase, not the rest of the
+      // 15/02 lot it sells from, and V1760-23 gives the 05/05 and 09/05 sales the
+      // 06/05 purchase, not the rest of the 04/05 lot.
       let remainingToAbsorb = need;
       // buyEvents is sorted by time, so each pass walks only its slice of the
-      // window, found by binary search: (sellTime, windowEnd] forward for post-sale
-      // buys, [windowStart, sellTime) backward for pre-sale ones. Same-day buys are
-      // outside both slices.
-      // With `commit` false it only measures what it would take.
-      const consume = (from: number, to: number, step: 1 | -1, maxQty: Decimal, commit = true): Decimal => {
-        let remainingBudget = maxQty;
+      // window, found by binary search: [windowStart, sellTime) for pre-sale buys,
+      // (sellTime, windowEnd] for post-sale ones. Same-day buys are outside both.
+      // The held buys are the newest ones, so the walk stops where the count
+      // runs out and the pre-sale passes start there (`preFrom`).
+      const preTo = firstIndexAtOrAfter(buyEvents, sellTime);
+      const windowFrom = firstIndexAtOrAfter(buyEvents, windowStart);
+      const heldAfter = new Map<number, Decimal>();
+      let partlyHeld = -1;
+      let preFrom = preTo;
+      let stillHeld = holdingAfter(key, sellTime);
+      for (let i = preTo - 1; i >= windowFrom && stillHeld.greaterThan(0); i--) {
+        const ev = buyEvents[i]!;
+        const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
+        const bought = ev.qty.mul(conversion.num).div(conversion.den);
+        const held = Decimal.min(bought, stillHeld);
+        stillHeld = stillHeld.minus(held);
+        heldAfter.set(i, held);
+        preFrom = i;
+        if (held.greaterThan(0) && held.lessThan(bought)) partlyHeld = i;
+      }
+      // Walks [from, to) oldest first, skipping `skip`; a pre-sale buy gives at
+      // most its shares held after the sale. With `commit` false it only
+      // measures what it would take.
+      const consume = (from: number, to: number, commit = true, skip = -1): Decimal => {
         let left = remainingToAbsorb;
-        for (let i = from; i !== to; i += step) {
+        for (let i = from; i < to && left.greaterThan(0); i++) {
           const ev = buyEvents[i]!;
-          if (left.lessThanOrEqualTo(0)) break;
-          if (remainingBudget.lessThanOrEqualTo(0)) break;
-          if (ev.remainingQty.lessThanOrEqualTo(0)) continue;
+          if (i === skip || ev.remainingQty.lessThanOrEqualTo(0)) continue;
           const conversion = buyQtyConversionToSellUnits(splitsByAsset, key, ev.time, sellTime);
-          const availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
+          let availableAtSell = ev.remainingQty.mul(conversion.num).div(conversion.den);
+          if (i < preTo) availableAtSell = Decimal.min(availableAtSell, heldAfter.get(i) ?? new Decimal(0));
           if (availableAtSell.lessThanOrEqualTo(0)) continue;
-          const take = Decimal.min(availableAtSell, left, remainingBudget);
+          const take = Decimal.min(availableAtSell, left);
           left = left.minus(take);
-          remainingBudget = remainingBudget.minus(take);
           if (!commit) continue;
           ev.remainingQty = ev.remainingQty.minus(take.mul(conversion.den).div(conversion.num));
           consumed.push({ date: ev.date, qty: take });
@@ -541,32 +573,36 @@ export function detectWashSales(
         if (commit) remainingToAbsorb = left;
         return taken;
       };
-      // post-sale repurchases first (surviving replacements). The one-purchase
-      // exception never reaches them: «sin perjuicio de que las recompras
-      // efectuadas en el plazo de los dos meses posteriores a la transmisión
-      // impidan también la imputación» (V3282-18, B).
-      consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd), 1, need);
-      // FIFO leaves the newest pre-sale lots behind after a partial sale, so take
-      // capped pre-sale repurchases newest-first, from the lots that survive.
-      const preFrom = firstIndexAtOrAfter(buyEvents, sellTime) - 1;
-      const preTo = firstIndexAtOrAfter(buyEvents, windowStart) - 1;
-      const preCap = holdingAfter(key, sellTime);
-      // The one-purchase exception lifts only this pre-sale rule, and the
-      // doctrine states it for the 2-month window of letter f only: the 1-year
-      // window (letter g, crypto) keeps the rule. Checked only where the
-      // pre-sale purchases would take something, so a sale it cannot change
+      // The one-purchase exception lifts the pre-sale rule (both pre-sale
+      // passes), and the doctrine states it for the 2-month window of letter f
+      // only: the 1-year window (letter g, crypto) keeps the rule. Checked only
+      // where a pre-sale pass would take something, so a sale it cannot change
       // carries no mark. The same test decides whether a sale is definitive
       // («los mismos criterios», V3282-18), because loss and gain lots share
       // this absorption.
-      let skipPreSale = false;
-      if (months === 2 && consume(preFrom, preTo, -1, preCap, false).greaterThan(0)) {
-        const status = singlePurchase(key, windowStart, sellTime);
-        if (status) {
-          for (const idx of idxs) if (!isShortAt(idx)) result[idx]!.washSaleSinglePurchase = status;
+      let preStatus: "applied" | "unverified" | null | undefined;
+      const preSaleRuleApplies = (): boolean => {
+        if (months !== 2) return true;
+        if (preStatus === undefined) {
+          preStatus = singlePurchase(key, windowStart, sellTime);
+          if (preStatus) {
+            for (const idx of idxs) if (!isShortAt(idx)) result[idx]!.washSaleSinglePurchase = preStatus;
+          }
         }
-        skipPreSale = status === "applied";
+        return preStatus !== "applied";
+      };
+      if (consume(preFrom, preTo, false, partlyHeld).greaterThan(0) && preSaleRuleApplies()) {
+        consume(preFrom, preTo, true, partlyHeld);
       }
-      if (!skipPreSale) consume(preFrom, preTo, -1, preCap);
+      // The post-sale repurchases. The one-purchase exception never reaches
+      // them: «sin perjuicio de que las recompras efectuadas en el plazo de los
+      // dos meses posteriores a la transmisión impidan también la imputación»
+      // (V3282-18, B).
+      consume(firstIndexAfter(buyEvents, sellTime), firstIndexAfter(buyEvents, windowEnd));
+      // Last, the rest of the lot the sale transmits.
+      if (partlyHeld >= 0 && consume(partlyHeld, partlyHeld + 1, false).greaterThan(0) && preSaleRuleApplies()) {
+        consume(partlyHeld, partlyHeld + 1);
+      }
       dayAbsorbed = need.minus(remainingToAbsorb);
     }
 
