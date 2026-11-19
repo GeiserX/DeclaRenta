@@ -31,7 +31,8 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 import { formatDateDmy } from "../engine/dates.js";
 
@@ -442,7 +443,7 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       context: { date, oldProduct, oldIsin, newProduct, newIsin },
     });
   }
-  dateUndatedTrades("DEGIRO", trades);
+  markUndatedTrades(trades, headers[cols.date] ?? "Date");
   parserMessages.push(...tradeQuantityUnknownMessages("DEGIRO", trades));
 
   return {
@@ -592,7 +593,7 @@ function parseAccountCsv(lines: string[], delimiter: string): Statement {
     });
   }
 
-  const parserMessages: TaxMessage[] = [];
+  const parserMessages: TaxMessage[] = dropUndatedCash("DEGIRO", cashTransactions, headers[cols.date] ?? "Fecha");
   for (const { product, isin, currency, total } of transactionTax.values()) {
     const paid = total.negated();
     if (!paid.greaterThan(0)) continue;

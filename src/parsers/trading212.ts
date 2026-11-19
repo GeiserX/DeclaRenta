@@ -41,7 +41,9 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  corporateActionTrade,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -105,12 +107,16 @@ function resolveColumns(headers: string[]): Trading212Columns {
 // Date conversion
 // ---------------------------------------------------------------------------
 
-/** Convert "YYYY-MM-DD HH:MM:SS" to YYYYMMDD */
+/**
+ * Convert "YYYY-MM-DD HH:MM:SS" to YYYYMMDD. Any other text is returned as it
+ * is: the row is then kept and named as a row with no readable date, never
+ * read as another day and never a reason to refuse the file (#467).
+ */
 function convertTrading212Date(dateStr: string): string {
   const trimmed = dateStr.trim();
   const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) return `${match[1]}${match[2]}${match[3]}`;
-  throw new Error(`Trading 212 CSV: formato de fecha no reconocido: "${trimmed}"`);
+  return trimmed;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,8 +145,8 @@ function isInterestAction(action: string): boolean {
 
 /**
  * One leg of a split or a consolidation: "Stock split close" takes the old
- * shares out, "Stock split open" puts the new ones in. Not applied: named in
- * trading212.split_not_applied.
+ * shares out, "Stock split open" puts the new ones in. Not applied: kept as a
+ * row that books nothing, named by parser.corporate_action_not_applied.
  */
 function isStockSplitAction(action: string): boolean {
   return /^stock split (open|close)$/i.test(action);
@@ -173,8 +179,6 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Total is in a currency that differs from the instrument's — we can derive
   // neither a per-share price nor usable trade money, so the row is unresolvable.
   let unresolvedPriceSkipped = 0;
-  // Stock split rows, not applied: security, date, action and share count.
-  const splitRows: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -208,16 +212,23 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     const uniqueId = txId || `${tradeDate}-${ticker || action}-${i}`;
 
+    // A split leg moves shares of its security, so it is evidence of a
+    // holding at the anti-churning window start (#453, #467): kept as a row
+    // that books nothing, never dropped, and named as a split that is not
+    // applied, not as an unreadable row.
     if (isStockSplitAction(action)) {
-      const security = isin ? (ticker ? `${ticker} (${isin})` : isin) : ticker || name || "—";
-      splitRows.push(`${security} ${tradeDate || "—"} [${action}: ${(fields[cols.shares] ?? "").trim() || "—"}]`);
+      trades.push(corporateActionTrade({
+        tradeID: `trading212-split-${uniqueId}`,
+        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        buySell: /close/i.test(action) ? "SELL" : "BUY", exchange: "TRADING212",
+      }, action, fields[cols.shares] ?? ""));
       continue;
     }
 
     // A buy or sale row, or a row of an action no branch below handles (a
-    // stock split, a share transfer) that names a ticker or an ISIN, is kept as
-    // a trade that books nothing when it cannot be read: no Time, no ticker,
-    // an unknown action. Dropping it would hide a purchase or a sale (#467).
+    // share transfer) that names a ticker or an ISIN, is kept as a trade that
+    // books nothing when it cannot be read: no Time, no ticker, an unknown
+    // action. Dropping it would hide a purchase or a sale (#467).
     // A row of an unknown action that writes a zero share count moves no
     // shares and stays skipped, as does one that names no security. One that
     // names its security only by Name is kept when it writes a share count.
@@ -243,8 +254,8 @@ function parseTrading212Csv(lines: string[]): Statement {
       }, cell));
       continue;
     }
-    // A dividend or interest row with no Time stays skipped, as before.
-    if (!timeRaw) continue;
+    // A dividend, withholding or interest row with no readable Time is
+    // booked with that Time and taken out, named, by dropUndatedCash below.
 
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
@@ -410,20 +421,11 @@ function parseTrading212Csv(lines: string[]): Statement {
     });
   }
 
-  if (splitRows.length > 0) {
-    const count = String(splitRows.length);
-    const rows = splitRows.join("; ");
-    parserMessages.push({
-      id: "trading212.split_not_applied",
-      severity: "warning",
-      message: `Trading 212: no se han aplicado ${count} fila(s) de desdoblamiento o agrupación de acciones (Stock split): ${rows}.`,
-      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste por acción de esos valores, así que las ganancias y pérdidas de las ventas posteriores de esos valores pueden no ser correctas. Comprueba esas ventas.",
-      context: { count, rows },
-    });
-  }
-
-  dateUndatedTrades("Trading 212", trades, cashTransactions.map((c) => c.dateTime), "Time");
-  parserMessages.push(...tradeQuantityUnknownMessages("Trading 212", trades));
+  markUndatedTrades(trades, headers[cols.time] ?? "Time");
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Trading 212", trades),
+    ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
+  );
 
   return {
     accountId: "",

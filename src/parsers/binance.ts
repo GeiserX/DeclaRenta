@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal } from "./csv-utils.js";
+import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal, markUndatedTrades, dropUndatedCash, tradeQuantityUnknownMessages } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
@@ -759,6 +759,11 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count: String(unhandledCount), operations },
     });
   }
+  // A garbage UTC_Time that still has the date shape ("25-13-45 10:00:00")
+  // gives no real day: such a trade is kept as a row that books nothing and
+  // such an income row is taken out, each named (#467).
+  markUndatedTrades(trades, "UTC_Time");
+  parserMessages.push(...tradeQuantityUnknownMessages("Binance", trades), ...dropUndatedCash("Binance", cashTransactions, "UTC_Time"));
 
   return {
     accountId: "",
@@ -1232,6 +1237,8 @@ function parseBinanceCsv(lines: string[]): Statement {
       context: { count: String(count), pairs },
     });
   }
+  markUndatedTrades(trades, "Date(UTC)");
+  parserMessages.push(...tradeQuantityUnknownMessages("Binance", trades));
 
   return {
     accountId: "",

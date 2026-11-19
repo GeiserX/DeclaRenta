@@ -18,6 +18,9 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  markUndatedTrades,
+  dropUndatedCash,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -189,7 +192,10 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     // and the line number only for V1 exports, which have no ID column.
     const rowId = (cols.id >= 0 ? (fields[cols.id] ?? "").trim() : "") || String(i);
 
-    if (!asset || !timestamp) continue;
+    // A row with no readable Timestamp is booked with that date: a trade is
+    // then kept as a row that books nothing and an income row is taken out,
+    // each named (markUndatedTrades, dropUndatedCash below; #467).
+    if (!asset) continue;
 
     const tradeDate = convertTimestamp(timestamp);
     const tradeTime = timeOfDay(timestamp);
@@ -357,7 +363,11 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     });
   }
 
-  const parserMessages: TaxMessage[] = [];
+  markUndatedTrades(trades, headers[cols.timestamp] ?? "Timestamp");
+  const parserMessages: TaxMessage[] = [
+    ...tradeQuantityUnknownMessages("Coinbase", trades),
+    ...dropUndatedCash("Coinbase", cashTransactions, headers[cols.timestamp] ?? "Timestamp"),
+  ];
   // "rewards income" is treated as savings-base income by default, but it can
   // also cover promotional cashback that is legally base-general. Nudge the user
   // to verify if any is present (info — no action needed for the common case).

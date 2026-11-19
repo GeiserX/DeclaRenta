@@ -1,7 +1,7 @@
 import type { Statement } from "../types/broker.js";
 import Decimal from "decimal.js";
 import { formatDateDmy, isYearEndDate, normalizeDate } from "../engine/dates.js";
-import { isReadableTradeDate } from "./csv-utils.js";
+import { readableDay } from "./csv-utils.js";
 
 export function createEmptyStatement(): Statement {
   return {
@@ -153,15 +153,18 @@ export function finalizeMergedStatement(statement: Statement): Statement {
 }
 
 /**
- * An unreadable trade row with no date of its own (`undatedRow`, #467) stands
- * at the earliest date of its file. Next to another broker's files that date
- * can fall after that broker's year-end list, where the one-purchase evidence
- * (#453) never looks, so a row with no ISIN would leave the exception
- * "applied". Moved to the earliest date of the whole upload (trades and cash
- * rows), it is on or before every sale: before the sale's window start or
- * inside the window, where it makes the evidence "unverified". The row books
- * nothing, so no number moves. A copy replaces it: the parsed file's own
- * statement keeps its trade.
+ * A kept trade row whose file gives no readable date (`undatedRow`, #467)
+ * cannot be placed in time, so it must make the one-purchase evidence (#453)
+ * "unverified" whatever the window. With an ISIN it does at any date. With no
+ * ISIN the evidence reads it only before a sale's window start or between the
+ * window start and the year-end list it checks, never after that list. The
+ * earliest date of the whole upload (trades and cash rows) is on or before
+ * every sale, so the row stands in one of those two places for every sale.
+ * The engine needs a real date (crypto valuation throws on ""), and this one
+ * adds no year to the upload. The row books nothing, so no number moves.
+ * When the upload has no readable date at all it has no sale either: the row
+ * is left out of the merged trades and stays named by its parser's warning.
+ * A copy replaces each row: the parsed file's own statement keeps its trade.
  */
 function dateUndatedRowsAtUploadStart(statement: Statement): void {
   if (!statement.trades.some((t) => t.undatedRow === true)) return;
@@ -169,15 +172,12 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
     ...statement.trades.map((t) => t.tradeDate),
     ...statement.cashTransactions.map((c) => c.dateTime),
   ]
-    .map((d) => normalizeDate(d.trim()).slice(0, 10).replace(/-/g, ""))
-    .filter(isReadableTradeDate)
+    .flatMap((d) => readableDay(d) ?? [])
     .sort();
   const earliest = days[0];
-  if (earliest === undefined) return;
-  statement.trades = statement.trades.map((t) =>
-    t.undatedRow === true && earliest < normalizeDate(t.tradeDate).replace(/-/g, "")
-      ? { ...t, tradeDate: earliest, settlementDate: earliest }
-      : t);
+  statement.trades = earliest === undefined
+    ? statement.trades.filter((t) => t.undatedRow !== true)
+    : statement.trades.map((t) => (t.undatedRow === true ? { ...t, tradeDate: earliest, settlementDate: earliest } : t));
 }
 
 /**

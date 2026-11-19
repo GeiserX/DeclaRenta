@@ -18,6 +18,7 @@ import {
   parseNumber,
   toFiniteDecimalString,
   convertDateISO,
+  convertDateDMYDot,
   findColumn,
   stripBom,
   timeOfDay,
@@ -26,7 +27,10 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  corporateActionTrade,
+  isCorporateActionType,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -119,7 +123,9 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     if (status && status !== "executed" && status !== "ejecutada" && status !== "ausgeführt") continue;
 
     const dateStr = (fields[cols.date] ?? "").trim();
-    const tradeDate = convertDateISO(dateStr); // YYYY-MM-DD → YYYYMMDD
+    // YYYY-MM-DD → YYYYMMDD; a German export may write DD.MM.YYYY. Any other
+    // text stays as it is: the row is kept and named as undated (#467).
+    const tradeDate = /^\d{2}\.\d{2}\.\d{4}/.test(dateStr) ? convertDateDMYDot(dateStr.slice(0, 10)) : convertDateISO(dateStr);
     const tradeTime = cols.time >= 0 ? timeOfDay(fields[cols.time] ?? "") : undefined;
     const type = (fields[cols.type] ?? "").trim().toLowerCase();
     const assetType = cols.assetType >= 0 ? (fields[cols.assetType] ?? "").trim().toLowerCase() : "";
@@ -181,9 +187,20 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const otherType = !sellType && !buyType && !DIVIDEND_TYPES.some((d) => type.includes(d));
     const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
     const movesNoShares = !sharesUnreadable && parseFloat(parseNumber(shares)) === 0;
+    const keptOther = otherType && (isin ? !movesNoShares : !sharesUnreadable && !movesNoShares);
+    // A split or another corporate action moves shares of its security: kept
+    // as a row that books nothing (evidence of a holding, #453) and named as
+    // not applied, not as an unreadable row.
+    if (keptOther && isCorporateActionType(type)) {
+      trades.push(corporateActionTrade({
+        tradeID: reference || `scalable-action-${tradeDate}-${isin}-${i}`,
+        symbol: description, description, isin, assetCategory: /etf|fund/.test(assetType) ? "FUND" : "STK",
+        currency: currency || "EUR", tradeDate, tradeTime, exchange: "XETR",
+      }, (fields[cols.type] ?? "").trim(), fields[cols.shares] ?? ""));
+      continue;
+    }
     const cell = (sellType || buyType) && !isin ? unreadableCell(headers[cols.isin] ?? "isin", isin)
-      : otherType && (isin ? !movesNoShares : !sharesUnreadable && !movesNoShares)
-        ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
+      : keptOther ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
       : undefined;
     if (cell !== undefined) {
       trades.push(unreadableTrade({
@@ -296,8 +313,11 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       context: { count: String(interestWithholdingRows) },
     });
   }
-  dateUndatedTrades("Scalable Capital", trades, [], "date");
-  parserMessages.push(...tradeQuantityUnknownMessages("Scalable Capital", trades));
+  markUndatedTrades(trades, headers[cols.date] ?? "date");
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Scalable Capital", trades),
+    ...dropUndatedCash("Scalable Capital", cashTransactions, headers[cols.date] ?? "date"),
+  );
 
   return {
     accountId: "",

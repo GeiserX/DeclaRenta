@@ -1114,8 +1114,12 @@ const gl: TranslationKeys = {
   "revolut.bad_fx_rate.hint": "Só os ingresos e as retiradas de efectivo usan esa columna; as compras, as vendas e os dividendos calcúlanse co tipo do BCE e non se omiten. Adoita deberse a unha cela de tipo de cambio non numérica, negativa ou igual a cero na exportación. Volve descargar o Trading Account Statement completo desde a app de Revolut para que eses movementos se inclúan.",
   "revolut.holding_size_unknown": "O extracto de Revolut non permite saber cantas accións ou unidades tes ao final de {{count}} valor(es): {{tickers}}.",
   "revolut.holding_size_unknown.hint": "Unha fila de cada un non se pode ler ou non di cantas accións ou unidades move (outro aviso nomea esa fila). DeclaRenta mostra só a parte que si se pode ler, que pode ser 0. Para os modelos 720 e 721, toma o número e o valor desas posicións do extracto de Revolut e engádeos a man.",
-  "trading212.split_not_applied": "Trading 212: non se aplicaron {{count}} fila(s) de desdobramento ou agrupación de accións (Stock split): {{rows}}.",
-  "trading212.split_not_applied.hint": "DeclaRenta non cambia por elas o número de accións nin o custo por acción deses valores, así que as ganancias e perdas das vendas posteriores deses valores poden non ser correctas. Comproba esas vendas.",
+  "parser.corporate_action_not_applied": "{{broker}}: non se aplicaron {{count}} fila(s) de desdobramento, agrupación ou outra operación societaria: {{rows}}.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta non cambia por elas o número de accións nin o custo deses valores, así que as ganancias e perdas das súas vendas posteriores poden non ser correctas: compróbaas co extracto do broker. Tampouco aplica a eses valores a excepción de compra única da regra dos 2 meses.",
+  "parser.cash_row_undated": "{{broker}}: {{count}} movemento(s) de diñeiro non teñen unha data lexible e non se calculan: {{rows}}.",
+  "parser.cash_row_undated.hint": "Entre corchetes vai a cela da data. Sen data, DeclaRenta non sabe a que ano pertence o importe nin que tipo de cambio do BCE lle corresponde, así que non o suma e non inventa unha data. Se é un dividendo, unha retención, un xuro ou outro ingreso do ano que declaras, corrixe a data no ficheiro do broker e volve subilo, ou engade o importe a man en Renta Web.",
+  "revolut.dividend_tax_correction": "O extracto de Revolut trae {{count}} corrección(s) da retención dun dividendo (DIVIDEND TAX (CORRECTION)) que DeclaRenta non suma: {{rows}}.",
+  "revolut.dividend_tax_correction.hint": "Con estas filas Revolut corrixe a retención dun dividendo xa cobrado. DeclaRenta importa os dividendos de Revolut polo seu importe neto e non le a retención deste extracto, así que tampouco a súa corrección. Toma o dividendo bruto e a retención final, xa corrixida, do informe fiscal anual de Revolut.",
 };
 
 export default gl;

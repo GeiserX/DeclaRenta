@@ -27,6 +27,9 @@ import { flatexParser } from "../../src/parsers/flatex.js";
 import { tradeRepublicParser } from "../../src/parsers/trade-republic.js";
 import { krakenParser } from "../../src/parsers/kraken.js";
 import { parseEtoroXlsx } from "../../src/parsers/etoro.js";
+import { coinbaseParser } from "../../src/parsers/coinbase.js";
+import { binanceParser } from "../../src/parsers/binance.js";
+import { isReadableDay } from "../../src/parsers/csv-utils.js";
 import { buildModelo721Entries } from "../../src/generators/modelo721.js";
 import { checkModelo720Thresholds } from "../../src/generators/modelo720.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
@@ -192,7 +195,8 @@ describe("#467 a trade row that cannot be read is kept as a trade that books not
       expect(kept.length).toBeGreaterThan(0);
       for (const t of kept) {
         expect([t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds, t.cost, t.commission]).toEqual(["0", true, "0", "0", "0", "0"]);
-        expect(t.tradeDate).toMatch(/^\d{8}$/);
+        // An undated row keeps no date of its own; the merge gives it one.
+        expect(t.tradeDate).toMatch(t.undatedRow === true ? /^$/ : /^\d{8}$/);
       }
       expect(kept[0]!.unreadableRow).toBe(row);
       expect(unreadableRows(parsed)).toContain(row);
@@ -225,10 +229,12 @@ describe("#467 a trade row that cannot be read is kept as a trade that books not
     expect(issueSale(parsed, broker, "monodivisa").blocked).toBe("100.00");
   });
 
-  it("a row with no readable date takes the file's earliest date; a file with none is refused", async () => {
+  it("a row with no readable date keeps no date in the parsed file; the merge puts it at the upload's earliest date", async () => {
     const parsed = await revolut(["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "1"], ["2025-03-01T10:00:00Z", "ACME", "BUY - MARKET", "1", "USD 1", "USD 1", "USD", "1"], REV_CASH);
-    expect(parsed.trades.map((t) => [t.symbol, t.tradeDate, t.quantityUnknown ?? false])).toEqual([["XYZ", "20241101", true], ["ACME", "20250301", false]]);
-    await expect(revolut(["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "1"])).rejects.toThrow(/fecha legible/);
+    expect(parsed.trades.map((t) => [t.symbol, t.tradeDate, t.undatedRow ?? false, t.quantityUnknown ?? false])).toEqual([["XYZ", "", true, true], ["ACME", "20250301", false, false]]);
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parsed, "Revolut");
+    expect(finalizeMergedStatement(statement).trades.map((t) => [t.symbol, t.tradeDate])).toEqual([["XYZ", "20241101"], ["ACME", "20250301"]]);
   });
 
   it("controls: a row that names no security and no trade stays skipped with no warning", async () => {
@@ -253,7 +259,7 @@ describe("#467 a trade row that cannot be read is kept as a trade that books not
       ["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "0.92"],
       ["2026-01-05T10:00:00Z", "", "CASH TOP-UP", "", "", "USD 100", "USD", "0.92"],
     );
-    expect(parsed.trades.map((t) => [t.symbol, t.tradeDate, t.undatedRow])).toEqual([["XYZ", "20260105", true]]);
+    expect(parsed.trades.map((t) => [t.symbol, t.tradeDate, t.undatedRow])).toEqual([["XYZ", "", true]]);
     expect(issueSale(parsed, "Revolut", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
     // A garbage date next to a readable 2026 trade, and a Scalable row with no
     // ISIN and a day 45, next to a 2026 buy: the same.
@@ -276,18 +282,7 @@ describe("#467 a trade row that cannot be read is kept as a trade that books not
     mergeStatement(statement, parsed, "Revolut");
     const merged = finalizeMergedStatement(statement);
     expect(merged.trades.find((t) => t.undatedRow)?.tradeDate).toBe("20250301");
-    expect(parsed.trades[0]!.tradeDate).toBe("20260105");
-  });
-
-  it("Trading 212: a stock split is not applied and is named, not called unreadable", () => {
-    const parsed = trading212Parser.parse([T212_H,
-      `Stock split close,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,10,10,EUR,1.00,,,0,EUR,,s1`,
-      `Stock split open,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,40,2.5,EUR,1.00,,,0,EUR,,s2`].join("\n"));
-    expect([parsed.trades, unreadableRows(parsed)]).toEqual([[], undefined]);
-    const warning = parsed.parserMessages?.find((m) => m.id === "trading212.split_not_applied");
-    expect([warning?.severity, warning?.context?.count, warning?.context?.rows]).toEqual([
-      "warning", "2", `XYZ (${ISIN}) 20250303 [Stock split close: 10]; XYZ (${ISIN}) 20250303 [Stock split open: 40]`,
-    ]);
+    expect(parsed.trades[0]!.tradeDate).toBe("");
   });
 
   it.each(METHODS)("[%s] Kraken: a readable trade with an empty txid is booked: the sale gains 1000 €", (method) => {
@@ -494,5 +489,285 @@ describe("#468 a row whose type is neither a buy nor a sale is never booked as a
     expect(sale.trades.map((t) => [t.buySell, t.quantity])).toEqual([["BUY", "10"], ["SELL", "-10"]]);
     const odd = flatex("1;20.09.2024;20.09.2024;US0000000002;ACME INC.;-10;Stk.;Ausführung ORDER Kauf US0000000002 1;101;175,00;EUR;x");
     expect(unreadableRows(odd)).toBe('ACME INC. (US0000000002) 20240920 [Nominal: "-10"]');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 2: splits and corporate actions as evidence, rows with no readable
+// date, date cells in XLSX, and cash rows with no readable date.
+// ---------------------------------------------------------------------------
+
+const AAPL = "US0378331005";
+const messageRows = (s: Statement, id: string): string | undefined =>
+  s.parserMessages?.find((m) => m.id === id)?.context?.rows;
+/** The report with its messages left out: every number and row it computes. */
+const numbers = (r: TaxReport): string => JSON.stringify({ ...r, messages: [] });
+
+describe("#467 Trading 212 split rows are evidence of a holding: kept, named as not applied", () => {
+  const split = (isin: string, time = "2024-12-02 09:30:00"): Statement => trading212Parser.parse([T212_H,
+    `Stock split close,${time},${isin},XYZ,XYZ SA,10,10,EUR,1.00,,,0,EUR,,s1`,
+    `Stock split open,${time},${isin},XYZ,XYZ SA,40,2.5,EUR,1.00,,,0,EUR,,s2`].join("\n"));
+
+  it("each leg is a row that books nothing, named only by parser.corporate_action_not_applied", () => {
+    const parsed = split(ISIN, "2025-03-03 09:30:00");
+    expect(parsed.trades.map((t) => [t.symbol, t.isin, t.tradeDate, t.quantity, t.quantityUnknown, t.tradeMoney, t.proceeds, t.cost, t.unreadableRow])).toEqual([
+      ["XYZ", ISIN, "20250303", "0", true, "0", "0", "0", undefined],
+      ["XYZ", ISIN, "20250303", "0", true, "0", "0", "0", undefined],
+    ]);
+    expect(parsed.parserMessages?.map((m) => [m.id, m.severity])).toEqual([["parser.corporate_action_not_applied", "warning"]]);
+    expect(messageRows(parsed, "parser.corporate_action_not_applied")).toBe(
+      `XYZ (${ISIN}) 20250303 [Stock split close: 10]; XYZ (${ISIN}) 20250303 [Stock split open: 40]`);
+  });
+
+  it.each(METHODS)("[%s] a split of the security on 02/12/2024 next to the IBKR issue file: the exception is not applied, 100 € stay blocked", (method) => {
+    expect(issueSale(split(ISIN), "Trading 212", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+  });
+
+  it.each(METHODS)("[%s] control: a split of another security leaves the exception applied", (method) => {
+    expect(issueSale(split("ES0000009999"), "Trading 212", method)).toEqual({ blocked: "0.00", singlePurchase: "applied" });
+  });
+
+  it.each(METHODS)("[%s] a split with no readable Time is kept with no date, still named as a split, and still blocks", (method) => {
+    const parsed = split(ISIN, "garbage");
+    expect(parsed.trades.map((t) => [t.tradeDate, t.undatedRow, t.unreadableRow])).toEqual([["", true, undefined], ["", true, undefined]]);
+    expect(messageRows(parsed, "parser.corporate_action_not_applied")).toBe(
+      `XYZ (${ISIN}) garbage [Stock split close: 10]; XYZ (${ISIN}) garbage [Stock split open: 40]`);
+    expect(unreadableRows(parsed)).toBeUndefined();
+    expect(issueSale(parsed, "Trading 212", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+  });
+});
+
+describe("#467 Lightyear and Scalable split and corporate-action rows: kept, named as not applied", () => {
+  const files: [string, string, () => Statement][] = [
+    ["Lightyear", `XYZ (${ISIN}) 20241202 [Stock split: 40]`, () => lightyearParser.parse([LY_H, `02/12/2024 09:30:00,CA-1,XYZ,${ISIN},Stock split,40,EUR,,,,,,`].join("\n"))],
+    ["Lightyear", `XYZ (${ISIN}) 20241202 [Reverse split: 40]`, () => lightyearParser.parse([LY_H, `02/12/2024 09:30:00,CA-1,XYZ,${ISIN},Reverse split,40,EUR,,,,,,`].join("\n"))],
+    ["Scalable Capital", `XYZ SA (${ISIN}) 20241202 [Corporate action: 40]`, () => scalableParser.parse([SC_H, `2024-12-02;09:15;Executed;REF1;XYZ SA;Security;Corporate action;${ISIN};40;;0;0;0;EUR`].join("\n"))],
+    ["Scalable Capital", `XYZ SA (${ISIN}) 20241202 [Split: 40]`, () => scalableParser.parse([SC_H, `2024-12-02;09:15;Executed;REF1;XYZ SA;Security;Split;${ISIN};40;;0;0;0;EUR`].join("\n"))],
+  ];
+  describe.each(files)("%s: %s", (broker, row, parse) => {
+    it("kept with no shares and no money, named only as not applied", () => {
+      const parsed = parse();
+      expect(parsed.trades.map((t) => [t.quantity, t.quantityUnknown, t.tradeMoney, t.corporateActionRow])).toEqual([["0", true, "0", row]]);
+      expect(parsed.parserMessages?.map((m) => m.id)).toEqual(["parser.corporate_action_not_applied"]);
+    });
+    it.each(METHODS)("[%s] next to the IBKR issue file: 100 € stay blocked", (method) => {
+      expect(issueSale(parse(), broker, method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    });
+  });
+});
+
+describe("#467 Trade Republic corporate-action and delivery rows are evidence of a holding", () => {
+  const tr = (category: string, type: string, isin: string, shares: string): Statement => tradeRepublicParser.parse([TR_H,
+    `"2024-12-02T09:30:00.000Z","2024-12-02","DEFAULT","${category}","${type}","STOCK","XYZ SA","${isin}","${shares}","","","","","EUR","","","","${type}","tx-1","","","",""`].join("\n"));
+
+  it.each([
+    ["DELIVERY", "FREE_RECEIPT", "40.0000000000", "trade_republic.delivery_not_applied"],
+    ["CORPORATE_ACTION", "MERGER", "-40.0000000000", "trade_republic.corporate_action_not_applied"],
+  ])("%s %s: kept with no shares and no money; its own warning still names the ISIN", (category, type, shares, id) => {
+    const parsed = tr(category, type, ISIN, shares);
+    expect(parsed.trades.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney, t.cost, t.corporateActionRow])).toEqual([
+      [ISIN, "0", true, "0", "0", `XYZ SA (${ISIN}) 20241202 [${category} ${type}: ${shares}]`],
+    ]);
+    expect(parsed.parserMessages?.map((m) => [m.id, m.context?.isins])).toEqual([[id, ISIN]]);
+  });
+
+  it.each(METHODS)("[%s] a delivery or a merger of the security on 02/12/2024 next to the IBKR issue file: 100 € stay blocked", (method) => {
+    expect(issueSale(tr("DELIVERY", "FREE_RECEIPT", ISIN, "40"), "Trade Republic", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    expect(issueSale(tr("CORPORATE_ACTION", "MERGER", ISIN, "-40"), "Trade Republic", method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+  });
+
+  it.each(METHODS)("[%s] controls: a delivery of another security, or of zero shares, leaves the exception applied", (method) => {
+    expect(issueSale(tr("DELIVERY", "FREE_RECEIPT", "ES0000009999", "40"), "Trade Republic", method)).toEqual({ blocked: "0.00", singlePurchase: "applied" });
+    const zero = tr("DELIVERY", "FREE_RECEIPT", ISIN, "0");
+    expect(zero.trades).toEqual([]);
+    expect(issueSale(zero, "Trade Republic", method)).toEqual({ blocked: "0.00", singlePurchase: "applied" });
+  });
+});
+
+describe("#467 a file with no readable trade date is read, never refused; its rows stay evidence whatever the window", () => {
+  const files: [string, string, () => Statement | Promise<Statement>][] = [
+    ["Revolut", 'XYZ [Date: ""]', () => revolut(["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "1"])],
+    // No ticker and a date that is no day: the critic case, a row with no ISIN.
+    ["Revolut", '— [Ticker: ""]', () => revolut(["not a date", "", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "1"])],
+    ["Trading 212", `XYZ (${ISIN}) [Time: "02.12.2024 09:30"]`, () => trading212Parser.parse([T212_H, `Market buy,02.12.2024 09:30,${ISIN},XYZ,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1`].join("\n"))],
+    ["Trading 212", 'XYZ SA [Time: ""]', () => trading212Parser.parse([T212_H, "Market buy,,,,XYZ SA,40,10,EUR,1.00,,,400,EUR,,t1"].join("\n"))],
+    ["Freedom24", `XYZ (${ISIN}) [date: null]`, () => freedom24Parser.parse(JSON.stringify({ trades: { detailed: [{ ...F24_ROW, date: null }] }, corporate_actions: { detailed: [] } }))],
+    ["Lightyear", `XYZ (${ISIN}) [Date: ""]`, () => lightyearParser.parse([LY_H, `,OR-1,XYZ,${ISIN},Buy,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n"))],
+    ["Lightyear", `XYZ (${ISIN}) [Date: "2024/12/02 09:30"]`, () => lightyearParser.parse([LY_H, `2024/12/02 09:30,OR-1,XYZ,${ISIN},Buy,40,EUR,10.00,400.00,,0.00,400.00,`].join("\n"))],
+  ];
+  describe.each(files)("%s: %s", (broker, row, parse) => {
+    it("the parser keeps the row with no date of its own and names it", async () => {
+      const parsed = await parse();
+      expect(parsed.trades.map((t) => [t.tradeDate, t.undatedRow, t.quantity, t.quantityUnknown])).toEqual([["", true, "0", true]]);
+      expect(unreadableRows(parsed)).toBe(row);
+    });
+    it.each(METHODS)("[%s] next to the IBKR issue file: the exception is not applied, 100 € stay blocked", async (method) => {
+      expect(issueSale(await parse(), broker, method)).toEqual({ blocked: "100.00", singlePurchase: "unverified" });
+    });
+  });
+
+  it.each(METHODS)("[%s] an upload whose only rows have no date: nothing is booked, the row stays named, the report runs", async (method) => {
+    const parsed = await revolut(["", "XYZ", "BUY - MARKET", "40", "USD 10", "USD 400", "USD", "1"]);
+    const statement = createEmptyStatement();
+    mergeStatement(statement, parsed, "Revolut");
+    const merged = finalizeMergedStatement(statement);
+    expect(merged.trades).toEqual([]);
+    expect(unreadableRows(merged)).toBe('XYZ [Date: ""]');
+    const r = generateTaxReport(merged, rates(), 2025, reportOptionsForMethod(method));
+    expect(r.capitalGains.disposals).toEqual([]);
+  });
+
+  it.each(METHODS)("[%s] an undated crypto row is dated by the merge, so the crypto valuation never sees an empty date", async (method) => {
+    const parsed = await revolut(["", "BTC", "BUY - MARKET", "", "USD 60000", "USD 600", "USD", "1"], ["2025-02-01T10:00:00Z", "AAPL", "BUY - MARKET", "1", "USD 100", "USD 100", "USD", "1"]);
+    expect(parsed.trades.find((t) => t.symbol === "BTC")?.tradeDate).toBe("");
+    const r = run([[parsed, "Revolut"]], 2025, method);
+    expect(r.capitalGains.disposals).toEqual([]);
+  });
+});
+
+describe("#467 XLSX date cells read as their real day, never as 'm/d/yy' text", () => {
+  // A date cell is a number with a date format; xlsx renders the default
+  // format as "1/10/25". Built at local noon, so no time zone moves the day.
+  const day = (y: number, m: number, d: number, h = 12): Date => new Date(y, m - 1, d, h);
+  function xlsxDates(sheet: string, rows: unknown[][], formats: Record<string, string> = {}): Uint8Array {
+    const ws = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
+    for (const [address, z] of Object.entries(formats)) (ws[address] as XLSX.CellObject).z = z;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheet);
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  }
+
+  it.each(METHODS)("[%s] Revolut closed positions: the sale of 10/06/2025 gains 550 €", async (method) => {
+    const parsed = await parseRevolutXlsx(xlsxDates("Sheet1", [REV_A, [day(2025, 1, 10), day(2025, 6, 10), "AAPL", 10, 1000, 1500, 500, 0, 500, "USD"]], { B2: "dd/mm/yyyy hh:mm" }));
+    expect(parsed.trades.map((t) => [t.buySell, t.tradeDate, t.quantity])).toEqual([["BUY", "20250110", "10"], ["SELL", "20250610", "-10"]]);
+    expect(parsed.parserMessages).toBeUndefined();
+    expect(run([[parsed, "Revolut"]], 2025, method).capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+  });
+
+  it.each(METHODS)("[%s] Revolut transaction log: the same sale, and a dividend dated by its cell", async (method) => {
+    const parsed = await parseRevolutXlsx(xlsxDates("Sheet1", [REV_H,
+      [day(2025, 1, 10, 9), "AAPL", "BUY - MARKET", "10", "USD 100", "USD 1000", "USD", "1"],
+      [day(2025, 5, 15), "AAPL", "DIVIDEND", "", "", "USD 110", "USD", "1"],
+      [day(2025, 6, 10, 15), "AAPL", "SELL - MARKET", "10", "USD 150", "USD 1500", "USD", "1"]]));
+    expect(parsed.trades.map((t) => t.tradeDate)).toEqual(["20250110", "20250610"]);
+    expect(parsed.cashTransactions.map((c) => c.dateTime)).toEqual(["20250515"]);
+    const r = run([[parsed, "Revolut"]], 2025, method);
+    expect([r.capitalGains.netGainLoss.toFixed(2), r.dividends.grossIncome.toFixed(2)]).toEqual(["550.00", "121.00"]);
+  });
+
+  it("eToro closed positions and dividends", async () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([ET_H, ["Buy AAPL", "1000", "5", "180", "195", "82.50", day(2025, 3, 15, 9), day(2025, 9, 20, 14), "Stocks", "1", AAPL]], { cellDates: true }), "Closed Positions");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"], [day(2025, 6, 15), "AAPL", "42.50", "7.50", AAPL]], { cellDates: true }), "Dividends");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Uint8Array;
+    const parsed = await parseEtoroXlsx(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength));
+    expect(parsed.trades.map((t) => [t.buySell, t.tradeDate])).toEqual([["BUY", "20250315"], ["SELL", "20250920"]]);
+    expect(parsed.cashTransactions.map((c) => [c.type, c.dateTime])).toEqual([["Dividends", "20250615"], ["Withholding Tax", "20250615"]]);
+  });
+
+  it("Scalable reads a German DD.MM.YYYY date", () => {
+    const parsed = scalableParser.parse([SC_H, `02.12.2024;09:15;Executed;REF1;XYZ SA;Security;Buy;${ISIN};40;10,00;-400,00;0;0;EUR`].join("\n"));
+    expect(parsed.trades.map((t) => [t.tradeDate, t.quantity])).toEqual([["20241202", "40"]]);
+  });
+});
+
+describe("#467 a cash row with no readable date is not booked under a guessed date: it is named for the user to add by hand", () => {
+  const IB_CASH = (extra: string): string => `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="Custom"><Trades /><CashTransactions><CashTransaction transactionID="D1" accountId="U1" symbol="AAPL" description="AAPL Cash Dividend" isin="${AAPL}" currency="USD" dateTime="20250601;100000" amount="110" fxRateToBase="1" type="Dividends" />${extra}</CashTransactions><CorporateActions /><OpenPositions /><SecuritiesInfo /></FlexStatement></FlexStatements></FlexQueryResponse>`;
+  const DG_ACC = "Fecha,Hora,Fecha valor,Producto,ISIN,Descripción,Tipo,Variación,,Saldo,,ID Orden";
+  const FX_KONTO = "Buchtag;Valuta;BIC / BLZ;IBAN / Kontonummer;Buchungsinformationen;TA-Nr.;Betrag;;Auftraggeberkonto;Konto";
+  const KR_LEDGER = `"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`;
+  const CB_H = "ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes";
+  const ET_DIV = ["Date of Payment", "Instrument Name", "Net Dividend Received (USD)", "Withholding Tax Amount (USD)", "ISIN"];
+  const f24div = (date: string | null, amount: number) => ({ type_id: "dividend", date, ticker: "AAPL.US", isin: AAPL, amount, tax_amount: 0, curr_c: "USD" });
+  const trDiv = (date: string, id: string): string => `"${date}","${date}","DEFAULT","CASH","DIVIDEND","STOCK","Apple","${AAPL}","","","110.00","","","USD","","","","Dividend","${id}","","","",""`;
+  const cashCases: { broker: string; year: number; cells: string[]; parse: (undated: boolean) => Statement | Promise<Statement> }[] = [
+    { broker: "Revolut", year: 2025, cells: ['Dividends AAPL 110 USD [Date: "20251345"]', 'Dividends AAPL 50 USD [Date: ""]', 'Deposits/Withdrawals CASH TOP-UP 100 USD [Date: ""]'], parse: (u) => revolut(
+      ["2025-05-15T10:00:00Z", "AAPL", "DIVIDEND", "", "", "USD 110", "USD", "1"],
+      ...(u ? [["2025-13-45T10:00:00Z", "AAPL", "DIVIDEND", "", "", "USD 110", "USD", "1"], ["", "AAPL", "DIVIDEND", "", "", "USD 50", "USD", "1"], ["", "", "CASH TOP-UP", "", "", "USD 100", "USD", "1"]] : [])) },
+    { broker: "Trading 212", year: 2024, cells: [`Dividends AAPL (${AAPL}) 5 USD [Time: ""]`, `Withholding Tax AAPL (${AAPL}) -0.5 USD [Time: "2024/12/01"]`], parse: (u) => trading212Parser.parse([T212_H, T212_DATED,
+      ...(u ? [`Dividend (Ordinary),,${AAPL},AAPL,Apple Inc,,,USD,0.92,,,5.00,USD,,div2`, `Dividend (Dividend tax),2024/12/01,${AAPL},AAPL,Apple Inc,,,USD,0.92,,,0.50,USD,,div3`] : [])].join("\n")) },
+    { broker: "Freedom24", year: 2024, cells: [`Dividends AAPL (${AAPL}) 50 USD [date: ""]`], parse: (u) => freedom24Parser.parse(JSON.stringify({
+      trades: { detailed: [] }, corporate_actions: { detailed: [f24div("2024-06-01", 110), ...(u ? [f24div(null, 50)] : [])] } })) },
+    { broker: "Lightyear", year: 2024, cells: [`Dividends AAPL (${AAPL}) 110 USD [Date: ""]`], parse: (u) => lightyearParser.parse([LY_H, LY_DATED,
+      ...(u ? [`,DV-2,AAPL,${AAPL},Dividend,,USD,,110,0.92,0,110,0`] : [])].join("\n")) },
+    { broker: "Scalable Capital", year: 2025, cells: [`Dividends AAPL Inc (${AAPL}) 110 USD [date: "20251345"]`], parse: (u) => scalableParser.parse([SC_H, `2025-05-15;09:15;Executed;REF8;AAPL Inc;Security;Distribution;${AAPL};;;110,00;0;0;USD`,
+      ...(u ? [`2025-13-45;09:15;Executed;REF9;AAPL Inc;Security;Distribution;${AAPL};;;110,00;0;0;USD`] : [])].join("\n")) },
+    { broker: "Trade Republic", year: 2025, cells: [`Dividends Apple (${AAPL}) 110 USD [date: "<b>"]`], parse: (u) => tradeRepublicParser.parse([TR_H, trDiv("2025-05-15", "tx-8"),
+      ...(u ? [trDiv("<b>", "tx-9")] : [])].join("\n")) },
+    { broker: "eToro", year: 2025, cells: [`Dividends AAPL (${AAPL}) 50.0000 USD [Date: ""]`, `Withholding Tax AAPL (${AAPL}) -7.5 USD [Date: ""]`], parse: (u) => parseEtoroXlsx(xlsx("Dividends", [ET_DIV,
+      ["15/06/2025", "AAPL", "42.50", "7.50", AAPL], ...(u ? [["", "AAPL", "42.50", "7.50", AAPL]] : [])])) },
+    { broker: "DEGIRO", year: 2024, cells: ['[Fecha: "20240231"]'], parse: (u) => degiroParser.parse([DG_ACC, "12-01-2024,07:31,11-01-2024,ALPHA SEMICON ADR,XX0000000001,Dividendo,,USD,2.42,USD,2.42,",
+      ...(u ? ["31-02-2024,07:31,11-01-2024,ALPHA SEMICON ADR,XX0000000001,Dividendo,,USD,4.00,USD,6.42,"] : [])].join("\n")) },
+    { broker: "Flatex", year: 2025, cells: ['[Buchtag: "20250231"]'], parse: (u) => flatexParser.parse([FX_KONTO, "30.12.2025;26.12.2025;;;Dividendenzahlung US67066G1040;4669369368;0,21;EUR;1234567890;***xxx Cashkonto",
+      ...(u ? ["31.02.2025;26.12.2025;;;Dividendenzahlung US67066G1040;4669369369;0,36;EUR;1234567890;***xxx Cashkonto"] : [])].join("\n")) },
+    { broker: "Interactive Brokers", year: 2025, cells: [`Dividends AAPL (${AAPL}) 50 USD [dateTime: "20250231"]`], parse: (u) => parseIbkrFlexXml(IB_CASH(u
+      ? `<CashTransaction transactionID="D2" accountId="U1" symbol="AAPL" description="AAPL Cash Dividend" isin="${AAPL}" currency="USD" dateTime="20250231" amount="50" fxRateToBase="1" type="Dividends" />` : "")) },
+    { broker: "Kraken", year: 2024, cells: ['[time: "20241301"]'], parse: (u) => krakenParser.parse([KR_LEDGER, `"LID100","REFID100","2024-06-01 00:00:00","staking","","currency","XETH","0.025","0.0001","5.025"`,
+      ...(u ? [`"LID101","REFID101","2024-13-01 00:00:00","staking","","currency","XETH","0.5","0.0001","5.525"`] : [])].join("\n")) },
+    { broker: "Coinbase", year: 2025, cells: ['[Timestamp: ""]'], parse: (u) => coinbaseParser.parse([CB_H, "tx1,2025-01-05 10:00:00 UTC,Rewards Income,ETH,0.01,EUR,€3000.00,€30.00,€30.00,€0.00,",
+      ...(u ? ["tx2,,Rewards Income,ETH,0.02,EUR,€3000.00,€60.00,€60.00,€0.00,"] : [])].join("\n")) },
+  ];
+  describe.each(cashCases)("$broker", ({ broker, year, cells, parse }) => {
+    it("the row is not booked, no booked row has a guessed date, and the warning names it", async () => {
+      const parsed = await parse(true);
+      for (const c of parsed.cashTransactions) expect(isReadableDay(c.dateTime)).toBe(true);
+      expect(parsed.cashTransactions).toHaveLength((await parse(false)).cashTransactions.length);
+      const warning = parsed.parserMessages?.find((m) => m.id === "parser.cash_row_undated");
+      expect([warning?.severity, warning?.context?.broker, warning?.context?.count]).toEqual(["warning", warning?.context?.broker, String(cells.length)]);
+      for (const cell of cells) expect(warning?.context?.rows).toContain(cell);
+    });
+    it.each(METHODS)("[%s] every number of the report is the one of the file without that row", async (method) => {
+      expect(numbers(run([[await parse(true), broker]], year, method))).toBe(numbers(run([[await parse(false), broker]], year, method)));
+    });
+  });
+});
+
+describe("#467 IBKR, Coinbase and Binance: a trade with no readable date is kept as a row that books nothing, named", () => {
+  it.each(METHODS)("[%s] IBKR: a buy dated 31/02 in the issue file is kept, named, and the 100 € stay blocked", (method) => {
+    const xml = IB_ISSUE.replace("<Trades>", `<Trades>${ibTrade("20240231", "BUY", 40, 10)}`);
+    const parsed = parseIbkrFlexXml(xml);
+    expect(parsed.trades.filter((t) => t.undatedRow).map((t) => [t.tradeDate, t.quantity, t.quantityUnknown])).toEqual([["", "0", true]]);
+    expect(unreadableRows(parsed)).toBe(`XYZ (${ISIN}) [tradeDate: "20240231"]`);
+    const r = run([[parsed, "Interactive Brokers"]], 2025, method);
+    const sale = r.capitalGains.disposals.find((d) => d.isin === ISIN)!;
+    expect([r.capitalGains.blockedLosses.toFixed(2), sale.washSaleSinglePurchase]).toEqual(["100.00", "unverified"]);
+  });
+
+  it("IBKR control: a file in another Date Format setting is still refused with the setting to change", () => {
+    expect(() => parseIbkrFlexXml(IB_ISSUE.replace('tradeDate="20250301"', 'tradeDate="03/01/2025"'))).toThrow(/yyyyMMdd/);
+  });
+
+  it.each(METHODS)("[%s] Coinbase: a sale with no Timestamp is kept and named, never dropped silently", (method) => {
+    const parsed = coinbaseParser.parse(["ID,Timestamp,Transaction Type,Asset,Quantity Transacted,Price Currency,Price at Transaction,Subtotal,Total (inclusive of fees and/or spread),Fees and/or Spread,Notes",
+      "tx4,2025-01-05 10:00:00 UTC,Buy,ETH,0.50000000,EUR,€3200.00,€1600.00,€1610.00,€10.00,Bought 0.5 ETH",
+      "tx5,,Sell,ETH,0.50000000,EUR,€3500.00,€1750.00,€1740.00,€10.00,Sold 0.5 ETH"].join("\n"));
+    expect(unreadableRows(parsed)).toBe('ETH [Timestamp: ""]');
+    expect(run([[parsed, "Coinbase"]], 2025, method).capitalGains.disposals).toEqual([]);
+  });
+
+  it.each(METHODS)("[%s] Binance: a sale dated 2024-13-45 is kept and named, never booked on a false day", (method) => {
+    const parsed = binanceParser.parse(["Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
+      "2024-01-15 10:30:00,BTCEUR,BUY,42000.00,0.05,2100.00,0.001BTC",
+      "2024-13-45 14:00:00,BTCEUR,SELL,48000.00,0.05,2400.00,0.001BTC"].join("\n"));
+    expect(unreadableRows(parsed)).toBe('BTC [Date(UTC): "20241345"]');
+    expect(run([[parsed, "Binance"]], 2024, method).capitalGains.disposals).toEqual([]);
+  });
+});
+
+describe("#467 Revolut DIVIDEND TAX (CORRECTION) rows are named, so the user knows where the withholding correction went", () => {
+  const file = (withCorrection: boolean): Promise<Statement> => revolut(
+    ["2025-05-15T10:00:00Z", "AAPL", "DIVIDEND", "", "", "USD 110", "USD", "1"],
+    ...(withCorrection ? [
+      ["2025-05-16T10:00:00Z", "AAPL", "DIVIDEND TAX (CORRECTION)", "", "", "USD 0.37", "USD", "1"],
+      ["2025-05-16T10:00:01Z", "AAPL", "DIVIDEND TAX (CORRECTION)", "", "", "USD -0.37", "USD", "1"]] : []));
+
+  it("an info message lists each row by ticker, date and amount", async () => {
+    const message = (await file(true)).parserMessages?.find((m) => m.id === "revolut.dividend_tax_correction");
+    expect([message?.severity, message?.context?.count, message?.context?.rows]).toEqual(["info", "2", "AAPL 20250516 USD 0.37; AAPL 20250516 USD -0.37"]);
+  });
+
+  it.each(METHODS)("[%s] the rows move no number", async (method) => {
+    expect(numbers(run([[await file(true), "Revolut"]], 2025, method))).toBe(numbers(run([[await file(false), "Revolut"]], 2025, method)));
   });
 });

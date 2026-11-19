@@ -40,7 +40,10 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  corporateActionTrade,
+  isCorporateActionType,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 
@@ -98,16 +101,21 @@ function resolveColumns(headers: string[]): LightyearColumns {
 // Date conversion
 // ---------------------------------------------------------------------------
 
-/** Convert "DD/MM/YYYY HH:MM:SS" to YYYYMMDD */
+/**
+ * Convert "DD/MM/YYYY HH:MM:SS" (day and month with one or two digits) or
+ * "YYYY-MM-DD" to YYYYMMDD. Any other text is returned as it is: the row is
+ * then kept and named as a row with no readable date, never read as another
+ * day and never a reason to refuse the file (#467).
+ */
 function convertLightyearDate(dateStr: string): string {
   const trimmed = dateStr.trim();
   // DD/MM/YYYY (with optional time)
-  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (match) return `${match[3]}${match[2]}${match[1]}`;
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) return `${match[3]}${match[2]!.padStart(2, "0")}${match[1]!.padStart(2, "0")}`;
   // Fallback: YYYY-MM-DD
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}${isoMatch[2]}${isoMatch[3]}`;
-  throw new Error(`Lightyear CSV: formato de fecha no reconocido: "${trimmed}"`);
+  return trimmed;
 }
 
 // ---------------------------------------------------------------------------
@@ -224,6 +232,16 @@ function parseLightyearCsv(lines: string[]): Statement {
       !INCOME_TYPES.has(txType) && txType !== "conversion";
     const namesSecurity = ticker !== "" || isin !== "";
     const movesNoShares = !quantityUnreadable(fields[cols.quantity]) && new Decimal(quantityStr).isZero();
+    // A split or another corporate action of a security moves its shares: kept
+    // as a row that books nothing (evidence of a holding, #453) and named as
+    // not applied, not as an unreadable row.
+    if (otherType && namesSecurity && !movesNoShares && isCorporateActionType(txType)) {
+      trades.push(corporateActionTrade({
+        tradeID: `lightyear-action-${reference || `${tradeDate}-${ticker || isin}-${i}`}`,
+        symbol: ticker, isin, assetCategory: "STK", currency, tradeDate, tradeTime, exchange: "LIGHTYEAR",
+      }, (fields[cols.type] ?? "").trim(), fields[cols.quantity] ?? ""));
+      continue;
+    }
     if (tradeType || (otherType && namesSecurity && !movesNoShares)) {
       const cell = !dateRaw ? unreadableCell(headers[cols.date] ?? "Date", dateRaw)
         : otherType ? unreadableCell(headers[cols.type] ?? "Type", fields[cols.type] ?? "")
@@ -238,8 +256,9 @@ function parseLightyearCsv(lines: string[]): Statement {
         continue;
       }
     }
-    // Any other row with no date stays skipped, as before.
-    if (!dateRaw) continue;
+    // Any other row with no readable date goes on with that date: a dividend
+    // or income row is taken out and named by dropUndatedCash, a conversion is
+    // kept and named by markUndatedTrades (#467).
 
     // Skip non-taxable transactions
     if (SKIP_TYPES.has(txType)) continue;
@@ -430,8 +449,11 @@ function parseLightyearCsv(lines: string[]): Statement {
       context: { count: String(unknownCount), types },
     });
   }
-  dateUndatedTrades("Lightyear", trades, cashTransactions.map((c) => c.dateTime));
-  parserMessages.push(...tradeQuantityUnknownMessages("Lightyear", trades));
+  markUndatedTrades(trades, headers[cols.date] ?? "Date");
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Lightyear", trades),
+    ...dropUndatedCash("Lightyear", cashTransactions, headers[cols.date] ?? "Date"),
+  );
 
   return {
     accountId: "",

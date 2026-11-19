@@ -14,7 +14,7 @@
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, dateUndatedTrades } from "./csv-utils.js";
+import { parseCsvLine, parseNumber, toFiniteDecimal, toFiniteDecimalString, stripBom, findColumn, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableTrade, unreadableCell, corporateActionTrade, markUndatedTrades, dropUndatedCash } from "./csv-utils.js";
 import { normalizeDate } from "../engine/dates.js";
 
 const TR_HEADERS = ["transaction_id", "asset_class", "counterparty_name"];
@@ -344,15 +344,33 @@ function parseTrCsv(lines: string[]): Statement {
     }
 
     // --- CORPORATE_ACTION (mergers, ...) / DELIVERY (free shares, ...) ---
-    // Not imported: count them and warn below.
-    if (category === "CORPORATE_ACTION") {
-      corporateActionRows++;
-      if (symbol) corporateActionIsins.add(symbol);
-      continue;
-    }
-    if (category === "DELIVERY") {
-      deliveryRows++;
-      if (symbol) deliveryIsins.add(symbol);
+    // Not applied: counted and named below. A row that names its security
+    // (an ISIN, or a name with a share count) and does not write a zero share
+    // count moves shares of it, so it is also kept as a row that books nothing:
+    // evidence of a holding at the anti-churning window start (#453, #467).
+    // Even with a readable signed share count the parser books no lot: a
+    // delivery in is a lot at the market value of that day (free shares) or at
+    // the original cost (a transfer), and a merger carries the old cost to the
+    // new shares, and the row gives neither value. The user adds a manual lot.
+    if (category === "CORPORATE_ACTION" || category === "DELIVERY") {
+      if (category === "CORPORATE_ACTION") {
+        corporateActionRows++;
+        if (symbol) corporateActionIsins.add(symbol);
+      } else {
+        deliveryRows++;
+        if (symbol) deliveryIsins.add(symbol);
+      }
+      const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
+      const named = symbol !== "" || (name !== "" && !sharesUnreadable);
+      if (named && !(!sharesUnreadable && shares === 0)) {
+        const isCrypto = mapAssetCategory(assetClass) === "CRYPTO";
+        trades.push(corporateActionTrade({
+          tradeID: txId || `tr-${category.toLowerCase()}-${tradeDate}-${symbol}-${i}`,
+          symbol: isCrypto ? symbol : name, description: name, isin: isCrypto ? "" : symbol,
+          assetCategory: mapAssetCategory(assetClass), currency, tradeDate,
+          buySell: shares < 0 ? "SELL" : "BUY", exchange: "TRADE_REPUBLIC",
+        }, `${category} ${field(fields, cols.type)}`.trim(), field(fields, cols.shares)));
+      }
       continue;
     }
 
@@ -380,8 +398,12 @@ function parseTrCsv(lines: string[]): Statement {
       context: { count: String(deliveryRows), isins },
     });
   }
-  dateUndatedTrades("Trade Republic", trades, cashTransactions.map((c) => c.dateTime), "date");
-  parserMessages.push(...tradeQuantityUnknownMessages("Trade Republic", trades));
+  markUndatedTrades(trades, headers[cols.date] ?? "date");
+  // The corporate-action and delivery rows are named by the two warnings above.
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Trade Republic", trades.filter((t) => t.corporateActionRow === undefined)),
+    ...dropUndatedCash("Trade Republic", cashTransactions, headers[cols.date] ?? "date"),
+  );
 
   return {
     accountId: "",

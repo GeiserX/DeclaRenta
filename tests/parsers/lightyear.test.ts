@@ -329,15 +329,16 @@ describe("lightyearParser", () => {
         "01/06/2025 09:00:00,CA-0000000020,AAPL,US0378331005,Stock split,10.000000000,USD,,,,,,",
       ].join("\n");
       const result = lightyearParser.parse(csv);
-      // A row of an unknown type that names a security is kept as a trade
-      // that books nothing and named (#467); one that names none is listed
-      // by its type.
-      expect(result.trades.map((t) => [t.quantity, t.quantityUnknown ?? false, t.unreadableRow])).toEqual([
-        ["10", false, undefined],
-        ["0", true, 'AAPL (US0378331005) 20250601 [Type: "Stock split"]'],
+      // A split that names a security is kept as a trade that books nothing
+      // and named as not applied (#467); one that names none is listed by its
+      // type.
+      expect(result.trades.map((t) => [t.quantity, t.quantityUnknown ?? false, t.unreadableRow, t.corporateActionRow])).toEqual([
+        ["10", false, undefined, undefined],
+        ["0", true, undefined, "AAPL (US0378331005) 20250601 [Stock split: 10.000000000]"],
       ]);
-      const unreadable = (result.parserMessages ?? []).find((m) => m.id === "parser.trade_row_unreadable");
-      expect([unreadable?.severity, unreadable?.context?.count]).toEqual(["warning", "1"]);
+      const split = (result.parserMessages ?? []).find((m) => m.id === "parser.corporate_action_not_applied");
+      expect([split?.severity, split?.context?.count]).toEqual(["warning", "1"]);
+      expect((result.parserMessages ?? []).some((m) => m.id === "parser.trade_row_unreadable")).toBe(false);
       expect((result.parserMessages ?? []).some((m) => m.id === "lightyear.unknown_types")).toBe(false);
 
       const unnamed = lightyearParser.parse([HEADER, "01/06/2025 09:00:00,CA-0000000021,,,Stock split,10,USD,,,,,,"].join("\n"));

@@ -26,7 +26,8 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -333,7 +334,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     }
   }
 
-  dateUndatedTrades("Kraken", trades, [], "time");
+  markUndatedTrades(trades, "time");
 
   // A pair we couldn't split with certainty (no known quote suffix) was split by
   // a guess — warn so the user knows that trade may be mis-valued and can verify
@@ -433,7 +434,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
   }
 
   const ignoredCount = [...ignoredTypes.values()].reduce((a, b) => a + b, 0);
-  const parserMessages: TaxMessage[] = ignoredCount > 0
+  const parserMessages: TaxMessage[] = [...dropUndatedCash("Kraken", cashTransactions, "time"), ...(ignoredCount > 0
     ? [{
         id: "kraken.ledger_rows_ignored",
         severity: "info" as const,
@@ -441,7 +442,7 @@ function parseLedgersCsv(lines: string[], delimiter: string): Statement {
         hint: "Del libro mayor solo se leen las recompensas de staking y Earn; las compraventas se leen del CSV de operaciones (Trades). Las compras instantáneas (tipos spend y receive) pueden no aparecer en ese CSV: si es tu caso, añádelas para que la moneda comprada tenga coste de adquisición.",
         context: { count: String(ignoredCount) },
       }]
-    : [];
+    : [])];
 
   return {
     accountId: "",

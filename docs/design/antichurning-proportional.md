@@ -471,22 +471,49 @@ práctico Renta 2025. The decisions, each pinned in
     "unverified"; with no ISIN, the trade is unidentified). The warning
     `parser.trade_row_unreadable` names every such row. The shared helpers
     are in `src/parsers/csv-utils.ts` (`unreadableTrade`, `unreadableCell`,
-    `dateUndatedTrades`). A trade whose date is not a real day
-    ("2024-13-45", "31-02-2024") is kept the same way, in every parser that
-    calls `dateUndatedTrades`: a lot with a false date could sit outside the
-    window it belongs to. A row with no readable date takes the earliest
-    readable date of its file (trades and cash rows), because the engine
-    needs a real day, and `Trade.undatedRow`; a file with no readable date at
-    all is refused. `finalizeMergedStatement` then moves it to the earliest
-    date of the whole upload: every sale is on or after that day, so the row
-    stands before the sale's window or inside it, never after another
-    broker's year-end list, where the evidence check does not look. A row of
+    `markUndatedTrades`, `corporateActionTrade`, `dropUndatedCash`).
+    - A trade whose date is not a real day ("2024-13-45", "31-02-2024",
+      "02.12.2024 09:30" where the broker writes another format, or an empty
+      cell) is kept the same way, in every parser: a lot with a false date
+      could sit outside the window it belongs to. No parser throws for a
+      date any more. The parsed file leaves such a row with no date
+      (`tradeDate` "") and marks it `Trade.undatedRow`.
+      `finalizeMergedStatement` gives it the earliest readable date of the
+      whole upload (trades and cash rows), because the engine needs a real
+      day. Every sale is on or after that day, so the row stands before the
+      sale's window or inside it, never after another broker's year-end
+      list, where the evidence check does not look. With no ISIN, a row
+      there is an unidentified trade, and the exception is never "applied".
+      An upload with no readable date at all keeps the warning and books no
+      row.
+    - IBKR keeps one exception: a date in the wrong shape ("03/01/2025")
+      means the Flex Date Format setting is wrong, so the whole file is still
+      refused with the setting to change. A date of the right shape that is
+      no real day ("20240231") is kept as above.
+    - A split, consolidation, merger, spin-off or other corporate action
+      that names a security is kept as a row of unknown quantity with
+      `Trade.corporateActionRow` (the security, the date, the action and
+      the share count it writes). It books no shares and no money, and
+      `parser.corporate_action_not_applied` names it, not
+      `parser.trade_row_unreadable`. The engine does not apply corporate
+      actions from these files, so the user must check the holding by
+      hand; until then the security's evidence is "unverified".
+    - A cash row (a dividend, a withholding, interest, a deposit) whose date
+      is not a real day is not booked. We never guess its date: the date
+      sets the tax year, the ECB rate and the pairing of a dividend with
+      its withholding, and a guessed year can move income to the wrong
+      return. `parser.cash_row_undated` names each row with its type,
+      security, amount and the failing cell, so the user can add it by hand.
+    - In Revolut and eToro XLSX files, a date stored as a date cell is read
+      as its real day (`isoDateCells`). The sheet's display text ("1/10/25"
+      for the default format) is never parsed. A row of
     an unknown type that writes a zero share count moves no shares and stays
     skipped, and so does a row that names no security and moves no shares
     (a cash line). A row that names its security only by name and writes a
     share count is kept (Scalable, Trading 212, Flatex, Trade Republic). The
     cases per broker:
-    - Revolut: a buy, sale or other type with a ticker and no readable date;
+    - Revolut: a buy, sale or other type with a ticker and no readable date
+      (an undated row with no ticker is kept with no ISIN);
       any type that is not a buy, sale, dividend, dividend tax correction,
       split or cash row (a `SPINOFF`, a `BUY - STOP`); a buy or sale with no
       ticker; a closed position with no symbol. The
@@ -501,15 +528,20 @@ práctico Renta 2025. The decisions, each pinned in
       evidence. A buy of unknown size with nothing readable left makes one of
       quantity "0"; a row of unknown type alone makes none.
       `revolut.holding_size_unknown` names every such ticker.
-    - Trading 212: a buy or sale with no Time or no ticker; an action that is
-      not a buy, sale, dividend, interest, split or cash row. A
-      `Stock split open` or `Stock split close` row is not applied and not
-      called unreadable: `trading212.split_not_applied` names it.
+      A `DIVIDEND TAX (CORRECTION)` row books nothing, and
+      `revolut.dividend_tax_correction` (info) names it by ticker, date and
+      amount.
+    - Trading 212: a buy or sale with no readable Time or no ticker; an
+      action that is not a buy, sale, dividend, interest, split or cash row.
+      Each leg of a `Stock split open` or `Stock split close` is a
+      corporate-action row (above).
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
       every operation that was not `sell` was booked as a buy (#468).
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
-      ISIN; a type that is not a buy or sale and moves shares.
+      ISIN; a type that is not a buy or sale and moves shares. A split or
+      corporate-action type is a corporate-action row (above). Scalable also
+      reads a German date (DD.MM.YYYY).
     - Flatex: the side comes from the text (Kauf, Verkauf), never from the
       Nominal's sign alone (#468). A row with neither word is unreadable, so
       a Depotübertrag Ausgang is no sale and an Einbuchung no repurchase. A
@@ -518,7 +550,13 @@ práctico Renta 2025. The decisions, each pinned in
       a row of another text with no ISIN that names a security and moves
       shares.
     - Trade Republic: a buy or sale with no amount; a TRADING row of another
-      type with a symbol, or a name and a share count.
+      type with a symbol, or a name and a share count. A CORPORATE_ACTION or
+      DELIVERY row that names a security and does not write a zero share
+      count is a corporate-action row (above), and its own warning still
+      names it. The file gives a share count and a sign, but not what the
+      action did (a split, a merger, a transfer in), so booking the count
+      could add or remove shares that were never there. The row books
+      nothing and keeps the evidence "unverified".
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
       order id.
     - eToro: an unknown direction in the Spanish `Long / Short` column (only

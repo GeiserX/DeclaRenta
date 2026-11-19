@@ -21,7 +21,7 @@ import type {
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
 import { ISIN_SHAPE } from "../engine/antichurning-window.js";
-import { tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { tradeQuantityUnknownMessages, markUndatedTrades, dropUndatedCash } from "./csv-utils.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -148,6 +148,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   }
 
   assertFlexDateFormat(trades.map((t) => t.tradeDate), cashTransactions.map((c) => c.dateTime));
+  // In a file of the right format, a trade whose date is no real day ("",
+  // "20251345") is kept as a row that books nothing, and such a cash row is
+  // taken out; each is named below (#467).
+  markUndatedTrades(trades, "tradeDate");
+  const undatedCashMessages = dropUndatedCash("IBKR", cashTransactions, "dateTime");
 
   // Detect important sections present in XML but not parsed
   const parserWarnings: string[] = [];
@@ -251,7 +256,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
 
   // An unreadable trade quantity reads "0" too (FIFO books no shares for it):
   // say which trades to check.
-  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades));
+  parserMessages.push(...tradeQuantityUnknownMessages("IBKR", trades), ...undatedCashMessages);
 
   // Use first statement's metadata, combine accountIds for multi-account
   const first = statements[0]!;
@@ -288,7 +293,10 @@ const FLEX_DATE_PREFIX = /^(?:19|20)\d\d(-?)(?:0[1-9]|1[0-2])\1(?:0[1-9]|[12]\d|
  * The Flex Query "Date Format" setting also offers MM/dd/yyyy, dd/MM/yyyy,
  * dd-MMM-yy and more. Those dates never match the declaration year, so the
  * report would come out empty with no message. Refuse the file instead and say
- * which setting to change.
+ * which setting to change. A Flex export writes every date in that one
+ * setting, so a date of another shape means the setting, not a damaged row. A
+ * date of the right shape that is no real day ("20240231"), or an empty one,
+ * is a damaged row: kept and named, never a reason to refuse the file (#467).
  */
 function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): void {
   for (const raw of [...tradeDates, ...cashDateTimes]) {

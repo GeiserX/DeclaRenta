@@ -21,7 +21,8 @@ import {
   unreadableTrade,
   unreadableCell,
   isReadableTradeDate,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -213,8 +214,9 @@ function parseFreedom24(input: string): Statement {
 
     const ticker = typeof ca.ticker === "string" ? ca.ticker : "";
     if (!ticker) { skippedMalformed++; continue; }
+    // A dividend with no readable date is booked with that date and taken
+    // out, named with its amount, by dropUndatedCash below (#467).
     const dateRaw = typeof ca.date === "string" ? ca.date.trim() : "";
-    if (!dateRaw) { skippedMalformed++; continue; }
 
     const tradeDate = convertFreedom24Date(dateRaw);
     const { symbol } = parseSymbol(ticker);
@@ -269,8 +271,11 @@ function parseFreedom24(input: string): Statement {
       context: { count: String(skippedMalformed) },
     });
   }
-  dateUndatedTrades("Freedom24", trades, cashTransactions.map((c) => c.dateTime), "date");
-  parserMessages.push(...tradeQuantityUnknownMessages("Freedom24", trades));
+  markUndatedTrades(trades, "date");
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Freedom24", trades),
+    ...dropUndatedCash("Freedom24", cashTransactions, "date"),
+  );
 
   return {
     accountId: "",

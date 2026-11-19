@@ -31,7 +31,9 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
+  isoDateCells,
 } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
@@ -372,7 +374,7 @@ function parseClosedPositions(
     });
   }
 
-  dateUndatedTrades("eToro", trades, [], "Open Date / Close Date");
+  markUndatedTrades(trades, "Open Date / Close Date");
   parserMessages.push(...tradeQuantityUnknownMessages("eToro", trades));
 
   return trades;
@@ -412,12 +414,14 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
     if (!row.length) continue;
 
     const dateStr = (row[dateCol] ?? "").trim();
-    if (!dateStr) continue;
-
-    const tradeDate = parseEtoroDate(dateStr);
     const instrument = instrumentCol >= 0 ? (row[instrumentCol] ?? "").trim() : "";
     const netAmount = (row[effectiveNetCol] ?? "0").trim();
     const isin = isinCol >= 0 ? (row[isinCol] ?? "").trim() : "";
+    // A dividend with no readable date is booked with that date and taken out,
+    // named with its amount, by dropUndatedCash (#467). A row with no date
+    // that names no security (a totals line) stays skipped.
+    if (!dateStr && (!(instrument || isin) || /^total/i.test(instrument))) continue;
+    const tradeDate = parseEtoroDate(dateStr);
 
     const netNum = parseFloat(parseNumber(netAmount));
     if (isNaN(netNum) || netNum === 0) continue;
@@ -524,9 +528,9 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
     // Only capture interest payments
     if (!typeStr.includes("interest") && !typeStr.includes("intereses")) continue;
 
+    // An interest row with no readable date is booked with that date and
+    // taken out, named with its amount, by dropUndatedCash (#467).
     const dateStr = (row[dateCol] ?? "").trim();
-    if (!dateStr) continue;
-
     const tradeDate = parseEtoroDate(dateStr);
     const amountStr = (row[amountCol] ?? "0").trim();
     const amountNum = parseFloat(parseNumber(amountStr));
@@ -562,7 +566,11 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
  */
 export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Statement> {
   const xlsx = await import("xlsx");
-  const wb = xlsx.read(data, { type: "buffer" });
+  const wb = xlsx.read(data, { type: "buffer", cellNF: true });
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    if (sheet) isoDateCells(xlsx, sheet);
+  }
 
   const closedSheet = getSheet(wb, ["closed positions", "posiciones cerradas"]);
   const dividendSheet = getSheet(wb, ["dividends", "dividendos"]);
@@ -572,6 +580,8 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
   const trades = closedSheet ? parseClosedPositions(xlsx, closedSheet, parserMessages) : [];
   const dividends = dividendSheet ? parseDividends(xlsx, dividendSheet) : [];
   const interest = activitySheet ? parseAccountActivity(xlsx, activitySheet) : [];
+  const cashTransactions = [...dividends, ...interest];
+  parserMessages.push(...dropUndatedCash("eToro", cashTransactions));
 
   return {
     accountId: "",
@@ -579,7 +589,7 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
     toDate: "",
     period: "",
     trades,
-    cashTransactions: [...dividends, ...interest],
+    cashTransactions,
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],

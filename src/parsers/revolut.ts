@@ -40,7 +40,9 @@ import {
   unreadableTrade,
   unreadableCell,
   isReadableTradeDate,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
+  isoDateCells,
 } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
@@ -280,7 +282,7 @@ function parseTrades(
 
   // Every money/quantity cell is finiteness-guarded via toFiniteDecimal; the
   // only messages name the trades of unknown quantity and the unreadable rows.
-  dateUndatedTrades("Revolut", trades, [], "Date acquired / Date sold");
+  markUndatedTrades(trades, "Date acquired / Date sold");
   return { trades, parserMessages: tradeQuantityUnknownMessages("Revolut", trades) };
 }
 
@@ -354,6 +356,8 @@ function parseTransactionLog(
   let netDividends = 0;
   // STOCK SPLIT rows with no usable Quantity (shares added).
   let unresolvedSplits = 0;
+  // DIVIDEND TAX (CORRECTION) rows, not booked: ticker, date and amount.
+  const dividendTaxRows: string[] = [];
 
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
@@ -390,7 +394,8 @@ function parseTransactionLog(
 
     // Cash flows: CASH TOP-UP, CASH WITHDRAWAL
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
-      if (!dateStr) continue;
+      // A cash row with no readable date is booked with that date and taken
+      // out, named with its amount, by dropUndatedCash below (#467).
       // FX rate validation, for the only rows that read the cell: it defaults
       // to "1" only when ABSENT (missing column or empty cell), a legitimate
       // case (EUR rows, no FX column). A cell that IS present and parses to a
@@ -436,9 +441,15 @@ function parseTransactionLog(
       }, unreadableCell(headers[cols.ticker] ?? "Ticker", "")));
       continue;
     }
+    // A withholding correction is no trade and is not booked (the dividends
+    // are net, the withholding comes from the annual tax report), but it is
+    // named, so the user knows where it went.
+    if (TXN_TYPE_DIVIDEND_TAX.test(type)) {
+      dividendTaxRows.push(`${ticker || "—"} ${isReadableTradeDate(tradeDate) ? tradeDate : dateStr || "—"} ${totalRaw || "—"}`);
+      continue;
+    }
     // Skip other rows without a ticker (e.g. REWARD, CUSTODY FEE): no trade.
     if (!ticker) continue;
-    if (TXN_TYPE_DIVIDEND_TAX.test(type)) continue;
 
     const quantityStr = (row[cols.quantity] ?? "0").trim();
     const priceStr = (row[cols.price] ?? "0").trim();
@@ -476,8 +487,10 @@ function parseTransactionLog(
       keepUnreadable(unreadableCell(headers[cols.type] ?? "Type", type));
       continue;
     }
-    // A dividend or split row with no date stays skipped, as before.
-    if (!dateStr) continue;
+    // A split row with no date stays skipped, as before. A dividend with no
+    // readable date is booked with that date and taken out, named with its
+    // amount, by dropUndatedCash below (#467).
+    if (!dateStr && !TXN_TYPE_DIVIDEND.test(type)) continue;
 
     // DIVIDEND: Quantity is empty and the amount is net of withholding.
     if (TXN_TYPE_DIVIDEND.test(type)) {
@@ -713,6 +726,17 @@ function parseTransactionLog(
       context: { count: String(unresolvedSplits) },
     });
   }
+  if (dividendTaxRows.length > 0) {
+    const count = String(dividendTaxRows.length);
+    const rows = dividendTaxRows.join("; ");
+    parserMessages.push({
+      id: "revolut.dividend_tax_correction",
+      severity: "info" as const,
+      message: `El extracto de Revolut trae ${count} corrección(es) de la retención de un dividendo (DIVIDEND TAX (CORRECTION)) que DeclaRenta no suma: ${rows}.`,
+      hint: "Con estas filas Revolut corrige la retención de un dividendo ya cobrado. DeclaRenta importa los dividendos de Revolut por su importe neto y no lee la retención de este extracto, así que tampoco su corrección. Toma el dividendo bruto y la retención final, ya corregida, del informe fiscal anual de Revolut.",
+      context: { count, rows },
+    });
+  }
   if (netDividends > 0) {
     parserMessages.push({
       id: "revolut.dividends_net",
@@ -723,8 +747,11 @@ function parseTransactionLog(
     });
   }
 
-  dateUndatedTrades("Revolut", trades, cashTransactions.map((c) => c.dateTime));
-  parserMessages.push(...tradeQuantityUnknownMessages("Revolut", trades));
+  markUndatedTrades(trades, headers[cols.date] ?? "Date");
+  parserMessages.push(
+    ...tradeQuantityUnknownMessages("Revolut", trades),
+    ...dropUndatedCash("Revolut", cashTransactions, headers[cols.date] ?? "Date"),
+  );
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
 
@@ -763,9 +790,10 @@ function hasClosedPositionHeaders(headers: string[]): boolean {
  */
 export async function parseRevolutXlsx(data: Buffer | Uint8Array): Promise<Statement> {
   const xlsx = await import("xlsx");
-  const wb = xlsx.read(data, { type: "buffer" });
+  const wb = xlsx.read(data, { type: "buffer", cellNF: true });
 
   const sheet = wb.Sheets[wb.SheetNames[0]!];
+  if (sheet) isoDateCells(xlsx, sheet);
   if (!sheet) {
     return {
       accountId: "", fromDate: "", toDate: "", period: "",

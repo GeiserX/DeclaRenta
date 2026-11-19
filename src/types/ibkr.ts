@@ -131,9 +131,16 @@ export interface Trade {
    */
   unreadableRow?: string;
   /**
-   * Set with `unreadableRow` when the file gives the row no readable date: its
-   * `tradeDate` is a stand-in, the earliest date of the upload
-   * (`finalizeMergedStatement`), so the row falls before or inside every
+   * Set with `quantityUnknown` on a row of a split, a merger, a delivery or
+   * another corporate action the parser does not apply (#467). It names the
+   * row (security, date, action, share count);
+   * `parser.corporate_action_not_applied` lists it. The row books nothing.
+   */
+  corporateActionRow?: string;
+  /**
+   * Set on a kept row whose date the file does not give. The parsed file
+   * leaves `tradeDate` ""; `finalizeMergedStatement` puts the earliest date
+   * of the whole upload there, so the row falls before or inside every
    * anti-churning window and never after a year-end list (#467).
    */
   undatedRow?: boolean;

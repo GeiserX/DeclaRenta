@@ -395,17 +395,26 @@ describe("fixture file integration", () => {
 
     it("should parse all trades (BUY + SELL, stocks + crypto + fund)", () => {
       const r = tradeRepublicParser.parse(csv);
-      expect(r.trades).toHaveLength(10);
-      const buys = r.trades.filter((t) => t.buySell === "BUY");
-      const sells = r.trades.filter((t) => t.buySell === "SELL");
+      // Plus the 2 merger rows and the free-share delivery, kept as rows that
+      // book nothing (evidence of a holding, #467).
+      expect(r.trades).toHaveLength(13);
+      const kept = r.trades.filter((t) => t.corporateActionRow !== undefined);
+      expect(kept.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney])).toEqual([
+        ["LU0000000001", "0", true, "0"], ["IE0000000001", "0", true, "0"], ["DE0000004001", "0", true, "0"],
+      ]);
+      const trades = r.trades.filter((t) => t.corporateActionRow === undefined);
+      expect(trades).toHaveLength(10);
+      const buys = trades.filter((t) => t.buySell === "BUY");
+      const sells = trades.filter((t) => t.buySell === "SELL");
       expect(buys).toHaveLength(5);
       expect(sells).toHaveLength(5);
     });
 
     it("should map asset categories correctly", () => {
       const r = tradeRepublicParser.parse(csv);
-      const crypto = r.trades.filter((t) => t.assetCategory === "CRYPTO");
-      const fund = r.trades.filter((t) => t.assetCategory === "FUND");
+      const trades = r.trades.filter((t) => t.corporateActionRow === undefined);
+      const crypto = trades.filter((t) => t.assetCategory === "CRYPTO");
+      const fund = trades.filter((t) => t.assetCategory === "FUND");
       expect(crypto).toHaveLength(2);
       expect(fund).toHaveLength(1);
     });

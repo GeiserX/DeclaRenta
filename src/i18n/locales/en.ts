@@ -1112,8 +1112,12 @@ const en: TranslationKeys = {
   "revolut.bad_fx_rate.hint": "Only cash top-ups and withdrawals use that column; purchases, sales and dividends are calculated at the ECB rate and are not skipped. It is usually caused by an exchange rate cell that is not a number, negative or zero in the export. Download the full Trading Account Statement again from the Revolut app so those movements are included.",
   "revolut.holding_size_unknown": "The Revolut statement does not tell how many shares or units you hold at the end for {{count}} security(ies): {{tickers}}.",
   "revolut.holding_size_unknown.hint": "One row of each cannot be read or does not say how many shares or units it moves (another warning names it). DeclaRenta shows only the part it can read, which may be 0. For Modelo 720 and 721, take the number and the value of those holdings from the Revolut statement and add them by hand.",
-  "trading212.split_not_applied": "Trading 212: {{count}} stock split or consolidation row(s) were not applied: {{rows}}.",
-  "trading212.split_not_applied.hint": "DeclaRenta does not change the number of shares or the cost per share of those securities for them, so the gains and losses of later sales of those securities may not be correct. Check those sales.",
+  "parser.corporate_action_not_applied": "{{broker}}: {{count}} stock split, consolidation or other corporate action row(s) were not applied: {{rows}}.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta does not change the number of shares or the cost of those securities for them, so the gains and losses of their later sales may not be correct: check them against the broker's statement. It does not apply the one-purchase exception of the 2-month rule to those securities either.",
+  "parser.cash_row_undated": "{{broker}}: {{count}} cash movement(s) have no readable date and are not calculated: {{rows}}.",
+  "parser.cash_row_undated.hint": "The square brackets show the date cell. Without a date, DeclaRenta does not know which year the amount belongs to or which ECB exchange rate applies, so it does not add it and does not make up a date. If it is a dividend, a withholding, an interest or other income of the year you declare, correct the date in the broker's file and upload it again, or add the amount by hand in Renta Web.",
+  "revolut.dividend_tax_correction": "The Revolut statement has {{count}} dividend withholding correction(s) (DIVIDEND TAX (CORRECTION)) that DeclaRenta does not add: {{rows}}.",
+  "revolut.dividend_tax_correction.hint": "With these rows Revolut corrects the withholding of a dividend already paid. DeclaRenta imports Revolut dividends at their net amount and does not read the withholding from this statement, so it does not read its correction either. Take the gross dividend and the final, corrected withholding from Revolut's annual tax report.",
 };
 
 export default en;

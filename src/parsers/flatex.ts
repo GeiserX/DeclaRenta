@@ -32,7 +32,8 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
-  dateUndatedTrades,
+  markUndatedTrades,
+  dropUndatedCash,
 } from "./csv-utils.js";
 import { daysBetween } from "../engine/dates.js";
 
@@ -247,7 +248,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       });
     }
   }
-  dateUndatedTrades("Flatex", trades, [], "Buchtag");
+  markUndatedTrades(trades, "Buchtag");
   parserMessages.push(...tradeQuantityUnknownMessages("Flatex", trades));
 
   return {
@@ -377,7 +378,7 @@ function parseKontoumsaetze(lines: string[], delimiter: string): Statement {
           Math.abs(daysBetween(w.dateTime, c.dateTime)) <= 7,
       ),
   );
-  const parserMessages: TaxMessage[] = [];
+  const parserMessages: TaxMessage[] = dropUndatedCash("Flatex", cashTransactions, headers[dateCol] ?? "Buchtag");
   if (hasNetDividends) {
     parserMessages.push({
       id: "flatex.dividends.net_amounts",
