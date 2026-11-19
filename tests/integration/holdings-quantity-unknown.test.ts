@@ -11,7 +11,8 @@
  * valores». Every case runs through the real IBKR parser.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { localizeHint, localizeMessage, setLocale } from "../../src/i18n/index.js";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { buildModelo721Entries } from "../../src/generators/modelo721.js";
 import { checkModelo720Thresholds, findModelo720Omissions, generateModelo720 } from "../../src/generators/modelo720.js";
@@ -229,7 +230,7 @@ describe("#470 an IBKR position of 0 next to a value that is not 0", () => {
       ["BTC", "0", true],
       ["ACME", "0", false],
     ]);
-    expect((st.parserMessages ?? []).map((m) => m.id).sort()).toEqual(["parser.crypto_position_quantity_unknown", "parser.open_position_quantity_unknown"]);
+    expect((st.parserMessages ?? []).map((m) => m.id).sort()).toEqual(["parser.crypto_position_zero_with_value", "parser.open_position_zero_with_value"]);
   });
 
   it("the 720 writes no record with 0 shares and lists it for manual entry", () => {
@@ -394,5 +395,61 @@ describe("#470 an IBKR row whose positionValue is no number, whatever its quanti
     expect(isShortPosition({ quantity: "5", positionValue: "N/A" })).toBe(false);
     expect(isShortPosition({ quantity: "0", positionValue: "", quantityUnknown: true })).toBe(false);
     expect(holdsNothing({ quantity: "0", positionValue: "N/A" })).toBe(true);
+  });
+});
+
+describe("#470 the warning for an explicit 0 next to a value that is not 0", () => {
+  // The 0 is readable, so the "no readable quantity" wording was wrong for it:
+  // the file says 0 units but gives a value, so the quantity is unknown.
+  afterEach(async () => { await setLocale("es"); });
+
+  it("shares and crypto get their own wording, apart from an unreadable quantity, each naming its own holdings", () => {
+    const st = flex(stock("0", "70000") + stock("", "1000", "US0000000002") + coin("BTC", "BITCOIN", "0", "60000") + coin("ETH", "ETHER", "", "30000"));
+    const byId = new Map((st.parserMessages ?? []).map((m) => [m.id, m]));
+    expect([...byId.keys()].sort()).toEqual([
+      "parser.crypto_position_quantity_unknown",
+      "parser.crypto_position_zero_with_value",
+      "parser.open_position_quantity_unknown",
+      "parser.open_position_zero_with_value",
+    ]);
+    expect(byId.get("parser.open_position_zero_with_value")!.context).toEqual({ count: "1", holdings: "ACME (US0000000001)" });
+    expect(byId.get("parser.open_position_quantity_unknown")!.context).toEqual({ count: "1", holdings: "ACME (US0000000002)" });
+    expect(byId.get("parser.crypto_position_zero_with_value")!.context).toEqual({ count: "1", holdings: "BTC" });
+    expect(byId.get("parser.crypto_position_quantity_unknown")!.context).toEqual({ count: "1", holdings: "ETH" });
+
+    const shares = byId.get("parser.open_position_zero_with_value")!;
+    expect(shares.message).toBe("IBKR da 0 acciones para 1 posición(es) abierta(s) que sí tienen un valor distinto de 0: ACME (US0000000001).");
+    expect(shares.message).not.toContain("legible");
+    expect(shares.hint).toContain("se trata como desconocido");
+    expect(shares.hint).toContain("Modelo 720");
+    const crypto = byId.get("parser.crypto_position_zero_with_value")!;
+    expect(crypto.message).toBe("IBKR da 0 unidades para 1 posición(es) de criptomonedas que sí tienen un valor distinto de 0: BTC.");
+    expect(crypto.hint).toContain("Modelo 721");
+    expect(crypto.hint).not.toContain("720");
+  });
+
+  it("control: 0 units worth 0 and a readable quantity give no warning", () => {
+    expect(flex(stock("0", "0") + stock("700", "70000", "US0000000002") + coin("BTC", "BITCOIN", "0", "0")).parserMessages ?? []).toEqual([]);
+  });
+
+  it("the Spanish locale text is the parser's own, and every locale renders the holdings with the 0-with-a-value wording", async () => {
+    const st = flex(stock("0", "70000") + coin("BTC", "BITCOIN", "0", "60000"));
+    const msgs = (st.parserMessages ?? []).filter((m) => m.id.endsWith("_zero_with_value"));
+    expect(msgs).toHaveLength(2);
+    for (const m of msgs) {
+      expect(localizeMessage(m)).toBe(m.message);
+      expect(localizeHint(m)).toBe(m.hint);
+    }
+    const unreadable: Record<string, RegExp> = { en: /readable/i, ca: /llegible/, eu: /irakurgarri/, gl: /lexible/ };
+    for (const locale of ["en", "ca", "eu", "gl"] as const) {
+      await setLocale(locale);
+      for (const m of msgs) {
+        const text = localizeMessage(m);
+        expect(text).toContain(m.context!.holdings);
+        expect(text).toContain("0");
+        expect(text).not.toMatch(unreadable[locale]!);
+        expect(localizeHint(m)).not.toBe(m.hint);
+      }
+    }
   });
 });

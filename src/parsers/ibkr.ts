@@ -88,6 +88,9 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   const cashTransactions: ReturnType<typeof mapCashTransaction>[] = [];
   const corporateActions: ReturnType<typeof mapCorporateAction>[] = [];
   const openPositions: ReturnType<typeof mapOpenPosition>[] = [];
+  // Rows whose quantity is unknown because an explicit 0 sits next to a value
+  // that is not 0 (they get their own warning, #470).
+  const zeroWithValue = new Set<OpenPosition>();
   const securitiesInfo: ReturnType<typeof mapSecurityInfo>[] = [];
   const cashBalances: ReturnType<typeof mapCashBalance>[] = [];
   const optionExercises: OptionExercise[] = [];
@@ -131,7 +134,11 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
     const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
-    openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
+    for (const raw of dropLotRowsWithSummary(rawPositions)) {
+      const position = mapOpenPosition(raw);
+      openPositions.push(position);
+      if (isZeroWithValue(raw)) zeroWithValue.add(position);
+    }
     securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
     // An empty <Trades /> still says "no trades in this period", and an empty
@@ -236,12 +243,36 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   // An unreadable Open Positions quantity reads "0" (so nothing crashes) with
   // `quantityUnknown`: the 720, the D-6 and the 721 show its units as unknown
   // and ask for them, never 0 (#470). Say which holdings to check by hand, one
-  // warning for securities (720, D-6) and one for crypto (721).
+  // warning for securities (720, D-6) and one for crypto (721). An explicit 0
+  // next to a value that is not 0 is unknown too, but the file does give a
+  // number: it gets its own wording, so the warning never says it is unreadable.
   for (const crypto of [false, true]) {
-    const unreadable = openPositions.filter((p) => p.quantityUnknown && (p.assetCategory === "CRYPTO") === crypto);
+    const flagged = openPositions.filter((p) => p.quantityUnknown && (p.assetCategory === "CRYPTO") === crypto);
+    const holdingsOf = (rows: OpenPosition[]): string => rows.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    const zeros = flagged.filter((p) => zeroWithValue.has(p));
+    if (zeros.length > 0) {
+      const count = String(zeros.length);
+      const holdings = holdingsOf(zeros);
+      parserMessages.push(crypto
+        ? {
+            id: "parser.crypto_position_zero_with_value",
+            severity: "warning",
+            message: `IBKR da 0 unidades para ${count} posición(es) de criptomonedas que sí tienen un valor distinto de 0: ${holdings}.`,
+            hint: "Un 0 junto a un valor no es un número de unidades, así que se trata como desconocido, nunca como 0: el Modelo 721 muestra sus unidades como desconocidas, y su valor sí cuenta para el umbral. Toma las unidades del extracto de fin de año de IBKR.",
+            context: { count, holdings },
+          }
+        : {
+            id: "parser.open_position_zero_with_value",
+            severity: "warning",
+            message: `IBKR da 0 acciones para ${count} posición(es) abierta(s) que sí tienen un valor distinto de 0: ${holdings}.`,
+            hint: "Un 0 junto a un valor no es un número de acciones, así que se trata como desconocido, nunca como 0: el Modelo 720 y el D-6 las muestran sin número de valores y te piden que lo escribas a mano, y su valor sí cuenta para el umbral del 720. Toma el número del extracto de fin de año de IBKR.",
+            context: { count, holdings },
+          });
+    }
+    const unreadable = flagged.filter((p) => !zeroWithValue.has(p));
     if (unreadable.length === 0) continue;
     const count = String(unreadable.length);
-    const holdings = unreadable.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    const holdings = holdingsOf(unreadable);
     parserMessages.push(crypto
       ? {
           id: "parser.crypto_position_quantity_unknown",
@@ -782,6 +813,22 @@ function dropLotRowsWithSummary(rows: Record<string, string>[]): Record<string, 
   return rows.filter((raw) => !(level(raw) === "LOT" && summarized.has(id(raw))));
 }
 
+/** Whether an IBKR attribute is a plain decimal number. */
+function isNumberText(text: string | undefined): boolean {
+  return /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(text ?? "");
+}
+
+/**
+ * An Open Positions row whose quantity is an explicit 0 while its value is a
+ * number other than 0: the 0 contradicts the value, so it is no share count
+ * (#470). The parser flags it `quantityUnknown` and warns with its own wording.
+ */
+function isZeroWithValue(raw: Record<string, string>): boolean {
+  const rawQuantity = raw.position ?? raw.quantity;
+  return isNumberText(rawQuantity) && Number(rawQuantity) === 0
+    && isNumberText(raw.positionValue) && Number(raw.positionValue) !== 0;
+}
+
 function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // IBKR writes the held quantity as `position`; `quantity` is the older
   // hand-written form some files use. Keep a missing or unreadable quantity
@@ -790,10 +837,8 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
   // An explicit 0 next to a value that is not 0 contradicts itself: the 0 is
   // no share count, so it is unknown too, never 0 units in the 720/721 (#470).
-  const isNumber = (text: string | undefined): boolean => /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(text ?? "");
   const rawQuantity = raw.position ?? raw.quantity;
-  const quantityUnknown = !isNumber(rawQuantity)
-    || (Number(rawQuantity) === 0 && isNumber(raw.positionValue) && Number(raw.positionValue) !== 0);
+  const quantityUnknown = !isNumberText(rawQuantity) || isZeroWithValue(raw);
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",

@@ -499,6 +499,10 @@ práctico Renta 2025. The decisions, each pinned in
        `parser.open_position_quantity_unknown` names those holdings so the user
        enters the share count by hand; a crypto holding gets
        `parser.crypto_position_quantity_unknown` instead, which names the 721.
+       An explicit 0 next to a value gets its own wording
+       (`parser.open_position_zero_with_value`,
+       `parser.crypto_position_zero_with_value`): the file gives 0 units but a
+       value, so the quantity is treated as unknown.
        A list with no row of the key says zero, but only when
        every share row (not the exempt categories, not crypto) of every list in
        the upload has an ISIN: Open Positions may leave the ISIN field out
