@@ -659,6 +659,126 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
   });
 });
 
+describe("Saves in two panels before the first rerun lands (#472 review)", () => {
+  beforeEach(async () => {
+    await startApp();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const solInput = (p: HTMLElement) => p.querySelector<HTMLInputElement>(".crypto-rate-input")!;
+
+  // The second Save starts a newer run and the first run is dropped. The newer
+  // run redraws both panels, and both were saved and left as saved.
+  it("a crypto Save, then an anti-churning Save in the same tick: both redrawn panels show «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    expect(shown(cryptoLabel())).toBe(true);
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).not.toBe(crypto);
+    expect(shown(windowLabel())).toBe(true);
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)).toHaveLength(1);
+  });
+
+  it("an edit after the first Save takes that panel out: the second Save's run draws it without «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    solInput(crypto).value = "31000";
+    solInput(crypto).dispatchEvent(new Event("input", { bubbles: true }));
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(shown(windowLabel())).toBe(true);
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  it("a Clear after the first Save takes that panel out: the second Save's run draws it without «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    win.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await redrawn(windowPanel, win, "rerun");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("a crypto Save, then a Clear in the anti-churning panel before the run lands: the crypto panel keeps «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    win.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+    await redrawn(windowPanel, win, "rerun");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).not.toBe(crypto);
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(windowLabel().hidden).toBe(true);
+  });
+
+  it("a crypto Save, then a new upload before the run lands: the next results show no «Guardado»", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    // Back to the upload step, pick the file again (it forgets the report), and calculate.
+    document.getElementById("wizard-back")!.click();
+    document.getElementById("wizard-back")!.click();
+    await openResults();
+    await redrawn(cryptoPanel, crypto, "crypto panel after the new upload");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  it("a Save in another panel after the first run has landed: that run's «Guardado» is not drawn again", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await redrawn(cryptoPanel, crypto, "rerun after the crypto Save");
+    expect(shown(cryptoLabel())).toBe(true);
+    const win = windowPanel()!;
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun after the anti-churning Save");
+    expect(shown(windowLabel())).toBe(true);
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+
+  // A year change shows the panels of another year: a Save made before it does
+  // not label them, even when a Save in the old year's panel lands the run.
+  it("a year change between the two Saves: the first panel's «Guardado» does not come back", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
+    const other = [...yearSelect.options].map((o) => o.value).find((v) => v !== String(YEAR));
+    if (!other) throw new Error("the year select offers no other year");
+    const header = document.getElementById("results-year-header")!.innerHTML;
+    yearSelect.value = other;
+    yearSelect.dispatchEvent(new Event("change"));
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== header ? true : null), `results for ${other}`);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).not.toBe(crypto);
+    expect(cryptoLabel().hidden).toBe(true);
+  });
+});
+
 describe("crypto prices a Save cannot store (#472 review)", () => {
   // A price saved earlier for another swap: it shows in the "saved elsewhere" list.
   beforeEach(async () => {
