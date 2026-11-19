@@ -28,6 +28,26 @@ import { normalizeDate } from "./dates.js";
 /** The shape of an ISIN: 2 letters, 9 alphanumerics, 1 check digit. */
 export const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
+/**
+ * True when `isin` has the ISIN shape and its check digit is right (ISO 6166:
+ * letters become 10-35, then the Luhn test over every digit). For values a
+ * person types (the CLI flags); parsers and stored values only check the shape.
+ */
+export function isValidIsin(isin: string): boolean {
+  if (!ISIN_SHAPE.test(isin)) return false;
+  const digits = isin.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let d = Number(digits[digits.length - 1 - i]);
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
 /** Window length in calendar months: 2 (letter f) or 12 (letter g). */
 export type WindowMonths = 2 | 12;
 

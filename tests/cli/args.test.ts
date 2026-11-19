@@ -170,6 +170,26 @@ describe("--antichurning-1y / --antichurning-2m (#452)", () => {
     expect(res.json).toBeUndefined();
   }, 30_000);
 
+  it("a mistyped check digit stops the run, so a typo cannot leave the 1-year block in place", () => {
+    const res = convert(["--antichurning-2m", "GB0007980592"]);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("«GB0007980592» no es un ISIN válido");
+    expect(res.json).toBeUndefined();
+  }, 30_000);
+
+  it("a valid ISIN that is in no file gives a warning and changes nothing", () => {
+    const res = convert(["--antichurning-1y", "US0378331005"]);
+    expect(res.status).toBe(0);
+    expect(res.stderr).toContain("ningún valor de los ficheros tiene el ISIN US0378331005");
+    expect(Number(res.json!.resumen.perdidas_bloqueadas_antichurning)).toBe(0);
+  }, 30_000);
+
+  it("an ISIN that is in the file gives no such warning", () => {
+    const res = convert(["--antichurning-1y", ISIN]);
+    expect(res.status).toBe(0);
+    expect(res.stderr).not.toContain("ningún valor de los ficheros");
+  }, 30_000);
+
   it("the same ISIN in both flags stops the run", () => {
     const res = convert(["--antichurning-1y", ISIN, "--antichurning-2m", ISIN]);
     expect(res.status).toBe(1);

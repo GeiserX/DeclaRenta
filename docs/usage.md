@@ -58,7 +58,7 @@ Opciones adicionales del comando `convert`:
 - `--monodivisa` — Alias de `--fx-method monodivisa`. Con `--fx-method` de otro valor, la CLI sale con código 1.
 - `--prior-losses fichero.json` — Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF). El formato está en [Compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas).
 - `--antichurning-1y ISIN...` — Aplica a esos valores el plazo anti-churning de 1 año (art. 33.5.g LIRPF): no están admitidos en un mercado regulado del Espacio Económico Europeo ni en uno equivalente.
-- `--antichurning-2m ISIN...` — Aplica a esos valores el plazo de 2 meses (art. 33.5.f LIRPF). Los dos ganan sobre el mercado que muestra IBKR. Un ISIN mal escrito, o el mismo ISIN en los dos, sale con código 1. Ver [Plazo de 2 meses o de 1 año por valor](casillas.md#plazo-de-2-meses-o-de-1-ano-por-valor).
+- `--antichurning-2m ISIN...` — Aplica a esos valores el plazo de 2 meses (art. 33.5.f LIRPF). Los dos ganan sobre el mercado que muestra IBKR. Un ISIN mal escrito (forma o cifra de control), o el mismo ISIN en los dos, sale con código 1. Un ISIN que no está en ningún fichero da un aviso, porque no cambia nada. Ver [Plazo de 2 meses o de 1 año por valor](casillas.md#plazo-de-2-meses-o-de-1-ano-por-valor).
 
 ## Interfaz web
 

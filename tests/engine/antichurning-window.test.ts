@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import {
   coerceWindowOverrides,
   collectIsinWindows,
+  isValidIsin,
   listAntichurningSecurities,
   NON_EQUIVALENT_LISTINGS,
   OPEN_EQUIVALENT_LISTINGS,
@@ -126,6 +127,19 @@ describe("collectIsinWindows", () => {
     const w = collectIsinWindows([trade("LSE")], [], { [ISIN]: 2, "US0378331005": 12 });
     expect(w.get(ISIN)).toEqual({ listings: ["LSE"], user: 2 });
     expect(w.get("US0378331005")).toEqual({ listings: [], user: 12 });
+  });
+});
+
+describe("isValidIsin: shape and ISO 6166 check digit", () => {
+  it("accepts real ISINs", () => {
+    for (const isin of ["GB0007980591", "US0378331005", "ES0113900J37", "IE00B4L5Y983", "MYL1155OO000", "CA0679011084"]) {
+      expect(isValidIsin(isin), isin).toBe(true);
+    }
+  });
+  it("rejects a wrong check digit, a swapped pair, the wrong shape and lower case", () => {
+    for (const isin of ["GB0007980592", "US0378331006", "GB0007989051", "GB000798059", "gb0007980591", "", "GB000798059X"]) {
+      expect(isValidIsin(isin), isin).toBe(false);
+    }
   });
 });
 
