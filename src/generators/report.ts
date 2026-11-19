@@ -809,9 +809,10 @@ export function generateTaxReport(
   // What each uploaded file shows per account, for the one-purchase exception
   // (#453): the days it covers and its end-of-period holdings, the only proof
   // that no share was held at the window start. An unmerged statement is one
-  // file. A multi-account IBKR Flex has one period per account; its holdings
-  // rows go to their own account, and a row of no listed account stays apart
-  // (with no period it can prove nothing).
+  // file. An IBKR Flex has one period per account; each holdings row goes to
+  // the account it names (the parser gives a row without one its
+  // FlexStatement's account), and a row of no listed account stays apart (with
+  // no period it can prove nothing), even in a one-account file.
   const files = statement.holdingsBySource ?? [
     {
       accountId: statement.accountId,
@@ -832,9 +833,10 @@ export function generateTaxReport(
       fromDate: p.fromDate,
       toDate: p.toDate,
       hasTrades: p.hasTrades,
-      positions: periods.length === 1 ? src.openPositions : src.openPositions.filter((pos) => pos.accountId === p.accountId),
+      ...(p.hasPositions !== undefined ? { hasPositions: p.hasPositions } : {}),
+      positions: src.openPositions.filter((pos) => pos.accountId === p.accountId),
     }));
-    const stray = periods.length === 1 ? [] : src.openPositions.filter((pos) => !ids.has(pos.accountId));
+    const stray = src.openPositions.filter((pos) => !ids.has(pos.accountId));
     return stray.length === 0 ? own : [...own, { source: src.brokerSource, accountId: "\u0000unlisted", toDate: src.toDate, hasTrades: false, positions: stray }];
   });
   // The anti-churning window of each ISIN (#452): the user's value, else IBKR's
@@ -1342,7 +1344,7 @@ export function generateTaxReport(
         id: "report.antichurning_single_purchase_unverified",
         severity: "warning",
         message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
-        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrir sus operaciones sin huecos ni días repetidos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, las secciones Trades y Open Positions de la Flex Query, con el campo ISIN), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrir sus operaciones sin huecos ni días repetidos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, las secciones Trades y Open Positions de la Flex Query, con el campo ISIN), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Una operación de acciones sin ISIN en ese periodo, o unas acciones sin ISIN que aún tuvieras al empezarlo (por ejemplo, de Revolut), en cualquier cuenta, también lo impiden, porque pueden ser de ese valor. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
         context: ctx,
       });
     }

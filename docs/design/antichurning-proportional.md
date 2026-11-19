@@ -83,8 +83,9 @@ unit:
    buys, uncapped, because they are genuine replacement lots; last, the rest of
    the lot the sale itself transmits. A full exit with no later repurchase
    therefore absorbs `0`, while a full exit followed by a later repurchase still
-   absorbs the post-sale quantity. A buy on the sale day is skipped (no
-   intraday time). This runs for **every loss sale**, and for a
+   absorbs the post-sale quantity. A buy on the sale day counts as the newest
+   pre-sale purchase, for its own held shares (see "Pick order", step 3). This
+   runs for **every loss sale**, and for a
    **gain sale while losses are pending**: the definitive test applies
    «con independencia de que determinen ganancias o pérdidas patrimoniales» and
    uses «los mismos criterios» as the block (V3282-18), and a rebuy counted there
@@ -299,22 +300,31 @@ transmission that releases them.
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
   reward receipts are no repurchase (reward lots stay out of
   `washSaleTrades`), the less strict choice, which no source settles.
-- **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
-  This now also covers the definitive test: the DGT treats a buy on the sale day
-  as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the
-  engine releases on such a sale. In V0571-21 itself the engine still gets the
-  DGT's answer, because an unused pre-sale buy also absorbs that sale. The
-  held-shares count of the pre-sale buys skips the same-day buys too, so an
-  older lot can stand in for a same-day rebuy (V2481-20: the 14/04 lot stands
-  in for the 880 bought on 20/04, and counting same-day buys gives the same
-  figure).
+- **Sale-day buys (closed by the #454 follow-up).** A buy on the sale day
+  counts for its own held shares (V0571-21; see "Pick order", step 3). The
+  stand-in it replaced had three gaps, now pinned on the DGT's figures in
+  `tests/integration/antichurning-same-day-held-e2e.test.ts` (IBKR and DEGIRO,
+  all three FX methods). (a) The rebuy was missed when no unused older lot was
+  in the window: buy 100, sell them at a loss on 10/03 and buy 50 the same day
+  blocked 0 when the 100 were bought on 01/12/2024; now 50. With the older lot
+  used (buy 100 on 01/03 and 100 on 02/03, sell 100 on 03/03 at −100, then
+  sell 100 on 10/03 at −100 and buy 50), 10/03 blocked 0 and released 100
+  (fiscal −200); now 50 blocked, 50 released (−100). A sale with a same-day
+  rebuy counted as definitive (buy 100 on 01/12/2024, sell 50 on 05/03/2025 at
+  −50 rebought on 08/03, sell all 100 on 20/03 at +100 and buy 300): released
+  50 (fiscal 50); now 0 (fiscal 100). (b) The sale-day shares were used twice:
+  sell 25 more at a loss on 20/03 blocked 25; now deducted, releasing 25 of
+  the 10/03 loss. (c) The stood-in lot went after the post-sale buys: buy 100
+  on 01/03; on 10/03 sell 100 at −100 and buy 50; on 15/03 buy 100; on 20/03
+  sell 50 at −50 gave fiscal −100; now 10/03 takes its 50 and 50 of 15/03, and
+  20/03 blocks the other 50 of 15/03 (fiscal 0).
 - **V2481-20** (engine 1,751.73, DGT 1,767; `it.fails` on the DGT's figure).
   The 23/04 sales leave no shares, so no purchase before them counts (V3282-18
   A, situation 1): they take the 1,880 of 27/04 and 40 of the 1,900 of 06/05.
   Only 1,860 are left for the 1,880 shares sold on 29/04, so 20 are definitive
   and release 20 × 672/880 = 15.27. The DGT says only that the 06/05 purchase
   prevents the release and does not count the 40 shares. Neither the pick
-  order nor the same-day exclusion changes this figure.
+  order nor the sale-day rule changes this figure.
 - **Multiple sales, one repurchase**: budget consumed **chronologically**
   (earliest sale day first, gain sales with pending losses included), the most
   defensible reading (DGT lot-tracking is chronological; AEAT gives no explicit
@@ -378,12 +388,38 @@ práctico Renta 2025. The decisions, each pinned in
   applied, `report.antichurning_single_purchase_unverified` warns) otherwise:
   - The long position never goes negative (a sale of shares the upload never
     shows bought).
+  - No share trade without an ISIN (not the exempt categories, not crypto), of
+    any account, falls between the window start and the latest list date the
+    check uses, and none has an unreadable date. Such a trade sits in a
+    symbol-only bucket, so its buy is missing from the ISIN's purchase count
+    and its sale from the reconciliation. No identifier ties it to an ISIN in
+    every file (IBKR's `conid` is optional, other brokers have none), so none
+    is resolved: fail safe.
+  - No share holding without an ISIN may be open at the window start
+    (`unidentifiedHeldAt`): FIFO holds no ISIN-less share lot that entered
+    before it and was not sold before it (`buildUnidentifiedFifoHoldings`,
+    which also sees lots no BUY row opened, such as a scrip dividend keyed on
+    its bare symbol), and no ISIN-less share key ever sells more than the
+    upload shows bought (those shares were held before the files, perhaps
+    still at the window start). A trade with neither ISIN nor symbol before
+    the window has no holding to walk and also fails. Such a holding may be
+    this security bought before the window: a Flex without the Trades ISIN
+    column, or a Revolut file (Revolut gives no ISIN), would otherwise hide
+    it, because its account never trades the ISIN key. A holding closed
+    before the window does not stop the exception.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
-    1. it has a non-empty holdings list dated on or after the sale day; the
-       earliest such date counts (the IBKR parser keeps the SUMMARY row of a
-       holding and drops its LOT rows, so the Summary and Lot options together
-       do not count it twice);
+    1. it has a holdings list dated on or after the sale day; the earliest such
+       date counts (the IBKR parser keeps the SUMMARY row of a holding and
+       drops its LOT rows, so the Summary and Lot options together do not count
+       it twice). An empty list counts only when the file says it has the
+       section (`AccountPeriod.hasPositions`, an empty `<OpenPositions />`);
+       with no section there is no list. Each row goes to the account it
+       names, in a one-account file too; the IBKR parser gives a row without
+       an Account ID its FlexStatement's account (a Trade row too, so a Flex
+       without the Account ID column in either section still proves), and a
+       row of no listed account forms its own group with no period (so it
+       fails);
     2. its files with a trades section cover every day from the window start
        to that date exactly once: no gap (a hidden trade) and no day in two
        files (merge does not drop duplicated trades, so the same Flex uploaded
@@ -395,13 +431,18 @@ práctico Renta 2025. The decisions, each pinned in
     3. every row of the key in that list has a readable quantity. IBKR writes
        it as `position` (hand-written files may use `quantity`); the parser
        marks a missing or non-numeric one `quantityUnknown` instead of reading
-       its "0" default. A list with no row of the key says zero, but only when
+       its "0" default (the quantity stays "0" so the D-6 and the 720 do not
+       crash, and `parser.open_position_quantity_unknown` warns that those
+       holdings show 0 shares there and must be checked by hand). A list with no row of the key says zero, but only when
        every share row (not the exempt categories, not crypto) of every list in
        the upload has an ISIN: Open Positions may leave the ISIN field out
        while Trades has it, and then the row of the shares held is no row of
        the key;
     4. the long holding listed equals what that account's own trades from the
-       window start leave on that date, split-adjusted to that date.
+       window start leave on that date, split-adjusted to that date, and that
+       replay never ends a day below zero (`longPositionAt` answers null): a
+       sale of shares the account held at the window start, which a later buy
+       and a transfer out can hide in the end total and the merged position.
 
     Then the account held nothing at the window start: its list is that
     holding plus its trades since. Each account is checked on its own, in its
@@ -411,15 +452,18 @@ práctico Renta 2025. The decisions, each pinned in
     plus a transfer out of the upload, and no parser documents transfers. So a
     transfer between two uploaded accounts is "unverified", and so is a manual
     opening lot of the key dated on or after the window start (it comes from an
-    account the upload does not hold). An empty list cannot be told apart from
-    a file without the section, so it counts as no list. Only IBKR
+    account the upload does not hold). Only IBKR
     (OpenPositions) gives such lists today. Revolut's list is built by its
     parser from the file's own trades (`OpenPosition.fromTrades`), so it always
-    matches them and is ignored. A transactions CSV (DEGIRO, Trade Republic and
-    the rest) therefore always gets "unverified".
+    matches them and is ignored. An account in a transactions CSV (DEGIRO,
+    Trade Republic and the rest) that trades the key therefore always gets
+    "unverified"; Revolut trades never carry the ISIN key, so they count only
+    through the two ISIN-less rules above.
   Left invisible on purpose: a broker or account the user did not upload, and
   shares held at the window start that a transfer out of the upload (which the
-  IBKR parser does not read) hides before the list date. The info message
+  IBKR parser does not read) hides before the list date, also when they pass
+  through another uploaded account first: the reconciliation catches a
+  transfer only when it leaves a difference in some account. The info message
   `report.antichurning_single_purchase` names both whenever the exception is
   applied.
 - **Definitive test.** Gain lots with pending losses share the absorption, so
@@ -457,7 +501,29 @@ the order it follows is derived from those names:
    después»). V1760-23: the 10/05 sale finds the 06/05 shares used and the
    04/05 shares sold, so its repurchase is the 10/06 purchase, after it. The
    engine reads the held shares as FIFO leaves them: the newest `holdingAfter`
-   shares bought before the sale day.
+   shares, handed to the buy days before the sale, newest first.
+
+   **The sale day.** Brokers give no time of day, but FIFO sells the oldest
+   shares first, so the shares bought on the sale day are the newest ones held
+   after it. The walk therefore starts at the sale day: its buys take the first
+   part of `holdingAfter` and count for their own held shares, and a sale uses
+   them like any other purchase (after the older held days, before the
+   post-sale buys; last when they are only partly held, step 4). The DGT counts
+   a sale-day buy as a rebuy (V0571-21: the 7,000 bought on 11/08 make that
+   sale not definitive). Buy 100 on 01/03 and 40 on 05/03, sell 100 at a loss
+   and buy 50 on 10/03: 90 blocked (05/03 and the 50 of 10/03; situation 3
+   gives min(90 held, 140 bought) = 90 too). Taking the sale-day buys off the
+   count instead (proposed in the review of #454) gives 40 there, and V2481-20
+   1,088.08, V0571-21 −1,500. Crypto never reaches the sale day: its window
+   starts at the sale (art. 33.5.e), so its walk is empty. For the
+   one-purchase exception a sale-day buy is still a second purchase.
+
+   Up to the #454 follow-up the walk skipped the sale day while `holdingAfter`
+   counted its buys, so an older lot, even one FIFO sold, stood in for the
+   sale-day rebuy. That stand-in missed the rebuy when no unused older lot was
+   in the window, left the sale-day buy for a later sale to use again, and,
+   because the stood-in lot was only partly held, put it after the post-sale
+   buys. The cases are in "Known limitations" (closed).
 4. **The rest of the lot the sale transmits comes last, after the post-sale
    purchases.** V3282-18 gives the 20/02 sale «las 2.000 acciones adquiridas el
    15 de marzo», not the 2,000 left of the 15/02 lot it sells from; V1760-23
@@ -492,6 +558,12 @@ The repurchase dates now match the DGT's on V3282-18 (20/02 ← 15/03, 26/03 ←
 0.66.13 got the figures there with other purchases. V2481-20 keeps a gap of
 15.27 (see "Known limitations"). No committed fixture changed in any FX method:
 their few blocked losses have a post-sale rebuy and no pre-sale alternative.
+The sale-day rule (#454 follow-up) keeps every figure in this table; on
+V2481-20 the 20/04 sale now takes the 880 bought that day (was 14/04) and the
+22/04 sale the 905 of 21/04. It moves one fixture,
+`degiro-transactions-sample.csv` 2021: THETA buy 2 and sell 1 on 14/04 with
+nothing held before is one purchase the CSV cannot prove, so the #453
+fail-safe blocks 49.02 (24.51 with two owners) with the "unverified" warning.
 
 ## Migration note (issue #451)
 

@@ -472,9 +472,12 @@ describe("#452 follow-up: a Toronto loss sale keeps its open-point notice when a
     expect(row452(r, CA)).toMatchObject({ months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["PINK"], openDecision: "2016/2273", openListingExchanges: ["PINK", "TSE"] });
     expect(msg(r, ONE_YEAR)?.message).toContain(`(${CA}, IBKR: PINK)`);
     expect(msg(r, OPEN)?.message).toContain(`(${CA}, IBKR: PINK, TSE, 2016/2273)`);
-    // The March loss sale is 2 months either way, as at a3fe6ae: the second
-    // share bought on 02/01 is inside them and still held, so the −20 stays blocked.
-    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("20.00");
+    // The March loss sale is 2 months either way. The buy on 02/01 is the only
+    // purchase in them, nothing was held on 01/01, and the empty Open Positions
+    // at 31/12 reconciles with the trades, so the one-purchase exception (#453)
+    // applies and nothing is blocked.
+    expect(r.capitalGains.disposals.find((d) => d.sellDate.replace(/-/g, "") === "20250301")?.washSaleSinglePurchase).toBe("applied");
+    expect(r.capitalGains.blockedLosses.toFixed(2)).toBe("0.00");
   });
 
   it("the loss sale on NYSE instead: no open notice", () => {

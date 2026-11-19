@@ -160,6 +160,12 @@ export interface AccountStatement {
    * nothing; it can still give the holdings list.
    */
   hasTrades: boolean;
+  /**
+   * Whether the file has a holdings section for the account (IBKR's
+   * `<OpenPositions>`). With it, no rows is a list of nothing held at
+   * `toDate`; without it (or unknown), no rows is no list.
+   */
+  hasPositions?: boolean;
   /** The account's holdings at `toDate` (IBKR's OpenPositions). */
   positions: readonly {
     isin: string;
@@ -205,12 +211,13 @@ interface TieGroup {
  * Per homogeneous key the pass keeps (a) a FIFO budget of in-window repurchase
  * quantities and (b) a queue of pending losses, oldest first, counted in shares.
  * For each (key, sell day) in date order, over all of that day's disposals:
- *  1. ABSORB — take the in-window repurchases not yet used (a buy ON the sell
- *     date is the lot being sold, excluded): for loss lots always, for gain lots
- *     only while losses are pending (they need them for the definitive test).
- *     The DGT's order (#454): oldest first, so the purchases before the sale
- *     (each only for its shares still held after it) come before those after
- *     it, and the rest of the lot the sale transmits comes last.
+ *  1. ABSORB — take the in-window repurchases not yet used: for loss lots
+ *     always, for gain lots only while losses are pending (they need them for
+ *     the definitive test). The DGT's order (#454): oldest first, so the
+ *     purchases before the sale and on the sale day (each only for its shares
+ *     still held after it; the sale day's buys are the newest of them) come
+ *     before those after it, and the rest of the lot the sale transmits comes
+ *     last.
  *     The purchases of the 2 months BEFORE the sale do not count when they are
  *     one buy operation and no shares were held at the window's start (the
  *     one-purchase exception, DGT V3282-18); the purchases after it always do.
@@ -304,14 +311,27 @@ export function detectWashSales(
   // manual opening lots, which FIFO books after the day's reward lots), for
   // the rebought coins still held of a buy day.
   const cryptoBoughtByDay = new Map<string, { all: Decimal; manual: Decimal }>();
+  // Days of the share trades with no ISIN (a Flex without the Trades ISIN
+  // column, a broker that gives none): any of them may be any ISIN's security,
+  // so the one-purchase exception's evidence cannot count them (#453).
+  const unidentifiedTradeTimes: number[] = [];
+  // Their symbol-only keys, and the days of those with neither ISIN nor symbol:
+  // a holding of one open at the window start may be any ISIN's shares (#453).
+  const unidentifiedKeys = new Set<string>();
+  const keylessTradeTimes: number[] = [];
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
-    if (!key) continue;
     const qty = parseQty(trade.quantity);
     if (qty.lessThanOrEqualTo(0)) continue;
     const d = parseDate(trade.tradeDate);
     const time = d.getTime();
+    if (!trade.isin && trade.assetCategory !== "CRYPTO") {
+      unidentifiedTradeTimes.push(time);
+      if (key) unidentifiedKeys.add(key);
+      else keylessTradeTimes.push(time);
+    }
+    if (!key) continue;
 
     let positionEvents = positionEventsByAsset.get(key);
     if (!positionEvents) {
@@ -385,7 +405,7 @@ export function detectWashSales(
   }
   const splitsByAsset = buildSplitEvents(corporateActions, splitRatios);
   const positionSteps = buildPositionSteps(longEventsByAsset, splitsByAsset);
-  const filesProveNoShares = buildEvidenceCheck(longEventsByAsset, splitsByAsset, coverage.statements ?? []);
+  const filesProveNoShares = buildEvidenceCheck(longEventsByAsset, splitsByAsset, coverage.statements ?? [], unidentifiedTradeTimes);
 
   // Pending-loss queue per key, oldest first. A blocked loss does not belong to
   // one lot: any later definitive transmission of homogeneous shares releases it.
@@ -466,6 +486,21 @@ export function detectWashSales(
   // asks FIFO whether any lot of the key is still held after the sale day.
   const fifoHoldsAfter = buildFifoHoldings(disposals, remainingLots);
 
+  // Whether a share holding with no ISIN may be open at the window start: FIFO
+  // holds a lot of it the day before (any lot, also one no BUY row opened), or
+  // a sale of one took shares the upload never shows bought (so they were held
+  // before the files, maybe still at the window start). Such a holding may be
+  // any ISIN's shares bought before the window, so the files cannot prove "no
+  // shares at the window start" for any ISIN (#453). A holding closed before
+  // the window does not stop the exception.
+  const unidentifiedFifoHoldsAfter = buildUnidentifiedFifoHoldings(disposals, remainingLots);
+  const unidentifiedSoldUnbought = [...unidentifiedKeys].some((key) => positionSteps.get(key)?.everNegative === true);
+  const unidentifiedHeldAt = (windowStart: number): boolean =>
+    unidentifiedSoldUnbought ||
+    unidentifiedFifoHoldsAfter(windowStart - 1) ||
+    // A trade with neither ISIN nor symbol has no holding to walk.
+    keylessTradeTimes.some((time) => !(time >= windowStart));
+
   // The one-purchase exception (DGT V3282-18, AEAT Manual Renta 2025): the rule
   // on the purchases of the 2 months BEFORE a sale «no resulta de aplicación
   // cuando dentro del plazo de los dos meses anteriores a la transmisión sólo se
@@ -482,8 +517,12 @@ export function detectWashSales(
   //    shares from before the files);
   //  - for every account that trades or lists the key, a holdings list dated
   //    on or after the sale, reached without a gap in its files from the window
-  //    start, is exactly what its trades since the window start leave
-  //    (`buildEvidenceCheck`). A start date alone proves nothing.
+  //    start, is exactly what its trades since the window start leave, and
+  //    those trades never sell more than they bought before; and no share
+  //    trade without an ISIN falls in that span (`buildEvidenceCheck`);
+  //  - no share holding without an ISIN may be open at the window start
+  //    (`unidentifiedHeldAt`).
+  // A start date alone proves nothing.
   const singlePurchase = (key: string, windowStart: number, sellTime: number): "applied" | "unverified" | null => {
     const ops = buyOpsByAsset.get(key) ?? [];
     const from = firstIndexAtOrAfter(ops, windowStart);
@@ -496,7 +535,7 @@ export function detectWashSales(
     if (steps && before >= 0 && steps.steps[before]!.position.greaterThan(0)) return null;
     if (fifoHoldsAfter(key, windowStart - 1)) return null;
     if (!steps || steps.everNegative) return "unverified";
-    return filesProveNoShares(key, windowStart, sellTime) ? "applied" : "unverified";
+    return filesProveNoShares(key, windowStart, sellTime) && !unidentifiedHeldAt(windowStart) ? "applied" : "unverified";
   };
 
   // One unit per (key, sell day): FIFO splits a sale into one disposal per lot,
@@ -600,11 +639,10 @@ export function detectWashSales(
       const windowStart = looksBack(first.assetCategory) ? addMonths(sellDate, -months).getTime() : sellTime;
       const windowEnd = addMonths(sellDate, months).getTime();
 
-      // Consume repurchase quantity from in-window buys, excluding any buy on the
-      // sell day (brokers give no intraday time; see the design doc). Absorbed ≤
-      // `need`. The DGT's order (#454) is the oldest purchase no earlier sale has
-      // used: the purchases of the 2 months before the sale first, oldest first,
-      // then those of the 2 months after it, oldest first. V3282-18 gives the
+      // Consume repurchase quantity from in-window buys. Absorbed ≤ `need`. The
+      // DGT's order (#454) is the oldest purchase no earlier sale has used: the
+      // purchases of the 2 months before the sale and of the sale day first,
+      // oldest first, then those of the 2 months after it, oldest first. V3282-18 gives the
       // 26/03 sale the 20/03 purchase, not 24/03 or the later 28/03; V0248-18
       // gives the 25/04 sale 3,000 of the 5,000 of 18/03, not the 3,000 of 31/03.
       //
@@ -613,7 +651,13 @@ export function detectWashSales(
       // day that fully exits the position deducts the loss in full (situation 1).
       // FIFO keeps the newest shares: the `holdingAfter` shares left are the
       // newest bought, so walking the pre-sale buy days newest first, each day holds
-      // what is left of that count. A buy only partly held is the lot the sale
+      // what is left of that count. The sale day's own buys are part of the
+      // count and of the walk, as its newest day: FIFO sells the oldest shares
+      // first, so the shares bought on the sale day are the newest ones held
+      // after it, whatever the time of day. The DGT counts such a buy as a
+      // rebuy (V0571-21, 11/08/2020: the 7,000 bought on the sale day make it
+      // not definitive), for its own held shares, and it is used up like any
+      // other purchase. A buy only partly held is the lot the sale
       // itself transmits. It still counts (situation 3, and the one-purchase
       // exception exists because it would), but last, after the post-sale buys:
       // V3282-18 gives the 20/02 sale the 15/03 purchase, not the rest of the
@@ -621,12 +665,23 @@ export function detectWashSales(
       // 06/05 purchase, not the rest of the 04/05 lot.
       let remainingToAbsorb = need;
       // buyEvents is sorted by time, so each pass walks only its slice of the
-      // window, found by binary search: [windowStart, sellTime) for pre-sale buys,
-      // (sellTime, windowEnd] for post-sale ones. Same-day buys are outside both.
-      // The held buys are the newest ones, so the walk stops where the count
-      // runs out and the pre-sale passes start there (`preFrom`).
-      const preTo = firstIndexAtOrAfter(buyEvents, sellTime);
+      // window, found by binary search: [windowStart, sellTime] for the buys up
+      // to the sale day included, (sellTime, windowEnd] for post-sale ones. The
+      // held buys are the newest ones, so the walk stops where the count runs
+      // out and the pre-sale passes start there (`preFrom`).
+      //
+      // Crypto (#457) looks forward only: its window starts at the sale, and a
+      // buy on the sale day is no reacquisition «dentro del año siguiente a la
+      // fecha de dicha transmisión», so its walk stays empty.
+      //
+      // Before #454's follow-up the walk stopped before the sale day and the
+      // day's held shares were credited to an older lot. That missed the rebuy
+      // when no older lot was in the window or an earlier sale had used it,
+      // left the sale-day shares for a later sale to use again, and put the
+      // stood-in lot after the post-sale buys (step 4), so the sale took a later
+      // purchase the DGT leaves for the next sale.
       const windowFrom = firstIndexAtOrAfter(buyEvents, windowStart);
+      const preTo = windowStart < sellTime ? firstIndexAfter(buyEvents, sellTime) : windowFrom;
       // The buys of one day are one purchase here: brokers give no time of day,
       // and some list one order as several fills (DEGIRO, one row per fill with
       // one «ID Orden»). So the held count, and whether a buy is the lot the
@@ -1225,6 +1280,38 @@ function buildPositionSteps(
   return out;
 }
 
+/**
+ * Whether FIFO holds a share lot with no ISIN after day `t` (crypto and the
+ * exempt categories aside): a lot still open that entered on or before `t`, or
+ * one sold after `t` that entered on or before it. This also sees lots no BUY
+ * row opened (a scrip dividend keyed on its bare symbol), whatever FIFO's key.
+ * A lot's category is the prefix of FIFO's key; a key with none (a scrip or
+ * merger lot) counts as shares.
+ */
+function buildUnidentifiedFifoHoldings(
+  disposals: readonly FifoDisposal[],
+  remainingLots: ReadonlyMap<string, readonly Lot[]> | undefined,
+): (time: number) => boolean {
+  const timeOf = (date: string): number => {
+    const t = parseDate(date).getTime();
+    // An unreadable entry date counts as held since forever (fail safe).
+    return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+  };
+  let firstOpen = Number.POSITIVE_INFINITY;
+  for (const [mapKey, lots] of remainingLots ?? []) {
+    const category = mapKey.includes(":") ? mapKey.split(":")[0]! : "STK";
+    if (category === "CRYPTO" || WASH_SALE_EXEMPT.has(category)) continue;
+    for (const lot of lots) {
+      if (lot.isin || lot.isShort || lot.quantity.lessThanOrEqualTo(0)) continue;
+      firstOpen = Math.min(firstOpen, timeOf(lot.entryDate ?? lot.acquireDate));
+    }
+  }
+  const spans = disposals
+    .filter((d) => !d.isin && !d.isShort && d.assetCategory !== "CRYPTO" && !WASH_SALE_EXEMPT.has(d.assetCategory))
+    .map((d) => ({ acquire: timeOf(d.entryDate ?? d.acquireDate), sell: parseDate(d.sellDate).getTime() }));
+  return (time) => firstOpen <= time || spans.some((span) => span.acquire <= time && time < span.sell);
+}
+
 /** The account a trade or a holdings row belongs to: its broker and account id. */
 function accountKey(source: string | undefined, accountId: string | undefined): string {
   return `${source ?? ""}\u0000${accountId ?? ""}`;
@@ -1250,7 +1337,15 @@ const DAY_MS = 86_400_000;
  *     the key under another name (options, the other exempt categories and
  *     crypto aside; only an ISIN key has the 2-month window);
  *  4. the long holding listed equals what the account's own trades from the
- *     window start to that date leave, split-adjusted to that date's units.
+ *     window start to that date leave, split-adjusted to that date's units,
+ *     and no day of those trades ends with more sold than bought since the
+ *     window start (a sale of shares held at the window start, hidden in the
+ *     end total by a later buy);
+ *  5. no share trade without an ISIN, of any account, falls between the
+ *     window start and the latest of those list dates (or has no readable
+ *     date): it may be this security, a purchase or a sale the ISIN's trades
+ *     miss. No identifier ties such a trade to an ISIN in every file, so
+ *     none is resolved.
  * Then the account held nothing at the window start: its list is that holding
  * plus its trades since. Each account is checked on its own, in its own list's
  * share units, and nothing is offset between accounts: a difference at one
@@ -1258,17 +1353,25 @@ const DAY_MS = 86_400_000;
  * another account shows the opposite one. So a transfer between two uploaded
  * accounts is unverified too (no parser documents transfers), and so is a
  * manual opening lot of the key dated on or after the window start (it belongs
- * to no uploaded account). A list holding nothing at all cannot be told apart
- * from a file without the section, and rows a parser built from the file's own
- * trades (Revolut) always match them: neither is a list. Not visible to any
- * check: shares held at the window start that leave the upload by a transfer
- * before the list date (the "applied" message says so).
+ * to no uploaded account). A list holding nothing at all is a list only when
+ * the file says it has the section (`hasPositions`, an empty IBKR
+ * `<OpenPositions />`); rows a parser built from the file's own trades
+ * (Revolut) always match them and are no list. Not visible to any check:
+ * shares held at the window start that a transfer moves out of the upload
+ * before the list date, or between uploaded accounts and out again (the
+ * "applied" message says so).
  */
 function buildEvidenceCheck(
   longEventsByAsset: ReadonlyMap<string, readonly LongEvent[]>,
   splitsByAsset: ReadonlyMap<string, readonly SplitEvent[]>,
   statements: readonly AccountStatement[],
+  unidentifiedTradeTimes: readonly number[],
 ): (key: string, windowStart: number, sellTime: number) => boolean {
+  const unidentified = unidentifiedTradeTimes
+    .filter((time) => Number.isFinite(time))
+    .sort((a, b) => a - b)
+    .map((time) => ({ time }));
+  const unidentifiedUndated = unidentified.length < unidentifiedTradeTimes.length;
   const dayTime = (date: string | undefined): number =>
     date ? parseDate(normalizeDate(date.trim()).slice(0, 10)).getTime() : Number.NaN;
   /** Per account: the periods its files cover, and its lists by date (null quantity = unreadable). */
@@ -1288,7 +1391,8 @@ function buildEvidenceCheck(
     const to = dayTime(st.toDate);
     if (st.hasTrades && Number.isFinite(from) && Number.isFinite(to) && from <= to) account.periods.push([from, to]);
     const rows = st.positions.filter((pos) => !pos.fromTrades);
-    if (rows.length === 0) continue;
+    // No rows is a list of nothing only when the file has the section.
+    if (rows.length === 0 && (st.positions.length > 0 || !st.hasPositions)) continue;
     const list = new Map<string, Decimal | null>();
     for (const pos of rows) {
       const key = homogeneousKey(pos.isin, pos.symbol, pos.assetCategory);
@@ -1324,6 +1428,7 @@ function buildEvidenceCheck(
       else if (ev.time >= windowStart) return false;
     }
     if (relevant.size === 0) return false;
+    let lastListTime = windowStart;
     for (const id of relevant) {
       const account = accounts.get(id);
       if (!account) return false;
@@ -1340,9 +1445,12 @@ function buildEvidenceCheck(
       }
       // A short position is no share held.
       const held = Decimal.max(listed!, 0);
-      if (!held.minus(longPositionAt(events, splits, id, windowStart, listTime)).abs().lessThan("1e-9")) return false;
+      const explained = longPositionAt(events, splits, id, windowStart, listTime);
+      if (explained === null || !held.minus(explained).abs().lessThan("1e-9")) return false;
+      lastListTime = Math.max(lastListTime, listTime);
     }
-    return true;
+    // A share trade with no ISIN in that span may be this security.
+    return !unidentifiedUndated && firstIndexAtOrAfter(unidentified, windowStart) === firstIndexAfter(unidentified, lastListTime);
   };
 }
 
@@ -1373,14 +1481,18 @@ function readQuantity(quantity: string): Decimal | null {
   }
 }
 
-/** The split-adjusted long position one account's events from `from` leave at the end of `until`, in that day's units. */
+/**
+ * The split-adjusted long position one account's events from `from` leave at
+ * the end of `until`, in that day's units, or null when it ends a day below
+ * zero (a sale of shares held before `from`). Same-day trades have no order.
+ */
 function longPositionAt(
   events: readonly LongEvent[],
   splits: readonly SplitEvent[],
   group: string,
   from: number,
   until: number,
-): Decimal {
+): Decimal | null {
   let position = new Decimal(0);
   let nextSplit = 0;
   const applySplitsUpTo = (time: number): void => {
@@ -1389,10 +1501,11 @@ function longPositionAt(
       nextSplit++;
     }
   };
-  for (const ev of events) {
-    if (!(ev.time >= from && ev.time <= until) || ev.group !== group) continue;
-    applySplitsUpTo(ev.time);
-    position = position.plus(ev.qty);
+  const own = events.filter((ev) => ev.time >= from && ev.time <= until && ev.group === group);
+  for (let i = 0; i < own.length; i++) {
+    applySplitsUpTo(own[i]!.time);
+    position = position.plus(own[i]!.qty);
+    if (own[i + 1]?.time !== own[i]!.time && position.isNegative()) return null;
   }
   applySplitsUpTo(until);
   return position;

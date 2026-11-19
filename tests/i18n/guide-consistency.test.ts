@@ -308,7 +308,14 @@ describe("Renta Web guide consistency", () => {
       eu: /berrikusi dagoeneko aurkeztu dituzun ondorengo urteak ere[^.]*zuzendu urte hori ere/,
       gl: /revisa tamén os anos posteriores que xa presentaches[^.]*corrixe tamén ese ano para quitala/,
     };
-    const shortCover = { es: /posición corta/, en: /short position/, ca: /posició curta/, eu: /posizio motz/, gl: /posición curta/ };
+    // Only a buy that ONLY covers a short is out: one that also leaves long shares is a repurchase.
+    const shortCover = {
+      es: /salvo la que solo cierra una posición corta/,
+      en: /except one that only closes a short position/,
+      ca: /excepte la que només tanca una posició curta/,
+      eu: /posizio motz bat soilik ixten duena izan ezik/,
+      gl: /agás a que só pecha unha posición curta/,
+    };
     const alwaysBlock = /bloquean siempre|always block|sempre bloquegen|beti blokeatzen|bloquean sempre/;
     for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
       const text = locale["guide_rw.blocked_losses_hint"];
@@ -483,5 +490,33 @@ describe("Renta Web guide consistency", () => {
     }
     const rollDocs = /pasa a las unidades nuevas|passes its claims to the new coins|rolledOf/;
     for (const [name, text] of Object.entries(files)) expect(text, name).not.toMatch(rollDocs);
+  });
+
+  it("puts each migration note under a warning box whose version title covers it, so a user who filed with a covered version reads it (#454)", () => {
+    // A user skips a box titled «0.66.5 o anterior» when they filed with 0.66.6
+    // to 0.66.13. The #453, #454 pick-order and same-day notes concern every
+    // version up to 0.66.13, so they must sit under a box titled 0.66.13 or later.
+    const casillas = readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8");
+    const patch = (v: string) => Number(v.split(".")[2]);
+    // Each box: its title line, then its indented (or blank) body lines.
+    const boxes = [...casillas.matchAll(/^!!! warning "([^"]*)"\n((?:(?: {4}.*)?\n)*)/gm)]
+      .map((m) => ({ title: m[1] ?? "", body: m[2] ?? "" }))
+      .filter((b) => /versión 0\.66\.\d+ o anterior/.test(b.title));
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    for (const { title, body } of boxes) {
+      const covered = patch(/0\.66\.\d+/.exec(title)?.[0] ?? "0.0.0");
+      const named = [...body.matchAll(/0\.66\.\d+/g)].map((m) => patch(m[0]));
+      // No paragraph talks about a version the title does not cover.
+      for (const v of named) expect(v, title).toBeLessThanOrEqual(covered);
+      // When the box also names an older version, "Esas versiones" no longer says which.
+      if (named.some((v) => v < covered)) expect(body, title).not.toMatch(/Esas versiones/);
+    }
+    // The #451 note concerns 0.66.5 and earlier; the #453 and #454 notes concern
+    // every version up to 0.66.13, so they sit in the box titled 0.66.13.
+    const v5 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.5 o anterior");
+    const v13 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.13 o anterior");
+    expect(v5?.body).toContain("#451");
+    for (const issue of ["#453", "#454"]) expect(v13?.body).toContain(issue);
+    expect(v13?.body).toMatch(/mismo día de la venta \(issue #454\)[^]*V0571-21/);
   });
 });

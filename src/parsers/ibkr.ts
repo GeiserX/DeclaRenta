@@ -106,7 +106,12 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
   let cancelledUnmatchedDropped = 0;
 
   for (const stmt of statements) {
-    const rawTrades = ensureArray(stmt.Trades?.Trade) as Record<string, string>[];
+    // A row without an Account ID (the column is optional in Trades and in
+    // Open Positions) belongs to the FlexStatement it is in; an explicit one
+    // is kept, so a mismatch shows.
+    const stmtAccount = (stmt.accountId as string | undefined) ?? "";
+    const withAccount = (raw: Record<string, string>): Record<string, string> => (raw.accountId ? raw : { ...raw, accountId: stmtAccount });
+    const rawTrades = (ensureArray(stmt.Trades?.Trade) as Record<string, string>[]).map(withAccount);
     const filteredRawTrades = filterDuplicateLevelOfDetail(rawTrades);
     orderLevelDetailDuplicatesSkipped += rawTrades.length - filteredRawTrades.length;
     const { kept, pairedCount, unmatchedCount } = dropCancelledExecutions(filteredRawTrades);
@@ -122,11 +127,19 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     cashSummaryDuplicatesSkipped += rawCash.length - detailCash.length;
     cashTransactions.push(...detailCash.map(mapCashTransaction));
     corporateActions.push(...ensureArray(stmt.CorporateActions?.CorporateAction).map(mapCorporateAction));
-    openPositions.push(...dropLotRowsWithSummary(ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(mapOpenPosition));
+    const rawPositions = (ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(withAccount);
+    openPositions.push(...dropLotRowsWithSummary(rawPositions).map(mapOpenPosition));
     securitiesInfo.push(...(ensureArray(stmt.SecuritiesInfo?.SecurityInfo) as Record<string, string>[]).map((raw) => mapSecurityInfo(raw, stmt.toDate as string | undefined)));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
-    // An empty <Trades /> still says "no trades in this period"; no element says nothing.
-    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "", hasTrades: stmt.Trades !== undefined && stmt.Trades !== null });
+    // An empty <Trades /> still says "no trades in this period", and an empty
+    // <OpenPositions /> "nothing held at its end"; no element says nothing.
+    accountPeriods.push({
+      accountId: stmtAccount,
+      fromDate: period.fromDate ?? "",
+      toDate: period.toDate ?? "",
+      hasTrades: stmt.Trades !== undefined && stmt.Trades !== null,
+      hasPositions: stmt.OpenPositions !== undefined && stmt.OpenPositions !== null,
+    });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }
@@ -204,6 +217,22 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
       message: `Se omitieron ${cancelledUnmatchedDropped} anulaciones de IBKR sin la operación original en este archivo.`,
       hint: "La operación cancelada queda fuera del periodo de este Flex Query. Si la cargas desde otro archivo, se seguirá contando como real: exporta un periodo que incluya la operación y su anulación en el mismo archivo.",
       context: { count: String(cancelledUnmatchedDropped) },
+    });
+  }
+
+  // An unreadable Open Positions quantity reads "0" (so nothing crashes), and
+  // the D-6 and the 720 then show a holding whose value is known with 0
+  // shares, or leave it out: say which holdings to check by hand.
+  const unreadablePositions = openPositions.filter((p) => p.quantityUnknown);
+  if (unreadablePositions.length > 0) {
+    const count = String(unreadablePositions.length);
+    const holdings = unreadablePositions.map((p) => (p.isin ? `${p.symbol} (${p.isin})` : p.symbol)).join(", ");
+    parserMessages.push({
+      id: "parser.open_position_quantity_unknown",
+      severity: "warning",
+      message: `IBKR no da un número de acciones legible para ${count} posición(es) abierta(s): ${holdings}.`,
+      hint: "DeclaRenta las cuenta con 0 acciones: el Modelo 720 las incluye con su valor, pero con 0 en «Número de valores», y el D-6 no las incluye. Revisa a mano esas posiciones en el 720 y el D-6, o comprueba que la sección Open Positions de la Flex Query incluye la cantidad y vuelve a exportarla.",
+      context: { count, holdings },
     });
   }
 
@@ -666,7 +695,8 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // IBKR writes the held quantity as `position`; `quantity` is the older
   // hand-written form some files use. Keep a missing or unreadable quantity
   // apart from an explicit zero: the "0" default would prove "no shares held"
-  // to the one-purchase exception (#453).
+  // to the one-purchase exception (#453). An unreadable one still reads "0"
+  // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
   const rawQuantity = raw.position ?? raw.quantity;
   const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
   return {
@@ -676,7 +706,7 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
     assetCategory: (raw.assetCategory ?? "STK") as OpenPosition["assetCategory"],
-    quantity: rawQuantity ?? "0",
+    quantity: quantityUnknown || rawQuantity === undefined ? "0" : rawQuantity,
     costBasisMoney: raw.costBasisMoney ?? "0",
     costBasisPrice: raw.costBasisPrice ?? "0",
     markPrice: raw.markPrice ?? "0",
