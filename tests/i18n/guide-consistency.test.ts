@@ -156,17 +156,22 @@ describe("Renta Web guide consistency", () => {
       expect(text, name).not.toMatch(/solo OTC, cripto|la mayoría de criptomonedas\)|most crypto/);
     }
     expect(docs.casillas).toMatch(/mercado de un tercer país declarado equivalente por la Comisión Europea/);
-    // Only the US, Australian and Hong Kong decisions are in force, so the #452
-    // gap also covers a share listed only in London, Switzerland or Toronto.
+    // The MiFID II decisions (US, Australia, Hong Kong) and the EMIR ones
+    // (Toronto, Tokyo, Singapore: open for shares, so 2 months), and the
+    // per-ISIN window that replaced the old "2 months for every ISIN" gap (#452).
     expect(docs.casillas).toMatch(/2017\/2318[^.]*2017\/2319|2017\/2319[^.]*2017\/2318/);
-    expect(docs.casillas).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(docs.casillas).toMatch(/2016\/2273[^.]*2016\/2271[^.]*2016\/2270/);
+    expect(docs.casillas).toMatch(/### Plazo de 2 meses o de 1 año por valor/);
+    expect(docs.casillas).toMatch(/--antichurning-1y[\s\S]*--antichurning-2m/);
+    expect(docs.casillas).toMatch(/Londres \(`LSE`\) para las ventas desde el 01\/01\/2021/);
     expect(docs.casillas).toMatch(/33\.5\.e[^.]*#457/);
     expect(docs.modelos).toMatch(/Londres/);
-    expect(docs.design).toMatch(/admitted\s+to\s+neither\s+kind\s+of\s+market[\s\S]{0,200}London\s+Stock\s+Exchange[\s\S]{0,200}#452/);
+    expect(docs.design).toMatch(/Window per ISIN \(#452\)[\s\S]{0,1200}2016\/2273[\s\S]{0,1500}NON_EQUIVALENT_LISTINGS/);
     expect(docs.design).toMatch(/33\.5\.e[\s\S]{0,300}#457/);
     const claude = readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8");
     expect(claude).toMatch(/2017\/2318/);
-    expect(claude).toMatch(/London Stock Exchange[^\n]*#452/);
+    expect(claude).toMatch(/London Stock Exchange from 2021[^\n]*#452/);
+    expect(claude).toMatch(/never list Toronto or Tokyo as settled 1-year markets/);
     expect(claude).toMatch(/33\.5\.e[^\n]*#457/);
     expect(claude).not.toMatch(/or non-EU listing|on an EU regulated or equivalent|on an EU regulated market, or|most crypto/);
     // The engine's own header no longer reads letter f as "MiFID venues" only.
@@ -177,24 +182,38 @@ describe("Renta Web guide consistency", () => {
     expect(engine).toMatch(/#457/);
   });
 
-  it("warns wherever it states the 1-year window that the engine applies 2 months to every ISIN, so a London-only share needs a manual check (#452)", () => {
-    // The guide and the window warning describe the law; without this note a
-    // user reads the engine's 2-month result as the legal 1-year window.
+  it("tells the user how DeclaRenta picks the 1-year window per security and how to set it by hand, never listing Toronto or Tokyo as 1 year (#452)", () => {
+    // The guide and the window warning describe the law and the engine: 1 year
+    // when IBKR shows only a market with no equivalence (London from 2021) or
+    // the user marks it; Toronto, Tokyo and Singapore have an EMIR equivalence
+    // decision and stay at 2 months. The old note sent users to a manual check.
+    const flag = "--antichurning-1y";
     for (const [name, locale] of Object.entries(locales)) {
       for (const key of ["guide_rw.blocked_losses_hint", "report.antichurning_window_past_data.hint"] as const) {
-        expect(locale[key], `${name} ${key}`).toMatch(/SIX[^.]*Toronto[^.]*OTC Markets/);
-        expect(locale[key], `${name} ${key}`).toMatch(/#452/);
+        const text = locale[key];
+        expect(text, `${name} ${key}`).toContain(flag);
+        expect(text, `${name} ${key}`).toMatch(/2021/);
+        expect(text, `${name} ${key}`).toMatch(/SIX[^.]*OTC Markets/);
+        expect(text, `${name} ${key}`).not.toMatch(/Toronto[^.]*OTC Markets|OTC Markets[^.]*Toronto|Tok(io|yo|ion)[^.]*OTC Markets/);
+        expect(text, `${name} ${key}`).not.toMatch(/#452/);
       }
+      // The guide names Toronto, Tokyo and Singapore as equivalent (2 months), open for shares.
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(/Toronto[^.]*Singap(ur|ore)[^.]*(DGT|DGTren)/);
     }
     // report.ts writes the Spanish hint itself; it must say the same as es.ts.
     const source = readFileSync(new URL("../../src/generators/report.ts", import.meta.url), "utf8");
-    const note = "Ese plazo usa 2 meses: si el valor solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, la ley da 1 año";
+    const note = "Ese plazo es de 1 año en los valores a los que DeclaRenta aplica 1 año (porque IBKR solo los muestra en un mercado sin equivalencia, como Londres desde 2021, SIX u OTC Markets, o porque tú los marcaste) y de 2 meses en los demás valores con ISIN.";
     expect(source).toContain(note);
     expect(es["report.antichurning_window_past_data.hint"]).toContain(note);
+    expect(source).not.toMatch(/Toronto, Tokio u OTC Markets/);
     for (const p of ["modelos-fiscales.md", "index.md"]) {
       const text = readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
-      expect(text, p).toMatch(/2 meses a todo valor con ISIN[^\n]*Tokio u OTC Markets[^\n]*#452/);
+      expect(text, p).toMatch(/Plazo anti-churning por valor[^\n]*casillas\.md#plazo-de-2-meses-o-de-1-ano-por-valor/);
+      expect(text, p).not.toMatch(/Toronto, Tokio u OTC Markets|2 meses a todo valor con ISIN: si el tuyo/);
     }
+    // The engine's comments no longer list Toronto as a 1-year market.
+    const engine = readFileSync(new URL("../../src/engine/wash-sale.ts", import.meta.url), "utf8");
+    expect(engine).not.toMatch(/SIX or Toronto|\(London, SIX, Toronto\)/);
   });
 
   it("corrects a filed year with an «autoliquidación rectificativa» from 2024 on, and keeps complementaria for 2023 and earlier (#455 follow-up)", () => {
@@ -252,7 +271,9 @@ describe("Renta Web guide consistency", () => {
     // engine's ISIN heuristic deviates there (#452); crypto is letter e (#457).
     expect(faqAnswer).toMatch(/1 año si el valor no está admitido a negociación ni en un mercado regulado del Espacio Económico Europeo ni en un mercado de un tercer país declarado equivalente por la Comisión Europea, art\. 33\.5\.g/);
     expect(faqAnswer).toMatch(/NYSE y Nasdaq[^.]*consulta DGT V0778-25/);
-    expect(faqAnswer).toMatch(/OTC Markets, la Bolsa de Londres, SIX o Toronto[^.]*#452/);
+    expect(faqAnswer).toMatch(/Plazo anti-churning por valor[^.]*--antichurning-1y/);
+    expect(faqAnswer).toMatch(/Toronto, Tokio y Singapur tienen una decisión de equivalencia y usan 2 meses/);
+    expect(faqAnswer).not.toMatch(/SIX o Toronto/);
     expect(faqAnswer).toMatch(/33\.5\.e[^.]*#457/);
     expect(faqAnswer).not.toMatch(/si el valor no cotiza/);
     // A window still open at filing time is corrected with a rectificativa.
@@ -469,5 +490,33 @@ describe("Renta Web guide consistency", () => {
     }
     const rollDocs = /pasa a las unidades nuevas|passes its claims to the new coins|rolledOf/;
     for (const [name, text] of Object.entries(files)) expect(text, name).not.toMatch(rollDocs);
+  });
+
+  it("puts each migration note under a warning box whose version title covers it, so a user who filed with a covered version reads it (#454)", () => {
+    // A user skips a box titled «0.66.5 o anterior» when they filed with 0.66.6
+    // to 0.66.13. The #453, #454 pick-order and same-day notes concern every
+    // version up to 0.66.13, so they must sit under a box titled 0.66.13 or later.
+    const casillas = readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8");
+    const patch = (v: string) => Number(v.split(".")[2]);
+    // Each box: its title line, then its indented (or blank) body lines.
+    const boxes = [...casillas.matchAll(/^!!! warning "([^"]*)"\n((?:(?: {4}.*)?\n)*)/gm)]
+      .map((m) => ({ title: m[1] ?? "", body: m[2] ?? "" }))
+      .filter((b) => /versión 0\.66\.\d+ o anterior/.test(b.title));
+    expect(boxes.length).toBeGreaterThanOrEqual(2);
+    for (const { title, body } of boxes) {
+      const covered = patch(/0\.66\.\d+/.exec(title)?.[0] ?? "0.0.0");
+      const named = [...body.matchAll(/0\.66\.\d+/g)].map((m) => patch(m[0]));
+      // No paragraph talks about a version the title does not cover.
+      for (const v of named) expect(v, title).toBeLessThanOrEqual(covered);
+      // When the box also names an older version, "Esas versiones" no longer says which.
+      if (named.some((v) => v < covered)) expect(body, title).not.toMatch(/Esas versiones/);
+    }
+    // The #451 note concerns 0.66.5 and earlier; the #453 and #454 notes concern
+    // every version up to 0.66.13, so they sit in the box titled 0.66.13.
+    const v5 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.5 o anterior");
+    const v13 = boxes.find((b) => b.title === "Si declaraste con la versión 0.66.13 o anterior");
+    expect(v5?.body).toContain("#451");
+    for (const issue of ["#453", "#454"]) expect(v13?.body).toContain(issue);
+    expect(v13?.body).toMatch(/mismo día de la venta \(issue #454\)[^]*V0571-21/);
   });
 });

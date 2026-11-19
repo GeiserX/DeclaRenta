@@ -62,6 +62,7 @@ import { initSection720, renderSection720, rerenderSection720 } from "./section-
 import { initSection721, renderSection721, rerenderSection721 } from "./section-721.js";
 import { initSectionD6, renderSectionD6, rerenderSectionD6 } from "./section-d6.js";
 import { findMissingHoldings, type MissingHoldings, type ParsedExport } from "./missing-holdings.js";
+import { bindAntichurningWindowPanel, getWindowOverrides, renderAntichurningWindowPanel } from "./antichurning-window.js";
 import { initSectionGuide, rerenderSectionGuide } from "./section-guide.js";
 import { t, initLocale, setLocale, getCurrentLocale, getLocaleNames, type Locale } from "../i18n/index.js";
 import { validateStatement, renderValidationIssues } from "./validation.js";
@@ -1008,6 +1009,7 @@ async function processFiles(): Promise<void> {
       titulares: profileForReport.titulares,
       manualRates: getManualRates(),
       manualOpeningLots,
+      windowMonthsByIsin: getWindowOverrides(),
     };
     const report = generateTaxReport(merged, allRates, year, {
       ...options,
@@ -1266,6 +1268,7 @@ function renderResults(report: TaxSummary) {
   const resultsSectionEl = document.getElementById("wizard-step-3")!;
   resultsSectionEl.querySelectorAll(".crypto-rates-panel").forEach((el) => el.remove());
   resultsSectionEl.querySelectorAll(".manual-opening-lots-panel").forEach((el) => el.remove());
+  resultsSectionEl.querySelectorAll(".antichurning-window-panel").forEach((el) => el.remove());
 
   const panelHtml = renderManualOpeningLotsPanel(report.messages);
   if (panelHtml) {
@@ -1283,11 +1286,25 @@ function renderResults(report: TaxSummary) {
     casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
-    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel)");
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel):not(.antichurning-window-panel)");
     if (panel) {
       bindManualRatesPanel(panel, () => {
         // Re-run the full pipeline so the newly-entered manual rates take
         // effect — no re-upload needed (statement is cached in mergedStatement).
+        void processFiles();
+      });
+    }
+  }
+
+  // The anti-churning window per security (#452): 2 months or 1 year, set by
+  // hand when IBKR's listing exchange is wrong or missing. Saving reruns the
+  // whole pipeline, so the method comparison below picks it up too.
+  const windowPanelHtml = renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities);
+  if (windowPanelHtml) {
+    casillasDiv.insertAdjacentHTML("beforebegin", windowPanelHtml);
+    const panel = resultsSectionEl.querySelector<HTMLElement>(".antichurning-window-panel");
+    if (panel) {
+      bindAntichurningWindowPanel(panel, () => {
         void processFiles();
       });
     }

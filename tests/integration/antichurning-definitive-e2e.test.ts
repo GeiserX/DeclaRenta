@@ -181,12 +181,13 @@ describe("DGT V3282-18: rebought gain sales are not definitive (2017: 900)", () 
 // (fiscal 1,767) because of the 1,900 shares bought on 06/05.
 //
 // With the DGT's pick order (#454) the engine releases 15.27 on 29/04 (fiscal
-// 1,751.73). 20/04 takes 880 of the 14/04 purchase, 22/04 takes 20/04 and 25
-// of 21/04. The 23/04 sales leave no shares, so no purchase before them counts
-// (V3282-18 A, situation 1): they take the 1,880 of 27/04 and 40 of 06/05.
-// Only 1,860 of 06/05 are left for the 1,880 shares sold on 29/04, so 20 are
-// definitive and release 20 × 672/880 = 15.27. This is not the same-day
-// exclusion: counting same-day buys gives the same figure. The DGT only says
+// 1,751.73). 20/04 takes the 880 bought that day (a sale-day buy counts for
+// its own held shares, V0571-21), 22/04 the 905 of 21/04 (the oldest unused
+// purchase still held). The 23/04 sales leave no shares, so no purchase before
+// them counts (V3282-18 A, situation 1): they take the 1,880 of 27/04 and 40 of
+// 06/05. Only 1,860 of 06/05 are left for the 1,880 shares sold on 29/04, so 20
+// are definitive and release 20 × 672/880 = 15.27. Same-day buys do not cause
+// it: the stand-in that skipped them gave the same figure. The DGT only says
 // the 1,900 of 06/05 prevent the release; it does not count the 40 that the
 // 23/04 sales already need. KNOWN GAP: the last 15.27.
 // ---------------------------------------------------------------------------
@@ -210,8 +211,8 @@ describe("DGT V2481-20: rebought gain sales keep the losses deferred", () => {
   it("#454: 23/04 and 29/04 use the rebuys in date order: 29/04 releases only 20 shares (15.27, fiscal 1,751.73)", () => {
     const r = year(ops, 2020);
     const trail = (date: string) => r.disposals.filter((d) => d.sellDate === date).flatMap((d) => d.washSaleRepurchaseDates ?? []);
-    expect(trail("2020-04-20")).toEqual(["2020-04-14"]);
-    expect([...new Set(trail("2020-04-22"))].sort()).toEqual(["2020-04-20", "2020-04-21"]);
+    expect(trail("2020-04-20")).toEqual(["2020-04-20"]);
+    expect([...new Set(trail("2020-04-22"))].sort()).toEqual(["2020-04-21"]);
     expect(onDate(r, "2020-04-29", "reintegratedLossEur")).toBe("15.27");
     expect(r.fiscal).toBe("1751.73");
   });

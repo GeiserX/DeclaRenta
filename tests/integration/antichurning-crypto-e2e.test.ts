@@ -299,8 +299,8 @@ describe("#457 follow-up: through the real parsers, a sale of the rebought coins
   // releases the whole loss while the reward is still held.
   const TH = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
   const LH = '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"';
-  const kt = (id: string, time: string, type: string, price: number, vol: number) =>
-    `"T${id}","O${id}","ETHEUR","${time}","${type}","market","${price}","${price * vol}","0","${vol}","0.0","","L${id}"`;
+  const kt = (id: string, time: string, type: string, price: string | number, vol: string | number) =>
+    `"T${id}","O${id}","ETHEUR","${time}","${type}","market","${price}","${new Decimal(price).mul(vol).toString()}","0","${vol}","0.0","","L${id}"`;
   const kraken = (rewardTime: string, sellVol: number, method: FxMethod, year: number) => {
     const trades = [TH,
       kt("1", "2023-03-01 10:00:00", "buy", 200, 1),

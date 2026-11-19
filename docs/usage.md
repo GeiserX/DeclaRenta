@@ -23,6 +23,9 @@ node dist/cli.js convert --input flex_query.xml --year 2025 --format pdf --outpu
 # Con compensación de pérdidas de años anteriores (Art. 49 LIRPF)
 node dist/cli.js convert --input flex_query.xml --year 2025 --prior-losses perdidas.json
 
+# Plazo anti-churning fijado a mano: 1 año para un valor que solo cotiza en Londres, 2 meses para otro
+node dist/cli.js convert --input flex_query.xml --year 2025 --antichurning-1y GB0007980591 --antichurning-2m GB00BP6MXD84
+
 # Modelo 720
 node dist/cli.js modelo720 --input flex_query.xml --year 2025 --nif 12345678A --name "APELLIDOS, NOMBRE"
 
@@ -54,6 +57,8 @@ Opciones adicionales del comando `convert`:
 - `--fx-method multidivisa|tradicional-divisa|monodivisa` — Método para acciones en divisa. `multidivisa` (por defecto, recomendado) es el «Criterio DGT (multidivisa)». `tradicional-divisa` es «Tradicional con divisa»: acciones al tipo del día de compra y de venta, y la divisa tributa por FIFO cuando sale de la cuenta. `monodivisa` es «Tradicional sin divisa (monodivisa)»: la misma valoración de acciones, sin ningún resultado de divisa. Ver [Los tres métodos](casillas.md#los-tres-metodos-para-acciones-en-divisa).
 - `--monodivisa` — Alias de `--fx-method monodivisa`. Con `--fx-method` de otro valor, la CLI sale con código 1.
 - `--prior-losses fichero.json` — Fichero JSON con pérdidas de ejercicios anteriores para compensación (Art. 49 LIRPF). El formato está en [Compensación de pérdidas](modelos-fiscales.md#compensacion-de-perdidas).
+- `--antichurning-1y ISIN...` — Aplica a esos valores el plazo anti-churning de 1 año (art. 33.5.g LIRPF): no están admitidos en un mercado regulado del Espacio Económico Europeo ni en uno equivalente.
+- `--antichurning-2m ISIN...` — Aplica a esos valores el plazo de 2 meses (art. 33.5.f LIRPF). Los dos ganan sobre el mercado que muestra IBKR. Un ISIN mal escrito (forma o cifra de control), o el mismo ISIN en los dos, sale con código 1. Un ISIN que no está en ningún fichero da un aviso, porque no cambia nada. Ver [Plazo de 2 meses o de 1 año por valor](casillas.md#plazo-de-2-meses-o-de-1-ano-por-valor).
 
 ## Interfaz web
 

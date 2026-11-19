@@ -20,6 +20,7 @@ import type {
 } from "../types/ibkr.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { TaxMessage } from "../types/tax.js";
+import { ISIN_SHAPE } from "../engine/antichurning-window.js";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -283,7 +284,6 @@ function assertFlexDateFormat(tradeDates: string[], cashDateTimes: string[]): vo
   }
 }
 
-const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}\d$/;
 
 /**
  * IBKR sends the underlying's identifier as underlyingSecurityID (an ISIN, or a
@@ -294,6 +294,12 @@ function underlyingIsinOf(raw: Record<string, string>): string {
   if (raw.underlyingIsin) return raw.underlyingIsin;
   const id = raw.underlyingSecurityID?.trim() ?? "";
   return ISIN_SHAPE.test(id) ? id : "";
+}
+
+/** IBKR `listingExchange`, trimmed and upper-cased; nothing when empty. */
+function listingExchangeOf(raw: Record<string, string>): { listingExchange?: string } {
+  const code = raw.listingExchange?.trim().toUpperCase();
+  return code ? { listingExchange: code } : {};
 }
 
 function mapTrade(raw: Record<string, string>): Trade {
@@ -323,6 +329,8 @@ function mapTrade(raw: Record<string, string>): Trade {
     buySell: (raw.buySell ?? "BUY").trim().toUpperCase() as Trade["buySell"],
     openCloseIndicator: (raw.openCloseIndicator ?? "O") as Trade["openCloseIndicator"],
     exchange: raw.exchange ?? "",
+    // The listing market, not the venue: it decides the anti-churning window (#452).
+    ...listingExchangeOf(raw),
     commissionCurrency: raw.ibCommissionCurrency ?? "",
     commission: raw.ibCommission ?? "0",
     taxes: raw.taxes ?? "0",
@@ -715,6 +723,7 @@ function mapSecurityInfo(raw: Record<string, string>): SecurityInfo {
     assetCategory: (raw.assetCategory ?? "STK") as SecurityInfo["assetCategory"],
     multiplier: raw.multiplier ?? "1",
     subCategory: raw.subCategory ?? "",
+    ...listingExchangeOf(raw),
   };
 }
 

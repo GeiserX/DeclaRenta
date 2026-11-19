@@ -132,14 +132,15 @@ export function clearAllReports(): void {
 
 /**
  * Every localStorage key that holds the user's data: the fiscal profile (NIF,
- * name, phone), the saved reports, the manual crypto rates and the manual
- * opening lots. Display preferences (theme, locale) are not listed.
+ * name, phone), the saved reports, the manual crypto rates, the manual
+ * opening lots and the per-security anti-churning windows. Display preferences (theme, locale) are not listed.
  */
 export const LOCAL_DATA_KEYS = [
   "declarenta_profile",
   STORAGE_KEY,
   "declarenta_manual_rates",
   "declarenta_manual_opening_lots",
+  "declarenta_antichurning_windows",
 ] as const;
 
 /** Delete everything the app stored about the user in this browser */
