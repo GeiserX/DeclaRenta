@@ -17,6 +17,7 @@ import {
   toFiniteDecimal,
   quantityUnknownTrade,
   quantityUnreadable,
+  toFiniteDecimalString,
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
@@ -24,7 +25,6 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   corporateActionTrade,
-  isCorporateActionType,
   cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 
@@ -122,6 +122,8 @@ function parseFreedom24(input: string): Statement {
   let skippedMalformed = 0;
   // Dividend and coupon rows with no ticker and no ISIN (#467).
   const unidentifiedCash: string[] = [];
+  // Dividend and coupon rows whose amount cannot be read (#467).
+  const unreadableAmountCash: string[] = [];
 
   // Parse trades
   const rawTrades = root.trades?.detailed ?? [];
@@ -226,32 +228,43 @@ function parseFreedom24(input: string): Statement {
     const currency = ca.curr_c || "USD";
     const { symbol: tickerSymbol, exchange } = parseSymbol(ticker);
 
-    // A split, a consolidation or a merger moves shares of its security, so
-    // it is evidence of a holding at the anti-churning window start (#453,
-    // #467): kept as a row that books nothing, named as not applied, never
-    // dropped. The JSON gives no share count for it.
+    // Every corporate action that is not a dividend or a coupon (a split, a
+    // consolidation, a merger, a conversion, bonus shares, a maturity, a
+    // redemption...) moves shares of its security, or takes them away with
+    // money. So it is evidence of a holding at the anti-churning window start
+    // (#453, #467): kept as a row that books nothing, named as not applied,
+    // never dropped. The JSON gives no share count for it. With no ticker and
+    // no ISIN it makes the evidence of every security "unverified".
     const dividend = typeId.includes("dividend") || typeId.includes("coupon");
-    if (!dividend && isCorporateActionType(typeId)) {
-      if (!ticker && !isin) continue;
+    if (!dividend) {
       trades.push(corporateActionTrade({
         tradeID: `freedom24-ca-${tradeDate}-${i}`,
         symbol: tickerSymbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate, exchange,
       }, typeIdText, ""));
       continue;
     }
-    if (!dividend) continue;
 
-    const amount = str(ca.amount);
+    // The engine reads the amount as written: an empty, textual or
+    // non-finite amount is unreadable, and a missing one is no zero. Such a
+    // dividend is named, never booked (a non-numeric amount would abort the
+    // whole report) and never read as zero (#467).
+    const amount = typeof ca.amount === "string" || typeof ca.amount === "number" ? String(ca.amount).trim() : "";
+    const amountReadable = toFiniteDecimalString(amount, "", false) !== "";
+    const amountText = amountReadable ? amount : `[${unreadableCell("amount", ca.amount)}]`;
     const taxAmount = str(ca.tax_amount);
+    const tax = toFiniteDecimal(taxAmount).isZero() ? "" : ` (tax_amount ${taxAmount})`;
     // A dividend with no ticker goes by its ISIN; with neither it is named,
     // never dropped with no word (#467).
     if (!ticker && !isin) {
-      const tax = toFiniteDecimal(taxAmount).isZero() ? "" : ` (tax_amount ${taxAmount})`;
-      if (!toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amount} ${currency}${tax} ${tradeDate || "—"}`);
+      if (!amountReadable || !toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amountText} ${currency}${tax} ${tradeDate || "—"}`);
       continue;
     }
     const security = ticker || isin;
     const symbol = ticker ? tickerSymbol : isin;
+    if (!amountReadable) {
+      unreadableAmountCash.push(`${typeIdText} ${isin ? (ticker ? `${tickerSymbol} (${isin})` : isin) : tickerSymbol} ${currency} ${tradeDate || "—"}${tax} ${amountText}`);
+      continue;
+    }
     // Include ISIN country code so dividend engine can extract withholding country
     const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
 
@@ -297,6 +310,17 @@ function parseFreedom24(input: string): Statement {
       message: `Freedom24: se ha(n) omitido ${skippedMalformed} fila(s) de acciones corporativas sin un tipo legible (type_id).`,
       hint: "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación, y no las calcula. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
       context: { count: String(skippedMalformed) },
+    });
+  }
+  if (unreadableAmountCash.length > 0) {
+    const count = String(unreadableAmountCash.length);
+    const rows = unreadableAmountCash.join("; ");
+    parserMessages.push({
+      id: "freedom24.dividend_amount_unreadable",
+      severity: "warning" as const,
+      message: `Freedom24: ${count} dividendo(s) o cupón(es) no tienen un importe (amount) legible y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda del importe (amount). Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no se inventa un importe. Si es un ingreso del año que declaras, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo. También puedes añadir el importe y la retención a mano en Renta Web.",
+      context: { count, rows },
     });
   }
   markUndatedTrades(trades, "date");

@@ -487,6 +487,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const skippedNoTimestamp: string[] = [];
   /** Rows left out because their Change cannot be read, each named as "coin operation date [Change: cell]". */
   const skippedBadAmount: string[] = [];
+  /** Rows left out because they move an amount of no named coin, each named as "operation change date [Coin: cell]". */
+  const skippedNoCoin: string[] = [];
 
   /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
   function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
@@ -512,38 +514,47 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       const account = (fields[cols.account] ?? "").trim();
       const remark = cols.remark >= 0 ? (fields[cols.remark] ?? "").trim() : "";
 
-      // Note: an empty/missing utcTime is NOT short-circuited here — it falls
-      // through to the txEpoch NaN guard below so it's counted+surfaced like any
-      // other unparseable timestamp (a single, uniform code path), never silently
-      // dropped.
-      if (!coin || !changeStr || TX_SKIP_OPS.has(operation)) continue;
-      // A "--" change (Binance writes this for some zero-fee rows) is not numeric.
-      if (changeStr === "--") continue;
-
-      // A row whose UTC_Time can't be parsed has no real epoch. txEpoch returns
-      // NaN (not 0) for it; dropping+counting it here is the safe fix — keeping
-      // it would let the ±1s window phases falsely cluster every NaN-epoch row
-      // together (all "within 1s") and degrade the forward-scan. Count it and
-      // name it in one warning rather than mis-group it. (Empty/missing
-      // UTC_Time also fails the regex → NaN → handled by this same path.)
-      // Each row is named by coin, operation, change and the date cell, so
-      // a missing purchase or sale of a coin is never only a count (#467).
-      const epoch = txEpoch(utcTime);
-      if (Number.isNaN(epoch)) {
-        skippedNoTimestamp.push(`${coin} ${operationText} ${changeStr} [${unreadableCell(headers[cols.utcTime] ?? "UTC_Time", utcTime)}]`);
-        continue;
-      }
-
-      let change: Decimal;
+      // An internal movement is no taxable row, and a "--" change (Binance
+      // writes this for some zero-fee rows) moves nothing.
+      if (TX_SKIP_OPS.has(operation) || changeStr === "--") continue;
+      // new Decimal("Infinity"/"NaN") does NOT throw: a non-finite value is as
+      // unreadable as an empty or textual cell, so it cannot poison totals or
+      // stall big-decimal arithmetic. null = the Change cannot be read.
+      let change: Decimal | null = null;
       try {
-        change = new Decimal(changeStr);
+        const parsed = new Decimal(changeStr);
+        change = parsed.isFinite() ? parsed : null;
       } catch {
-        skippedBadAmount.push(`${coin} ${operationText} ${convertBinanceDate(utcTime)} [${unreadableCell(headers[cols.change] ?? "Change", changeStr)}]`);
+        change = null;
+      }
+      const changeCell = unreadableCell(headers[cols.change] ?? "Change", changeStr);
+      const timeCell = unreadableCell(headers[cols.utcTime] ?? "UTC_Time", utcTime);
+      // A row whose UTC_Time can't be parsed has no real epoch. txEpoch returns
+      // NaN (not 0) for it; dropping it here is the safe fix: keeping it would
+      // let the ±1s window phases falsely cluster every NaN-epoch row together
+      // (all "within 1s") and degrade the forward-scan. An empty or missing
+      // UTC_Time fails the regex too.
+      const epoch = txEpoch(utcTime);
+      const dated = !Number.isNaN(epoch);
+      // A row with no Coin but a movement cannot be booked against any coin.
+      // A row with neither a Coin nor a non-zero Change moves nothing.
+      if (!coin) {
+        if (change === null ? changeStr === "" : change.isZero()) continue;
+        skippedNoCoin.push(`${operationText} ${changeStr} ${dated ? convertBinanceDate(utcTime) : `[${timeCell}]`} [${unreadableCell(headers[cols.coin] ?? "Coin", "")}]`);
         continue;
       }
-      // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
-      // a malformed cell can't poison totals or stall big-decimal arithmetic.
-      if (!change.isFinite() || change.isZero()) continue;
+      // Each row left out is named by coin, operation, change or date and the
+      // failing cell, so a missing purchase or sale of a coin is never only a
+      // count, and never dropped with no word (#467).
+      if (!dated) {
+        skippedNoTimestamp.push(`${coin} ${operationText} ${change === null ? `[${changeCell}]` : changeStr} [${timeCell}]`);
+        continue;
+      }
+      if (change === null) {
+        skippedBadAmount.push(`${coin} ${operationText} ${convertBinanceDate(utcTime)} [${changeCell}]`);
+        continue;
+      }
+      if (change.isZero()) continue;
 
       let eurValue: Decimal | null = null;
       if (cols.eurValue >= 0) {
@@ -750,6 +761,17 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       severity: "warning",
       message: `Binance: ${count} fila(s) no tienen un importe (Change) legible y no se calculan: ${rows}.`,
       hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      context: { count, rows },
+    });
+  }
+  if (skippedNoCoin.length > 0) {
+    const count = String(skippedNoCoin.length);
+    const rows = skippedNoCoin.join("; ");
+    parserMessages.push({
+      id: "binance.unparseable_coin",
+      severity: "warning",
+      message: `Binance: ${count} fila(s) no dicen de qué moneda son (Coin) y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
       context: { count, rows },
     });
   }

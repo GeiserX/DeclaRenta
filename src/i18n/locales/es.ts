@@ -1088,10 +1088,18 @@ const es = {
     "Binance: {{count}} fila(s) no tienen un importe (Change) legible y no se calculan: {{rows}}.",
   "binance.unparseable_amount.hint":
     "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} fila(s) no dicen de qué moneda son (Coin) y no se calculan: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "Entre corchetes va la celda de la moneda. Sin ella, DeclaRenta no sabe qué criptomoneda entra o sale. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de tus criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
   "freedom24.row_skipped_malformed":
     "Freedom24: se ha(n) omitido {{count}} fila(s) de acciones corporativas sin un tipo legible (type_id).",
   "freedom24.row_skipped_malformed.hint":
     "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación, y no las calcula. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dividendo(s) o cupón(es) no tienen un importe (amount) legible y no se calculan: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "Entre corchetes va la celda del importe (amount). Sin ella, DeclaRenta no sabe cuánto cobraste. Por eso no suma ese ingreso ni su retención y no se inventa un importe. Si es un ingreso del año que declaras, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo. También puedes añadir el importe y la retención a mano en Renta Web.",
   "binance.unhandled_operation":
     "Se han omitido {{count}} movimiento(s) del CSV de Binance con operaciones no reconocidas: {{operations}}.",
   "binance.unhandled_operation.hint":
@@ -1162,7 +1170,7 @@ const es = {
   "revolut.holding_size_unknown": "El extracto de Revolut no permite saber cuántas acciones o unidades tienes al final de {{count}} valor(es): {{tickers}}.",
   "revolut.holding_size_unknown.hint": "Una fila de cada uno no se puede leer o no dice cuántas acciones o unidades mueve (otro aviso la nombra). DeclaRenta muestra solo la parte que sí se puede leer, que puede ser 0. Para los modelos 720 y 721, toma el número y el valor de esas posiciones del extracto de Revolut y añádelos a mano.",
   "parser.corporate_action_not_applied": "{{broker}}: no se han aplicado {{count}} fila(s) de desdoblamiento, agrupación u otra operación societaria: {{rows}}.",
-  "parser.corporate_action_not_applied.hint": "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses. Si una de esas filas te pagó dinero, como un vencimiento o un reembolso, esa venta no está en el informe. Añádela a mano en Renta Web.",
   "parser.cash_row_undated": "{{broker}}: {{count}} movimiento(s) de dinero no tienen una fecha legible y no se calculan: {{rows}}.",
   "parser.cash_row_undated.hint": "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Si es un dividendo, una retención, un interés u otro ingreso del año que declaras, corrige la fecha en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
   "parser.cash_row_unidentified": "{{broker}}: {{count}} dividendo(s) o retención(es) no dicen de qué valor son y no se calculan: {{rows}}.",

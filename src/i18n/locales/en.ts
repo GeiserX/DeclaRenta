@@ -1049,10 +1049,18 @@ const en: TranslationKeys = {
     "Binance: {{count}} row(s) have no readable amount (Change) and are not calculated: {{rows}}.",
   "binance.unparseable_amount.hint":
     "The square brackets show the amount cell. DeclaRenta adds or removes no units and no money for those rows. So the gains, losses and income of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it. Download the original Binance report again, do not edit it, and upload it.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} row(s) do not say which coin they are for (Coin) and are not calculated: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "The square brackets show the coin cell. Without it, DeclaRenta does not know which cryptocurrency comes in or goes out. So it adds or removes no units and no money for those rows. The gains, losses and income of your cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it. Download the original Binance report again, do not edit it, and upload it.",
   "freedom24.row_skipped_malformed":
     "Freedom24: {{count}} corporate action row(s) with no readable type (type_id) were skipped.",
   "freedom24.row_skipped_malformed.hint":
     "The \"type_id\" field of those rows is empty or is not text. So DeclaRenta does not know if they are a dividend, a coupon or another operation, and does not calculate them. If a dividend or a coupon is missing, download the full Freedom24 JSON report again and upload it.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) or coupon(s) have no readable amount (amount) and are not calculated: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "The square brackets show the amount cell (amount). Without it, DeclaRenta does not know how much you received. So it does not add that income or its withholding, and does not make up an amount. If it is income of the year you declare, download the full Freedom24 JSON report again and upload it. You can also add the amount and the withholding by hand in Renta Web.",
   "binance.unhandled_operation":
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":
@@ -1121,7 +1129,7 @@ const en: TranslationKeys = {
   "revolut.holding_size_unknown": "The Revolut statement does not tell how many shares or units you hold at the end for {{count}} security(ies): {{tickers}}.",
   "revolut.holding_size_unknown.hint": "One row of each cannot be read or does not say how many shares or units it moves (another warning names it). DeclaRenta shows only the part it can read, which may be 0. For Modelo 720 and 721, take the number and the value of those holdings from the Revolut statement and add them by hand.",
   "parser.corporate_action_not_applied": "{{broker}}: {{count}} stock split, consolidation or other corporate action row(s) were not applied: {{rows}}.",
-  "parser.corporate_action_not_applied.hint": "DeclaRenta does not change the number of shares or the cost of those securities for them. So the gains and losses of their later sales may not be correct. Check them against the broker's statement. DeclaRenta also does not apply the one-purchase exception of the 2-month rule to those securities.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta does not change the number of shares or the cost of those securities for them. So the gains and losses of their later sales may not be correct. Check them against the broker's statement. DeclaRenta also does not apply the one-purchase exception of the 2-month rule to those securities. If one of those rows paid you money, such as a maturity or a redemption, that sale is not in the report. Add it by hand in Renta Web.",
   "parser.cash_row_undated": "{{broker}}: {{count}} cash movement(s) have no readable date and are not calculated: {{rows}}.",
   "parser.cash_row_undated.hint": "The square brackets show the date cell. Without a date, DeclaRenta does not know which year the amount belongs to or which ECB exchange rate applies. So it does not add the amount and does not make up a date. If it is a dividend, a withholding, an interest or other income of the year you declare, correct the date in the broker's file and upload it again. You can also add the amount by hand in Renta Web.",
   "parser.cash_row_unidentified": "{{broker}}: {{count}} dividend(s) or withholding(s) do not say which security they belong to and are not calculated: {{rows}}.",

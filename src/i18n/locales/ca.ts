@@ -1051,10 +1051,18 @@ const ca: TranslationKeys = {
     "Binance: {{count}} fila(es) no tenen un import (Change) llegible i no es calculen: {{rows}}.",
   "binance.unparseable_amount.hint":
     "Entre claudàtors hi ha la cel·la de l'import. DeclaRenta no suma ni resta unitats ni diners per aquestes files. Per això els guanys, les pèrdues i els ingressos d'aquestes criptomonedes no són fiables. Si una fila és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja. Torna a descarregar l'informe original de Binance, no l'editis i torna'l a pujar.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} fila(es) no diuen de quina moneda són (Coin) i no es calculen: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "Entre claudàtors hi ha la cel·la de la moneda. Sense ella, DeclaRenta no sap quina criptomoneda entra o surt. Per això no suma ni resta unitats ni diners per aquestes files. Els guanys, les pèrdues i els ingressos de les teves criptomonedes no són fiables. Si una fila és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja. Torna a descarregar l'informe original de Binance, no l'editis i torna'l a pujar.",
   "freedom24.row_skipped_malformed":
     "Freedom24: s'han omès {{count}} fila(es) d'accions corporatives sense un tipus llegible (type_id).",
   "freedom24.row_skipped_malformed.hint":
     "El camp \"type_id\" d'aquestes files és buit o no és text. Per això DeclaRenta no sap si són un dividend, un cupó o una altra operació, i no les calcula. Si et falta un dividend o un cupó, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen un import (amount) llegible i no es calculen: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "Entre claudàtors hi ha la cel·la de l'import (amount). Sense ella, DeclaRenta no sap quant vas cobrar. Per això no suma aquest ingrés ni la seva retenció i no s'inventa un import. Si és un ingrés de l'any que declares, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar. També pots afegir l'import i la retenció a mà a Renta Web.",
   "binance.unhandled_operation":
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":
@@ -1123,7 +1131,7 @@ const ca: TranslationKeys = {
   "revolut.holding_size_unknown": "L'extracte de Revolut no permet saber quantes accions o unitats tens al final de {{count}} valor(s): {{tickers}}.",
   "revolut.holding_size_unknown.hint": "Una fila de cadascun no es pot llegir o no diu quantes accions o unitats mou (un altre avís la indica). DeclaRenta mostra només la part que sí que es pot llegir, que pot ser 0. Per als models 720 i 721, pren el nombre i el valor d'aquestes posicions de l'extracte de Revolut i afegeix-los a mà.",
   "parser.corporate_action_not_applied": "{{broker}}: no s'han aplicat {{count}} fila(es) de desdoblament, agrupació o una altra operació societària: {{rows}}.",
-  "parser.corporate_action_not_applied.hint": "DeclaRenta no canvia per elles el nombre d'accions ni el cost d'aquests valors. Per això els guanys i les pèrdues de les seves vendes posteriors poden no ser correctes. Comprova-les amb l'extracte del broker. Tampoc no aplica a aquests valors l'excepció de compra única de la regla dels 2 mesos.",
+  "parser.corporate_action_not_applied.hint": "DeclaRenta no canvia per elles el nombre d'accions ni el cost d'aquests valors. Per això els guanys i les pèrdues de les seves vendes posteriors poden no ser correctes. Comprova-les amb l'extracte del broker. Tampoc no aplica a aquests valors l'excepció de compra única de la regla dels 2 mesos. Si una d'aquestes files et va pagar diners, com un venciment o un reemborsament, aquesta venda no és a l'informe. Afegeix-la a mà a Renta Web.",
   "parser.cash_row_undated": "{{broker}}: {{count}} moviment(s) de diners no tenen una data llegible i no es calculen: {{rows}}.",
   "parser.cash_row_undated.hint": "Entre claudàtors hi ha la cel·la de la data. Sense data, DeclaRenta no sap a quin any pertany l'import ni quin tipus de canvi del BCE li correspon. Per això no el suma i no s'inventa cap data. Si és un dividend, una retenció, un interès o un altre ingrés de l'any que declares, corregeix la data al fitxer del broker i torna'l a pujar. També pots afegir l'import a mà a Renta Web.",
   "parser.cash_row_unidentified": "{{broker}}: {{count}} dividend(s) o retenció(ons) no diuen de quin valor són i no es calculen: {{rows}}.",

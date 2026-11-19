@@ -324,7 +324,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.corporate_action_not_applied",
       severity: "warning",
       message: `${broker}: no se han aplicado ${count} fila(s) de desdoblamiento, agrupación u otra operación societaria: ${list}.`,
-      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses.",
+      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses. Si una de esas filas te pagó dinero, como un vencimiento o un reembolso, esa venta no está en el informe. Añádela a mano en Renta Web.",
       context: { broker, count, rows: list },
     });
   }

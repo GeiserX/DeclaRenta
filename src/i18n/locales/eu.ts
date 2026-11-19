@@ -1053,10 +1053,18 @@ const eu: TranslationKeys = {
     "Binance: {{count}} errenkadak ez dute zenbateko (Change) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
   "binance.unparseable_amount.hint":
     "Kortxete artean dago zenbatekoaren gelaxka. DeclaRentak ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Beraz, kriptomoneta horien irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, ez editatu, eta igo berriro.",
+  "binance.unparseable_coin":
+    "Binance: {{count}} errenkadak ez dute esaten zein txanponena diren (Coin), eta ez dira kalkulatzen: {{rows}}.",
+  "binance.unparseable_coin.hint":
+    "Kortxete artean dago txanponaren gelaxka. Hura gabe, DeclaRentak ez daki zein kriptomoneta sartzen edo ateratzen den. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen errenkada horiengatik. Zure kriptomoneten irabaziak, galerak eta diru-sarrerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen. Deskargatu berriro Binance-ren jatorrizko txostena, ez editatu, eta igo berriro.",
   "freedom24.row_skipped_malformed":
     "Freedom24: mota irakurgarririk (type_id) ez duten ekintza korporatiboen {{count}} errenkada baztertu dira.",
   "freedom24.row_skipped_malformed.hint":
     "Errenkada horien \"type_id\" eremua hutsik dago edo ez da testua. Beraz, DeclaRentak ez daki dibidendu, kupoi edo beste eragiketa bat diren, eta ez ditu kalkulatzen. Dibidendu edo kupoi bat falta bazaizu, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro.",
+  "freedom24.dividend_amount_unreadable":
+    "Freedom24: {{count}} dibidendu edo kupoik ez dute zenbateko (amount) irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
+  "freedom24.dividend_amount_unreadable.hint":
+    "Kortxete artean dago zenbatekoaren gelaxka (amount). Hura gabe, DeclaRentak ez daki zenbat kobratu zenuen. Beraz, ez du diru-sarrera hori batzen, ezta bere atxikipena ere, eta ez du zenbatekorik asmatzen. Aitortzen duzun urteko diru-sarrera bada, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro. Zenbatekoa eta atxikipena eskuz ere gehi ditzakezu Renta Web-en.",
   "binance.unhandled_operation":
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":
@@ -1125,7 +1133,7 @@ const eu: TranslationKeys = {
   "revolut.holding_size_unknown": "Revoluteko laburpenak ez du esaten zenbat akzio edo unitate dituzun amaieran {{count}} baloretan: {{tickers}}.",
   "revolut.holding_size_unknown.hint": "Bakoitzaren errenkada bat ezin da irakurri, edo ez du esaten zenbat akzio edo unitate mugitzen dituen (beste abisu batek izendatzen du). DeclaRentak irakur daitekeen zatia bakarrik erakusten du, eta 0 izan daiteke. 720 eta 721 ereduetarako, hartu posizio horien kopurua eta balioa Revoluteko laburpenetik eta gehitu eskuz.",
   "parser.corporate_action_not_applied": "{{broker}}: akzioen zatiketa, bilketa edo beste eragiketa sozietario bateko {{count}} errenkada ez dira aplikatu: {{rows}}.",
-  "parser.corporate_action_not_applied.hint": "DeclaRentak ez ditu haiengatik balore horien akzio kopurua eta kostua aldatzen. Beraz, haien ondorengo salmenten irabaziak eta galerak baliteke zuzenak ez izatea. Egiaztatu brokerraren laburpenarekin. Ez die balore horiei 2 hilabeteko arauaren erosketa bakarraren salbuespena aplikatzen ere.",
+  "parser.corporate_action_not_applied.hint": "DeclaRentak ez ditu haiengatik balore horien akzio kopurua eta kostua aldatzen. Beraz, haien ondorengo salmenten irabaziak eta galerak baliteke zuzenak ez izatea. Egiaztatu brokerraren laburpenarekin. Ez die balore horiei 2 hilabeteko arauaren erosketa bakarraren salbuespena aplikatzen ere. Errenkada horietako batek dirua ordaindu bazizun, adibidez mugaeguna edo itzulketa bat, salmenta hori ez dago txostenean. Gehitu eskuz Renta Web-en.",
   "parser.cash_row_undated": "{{broker}}: {{count}} diru-mugimenduk ez dute data irakurgarririk, eta ez dira kalkulatzen: {{rows}}.",
   "parser.cash_row_undated.hint": "Kortxete artean dago dataren gelaxka. Datarik gabe, DeclaRentak ez daki zenbatekoa zein urtetakoa den, ezta EBZren zein truke-tasa dagokion ere. Beraz, ez du batzen eta ez du datarik asmatzen. Aitortzen duzun urteko dibidendu, atxikipen, interes edo beste diru-sarrera bat bada, zuzendu data brokerraren fitxategian eta igo berriro, edo gehitu zenbatekoa eskuz Renta Web-en.",
   "parser.cash_row_unidentified": "{{broker}}: {{count}} dibidendu edo atxikipenek ez dute esaten zein baloirenak diren, eta ez dira kalkulatzen: {{rows}}.",
