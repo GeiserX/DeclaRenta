@@ -61,9 +61,31 @@ interface CoinbaseColumns {
   total: number;
   fees: number;
   notes: number;
+  /**
+   * The currency an older export writes in its price header ("EUR Spot Price
+   * at Transaction"); "" when the header has none.
+   */
+  headerCurrency: string;
+}
+
+/**
+ * Find a money column, also when an older export writes its currency in front
+ * of the name ("USD Spot Price at Transaction", "EUR Subtotal"). The prefix is
+ * read only as three capital letters and a space, so "Net Total" is no currency.
+ */
+function findMoneyColumn(headers: string[], names: string[]): { index: number; currency: string } {
+  const index = findColumn(headers, names);
+  if (index >= 0) return { index, currency: "" };
+  const lower = names.map((n) => n.toLowerCase());
+  for (const [i, header] of headers.entries()) {
+    const m = /^([A-Z]{3}) (.+)$/.exec(header.trim());
+    if (m && lower.includes(m[2]!.toLowerCase())) return { index: i, currency: m[1]! };
+  }
+  return { index: -1, currency: "" };
 }
 
 function resolveColumns(headers: string[]): CoinbaseColumns {
+  const spotPrice = findMoneyColumn(headers, ["spot price at transaction", "price at transaction"]);
   return {
     id: findColumn(headers, ["id"]),
     timestamp: findColumn(headers, ["timestamp"]),
@@ -71,12 +93,18 @@ function resolveColumns(headers: string[]): CoinbaseColumns {
     asset: findColumn(headers, ["asset"]),
     quantity: findColumn(headers, ["quantity transacted"]),
     spotCurrency: findColumn(headers, ["spot price currency", "price currency"]),
-    spotPrice: findColumn(headers, ["spot price at transaction", "price at transaction"]),
-    subtotal: findColumn(headers, ["subtotal"]),
-    total: findColumn(headers, ["total (inclusive of fees and/or spread)", "total"]),
-    fees: findColumn(headers, ["fees and/or spread", "fees"]),
+    spotPrice: spotPrice.index,
+    subtotal: findMoneyColumn(headers, ["subtotal"]).index,
+    total: findMoneyColumn(headers, ["total (inclusive of fees and/or spread)", "total (inclusive of fees)", "total"]).index,
+    fees: findMoneyColumn(headers, ["fees and/or spread", "fees"]).index,
     notes: findColumn(headers, ["notes"]),
+    headerCurrency: spotPrice.currency,
   };
+}
+
+/** A money cell as a number string; one that cannot be read is "0", never its text. */
+function money(cell: string | undefined): string {
+  return quantityUnreadable(cell) ? "0" : parseNumber(cell!);
 }
 
 // ---------------------------------------------------------------------------
@@ -163,6 +191,13 @@ function parseCoinbaseCsv(lines: string[]): Statement {
   if (cols.timestamp < 0 || cols.transactionType < 0 || cols.asset < 0) {
     throw new Error("Coinbase CSV: faltan columnas obligatorias (Timestamp, Transaction Type, Asset)");
   }
+  // FIFO values a trade at Quantity × Spot Price: with no price column every
+  // trade was booked at 0 and every gain vanished with no word (#467).
+  if (cols.spotPrice < 0) {
+    throw new Error("Coinbase CSV: faltan columnas obligatorias (Spot Price at Transaction)");
+  }
+  const currencyHeader = headers[cols.spotCurrency] ?? "Spot Price Currency";
+  const priceHeader = headers[cols.spotPrice] ?? "Spot Price at Transaction";
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
@@ -191,11 +226,22 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const txType = (fields[cols.transactionType] ?? "").trim().toLowerCase();
     const asset = (fields[cols.asset] ?? "").trim();
     const quantity = parseNumber(fields[cols.quantity] ?? "0");
-    const spotCurrency = (fields[cols.spotCurrency] ?? "EUR").trim();
-    const spotPrice = parseNumber(fields[cols.spotPrice] ?? "0");
-    const subtotal = parseNumber(fields[cols.subtotal] ?? "0");
-    const total = parseNumber(fields[cols.total] ?? "0");
-    const fees = parseNumber(fields[cols.fees] ?? "0");
+    // The currency of the price and the money cells. An empty cell or no
+    // column was read as EUR, so dollars were booked as euros: now such a
+    // row is named, never booked under a guessed currency (#467). An older
+    // export writes it in the price header.
+    const rawCurrency = cols.spotCurrency >= 0 ? fields[cols.spotCurrency] : cols.headerCurrency || undefined;
+    const spotCurrency = (rawCurrency ?? "").trim();
+    // A money cell that cannot be read is "0", never its text: the engine
+    // stopped with a DecimalError on a price of "abc" (#467).
+    const rawPrice = fields[cols.spotPrice];
+    const rawSubtotal = cols.subtotal >= 0 ? fields[cols.subtotal] : undefined;
+    const priceReadable = !quantityUnreadable(rawPrice);
+    const subtotalReadable = !quantityUnreadable(rawSubtotal);
+    const spotPrice = priceReadable ? parseNumber(rawPrice!) : "0";
+    const subtotal = subtotalReadable ? parseNumber(rawSubtotal!) : "0";
+    const total = money(cols.total >= 0 ? fields[cols.total] : undefined);
+    const fees = money(cols.fees >= 0 ? fields[cols.fees] : undefined);
     const notes = cols.notes >= 0 ? (fields[cols.notes] ?? "").trim() : "";
     // The same row in two overlapping exports must get the same ID, or the
     // duplicate-trades check cannot see it: use Coinbase's own transaction ID,
@@ -218,15 +264,30 @@ function parseCoinbaseCsv(lines: string[]): Statement {
     const isTrade = SELL_TYPES.includes(txType) || BUY_TYPES.includes(txType) || txType === "convert";
     const rawType = (fields[cols.transactionType] ?? "").trim();
     const rawQty = cols.quantity >= 0 ? fields[cols.quantity] : undefined;
-    if (isTrade && (!asset || quantityUnreadable(rawQty))) {
+    // A Spot Price that cannot be read was booked as 0 (a sale became a full
+    // loss) or as its text (the report stopped): the price is then Subtotal ÷
+    // Quantity, the file's own numbers. With neither, or with no currency,
+    // the row is kept and named. A written zero quantity or price stays the
+    // file's word (#467).
+    const writtenZero = !quantityUnreadable(rawQty) && toFiniteDecimal(quantity).isZero();
+    const badCell = !asset ? unreadableCell(headers[cols.asset] ?? "Asset", "")
+      : quantityUnreadable(rawQty) ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty)
+      : writtenZero ? undefined
+      : !spotCurrency ? unreadableCell(currencyHeader, rawCurrency)
+      : !priceReadable && !subtotalReadable ? unreadableCell(priceHeader, rawPrice)
+      : undefined;
+    if (isTrade && badCell !== undefined) {
       trades.push(unreadableTrade({
         tradeID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
         symbol: asset, description: `${rawType} ${(rawQty ?? "").trim()}`.trim(), isin: "", assetCategory: "CRYPTO",
         currency: spotCurrency || "EUR", tradeDate, tradeTime, exchange: "COINBASE",
         buySell: SELL_TYPES.includes(txType) || txType === "convert" ? "SELL" : "BUY",
-      }, asset ? unreadableCell(headers[cols.quantity] ?? "Quantity Transacted", rawQty) : unreadableCell(headers[cols.asset] ?? "Asset", "")));
+      }, badCell));
       if (txType !== "convert") continue;
     }
+    const tradePrice = isTrade && badCell === undefined && !priceReadable && !writtenZero
+      ? toFiniteDecimal(subtotal).abs().div(toFiniteDecimal(quantity).abs()).toString()
+      : spotPrice;
     // An income row with no Asset says no coin: it is not booked under a
     // guessed one, but named by type, amount, date and cell, never skipped
     // with no word (#467). Another row with no Asset is a type this parser
@@ -250,31 +311,40 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       // "0", so the income was booked as 0 even with a Subtotal, and a Total of
       // "abc" stopped the whole report. With neither cell readable the row is
       // not booked, but named by type, coin, date and cells (#467).
+      // An income row with no currency is named the same way: its amount
+      // was booked as euros whatever the currency was (#467).
       const rawTotal = cols.total >= 0 ? fields[cols.total] : undefined;
-      const rawSubtotal = cols.subtotal >= 0 ? fields[cols.subtotal] : undefined;
-      if (quantityUnreadable(rawTotal) && quantityUnreadable(rawSubtotal)) {
+      if ((quantityUnreadable(rawTotal) && !subtotalReadable) || !spotCurrency) {
         const shownDate = isReadableTradeDate(tradeDate) ? tradeDate : timestamp || "—";
-        const cells = `${unreadableCell(headers[cols.total] ?? "Total", rawTotal)}, ${unreadableCell(headers[cols.subtotal] ?? "Subtotal", rawSubtotal)}`;
+        const cells = !spotCurrency ? unreadableCell(currencyHeader, rawCurrency)
+          : `${unreadableCell(headers[cols.total] ?? "Total", rawTotal)}, ${unreadableCell(headers[cols.subtotal] ?? "Subtotal", rawSubtotal)}`;
         unreadableIncome.push(`${rawType} ${(rawQty ?? "").trim() || "—"} ${asset} ${shownDate} [${cells}]`);
         continue;
       }
       if (txType === "rewards income") rewardsIncomeCount++;
-      const eurAmount = quantityUnreadable(rawTotal) ? subtotal : total;
+      const amount = quantityUnreadable(rawTotal) ? subtotal : total;
+      const amountDec = toFiniteDecimal(amount);
+      const quantityDec = toFiniteDecimal(quantity);
       cashTransactions.push({
         transactionID: `coinbase-${txType.replace(/\s+/g, "-")}-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
         symbol: asset,
         description: `${txType} - ${asset}${notes ? ` (${notes})` : ""}`,
         isin: "",
-        currency: spotCurrency || "EUR",
+        currency: spotCurrency,
         dateTime: tradeDate,
         settleDate: tradeDate,
-        amount: eurAmount,
+        amount,
         fxRateToBase: "1",
         type: "Crypto Reward Income",
         taxBucket: incomeBucket,
-        rewardQuantity: toFiniteDecimal(quantity).abs().toString(),
-        rewardCostBasisEur: toFiniteDecimal(eurAmount).abs().toString(),
+        // A negative row takes income back: it opens no lot. Before, abs()
+        // gave it a second lot, so a later sale of a coin with no lot got a
+        // made-up cost and no fifo.insufficient_lots warning (#467).
+        ...(quantityDec.greaterThan(0) && !amountDec.isNegative() ? { rewardQuantity: quantityDec.toString() } : {}),
+        // Only an amount in euros is the euro value: $30 was taken as 30 €.
+        // Any other currency is valued at the ECB rate of its day (#467).
+        ...(spotCurrency.toUpperCase() === "EUR" ? { rewardCostBasisEur: amountDec.abs().toString() } : {}),
       });
       continue;
     }
@@ -287,8 +357,8 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       const quantityDec = toFiniteDecimal(quantity).abs();
       const feeDec = toFiniteDecimal(fees);
 
-      // Close (sell) the source asset (kept above when its Asset or Quantity is unreadable)
-      if (asset && !quantityUnreadable(rawQty)) trades.push({
+      // Close (sell) the source asset (kept above when a cell it needs is unreadable)
+      if (badCell === undefined) trades.push({
         tradeID: `coinbase-convert-sell-${tradeDate}-${asset}-${rowId}`,
         accountId: "",
         symbol: asset,
@@ -300,7 +370,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
         tradeTime,
         settlementDate: tradeDate,
         quantity: quantityDec.neg().toString(),
-        tradePrice: spotPrice,
+        tradePrice,
         tradeMoney: subtotal,
         proceeds: subtotal,
         cost: "0",
@@ -316,7 +386,14 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       });
 
       // Open (buy) the destination asset
-      if (convertMatch) {
+      if (convertMatch && !spotCurrency) {
+        // Its cost is in a currency the row does not name: kept and named.
+        trades.push(unreadableTrade({
+          tradeID: `coinbase-convert-buy-${tradeDate}-${convertMatch[2]!}-${rowId}`,
+          symbol: convertMatch[2]!, description: `Convert ${asset} to ${convertMatch[2]!}`, isin: "", assetCategory: "CRYPTO",
+          currency: "EUR", tradeDate, tradeTime, exchange: "COINBASE", buySell: "BUY",
+        }, unreadableCell(currencyHeader, rawCurrency)));
+      } else if (convertMatch) {
         const destAsset = convertMatch[2]!;
         // Notes are US-formatted: a comma is a thousands separator ("2,000").
         const destQuantityDec = toFiniteDecimal(convertMatch[1]!.replace(/,/g, "")).abs();
@@ -393,7 +470,7 @@ function parseCoinbaseCsv(lines: string[]): Statement {
       tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
-      tradePrice: spotPrice,
+      tradePrice,
       tradeMoney: total,
       proceeds: isSell ? subtotal : "0",
       cost: isSell ? "0" : subtotal,

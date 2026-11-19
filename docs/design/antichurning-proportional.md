@@ -636,6 +636,20 @@ práctico Renta 2025. The decisions, each pinned in
       books the coin it received when its Notes name it. Before, the row
       was skipped with no word: a sale vanished with its gain, and a rebuy
       could not show that an art. 33.5.e check was missing.
+      FIFO values a Coinbase trade at Quantity × Spot Price. A Spot Price
+      that cannot be read (empty, only a currency sign, text, a cell cut
+      off) was booked as 0, so a sale became a full loss with no word, or
+      was passed on as text and stopped the whole report with a
+      `DecimalError`. The price is now Subtotal ÷ Quantity, the file's own
+      numbers; a row with neither is an unreadable row named by its Spot
+      Price. A written 0 stays the file's word. An empty `Price Currency`,
+      or a header with no currency column, was read as EUR, so dollars were
+      booked as euros: such a buy, sale or Convert (both coins) is an
+      unreadable row named by that cell. Exports from before 2021 write the
+      currency in the money headers ("USD Spot Price at Transaction", "EUR
+      Subtotal"); no money column was found, so every trade was booked at 0
+      and the gain vanished. Those headers are now read, with the currency
+      from the prefix, and a header with no price column at all is refused.
     - Crypto income whose coin cannot be read: a Coinbase Staking Income,
       Rewards Income, Learning Reward, Inflation Reward or Coinbase Earn
       row with an empty `Asset`, and a Kraken staking or Earn reward with
@@ -656,6 +670,15 @@ práctico Renta 2025. The decisions, each pinned in
       0 with no word, even with a readable Subtotal (now used); a Total of
       "abc" stopped the whole report with a `DecimalError`; and the Kraken
       reward was booked as 0 units.
+      A Coinbase income row with an empty `Price Currency` is named the
+      same way: it was booked as euros. Coinbase income in another currency
+      ($30 of staking) was taken as that many euros (30 €), for the income
+      and for the cost of the coin received; it is now valued at the ECB
+      rate of its day, and only a EUR amount is taken as it is. A negative
+      Coinbase income row (income taken back) lowers the income, as
+      before, but no longer opens a second lot: abs() gave it one, so a
+      later sale of a coin with no lot got a made-up cost and no
+      `fifo.insufficient_lots` warning.
     - Dividends and interest whose amount cannot be read: a Lightyear
       Dividend or Distribution whose `Gross Amount` cannot be read, a
       Lightyear Interest or Reward whose `Net Amt.` and `Gross Amount`

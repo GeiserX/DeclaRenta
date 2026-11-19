@@ -152,11 +152,11 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 3. Haz clic en **Generar informe**.
 4. Descarga el historial de transacciones en formato CSV.
 
-**Formato:** CSV con cabeceras `Transaction Type` y `Spot Price`.
+**Formato:** CSV con cabeceras `Transaction Type` y `Spot Price`. También lee los ficheros anteriores a 2021, que ponen la divisa delante del nombre de la columna (`EUR Spot Price at Transaction`).
 
 **Datos extraídos:** Compras, ventas, conversiones y posiciones de criptomonedas.
 
-**Limitaciones:** Solo operaciones de criptoactivos. Los staking rewards se interpretan como ingresos.
+**Limitaciones:** Solo operaciones de criptoactivos. Los staking rewards se interpretan como ingresos. Un ingreso en dólares u otra divisa se pasa a euros con el tipo del BCE de ese día. Si el precio de una operación no se puede leer, DeclaRenta lo calcula con el subtotal dividido por la cantidad. Si tampoco hay subtotal, o si falta la divisa de la fila (`Price Currency`), DeclaRenta no calcula esa fila y te avisa con la celda que falla.
 
 ### Binance
 
