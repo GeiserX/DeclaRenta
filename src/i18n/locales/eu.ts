@@ -1066,9 +1066,9 @@ const eu: TranslationKeys = {
   "freedom24.dividend_amount_unreadable.hint":
     "Kortxete artean dago zenbatekoaren gelaxka (amount). Hura gabe, DeclaRentak ez daki zenbat kobratu zenuen. Beraz, ez du diru-sarrera hori batzen, ezta bere atxikipena ere, eta ez du zenbatekorik asmatzen. Aitortzen duzun urteko diru-sarrera bada, deskargatu berriro Freedom24-ren JSON txosten osoa eta igo berriro. Zenbatekoa eta atxikipena eskuz ere gehi ditzakezu Renta Web-en.",
   "freedom24.tax_amount_unreadable":
-    "Freedom24: {{count}} dibidendu edo kupoik ez dute atxikipen (tax_amount) irakurgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
+    "Freedom24: {{count}} dibidendu edo kupoik ez dute atxikipen (tax_amount) erabilgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
-    "Kortxete artean dago atxikipenaren gelaxka (tax_amount). DeclaRentak diru-sarrera osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Hartu atxikipena Freedom24-ren txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+    "Kortxete artean dago atxikipenaren gelaxka (tax_amount). Ez da zenbaki bat, edo dibidenduaren zenbatekoa (amount) baino handiagoa da. DeclaRentak diru-sarrera osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Hartu atxikipena Freedom24-ren txosten fiskaletik eta gehitu eskuz Renta Web-en.",
   "binance.unhandled_operation":
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":

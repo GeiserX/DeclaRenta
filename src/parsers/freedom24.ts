@@ -263,9 +263,13 @@ function parseFreedom24(input: string): Statement {
     // no withholding (the user can only lose a deduction, never underpay),
     // and the cell is named (#467). A missing, null or empty one is none.
     // The cast JSON may carry null, an object or a boolean there.
+    // A readable tax_amount larger than the dividend cannot be its withholding
+    // ("1e400", or "1.234,56" on a 500 dividend): booked, it went to box 0597
+    // with no cap for a Spanish security, so it is treated the same way (#467).
     const taxCell: unknown = ca.tax_amount;
     const taxUnreadable = taxCell !== undefined && taxCell !== null && taxCell !== "" &&
-      (!(typeof taxCell === "string" || typeof taxCell === "number") || quantityUnreadable(taxCell));
+      (!(typeof taxCell === "string" || typeof taxCell === "number") || quantityUnreadable(taxCell) ||
+        (amountReadable && toFiniteDecimal(taxAmount).abs().greaterThan(toFiniteDecimal(amount, "0", false).abs())));
     const tax = taxUnreadable
       ? ` [${unreadableCell("tax_amount", ca.tax_amount)}]`
       : toFiniteDecimal(taxAmount).isZero() ? "" : ` (tax_amount ${taxAmount})`;
@@ -302,9 +306,9 @@ function parseFreedom24(input: string): Statement {
       type: "Dividends",
     });
 
-    // Withholding tax (if present)
+    // Withholding tax (if present and usable)
     const taxDec = toFiniteDecimal(taxAmount);
-    if (!taxDec.isZero()) {
+    if (!taxUnreadable && !taxDec.isZero()) {
       cashTransactions.push({
         transactionID: `freedom24-wht-${tradeDate}-${isin}-${i}`,
         accountId: "",
@@ -348,8 +352,8 @@ function parseFreedom24(input: string): Statement {
     parserMessages.push({
       id: "freedom24.tax_amount_unreadable",
       severity: "warning" as const,
-      message: `Freedom24: ${count} dividendo(s) o cupón(es) no tienen una retención (tax_amount) legible y se calculan sin retención: ${rows}.`,
-      hint: "Entre corchetes va la celda de la retención (tax_amount). DeclaRenta suma el ingreso completo, pero no sabe cuánto te retuvieron. Así no pagas de menos, pero pierdes la deducción por esa retención (casilla 0588, o 0597 si el valor es español). Toma la retención del informe fiscal de Freedom24 y añádela a mano en Renta Web.",
+      message: `Freedom24: ${count} dividendo(s) o cupón(es) no tienen una retención (tax_amount) que se pueda usar y se calculan sin retención: ${rows}.`,
+      hint: "Entre corchetes va la celda de la retención (tax_amount). No es un número, o es mayor que el importe (amount) del dividendo. DeclaRenta suma el ingreso completo, pero no sabe cuánto te retuvieron. Así no pagas de menos, pero pierdes la deducción por esa retención (casilla 0588, o 0597 si el valor es español). Toma la retención del informe fiscal de Freedom24 y añádela a mano en Renta Web.",
       context: { count, rows },
     });
   }

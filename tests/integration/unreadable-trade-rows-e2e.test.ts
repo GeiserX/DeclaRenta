@@ -1640,3 +1640,44 @@ describe("#467 Binance spot: several coins bought in one window never move one o
   });
 });
 
+describe("#467 Freedom24: a withholding larger than its dividend is never booked", () => {
+  const f24 = (...rows: Record<string, unknown>[]): Statement => freedom24Parser.parse(JSON.stringify({
+    trades: { detailed: [] }, corporate_actions: { detailed: rows },
+  }));
+  const ES_DIV = { date: "2025-05-15 00:00:00", ticker: "XYZ.EU", isin: ISIN, type_id: "dividend", amount: "500", tax_amount: "95", curr_c: "EUR" };
+  const US_DIV = { date: "2025-05-15 00:00:00", ticker: "AAPL.US", isin: AAPL, type_id: "dividend", amount: "500", tax_amount: "75", curr_c: "USD" };
+
+  describe.each(["1e400", "1.234,56", "600", "-600"])("tax_amount %j on a 500 dividend", (tax) => {
+    it.each(METHODS)("[%s] of a Spanish security: no withholding in box 0597, the dividend counts, the cell is named", (method) => {
+      const parsed = f24({ ...ES_DIV, tax_amount: tax });
+      expect(messageRows(parsed, "freedom24.tax_amount_unreadable")).toBe(`dividend XYZ (${ISIN}) 500 EUR 20250515 [tax_amount: ${JSON.stringify(tax)}]`);
+      const r = run([[parsed, "Freedom24"]], 2025, method);
+      expect([r.dividends.grossIncome.toFixed(2), new Decimal(r.dividends.spanishWithholding).toFixed(2)]).toEqual(["500.00", "0.00"]);
+    });
+
+    it.each(METHODS)("[%s] of a US security: no withholding and no deduction in box 0588, the cell is named", (method) => {
+      const parsed = f24({ ...US_DIV, tax_amount: tax });
+      expect(messageRows(parsed, "freedom24.tax_amount_unreadable")).toBe(`dividend AAPL (${AAPL}) 500 USD 20250515 [tax_amount: ${JSON.stringify(tax)}]`);
+      const r = run([[parsed, "Freedom24"]], 2025, method);
+      expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["550.00", "0.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] control: a withholding up to the dividend is booked with no warning", (method) => {
+    const parsed = f24(ES_DIV, US_DIV, { ...ES_DIV, tax_amount: "500", date: "2025-05-16 00:00:00" });
+    expect(parsed.parserMessages ?? []).toEqual([]);
+    const r = run([[parsed, "Freedom24"]], 2025, method);
+    expect(new Decimal(r.dividends.spanishWithholding).toFixed(2)).toBe("595.00");
+    expect(r.doubleTaxation.deduction.toFixed(2)).toBe("82.50");
+  });
+
+  it("the warning says, in the five locales, that the withholding is no number or is larger than the dividend", () => {
+    for (const [locale, word] of [[es, "mayor"], [en, "larger"], [ca, "més gran"], [eu, "handiagoa"], [gl, "maior"]] as [Record<string, string>, string][]) {
+      expect(locale["freedom24.tax_amount_unreadable.hint"]).toContain(word);
+    }
+    const emitted = f24({ ...ES_DIV, tax_amount: "600" }).parserMessages?.find((m) => m.id === "freedom24.tax_amount_unreadable");
+    const esText = es as Record<string, string>;
+    expect(emitted?.message).toBe(esText["freedom24.tax_amount_unreadable"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted?.context?.[k] ?? ""));
+    expect(emitted?.hint).toBe(esText["freedom24.tax_amount_unreadable.hint"]);
+  });
+});

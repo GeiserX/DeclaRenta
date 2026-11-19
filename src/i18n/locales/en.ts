@@ -1062,9 +1062,9 @@ const en: TranslationKeys = {
   "freedom24.dividend_amount_unreadable.hint":
     "The square brackets show the amount cell (amount). Without it, DeclaRenta does not know how much you received. So it does not add that income or its withholding, and does not make up an amount. If it is income of the year you declare, download the full Freedom24 JSON report again and upload it. You can also add the amount and the withholding by hand in Renta Web.",
   "freedom24.tax_amount_unreadable":
-    "Freedom24: {{count}} dividend(s) or coupon(s) have no readable withholding (tax_amount) and are calculated with no withholding: {{rows}}.",
+    "Freedom24: {{count}} dividend(s) or coupon(s) have no usable withholding (tax_amount) and are calculated with no withholding: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
-    "The square brackets show the withholding cell (tax_amount). DeclaRenta adds the full income, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). Take the withholding from the Freedom24 tax report and add it by hand in Renta Web.",
+    "The square brackets show the withholding cell (tax_amount). It is no number, or it is larger than the dividend amount (amount). DeclaRenta adds the full income, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). Take the withholding from the Freedom24 tax report and add it by hand in Renta Web.",
   "binance.unhandled_operation":
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":

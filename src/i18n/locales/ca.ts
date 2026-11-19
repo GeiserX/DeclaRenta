@@ -1064,9 +1064,9 @@ const ca: TranslationKeys = {
   "freedom24.dividend_amount_unreadable.hint":
     "Entre claudàtors hi ha la cel·la de l'import (amount). Sense ella, DeclaRenta no sap quant vas cobrar. Per això no suma aquest ingrés ni la seva retenció i no s'inventa un import. Si és un ingrés de l'any que declares, torna a descarregar l'informe JSON complet de Freedom24 i torna'l a pujar. També pots afegir l'import i la retenció a mà a Renta Web.",
   "freedom24.tax_amount_unreadable":
-    "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen una retenció (tax_amount) llegible i es calculen sense retenció: {{rows}}.",
+    "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen una retenció (tax_amount) que es pugui fer servir i es calculen sense retenció: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
-    "Entre claudàtors hi ha la cel·la de la retenció (tax_amount). DeclaRenta suma l'ingrés complet, però no sap quant et van retenir. Així no pagues de menys, però perds la deducció per aquesta retenció (casella 0588, o 0597 si el valor és espanyol). Agafa la retenció de l'informe fiscal de Freedom24 i afegeix-la a mà a Renta Web.",
+    "Entre claudàtors hi ha la cel·la de la retenció (tax_amount). No és un número, o és més gran que l'import (amount) del dividend. DeclaRenta suma l'ingrés complet, però no sap quant et van retenir. Així no pagues de menys, però perds la deducció per aquesta retenció (casella 0588, o 0597 si el valor és espanyol). Agafa la retenció de l'informe fiscal de Freedom24 i afegeix-la a mà a Renta Web.",
   "binance.unhandled_operation":
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":

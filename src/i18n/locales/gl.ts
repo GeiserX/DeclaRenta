@@ -1064,9 +1064,9 @@ const gl: TranslationKeys = {
   "freedom24.dividend_amount_unreadable.hint":
     "Entre corchetes vai a cela do importe (amount). Sen ela, DeclaRenta non sabe canto cobraches. Por iso non suma ese ingreso nin a súa retención e non inventa un importe. Se é un ingreso do ano que declaras, volve descargar o informe JSON completo de Freedom24 e volve subilo. Tamén podes engadir o importe e a retención a man en Renta Web.",
   "freedom24.tax_amount_unreadable":
-    "Freedom24: {{count}} dividendo(s) ou cupón(s) non teñen unha retención (tax_amount) lexible e calcúlanse sen retención: {{rows}}.",
+    "Freedom24: {{count}} dividendo(s) ou cupón(s) non teñen unha retención (tax_amount) que se poida usar e calcúlanse sen retención: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
-    "Entre corchetes vai a cela da retención (tax_amount). DeclaRenta suma o ingreso completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Toma a retención do informe fiscal de Freedom24 e engádea a man en Renta Web.",
+    "Entre corchetes vai a cela da retención (tax_amount). Non é un número, ou é maior que o importe (amount) do dividendo. DeclaRenta suma o ingreso completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Toma a retención do informe fiscal de Freedom24 e engádea a man en Renta Web.",
   "binance.unhandled_operation":
     "Omitíronse {{count}} movemento(s) do CSV de Binance con operacións non recoñecidas: {{operations}}.",
   "binance.unhandled_operation.hint":
