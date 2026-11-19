@@ -443,7 +443,7 @@ describe("Phase 5 — Options (OPT)", () => {
     expect(checked[0]!.washSaleBlocked).toBe(false);
   });
 
-  it("should apply the one-year anti-churning window to crypto losses", () => {
+  it("should block a crypto loss rebought in the year after the sale (art. 33.5.e)", () => {
     const rates = makeRateMap({
       "2025-03-01": { "USD": "0.92" },
       "2025-06-01": { "USD": "0.91" },
@@ -461,7 +461,7 @@ describe("Phase 5 — Options (OPT)", () => {
         assetCategory: "CRYPTO", tradeDate: "2025-06-01",
         quantity: "-1", tradePrice: "50000", buySell: "SELL",
       }),
-      // Repurchase within 2 months
+      // Repurchase two weeks after the sale, inside the year after it
       makeTrade({
         tradeID: "3", symbol: "BTC", isin: "",
         assetCategory: "CRYPTO", tradeDate: "2025-06-15",

@@ -619,6 +619,26 @@ describe("property: a closed position releases every blocked euro once", () => {
     // The property is not vacuous: most histories do block something.
     expect(churned).toBeGreaterThan(30);
   });
+
+  it("the same for crypto, whose window is only the year after the sale (art. 33.5.e, #457)", () => {
+    let churned = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const ops = randomClosedPosition(seed);
+      const st = statement(ops);
+      st.trades = st.trades.map((t) => ({ ...t, isin: "", symbol: "BTC", description: "Bitcoin", assetCategory: "CRYPTO", exchange: "" }));
+      const years = [...new Set(ops.map((o) => Number(o[0].slice(0, 4))))];
+      let blocked = new Decimal(0);
+      let released = new Decimal(0);
+      for (const y of years) {
+        const cg = generateTaxReport(st, rates(ops), y, reportOptionsForMethod("monodivisa")).capitalGains;
+        blocked = blocked.plus(cg.blockedLosses);
+        released = released.plus(cg.reintegratedLosses);
+      }
+      if (blocked.greaterThan(0)) churned++;
+      expect(released.toFixed(2), `seed ${seed}: ${JSON.stringify(ops)}`).toBe(blocked.toFixed(2));
+    }
+    expect(churned).toBeGreaterThan(30);
+  });
 });
 
 /** A random history of long and short legs that ends flat, with no trade in the last leg's window. */
@@ -1091,7 +1111,7 @@ describe("a window still open when the return is due gets its own warning, witho
     return generateTaxReport(st, map, 2025, reportOptionsForMethod("monodivisa"));
   };
 
-  it("a crypto loss of 15/07/2025: its 1-year window ends 15/07/2026, after the 30/06/2026 filing deadline", () => {
+  it("a crypto loss of 15/07/2025: its window (the year after the sale) ends 15/07/2026, after the 30/06/2026 filing deadline", () => {
     const r = run([crypto(buy("2025-02-03", 1, 200), 0), crypto(["2025-07-15", "SELL", 1, 100], 1)], "20251231");
     expect(r.messages.some((m) => m.id === PAST)).toBe(false);
     const m = r.messages.find((x) => x.id === OPEN);

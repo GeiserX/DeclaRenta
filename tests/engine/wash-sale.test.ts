@@ -190,7 +190,7 @@ describe("detectWashSales", () => {
     expect(result[0]!.washSaleBlocked).toBe(false);
   });
 
-  it("should use 1-year window for CRYPTO asset category", () => {
+  it("should block a CRYPTO rebuy in the year after the sale (art. 33.5.e)", () => {
     const disposals = [makeDisposal({
       isin: "",
       symbol: "BTC",
@@ -773,8 +773,8 @@ describe("proportional blocking + reintegration", () => {
     expect(release2.reintegratedLossEur.toFixed(2)).toBe("500.00");
   });
 
-  it("blocks proportionally for CRYPTO using the 12-month window (sell 100, rebuy 25 → 25%)", () => {
-    // CRYPTO → 12-month window. A partial repurchase 6 months later is in-window
+  it("blocks proportionally for CRYPTO rebought in the year after the sale (sell 100, rebuy 25 → 25%)", () => {
+    // CRYPTO → the year after the sale (art. 33.5.e). A partial repurchase 6 months later is in-window
     // and blocks proportionally: |loss| × 25/100 = €125.
     const disposals = [makeDisposal({
       isin: "", symbol: "BTC", assetCategory: "CRYPTO", sellDate: "2025-06-15",
@@ -1115,5 +1115,67 @@ describe("a short cover runs no definitive test", () => {
     ];
     const result = detectWashSales(disposals, trades);
     expect(result[0]!.blockedLossEur.toString()).toBe("18");
+  });
+});
+
+// Issue #457: crypto is no «valor o participación», so art. 33.5.e applies:
+// only a repurchase of the same coin in the year AFTER the sale defers the loss
+// (de fecha a fecha, end day included). A buy before the sale never counts.
+describe("crypto uses art. 33.5.e: only a rebuy in the year after the sale (#457)", () => {
+  const btc = (date: string, side: "BUY" | "SELL", qty = "1"): Trade =>
+    ({ ...makeTrade("", date, side, qty), symbol: "BTC", description: "Bitcoin", isin: "", assetCategory: "CRYPTO", exchange: "" });
+  const privco = (date: string, side: "BUY" | "SELL", qty = "1"): Trade =>
+    ({ ...makeTrade("", date, side, qty), symbol: "PRIVCO", description: "PRIVATE CO", isin: "" });
+  const lossSale = (assetCategory: "CRYPTO" | "STK", symbol: string, sellDate: string, acquireDate: string): FifoDisposal =>
+    makeDisposal({
+      isin: "", symbol, assetCategory, sellDate, acquireDate,
+      quantity: new Decimal(1), costBasisEur: new Decimal(200), proceedsEur: new Decimal(100), gainLossEur: new Decimal(-100),
+    });
+  const blocked = (d: FifoDisposal, t: Trade[]): string => detectWashSales([d], t)[0]!.blockedLossEur.toFixed(2);
+
+  it("the issue example: a buy before the sale that is still held does not block a crypto loss", () => {
+    // Buy 1 on 01/12/2024 (200), buy 1 on 01/03/2025 (100), sell 1 on 01/06/2025
+    // for 100: FIFO sells the 200 lot, loss −100, and nothing is bought after.
+    const trades = [btc("2024-12-01", "BUY"), btc("2025-03-01", "BUY"), btc("2025-06-01", "SELL")];
+    expect(blocked(lossSale("CRYPTO", "BTC", "2025-06-01", "2024-12-01"), trades)).toBe("0.00");
+  });
+
+  it("mirror: the same dates on a security with no ISIN (letter g, a year before or after) still block 100", () => {
+    const trades = [privco("2024-12-01", "BUY"), privco("2025-03-01", "BUY"), privco("2025-06-01", "SELL")];
+    expect(blocked(lossSale("STK", "PRIVCO", "2025-06-01", "2024-12-01"), trades)).toBe("100.00");
+  });
+
+  it("a crypto buy the day before the sale, or exactly a year before, does not block", () => {
+    const sale = lossSale("CRYPTO", "BTC", "2025-06-01", "2024-01-02");
+    expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2025-05-31", "BUY"), btc("2025-06-01", "SELL")])).toBe("0.00");
+    expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2024-06-01", "BUY"), btc("2025-06-01", "SELL")])).toBe("0.00");
+  });
+
+  it("a crypto rebuy on the anniversary day blocks; one a day later does not", () => {
+    const sale = lossSale("CRYPTO", "BTC", "2025-06-01", "2025-01-02");
+    expect(blocked(sale, [btc("2025-01-02", "BUY"), btc("2025-06-01", "SELL"), btc("2026-06-01", "BUY")])).toBe("100.00");
+    expect(blocked(sale, [btc("2025-01-02", "BUY"), btc("2025-06-01", "SELL"), btc("2026-06-02", "BUY")])).toBe("0.00");
+  });
+
+  it("a crypto sale on 29/02 runs to 28/02 of the next year (Código Civil art. 5.1)", () => {
+    const sale = lossSale("CRYPTO", "BTC", "2024-02-29", "2024-01-02");
+    expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2024-02-29", "SELL"), btc("2025-02-28", "BUY")])).toBe("100.00");
+    expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2024-02-29", "SELL"), btc("2025-03-01", "BUY")])).toBe("0.00");
+  });
+
+  it("a crypto rebuy on the sale day itself does not block («año siguiente a la fecha de dicha transmisión»)", () => {
+    // Bought more than a year before, so only the same-day buy could block.
+    const sale = lossSale("CRYPTO", "BTC", "2025-06-01", "2024-01-02");
+    expect(blocked(sale, [btc("2024-01-02", "BUY"), btc("2025-06-01", "SELL"), btc("2025-06-01", "BUY")])).toBe("0.00");
+  });
+
+  it("the same coin bought at another exchange is the same element", () => {
+    const sale = lossSale("CRYPTO", "BTC", "2025-06-01", "2025-01-02");
+    const trades = [
+      { ...btc("2025-01-02", "BUY"), exchange: "BINANCE" },
+      { ...btc("2025-06-01", "SELL"), exchange: "BINANCE" },
+      { ...btc("2025-09-01", "BUY"), exchange: "KRAKEN" },
+    ];
+    expect(blocked(sale, trades)).toBe("100.00");
   });
 });
