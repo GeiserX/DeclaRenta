@@ -163,11 +163,15 @@ En Renta Web esto **requiere acción**: no es automático. Por el importe bloque
 
     También puede pasar al revés: la versión actual puede liberar una pérdida en un año anterior al que la liberaba la 0.66.5 (por ejemplo, cuando una venta definitiva vende lotes antiguos, DGT **V0046-20**). Si ese año ya está presentado, puedes corregirlo para deducirla: con una autoliquidación rectificativa si es 2024 o posterior, o con una solicitud de rectificación de la autoliquidación si es 2023 o anterior. Si no lo corriges, esa pérdida no se deduce nunca.
 
+!!! warning "Si declaraste con la versión 0.66.13 o anterior"
+
     La versión 0.66.13 y las anteriores no aplicaban la excepción de compra única (issue #453): bloqueaban la pérdida de una venta cuya única compra en los 2 meses anteriores se hizo sin tener acciones antes. Si presentaste un año con esa pérdida bloqueada, puedes corregirlo para deducirla: con una autoliquidación rectificativa si es 2024 o posterior, o con una solicitud de rectificación de la autoliquidación si es 2023 o anterior.
 
     La versión 0.66.13 y las anteriores tampoco elegían las recompras en el orden de la DGT (issue #454): tomaban primero las compras posteriores a la venta y después las anteriores, de la más reciente a la más antigua. Por eso podían liberar una pérdida antes de tiempo (con los datos de la consulta DGT **V0248-18** liberaban 400 € en 2017; la DGT no libera nada ese año) o bloquear una pérdida que ya podías deducir. Si un año que ya presentaste cambia ahora, corrígelo: con una autoliquidación rectificativa si es 2024 o posterior; si es 2023 o anterior, con una autoliquidación complementaria si sale a ingresar o con una solicitud de rectificación si sale a devolver.
 
-    Siempre que corrijas un año para deducir una pérdida (en cualquiera de los casos anteriores), revisa también los años posteriores que ya presentaste. La versión anterior pudo liberar esa misma pérdida en uno de ellos. Si allí la dedujiste, corrige también ese año para quitarla: con una autoliquidación rectificativa si es 2024 o posterior, o con una autoliquidación complementaria si es 2023 o anterior. Una pérdida solo se deduce una vez.
+!!! note "Al corregir un año ya presentado"
+
+    Siempre que corrijas un año para deducir una pérdida (en cualquiera de los casos de los avisos anteriores), revisa también los años posteriores que ya presentaste. La versión anterior pudo liberar esa misma pérdida en uno de ellos. Si allí la dedujiste, corrige también ese año para quitarla: con una autoliquidación rectificativa si es 2024 o posterior, o con una autoliquidación complementaria si es 2023 o anterior. Una pérdida solo se deduce una vez.
 
     Desde el ejercicio 2024, la autoliquidación rectificativa es el único procedimiento para corregir una declaración de IRPF, tanto si el resultado sale a ingresar como a devolver. La complementaria y la solicitud de rectificación solo siguen para 2023 y años anteriores (Manual práctico de Renta 2025 de la AEAT, «Regularización de situaciones tributarias: la autoliquidación rectificativa»).
 
