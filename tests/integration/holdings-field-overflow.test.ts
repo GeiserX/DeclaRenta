@@ -30,7 +30,7 @@ import { renderSection720 } from "../../src/web/section-720.js";
 import { renderSectionD6 } from "../../src/web/section-d6.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import { generateD6Report } from "../../src/generators/d6.js";
-import { buildModelo721Entries, generateModelo721 } from "../../src/generators/modelo721.js";
+import { buildModelo721Entries, findModelo721Omissions, generateModelo721 } from "../../src/generators/modelo721.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { FifoDisposal } from "../../src/types/tax.js";
@@ -423,10 +423,6 @@ describe("#470 the 721 library export writes numbers as the 720 does: digits in 
     expect(() => generateModelo721([entry(value)], cfg721)).toThrow(/excede el campo/);
   });
 
-  it("a quantity past its 9 integer digits throws", () => {
-    expect(() => generateModelo721([entry("60000", "1e21")], cfg721)).toThrow(/excede el campo/);
-  });
-
   // CodeRabbit on 45c5712: the acquisition cost skips the 720 fit, and numPad
   // wrote the integer digits with toFixed(0) before its width check, one digit
   // per exponent step. costBasisMoney="1e1000000000" ran out of memory. Now
@@ -445,10 +441,46 @@ describe("#470 the 721 library export writes numbers as the 720 does: digits in 
       expect(message).toMatch(/^Modelo 721: importe .* excede el campo de 13 dígitos enteros$/);
       expect(message.length).toBeLessThan(100);
     });
+  }
 
-    it(`a coin quantity of ${cost} fails fast with a short error`, () => {
-      expect(() => generateModelo721([entry("60000", cost)], cfg721)).toThrow(/^.{0,100}$/);
+  // The quantity field has 9 integer digits: 1e9 coins or more threw and
+  // failed the whole file, though a meme coin held by the billion is ordinary.
+  // As the 720 does with a count past its field (`quantity_too_large`), that
+  // coin is left out of the file and named for manual entry
+  // (`findModelo721Omissions`); every other record is the same, and the coin
+  // still counts toward the 50,000 € threshold.
+  const shib = (position: string, value: string) => coin(value)
+    .replace('symbol="BTC" description="BITCOIN"', 'symbol="SHIB" description="SHIBA INU"')
+    .replace('position="1"', `position="${position}"`);
+  const entriesOf = (xml: string) => buildModelo721Entries(flex(xml).openPositions, rateMap, "2025-12-31").positions.map((p) => p.entry);
+
+  for (const position of ["1000000000", "-1000000000", "1e21", ...hugeCases]) {
+    it(`a coin of ${position} units is left out and named; the file is the one without it`, () => {
+      const entries = entriesOf(coin("80000") + shib(position, "20000"));
+      expect(generateModelo721(entries, cfg721)).toBe(generateModelo721(entriesOf(coin("80000")), cfg721));
+      expect(findModelo721Omissions(entries)).toEqual([{ reason: "quantity_too_large", entry: entries[1] }]);
     });
   }
+
+  it("a coin left out still counts toward the threshold; the sums are those of the records written", () => {
+    // 25,500 € of BTC alone is below 50,000 €; with 34,000 € of SHIB it is not.
+    expect(generateModelo721(entriesOf(coin("30000")), cfg721)).toBe("");
+    const lines = generateModelo721(entriesOf(coin("30000") + shib("2000000000", "40000")), cfg721).split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]!.slice(135, 144)).toBe("000000001");
+    expect(lines[0]!.slice(163, 180)).toBe("00000000002550000");
+    expect(lines[1]!.slice(131, 143).trim()).toBe("BTC");
+    // The only coin, left out: no file, and the omission names it.
+    const alone = entriesOf(shib("2000000000", "80000"));
+    expect(generateModelo721(alone, cfg721)).toBe("");
+    expect(findModelo721Omissions(alone).map((o) => o.entry.assetId)).toEqual(["SHIB"]);
+  });
+
+  it("boundary: 999,999,999.999 coins are written; 1,000,000,000 are left out", () => {
+    const fits = entriesOf(coin("80000") + shib("999999999.999", "20000"));
+    expect(findModelo721Omissions(fits)).toEqual([]);
+    expect(generateModelo721(fits, cfg721).split("\n")[2]!.slice(464, 476)).toBe("999999999999");
+    expect(findModelo721Omissions(entriesOf(shib("1000000000", "80000")))).toHaveLength(1);
+  });
 });
 
