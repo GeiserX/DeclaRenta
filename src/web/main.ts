@@ -984,6 +984,18 @@ const savedPanels = new Set<SavedPanel>();
 const panelTouched = new WeakMap<Element, number>();
 let panelTouchSeq = 0;
 
+/**
+ * The drawn results panels that hold something the user did not save (#472
+ * review of 6fb63b2): an edit (typing, a select, an added or removed row) or a
+ * Save or Clear the panel refused (its error is on screen). The stamp above
+ * only covers what happened after a run started; a Save in another panel
+ * starts a newer run after the edit, and that run would redraw the panel from
+ * storage and drop the typed value. Every run keeps these panels, unless it
+ * shows another year. Only the panel's own good Save or Clear takes it out, so
+ * the run it starts redraws it. A Save that changes nothing adds nothing.
+ */
+const panelUnsaved = new WeakSet<Element>();
+
 async function processFiles(): Promise<void> {
   // Noted before any await: a Save calls this from its click handler.
   const touchSeqAtStart = panelTouchSeq;
@@ -1063,7 +1075,8 @@ async function processFiles(): Promise<void> {
     clearWizardError();
     // Panels touched while this run waited stay as the user left them, unless
     // the run shows another year (they belong to the year on screen).
-    const keep = (el: Element) => report.year === shownResultsYear && (panelTouched.get(el) ?? 0) > touchSeqAtStart;
+    const keep = (el: Element) =>
+      report.year === shownResultsYear && (panelUnsaved.has(el) || (panelTouched.get(el) ?? 0) > touchSeqAtStart);
     const labelled = new Set(savedPanels);
     savedPanels.clear();
     renderResults(report, labelled, keep);
@@ -1328,8 +1341,10 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
   });
 
   // A Save reruns the report and redraws its panel: the new panel shows
-  // «Guardado» (#472). A Clear reruns without it.
-  const rerunAfter = (panel: SavedPanel) => (action: "save" | "clear") => {
+  // «Guardado» (#472). A Clear reruns without it. Either one stored what the
+  // panel shows, so the panel holds nothing unsaved any more.
+  const rerunAfter = (panel: SavedPanel, el: HTMLElement) => (action: "save" | "clear") => {
+    panelUnsaved.delete(el);
     if (action === "save") savedPanels.add(panel);
     void processFiles();
   };
@@ -1355,24 +1370,34 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
       });
     };
     for (const type of ["input", "change", "click"]) panel.addEventListener(type, touch, true);
+    // What the panel holds that nobody saved. An edit, or a button outside the
+    // Save/Clear bar (add or remove a row), counts at once; a Save or Clear
+    // counts after its handler ran, when it left an error on screen.
+    const actionBar = ".crypto-rates-actions, .manual-opening-lots-actions";
+    for (const type of ["input", "change"]) panel.addEventListener(type, () => panelUnsaved.add(panel), true);
+    panel.addEventListener("click", (e) => {
+      const button = e.target instanceof Element ? e.target.closest("button") : null;
+      if (!button) return;
+      if (!button.closest(actionBar) || panel.querySelector("[role='alert']:not([hidden])")) panelUnsaved.add(panel);
+    });
     bind(panel);
   };
 
   placePanel("openingLots", renderManualOpeningLotsPanel(report.messages, { saved: labelled.has("openingLots") }), (panel) => {
-    bindManualOpeningLotsPanel(panel, rerunAfter("openingLots"));
+    bindManualOpeningLotsPanel(panel, rerunAfter("openingLots", panel));
   });
 
   // Re-run the full pipeline so the newly-entered manual rates take
   // effect — no re-upload needed (statement is cached in mergedStatement).
   placePanel("crypto", renderManualRatesPanel(report.unresolvedCryptoValuations ?? [], { saved: labelled.has("crypto") }), (panel) => {
-    bindManualRatesPanel(panel, rerunAfter("crypto"));
+    bindManualRatesPanel(panel, rerunAfter("crypto", panel));
   });
 
   // The anti-churning window per security (#452): 2 months or 1 year, set by
   // hand when IBKR's listing exchange is wrong or missing. Saving reruns the
   // whole pipeline, so the method comparison below picks it up too.
   placePanel("antichurning", renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities, { saved: labelled.has("antichurning") }), (panel) => {
-    bindAntichurningWindowPanel(panel, rerunAfter("antichurning"));
+    bindAntichurningWindowPanel(panel, rerunAfter("antichurning", panel));
   });
 
   // «Acciones / Divisa / Total», then the closed comparison with the other methods.

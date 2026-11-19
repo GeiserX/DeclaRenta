@@ -692,7 +692,7 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)).toHaveLength(1);
   });
 
-  it("an edit after the first Save takes that panel out: the second Save's run draws it without «Guardado»", async () => {
+  it("an edit after the first Save takes that panel out: the second Save's run keeps it without «Guardado»", async () => {
     const crypto = await waitFor(cryptoPanel, "crypto panel");
     const win = await waitFor(windowPanel, "window panel");
     solInput(crypto).value = "30000";
@@ -704,6 +704,7 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     await redrawn(windowPanel, win, "rerun");
     await new Promise((r) => setTimeout(r, 100));
     expect(shown(windowLabel())).toBe(true);
+    expect(cryptoPanel()).toBe(crypto);
     expect(cryptoLabel().hidden).toBe(true);
   });
 
@@ -732,6 +733,73 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     expect(cryptoPanel()).not.toBe(crypto);
     expect(shown(cryptoLabel())).toBe(true);
     expect(windowLabel().hidden).toBe(true);
+  });
+
+  // The second Save's run starts after the crypto edit, so the edit is older
+  // than that run: the panel still holds a price nobody saved, and the run
+  // must leave it on screen (#472 review of 6fb63b2).
+  it("a crypto Save, an edit, then an anti-churning Save: the run keeps the typed crypto price; the crypto panel's own Save redraws it", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    solInput(crypto).value = "31000";
+    solInput(crypto).dispatchEvent(new Event("input", { bubbles: true }));
+    windowSelect(win).value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun after the anti-churning Save");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).toBe(crypto);
+    expect(solInput(crypto).value).toBe("31000");
+    expect(cryptoLabel().hidden).toBe(true);
+    expect(shown(windowLabel())).toBe(true);
+    // A later run from another panel keeps it too.
+    const win2 = windowPanel()!;
+    windowSelect(win2).value = "12";
+    win2.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win2, "rerun after the second anti-churning Save");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).toBe(crypto);
+    expect(solInput(crypto).value).toBe("31000");
+    // The crypto panel's own Save stores the price and lets its run redraw it.
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await redrawn(cryptoPanel, crypto, "rerun after the crypto Save");
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)[0].eurPerUnit).toBe("31000");
+  });
+
+  it("a crypto Save, a refused crypto Save, then an anti-churning Save: the run keeps the flagged price and the error", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    // No input event: only the refused Save says the panel holds something unsaved.
+    solInput(crypto).value = "abc";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    const error = crypto.querySelector<HTMLElement>(".crypto-rates-error-msg")!;
+    expect(error.hidden).toBe(false);
+    windowSelect(win).value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await redrawn(windowPanel, win, "rerun after the anti-churning Save");
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).toBe(crypto);
+    expect(solInput(crypto).value).toBe("abc");
+    expect(solInput(crypto).getAttribute("aria-invalid")).toBe("true");
+    expect(error.hidden).toBe(false);
+  });
+
+  it("an empty Save that changes nothing does not hold the panel: the next run from another panel redraws it (control)", async () => {
+    const win = await waitFor(windowPanel, "window panel");
+    // Nothing chosen: the anti-churning Save stores nothing and starts no run.
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(windowPanel()).toBe(win);
+    const crypto = cryptoPanel()!;
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await redrawn(cryptoPanel, crypto, "rerun after the crypto Save");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(windowPanel()).not.toBe(win);
   });
 
   it("a crypto Save, then a new upload before the run lands: the next results show no «Guardado»", async () => {
