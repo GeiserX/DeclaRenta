@@ -37,6 +37,12 @@ Un fichero de texto de **ancho fijo** (500 bytes por registro) codificado en **I
 
 Las posiciones sin ISIN, las posiciones sin un número de acciones legible y los bienes o cuentas sin país conocido no caben en el fichero: si su categoría supera los 50.000 €, DeclaRenta los lista para que los declares a mano en el formulario. Una posición sin número de acciones no sale nunca con 0 en «Número de valores»: toma el número del extracto de fin de año del bróker. Una cantidad de 0 junto a un valor distinto de 0 se trata igual, porque ese 0 no es el número de acciones. Una fila con 0 acciones y valor 0 no es una posición: no se escribe. Su valor sí cuenta para el umbral. Si tampoco trae valor, cuenta como posición sin valorar, y la sección no dice que estés por debajo del umbral. Lo mismo vale para cualquier posición con acciones cuyo valor no es un número (IBKR puede dejarlo vacío o escribir «N/A»): cuenta como sin valorar, nunca como 0 €. Hasta la versión 0.66.14 ese valor hacía fallar la sección del 720 y la del 721. Una posición corta (valor negativo, o un número de acciones negativo si el valor no lo dice) no es un bien que tengas y no entra.
 
+Un número es un decimal finito: `700`, `-12.5` o con exponente (`1e5`). «NaN», «Infinity» o cualquier otro texto no es un número, y la posición cuenta como sin valorar. Hasta la versión 0.66.14 un valor «NaN» convertía el total en NaN, y la sección decía que no superabas el umbral aunque tuvieras más de 50.000 € en otras posiciones.
+
+Si el número de acciones y el valor tienen signos contrarios (700 acciones con valor −5.000, o −700 con valor 5.000), la fila se contradice: no se sabe si es una posición larga o corta. DeclaRenta la trata como una posición que tienes, pero sin valorar, igual en el 720, el 721 y el D-6, y avisa nombrándola. Así nunca la deja fuera como corta cuando podría contar para el umbral. Hasta la versión 0.66.14 el 720 la dejaba fuera como corta y el D-6 la listaba con valor negativo.
+
+Un saldo en efectivo sin un número legible (IBKR puede dejar vacío el saldo final, escribir «N/A», o no traer la columna) no cuenta como 0 €. La categoría de cuentas lo cuenta como saldo sin valorar, la sección dice «No se puede determinar» si las demás cuentas no superan el umbral, y un aviso nombra la cuenta y la moneda. Ese saldo no entra en el fichero: decláralo a mano con el saldo del extracto de fin de año del bróker. Hasta la versión 0.66.14 ese saldo hacía fallar la sección del 720. Una media del cuarto trimestre sin un número legible cuenta como media que falta.
+
 Para acciones (STK), la valoración se calcula con el **tipo medio del cuarto trimestre** del BCE. Para fondos y bonos, se usa el tipo a 31 de diciembre.
 
 ### Cómo presentarlo en sede electrónica
@@ -70,7 +76,7 @@ La presentación oficial para programas externos se hace en XML según la Orden 
 
     DeclaRenta muestra una revisión orientativa de posiciones cripto, pero la generación oficial del Modelo 721 está desactivada hasta implementar y validar el XML AEAT.
 
-Si el fichero no da un número de unidades legible para una criptomoneda (IBKR puede exportar una posición sin cantidad), la sección muestra sus unidades como «—», nunca 0, y un aviso con esas monedas: toma las unidades del extracto de fin de año del exchange o del bróker. Su valor sí cuenta para el umbral. Si tampoco trae valor, cuenta como posición sin valorar, y la sección dice que no se puede determinar si superas el umbral, en lugar de decir que no estás obligado. Una criptomoneda con unidades cuyo valor no es un número (vacío o «N/A») cuenta igual como sin valorar.
+Si el fichero no da un número de unidades legible para una criptomoneda (IBKR puede exportar una posición sin cantidad), la sección muestra sus unidades como «—», nunca 0, y un aviso con esas monedas: toma las unidades del extracto de fin de año del exchange o del bróker. Su valor sí cuenta para el umbral. Si tampoco trae valor, cuenta como posición sin valorar, y la sección dice que no se puede determinar si superas el umbral, en lugar de decir que no estás obligado. Una criptomoneda con unidades cuyo valor no es un número (vacío, «N/A» o «NaN») cuenta igual como sin valorar. Una cantidad de 0 junto a un valor positivo es una cantidad desconocida, nunca 0 unidades; junto a un valor negativo es una posición corta, que no entra.
 
 ## Modelo D-6
 
