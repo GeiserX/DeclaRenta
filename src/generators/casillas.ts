@@ -86,30 +86,65 @@ function emptyBlock(): CasillaBlock {
   };
 }
 
+/**
+ * The amounts of one disposal (a sale, or a currency disposal) that the boxes
+ * add. A non-finite amount (NaN or ±Infinity, from a division by an unexpected
+ * zero or a corrupt rate) is left out alone, never the valid amounts of the
+ * rest of the year (#469 review). Before, the whole leg was summed and then set
+ * to 0, so one poisoned sale erased every cost of the year (the user overpays)
+ * or every proceeds (the user underpays).
+ *
+ * The rule never lets a missing number lower the tax:
+ * - proceeds not finite: neither its proceeds nor its cost are added, because a
+ *   cost with no proceeds would be a loss that no figure supports;
+ * - cost not finite: the proceeds are added and the cost is not (a gain that
+ *   may be too high, never too low);
+ * - result: proceeds minus cost of what was added, or `gainLossEur` itself when
+ *   every amount is finite (byte-identical to before).
+ *
+ * `excluded` marks a disposal that lost an amount: the report names it in the
+ * error `report.non_finite_disposal`, so it is never silent. The report totals,
+ * the casilla boxes and the web annex all read the amounts through this, so
+ * every view shows the same figures.
+ */
+export function finiteDisposalAmounts(d: Pick<FifoDisposal, "proceedsEur" | "costBasisEur" | "gainLossEur">): {
+  proceeds: Decimal;
+  cost: Decimal;
+  gainLoss: Decimal;
+  excluded: boolean;
+} {
+  if (d.proceedsEur.isFinite() && d.costBasisEur.isFinite() && d.gainLossEur.isFinite()) {
+    return { proceeds: d.proceedsEur, cost: d.costBasisEur, gainLoss: d.gainLossEur, excluded: false };
+  }
+  const proceeds = d.proceedsEur.isFinite() ? d.proceedsEur : new Decimal(0);
+  const cost = d.proceedsEur.isFinite() && d.costBasisEur.isFinite() ? d.costBasisEur : new Decimal(0);
+  return { proceeds, cost, gainLoss: proceeds.minus(cost), excluded: true };
+}
+
 function accumulate(block: CasillaBlock, d: FifoDisposal): void {
-  block.transmissionValue = block.transmissionValue.plus(d.proceedsEur);
-  block.acquisitionValue = block.acquisitionValue.plus(d.costBasisEur);
+  const { proceeds, cost, gainLoss } = finiteDisposalAmounts(d);
+  block.transmissionValue = block.transmissionValue.plus(proceeds);
+  block.acquisitionValue = block.acquisitionValue.plus(cost);
   // Zero-gain disposals fall into the gains bucket (>= 0). This is a sum-of-
   // positives / sum-of-losses split for the 0339/0340 (or 0386/0385) totals; a
   // zero contributes nothing either way, so the boundary choice is immaterial to
   // the figures and only keeps the count of "loss" rows from being inflated.
-  if (d.gainLossEur.greaterThanOrEqualTo(0)) {
-    block.gains = block.gains.plus(d.gainLossEur);
+  if (gainLoss.greaterThanOrEqualTo(0)) {
+    block.gains = block.gains.plus(gainLoss);
   } else {
-    block.losses = block.losses.plus(d.gainLossEur.abs());
+    block.losses = block.losses.plus(gainLoss.abs());
   }
-  block.netGainLoss = block.netGainLoss.plus(d.gainLossEur);
+  block.netGainLoss = block.netGainLoss.plus(gainLoss);
   block.count += 1;
 }
 
 /**
- * The casilla boxes never render "NaN" (#469). A non-finite disposal amount
- * (a division by an unexpected zero deep in an engine) would otherwise reach the
- * CSV, the PDFs, the web cards and the CLI, which all recompute the boxes here
- * from the raw disposals. Same rule as report.ts guardNonFiniteTotals, which
- * already emitted `report.non_finite_total` for the totals: a non-finite leg is
- * 0, and a non-finite net is the difference of the two legs, as the report's.
- * A strict no-op when every amount is finite.
+ * The casilla boxes never render "NaN" (#469). The disposals' own amounts are
+ * already cleaned one by one (`finiteDisposalAmounts`); this is the last line
+ * for the FX totals folded in from the report, which report.ts
+ * guardNonFiniteTotals has already cleaned: a non-finite leg is 0, and a
+ * non-finite net is the difference of the two legs, as the report's. A strict
+ * no-op when every amount is finite.
  */
 function finiteBlock(block: CasillaBlock): CasillaBlock {
   const finite = (d: Decimal): Decimal => (d.isFinite() ? d : new Decimal(0));

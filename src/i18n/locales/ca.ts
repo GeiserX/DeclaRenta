@@ -1021,6 +1021,10 @@ const ca: TranslationKeys = {
     "S'ha detectat un valor no finit (NaN/Infinit) en un total calculat; revisa els fitxers importats.",
   "report.non_finite_total.hint":
     "És possible que un fitxer d'un bróker tingui un import corrupte o un format numèric inesperat. Revisa les operacions d'origen.",
+  "report.non_finite_disposal":
+    "{{count}} venda(es) tenen un import que no és un número (NaN o infinit): {{rows}}. Aquest import no se suma a les caselles. La resta d'operacions de l'any sí que se sumen.",
+  "report.non_finite_disposal.hint":
+    "Si falta el valor de transmissió d'una venda, DeclaRenta tampoc no en suma el valor d'adquisició, per no crear una pèrdua que res no justifica. Si falta el valor d'adquisició, suma el de transmissió. Revisa aquestes operacions al fitxer del bróker i als tipus de canvi, i declara'n el resultat a mà.",
   "flatex.lagerstellenwechsel.unmatched":
     "Traspàs de custòdia (Lagerstellenwechsel) sense contrapartida per a {{isin}}: {{netQuantity}} títols.",
   "flatex.lagerstellenwechsel.unmatched.hint":

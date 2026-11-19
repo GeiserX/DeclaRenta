@@ -1019,6 +1019,10 @@ const en: TranslationKeys = {
     "A non-finite value (NaN/Infinity) was detected in a calculated total; please review the imported files.",
   "report.non_finite_total.hint":
     "A broker file may have a corrupt amount or an unexpected number format. Review the source operations.",
+  "report.non_finite_disposal":
+    "{{count}} sale(s) have an amount that is not a number (NaN or infinity): {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
+  "report.non_finite_disposal.hint":
+    "If the transmission value of a sale is missing, DeclaRenta does not add its acquisition value either, so it creates no loss that nothing supports. If the acquisition value is missing, it adds the transmission value. Check those operations in the broker file and the exchange rates, and declare their result by hand.",
   "flatex.lagerstellenwechsel.unmatched":
     "Custody transfer (Lagerstellenwechsel) without a counterpart for {{isin}}: {{netQuantity}} units.",
   "flatex.lagerstellenwechsel.unmatched.hint":

@@ -1023,6 +1023,10 @@ const eu: TranslationKeys = {
     "Balio ez-finitu bat (NaN/Infinitua) detektatu da kalkulatutako total batean; berrikusi inportatutako fitxategiak.",
   "report.non_finite_total.hint":
     "Litekeena da broker baten fitxategi batek zenbateko hondatu bat edo ustekabeko zenbaki-formatu bat izatea. Berrikusi jatorrizko eragiketak.",
+  "report.non_finite_disposal":
+    "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua): {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
+  "report.non_finite_disposal.hint":
+    "Salmenta baten eskualdaketa-balioa falta bada, DeclaRentak ez du haren eskuratze-balioa ere batzen, ezerk justifikatzen ez duen galerarik ez sortzeko. Eskuratze-balioa falta bada, eskualdaketa-balioa batzen du. Berrikusi eragiketa horiek brokerraren fitxategian eta kanbio-tasetan, eta aitortu haien emaitza eskuz.",
   "flatex.lagerstellenwechsel.unmatched":
     "Kustodia-transferentzia (Lagerstellenwechsel) kontrapartidarik gabe {{isin}} baliorako: {{netQuantity}} titulu.",
   "flatex.lagerstellenwechsel.unmatched.hint":

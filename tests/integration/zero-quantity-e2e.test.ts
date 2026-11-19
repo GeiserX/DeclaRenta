@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { computeCasillaBlocksWithFx, combinedNetGainLoss } from "../../src/generators/casillas.js";
@@ -12,6 +12,7 @@ import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from ".
 import type { FxMethod, TaxSummary } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
+import { localizeHint, localizeMessage, setLocale } from "../../src/i18n/index.js";
 
 // ===========================================================================
 // Issue #469: a buy or sale of 0 units must never book an empty lot.
@@ -263,9 +264,10 @@ describe("#469 DEGIRO: the quantity is compared as a number", () => {
 });
 
 describe("#469 the casilla boxes never render NaN, whatever reaches them", () => {
-  // A defense in depth for any future engine path: a non-finite disposal is
-  // cleaned the way report.ts guardNonFiniteTotals cleans the totals.
-  it("a NaN disposal amount reads 0 in its leg and the net is the difference of the legs", () => {
+  // A defense in depth for any future engine path: only the non-finite amount
+  // is left out, never the valid amounts of the rest of the year, and the
+  // report names the sale (the same rule in the report totals and every view).
+  it("a NaN cost is left out alone: the valid sale keeps its 1.000 cost, so 1.200 / 1.000 / 200", () => {
     const base = report(ibkr([ibkrTrade("EUR", "20250301", "BUY", "100", "10"), ibkrTrade("EUR", "20250601", "SELL", "-100", "12")]), "Interactive Brokers", "multidivisa");
     const good = base.capitalGains.disposals[0]!;
     const poisoned: TaxSummary = {
@@ -277,10 +279,66 @@ describe("#469 the casilla boxes never render NaN, whatever reaches them", () =>
     };
     const blocks = computeCasillaBlocksWithFx(poisoned);
     expect(blocks.listedShares.transmissionValue.toString()).toBe("1200");
-    expect(blocks.listedShares.acquisitionValue.toString()).toBe("0");
-    expect(blocks.listedShares.netGainLoss.toString()).toBe("1200");
+    expect(blocks.listedShares.acquisitionValue.toString()).toBe("1000");
+    expect(blocks.listedShares.netGainLoss.toString()).toBe("200");
+    expect(blocks.listedShares.gains.toString()).toBe("200");
+    expect(blocks.listedShares.losses.toString()).toBe("0");
     expect(combinedNetGainLoss(blocks).isFinite()).toBe(true);
     const resumen = formatCsv(poisoned).split("# RESUMEN CASILLAS")[1] ?? "";
     expect(resumen).not.toMatch(/NaN/);
+  });
+});
+
+describe("#469 review: one sale with a non-finite amount never erases the year's valid amounts", () => {
+  // Real path: a USD rate of "Infinity" on one sale date (a corrupt manual or
+  // cached rate) poisons that sale only. The EUR sale (1.200 / 1.000) must stay
+  // in the boxes, and the report must name the poisoned sale.
+  const rows = [
+    ibkrTrade("EUR", "20250301", "BUY", "100", "10"),
+    ibkrTrade("EUR", "20250601", "SELL", "-100", "12"),
+    ibkrTrade("USD", "20250310", "BUY", "10", "100").replace(/symbol="XYZ"/, 'symbol="ABC"').replace(/isin="US0000004531"/, 'isin="US0000000ABC"').replace(/conid="4531"/, 'conid="777"'),
+    ibkrTrade("USD", "20250901", "SELL", "-10", "120").replace(/symbol="XYZ"/, 'symbol="ABC"').replace(/isin="US0000004531"/, 'isin="US0000000ABC"').replace(/conid="4531"/, 'conid="777"'),
+  ];
+  const poisoned: EcbRateMap = new Map([...RATES].map(([d, m]) => [d, d === "2025-09-01" ? new Map([["USD", "Infinity"]]) : m]));
+
+  for (const method of METHODS) {
+    it(`the EUR sale stays 1.200 / 1.000 / 200 and the error names ABC (${method})`, () => {
+      const st = finalizeMergedStatement(mergeStatement(createEmptyStatement(), ibkr(rows), "Interactive Brokers"));
+      const r = generateTaxReport(st, poisoned, 2025, reportOptionsForMethod(method));
+      const abc = r.capitalGains.disposals.find((d) => d.symbol === "ABC")!;
+      expect(abc.proceedsEur.isFinite()).toBe(false);
+      expect(totals(r)).toEqual(["1200", "1000", "200"]);
+      const blocks = computeCasillaBlocksWithFx(r);
+      expect(blocks.listedShares.transmissionValue.toString()).toBe("1200");
+      expect(blocks.listedShares.acquisitionValue.toString()).toBe("1000");
+      expect(blocks.listedShares.netGainLoss.toString()).toBe("200");
+      const err = r.messages.find((m) => m.id === "report.non_finite_disposal");
+      expect(err?.severity).toBe("error");
+      expect(err?.context?.rows).toContain("ABC");
+      expect(err?.context?.rows).toContain("01/09/2025");
+      const resumen = formatCsv(r).split("# RESUMEN CASILLAS")[1] ?? "";
+      expect(resumen).not.toMatch(/NaN|Infinity/);
+    });
+  }
+
+  describe("the error in the 5 locales", () => {
+    afterEach(async () => {
+      await setLocale("es");
+    });
+
+    it("the Spanish text is the report's own; every other locale has its own text naming the sale", async () => {
+      const st = finalizeMergedStatement(mergeStatement(createEmptyStatement(), ibkr(rows), "Interactive Brokers"));
+      const m = generateTaxReport(st, poisoned, 2025, reportOptionsForMethod("monodivisa")).messages.find((x) => x.id === "report.non_finite_disposal")!;
+      await setLocale("es");
+      expect(localizeMessage(m)).toBe(m.message);
+      expect(localizeHint(m)).toBe(m.hint);
+      for (const locale of ["en", "ca", "eu", "gl"] as const) {
+        await setLocale(locale);
+        expect(localizeMessage(m)).not.toBe(m.message);
+        expect(localizeHint(m)).not.toBe(m.hint);
+        expect(localizeMessage(m)).toContain(m.context!.rows);
+        expect(localizeMessage(m)).not.toContain("{{");
+      }
+    });
   });
 });
