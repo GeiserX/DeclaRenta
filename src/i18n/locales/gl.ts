@@ -1083,6 +1083,10 @@ const gl: TranslationKeys = {
     "Binance: {{count}} comisión(s) non din de que operación do mesmo segundo son, e DeclaRenta non as resta: {{rows}}.",
   "binance.fee_unassigned.hint":
     "Binance dá varias operacións no mesmo segundo. Estas comisións están entre dúas operacións da mesma moeda. Por iso DeclaRenta non sabe de cal son. Non as suma ao custo nin as resta do importe de venda, e así non pagas de menos. Se sabes de que compra ou venda é cada comisión, corrixe a man en Renta Web o seu custo ou o seu importe de venda.",
+  "binance.income_negative":
+    "Binance: {{count}} fila(s) de ingresos son negativas e non se calculan: {{rows}}.",
+  "binance.income_negative.hint":
+    "Unha fila de ingresos negativa adoita ser unha recompensa que Binance che retirou. DeclaRenta non sabe que recompensa anula, así que non cambia ningún importe. Segue contando esa recompensa como ingreso e as súas moedas como compradas ao seu valor dese día. Se anula un ingreso do ano que declaras, quítao a man en Renta Web. Se despois vendiches esa criptomoeda, o custo da venda pode ser demasiado alto. Revisa en Renta Web o custo desas vendas.",
   "binance.fiat_conversion_not_booked":
     "Binance: {{count}} fila(s) cambian unha moeda oficial por outra (por exemplo, euros por dólares) e non se calculan: {{rows}}.",
   "binance.fiat_conversion_not_booked.hint":

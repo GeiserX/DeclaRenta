@@ -1756,7 +1756,7 @@ describe("#467 crypto income whose coin cannot be read is named, never skipped w
 describe("#466 #467 #468 the warnings of these issues read as plain short sentences in Spanish and English", () => {
   const KEYS = [
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
-    "binance.fee_unassigned", "binance.fiat_conversion_not_booked", "binance.unsupported_pair",
+    "binance.fee_unassigned", "binance.income_negative", "binance.fiat_conversion_not_booked", "binance.unsupported_pair",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
@@ -2154,7 +2154,7 @@ describe("#467 a dividend or interest row whose amount cannot be read is named, 
   });
 });
 
-describe("#467 Binance: every fee, fiat swap and price is booked from the file or named", () => {
+describe("#467 Binance: every fee, dust row, negative income, fiat swap and price is booked from the file or named", () => {
   const TX_H = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
   const TH_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
   const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
@@ -2275,6 +2275,57 @@ describe("#467 Binance: every fee, fiat swap and price is booked from the file o
     });
   });
 
+  // Dust: a dust row with no BNB row at its exact time was dropped with no
+  // word, and a BNB row one second later was lost with it.
+  const dustBuys = ["2024-01-10 10:00:00|Buy,SOL,1", "2024-01-10 10:00:00|Sell,EUR,-10", "2024-01-11 10:00:00|Buy,ADA,100", "2024-01-11 10:00:00|Sell,EUR,-20"];
+  const dust = (...rows: string[]): Statement => tx(...dustBuys, ...rows.map((r) => `2025-02-01 10:00:0${r[0]}|Small Assets Exchange BNB,${r.slice(2)}`));
+  const permutas = (s: Statement): string[] => s.trades.filter((t) => t.description.startsWith("Dust")).map((t) => `${t.buySell} ${t.symbol} ${t.quantity}`);
+  it.each(METHODS)("[%s] dust: a SOL row with no BNB row is named as a leg with no other side", (method) => {
+    const parsed = dust("0|SOL,-1");
+    expect(permutas(parsed)).toEqual([]);
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(message(r.messages, "binance.unpaired_leg")?.context?.rows).toBe("SOL Small Assets Exchange BNB -1 2025-02-01 10:00:00");
+  });
+  it("dust: a BNB row 1 s after its dust row is paired, as in the same second", () => {
+    for (const second of ["0", "1"]) {
+      const parsed = dust("0|SOL,-1", `${second}|BNB,0.05`);
+      expect(permutas(parsed)).toEqual(["SELL SOL -1", "BUY BNB 0.05"]);
+      expect(parsed.parserMessages ?? []).toEqual([]);
+    }
+  });
+  it("dust: two coins and one BNB row: the coin left out is named, and the window is named as shared by a guess", () => {
+    const parsed = dust("0|SOL,-1", "0|ADA,-100", "0|BNB,0.1");
+    expect(permutas(parsed)).toEqual(["SELL SOL -1", "BUY BNB 0.1"]);
+    expect(message(parsed.parserMessages, "binance.unpaired_leg")?.context?.rows).toBe("ADA Small Assets Exchange BNB -100 2025-02-01 10:00:00");
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context?.count).toBe("3");
+  });
+  it("dust: two coins and two BNB rows with no Remark are paired by order, a guess that is named", () => {
+    const parsed = dust("0|SOL,-1", "0|ADA,-100", "0|BNB,0.02", "0|BNB,0.08");
+    expect(permutas(parsed)).toEqual(["SELL SOL -1", "BUY BNB 0.02", "SELL ADA -100", "BUY BNB 0.08"]);
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context?.count).toBe("4");
+  });
+  it("control: two coins and two BNB rows paired by their Remark are named by nothing", () => {
+    const parsed = dust("0|SOL,-1,SOL to BNB", "0|ADA,-100,ADA to BNB", "0|BNB,0.08,ADA to BNB", "0|BNB,0.02,SOL to BNB");
+    expect(permutas(parsed)).toEqual(["SELL SOL -1", "BUY BNB 0.02", "SELL ADA -100", "BUY BNB 0.08"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+  });
+
+  // Income: a negative income row (a reward taken back) was dropped with no
+  // word, so a later sale used the reward's 50 € lot (-38 € instead of +2 €).
+  it.each(METHODS)("[%s] a negative Referral Commission is named, and the numbers do not move", (method) => {
+    const sale = ["2025-02-01 10:00:00|Buy,ADA,10", "2025-02-01 10:00:00|Sell,EUR,-10", "2025-06-01 10:00:00|Sell,ADA,-10", "2025-06-01 10:00:00|Buy,EUR,12"];
+    const parsed = binanceParser.parse([`${TX_H},EUR_Value`,
+      "1,2024-03-01 10:00:00,Spot,Referral Commission,ADA,10,,50", "1,2024-03-05 10:00:00,Spot,Referral Commission,ADA,-10,,-50",
+      ...sale.map((r) => `1,${r.replace("|", ",Spot,")},,`)].join("\n"));
+    expect(parsed.cashTransactions.map((c) => c.amount)).toEqual(["10"]);
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(gains(r, "ADA")).toEqual(["-38.00"]);
+    expect(message(r.messages, "binance.income_negative")?.context).toEqual({ count: "1", rows: "ADA Referral Commission -10 2024-03-05 10:00:00" });
+  });
+  it("control: a positive reward alone names nothing", () => {
+    expect(ids(tx("0|Referral Commission,ADA,10"))).toEqual([]);
+  });
+
   // A Convert of EUR for USD and back was dropped with no word: the comment
   // said the FX engine handles it, but that engine reads only cash trades.
   it.each(METHODS)("[%s] a fiat-for-fiat Convert is named, never dropped with no word", (method) => {
@@ -2296,9 +2347,10 @@ describe("#467 Binance: every fee, fiat swap and price is booked from the file o
     const esText = es as Record<string, string>;
     const emitted: TaxMessage[] = [
       ...(tx("0|Buy,BTC,0.1", "0|Sell,EUR,-9000", "0|Fee,EUR,-5", "0|Buy,ETH,1", "0|Sell,EUR,-3000", "0|Fee,EUR,-1").parserMessages ?? []),
+      ...(tx("0|Referral Commission,ADA,-10").parserMessages ?? []),
       ...(tx("0|Binance Convert,EUR,-100", "0|Binance Convert,USD,110").parserMessages ?? []),
     ];
-    expect(emitted.map((m) => m.id)).toEqual(["binance.fee_unassigned", "binance.fiat_conversion_not_booked"]);
+    expect(emitted.map((m) => m.id)).toEqual(["binance.fee_unassigned", "binance.income_negative", "binance.fiat_conversion_not_booked"]);
     for (const m of emitted) {
       expect(isTranslationKey(m.id) && isTranslationKey(`${m.id}.hint`)).toBe(true);
       for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {

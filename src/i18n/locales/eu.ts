@@ -1085,6 +1085,10 @@ const eu: TranslationKeys = {
     "Binance: {{count}} komisiok ez dute esaten segundo bereko zein eragiketarenak diren, eta DeclaRentak ez ditu kentzen: {{rows}}.",
   "binance.fee_unassigned.hint":
     "Binance-k hainbat eragiketa ematen ditu segundo berean. Komisio horiek moneta bereko bi eragiketaren artean daude. Beraz, DeclaRentak ez daki zeinenak diren. Ez ditu kostuari gehitzen, ezta salmenta-zenbatekotik kentzen ere, eta horrela ez duzu gutxiago ordaintzen. Komisio bakoitza zein erosketa edo salmentarena den badakizu, zuzendu eskuz Renta Web-en haren kostua edo salmenta-zenbatekoa.",
+  "binance.income_negative":
+    "Binance: diru-sarreren {{count}} errenkada negatiboak dira, eta ez dira kalkulatzen: {{rows}}.",
+  "binance.income_negative.hint":
+    "Diru-sarreren errenkada negatibo bat Binance-k kendu dizun sari bat izan ohi da. DeclaRentak ez daki zein sari baliogabetzen duen, beraz, ez du zenbatekorik aldatzen. Sari hori diru-sarreratzat hartzen jarraitzen du, eta haren monetak egun horretako balioan erositakotzat. Aitortzen duzun urteko diru-sarrera bat baliogabetzen badu, kendu eskuz Renta Web-en. Gero kriptomoneta hori saldu bazenuen, salmentaren kostua handiegia izan daiteke. Berrikusi Renta Web-en salmenta horien kostua.",
   "binance.fiat_conversion_not_booked":
     "Binance: {{count}} errenkadak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
   "binance.fiat_conversion_not_booked.hint":

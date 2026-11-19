@@ -348,6 +348,8 @@ interface TxRow {
    * named (#467).
    */
   feeUnassigned?: boolean;
+  /** A negative income row (a reward taken back): it books nothing and is named (#467). */
+  negativeIncome?: boolean;
   /** A leg of a swap of one fiat currency for another: no engine books it, so it is named (#467). */
   fiatConversion?: boolean;
   /** The row a trade phase paired this leg with, when each leg is one row. */
@@ -639,8 +641,11 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       const isAhorro = TX_INCOME_AHORRO_OPS.has(r.operation);
       const isGeneral = TX_INCOME_GENERAL_OPS.has(r.operation);
       if (!isAhorro && !isGeneral) continue;
-      // Only positive credits are income; a negative (clawback) is rare — skip.
-      if (!r.change.isPositive()) { r.parsed = true; continue; }
+      // Only positive credits are income. A negative row takes a reward back:
+      // the reward's lot stays in FIFO and its income stays counted, so the
+      // row is named, never dropped with no word, and no disposal is made up
+      // for it (#467).
+      if (!r.change.isPositive()) { r.parsed = true; r.negativeIncome = true; continue; }
 
       r.parsed = true;
       addHint(r.coin, r.tradeDate, r.change, r.eurValue);
@@ -664,33 +669,41 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   }
 
   // 3. Dust (Small Assets Exchange BNB): negative dust-coin rows + positive BNB
-  //    rows at one timestamp, paired via the Remark ("SCR to BNB"). Each dust
-  //    coin → BNB is a permuta.
+  //    rows within ±1 s, paired via the Remark ("SCR to BNB"). Each dust coin →
+  //    BNB is a permuta. A dust row with no BNB row books nothing and is named
+  //    (binance.unpaired_leg); when the BNB rows are fewer than the dust coins,
+  //    or several coins fall back from the Remark to file order, which BNB
+  //    each coin got is a guess and every row is named
+  //    (binance.spot_cost_split, #467).
   function emitDust(): void {
-    const dustByTime = new Map<string, TxRow[]>();
-    for (const r of rows) {
-      if (r.parsed || !TX_DUST_OPS.has(r.operation)) continue;
-      if (!dustByTime.has(r.utcTime)) dustByTime.set(r.utcTime, []);
-      dustByTime.get(r.utcTime)!.push(r);
-    }
-    for (const group of dustByTime.values()) {
-      const bnbRows = group.filter((r) => r.coin === "BNB" && r.change.isPositive());
-      for (const dust of group) {
-        if (dust.coin === "BNB" || !dust.change.isNegative()) continue;
+    const isDustLeg = (r: TxRow): boolean => TX_DUST_OPS.has(r.operation) &&
+      (r.coin === "BNB" ? r.change.isPositive() : r.change.isNegative());
+    for (let i = 0; i < rows.length; i++) {
+      const start = rows[i]!;
+      if (start.parsed || !isDustLeg(start)) continue;
+      const group = collectWindow(rows, i, isDustLeg);
+      const bnbRows = group.filter((r) => r.coin === "BNB");
+      const dustRows = group.filter((r) => r.coin !== "BNB");
+      let guessed = dustRows.length > 1 && bnbRows.length < dustRows.length;
+      for (const dust of dustRows) {
         // Match BNB output by remark (e.g. "SCR to BNB"); fall back to any unused.
-        const bnb = bnbRows.find((b) => !b.parsed && b.remark === dust.remark)
-          ?? bnbRows.find((b) => !b.parsed);
+        const byRemark = bnbRows.find((b) => !b.parsed && b.remark === dust.remark);
+        const bnb = byRemark ?? bnbRows.find((b) => !b.parsed);
+        if (dustRows.length > 1 && bnb && (byRemark === undefined || dust.remark === "")) guessed = true;
         dust.parsed = true;
         addHint(dust.coin, dust.tradeDate, dust.change, dust.eurValue);
         if (bnb) {
           bnb.parsed = true;
           addHint("BNB", bnb.tradeDate, bnb.change, bnb.eurValue);
-          emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index, key: dust.key },
-            { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index, key: bnb.key }, "Dust");
+          emitCryptoSwap(trades, { coin: dust.coin, qty: dust.change, eur: dust.eurValue, date: dust.tradeDate, index: dust.index, key: dust.key, rows: [dust] },
+            { coin: "BNB", qty: bnb.change, eur: bnb.eurValue, date: bnb.tradeDate, index: bnb.index, key: bnb.key, rows: [bnb] }, "Dust");
+        } else {
+          dust.unpaired = true;
         }
       }
       // Any leftover BNB rows (rounding remainders) are immaterial — drop.
       for (const b of bnbRows) b.parsed = true;
+      if (guessed) for (const r of group) r.costSplitGuessed = true;
     }
   }
 
@@ -861,6 +874,22 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       severity: "warning",
       message: `Binance: ${count} comisión(es) no dicen de qué operación del mismo segundo son, y DeclaRenta no las resta: ${rows}.`,
       hint: "Binance anota varias operaciones en el mismo segundo. Estas comisiones están entre dos operaciones de la misma moneda. Por eso DeclaRenta no sabe de cuál son. No las suma al coste ni las resta del importe de venta, y así no pagas de menos. Si sabes de qué compra o venta es cada comisión, corrige a mano en Renta Web su coste o su importe de venta.",
+      context: { count, rows },
+    });
+  }
+  // A negative income row takes a reward back. DeclaRenta does not know
+  // which reward it cancels, so it changes no number, and each row is named
+  // (#467): before, it was dropped with no word, and a later sale used the
+  // reward's lot as if the coins were still held.
+  const negativeIncome = rows.filter((r) => r.negativeIncome);
+  if (negativeIncome.length > 0) {
+    const count = String(negativeIncome.length);
+    const rows = negativeIncome.map((r) => `${r.coin} ${r.operationText} ${r.changeText} ${r.utcTime}`).join("; ");
+    parserMessages.push({
+      id: "binance.income_negative",
+      severity: "warning",
+      message: `Binance: ${count} fila(s) de ingresos son negativas y no se calculan: ${rows}.`,
+      hint: "Una fila de ingresos negativa suele ser una recompensa que Binance te ha retirado. DeclaRenta no sabe qué recompensa anula, así que no cambia ningún importe. Sigue contando esa recompensa como ingreso y sus monedas como compradas a su valor de ese día. Si anula un ingreso del año que declaras, quítalo a mano en Renta Web. Si después vendiste esa criptomoneda, el coste de la venta puede ser demasiado alto. Revisa en Renta Web el coste de esas ventas.",
       context: { count, rows },
     });
   }

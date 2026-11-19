@@ -756,13 +756,18 @@ práctico Renta 2025. The decisions, each pinned in
       Sell EUR, Fee -1" put 6 € on ETH), each Strategy pair took the first
       fee row of its coin (BTC paid ETH's 5 € and the 1 € row vanished), and
       a fiat-for-fiat Strategy pair wrote its fee onto an earlier, unrelated
-      trade. A fiat-for-fiat swap books nothing, as before, and is now named
-      (`binance.fiat_conversion_not_booked`).
-      In the Trade History export, FIFO values a fiat-pair trade at Price ×
-      Executed: a Price that cannot be read was read as 0 (a 3000 € sale
-      showed a 2000 € loss), so the price is now Amount ÷ Executed, and a
-      row with neither is an unreadable row named by its Price. A row whose
-      Pair cannot be split is named by date, side, amount and the Pair cell.
+      trade. Dust rows and their BNB rows pair within 1 s, like every other
+      trade path; a dust row with no BNB row is named by
+      `binance.unpaired_leg`, and a dust window paired by order or with
+      fewer BNB rows than coins by `binance.spot_cost_split`. A negative
+      income row (a reward taken back) and a fiat-for-fiat swap book
+      nothing, as before, and are now named (`binance.income_negative`,
+      `binance.fiat_conversion_not_booked`). In the Trade History export,
+      FIFO values a fiat-pair trade at Price × Executed: a Price that
+      cannot be read was read as 0 (a 3000 € sale showed a 2000 € loss), so
+      the price is now Amount ÷ Executed, and a row with neither is an
+      unreadable row named by its Price. A row whose Pair cannot be split is
+      named by date, side, amount and the Pair cell.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

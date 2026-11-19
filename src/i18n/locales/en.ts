@@ -1081,6 +1081,10 @@ const en: TranslationKeys = {
     "Binance: {{count}} fee(s) do not say which trade of the same second they belong to, and DeclaRenta does not deduct them: {{rows}}.",
   "binance.fee_unassigned.hint":
     "Binance lists several trades in the same second. These fees sit between two trades in the same currency. So DeclaRenta does not know which one they belong to. It does not add them to the cost or deduct them from the sale amount, so you do not pay too little. If you know which purchase or sale each fee belongs to, correct its cost or sale amount by hand in Renta Web.",
+  "binance.income_negative":
+    "Binance: {{count}} income row(s) are negative and are not calculated: {{rows}}.",
+  "binance.income_negative.hint":
+    "A negative income row is usually a reward that Binance took back. DeclaRenta does not know which reward it cancels, so it changes no amount. It still counts that reward as income, and its coins as bought at their value on that day. If it cancels income of the year you file, remove it by hand in Renta Web. If you later sold that cryptocurrency, the cost of the sale may be too high. Check the cost of those sales in Renta Web.",
   "binance.fiat_conversion_not_booked":
     "Binance: {{count}} row(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
   "binance.fiat_conversion_not_booked.hint":
