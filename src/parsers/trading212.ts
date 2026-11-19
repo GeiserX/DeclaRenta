@@ -284,13 +284,16 @@ function parseTrading212Csv(lines: string[]): Statement {
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
     if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
       unresolvedPriceSkipped++;
-      // Still a buy or sale for the anti-churning evidence (#453): kept as a
-      // trade that books nothing, as a row with no share count is.
-      trades.push(quantityUnknownTrade({
-        tradeID: `trading212-${buy ? "buy" : "sell"}-${uniqueId}`,
-        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
-        buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
-      }));
+      // A blank or unreadable price is still a buy or sale for the
+      // anti-churning evidence (#453): kept as a trade that books nothing, as
+      // a row with no share count is. A written zero price stays skipped.
+      if (quantityUnreadable(fields[cols.pricePerShare])) {
+        trades.push(quantityUnknownTrade({
+          tradeID: `trading212-${buy ? "buy" : "sell"}-${uniqueId}`,
+          symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+          buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
+        }));
+      }
       continue;
     }
     const grossDec = priceDec.isZero()

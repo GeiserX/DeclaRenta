@@ -425,17 +425,24 @@ práctico Renta 2025. The decisions, each pinned in
     unreadable. Only a buy or sale row is kept: a Freedom24 transfer stays
     skipped, a Flatex row with neither Nominal nor Kurs is kept only when its
     text says Kauf or Verkauf, a DEGIRO row with neither quantity nor price
-    only when it has an order id or a value, and a written zero price (a
-    conversion, a rights assignment) is always skipped. Revolut's
+    only when it has an order id or a value, and in the Flatex, DEGIRO and
+    Trading 212 trade rows a written zero price (a conversion, a rights
+    assignment) stays skipped, as does a DEGIRO row with a written zero
+    quantity ("0,00") and no price (an IBKR fill with `tradePrice="0"` and a
+    readable quantity still reaches `mapTrade`). Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
     buy or sale with a readable quantity but a blank or unreadable price is
     kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with an order id
     or a value, a Trading 212 buy with no price and a Total in another
     currency): FIFO cannot book shares with no cost, and a dropped row would
-    hide a second purchase. An IBKR cancellation whose quantity or price is
-    unreadable pairs with its fill only by the same `ibExecID`; with none it
-    is dropped alone, and its warning does not claim the original is outside
-    the file. A crypto row of unknown quantity is no repurchase either: FIFO
+    hide a second purchase. An IBKR cancellation with an `origTransactionID`
+    drops itself and the fill that id names, whatever their quantity or
+    price. A cancellation without that link reaches the fallback matcher:
+    when a quantity or a price (missing, blank or no number; a written "0" is
+    readable) is unreadable on the cancellation or on a candidate fill, the
+    pair needs the same `ibExecID`; with none the cancellation is dropped
+    alone, and its warning does not claim the original is outside the file.
+    A crypto row of unknown quantity is no repurchase either: FIFO
     holds no lot for it, so no loss is tied to its coins. Its warning is the
     crypto one: it says that a crypto loss before such a rebuy may have to
     wait (art. 33.5.e) and that DeclaRenta does not block it, and it does not

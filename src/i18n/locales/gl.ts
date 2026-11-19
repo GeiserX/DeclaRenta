@@ -1104,7 +1104,7 @@ const gl: TranslationKeys = {
   "parser.cancelled_trades.hint": 'IBKR marca unha execución cancelada cunha fila de anulación ("(Ca.)"). A operación orixinal e a súa anulación descartáronse: nunca chegaron a ser unha compra ou venda real.',
   "parser.cancelled_trades_unmatched": "Omitíronse {{count}} anulacións de IBKR sen a operación orixinal neste ficheiro.",
   "parser.cancelled_trades_unmatched.hint": "A operación cancelada queda fóra do período deste Flex Query. Se a cargas desde outro ficheiro, seguirá contando como real: exporta un período que inclúa a operación e a súa anulación no mesmo ficheiro.",
-  "parser.cancelled_trades_unreadable": "Omitíronse {{count}} anulacións de IBKR sen unha cantidade ou un prezo lexible, sen poder emparellalas coa operación que anulan.",
+  "parser.cancelled_trades_unreadable": "Omitíronse {{count}} anulacións de IBKR sen poder emparellalas coa operación que anulan: falta unha cantidade ou un prezo lexible na anulación ou nunha operación deste ficheiro.",
   "parser.cancelled_trades_unreadable.hint": "Se a operación anulada está neste ficheiro, DeclaRenta segue contándoa como unha compra ou venda real. Comproba que a Flex Query exporta a cantidade, o prezo e o ID de execución (IB Execution ID) de cada operación e volve exportala.",
   "parser.open_position_quantity_unknown": "IBKR non dá un número de accións lexible para {{count}} posición(s) aberta(s): {{holdings}}.",
   "parser.open_position_quantity_unknown.hint": "DeclaRenta cóntaas con 0 accións: o Modelo 720 inclúeas co seu valor, pero con 0 en «Número de valores», e o D-6 non as inclúe. Revisa a man esas posicións no 720 e no D-6, ou comproba que a sección Open Positions da Flex Query inclúe a cantidade e volve exportala.",

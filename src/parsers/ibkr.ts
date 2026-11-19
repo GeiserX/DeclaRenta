@@ -227,7 +227,7 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     parserMessages.push({
       id: "parser.cancelled_trades_unreadable",
       severity: "warning",
-      message: `Se omitieron ${cancelledUnreadableDropped} anulaciones de IBKR sin una cantidad o un precio legible, sin poder emparejarlas con la operación que anulan.`,
+      message: `Se omitieron ${cancelledUnreadableDropped} anulaciones de IBKR sin poder emparejarlas con la operación que anulan: falta una cantidad o un precio legible en la anulación o en una operación de este archivo.`,
       hint: "Si la operación anulada está en este archivo, DeclaRenta la sigue contando como una compra o venta real. Comprueba que la Flex Query exporta la cantidad, el precio y el ID de ejecución (IB Execution ID) de cada operación y vuelve a exportarla.",
       context: { count: String(cancelledUnreadableDropped) },
     });
@@ -333,11 +333,14 @@ function readableQuantity(raw: string | undefined): string | undefined {
   }
 }
 
-/** A trade price as a finite Decimal ("0" when missing or blank), or undefined when it is no number. */
+/**
+ * A trade price as a finite Decimal, or undefined when it is missing, blank or
+ * no number: a missing price is no written "0" (#453).
+ */
 function finitePrice(raw: string | undefined): Decimal | undefined {
-  const text = raw || "0";
+  if (raw === undefined || raw.trim() === "") return undefined;
   try {
-    const price = new Decimal(text);
+    const price = new Decimal(raw);
     return price.isFinite() ? price : undefined;
   } catch {
     return undefined;
@@ -431,8 +434,9 @@ function cancelledTransactionId(cancel: Record<string, string>): string {
  *
  * A cancel row with no original in this statement (the fill is outside the
  * export's period) is dropped alone and counted separately so the user is
- * warned; one whose own quantity or price is unreadable and that no ibExecID
- * pairs is counted apart, since its original may be in the file. It is never
+ * warned; one that no ibExecID pairs while its own quantity or price, or that
+ * of a candidate fill in the file, is unreadable is counted apart, since its
+ * original may be in the file. It is never
  * flipped into an opposite-direction trade: that would create a lot or a
  * disposal that never happened.
  */
@@ -472,6 +476,9 @@ function dropCancelledExecutions(
     const price = finitePrice(cancel.tradePrice);
     let best = -1;
     let bestScore = -1;
+    // A candidate fill in the file that only unreadable data kept from
+    // pairing may be the original: the warning must not call it absent.
+    let unreadableCandidate = false as boolean; // set inside the forEach below
     rows.forEach((o, oi) => {
       if (dropped.has(oi)) return;
       const sameInstrument = o.conid && cancel.conid ? o.conid === cancel.conid : o.symbol === cancel.symbol;
@@ -479,13 +486,13 @@ function dropCancelledExecutions(
       if ((o.buySell ?? "").trim().toUpperCase() !== direction) return;
       const sameExec = !!o.ibExecID && o.ibExecID === cancel.ibExecID;
       const qty = readableQuantity(o.quantity);
-      if (qty === undefined || cancelQty === undefined) {
-        if (!sameExec) return;
-      } else if (!new Decimal(qty).eq(new Decimal(cancelQty).neg())) return;
       const oPrice = finitePrice(o.tradePrice);
-      if (oPrice === undefined || price === undefined) {
-        if (!sameExec) return;
-      } else if (!oPrice.eq(price)) return;
+      if (qty === undefined || cancelQty === undefined || oPrice === undefined || price === undefined) {
+        if (!sameExec) {
+          unreadableCandidate = true;
+          return;
+        }
+      } else if (!new Decimal(qty).eq(new Decimal(cancelQty).neg()) || !oPrice.eq(price)) return;
       const score =
         (sameExec ? 4 : 0) +
         (o.ibOrderID && o.ibOrderID === cancel.ibOrderID ? 2 : 0) +
@@ -498,7 +505,7 @@ function dropCancelledExecutions(
     if (best >= 0) {
       dropped.add(best);
       pairedCount++;
-    } else if (cancelQty === undefined || price === undefined) {
+    } else if (unreadableCandidate || cancelQty === undefined || price === undefined) {
       // Not "the original is outside this file": it may be here, unpaired.
       unreadableCount++;
     } else {
