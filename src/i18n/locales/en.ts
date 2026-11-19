@@ -902,7 +902,7 @@ const en: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 months: admitted on an EEA regulated market or an equivalent one",
   "antichurning_window.opt_1y":
-    "1 year: listed only outside the EEA with no equivalent market (e.g. London from 2021, SIX, OTC)",
+    "1 year: not admitted on an EEA regulated market or an equivalent one (e.g. only on London from 2021, SIX, OTC or BME Growth)",
   "antichurning_window.no_listing":
     "no data",
   "antichurning_window.open_note":
@@ -915,6 +915,10 @@ const en: TranslationKeys = {
     "Saved",
   "antichurning_window.recalculate_hint":
     "The windows are saved in your browser and the report is recalculated.",
+  "antichurning_window.save_error":
+    "The browser did not let DeclaRenta save the windows: its storage may be full or blocked. The report has not changed.",
+  "antichurning_window.clear_error":
+    "The browser did not let DeclaRenta clear the saved windows: its storage may be blocked. The report has not changed.",
   "report.antichurning_single_purchase":
     "In {{count}} sale(s) of {{year}}, the purchase in the 2 months before does not count as a repurchase: it was the only purchase of that security in that window and you held none of it when the window began (the one-purchase exception, DGT V3282-18). That purchase does not block the loss and does not stop the sale from releasing pending losses.",
   "report.antichurning_single_purchase.hint":

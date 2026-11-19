@@ -904,7 +904,7 @@ const ca: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 mesos: admès en un mercat regulat de l'EEE o en un d'equivalent",
   "antichurning_window.opt_1y":
-    "1 any: només cotitza fora de l'EEE i sense mercat equivalent (p. ex. Londres des del 2021, SIX, OTC)",
+    "1 any: no admès en un mercat regulat de l'EEE ni en un d'equivalent (p. ex. només a Londres des del 2021, SIX, OTC o BME Growth)",
   "antichurning_window.no_listing":
     "sense dada",
   "antichurning_window.open_note":
@@ -917,6 +917,10 @@ const ca: TranslationKeys = {
     "Desat",
   "antichurning_window.recalculate_hint":
     "Els terminis es desen al teu navegador i l'informe es recalcula.",
+  "antichurning_window.save_error":
+    "El navegador no ha deixat desar els terminis: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "antichurning_window.clear_error":
+    "El navegador no ha deixat esborrar els terminis desats: el seu emmagatzematge pot estar bloquejat. L'informe no ha canviat.",
   "report.antichurning_single_purchase":
     "En {{count}} venda(es) de {{year}}, la compra dels 2 mesos anteriors no compta com a recompra: va ser l'única compra d'aquest valor en aquest termini i en començar el termini no tenies accions d'aquest valor (excepció de compra única, DGT V3282-18). Aquesta compra no bloqueja la pèrdua ni impedeix que la venda alliberi pèrdues pendents.",
   "report.antichurning_single_purchase.hint":

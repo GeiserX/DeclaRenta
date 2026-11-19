@@ -904,7 +904,7 @@ const gl: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 meses: admitido nun mercado regulado do EEE ou nun equivalente",
   "antichurning_window.opt_1y":
-    "1 ano: só cotiza fóra do EEE e sen mercado equivalente (p. ex. Londres desde 2021, SIX, OTC)",
+    "1 ano: non admitido nun mercado regulado do EEE nin nun equivalente (p. ex. só en Londres desde 2021, SIX, OTC ou BME Growth)",
   "antichurning_window.no_listing":
     "sen dato",
   "antichurning_window.open_note":
@@ -917,6 +917,10 @@ const gl: TranslationKeys = {
     "Gardado",
   "antichurning_window.recalculate_hint":
     "Os prazos gárdanse no teu navegador e o informe recalcúlase.",
+  "antichurning_window.save_error":
+    "O navegador non deixou gardar os prazos: o seu almacenamento pode estar cheo ou bloqueado. O informe non cambiou.",
+  "antichurning_window.clear_error":
+    "O navegador non deixou borrar os prazos gardados: o seu almacenamento pode estar bloqueado. O informe non cambiou.",
   "report.antichurning_single_purchase":
     "En {{count}} venda(s) de {{year}}, a compra dos 2 meses anteriores non conta como recompra: foi a única compra dese valor nese prazo e ao comezar o prazo non tiñas accións dese valor (excepción de compra única, DGT V3282-18). Esa compra non bloquea a súa perda nin impide que a venda libere perdas pendentes.",
   "report.antichurning_single_purchase.hint":

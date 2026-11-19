@@ -11,7 +11,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { renderAntichurningWindowPanel } from "../../src/web/antichurning-window.js";
+import { bindAntichurningWindowPanel, renderAntichurningWindowPanel } from "../../src/web/antichurning-window.js";
+import type { AntichurningSecurity } from "../../src/types/tax.js";
 
 const INDEX_HTML = readFileSync(resolve(__dirname, "../../src/web/index.html"), "utf-8");
 const YEAR = new Date().getFullYear() - 1; // the profile's default declaration year
@@ -83,6 +84,7 @@ function memoryStorage(): Storage {
 
 const panel = () => document.querySelector<HTMLDetailsElement>("#wizard-step-3 .antichurning-window-panel");
 const select = () => panel()?.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${ISIN}']`);
+const blockedRow = () => document.querySelector("#operations-table tr.wash-sale-blocked");
 
 describe("anti-churning window panel in the app", () => {
   beforeEach(async () => {
@@ -111,24 +113,47 @@ describe("anti-churning window panel in the app", () => {
     expect(p.innerHTML).toContain("&lt;img");
   });
 
-  it("marking 2 months saves the ISIN and reruns: the row then shows the user's value", async () => {
-    await waitFor(panel, "window panel");
+  it("marking 2 months saves the ISIN and reruns: the loss is no longer blocked and the row shows the user's value", async () => {
+    const before = await waitFor(panel, "window panel");
+    expect(blockedRow()).not.toBeNull(); // 1 year from IBKR: the 01/08 rebuy blocks the loss
     select()!.value = "2";
-    panel()!.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
     expect(JSON.parse(localStorage.getItem(KEY) ?? "{}")).toEqual({ [ISIN]: 2 });
-    await waitFor(() => (select()?.value === "2" ? select() : null), "rerun with the user's value");
+    // Wait for the rerun: a new panel, and a calculation without the block.
+    await waitFor(() => (panel() && panel() !== before && !blockedRow() ? panel() : null), "rerun with 2 months");
+    expect(select()!.value).toBe("2");
     // The automatic option still says what IBKR would give.
     expect(select()!.querySelector("option[value='auto']")!.textContent).toMatch(/1 (año|year)/);
   });
 
-  it("clear removes every saved window and reruns", async () => {
-    await waitFor(panel, "window panel");
-    select()!.value = "12";
-    panel()!.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
-    await waitFor(() => (select()?.value === "12" ? select() : null), "rerun with 12");
-    panel()!.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+  it("clear removes every saved window and reruns: the automatic 1 year blocks the loss again", async () => {
+    const first = await waitFor(panel, "window panel");
+    select()!.value = "2";
+    first.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    const second = await waitFor(() => (panel() && panel() !== first && !blockedRow() ? panel() : null), "rerun with 2 months");
+    second.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
     expect(localStorage.getItem(KEY)).toBeNull();
-    await waitFor(() => (select()?.value === "auto" ? select() : null), "rerun with auto");
+    await waitFor(() => (panel() && panel() !== second && blockedRow() ? panel() : null), "rerun with the automatic year");
+    expect(select()!.value).toBe("auto");
+  });
+
+  it("a refused write shows an error, keeps the old setting and does not rerun", async () => {
+    const before = await waitFor(panel, "window panel");
+    const storage = localStorage;
+    const setItem = vi.spyOn(storage, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    select()!.value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    const error = before.querySelector<HTMLElement>(".antichurning-window-error")!;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toMatch(/navegador|browser/);
+    expect(before.querySelector<HTMLElement>(".antichurning-window-saved")!.hidden).toBe(true);
+    expect(storage.getItem(KEY)).toBeNull();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(panel()).toBe(before); // no rerun
+    expect(blockedRow()).not.toBeNull();
+    setItem.mockRestore();
   });
 
   it("ignores garbage someone left in the storage key", async () => {
@@ -152,5 +177,115 @@ describe("renderAntichurningWindowPanel", () => {
     const open = renderAntichurningWindowPanel([{ ...base, listingExchanges: ["TSE"], source: "ibkr", openDecision: "2016/2273" }]);
     expect(open).toContain(" open>");
     expect(open).toContain("2016/2273");
+  });
+});
+
+describe("bindAntichurningWindowPanel: one write per Save, and failures shown", () => {
+  const OTHER = "US0378331005";
+  const rows: AntichurningSecurity[] = [
+    { isin: ISIN, symbol: "BP", description: "BP", months: 12, source: "ibkr", autoMonths: 12, listingExchanges: ["LSE"] },
+    { isin: OTHER, symbol: "AAPL", description: "APPLE", months: 2, source: "default", autoMonths: 2, listingExchanges: [] },
+  ];
+  let storage: Storage;
+  let container: HTMLElement;
+  let reruns: number;
+
+  beforeEach(() => {
+    storage = memoryStorage();
+    vi.stubGlobal("localStorage", storage);
+    container = document.createElement("div");
+    container.innerHTML = renderAntichurningWindowPanel(rows);
+    document.body.replaceChildren(container);
+    reruns = 0;
+    bindAntichurningWindowPanel(container, () => {
+      reruns++;
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const pick = (isin: string, value: string) => {
+    container.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${isin}']`)!.value = value;
+  };
+  const click = (cls: string): void => {
+    container.querySelector<HTMLButtonElement>(cls)!.click();
+  };
+  const error = () => container.querySelector<HTMLElement>(".antichurning-window-error")!;
+  const saved = () => container.querySelector<HTMLElement>(".antichurning-window-saved")!;
+
+  it("saves every row's choice in a single write and keeps windows of other ISINs", () => {
+    storage.setItem(KEY, JSON.stringify({ ES0113900J37: 12 }));
+    const setItem = vi.spyOn(storage, "setItem");
+    pick(ISIN, "2");
+    pick(OTHER, "12");
+    click(".antichurning-window-save");
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(storage.getItem(KEY)!)).toEqual({ ES0113900J37: 12, [ISIN]: 2, [OTHER]: 12 });
+    expect(reruns).toBe(1);
+    expect(saved().hidden).toBe(false);
+    expect(error().hidden).toBe(true);
+  });
+
+  it("a refused Save leaves every old value in place (no partial write), shows the error and does not rerun", () => {
+    storage.setItem(KEY, JSON.stringify({ [ISIN]: 12 }));
+    vi.spyOn(storage, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    pick(ISIN, "2");
+    pick(OTHER, "12");
+    click(".antichurning-window-save");
+    expect(JSON.parse(storage.getItem(KEY)!)).toEqual({ [ISIN]: 12 });
+    expect(reruns).toBe(0);
+    expect(error().hidden).toBe(false);
+    expect(error().getAttribute("role")).toBe("alert");
+    expect(saved().hidden).toBe(true);
+  });
+
+  it("a refused Clear shows its own error and does not rerun", () => {
+    storage.setItem(KEY, JSON.stringify({ [ISIN]: 12 }));
+    vi.spyOn(storage, "removeItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    click(".antichurning-window-clear");
+    expect(reruns).toBe(0);
+    expect(error().hidden).toBe(false);
+    expect(error().textContent).not.toBe("");
+    expect(storage.getItem(KEY)).not.toBeNull();
+  });
+
+  it("a later good Save hides the earlier error", () => {
+    const setItem = vi.spyOn(storage, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    pick(ISIN, "2");
+    click(".antichurning-window-save");
+    expect(error().hidden).toBe(false);
+    click(".antichurning-window-save");
+    expect(setItem).toHaveBeenCalledTimes(2);
+    expect(error().hidden).toBe(true);
+    expect(saved().hidden).toBe(false);
+    expect(reruns).toBe(1);
+  });
+});
+
+describe("1-year option label: letter g is «not admitted on an EEA regulated or equivalent market», not «only outside the EEA»", () => {
+  it("all 5 locales name the regulated market and none says the security only trades outside the EEA", async () => {
+    const es = (await import("../../src/i18n/locales/es.js")).default;
+    const en = (await import("../../src/i18n/locales/en.js")).default;
+    const ca = (await import("../../src/i18n/locales/ca.js")).default;
+    const eu = (await import("../../src/i18n/locales/eu.js")).default;
+    const gl = (await import("../../src/i18n/locales/gl.js")).default;
+    const regulated = { es: /regulado del EEE/, en: /EEA regulated market/, ca: /regulat de l'EEE/, eu: /EEEko merkatu arautu/, gl: /regulado do EEE/ };
+    const outsideOnly = /fuera del EEE|outside the EEA|fora de l'EEE|EEEtik kanpo|fóra do EEE/;
+    for (const [name, locale] of Object.entries({ es, en, ca, eu, gl })) {
+      const label = locale["antichurning_window.opt_1y"];
+      expect(label, name).toMatch(regulated[name as keyof typeof regulated]);
+      expect(label, name).not.toMatch(outsideOnly);
+      expect(label, name).toMatch(/BME Growth/);
+      expect(locale["antichurning_window.save_error"], name).toBeTruthy();
+      expect(locale["antichurning_window.clear_error"], name).toBeTruthy();
+    }
   });
 });

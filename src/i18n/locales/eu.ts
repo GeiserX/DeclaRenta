@@ -906,7 +906,7 @@ const eu: TranslationKeys = {
   "antichurning_window.opt_2m":
     "2 hilabete: EEEko merkatu arautu batean edo baliokide batean onartua",
   "antichurning_window.opt_1y":
-    "Urtebete: EEEtik kanpo bakarrik kotizatzen du, merkatu baliokiderik gabe (adib. Londres 2021etik aurrera, SIX, OTC)",
+    "Urtebete: ez dago onartuta EEEko merkatu arautu batean ezta baliokide batean ere (adib. Londresen bakarrik 2021etik aurrera, SIX, OTC edo BME Growth)",
   "antichurning_window.no_listing":
     "daturik ez",
   "antichurning_window.open_note":
@@ -919,6 +919,10 @@ const eu: TranslationKeys = {
     "Gordeta",
   "antichurning_window.recalculate_hint":
     "Epeak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
+  "antichurning_window.save_error":
+    "Nabigatzaileak ez du utzi epeak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "antichurning_window.clear_error":
+    "Nabigatzaileak ez du utzi gordetako epeak ezabatzen: haren biltegia blokeatuta egon daiteke. Txostena ez da aldatu.",
   "report.antichurning_single_purchase":
     "{{year}} urteko {{count}} salmentatan, aurreko 2 hilabeteetako erosketa ez da berrerosketatzat hartzen: epe horretan balio horren erosketa bakarra izan zen, eta epea hastean ez zenuen balio horren akziorik (erosketa bakarraren salbuespena, DGT V3282-18). Erosketa horrek ez du galera blokeatzen, eta ez du eragozten salmentak zain dauden galerak askatzea.",
   "report.antichurning_single_purchase.hint":

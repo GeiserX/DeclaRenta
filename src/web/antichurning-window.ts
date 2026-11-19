@@ -37,29 +37,31 @@ export function getWindowOverrides(): Record<string, WindowMonths> {
   }
 }
 
-/** Save one ISIN's window, or remove it with `null` (back to automatic). Returns false for a malformed ISIN. */
-export function setWindowOverride(isin: string, months: WindowMonths | null): boolean {
-  const key = isin.trim().toUpperCase();
-  if (!ISIN_SHAPE.test(key)) return false;
-  const current = new Map(Object.entries(getWindowOverrides()));
-  if (months === null) current.delete(key);
-  else current.set(key, months);
+/**
+ * Replace every saved window with `windows` in ONE write (the key is removed
+ * when it is empty), so a refused write leaves the old settings whole. Keys
+ * that are not ISIN-shaped and values other than 2 or 12 are dropped. Returns
+ * false when the browser refuses the write (storage full or blocked).
+ */
+export function saveWindowOverrides(windows: Readonly<Record<string, WindowMonths>>): boolean {
+  const next = coerceWindowOverrides(windows);
   try {
-    if (current.size === 0) localStorage.removeItem(WINDOW_STORAGE_KEY);
-    else localStorage.setItem(WINDOW_STORAGE_KEY, JSON.stringify(Object.fromEntries(current)));
+    if (next.size === 0) localStorage.removeItem(WINDOW_STORAGE_KEY);
+    else localStorage.setItem(WINDOW_STORAGE_KEY, JSON.stringify(Object.fromEntries(next)));
   } catch {
     return false;
   }
   return true;
 }
 
-/** Remove every saved window. */
-export function clearWindowOverrides(): void {
+/** Remove every saved window. Returns false when the browser refuses (storage blocked). */
+export function clearWindowOverrides(): boolean {
   try {
     localStorage.removeItem(WINDOW_STORAGE_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    return false;
   }
+  return true;
 }
 
 const monthsLabel = (m: WindowMonths): string => tr(m === 12 ? "antichurning_window.months_12" : "antichurning_window.months_2");
@@ -111,27 +113,53 @@ export function renderAntichurningWindowPanel(securities: readonly AntichurningS
         <button type="button" class="btn-secondary antichurning-window-clear">${esc(tr("antichurning_window.clear_btn"))}</button>
       </div>
       <span class="crypto-rates-saved-msg antichurning-window-saved" hidden>${esc(tr("antichurning_window.saved"))}</span>
+      <span class="antichurning-window-error" role="alert" hidden></span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("antichurning_window.recalculate_hint"))}</p>
     </div>
   </details>`;
 }
 
-/** Save writes every row's choice and reruns the report; Clear removes every saved window and reruns. */
+/**
+ * Save writes every row's choice in one write and reruns the report; Clear
+ * removes every saved window and reruns. When the browser refuses the write,
+ * the panel says so, keeps the old settings and does not rerun.
+ */
 export function bindAntichurningWindowPanel(container: HTMLElement, onSave: () => void): void {
+  const saved = container.querySelector<HTMLElement>(".antichurning-window-saved");
+  const error = container.querySelector<HTMLElement>(".antichurning-window-error");
+  const show = (failure: "antichurning_window.save_error" | "antichurning_window.clear_error" | null): void => {
+    if (saved) saved.hidden = failure !== null;
+    if (error) {
+      error.hidden = failure === null;
+      error.textContent = failure === null ? "" : tr(failure);
+    }
+  };
   container.querySelector<HTMLButtonElement>(".antichurning-window-clear")?.addEventListener("click", () => {
-    clearWindowOverrides();
+    if (!clearWindowOverrides()) {
+      show("antichurning_window.clear_error");
+      return;
+    }
     onSave();
   });
   container.querySelector<HTMLButtonElement>(".antichurning-window-save")?.addEventListener("click", () => {
-    const before = JSON.stringify(getWindowOverrides());
+    const before = getWindowOverrides();
+    const next = new Map(Object.entries(before));
     for (const select of container.querySelectorAll<HTMLSelectElement>(".antichurning-window-select")) {
-      const isin = select.dataset.isin ?? "";
-      const months = select.value === "12" ? 12 : select.value === "2" ? 2 : null;
-      setWindowOverride(isin, months);
+      const isin = (select.dataset.isin ?? "").trim().toUpperCase();
+      if (!ISIN_SHAPE.test(isin)) continue;
+      if (select.value === "12" || select.value === "2") next.set(isin, select.value === "12" ? 12 : 2);
+      else next.delete(isin);
     }
-    const changed = JSON.stringify(getWindowOverrides()) !== before;
-    const msg = container.querySelector<HTMLElement>(".antichurning-window-saved");
-    if (msg) msg.hidden = false;
-    if (changed) onSave();
+    const mapping = Object.fromEntries(next);
+    if (JSON.stringify(mapping) === JSON.stringify(before)) {
+      show(null);
+      return;
+    }
+    if (!saveWindowOverrides(mapping)) {
+      show("antichurning_window.save_error");
+      return;
+    }
+    show(null);
+    onSave();
   });
 }
