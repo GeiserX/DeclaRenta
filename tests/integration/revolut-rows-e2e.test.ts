@@ -9,6 +9,8 @@
  *   with or without a ticker.
  * - A row of unknown type (a cash merger) with a zero quantity and a Total
  *   Amount that cannot be read was dropped with no word.
+ * - A buy or sale whose Price per share cannot be read, or is zero, was
+ *   booked at price 0: a sale became a full loss with no word.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -168,5 +170,50 @@ describe("Revolut rows of unknown type with a zero quantity: an amount that cann
       expect(s.parserMessages, row.join()).toBeUndefined();
       expect(s.openPositions.map((p) => [p.symbol, p.quantity, p.costBasisMoney]), row.join()).toEqual([["AAPL", "10", "1000.00"]]);
     }
+  });
+});
+
+describe("Revolut Price per share: a sale is never booked at price 0", () => {
+  it.each(METHODS)("[%s] control: a readable price of USD 150 gives a 550 € gain", async (method) => {
+    const r = await report([BUY, sell()], method);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("1650.00");
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    expect((await parse([BUY, sell()])).trades[1]!.tradePrice).toBe("150");
+  });
+
+  it.each(METHODS)("[%s] a price that cannot be read, is zero or negative is |Total Amount| ÷ Quantity", async (method) => {
+    for (const price of ["USD abc", "", "USD", "USD 0", "-USD 150", "USD -150"]) {
+      const s = await parse([BUY, sell(price)]);
+      expect(s.trades[1]!.tradePrice, price).toBe("150");
+      expect(s.parserMessages, price).toBeUndefined();
+      const r = await report([BUY, sell(price)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), price).toBe("1650.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), price).toBe("550.00");
+    }
+    const one = await report([BUY, sell("USD 1 500.00", "USD 1500", "1")], method);
+    expect(one.capitalGains.netGainLoss.toFixed(2)).toBe("1540.00");
+    const buyAbc = await report([BUY.map((c) => (c === "USD 100" ? "USD abc" : c)), sell()], method);
+    expect(buyAbc.capitalGains.acquisitionValue.toFixed(2)).toBe("1100.00");
+    expect(buyAbc.capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+  });
+
+  it.each(METHODS)("[%s] with no readable Total either, the sale is named by its price and books nothing", async (method) => {
+    for (const [price, total] of [["USD abc", "USD abc"], ["", ""], ["USD", "USD 0"]]) {
+      const s = await parse([BUY, sell(price, total)]);
+      expect(msg(s, "parser.trade_row_unreadable"), price).toBe(`AAPL 20250603 [Price per share: ${JSON.stringify(price)}]`);
+      expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown]), price).toEqual([["AAPL", true]]);
+      const r = await report([BUY, sell(price, total)], method);
+      expect(r.capitalGains.transmissionValue.toFixed(2), price).toBe("0.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), price).toBe("0.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] a written zero price with no money is a corporate action not applied, never a sale at 0", async (method) => {
+    const s = await parse([BUY, sell("USD 0", "USD 0")]);
+    expect(msg(s, "parser.corporate_action_not_applied")).toBe("AAPL 20250603 [Price per share USD 0: 10]");
+    expect(s.openPositions.map((p) => [p.symbol, p.quantityUnknown])).toEqual([["AAPL", true]]);
+    const r = await report([BUY, sell("USD 0", "USD 0")], method);
+    expect(r.capitalGains.transmissionValue.toFixed(2)).toBe("0.00");
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("0.00");
   });
 });

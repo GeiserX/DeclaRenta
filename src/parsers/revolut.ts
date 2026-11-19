@@ -503,7 +503,7 @@ function parseTransactionLog(
     if (!ticker) continue;
 
     const quantityStr = (row[cols.quantity] ?? "0").trim();
-    const priceStr = (row[cols.price] ?? "0").trim();
+    const priceStr = (row[cols.price] ?? "").trim();
 
     const qtyRead = readRevolutNumber(quantityStr).amount;
     const signedQtyDec = qtyRead ?? new Decimal(0);
@@ -627,7 +627,35 @@ function parseTransactionLog(
       continue;
     }
 
-    const pricePerShareDec = readRevolutNumber(priceStr).amount ?? new Decimal(0);
+    // FIFO values a buy or sale at quantity × tradePrice, never from Total
+    // Amount. A Price per share with no number ("USD abc", "", "USD",
+    // "-USD 150", "USD 1 500.00"), or one that is zero or negative, sold the
+    // shares at 0: a gain became a full loss with no word (#467). Revolut
+    // writes Total Amount = quantity × price in the row's currency, so with
+    // no price the price is |Total Amount| ÷ quantity, the file's own
+    // numbers. With no readable non-zero Total either, a written zero price
+    // moves shares for no money: a corporate action not applied, as in
+    // Lightyear, Flatex, DEGIRO and Freedom24. Any other price makes the row
+    // one that books nothing, named by its Price per share cell. Either way
+    // the ticker's holding is of unknown size.
+    const priceRead = readRevolutNumber(row[cols.price]).amount;
+    let pricePerShareDec = priceRead ?? new Decimal(0);
+    if (!pricePerShareDec.greaterThan(0)) {
+      if (totalRead !== undefined && !totalRead.isZero()) {
+        pricePerShareDec = totalRead.abs().div(qtyDec);
+      } else if (priceRead?.isZero() === true) {
+        trades.push(corporateActionTrade({
+          tradeID: `revolut-action-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
+          assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate, exchange: "REVOLUT",
+          buySell: buy ? "BUY" : "SELL",
+        }, `${headers[cols.price] ?? "Price per share"} ${priceStr}`, quantityCell));
+        markUnknownSize(ticker, currencyRaw, buy);
+        continue;
+      } else {
+        keepUnreadable(unreadableCell(headers[cols.price] ?? "Price per share", row[cols.price]));
+        continue;
+      }
+    }
 
     const assetCategory = detectAssetCategory(ticker);
     const absTotalAmount = totalAmountDec.abs();

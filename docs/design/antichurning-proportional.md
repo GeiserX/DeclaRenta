@@ -569,6 +569,12 @@ práctico Renta 2025. The decisions, each pinned in
       A row of unknown type with a zero quantity whose Total Amount cannot
       be read ("USD abc", "USD") is kept like one with a readable amount; a
       blank or written-zero amount moves no money and stays skipped.
+      A buy or sale whose Price per share cannot be read, is zero or is
+      negative takes |Total Amount| ÷ Quantity as its price (it was booked
+      at 0, so a sale became a full loss). With no readable non-zero Total
+      either, a written zero price is a corporate-action row and any other
+      price an unreadable row named by Price per share; the holding is of
+      unknown size.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell
