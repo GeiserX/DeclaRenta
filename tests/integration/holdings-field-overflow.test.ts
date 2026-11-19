@@ -332,6 +332,49 @@ describe("#470 one rule for the share count: a count the 720 field cannot hold h
   });
 });
 
+describe("#470 a share count with more than 20 decimals has no valid share count in the D-6, and no screen expands it", () => {
+  // CodeRabbit on 45c5712: position="1e-1000000000" is a readable number, and
+  // `toFixed()` wrote it as a billion characters: the D-6 report and the web
+  // table ran out of memory. A count with more than 20 decimals is no share
+  // count a broker writes. The D-6 names it to declare by hand, and the
+  // holding stays held (no cancellation). Every quantity cell shows «—» for it.
+  const tinyCases = (process.env.D6_TINY_CASES ?? "1e-100000,1e-1000000000,0.000000000000000000001").split(",");
+  for (const position of tinyCases) {
+    it(`position="${position}": the D-6 counts it unvalued, names it, keeps it held, and writes no long count`, () => {
+      const d6 = generateD6Report(flex(stock(position, "70000") + other).openPositions, rateMap, 2025, "X", "12345678Z", [ACME]);
+      expect(d6.positions.map((p) => p.isin)).toEqual([OTHER]);
+      expect([d6.unvaluedCount, d6.unvalued]).toEqual([1, [{ isin: ACME, description: "ACME CORP" }]]);
+      expect(d6.cancelled).toEqual([]);
+      expect(d6.totalValueEur).toBe("59500.00");
+      expect(JSON.stringify(d6).length).toBeLessThan(20000);
+    });
+
+    it(`position="${position}": the web D-6 shows «—» for its count and value, and the unvalued banner`, () => {
+      useContainer("d6-content");
+      renderSectionD6(flex(stock(position, "70000") + other), rateMap);
+      const row = [...document.querySelectorAll("#d6-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim())).find((r) => r[0] === ACME)!;
+      expect(row.at(-1)).toBe("—");
+      expect(row.join(" ").length).toBeLessThan(200);
+      expect(document.getElementById("d6-content")!.textContent).toContain("no se han podido valorar");
+    });
+
+    it(`a coin of ${position} units: the web 721 shows «—» for its units, never a long number`, () => {
+      useContainer("m721-content");
+      renderSection721(flex(coin("60000").replace('position="1"', `position="${position}"`)), rateMap);
+      const row = [...document.querySelectorAll("#m721-content tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent.trim()))[0]!;
+      expect(row[2]).toBe("—");
+      expect(document.getElementById("m721-content")!.innerHTML.length).toBeLessThan(50000);
+    });
+  }
+
+  it("boundary: a count with 20 decimals is listed in full, as is 0.00000005", () => {
+    const fits = generateD6Report(flex(stock("0.00000000000000000001", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([fits.unvaluedCount, fits.positions[0]!.sharesAtYearEnd]).toEqual([0, "0.00000000000000000001"]);
+    const tiny = generateD6Report(flex(stock("0.00000005", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect([tiny.unvaluedCount, tiny.positions[0]!.sharesAtYearEnd]).toEqual([0, "0.00000005"]);
+  });
+});
+
 describe("#470 the 721 library export writes numbers as the 720 does: digits in their width, never an exponent", () => {
   const cfg721 = { ...cfg720, declarationId: "7210000000001", allowPrototypeOutput: true };
   const entry = (valuationEur: string, quantity = "1") => ({

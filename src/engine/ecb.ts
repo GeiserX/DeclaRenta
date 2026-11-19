@@ -293,6 +293,18 @@ export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionVal
 }
 
 /**
+ * Whether a quantity of units (shares, coins) has at most 20 integer digits
+ * and at most 20 decimals. No broker writes a count past that, and `toFixed()`
+ * writes one character per digit: a readable "1e-1000000000" would become a
+ * string of a billion characters and exhaust the memory of the page or the
+ * report (CodeRabbit on #470). A count that fails this has no valid count
+ * (`d6ShareCount`) and is shown as «—» (`fmtQty`), never expanded.
+ */
+export function hasPrintableDigits(quantity: Decimal): boolean {
+  return quantity.decimalPlaces() <= 20 && quantity.abs().lessThan("1e20");
+}
+
+/**
  * The one shape of a number in a broker export's holding fields: an optional
  * sign, digits with an optional decimal point, and an optional exponent
  * (`700`, `-12.5`, `.5`, `1e5`). Surrounding spaces are ignored.

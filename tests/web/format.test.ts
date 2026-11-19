@@ -99,4 +99,16 @@ describe("fmtQty — quantities in Spanish format, never in exponent notation", 
   it("keeps the sign of a short position", () => {
     expect(fmtQty(new Decimal("-2.5"))).toBe("-2,5");
   });
+
+  // CodeRabbit on 45c5712: toFixed() wrote 1e-1000000000 as a billion
+  // characters and the page ran out of memory. Past 20 digits on either side
+  // of the point no broker writes a count: «—», never a long number.
+  it("shows «—» for a count past 20 integer digits or 20 decimals, and up to 20 in full", () => {
+    expect(fmtQty("1e-1000000000")).toBe("—");
+    expect(fmtQty("1e1000000000")).toBe("—");
+    expect(fmtQty("-1e-21")).toBe("—");
+    expect(fmtQty("1e20")).toBe("—");
+    expect(fmtQty("1e-20")).toBe("0,00000000000000000001");
+    expect(fmtQty("99999999999999999999")).toBe("99.999.999.999.999.999.999");
+  });
 });

@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { normalizeDate } from "../engine/dates.js";
+import { hasPrintableDigits } from "../engine/ecb.js";
 
 /** "-1234.5" → "-1.234,5"; a negative zero ("-0", "-0.00") loses its sign. */
 function spanishNumber(str: string): string {
@@ -25,9 +26,13 @@ export function fmtEur(d: Decimal | number, decimals = 2): string {
 /**
  * Format a quantity of units in full, in Spanish format, with no trailing zeros
  * and never in exponent notation: 5e-8 → "0,00000005", 1234.5 → "1.234,5".
+ * A count past 20 integer digits or 20 decimals (`hasPrintableDigits`) is «—»:
+ * in full, "1e-1000000000" is a billion characters.
  */
 export function fmtQty(q: Decimal.Value): string {
-  return spanishNumber(new Decimal(q).toFixed());
+  const quantity = new Decimal(q);
+  if (quantity.isFinite() && !hasPrintableDigits(quantity)) return "—";
+  return spanishNumber(quantity.toFixed());
 }
 
 /** "20250315", "2025-03-15" or "20250315;103000" → "15/03/2025". Anything else is returned unchanged. */
