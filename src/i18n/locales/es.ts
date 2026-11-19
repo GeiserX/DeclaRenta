@@ -1112,6 +1112,10 @@ const es = {
     "Binance: {{count}} movimiento(s) de compra, venta o conversión no tienen la otra parte de la operación y no se calculan: {{rows}}.",
   "binance.unpaired_leg.hint":
     "Cada compra o venta de Binance son dos filas con la misma hora: la moneda que entra y la que sale. DeclaRenta no ha encontrado la otra fila de estos movimientos. Por eso no suma ni resta unidades ni dinero por ellos. Las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Compara esas filas con tu historial de Binance y añade a mano en Renta Web las operaciones que falten.",
+  "binance.spot_cost_split":
+    "Binance: {{count}} movimiento(s) de compra de varias criptomonedas a la vez no dicen qué pago va con cada una. DeclaRenta ha repartido el pago entre ellas: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance da varias compras en el mismo segundo, pero no un pago por cada compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
   "binance.unsupported_pair":
     "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
   "binance.unsupported_pair.hint":

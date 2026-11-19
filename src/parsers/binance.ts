@@ -336,6 +336,12 @@ interface TxRow {
   changeText: string;
   /** A spot trade leg its window could not pair: it books nothing and is named (#467). */
   unpaired?: boolean;
+  /**
+   * A leg of a spot window where several coins share fiat payments the export
+   * does not tie to each coin: the payment is shared by a guess, so the row
+   * is named (#467).
+   */
+  costSplitGuessed?: boolean;
 }
 
 /**
@@ -801,6 +807,22 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count, rows },
     });
   }
+  // A spot window whose fiat payments the export does not tie to each coin
+  // bought: the payment was shared by a guess (emitBareSpotGroup), so each
+  // coin's cost, its gains and losses and its art. 33.5.e check are not
+  // reliable. Every leg of the window is named (#467).
+  const guessedLegs = rows.filter((r) => r.costSplitGuessed);
+  if (guessedLegs.length > 0) {
+    const count = String(guessedLegs.length);
+    const rows = guessedLegs.map((r) => `${r.coin} ${r.operationText} ${r.changeText} ${r.utcTime}`).join("; ");
+    parserMessages.push({
+      id: "binance.spot_cost_split",
+      severity: "warning",
+      message: `Binance: ${count} movimiento(s) de compra de varias criptomonedas a la vez no dicen qué pago va con cada una. DeclaRenta ha repartido el pago entre ellas: ${rows}.`,
+      hint: "Binance da varias compras en el mismo segundo, pero no un pago por cada compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
+      context: { count, rows },
+    });
+  }
   // A row still unparsed after every phase has an Operation no phase handles
   // (futures PnL, card spending, Auto-Invest, cashback...). It is left out of
   // the report, so name each operation with its row count instead of dropping
@@ -1145,7 +1167,8 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
  * individual given-up leg BY ORDER (the real export lists N buys against N sells), and
  * never drop: every bought coin keeps a real, non-zero cost basis. The aggregate fiat
  * spent is exact; only the per-coin split is approximate when the export doesn't link
- * order-to-order — acceptable, and vastly better than a cost-basis-0 phantom gain.
+ * order-to-order, and then every leg of the group is named (`binance.spot_cost_split`)
+ * rather than a cost-basis-0 phantom gain.
  * Returns the legs left without a counterpart, so the caller can name them.
  */
 function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): NetLeg[] {
@@ -1160,11 +1183,33 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
   }
 
   // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them
-  // so none is dropped: 1:1 by order when the export gives one fiat row per coin (the
-  // common case), else an equal split of the netted fiat as a conservative fallback.
+  // so none is dropped. When the export gives one fiat row per received row (one
+  // payment per fill, the common case), pair them 1:1 by order and give each coin
+  // the sum of its fills' payments: that is exact. Otherwise the export does not
+  // say which payment goes with which coin: pair by coin when the counts match,
+  // else split the netted fiat equally. The total paid stays exact, but each
+  // coin's cost is a guess, so every leg of the group is named (#467): a guess
+  // that gave one order's cost to another coin overstated its loss with no word.
   const fiatRows = rows
     .filter((r) => r.change.isNegative() && isFiat(r.coin))
     .sort((a, b) => a.index - b.index);
+  const recvRows = rows.filter((r) => r.change.isPositive()).sort((a, b) => a.index - b.index);
+  if (fiatRows.length === recvRows.length) {
+    const paid = new Map<string, TxRow[]>();
+    recvRows.forEach((r, k) => paid.set(r.coin, [...(paid.get(r.coin) ?? []), fiatRows[k]!]));
+    for (const r of recv) {
+      const legs = paid.get(r.coin)!;
+      const g = legs[0]!;
+      const qty = legs.reduce((sum, l) => sum.plus(l.change), new Decimal(0));
+      const eur = legs.some((l) => l.eurValue === null) ? null : legs.reduce((sum, l) => sum.plus(l.eurValue!), new Decimal(0));
+      const sell: NetLeg = { coin: g.coin, qty, eur, date: g.tradeDate, index: g.index, key: g.key };
+      addHint(sell.coin, sell.date, sell.qty, sell.eur);
+      addHint(r.coin, r.date, r.qty, r.eur);
+      emitCryptoSwap(trades, sell, r, "Spot");
+    }
+    return [];
+  }
+  for (const r of rows) r.costSplitGuessed = true;
   if (fiatRows.length === recv.length) {
     for (let k = 0; k < recv.length; k++) {
       const r = recv[k]!;
@@ -1176,7 +1221,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
     }
     return [];
   }
-  // Count mismatch (rare): split the total fiat equally across the received coins.
+  // Neither count matches (rare): split the total fiat equally across the received coins.
   const totalFiat = give[0]!.qty; // negative
   const share = totalFiat.div(recv.length);
   for (const r of recv) {

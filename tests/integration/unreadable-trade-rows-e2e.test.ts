@@ -39,7 +39,7 @@ import gl from "../../src/i18n/locales/gl.js";
 import { buildModelo721Entries } from "../../src/generators/modelo721.js";
 import { checkModelo720Thresholds } from "../../src/generators/modelo720.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
-import type { FxMethod, TaxSummary as TaxReport } from "../../src/types/tax.js";
+import type { FxMethod, TaxMessage, TaxSummary as TaxReport } from "../../src/types/tax.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
 
@@ -1558,6 +1558,85 @@ describe("#467 a crypto buy or sale whose quantity, side or coin cannot be read 
     }
     const emitted = coinbase(cbBuy, cbSell("BTC", "")).parserMessages?.find((m) => m.id === "parser.trade_row_unreadable");
     expect(emitted?.hint).toBe((es as Record<string, string>)["parser.trade_row_unreadable.hint"]);
+  });
+});
+
+describe("#467 Binance spot: several coins bought in one window never move one order's cost onto another coin with no word", () => {
+  const TX_H = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const costOf = (s: Statement, coin: string): string | undefined => s.trades.find((t) => t.symbol === coin && t.buySell === "BUY")?.cost;
+  const ethGain = (r: TaxReport): string[] => r.capitalGains.disposals.filter((d) => d.symbol === "ETH").map((d) => new Decimal(d.gainLossEur).toFixed(2));
+
+  // Two BTC fills (0.05 for 5000 € each) at 10:00:00 and one ETH order (1 for
+  // 100 €) at 10:00:0x. The ETH is sold on 01/06/2025 for 200 €: a 100 € gain.
+  const multiFill = (ethSecond: string): Statement => binanceParser.parse([TX_H,
+    "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.05,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-5000,", "1,2025-01-10 10:00:00,Spot,Fee,BNB,-0.001,",
+    "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.05,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-5000,", "1,2025-01-10 10:00:00,Spot,Fee,BNB,-0.001,",
+    `1,2025-01-10 10:00:${ethSecond},Spot,Buy,ETH,1,`, `1,2025-01-10 10:00:${ethSecond},Spot,Sell,EUR,-100,`, `1,2025-01-10 10:00:${ethSecond},Spot,Fee,BNB,-0.001,`,
+    "1,2025-06-01 10:00:00,Spot,Sell,ETH,-1,", "1,2025-06-01 10:00:00,Spot,Buy,EUR,200,",
+  ].join("\n"));
+
+  it.each(METHODS)("[%s] two BTC fills and an ETH order 1 s later: each fill keeps its own payment, ETH gains 100 €", (method) => {
+    const parsed = multiFill("01");
+    expect([costOf(parsed, "BTC"), costOf(parsed, "ETH")]).toEqual(["10000", "100"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+    expect(ethGain(run([[parsed, "Binance"]], 2025, method))).toEqual(["100.00"]);
+  });
+
+  it.each(METHODS)("[%s] control: the ETH order 3 s later gives the same numbers", (method) => {
+    const parsed = multiFill("03");
+    expect([costOf(parsed, "BTC"), costOf(parsed, "ETH")]).toEqual(["10000", "100"]);
+    expect(ethGain(run([[parsed, "Binance"]], 2025, method))).toEqual(["100.00"]);
+  });
+
+  // BTC (0.1 for 10000 €) at 10:00:00; ETH's leg at 10:00:01 and its 100 €
+  // at 10:00:02. The window of 10:00:00 has two coins and one payment, so
+  // the payment must be shared by a guess: every leg is named.
+  const straddle = (): Statement => binanceParser.parse([TX_H,
+    "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.1,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-10000,",
+    "1,2025-01-10 10:00:01,Spot,Buy,ETH,1,", "1,2025-01-10 10:00:02,Spot,Sell,EUR,-100,",
+    "1,2025-06-01 10:00:00,Spot,Sell,ETH,-1,", "1,2025-06-01 10:00:00,Spot,Buy,EUR,200,",
+  ].join("\n"));
+
+  it.each(METHODS)("[%s] a payment shared by a guess names every leg of its window and art. 33.5.e", (method) => {
+    const parsed = straddle();
+    const r = run([[parsed, "Binance"]], 2025, method);
+    const warning = message(r.messages, "binance.spot_cost_split");
+    expect(warning?.context).toEqual({ count: "3", rows: "BTC Buy 0.1 2025-01-10 10:00:00; EUR Sell -10000 2025-01-10 10:00:00; ETH Buy 1 2025-01-10 10:00:01" });
+    expect(warning?.hint).toContain("33.5.e");
+    expect(message(r.messages, "binance.unpaired_leg")?.context?.rows).toBe("EUR Sell -100 2025-01-10 10:00:02");
+    // The total paid stays exact.
+    expect(new Decimal(costOf(parsed, "BTC")!).plus(costOf(parsed, "ETH")!).toFixed(2)).toBe("10000.00");
+  });
+
+  it("two BTC fills paid in one EUR row and an ETH order in the same second: booked by order as before, but named", () => {
+    const parsed = binanceParser.parse([TX_H,
+      "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.05,", "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.05,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-10000,",
+      "1,2025-01-10 10:00:00,Spot,Buy,ETH,1,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-100,",
+    ].join("\n"));
+    expect([costOf(parsed, "BTC"), costOf(parsed, "ETH")]).toEqual(["10000", "100"]);
+    expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context?.count).toBe("5");
+  });
+
+  it("control: one fill per coin, each with its own payment, gives no warning", () => {
+    const parsed = binanceParser.parse([TX_H,
+      "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.1,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-10000,",
+      "1,2025-01-10 10:00:00,Spot,Buy,ETH,1,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-100,",
+    ].join("\n"));
+    expect([costOf(parsed, "BTC"), costOf(parsed, "ETH")]).toEqual(["10000", "100"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+  });
+
+  it("the shared-payment warning exists in the five locales, names the rows and says the art. 33.5.e result is not reliable", () => {
+    expect(isTranslationKey("binance.spot_cost_split") && isTranslationKey("binance.spot_cost_split.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["binance.spot_cost_split"]).toContain("{{rows}}");
+      expect(locale["binance.spot_cost_split.hint"]).toContain("33.5.e");
+    }
+    const emitted = message(straddle().parserMessages, "binance.spot_cost_split")!;
+    const esText = es as Record<string, string>;
+    expect(emitted.message).toBe(esText["binance.spot_cost_split"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
+    expect(emitted.hint).toBe(esText["binance.spot_cost_split.hint"]);
   });
 });
 

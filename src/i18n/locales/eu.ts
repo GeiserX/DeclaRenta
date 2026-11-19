@@ -1077,6 +1077,10 @@ const eu: TranslationKeys = {
     "Binance: erosketa, salmenta edo bihurketa mugimenduen {{count}} errenkadak ez dute eragiketaren beste aldea, eta ez dira kalkulatzen: {{rows}}.",
   "binance.unpaired_leg.hint":
     "Binance-ko erosketa edo salmenta bakoitza ordu bereko bi errenkada dira: sartzen den moneta eta ateratzen dena. DeclaRentak ez du aurkitu mugimendu horien beste errenkada. Beraz, ez du unitaterik edo dirurik gehitzen edo kentzen haiengatik. Kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Errenkada bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen. Alderatu errenkada horiek zure Binance historiarekin, eta gehitu eskuz Renta Web-en falta diren eragiketak.",
+  "binance.spot_cost_split":
+    "Binance: aldi berean kriptomoneta batzuk erosteko mugimenduen {{count}} errenkadek ez dute esaten zein ordainketa doan bakoitzarekin. DeclaRentak ordainketa haien artean banatu du: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance-k hainbat erosketa ematen ditu segundo berean, baina ez erosketa bakoitzeko ordainketa bat. Beraz, DeclaRentak ez daki zenbat ordaindu zenuen kriptomoneta bakoitzagatik. Ordainketa osoa haien artean banatu du, ordenaren arabera edo zati berdinetan. Ordaindutako guztizkoa zuzena da, baina kriptomoneta bakoitzaren kostua ez da fidagarria. Beraz, kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, LIRPF 33.5.e artikuluaren egiaztapena ere ez da fidagarria. Bilatu agindu horiek zure Binance historian, eta zuzendu eskuz Renta Web-en kriptomoneta bakoitzaren kostua.",
   "binance.unsupported_pair":
     "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{pairs}}.",
   "binance.unsupported_pair.hint":

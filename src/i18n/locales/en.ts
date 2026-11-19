@@ -1073,6 +1073,10 @@ const en: TranslationKeys = {
     "Binance: {{count}} buy, sell or convert movement(s) have no other side of the operation and are not calculated: {{rows}}.",
   "binance.unpaired_leg.hint":
     "Each Binance buy or sale is two rows with the same time: the coin that comes in and the one that goes out. DeclaRenta did not find the other row of these movements. So it adds or removes no units and no money for them. The gains and losses of those cryptocurrencies are not reliable. If a row is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it. Compare those rows with your Binance history and add the missing operations by hand in Renta Web.",
+  "binance.spot_cost_split":
+    "Binance: {{count}} movement(s) of buying several cryptocurrencies at once do not say which payment goes with each one. DeclaRenta shared the payment among them: {{rows}}.",
+  "binance.spot_cost_split.hint":
+    "Binance gives several purchases in the same second, but not one payment for each purchase. So DeclaRenta does not know how much you paid for each cryptocurrency. It shared the total payment among them by order or in equal parts. The total paid is correct, but the cost of each cryptocurrency is not reliable. So the gains and losses of those cryptocurrencies are not reliable. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost of each cryptocurrency by hand in Renta Web.",
   "binance.unsupported_pair":
     "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
   "binance.unsupported_pair.hint":
