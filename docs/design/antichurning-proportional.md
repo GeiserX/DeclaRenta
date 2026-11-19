@@ -506,11 +506,11 @@ práctico Renta 2025. The decisions, each pinned in
       return. `parser.cash_row_undated` names each row with its type,
       security, amount and the failing cell, so the user can add it by hand.
     - A dividend or withholding row with no ticker goes by its ISIN
-      (Lightyear, Trading 212). With no ticker and no ISIN (and for
-      Scalable, no ISIN) it is not booked, for the same reason: the security
-      sets the source country and the pairing with the withholding.
+      (Lightyear, Trading 212, Freedom24). With no ticker and no ISIN (and
+      for Scalable, no ISIN) it is not booked, for the same reason: the
+      security sets the source country and the pairing with the withholding.
       `parser.cash_row_unidentified` names each row with its type, amount
-      and date (Lightyear, Scalable, Trading 212, Revolut).
+      and date (Lightyear, Scalable, Trading 212, Revolut, Freedom24).
     - An IBKR cash `dateTime` written with the Flex Date/Time separator ",",
       a space or none ("20240615,103000", "2024-06-15 10:30:00",
       "20240615103000") is rewritten with ";" (`flexDateTime`). The engine
@@ -527,12 +527,12 @@ práctico Renta 2025. The decisions, each pinned in
       file has a second part over 12 ("3/15/2025") and none a first part over
       12. A 2-digit year is 20YY. A file with both kinds is day first, so its
       month-first dates are no real day and are named, never read as another
-      day. A row of
-    an unknown type that writes a zero share count moves no shares and stays
-    skipped, and so does a row that names no security and moves no shares
-    (a cash line). A row that names its security only by name and writes a
-    share count is kept (Scalable, Trading 212, Flatex, Trade Republic). The
-    cases per broker:
+      day.
+    - A row of an unknown type that writes a zero share count moves no
+      shares and stays skipped. So does a row that names no security and
+      moves no shares (a cash line). A row that names its security only by
+      name and writes a share count is kept (Scalable, Trading 212, Flatex,
+      Trade Republic). The cases per broker follow.
     - Revolut: a buy, sale or other type with a ticker and no readable date
       (an undated row with no ticker is kept with no ISIN);
       any type that is not a buy, sale, dividend, dividend tax correction,
@@ -565,7 +565,12 @@ práctico Renta 2025. The decisions, each pinned in
       corporate-action row (above).
     - Freedom24: a row with no readable date, no ticker, or an operation
       other than `buy` or `sell` after trimming (`sale`, `transfer`). Before,
-      every operation that was not `sell` was booked as a buy (#468).
+      every operation that was not `sell` was booked as a buy (#468). In
+      `corporate_actions`, a split, consolidation or merger that names a
+      ticker or an ISIN is a corporate-action row (the JSON gives no share
+      count; it was skipped with no word). A corporate action with no
+      readable `type_id` cannot be told from a dividend or a split: it is
+      skipped and counted by `freedom24.row_skipped_malformed`.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
@@ -606,6 +611,16 @@ práctico Renta 2025. The decisions, each pinned in
       pair is kept unreadable.
     - IBKR: a trade with no `buySell` takes its side from the quantity's
       sign; with no signed quantity, the side is unknown (""), never BUY.
+    - Binance Transaction History: a row with no readable `UTC_Time` (empty,
+      text, a date with no time) cannot be paired with the other legs of its
+      conversion or trade, so it books nothing and is no trade.
+      `binance.unparseable_timestamp` names each row by coin, operation,
+      change and the date cell. `binance.unparseable_amount` does the same
+      for a row whose `Change` is no number. Both hints say that the coin's
+      gains, losses and income, and its art. 33.5.e check, are not reliable.
+      Before, both warnings gave only a count. A `UTC_Time` of the right
+      shape that is no real day ("2025-13-45 10:00:00") is still paired, and
+      its trades are undated rows, as in every parser.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

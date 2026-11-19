@@ -22,6 +22,8 @@ Si una fila de compra o venta nombra un valor pero no se puede leer (una fecha q
 
 Lo mismo pasa con una fila que mueve acciones sin precio, como un desdoblamiento, un traspaso de entrada, unas acciones gratuitas o unos derechos con precio 0. DeclaRenta no la aplica, pero tampoco la descarta: te avisa con la fila. Un dividendo sin ticker se calcula por su ISIN. Si no trae ni ticker ni ISIN, o no tiene una fecha legible, DeclaRenta no lo suma y te avisa con el importe para que lo añadas a mano.
 
+En el historial de transacciones de Binance, una fila sin fecha y hora legible, o sin importe legible, no se puede emparejar con el resto de su operación. DeclaRenta no la calcula, pero te avisa con la moneda, la operación, la cantidad y la celda que falla.
+
 La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?», en el paso de subida.
 
 ## Cómo exportar el informe de cada broker
