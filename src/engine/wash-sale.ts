@@ -591,7 +591,15 @@ export function detectWashSales(
     group.idxs.push(idx);
   }
 
-  const isLossAt = (idx: number): boolean => result[idx]!.gainLossEur.lessThan(0);
+  // Only a finite loss can be blocked. A sale with a non-finite proceeds or
+  // cost (a corrupt rate) has no loss the report counts: `finiteDisposalAmounts`
+  // leaves that amount out, so the sale reads as a gain or as nothing. Blocking
+  // its "Infinity" would zero the year's blocked total in guardNonFiniteTotals
+  // and drop every valid blocked loss from the base (#469).
+  const isLossAt = (idx: number): boolean => {
+    const d = result[idx]!;
+    return d.proceedsEur.isFinite() && d.costBasisEur.isFinite() && d.gainLossEur.lessThan(0);
+  };
   // A short cover buys back shares sold short; it transmits no held shares, so
   // it is never a «transmisión definitiva»: it runs no definitive test, releases
   // no pending loss and cannot empty the position. Its own loss still blocks.

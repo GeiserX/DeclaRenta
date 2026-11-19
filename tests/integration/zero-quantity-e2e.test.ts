@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { computeCasillaBlocksWithFx, combinedNetGainLoss } from "../../src/generators/casillas.js";
 import { formatCsv } from "../../src/generators/csv.js";
+import { computeTaxableBase } from "../../src/engine/taxable-base.js";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
 import { krakenParser } from "../../src/parsers/kraken.js";
 import { binanceParser } from "../../src/parsers/binance.js";
@@ -340,5 +341,51 @@ describe("#469 review: one sale with a non-finite amount never erases the year's
         expect(localizeMessage(m)).not.toContain("{{");
       }
     });
+  });
+});
+
+describe("#469 review: a sale with a non-finite cost blocks no loss, so the year's valid blocked loss stays", () => {
+  // Real path: XYZ (EUR) is sold at a 200 € loss and rebought within two
+  // months, so 200 € is blocked (Art. 33.5.f). ABC (USD) was bought on a day
+  // whose rate is "Infinity" (monodivisa and tradicional-divisa read it; in
+  // multidivisa the cost is in dollars), sold and rebought. Its cost is left
+  // out (`finiteDisposalAmounts`), so it counts as a 990 € gain: it has no loss
+  // to block. Before, it blocked "Infinity", the year's blocked total became 0
+  // and the base dropped by XYZ's 200 € (the user underpays).
+  const sym = (row: string): string => row.replace(/symbol="XYZ"/, 'symbol="ABC"').replace(/isin="US0000004531"/, 'isin="US0000000ABC"').replace(/conid="4531"/, 'conid="777"');
+  const rows = [
+    ibkrTrade("EUR", "20250301", "BUY", "100", "10"),
+    ibkrTrade("EUR", "20250601", "SELL", "-100", "8"),
+    ibkrTrade("EUR", "20250615", "BUY", "100", "8"),
+    sym(ibkrTrade("USD", "20250310", "BUY", "10", "100")),
+    sym(ibkrTrade("USD", "20250901", "SELL", "-10", "90")),
+    sym(ibkrTrade("USD", "20250910", "BUY", "10", "90")),
+  ];
+  const poisoned: EcbRateMap = new Map([...RATES].map(([d, m]) => [d, d === "2025-03-10" ? new Map([["USD", "Infinity"]]) : m]));
+
+  for (const method of ["monodivisa", "tradicional-divisa"] as FxMethod[]) {
+    it(`XYZ's 200 € stays blocked, ABC blocks nothing, the base is 990 € (${method})`, () => {
+      const st = finalizeMergedStatement(mergeStatement(createEmptyStatement(), ibkr(rows), "Interactive Brokers"));
+      const r = generateTaxReport(st, poisoned, 2025, reportOptionsForMethod(method));
+      const abc = r.capitalGains.disposals.find((d) => d.symbol === "ABC")!;
+      expect(abc.costBasisEur.isFinite()).toBe(false);
+      expect([abc.blockedLossEur.toString(), abc.washSaleBlocked]).toEqual(["0", false]);
+      expect(r.capitalGains.disposals.find((d) => d.symbol === "XYZ")!.blockedLossEur.toString()).toBe("200");
+      expect(r.capitalGains.blockedLosses.toString()).toBe("200");
+      expect(r.capitalGains.reintegratedLosses.toString()).toBe("0");
+      expect(computeTaxableBase(r).toString()).toBe("990");
+      expect(r.messages.filter((m) => m.id === "report.non_finite_total")).toEqual([]);
+      expect(r.messages.find((m) => m.id === "report.non_finite_disposal")?.context?.rows).toContain("ABC");
+      const resumen = formatCsv(r).split("# RESUMEN CASILLAS")[1] ?? "";
+      expect(resumen).toMatch(/Perdidas bloqueadas antichurning[^\n]*200\.00/);
+      expect(resumen).not.toMatch(/Infinity|NaN/);
+    });
+  }
+
+  it("control: in multidivisa ABC is finite and both losses stay blocked (310 €)", () => {
+    const st = finalizeMergedStatement(mergeStatement(createEmptyStatement(), ibkr(rows), "Interactive Brokers"));
+    const r = generateTaxReport(st, poisoned, 2025, reportOptionsForMethod("multidivisa"));
+    expect(r.capitalGains.blockedLosses.toString()).toBe("310");
+    expect(computeTaxableBase(r).toString()).toBe("0");
   });
 });
