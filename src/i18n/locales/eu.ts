@@ -292,6 +292,8 @@ const eu: TranslationKeys = {
   "results.split_fx": "Dibisa",
   "results.split_fx_sub": "1633 eta 1637 laukietan sartuta",
   "results.split_fx_off": "ez da kalkulatzen metodo honekin",
+  "results.split_deferred": "Galera atzeratuak (anti-churning)",
+  "results.split_deferred_sub": "aurten blokeatutakoak, ken aurreko urteetatik aurten integratutakoak",
   "results.split_total": "Guztira",
   "results.split_total_sub": "aurrezki-oinarrira · kuota estimatua {{tax}} €",
   "results.compare_title": "Beste metodoekin alderatu (beste tresna batekin bat etortzeko)",

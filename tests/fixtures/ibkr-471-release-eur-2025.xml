@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="WT" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1111111" fromDate="20240101" toDate="20251231" period="Custom">
+      <Trades>
+        <Trade tradeID="1" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20241101" settlementDate="20241105" quantity="100" tradePrice="100.00" tradeMoney="10000.00"
+               proceeds="-10000.00" cost="10000.00" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="2" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20241210" settlementDate="20241212" quantity="-100" tradePrice="90.00" tradeMoney="-9000.00"
+               proceeds="9000.00" cost="-10000.00" fifoPnlRealized="-1000" fxRateToBase="1" buySell="SELL" openCloseIndicator="C"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="3" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20241220" settlementDate="20241224" quantity="100" tradePrice="90.00" tradeMoney="9000.00"
+               proceeds="-9000.00" cost="9000.00" fifoPnlRealized="0" fxRateToBase="1" buySell="BUY" openCloseIndicator="O"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+        <Trade tradeID="4" accountId="U1111111" symbol="ACME" description="ACME CORP" isin="US0000000001" assetCategory="STK" currency="EUR"
+               tradeDate="20250616" settlementDate="20250618" quantity="-100" tradePrice="95.00" tradeMoney="-9500.00"
+               proceeds="9500.00" cost="-9000.00" fifoPnlRealized="500" fxRateToBase="1" buySell="SELL" openCloseIndicator="C"
+               exchange="NASDAQ" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />
+      </Trades>
+      <OpenPositions />
+      <CashTransactions />
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

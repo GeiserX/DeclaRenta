@@ -303,6 +303,8 @@ const es = {
   "results.split_fx": "Divisa",
   "results.split_fx_sub": "incluida en 1633 y 1637",
   "results.split_fx_off": "no se calcula en este método",
+  "results.split_deferred": "Pérdidas diferidas (anti-churning)",
+  "results.split_deferred_sub": "bloqueadas este año menos las integradas de años anteriores",
   "results.split_total": "Total",
   "results.split_total_sub": "a la base del ahorro · cuota estimada {{tax}} €",
   "results.compare_title": "Comparar con los otros métodos (para cuadrar con otra herramienta)",

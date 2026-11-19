@@ -4,7 +4,9 @@
  * - the header chips: «Método: … · Cambiar», titulares, auto-conversions;
  * - the open «Cómo se ha calculado» box: the method text, its legal basis and
  *   the report's own notes about the method;
- * - the «Acciones / Divisa / Total» strip above the casillas;
+ * - the «Acciones / Divisa / Total» strip above the casillas (with a
+ *   «Pérdidas diferidas» cell when the anti-churning rule blocks or releases a
+ *   loss, #471);
  * - the closed «Comparar con los otros métodos» box. It is read-only and runs
  *   the engine for the other two methods only when the user opens it, so the
  *   normal path stays at one engine run.
@@ -13,7 +15,7 @@
 import Decimal from "decimal.js";
 import type { FxMethod, TaxSummary } from "../types/tax.js";
 import { calculateSavingsTax } from "../engine/tax-brackets.js";
-import { computeTaxableBase } from "../engine/taxable-base.js";
+import { computeTaxableBase, savingsBalances } from "../engine/taxable-base.js";
 import { combinedNetGainLoss, computeCasillaBlocks, computeCasillaBlocksWithFx } from "../generators/casillas.js";
 import { t, localizeMessage, localizeHint } from "../i18n/index.js";
 import { esc } from "./esc.js";
@@ -27,7 +29,18 @@ export interface MethodTotals {
   securities: Decimal;
   /** Gain or loss of the currency (part of 1633/1637). */
   fx: Decimal;
-  /** securities + fx: the net row under the casillas. */
+  /**
+   * Anti-churning deferral (art. 33.5.f/g LIRPF): losses blocked this year
+   * minus earlier blocked losses released this year. Not in 0328/0331; the
+   * base adds it (#471).
+   */
+  deferred: Decimal;
+  /** True when a loss is blocked or released, so the strip and the table show the deferral. */
+  hasDeferred: boolean;
+  /**
+   * The gains balance of the savings base, the figure the cuota uses:
+   * savingsBalances().gains = securities + fx + deferred (#471).
+   */
   total: Decimal;
   /** Indicative savings tax of the whole savings base, after the 0588 deduction (as the tax card). */
   tax: Decimal;
@@ -36,13 +49,27 @@ export interface MethodTotals {
 }
 
 export function methodTotals(report: TaxSummary): MethodTotals {
-  const total = combinedNetGainLoss(computeCasillaBlocksWithFx(report));
+  const net = combinedNetGainLoss(computeCasillaBlocksWithFx(report));
   const fx = report.fxGains.netGainLoss;
+  const { blockedLosses, reintegratedLosses } = report.capitalGains;
+  // The Total says «a la base del ahorro» next to the cuota, so it is the same
+  // Decimal figure the cuota reads: a blocked loss is not deductible this year,
+  // a released one is (#471). The raw casilla net would show a deferred loss
+  // as deductible.
+  const total = savingsBalances(report).gains;
   // The exact Decimal base: a Number round trip moves the tax by a cent.
   const gross = calculateSavingsTax(computeTaxableBase(report), report.year);
   const tax = Decimal.max(0, gross.minus(report.doubleTaxation.deduction));
   const hasOtherElements = computeCasillaBlocks(report.capitalGains.disposals).otherElements.count > 0;
-  return { securities: total.minus(fx), fx, total, tax, hasOtherElements };
+  return {
+    securities: net.minus(fx),
+    fx,
+    deferred: blockedLosses.minus(reintegratedLosses),
+    hasDeferred: !blockedLosses.isZero() || !reintegratedLosses.isZero(),
+    total,
+    tax,
+    hasOtherElements,
+  };
 }
 
 /** "+425,00" / "−225,00" / "0,00": a sign on every non-zero figure, a real minus sign. */
@@ -122,6 +149,8 @@ export function renderHowCalculated(report: TaxSummary, method: FxMethod | null)
 /**
  * `method` is null when the upload has no foreign currency: no method applies
  * and there are no 1633/1637 rows, so the strip leaves the «Divisa» cell out.
+ * The «Pérdidas diferidas» cell shows only when a loss is blocked or released,
+ * so the cells always add up to the Total (#471).
  */
 export function renderResultsSplit(report: TaxSummary, method: FxMethod | null): string {
   const totals = methodTotals(report);
@@ -134,9 +163,12 @@ export function renderResultsSplit(report: TaxSummary, method: FxMethod | null):
       <dd class="split-value ${signClass(value)}">${signed(value)} €</dd>
       <dd class="split-sub">${esc(sub)}</dd>
     </div>`;
-  return `<dl class="results-split${method ? "" : " results-split-two"}" id="results-split">
+  const count = 2 + (method ? 1 : 0) + (totals.hasDeferred ? 1 : 0);
+  const countClass = count === 2 ? " results-split-two" : count === 4 ? " results-split-four" : "";
+  return `<dl class="results-split${countClass}" id="results-split">
     ${cell(securitiesLabel, totals.securities, securitiesSub)}
     ${method ? cell(t("results.split_fx"), totals.fx, fxSub) : ""}
+    ${totals.hasDeferred ? cell(t("results.split_deferred"), totals.deferred, t("results.split_deferred_sub")) : ""}
     ${cell(t("results.split_total"), totals.total, t("results.split_total_sub", { tax: fmtEur(totals.tax) }))}
   </dl>`;
 }
@@ -157,6 +189,7 @@ export function renderMethodCompare(): string {
 function renderCompareTable(totals: Record<FxMethod, MethodTotals>, current: FxMethod): string {
   const cur = (m: FxMethod) => (m === current ? ' class="cur"' : "");
   const hasOther = FX_METHODS.some((m) => totals[m].hasOtherElements);
+  const hasDeferred = FX_METHODS.some((m) => totals[m].hasDeferred);
   // On a phone the parenthesis of a name ("(multidivisa)") is hidden in the
   // table head so the four columns fit; the cards and the chip keep it.
   const headName = (m: FxMethod) => {
@@ -174,6 +207,7 @@ function renderCompareTable(totals: Record<FxMethod, MethodTotals>, current: FxM
         <tbody>
           ${row(hasOther ? t("results.split_securities") : t("results.split_shares"), (x) => signed(x.securities))}
           ${row(t("results.split_fx"), (x) => signed(x.fx))}
+          ${hasDeferred ? row(t("results.split_deferred"), (x) => signed(x.deferred)) : ""}
           ${row(t("results.split_total"), (x) => signed(x.total), "total")}
           ${row(t("results.compare_tax"), (x) => fmtEur(x.tax))}
         </tbody>

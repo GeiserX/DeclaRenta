@@ -291,6 +291,8 @@ const ca: TranslationKeys = {
   "results.split_fx": "Divisa",
   "results.split_fx_sub": "inclosa a 1633 i 1637",
   "results.split_fx_off": "no es calcula amb aquest mètode",
+  "results.split_deferred": "Pèrdues diferides (anti-churning)",
+  "results.split_deferred_sub": "bloquejades aquest any menys les integrades d'anys anteriors",
   "results.split_total": "Total",
   "results.split_total_sub": "a la base de l'estalvi · quota estimada {{tax}} €",
   "results.compare_title": "Comparar amb els altres mètodes (per quadrar amb una altra eina)",

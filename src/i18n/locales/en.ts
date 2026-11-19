@@ -291,6 +291,8 @@ const en: TranslationKeys = {
   "results.split_fx": "Currency",
   "results.split_fx_sub": "included in 1633 and 1637",
   "results.split_fx_off": "not computed with this method",
+  "results.split_deferred": "Deferred losses (anti-churning)",
+  "results.split_deferred_sub": "blocked this year minus earlier ones released this year",
   "results.split_total": "Total",
   "results.split_total_sub": "to the savings base · estimated tax {{tax}} €",
   "results.compare_title": "Compare with the other methods (to match another tool)",

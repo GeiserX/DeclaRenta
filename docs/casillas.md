@@ -176,6 +176,8 @@ La ventana se calcula en meses naturales (no en días). Si vendes el 15 de marzo
 
 En Renta Web esto **requiere acción**: no es automático. Por el importe bloqueado debes marcar la casilla **«Pérdidas patrimoniales no imputables»**; y en el ejercicio de la transmisión definitiva que la libera, debes imputar entonces la pérdida diferida. DeclaRenta marca en la tabla de operaciones qué venta libera pérdidas pendientes y de qué ventas proceden.
 
+En la página de resultados, la franja «Acciones / Divisa / Total» separa las cifras. «Acciones» es la diferencia entre 0328 y 0331, con la pérdida entera. «Pérdidas diferidas (anti-churning)» suma las pérdidas bloqueadas este año y resta las de años anteriores que se integran este año. «Total» es la suma: el saldo de ganancias y pérdidas que va a la base del ahorro, del que sale la cuota estimada. La tabla «Comparar con los otros métodos» tiene la misma fila. Hasta la versión 0.66.14, el «Total» no restaba las pérdidas bloqueadas ni sumaba las integradas, aunque la cuota estimada sí lo hacía (issue #471). Las casillas no cambian.
+
 !!! warning "Si declaraste con la versión 0.66.5 o anterior"
 
     Esas versiones liberaban una pérdida al vender las acciones recompradas aunque esa venta volviera a tener recompra en su plazo. Si ya dedujiste esa pérdida en un año presentado, no la deduzcas otra vez cuando DeclaRenta la libere ahora en un año posterior, o corrige aquel año: con una autoliquidación rectificativa si es 2024 o posterior, o con una autoliquidación complementaria si es 2023 o anterior. Ejemplo: con el caso de la issue #451, la 0.66.5 dedujo 20 € en 2025; la versión actual los mantiene diferidos y libera 25 € en 2026 en lugar de 5 €.
