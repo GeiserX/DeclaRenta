@@ -99,6 +99,11 @@ tests/           Vitest tests mirroring src/ structure
 - **GOTCHA**: Any module that renders HTML with `t()` must listen for `localechange` and re-render, otherwise switching language leaves stale text
 - Only `es` is bundled up front; `en`/`ca`/`eu`/`gl` load on demand. `setLocale()` and `initLocale()` are async and switch only after the table has loaded (`localechange` fires after). `main.ts` awaits `initLocale()` before the first render; tests must `await setLocale(...)` before asserting on `t()`
 
+### Results panels are redrawn on every run (Hard Trace — issue #472)
+- **Trap**: up to 0.66.14 the Save handlers of «Plazo anti-churning por valor», «Valoración manual de criptomonedas» and «Lotes manuales» unhid «Guardado» and called `processFiles()`; `renderResults` removes and redraws all three panels, always with the label `hidden`, so the user saw it for one frame (or only during an ECB download).
+- **Model**: the bind functions call `onSave("save" | "clear")`; `main.ts` passes the saved panel (`SavedPanel`) to `processFiles(savedPanel)` → `renderResults(report, savedPanel)`, and each renderer takes `{ saved }` to drop `hidden`. Only that run carries it, so a Clear, a refused save, a locale change or a year change redraw without the label. Any new transient state on these panels must travel the same way.
+- Pinned by `tests/web/panel-saved-label.test.ts` (real app in jsdom: Save, Clear, refused save, invalid row, locale and year redraws, for the three panels).
+
 ### Data Persistence
 - **localStorage only** — no cookies, no server-side storage
 - `declarenta_profile`: fiscal profile (NIF, name, CCAA, phone, year)

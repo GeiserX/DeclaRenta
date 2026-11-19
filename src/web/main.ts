@@ -951,7 +951,14 @@ function renderSectionSafely(containerId: string, render: () => void): void {
  */
 let processRunToken = 0;
 
-async function processFiles(): Promise<void> {
+/**
+ * The results panel whose Save started a run (#472). The run redraws every
+ * panel, so the new one must show «Guardado»; a Clear, a locale change or a
+ * year change pass nothing and show none.
+ */
+type SavedPanel = "antichurning" | "crypto" | "openingLots";
+
+async function processFiles(savedPanel: SavedPanel | null = null): Promise<void> {
   if (!mergedStatement) {
     await parseFiles();
   }
@@ -1026,7 +1033,7 @@ async function processFiles(): Promise<void> {
 
     unlockStep(3);
     clearWizardError();
-    renderResults(report);
+    renderResults(report, savedPanel);
     shownResultsYear = report.year;
 
     // Render 720, 721 and D-6 sections with processed data. Each is wrapped so a
@@ -1201,7 +1208,7 @@ opsFilter.addEventListener("change", () => renderOperationsTable());
 // Render results (Step 3)
 // ---------------------------------------------------------------------------
 
-function renderResults(report: TaxSummary) {
+function renderResults(report: TaxSummary, savedPanel: SavedPanel | null = null) {
   // The method chip, the «Cómo se ha calculado» text and the comparison apply
   // only to an upload with foreign currency.
   const method: FxMethod | null = uploadCurrencies.length > 0
@@ -1270,43 +1277,43 @@ function renderResults(report: TaxSummary) {
   resultsSectionEl.querySelectorAll(".manual-opening-lots-panel").forEach((el) => el.remove());
   resultsSectionEl.querySelectorAll(".antichurning-window-panel").forEach((el) => el.remove());
 
-  const panelHtml = renderManualOpeningLotsPanel(report.messages);
+  // A Save reruns the report and redraws its panel: the new panel shows
+  // «Guardado» (#472). A Clear reruns without it.
+  const rerunAfter = (panel: SavedPanel) => (action: "save" | "clear") => {
+    void processFiles(action === "save" ? panel : null);
+  };
+
+  const panelHtml = renderManualOpeningLotsPanel(report.messages, { saved: savedPanel === "openingLots" });
   if (panelHtml) {
     casillasDiv.insertAdjacentHTML("beforebegin", panelHtml);
     const panel = resultsSectionEl.querySelector<HTMLElement>(".manual-opening-lots-panel");
     if (panel) {
-      bindManualOpeningLotsPanel(panel, () => {
-        void processFiles();
-      });
+      bindManualOpeningLotsPanel(panel, rerunAfter("openingLots"));
     }
   }
 
-  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? []);
+  const cryptoPanelHtml = renderManualRatesPanel(report.unresolvedCryptoValuations ?? [], { saved: savedPanel === "crypto" });
   if (cryptoPanelHtml) {
     casillasDiv.insertAdjacentHTML("beforebegin", cryptoPanelHtml);
     // The opening-lots panel also carries .crypto-rates-panel (shared styling)
     // and sits earlier in the DOM, so exclude it or the Save button stays unbound.
     const panel = resultsSectionEl.querySelector<HTMLElement>(".crypto-rates-panel:not(.manual-opening-lots-panel):not(.antichurning-window-panel)");
     if (panel) {
-      bindManualRatesPanel(panel, () => {
-        // Re-run the full pipeline so the newly-entered manual rates take
-        // effect — no re-upload needed (statement is cached in mergedStatement).
-        void processFiles();
-      });
+      // Re-run the full pipeline so the newly-entered manual rates take
+      // effect — no re-upload needed (statement is cached in mergedStatement).
+      bindManualRatesPanel(panel, rerunAfter("crypto"));
     }
   }
 
   // The anti-churning window per security (#452): 2 months or 1 year, set by
   // hand when IBKR's listing exchange is wrong or missing. Saving reruns the
   // whole pipeline, so the method comparison below picks it up too.
-  const windowPanelHtml = renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities);
+  const windowPanelHtml = renderAntichurningWindowPanel(report.capitalGains.antichurningSecurities, { saved: savedPanel === "antichurning" });
   if (windowPanelHtml) {
     casillasDiv.insertAdjacentHTML("beforebegin", windowPanelHtml);
     const panel = resultsSectionEl.querySelector<HTMLElement>(".antichurning-window-panel");
     if (panel) {
-      bindAntichurningWindowPanel(panel, () => {
-        void processFiles();
-      });
+      bindAntichurningWindowPanel(panel, rerunAfter("antichurning"));
     }
   }
 

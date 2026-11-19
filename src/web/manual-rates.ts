@@ -287,7 +287,7 @@ function storedRatesList(stored: StoredManualRate[]): string {
   </details>`;
 }
 
-function renderStoredRatesPanel(stored: StoredManualRate[]): string {
+function renderStoredRatesPanel(stored: StoredManualRate[], saved: boolean): string {
   const rows = storedRateRows(stored);
 
   return `<details class="crypto-rates-panel crypto-rates-stored-panel">
@@ -309,7 +309,7 @@ function renderStoredRatesPanel(stored: StoredManualRate[]): string {
         <button type="button" id="crypto-rates-save-btn" class="btn-cta">${esc(tr("crypto_rates.save_btn"))}</button>
         ${renderClearRatesButton()}
       </div>
-      <span class="crypto-rates-saved-msg" hidden>${esc(tr("crypto_rates.saved"))}</span>
+      <span class="crypto-rates-saved-msg"${saved ? "" : " hidden"}>${esc(tr("crypto_rates.saved"))}</span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
     </div>
   </details>`;
@@ -323,10 +323,13 @@ function renderStoredRatesPanel(stored: StoredManualRate[]): string {
  *
  * With nothing left to value it falls back to the collapsed list of saved
  * prices, or returns "" when none are saved.
+ *
+ * `saved` shows the «Guardado» label: a Save reruns the report, which redraws
+ * the panel, so the new panel has to carry the confirmation (#472).
  */
-export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): string {
+export function renderManualRatesPanel(unresolved: UnresolvedValuation[], { saved = false }: { saved?: boolean } = {}): string {
   const stored = readStored();
-  if (unresolved.length === 0) return stored.length > 0 ? renderStoredRatesPanel(stored) : "";
+  if (unresolved.length === 0) return stored.length > 0 ? renderStoredRatesPanel(stored, saved) : "";
   // Prices already saved for swaps that no longer need one stay editable here
   // too; otherwise a mistyped one could only be removed with "clear all".
   const savedElsewhere = stored.filter((e) => !unresolved.some((u) => u.currency === e.currency && u.date === e.date));
@@ -374,7 +377,7 @@ export function renderManualRatesPanel(unresolved: UnresolvedValuation[]): strin
       <button type="button" id="crypto-rates-save-btn" class="btn-cta">${esc(tr("crypto_rates.save_btn"))}</button>
       ${stored.length > 0 ? renderClearRatesButton() : ""}
     </div>
-    <span class="crypto-rates-saved-msg" hidden>${esc(tr("crypto_rates.saved"))}</span>
+    <span class="crypto-rates-saved-msg"${saved ? "" : " hidden"}>${esc(tr("crypto_rates.saved"))}</span>
     <p class="muted crypto-rates-recalculate-hint">${esc(tr("crypto_rates.recalculate_hint"))}</p>
   </div>`;
 }
@@ -413,7 +416,8 @@ function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
     .join("");
 }
 
-export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
+/** `saved` shows the «Guardado» label in the panel a Save redraws (#472). */
+export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
   const issuesFromMessages = messages
     .map((msg) => manualOpeningIssueFromMessage(msg))
     .filter((issue): issue is ManualOpeningLotIssue => issue !== null)
@@ -465,7 +469,7 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
         <button type="button" id="manual-opening-lots-save-btn" class="btn-cta">${esc(tr("opening_lots.save_btn"))}</button>
         <button type="button" id="manual-opening-lots-clear-btn" class="btn-secondary">${esc(tr("opening_lots.clear_btn"))}</button>
       </div>
-      <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg" hidden>${esc(tr("opening_lots.saved"))}</span>
+      <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg"${saved ? "" : " hidden"}>${esc(tr("opening_lots.saved"))}</span>
       <span class="manual-opening-lots-error-msg" role="alert" hidden>${esc(tr("opening_lots.row_invalid"))}</span>
       <p class="muted crypto-rates-recalculate-hint">${esc(tr("opening_lots.recalculate_hint"))}</p>
     </div>
@@ -475,13 +479,14 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[]): string {
 /**
  * Wire the save and clear buttons after the panel HTML has been injected into
  * `container`. On save: reads each non-empty input, persists it via
- * setManualRate, then invokes `onSave` (which re-runs the report so the new
- * rates take effect). On clear: drops every saved price and re-runs.
+ * setManualRate, then invokes `onSave("save")` (which re-runs the report so the
+ * new rates take effect). On clear: drops every saved price and calls
+ * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472).
  */
-export function bindManualRatesPanel(container: HTMLElement, onSave: () => void): void {
+export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   container.querySelector<HTMLButtonElement>("#crypto-rates-clear-btn")?.addEventListener("click", () => {
     clearManualRates();
-    onSave();
+    onSave("clear");
   });
 
   const btn = container.querySelector<HTMLButtonElement>("#crypto-rates-save-btn");
@@ -504,7 +509,7 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: () => void)
     const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
     if (msg) msg.hidden = savedCount === 0;
 
-    if (savedCount > 0) onSave();
+    if (savedCount > 0) onSave("save");
   });
 }
 
@@ -522,7 +527,7 @@ function renderEmptyOpeningLotRow(groupEl: HTMLElement): string {
   </tr>`;
 }
 
-export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () => void): void {
+export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
   container.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const addBtn = target.closest<HTMLButtonElement>(".manual-opening-lot-add");
@@ -552,7 +557,7 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () =>
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       clearManualOpeningLots();
-      onSave();
+      onSave("clear");
     });
   }
 
@@ -620,6 +625,6 @@ export function bindManualOpeningLotsPanel(container: HTMLElement, onSave: () =>
 
     if (msg) msg.hidden = savedCount === 0;
 
-    if (savedCount > 0) onSave();
+    if (savedCount > 0) onSave("save");
   });
 }
