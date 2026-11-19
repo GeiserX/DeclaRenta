@@ -13,7 +13,7 @@ import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { showBrokerColumns } from "../generators/broker-columns.js";
 import { finiteDisposalAmounts } from "../generators/casillas.js";
-import { isCountableAmount } from "../engine/amount-range.js";
+import { amountCell, costCell, countedResult } from "./disposal-cells.js";
 
 const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
   expiration: "option.expiration",
@@ -24,15 +24,6 @@ const OPTION_SCENARIO_LABELS: Record<string, TranslationKey> = {
 function optionScenarioLabel(scenario: string): string {
   const key = OPTION_SCENARIO_LABELS[scenario];
   return key ? t(key) : scenario;
-}
-
-/**
- * An amount cell: «—» for an amount the boxes leave out because it is no
- * number or past 12 integer digits of euros (`isCountableAmount`), never
- * "NaN" and never a 2000-digit figure.
- */
-function amountCell(amount: Decimal): string {
-  return isCountableAmount(amount) ? fmtEur(amount) : "—";
 }
 
 export function renderOperationsAnnex(report: TaxSummary): string {
@@ -101,16 +92,9 @@ export function renderOperationsAnnex(report: TaxSummary): string {
 
     ops.forEach((d, i) => {
       // Each cell shows what the subtotal adds (`finiteDisposalAmounts`), so
-      // the column sums to it. A finite cost next to non-finite proceeds is
-      // shown but not added (no phantom loss): it carries the mark. With only
-      // the cost not finite, the result added is the proceeds: shown as such.
-      // With proceeds left out, nothing is added: «—», also when the raw
-      // result is a small number (1e15 − (1e15 − 5) is 5, #470).
-      const counted = amounts[i]!;
-      const costCell = isCountableAmount(d.costBasisEur) && !isCountableAmount(d.proceedsEur)
-        ? `${fmtEur(d.costBasisEur)} <span class="muted">(${esc(t("annex.not_counted"))})</span>`
-        : amountCell(d.costBasisEur);
-      const result = isCountableAmount(d.proceedsEur) ? counted.gainLoss : null;
+      // the column sums to it (disposal-cells.ts, shared with the drill-down
+      // and the operations table).
+      const result = countedResult(d);
       const cls = result !== null && result.greaterThanOrEqualTo(0) ? "gain" : "loss";
       const blocked = washSaleRowAttr(d);
       const optionInfo = d.optionScenario
@@ -129,7 +113,7 @@ export function renderOperationsAnnex(report: TaxSummary): string {
               <td>${esc(formatDate(d.acquireDate))}</td>
               <td>${esc(formatDate(d.sellDate))}</td>${brokerCells}
               <td>${fmtQty(d.quantity)}</td>
-              <td class="num">${costCell}</td>
+              <td class="num">${costCell(d)}</td>
               <td class="num">${amountCell(d.proceedsEur)}</td>
               <td class="num ${cls}">${result === null ? "—" : `${result.greaterThanOrEqualTo(0) ? "+" : ""}${fmtEur(result)}`}</td>
             </tr>${renderWashSaleDetailRow(d, columnCount)}`;

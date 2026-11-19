@@ -72,6 +72,7 @@ import { washSaleRowAttr, renderWashSaleDetailRow } from "./wash-sale-row.js";
 import { symbolCell } from "./symbol-cell.js";
 import { createEmptyStatement, finalizeMergedStatement, mergeStatement, yearEndHoldings } from "../parsers/merge.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
+import { amountCell, costCell, countedResult } from "./disposal-cells.js";
 import Decimal from "decimal.js";
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
@@ -1379,6 +1380,11 @@ function sortableTh(label: string, col: string, state: SortState): string {
   return `<th class="sortable${sortIndicator(col, state)}" data-col="${col}"${ariaSort}><button type="button" class="sort-btn">${label}</button></th>`;
 }
 
+/** The result cell of a sale: what the boxes add for it, «—» when they add nothing (#470). */
+function resultCell(result: Decimal | null): string {
+  return `<td class="${result !== null && result.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${result === null ? "—" : fmtEur(result)}</td>`;
+}
+
 function renderOperationsTable() {
   if (!currentReport) return;
   const search = opsSearch.value.toLowerCase();
@@ -1464,9 +1470,9 @@ function renderOperationsTable() {
             <td class="cell-broker">${esc(d.acquireBrokerSource ?? "—")}</td>
             <td class="cell-broker">${esc(d.brokerSource ?? "—")}</td>` : ""}
             <td>${fmtQty(d.quantity)}</td>
-            <td>${fmtEur(d.costBasisEur)}</td>
-            <td>${fmtEur(d.proceedsEur)}</td>
-            <td class="${d.gainLossEur.greaterThanOrEqualTo(0) ? "gain" : "loss"}">${fmtEur(d.gainLossEur)}</td>
+            <td>${costCell(d)}</td>
+            <td>${amountCell(d.proceedsEur)}</td>
+            ${resultCell(countedResult(d))}
             <td>${d.holdingPeriodDays}</td>
           </tr>${renderWashSaleDetailRow(d, brokers ? 11 : 9)}
         `,

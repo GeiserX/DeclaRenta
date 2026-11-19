@@ -10,6 +10,7 @@ import { fxMethodOf, type FxMethod, type TaxSummary, type FifoDisposal, type FxD
 import { t, localizeMessage, localizeHint, isTranslationKey } from "../i18n/index.js";
 import { fmtEur, fmtQty, formatDate } from "./format.js";
 import { esc } from "./esc.js";
+import { amountCell, costCell } from "./disposal-cells.js";
 import { copyToClipboard } from "./clipboard.js";
 import { combinedNetGainLoss, computeCasillaBlocksWithFx, groupDividendsByIssuer, isListedShare, type CasillaBlocks } from "../generators/casillas.js";
 
@@ -118,7 +119,7 @@ function renderDisposalsDetail(
           <td>${esc(d.symbol)}</td>
           <td>${esc(formatDate(mode === "acquisition" ? d.acquireDate : d.sellDate))}</td>
           <td>${fmtQty(d.quantity)}</td>
-          <td>${fmtEur(mode === "acquisition" ? d.costBasisEur : d.proceedsEur)}</td>
+          <td>${mode === "acquisition" ? costCell(d) : amountCell(d.proceedsEur)}</td>
         </tr>`).join("")}
       </tbody>
     </table></div>
