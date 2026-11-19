@@ -750,7 +750,7 @@ function parseTransactionLog(
       id: "revolut.bad_fx_rate",
       severity: "warning" as const,
       message: `Se ha(n) omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: ${rows}.`,
-      hint: "Solo los ingresos y las retiradas de efectivo usan esa columna; las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. Suele deberse a una celda de tipo de cambio no numérica, negativa o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esos movimientos se incluyan.",
+      hint: "Solo los ingresos y las retiradas de efectivo usan esa columna. Las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. La causa suele ser una celda de tipo de cambio que no es un número, es negativa o vale cero. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut y súbelo de nuevo.",
       context: { count, rows },
     });
   }
@@ -770,7 +770,7 @@ function parseTransactionLog(
       id: "revolut.dividend_tax_correction",
       severity: "info" as const,
       message: `El extracto de Revolut trae ${count} corrección(es) de la retención de un dividendo (DIVIDEND TAX (CORRECTION)) que DeclaRenta no suma: ${rows}.`,
-      hint: "Con estas filas Revolut corrige la retención de un dividendo ya cobrado. DeclaRenta importa los dividendos de Revolut por su importe neto y no lee la retención de este extracto, así que tampoco su corrección. Toma el dividendo bruto y la retención final, ya corregida, del informe fiscal anual de Revolut.",
+      hint: "Con estas filas Revolut corrige la retención de un dividendo ya cobrado. DeclaRenta importa los dividendos de Revolut por su importe neto. No lee la retención de este extracto, y tampoco su corrección. Toma el dividendo bruto y la retención final, ya corregida, del informe fiscal anual de Revolut.",
       context: { count, rows },
     });
   }

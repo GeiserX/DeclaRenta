@@ -246,7 +246,7 @@ export function dropUndatedCash(broker: string, cash: CashTransaction[], dateCol
     id: "parser.cash_row_undated",
     severity: "warning",
     message: `${broker}: ${count} movimiento(s) de dinero no tienen una fecha legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca, así que no lo suma y no se inventa una fecha. Si es un dividendo, una retención, un interés u otro ingreso del año que declaras, corrige la fecha en el archivo del broker y vuelve a subirlo, o añade el importe a mano en Renta Web.",
+    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Si es un dividendo, una retención, un interés u otro ingreso del año que declaras, corrige la fecha en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -266,7 +266,7 @@ export function cashRowsUnidentifiedMessages(broker: string, rows: readonly stri
     id: "parser.cash_row_unidentified",
     severity: "warning",
     message: `${broker}: ${count} dividendo(s) o retención(es) no dicen de qué valor son y no se calculan: ${list}.`,
-    hint: "La fila no trae ni el ticker ni el ISIN. Sin el valor, DeclaRenta no sabe de qué país viene el dividendo ni con qué retención va, así que no lo suma y no se inventa el valor. Si es un ingreso del año que declaras, corrige la fila en el archivo del broker y vuelve a subirlo, o añade el importe a mano en Renta Web.",
+    hint: "La fila no trae ni el ticker ni el ISIN. Sin el valor, DeclaRenta no sabe de qué país viene el dividendo ni con qué retención va. Por eso no lo suma y no se inventa el valor. Si es un ingreso del año que declaras, corrige la fila en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -312,7 +312,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.trade_row_unreadable",
       severity: "warning",
       message: `${broker}: ${count} fila(s) de operación no se pueden leer y no se calculan: ${list}.`,
-      hint: "Entre corchetes va la celda que falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas, así que las ganancias y pérdidas de esos valores no son fiables, y no aplica la excepción de compra única de la regla de los 2 meses a un valor que pueda ser el de una de ellas. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
+      hint: "Entre corchetes va la celda que falla: falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a un valor que pueda ser el de una de esas filas. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
       context: { broker, count, rows: list },
     });
   }
@@ -324,7 +324,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.corporate_action_not_applied",
       severity: "warning",
       message: `${broker}: no se han aplicado ${count} fila(s) de desdoblamiento, agrupación u otra operación societaria: ${list}.`,
-      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores, así que las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas: compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses.",
+      hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses.",
       context: { broker, count, rows: list },
     });
   }

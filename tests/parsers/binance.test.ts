@@ -763,11 +763,11 @@ describe("binanceParser", () => {
       // Only the valid permuta → exactly 2 trades; the BTC ghost leg is gone.
       expect(result.trades).toHaveLength(2);
       expect(result.trades.some((t) => t.symbol === "BTC")).toBe(false);
-      // Surfaced exactly once with the right count.
+      // Surfaced exactly once, naming the row by coin, operation, change and cell.
       const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
       expect(msg).toBeDefined();
       expect(msg!.severity).toBe("warning");
-      expect(msg!.message).toContain("1 fila");
+      expect(msg!.context).toEqual({ count: "1", rows: 'BTC Binance Convert 0.01 [UTC_Time: ""]' });
     });
 
     it("keeps the row order deterministic when a bad timestamp is interleaved (comparator not NaN-poisoned)", () => {
@@ -792,7 +792,7 @@ describe("binanceParser", () => {
       expect(result.trades.filter((t) => t.symbol === "SOL")).toHaveLength(1);
       expect(result.trades.filter((t) => t.symbol === "ETH")).toHaveLength(1);
       const msg = (result.parserMessages ?? []).find((m) => m.id === "binance.unparseable_timestamp");
-      expect(msg!.message).toContain("2 filas");
+      expect(msg!.context).toEqual({ count: "2", rows: 'BTC Binance Convert 0.01 [UTC_Time: "not-a-date"]; DOGE Binance Convert 50 [UTC_Time: "2025-03-15"]' });
     });
   });
 

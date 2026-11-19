@@ -23,6 +23,9 @@ import {
   isReadableTradeDate,
   markUndatedTrades,
   dropUndatedCash,
+  corporateActionTrade,
+  isCorporateActionType,
+  cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -113,10 +116,12 @@ function parseFreedom24(input: string): Statement {
 
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
-  // Corporate-action rows dropped because a structurally-valid JSON had a
-  // malformed row shape (e.g. type_id/ticker/date not a string). We
+  // Corporate-action rows dropped because their type_id is empty or not
+  // text, so the parser cannot tell a dividend from anything else. We
   // skip-and-warn instead of letting a TypeError abort the whole parse.
   let skippedMalformed = 0;
+  // Dividend and coupon rows with no ticker and no ISIN (#467).
+  const unidentifiedCash: string[] = [];
 
   // Parse trades
   const rawTrades = root.trades?.detailed ?? [];
@@ -208,22 +213,45 @@ function parseFreedom24(input: string): Statement {
     // Same defensive narrowing as the trades loop: the cast JSON could carry a
     // non-string type_id/date/ticker that would crash .toLowerCase()/.slice()/
     // .split(). A malformed type_id is unclassifiable → skip-and-warn.
-    const typeId = typeof ca.type_id === "string" ? ca.type_id.toLowerCase() : "";
+    const typeIdText = typeof ca.type_id === "string" ? ca.type_id.trim() : "";
+    const typeId = typeIdText.toLowerCase();
     if (!typeId) { skippedMalformed++; continue; }
-    if (!typeId.includes("dividend") && !typeId.includes("coupon")) continue;
 
-    const ticker = typeof ca.ticker === "string" ? ca.ticker : "";
-    if (!ticker) { skippedMalformed++; continue; }
+    const ticker = typeof ca.ticker === "string" ? ca.ticker.trim() : "";
+    const isin = typeof ca.isin === "string" ? ca.isin.trim() : "";
     // A dividend with no readable date is booked with that date and taken
     // out, named with its amount, by dropUndatedCash below (#467).
     const dateRaw = typeof ca.date === "string" ? ca.date.trim() : "";
-
     const tradeDate = convertFreedom24Date(dateRaw);
-    const { symbol } = parseSymbol(ticker);
-    const isin = ca.isin ?? "";
+    const currency = ca.curr_c || "USD";
+    const { symbol: tickerSymbol, exchange } = parseSymbol(ticker);
+
+    // A split, a consolidation or a merger moves shares of its security, so
+    // it is evidence of a holding at the anti-churning window start (#453,
+    // #467): kept as a row that books nothing, named as not applied, never
+    // dropped. The JSON gives no share count for it.
+    const dividend = typeId.includes("dividend") || typeId.includes("coupon");
+    if (!dividend && isCorporateActionType(typeId)) {
+      if (!ticker && !isin) continue;
+      trades.push(corporateActionTrade({
+        tradeID: `freedom24-ca-${tradeDate}-${i}`,
+        symbol: tickerSymbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate, exchange,
+      }, typeIdText, ""));
+      continue;
+    }
+    if (!dividend) continue;
+
     const amount = str(ca.amount);
     const taxAmount = str(ca.tax_amount);
-    const currency = ca.curr_c || "USD";
+    // A dividend with no ticker goes by its ISIN; with neither it is named,
+    // never dropped with no word (#467).
+    if (!ticker && !isin) {
+      const tax = toFiniteDecimal(taxAmount).isZero() ? "" : ` (tax_amount ${taxAmount})`;
+      if (!toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amount} ${currency}${tax} ${tradeDate || "—"}`);
+      continue;
+    }
+    const security = ticker || isin;
+    const symbol = ticker ? tickerSymbol : isin;
     // Include ISIN country code so dividend engine can extract withholding country
     const isinCountry = isin.length >= 2 ? isin.slice(0, 2).toUpperCase() : "";
 
@@ -232,7 +260,7 @@ function parseFreedom24(input: string): Statement {
       transactionID: `freedom24-div-${tradeDate}-${isin}-${i}`,
       accountId: "",
       symbol,
-      description: ca.description || `${isinCountry} Dividend - ${ticker}`,
+      description: ca.description || `${isinCountry} Dividend - ${security}`,
       isin,
       currency,
       dateTime: tradeDate,
@@ -249,7 +277,7 @@ function parseFreedom24(input: string): Statement {
         transactionID: `freedom24-wht-${tradeDate}-${isin}-${i}`,
         accountId: "",
         symbol,
-        description: `${isinCountry} WHT - ${ticker}`,
+        description: `${isinCountry} WHT - ${security}`,
         isin,
         currency,
         dateTime: tradeDate,
@@ -266,8 +294,8 @@ function parseFreedom24(input: string): Statement {
     parserMessages.push({
       id: "freedom24.row_skipped_malformed",
       severity: "warning" as const,
-      message: `Se ha(n) omitido ${skippedMalformed} fila(s) de dividendos o cupones de Freedom24 con un formato no válido.`,
-      hint: "Suele deberse a filas incompletas o corruptas en el JSON exportado (campos \"type_id\", \"date\" o \"ticker\" vacíos o de tipo incorrecto). Si faltan dividendos, vuelve a descargar el informe JSON completo desde Freedom24.",
+      message: `Freedom24: se ha(n) omitido ${skippedMalformed} fila(s) de acciones corporativas sin un tipo legible (type_id).`,
+      hint: "El campo \"type_id\" de esas filas está vacío o no es texto. Por eso DeclaRenta no sabe si son un dividendo, un cupón u otra operación, y no las calcula. Si te falta un dividendo o un cupón, vuelve a descargar el informe JSON completo de Freedom24 y súbelo de nuevo.",
       context: { count: String(skippedMalformed) },
     });
   }
@@ -275,6 +303,7 @@ function parseFreedom24(input: string): Statement {
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Freedom24", trades),
     ...dropUndatedCash("Freedom24", cashTransactions, "date"),
+    ...cashRowsUnidentifiedMessages("Freedom24", unidentifiedCash),
   );
 
   return {

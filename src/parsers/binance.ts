@@ -15,7 +15,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { CashTransaction, Trade } from "../types/ibkr.js";
 import type { ManualRateQuote, TaxMessage } from "../types/tax.js";
 import { isFiat, isEcbResolvable } from "../engine/ecb.js";
-import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal, markUndatedTrades, dropUndatedCash, tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { parseCsvLine, stripBom, timeOfDay, toFiniteDecimal, markUndatedTrades, dropUndatedCash, tradeQuantityUnknownMessages, unreadableCell } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 // ---------------------------------------------------------------------------
@@ -480,10 +480,13 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   const manualRateHints: ManualRateQuote[] = [];
   /** Shared accumulator: all taxable rows, sorted by (epoch, index) in collectRows. */
   const rows: TxRow[] = [];
-  /** Rows dropped because their UTC_Time was unparseable (counted, surfaced once). */
-  let skippedNoTimestamp = 0;
-  /** Rows dropped because their Change amount was unparseable (counted, surfaced once). */
-  let skippedBadAmount = 0;
+  /**
+   * Rows left out because their UTC_Time cannot be read, each named as
+   * "coin operation change [UTC_Time: cell]" (#467).
+   */
+  const skippedNoTimestamp: string[] = [];
+  /** Rows left out because their Change cannot be read, each named as "coin operation date [Change: cell]". */
+  const skippedBadAmount: string[] = [];
 
   /** Record an EUR-per-unit valuation hint for a coin+date from its EUR value. */
   function addHint(coin: string, date: string, qty: Decimal, eur: Decimal | null): void {
@@ -502,7 +505,8 @@ function parseBinanceTxCsv(lines: string[]): Statement {
 
       const fields = parseCsvLine(line, ",");
       const utcTime = (fields[cols.utcTime] ?? "").trim();
-      const operation = (fields[cols.operation] ?? "").trim().toLowerCase();
+      const operationText = (fields[cols.operation] ?? "").trim();
+      const operation = operationText.toLowerCase();
       const coin = (fields[cols.coin] ?? "").trim().toUpperCase();
       const changeStr = (fields[cols.change] ?? "").trim();
       const account = (fields[cols.account] ?? "").trim();
@@ -520,16 +524,21 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       // NaN (not 0) for it; dropping+counting it here is the safe fix — keeping
       // it would let the ±1s window phases falsely cluster every NaN-epoch row
       // together (all "within 1s") and degrade the forward-scan. Count it and
-      // surface ONE info message rather than mis-group it. (Empty/missing
+      // name it in one warning rather than mis-group it. (Empty/missing
       // UTC_Time also fails the regex → NaN → handled by this same path.)
+      // Each row is named by coin, operation, change and the date cell, so
+      // a missing purchase or sale of a coin is never only a count (#467).
       const epoch = txEpoch(utcTime);
-      if (Number.isNaN(epoch)) { skippedNoTimestamp++; continue; }
+      if (Number.isNaN(epoch)) {
+        skippedNoTimestamp.push(`${coin} ${operationText} ${changeStr} [${unreadableCell(headers[cols.utcTime] ?? "UTC_Time", utcTime)}]`);
+        continue;
+      }
 
       let change: Decimal;
       try {
         change = new Decimal(changeStr);
       } catch {
-        skippedBadAmount++;
+        skippedBadAmount.push(`${coin} ${operationText} ${convertBinanceDate(utcTime)} [${unreadableCell(headers[cols.change] ?? "Change", changeStr)}]`);
         continue;
       }
       // new Decimal("Infinity"/"NaN") does NOT throw — reject non-finite values so
@@ -718,26 +727,30 @@ function parseBinanceTxCsv(lines: string[]): Statement {
   emitStrategy();
   emitSpot();
 
-  // Surface dropped timestamp-less rows ONCE (info — they were excluded from
-  // every phase, so they can't be silently mis-grouped). Actionable hint per the
-  // three-tier message policy: the usual cause is a corrupted/edited export.
+  // Name every row left out for a date or an amount it cannot read: they are
+  // excluded from every phase, so they can't be silently mis-grouped, and the
+  // user sees each coin whose results they make unreliable (#467).
   const parserMessages: TaxMessage[] = [];
-  if (skippedNoTimestamp > 0) {
+  if (skippedNoTimestamp.length > 0) {
+    const count = String(skippedNoTimestamp.length);
+    const rows = skippedNoTimestamp.join("; ");
     parserMessages.push({
       id: "binance.unparseable_timestamp",
       severity: "warning",
-      message: `Se ${skippedNoTimestamp === 1 ? "ha omitido 1 fila" : `han omitido ${skippedNoTimestamp} filas`} del CSV de Binance por tener una fecha/hora (UTC_Time) no reconocible.`,
-      hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
-      context: { count: String(skippedNoTimestamp) },
+      message: `Binance: ${count} fila(s) no tienen una fecha y hora (UTC_Time) legible y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda de la fecha. Sin ella, DeclaRenta no sabe con qué otra fila va cada movimiento. Por eso no suma ni resta unidades ni dinero por esas filas. Las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      context: { count, rows },
     });
   }
-  if (skippedBadAmount > 0) {
+  if (skippedBadAmount.length > 0) {
+    const count = String(skippedBadAmount.length);
+    const rows = skippedBadAmount.join("; ");
     parserMessages.push({
       id: "binance.unparseable_amount",
       severity: "warning",
-      message: `Se ${skippedBadAmount === 1 ? "ha omitido 1 fila" : `han omitido ${skippedBadAmount} filas`} del CSV de Binance por tener un importe (Change) no numérico.`,
-      hint: "Suele deberse a un fichero modificado manualmente o exportado de forma incompleta. Vuelve a descargar el informe original desde Binance sin editarlo para que esas operaciones se incluyan.",
-      context: { count: String(skippedBadAmount) },
+      message: `Binance: ${count} fila(s) no tienen un importe (Change) legible y no se calculan: ${rows}.`,
+      hint: "Entre corchetes va la celda del importe. DeclaRenta no suma ni resta unidades ni dinero por esas filas. Por eso las ganancias, las pérdidas y los ingresos de esas criptomonedas no son fiables. Si una fila es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea. Vuelve a descargar el informe original de Binance, no lo edites y súbelo de nuevo.",
+      context: { count, rows },
     });
   }
   // A row still unparsed after every phase has an Operation no phase handles
