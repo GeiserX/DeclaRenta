@@ -851,6 +851,74 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
   });
 });
 
+describe("a Save that leaves the panel with no rows (#472 review)", () => {
+  // A window saved for a security with no sale this year still lists it. Set
+  // back to «auto», the next report lists nothing: «Guardado» must still show.
+  const APPLE = "US0378331005";
+  // A lot saved for a security this upload never sells.
+  const ORPHAN_LOT = { symbol: "ZZZ", description: "ZZZ PLC", isin: "XX0000000009", assetCategory: "STK", currency: "EUR", acquireDate: `${YEAR - 1}-01-15`, quantity: "1", pricePerShare: "10" };
+  beforeEach(async () => {
+    await startApp(() => {
+      localStorage.setItem("declarenta_antichurning_windows", JSON.stringify({ [APPLE]: 12 }));
+      localStorage.setItem("declarenta_manual_opening_lots", JSON.stringify([ORPHAN_LOT]));
+    });
+  });
+
+  async function showOtherYear(): Promise<void> {
+    const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
+    const other = [...yearSelect.options].map((o) => o.value).find((v) => v !== String(YEAR));
+    if (!other) throw new Error("the year select offers no other year");
+    const header = document.getElementById("results-year-header")!.innerHTML;
+    yearSelect.value = other;
+    yearSelect.dispatchEvent(new Event("change"));
+    await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== header ? true : null), `results for ${other}`);
+  }
+
+  it("opening lots: the only saved lot emptied and saved shows «Guardado» without rows", async () => {
+    await showOtherYear();
+    const before = await waitFor(lotsPanel, "opening lots panel");
+    expect([...before.querySelectorAll<HTMLElement>(".manual-opening-lot-group")].map((g) => g.dataset.symbol)).toEqual(["ZZZ"]);
+    before.querySelectorAll<HTMLInputElement>(".manual-opening-lot-input").forEach((input) => {
+      input.value = "";
+    });
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLButtonElement>("#manual-opening-lots-save-btn")!.click();
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after Save");
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_opening_lots")!)).toEqual([]);
+    const after = lotsPanel();
+    expect(after).not.toBeNull();
+    expect(after).not.toBe(before);
+    expect(after!.querySelector(".manual-opening-lot-row")).toBeNull();
+    expect(shown(lotsLabel())).toBe(true);
+    redrawOnLocaleChange();
+    expect(lotsPanel()).toBeNull();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("anti-churning window: the only row saved back to «auto» shows «Guardado» without a table", async () => {
+    await showOtherYear();
+    const before = await waitFor(windowPanel, "window panel");
+    const selects = before.querySelectorAll<HTMLSelectElement>(".antichurning-window-select");
+    expect([...selects].map((sel) => sel.dataset.isin)).toEqual([APPLE]);
+    selects[0]!.value = "auto";
+    const strip = document.getElementById("results-split");
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await waitFor(() => (document.getElementById("results-split") !== strip ? true : null), "rerun after Save");
+    expect(localStorage.getItem("declarenta_antichurning_windows")).toBeNull();
+    const after = windowPanel();
+    expect(after).not.toBeNull();
+    expect(after).not.toBe(before);
+    expect(after!.querySelector("table")).toBeNull();
+    expect(shown(windowLabel())).toBe(true);
+    // The next redraw has nothing to confirm: no panel at all.
+    redrawOnLocaleChange();
+    expect(windowPanel()).toBeNull();
+  });
+});
+
 describe("Clear in each panel (#472 review)", () => {
   const ETH = { currency: "ETH", date: "2020-01-02", eurPerUnit: "5" };
   const LOT = { symbol: "ACME", description: "ACME CORP", isin: "XX0000000001", assetCategory: "STK", currency: "EUR", acquireDate: `${YEAR}-01-15`, quantity: "10", pricePerShare: "100" };
@@ -1142,6 +1210,15 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     expect(shown(saved.querySelector<HTMLElement>(".antichurning-window-saved")!)).toBe(true);
   });
 
+  it("anti-churning window with no row: nothing, unless a Save asks for «Guardado»", () => {
+    expect(renderAntichurningWindowPanel([])).toBe("");
+    expect(renderAntichurningWindowPanel(undefined)).toBe("");
+    const saved = parse(renderAntichurningWindowPanel([], { saved: true }));
+    expect(saved.querySelector("table")).toBeNull();
+    expect(saved.querySelector(".antichurning-window-select")).toBeNull();
+    expect(shown(saved.querySelector<HTMLElement>(".antichurning-window-saved")!)).toBe(true);
+  });
+
   it("anti-churning window: each select shows the stored window, not the report's reading", () => {
     vi.stubGlobal("localStorage", memoryStorage());
     const select = (html: string) => parse(html).querySelector<HTMLSelectElement>(".antichurning-window-select")!;
@@ -1191,6 +1268,12 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     const stored = parse(renderManualOpeningLotsPanel([], { saved: true }));
     expect(stored.querySelector<HTMLDetailsElement>(".manual-opening-lots-panel")!.open).toBe(true);
     expect(shown(stored.querySelector<HTMLElement>(".manual-opening-lots-saved-msg")!)).toBe(true);
+    // A Save that emptied the last stored group with no issue left: no rows, but «Guardado».
+    localStorage.removeItem("declarenta_manual_opening_lots");
+    expect(renderManualOpeningLotsPanel([])).toBe("");
+    const emptied = parse(renderManualOpeningLotsPanel([], { saved: true }));
+    expect(emptied.querySelector(".manual-opening-lot-row")).toBeNull();
+    expect(shown(emptied.querySelector<HTMLElement>(".manual-opening-lots-saved-msg")!)).toBe(true);
     vi.unstubAllGlobals();
   });
 });

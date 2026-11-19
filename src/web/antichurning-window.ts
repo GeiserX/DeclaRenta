@@ -104,13 +104,26 @@ function row(s: AntichurningSecurity, stored: Readonly<Record<string, WindowMont
  * open decision, or when the user set a window.
  *
  * `saved` shows the «Guardado» label: a Save reruns the report, which redraws
- * this panel, so the new panel has to carry the confirmation (#472).
+ * this panel, so the new panel has to carry the confirmation (#472). A Save
+ * can leave no row (a window saved for a security with no sale this year, set
+ * back to «auto»): the panel then shows only its title and the label, with no
+ * table and no buttons (#472 review).
  */
 export function renderAntichurningWindowPanel(
   securities: readonly AntichurningSecurity[] | undefined,
   { saved = false }: { saved?: boolean } = {},
 ): string {
-  if (!securities || securities.length === 0) return "";
+  if (!securities || securities.length === 0) {
+    if (!saved) return "";
+    return `<details class="antichurning-window-panel crypto-rates-panel" open>
+    <summary class="crypto-rates-stored-summary">
+      <span class="crypto-rates-stored-summary-text">${esc(tr("antichurning_window.title"))}</span>
+    </summary>
+    <div class="crypto-rates-stored-body">
+      <span class="crypto-rates-saved-msg antichurning-window-saved">${esc(tr("antichurning_window.saved"))}</span>
+    </div>
+  </details>`;
+  }
   const stored = getWindowOverrides();
   const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || stored[s.isin] !== undefined);
   // A Save back to «auto» can leave no reason to open: open it anyway so

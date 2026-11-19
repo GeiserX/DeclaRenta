@@ -471,7 +471,11 @@ function renderOpeningLotRows(issue: ManualOpeningLotIssue): string {
     .join("");
 }
 
-/** `saved` shows the «Guardado» label in the panel a Save redraws (#472). */
+/**
+ * `saved` shows the «Guardado» label in the panel a Save redraws (#472). A
+ * Save that emptied the last saved group with no missing lot left draws only
+ * the title and the label, with no rows and no buttons (#472 review).
+ */
 export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = false }: { saved?: boolean } = {}): string {
   const issuesFromMessages = messages
     .map((msg) => manualOpeningIssueFromMessage(msg))
@@ -484,7 +488,17 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
   const issues = issuesFromMessages.length > 0 ? issuesFromMessages : collectStoredOpeningLotIssues();
   const hasActiveIssues = issuesFromMessages.length > 0;
 
-  if (issues.length === 0) return "";
+  if (issues.length === 0) {
+    if (!saved) return "";
+    return `<details class="manual-opening-lots-panel crypto-rates-panel" open>
+    <summary class="manual-opening-lots-summary">
+      <span class="manual-opening-lots-summary-text">${esc(tr("opening_lots.title"))}</span>
+    </summary>
+    <div class="manual-opening-lots-body">
+      <span class="crypto-rates-saved-msg manual-opening-lots-saved-msg">${esc(tr("opening_lots.saved"))}</span>
+    </div>
+  </details>`;
+  }
 
   const groups = issues
     .map(
