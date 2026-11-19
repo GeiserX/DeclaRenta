@@ -144,6 +144,12 @@ export interface AccountStatement {
   /** First and last day the file covers for the account (YYYY-MM-DD or YYYYMMDD). */
   fromDate?: string;
   toDate?: string;
+  /**
+   * Whether the file has a trades section for the account. Without one (an
+   * IBKR Flex with only Open Positions) its period shows no trades and covers
+   * nothing; it can still give the holdings list.
+   */
+  hasTrades: boolean;
   /** The account's holdings at `toDate` (IBKR's OpenPositions). */
   positions: readonly {
     isin: string;
@@ -941,10 +947,16 @@ const DAY_MS = 86_400_000;
  * it in any holdings list of the upload:
  *  1. it has a holdings list dated on or after the sale day (the earliest such
  *     date counts);
- *  2. its files cover it without a gap from the window start to that date
- *     (adjacent or overlapping periods qualify);
+ *  2. its files with a trades section cover every day from the window start
+ *     to that date exactly once: no gap (a hidden trade), no day in two files
+ *     (the same trades counted twice). Back-to-back files qualify; a file with
+ *     no trades section (a holdings-only Flex) covers nothing, though it can
+ *     give the list;
  *  3. every row of the key in that list has a readable quantity (a missing one
- *     is no zero); a list with no row of the key says zero;
+ *     is no zero); a list with no row of the key says zero, but only when every
+ *     row of shares in every list of the upload has an ISIN, so no row can be
+ *     the key under another name (options, the other exempt categories and
+ *     crypto aside; only an ISIN key has the 2-month window);
  *  4. the long holding listed equals what the account's own trades from the
  *     window start to that date leave, split-adjusted to that date's units.
  * Then the account held nothing at the window start: its list is that holding
@@ -971,6 +983,8 @@ function buildEvidenceCheck(
   const accounts = new Map<string, { periods: [number, number][]; lists: Map<number, Map<string, Decimal | null>[]> }>();
   /** Per key: the accounts whose lists have a row of it. */
   const listedBy = new Map<string, Set<string>>();
+  /** Whether some list row of shares has no ISIN (exempt categories and crypto aside). */
+  let rowWithoutIsin = false;
   for (const st of statements) {
     const id = accountKey(st.source, st.accountId);
     let account = accounts.get(id);
@@ -980,12 +994,13 @@ function buildEvidenceCheck(
     }
     const from = dayTime(st.fromDate);
     const to = dayTime(st.toDate);
-    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) account.periods.push([from, to]);
+    if (st.hasTrades && Number.isFinite(from) && Number.isFinite(to) && from <= to) account.periods.push([from, to]);
     const rows = st.positions.filter((pos) => !pos.fromTrades);
     if (rows.length === 0) continue;
     const list = new Map<string, Decimal | null>();
     for (const pos of rows) {
       const key = homogeneousKey(pos.isin, pos.symbol, pos.assetCategory);
+      if (!pos.isin && !WASH_SALE_EXEMPT.has(pos.assetCategory) && pos.assetCategory !== "CRYPTO") rowWithoutIsin = true;
       if (!key) continue;
       let ids = listedBy.get(key);
       if (!ids) {
@@ -1005,6 +1020,10 @@ function buildEvidenceCheck(
   for (const account of accounts.values()) account.periods.sort((a, b) => a[0] - b[0]);
 
   return (key: string, windowStart: number, sellTime: number): boolean => {
+    // Only an ISIN key reaches here (the 2-month window needs one). A list row
+    // of shares with no ISIN may be the key under another name, so then "no
+    // row of the key" proves nothing.
+    if (key.includes(":") || rowWithoutIsin) return false;
     const events = longEventsByAsset.get(key) ?? [];
     const splits = splitsByAsset.get(key) ?? [];
     const relevant = new Set(listedBy.get(key));
@@ -1018,7 +1037,7 @@ function buildEvidenceCheck(
       if (!account) return false;
       let listTime = Number.POSITIVE_INFINITY;
       for (const time of account.lists.keys()) if (time >= sellTime && time < listTime) listTime = time;
-      if (!Number.isFinite(listTime) || !coversDays(account.periods, windowStart, listTime)) return false;
+      if (!Number.isFinite(listTime) || !coversDaysOnce(account.periods, windowStart, listTime)) return false;
       let listed: Decimal | undefined;
       for (const list of account.lists.get(listTime)!) {
         const value = list.get(key);
@@ -1035,16 +1054,21 @@ function buildEvidenceCheck(
   };
 }
 
-/** Whether the periods (sorted by start) cover every day from `start` to `end` without a gap. */
-function coversDays(periods: readonly [number, number][], start: number, end: number): boolean {
+/**
+ * Whether the periods (sorted by start) cover every day from `start` to `end`
+ * exactly once: no gap, and no day of that span in two periods.
+ */
+function coversDaysOnce(periods: readonly [number, number][], start: number, end: number): boolean {
+  /** Last day of the span covered so far. */
   let reach = start - DAY_MS;
   for (const [from, to] of periods) {
-    if (to <= reach) continue;
+    if (to < start) continue;
+    if (from > end) break;
+    if (from <= reach && reach >= start) return false;
     if (from > reach + DAY_MS) return false;
-    reach = to;
-    if (reach >= end) return true;
+    reach = Math.max(reach, to);
   }
-  return false;
+  return reach >= end;
 }
 
 /** A holdings quantity, or null when it is missing or unreadable. */

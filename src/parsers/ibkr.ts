@@ -124,7 +124,8 @@ export function parseIbkrFlexXml(xml: string): FlexStatement {
     openPositions.push(...dropLotRowsWithSummary(ensureArray(stmt.OpenPositions?.OpenPosition) as Record<string, string>[]).map(mapOpenPosition));
     securitiesInfo.push(...ensureArray(stmt.SecuritiesInfo?.SecurityInfo).map(mapSecurityInfo));
     const period = { fromDate: stmt.fromDate as string | undefined, toDate: stmt.toDate as string | undefined };
-    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "" });
+    // An empty <Trades /> still says "no trades in this period"; no element says nothing.
+    accountPeriods.push({ accountId: stmt.accountId ?? "", fromDate: period.fromDate ?? "", toDate: period.toDate ?? "", hasTrades: stmt.Trades !== undefined && stmt.Trades !== null });
     cashBalances.push(...(ensureArray(stmt.CashReport?.CashReportCurrency) as Record<string, string>[]).map((raw) => mapCashBalance(raw, period)));
     optionExercises.push(...parseOptionEaeRows(ensureArray(stmt.OptionEAE?.OptionEAE) as Record<string, string>[]));
   }

@@ -51,6 +51,8 @@ export interface AccountPeriod {
   accountId: string;
   fromDate: string;
   toDate: string;
+  /** Whether the file has a Trades section for the account: a holdings-only Flex shows no trades for its period. */
+  hasTrades: boolean;
 }
 
 /** The year-end holdings of one merged file, dated to that file's period end. */

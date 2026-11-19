@@ -339,14 +339,25 @@ práctico Renta 2025. The decisions, each pinned in
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a non-empty holdings list dated on or after the sale day; the
-       earliest such date counts;
-    2. its files cover it without a gap from the window start to that date
-       (adjacent or overlapping periods qualify; the IBKR parser gives one
-       period per FlexStatement, so each account of a multi-account Flex has
-       its own);
-    3. every row of the key in that list has a readable quantity (the IBKR
-       parser marks a missing or non-numeric one `quantityUnknown` instead of
-       reading its "0" default); a list with no row of the key says zero;
+       earliest such date counts (the IBKR parser keeps the SUMMARY row of a
+       holding and drops its LOT rows, so the Summary and Lot options together
+       do not count it twice);
+    2. its files with a trades section cover every day from the window start
+       to that date exactly once: no gap (a hidden trade) and no day in two
+       files (merge does not drop duplicated trades, so the same Flex uploaded
+       twice would double them and still match a doubled list). Back-to-back
+       periods qualify. The IBKR parser gives one period per FlexStatement,
+       so each account of a multi-account Flex has its own, and marks the ones
+       without a `<Trades>` element (`AccountPeriod.hasTrades`): a
+       holdings-only Flex covers nothing, though it can give the list;
+    3. every row of the key in that list has a readable quantity. IBKR writes
+       it as `position` (hand-written files may use `quantity`); the parser
+       marks a missing or non-numeric one `quantityUnknown` instead of reading
+       its "0" default. A list with no row of the key says zero, but only when
+       every share row (not the exempt categories, not crypto) of every list in
+       the upload has an ISIN: Open Positions may leave the ISIN field out
+       while Trades has it, and then the row of the shares held is no row of
+       the key;
     4. the long holding listed equals what that account's own trades from the
        window start leave on that date, split-adjusted to that date.
 

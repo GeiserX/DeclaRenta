@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { parseIbkrFlexXml } from "../../src/parsers/ibkr.js";
@@ -36,9 +37,10 @@ function tradeXml([date, side, qty, price, extra = "", oci]: Row, currency: stri
   return `<Trade tradeID="${tradeSeq}" accountId="${account}" symbol="XYZ" description="XYZ SA" conid="4531" isin="${isin}" assetCategory="STK" currency="${currency}" tradeDate="${date}" settlementDate="${date}" quantity="${signed}" tradePrice="${price}" tradeMoney="${side === "BUY" ? money : money.neg()}" proceeds="${side === "BUY" ? money.neg() : money}" cost="${money}" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${oci ?? (side === "BUY" ? "O" : "C")}" exchange="BME" ibCommissionCurrency="${currency}" ibCommission="0" taxes="0" multiplier="1" ${extra} />`;
 }
 
+/** An Open Positions row as IBKR writes it: the held quantity is the `position` attribute. */
 function openPositionXml(isin: string, quantity: number | string | null, currency: string, account = "U1"): string {
-  const qty = quantity === null ? "" : ` quantity="${quantity}"`;
-  return `<OpenPosition accountId="${account}" symbol="XYZ" description="XYZ SA" isin="${isin}" currency="${currency}" assetCategory="STK"${qty} costBasisMoney="0" costBasisPrice="0" markPrice="10" positionValue="0" fifoPnlUnrealized="0" fxRateToBase="1" />`;
+  const qty = quantity === null ? "" : ` position="${quantity}"`;
+  return `<OpenPosition accountId="${account}" symbol="XYZ" description="XYZ SA" conid="4531" isin="${isin}" currency="${currency}" assetCategory="STK"${qty} costBasisMoney="0" costBasisPrice="0" markPrice="10" positionValue="0" fifoPnlUnrealized="0" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
 }
 
 /**
@@ -621,16 +623,20 @@ interface Stmt {
   rows?: Row[];
   /** OpenPosition rows: [isin, quantity] (`null` = no quantity attribute). */
   positions?: [isin: string, qty: number | null][];
+  /** Extra OpenPosition rows, written as given. */
+  rawPositions?: string[];
   actions?: string;
+  /** `false`: the statement has no Trades section (a holdings-only Flex). */
+  trades?: false;
 }
 
 /** An IBKR Flex file with one FlexStatement per entry (a multi-account query). */
 function flexXml(stmts: Stmt[]): string {
   const body = stmts
-    .map(({ account = "U1", fromDate, toDate, rows = [], positions = [], actions = "" }) => {
-      const trades = rows.map((r) => tradeXml(r, "EUR", ISIN, account)).join("");
-      const op = positions.map(([isin, qty]) => openPositionXml(isin, qty, "EUR", account)).join("");
-      return `<FlexStatement accountId="${account}" fromDate="${fromDate}" toDate="${toDate}" period="Custom"><Trades>${trades}</Trades><CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions>${op}</OpenPositions><SecuritiesInfo /></FlexStatement>`;
+    .map(({ account = "U1", fromDate, toDate, rows = [], positions = [], rawPositions = [], actions = "", trades: withTrades }) => {
+      const trades = withTrades === false ? "" : `<Trades>${rows.map((r) => tradeXml(r, "EUR", ISIN, account)).join("")}</Trades>`;
+      const op = positions.map(([isin, qty]) => openPositionXml(isin, qty, "EUR", account)).join("") + rawPositions.join("");
+      return `<FlexStatement accountId="${account}" fromDate="${fromDate}" toDate="${toDate}" period="Custom">${trades}<CashTransactions /><CorporateActions>${actions}</CorporateActions><OpenPositions>${op}</OpenPositions><SecuritiesInfo /></FlexStatement>`;
     })
     .join("");
   return `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="${stmts.length}">${body}</FlexStatements></FlexQueryResponse>`;
@@ -764,8 +770,8 @@ describe("(f) the files must cover the account without a gap from the window sta
     expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20250228" }])], [IB, later]]));
   });
 
-  it("control: overlapping files (01/01–10/03 and 01/03–31/12): applied", () => {
-    expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20250310" }])], [IB, later]]));
+  it("overlapping files (01/01–10/03 and 01/03–31/12): 01/03–10/03 is in two files, whose trades may count twice: not applied", () => {
+    expectUnverified(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20250310" }])], [IB, later]]));
   });
 });
 
@@ -810,5 +816,133 @@ describe("(f) the evidence must come from the account that traded (a multi-accou
       ],
     ]);
     expectApplied(r);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (g) Second review of the evidence rule: what a real IBKR export looks like.
+// ---------------------------------------------------------------------------
+
+/** An Open Positions row with every attribute given (IBKR's real format unless overridden). */
+function positionRow(attrs: Record<string, string>): string {
+  const all: Record<string, string> = {
+    accountId: "U1", symbol: "XYZ", description: "XYZ SA", conid: "4531", isin: ISIN, currency: "EUR", assetCategory: "STK",
+    position: "50", markPrice: "10", positionValue: "500", costBasisMoney: "500", costBasisPrice: "10", fifoPnlUnrealized: "0",
+    fxRateToBase: "1", side: "Long", levelOfDetail: "SUMMARY", ...attrs,
+  };
+  return `<OpenPosition ${Object.entries(all).filter(([, v]) => v !== "\u0000").map(([k, v]) => `${k}="${v}"`).join(" ")} />`;
+}
+/** Drop an attribute from {@link positionRow}. */
+const NONE = "\u0000";
+
+describe("(g) IBKR writes the held quantity as `position`", () => {
+  it.each(METHODS)("[%s] the issue example with IBKR's real Open Positions row: applied, 0 blocked", (method) => {
+    expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions: [positionRow({})] }])]], method));
+  });
+
+  it("the parser reads `position` from a committed real export (ibkr-autoconvert.xml: BRYN 2, PYPL 23)", () => {
+    const xml = readFileSync(new URL("../fixtures/ibkr-autoconvert.xml", import.meta.url), "utf-8");
+    const rows = parseIbkrFlexXml(xml).openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown]);
+    expect(rows).toEqual([
+      ["BRYN", "2", undefined],
+      ["PYPL", "23", undefined],
+      ["V", "2", undefined],
+    ]);
+  });
+
+  it("a hand-written row with `quantity` and no `position` is still read", () => {
+    const xml = flexXml([{ fromDate: "20250101", toDate: "20251231", rawPositions: [positionRow({ position: NONE, quantity: "7" })] }]);
+    const pos = parseIbkrFlexXml(xml).openPositions[0]!;
+    expect([pos.quantity, pos.quantityUnknown]).toEqual(["7", undefined]);
+  });
+
+  it("a row with neither attribute is unknown, not zero: not applied", () => {
+    const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
+    expectUnverified(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: NONE })] }])]]));
+  });
+
+  it("control: position=\"0\" proves zero: applied", () => {
+    const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
+    expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: "0" })] }])]]));
+  });
+});
+
+describe("(g) a list row that may be the security under another name proves nothing", () => {
+  // 50 held since 2024, never sold in the window: the 31/12/2026 list has 50
+  // after the 100 bought and 100 sold since the window start.
+  const rows: Row[] = [...issueRows, ["20260601", "SELL", 50, 12]];
+  const file = (row: string): string => flexXml([{ fromDate: "20250101", toDate: "20261231", rows, rawPositions: [row] }]);
+
+  it.each(METHODS)("[%s] the row of the 50 held has no ISIN (field not selected in Open Positions): not applied", (method) => {
+    expectUnverified(mergedFiles([[IB, file(positionRow({ isin: "" }))]], method));
+  });
+
+  it("complete evidence, but another stock's row has no ISIN: not applied (it could be this one)", () => {
+    const xml = flexXml([
+      { fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions: [positionRow({}), positionRow({ symbol: "ABC", conid: "1", isin: "", position: "5" })] },
+    ]);
+    expectUnverified(mergedFiles([[IB, xml]]));
+  });
+
+  it("control: complete evidence and an option row without ISIN (options are no shares): applied", () => {
+    const xml = flexXml([
+      {
+        fromDate: "20250101",
+        toDate: "20251231",
+        rows: issueRows,
+        rawPositions: [positionRow({}), positionRow({ symbol: "XYZ 260116C00010000", conid: "2", isin: "", assetCategory: "OPT", position: "3" })],
+      },
+    ]);
+    expectApplied(mergedFiles([[IB, xml]]));
+  });
+});
+
+describe("(g) only a statement with a Trades section covers its period", () => {
+  // 50 held at the window start (15/01) and sold on 01/02 in a period no
+  // trades file shows; the 31/12 list (50) matches the trades of 01/03–31/12.
+  const tradesFile = flexXml([{ fromDate: "20250301", toDate: "20251231", rows: issueRows, positions: [] }]);
+
+  it.each(METHODS)("[%s] a holdings-only Flex of 01/01–31/12 does not cover 01/01–28/02: not applied", (method) => {
+    const holdingsOnly = flexXml([{ fromDate: "20250101", toDate: "20251231", trades: false, positions: [[ISIN, 50]] }]);
+    expectUnverified(mergedFiles([[IB, tradesFile], [IB, holdingsOnly]], method));
+  });
+
+  it.each(METHODS)("[%s] a holdings-only Flex of 01/01–28/02, right before the trades file: not applied", (method) => {
+    const holdingsOnly = flexXml([{ fromDate: "20250101", toDate: "20250228", trades: false, positions: [[OTHER, 5]] }]);
+    const tradesWithList = flexXml([{ fromDate: "20250301", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+    expectUnverified(mergedFiles([[IB, holdingsOnly], [IB, tradesWithList]], method));
+  });
+
+  it("control: an empty Trades section of 01/01–28/02 says no trades: applied", () => {
+    const before = flexXml([{ fromDate: "20250101", toDate: "20250228" }]);
+    const later = flexXml([{ fromDate: "20250301", toDate: "20251231", rows: issueRows, positions: [[ISIN, 50]] }]);
+    expectApplied(mergedFiles([[IB, before], [IB, later]]));
+  });
+});
+
+describe("(g) Open Positions with both the Summary and the Lot options", () => {
+  const file = (rawPositions: string[]): string => flexXml([{ fromDate: "20250101", toDate: "20251231", rows: issueRows, rawPositions }]);
+
+  it.each(METHODS)("[%s] a SUMMARY row of 50 and its LOT row of 50: counted once, applied", (method) => {
+    expectApplied(mergedFiles([[IB, file([positionRow({}), positionRow({ levelOfDetail: "LOT" })])]], method));
+  });
+
+  it("the parser keeps only the SUMMARY row", () => {
+    const pos = parseIbkrFlexXml(file([positionRow({}), positionRow({ levelOfDetail: "LOT", position: "30" }), positionRow({ levelOfDetail: "LOT", position: "20" })])).openPositions;
+    expect(pos.map((p) => p.quantity)).toEqual(["50"]);
+  });
+
+  it("control: LOT rows with no SUMMARY row add up (30 + 20 = 50): applied", () => {
+    expectApplied(mergedFiles([[IB, file([positionRow({ levelOfDetail: "LOT", position: "30" }), positionRow({ levelOfDetail: "LOT", position: "20" })])]]));
+  });
+});
+
+describe("(g) the same Flex uploaded twice", () => {
+  // 50 held before: the real list is 100, and the doubled trades (+200 −100) leave 100 too.
+  const file = flexXml([{ fromDate: "20250101", toDate: "20251231", rows: issueRows, positions: [[ISIN, 100]] }]);
+
+  it.each(METHODS)("[%s] every day is in two files: not applied", (method) => {
+    const r = mergedFiles([[IB, file], [IB, file]], method);
+    expect(ids(r)).toEqual([UNVERIFIED]);
   });
 });

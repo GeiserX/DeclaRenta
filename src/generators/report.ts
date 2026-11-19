@@ -807,17 +807,19 @@ export function generateTaxReport(
     },
   ];
   const accountStatements = files.flatMap((src) => {
-    const periods = src.accountPeriods?.length ? src.accountPeriods : [{ accountId: src.accountId, fromDate: src.fromDate ?? "", toDate: src.toDate }];
+    // A file with no account periods is a broker export of trades.
+    const periods = src.accountPeriods?.length ? src.accountPeriods : [{ accountId: src.accountId, fromDate: src.fromDate ?? "", toDate: src.toDate, hasTrades: true }];
     const ids = new Set(periods.map((p) => p.accountId));
     const own = periods.map((p) => ({
       source: src.brokerSource,
       accountId: p.accountId,
       fromDate: p.fromDate,
       toDate: p.toDate,
+      hasTrades: p.hasTrades,
       positions: periods.length === 1 ? src.openPositions : src.openPositions.filter((pos) => pos.accountId === p.accountId),
     }));
     const stray = periods.length === 1 ? [] : src.openPositions.filter((pos) => !ids.has(pos.accountId));
-    return stray.length === 0 ? own : [...own, { source: src.brokerSource, accountId: "\u0000unlisted", toDate: src.toDate, positions: stray }];
+    return stray.length === 0 ? own : [...own, { source: src.brokerSource, accountId: "\u0000unlisted", toDate: src.toDate, hasTrades: false, positions: stray }];
   });
   const allDisposals = detectWashSales(
     fifoEngine.getDisposals(),
@@ -1272,7 +1274,7 @@ export function generateTaxReport(
         id: "report.antichurning_single_purchase_unverified",
         severity: "warning",
         message: `En ${ctx.count} venta(s) de ${ctx.year} puede aplicarse la excepción de compra única de la regla de los 2 meses, pero DeclaRenta no la aplica: los ficheros subidos no demuestran que al empezar el plazo (el primero empieza el ${ctx.windowStart}) no tuvieras acciones de ese valor. La compra de los 2 meses anteriores cuenta como recompra.`,
-        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrirla sin huecos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, la sección Open Positions de la Flex Query), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
+        hint: `Si al empezar el plazo no tenías acciones de ese valor en ningún bróker, y en los 2 meses anteriores a la venta solo hiciste esa compra, esa compra no cuenta como recompra (DGT V3282-18). DeclaRenta solo la aplica cuando tus ficheros lo demuestran, cuenta por cuenta: los ficheros de cada cuenta que tiene o mueve ese valor deben cubrir sus operaciones sin huecos ni días repetidos desde el ${ctx.windowStart} hasta unas posiciones a fin de periodo con fecha igual o posterior a la venta (en IBKR, las secciones Trades y Open Positions de la Flex Query, con el campo ISIN), con todas las cantidades legibles y con las mismas acciones que dejan las operaciones de esa cuenta. Un fichero que solo incluye operaciones no basta, y un traspaso entre cuentas o un lote manual dentro de ese plazo no se puede comprobar.`,
         context: ctx,
       });
     }
