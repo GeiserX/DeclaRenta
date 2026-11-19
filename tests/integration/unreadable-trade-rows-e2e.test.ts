@@ -1618,6 +1618,44 @@ describe("#467 Binance spot: several coins bought in one window never move one o
     expect(message(parsed.parserMessages, "binance.spot_cost_split")?.context?.count).toBe("5");
   });
 
+  // The same counts of received and EUR rows prove nothing when the file does
+  // not write each payment next to its coin: then the payment of one order
+  // may go to another coin. Each case ends with the ETH sold on 01/06/2025
+  // for 200 €; the readable control writes each payment next to its coin.
+  const window = (...legs: string[]): Statement => binanceParser.parse([TX_H,
+    ...legs.map((l) => `1,2025-01-10 10:00:00,Spot,${l},`),
+    "1,2025-06-01 10:00:00,Spot,Sell,ETH,-1,", "1,2025-06-01 10:00:00,Spot,Buy,EUR,200,",
+  ].join("\n"));
+  const unprovenCases: [string, string[], string][] = [
+    ["ETH and two BTC fills, then three payments", ["Buy,ETH,1", "Buy,BTC,0.05", "Buy,BTC,0.05", "Sell,EUR,-5000", "Sell,EUR,-5000", "Sell,EUR,-100"],
+      "ETH Buy 1 2025-01-10 10:00:00; BTC Buy 0.05 2025-01-10 10:00:00; BTC Buy 0.05 2025-01-10 10:00:00; EUR Sell -5000 2025-01-10 10:00:00; EUR Sell -5000 2025-01-10 10:00:00; EUR Sell -100 2025-01-10 10:00:00"],
+    ["BTC and ETH, then the two payments", ["Buy,BTC,0.1", "Buy,ETH,1", "Sell,EUR,-100", "Sell,EUR,-10000"],
+      "BTC Buy 0.1 2025-01-10 10:00:00; ETH Buy 1 2025-01-10 10:00:00; EUR Sell -100 2025-01-10 10:00:00; EUR Sell -10000 2025-01-10 10:00:00"],
+  ];
+  describe.each(unprovenCases)("%s: the payments are not written next to their coins", (_label, legs, rows) => {
+    it.each(METHODS)("[%s] every leg of the window is named with art. 33.5.e, and the total paid stays exact", (method) => {
+      const parsed = window(...legs);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      const warning = message(r.messages, "binance.spot_cost_split");
+      expect(warning?.context).toEqual({ count: String(legs.length), rows });
+      expect(warning?.hint).toContain("33.5.e");
+      expect(new Decimal(costOf(parsed, "BTC")!).plus(costOf(parsed, "ETH")!).toFixed(2)).toBe("10100.00");
+    });
+  });
+
+  const provenCases: [string, string[]][] = [
+    ["ETH, BTC and BTC, each with its payment after it", ["Buy,ETH,1", "Sell,EUR,-100", "Buy,BTC,0.05", "Sell,EUR,-5000", "Buy,BTC,0.05", "Sell,EUR,-5000"]],
+    ["BTC and ETH, each with its payment before it", ["Sell,EUR,-10000", "Buy,BTC,0.1", "Sell,EUR,-100", "Buy,ETH,1"]],
+  ];
+  describe.each(provenCases)("control: %s", (_label, legs) => {
+    it.each(METHODS)("[%s] each coin keeps its own payment, ETH gains 100 €, no warning", (method) => {
+      const parsed = window(...legs);
+      expect([costOf(parsed, "BTC"), costOf(parsed, "ETH")]).toEqual(["10000", "100"]);
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      expect(ethGain(run([[parsed, "Binance"]], 2025, method))).toEqual(["100.00"]);
+    });
+  });
+
   it("control: one fill per coin, each with its own payment, gives no warning", () => {
     const parsed = binanceParser.parse([TX_H,
       "1,2025-01-10 10:00:00,Spot,Buy,BTC,0.1,", "1,2025-01-10 10:00:00,Spot,Sell,EUR,-10000,",

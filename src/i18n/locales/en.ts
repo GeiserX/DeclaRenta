@@ -1076,7 +1076,7 @@ const en: TranslationKeys = {
   "binance.spot_cost_split":
     "Binance: {{count}} movement(s) of buying several cryptocurrencies at once do not say which payment goes with each one. DeclaRenta shared the payment among them: {{rows}}.",
   "binance.spot_cost_split.hint":
-    "Binance gives several purchases in the same second, but not one payment for each purchase. So DeclaRenta does not know how much you paid for each cryptocurrency. It shared the total payment among them by order or in equal parts. The total paid is correct, but the cost of each cryptocurrency is not reliable. So the gains and losses of those cryptocurrencies are not reliable. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost of each cryptocurrency by hand in Renta Web.",
+    "Binance gives several purchases in the same second. It does not write each payment next to its purchase. So DeclaRenta does not know how much you paid for each cryptocurrency. It shared the total payment among them by order or in equal parts. The total paid is correct, but the cost of each cryptocurrency is not reliable. So the gains and losses of those cryptocurrencies are not reliable. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost of each cryptocurrency by hand in Renta Web.",
   "binance.unsupported_pair":
     "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
   "binance.unsupported_pair.hint":

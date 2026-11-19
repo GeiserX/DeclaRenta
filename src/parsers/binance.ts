@@ -819,7 +819,7 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       id: "binance.spot_cost_split",
       severity: "warning",
       message: `Binance: ${count} movimiento(s) de compra de varias criptomonedas a la vez no dicen qué pago va con cada una. DeclaRenta ha repartido el pago entre ellas: ${rows}.`,
-      hint: "Binance da varias compras en el mismo segundo, pero no un pago por cada compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
+      hint: "Binance da varias compras en el mismo segundo. No pone cada pago junto a su compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
       context: { count, rows },
     });
   }
@@ -1155,6 +1155,21 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
 }
 
 /**
+ * Whether the file writes each payment next to its fill: in file order, the
+ * rows split into consecutive pairs of one received row and one payment row.
+ * Then the k-th received row and the k-th payment are one order, so pairing
+ * them by order is what the file says, not a guess (#467).
+ */
+function paymentsBesideFills(legRows: TxRow[]): boolean {
+  const ordered = [...legRows].sort((a, b) => a.index - b.index);
+  if (ordered.length % 2 !== 0) return false;
+  for (let k = 0; k < ordered.length; k += 2) {
+    if (ordered[k]!.change.isPositive() === ordered[k + 1]!.change.isPositive()) return false;
+  }
+  return true;
+}
+
+/**
  * Emit the trades for one spot sub-group, pairing received (positive) legs with
  * given-up (negative) legs. Same-coin multi-fills are netted per coin first.
  *
@@ -1167,8 +1182,9 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
  * individual given-up leg BY ORDER (the real export lists N buys against N sells), and
  * never drop: every bought coin keeps a real, non-zero cost basis. The aggregate fiat
  * spent is exact; only the per-coin split is approximate when the export doesn't link
- * order-to-order, and then every leg of the group is named (`binance.spot_cost_split`)
- * rather than a cost-basis-0 phantom gain.
+ * order-to-order (each payment written next to its fill, see paymentsBesideFills),
+ * and then every leg of the group is named (`binance.spot_cost_split`) rather than
+ * a cost-basis-0 phantom gain.
  * Returns the legs left without a counterpart, so the caller can name them.
  */
 function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): NetLeg[] {
@@ -1185,16 +1201,21 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
   // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them
   // so none is dropped. When the export gives one fiat row per received row (one
   // payment per fill, the common case), pair them 1:1 by order and give each coin
-  // the sum of its fills' payments: that is exact. Otherwise the export does not
-  // say which payment goes with which coin: pair by coin when the counts match,
-  // else split the netted fiat equally. The total paid stays exact, but each
-  // coin's cost is a guess, so every leg of the group is named (#467): a guess
-  // that gave one order's cost to another coin overstated its loss with no word.
+  // the sum of its fills' payments. That pairing is exact only when the file
+  // writes each payment next to its fill (the real export lists each order's rows
+  // together, in either order); equal counts alone prove nothing ("Buy ETH, Buy
+  // BTC, Sell 100, Sell 10000" gave ETH the 10000). Otherwise the export does not
+  // say which payment goes with which coin: pair by order when the counts match,
+  // else by coin when that count matches, else split the netted fiat equally. The
+  // total paid stays exact, but each coin's cost is a guess, so every leg of the
+  // group is named (#467): a guess that gave one order's cost to another coin
+  // overstated its loss with no word.
   const fiatRows = rows
     .filter((r) => r.change.isNegative() && isFiat(r.coin))
     .sort((a, b) => a.index - b.index);
   const recvRows = rows.filter((r) => r.change.isPositive()).sort((a, b) => a.index - b.index);
   if (fiatRows.length === recvRows.length) {
+    if (!paymentsBesideFills([...recvRows, ...fiatRows])) for (const r of rows) r.costSplitGuessed = true;
     const paid = new Map<string, TxRow[]>();
     recvRows.forEach((r, k) => paid.set(r.coin, [...(paid.get(r.coin) ?? []), fiatRows[k]!]));
     for (const r of recv) {

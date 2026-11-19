@@ -1115,7 +1115,7 @@ const es = {
   "binance.spot_cost_split":
     "Binance: {{count}} movimiento(s) de compra de varias criptomonedas a la vez no dicen qué pago va con cada una. DeclaRenta ha repartido el pago entre ellas: {{rows}}.",
   "binance.spot_cost_split.hint":
-    "Binance da varias compras en el mismo segundo, pero no un pago por cada compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
+    "Binance da varias compras en el mismo segundo. No pone cada pago junto a su compra. Por eso DeclaRenta no sabe cuánto pagaste por cada criptomoneda. Ha repartido el pago total entre ellas por orden o a partes iguales. El total pagado es correcto, pero el coste de cada criptomoneda no es fiable. Por eso las ganancias y las pérdidas de esas criptomonedas no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste de cada criptomoneda.",
   "binance.unsupported_pair":
     "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
   "binance.unsupported_pair.hint":

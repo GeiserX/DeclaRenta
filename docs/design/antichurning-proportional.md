@@ -673,10 +673,17 @@ práctico Renta 2025. The decisions, each pinned in
       coin gets the sum of its own payments. Before, two fills of one coin
       and one order of another split the total equally, so one coin took
       the other's cost (ETH cost 5050 € instead of 100 €) with no word.
-      When the counts do not match, the window is booked as before (by
-      coin when that count matches, else an equal split; the total paid
-      stays exact), and `binance.spot_cost_split` names every leg of the
-      window with the art. 33.5.e caveat.
+      That pairing is trusted only when the file writes each payment next
+      to its fill: in file order, the rows form consecutive pairs of one
+      received row and one fiat row (the real export lists each order's
+      rows together, in either order). Equal counts alone prove nothing:
+      "Buy BTC 0.1, Buy ETH 1, Sell EUR -100, Sell EUR -10000" gave ETH the
+      10000 € and a 9800 € loss with no word. When the rows are not in
+      such pairs, or the counts do not match, the window is booked as
+      before (by order, else by coin when that count matches, else an
+      equal split; the total paid stays exact), and
+      `binance.spot_cost_split` names every leg of the window with the
+      art. 33.5.e caveat.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

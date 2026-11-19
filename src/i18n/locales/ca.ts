@@ -1078,7 +1078,7 @@ const ca: TranslationKeys = {
   "binance.spot_cost_split":
     "Binance: {{count}} moviment(s) de compra de diverses criptomonedes alhora no diuen quin pagament va amb cadascuna. DeclaRenta ha repartit el pagament entre elles: {{rows}}.",
   "binance.spot_cost_split.hint":
-    "Binance dona diverses compres en el mateix segon, però no un pagament per cada compra. Per això DeclaRenta no sap quant vas pagar per cada criptomoneda. Ha repartit el pagament total entre elles per ordre o a parts iguals. El total pagat és correcte, però el cost de cada criptomoneda no és fiable. Per això els guanys i les pèrdues d'aquestes criptomonedes no són fiables. Si una d'elles és una recompra en l'any següent a una venda amb pèrdues, la comprovació de l'art. 33.5.e LIRPF tampoc no és fiable. Busca aquestes ordres al teu historial de Binance i corregeix a mà a Renta Web el cost de cada criptomoneda.",
+    "Binance dona diverses compres en el mateix segon. No posa cada pagament al costat de la seva compra. Per això DeclaRenta no sap quant vas pagar per cada criptomoneda. Ha repartit el pagament total entre elles per ordre o a parts iguals. El total pagat és correcte, però el cost de cada criptomoneda no és fiable. Per això els guanys i les pèrdues d'aquestes criptomonedes no són fiables. Si una d'elles és una recompra en l'any següent a una venda amb pèrdues, la comprovació de l'art. 33.5.e LIRPF tampoc no és fiable. Busca aquestes ordres al teu historial de Binance i corregeix a mà a Renta Web el cost de cada criptomoneda.",
   "binance.unsupported_pair":
     "S'han omès {{count}} operació(ns) del CSV de Binance amb un parell no reconegut: {{pairs}}.",
   "binance.unsupported_pair.hint":
