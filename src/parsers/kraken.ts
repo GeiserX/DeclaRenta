@@ -14,6 +14,7 @@ import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
 import { isEcbResolvable, isFiat } from "../engine/ecb.js";
+import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 import {
   parseCsvLine,
   parseNumber,
@@ -85,28 +86,42 @@ function cleanSymbol(raw: string): string {
   return KRAKEN_ASSET_MAP[trimmed] ?? trimmed;
 }
 
+// Well-known quote suffixes, longer first to avoid partial matches
+// (XBTPYUSD must match PYUSD before USD; XBTUSDT has no Z/X prefix at all).
+const QUOTE_SUFFIXES = [
+  "PYUSD", "USDT", "USDC", "EURT",
+  "ZEUR", "ZUSD", "ZGBP", "ZJPY", "ZCAD", "ZAUD",
+  "XETH", "XXBT", "XLTC", "XXRP",
+  "EUR", "USD", "GBP", "JPY", "CAD", "AUD",
+  "ETH", "XBT", "BTC",
+];
+
 /**
  * Split a Kraken pair into base and quote symbols.
- * Kraken pairs can be: XBTEUR, XXBTXETH, ETHEUR, DOTUSD, etc.
+ * Kraken pairs can be: XBTEUR, XXBTXETH, ETHEUR, DOTUSD, BTC/EUR, etc.
  *
  * `assumedQuote` is true when the pair matched no known quote suffix and the
  * quote is a guess: either the last 3 chars (6+ char pairs) are not a currency
- * the ECB publishes, or the pair is too short and the quote defaulted to EUR.
+ * the ECB publishes, or the pair is too short and the quote defaulted to EUR,
+ * or a slash pair is not two sides or its quote is no known currency or coin.
  * The caller warns in that case because the trade may be split or valued wrong.
  */
 function splitPair(pair: string): { base: string; quote: string; assumedQuote: boolean } {
   const p = pair.trim().toUpperCase();
 
-  // Try well-known quote suffixes, longer first to avoid partial matches
-  // (XBTPYUSD must match PYUSD before USD; XBTUSDT has no Z/X prefix at all).
-  const quoteSuffixes = [
-    "PYUSD", "USDT", "USDC", "EURT",
-    "ZEUR", "ZUSD", "ZGBP", "ZJPY", "ZCAD", "ZAUD",
-    "XETH", "XXBT", "XLTC", "XXRP",
-    "EUR", "USD", "GBP", "JPY", "CAD", "AUD",
-    "ETH", "XBT", "BTC",
-  ];
-  for (const suffix of quoteSuffixes) {
+  // A pair written with a slash (BTC/EUR) names both sides. It was booked as
+  // the coin "BTC/", which matched no BTC lot, reward or rebuy (#467). A
+  // quote that is no known currency or coin, or a pair that is not two
+  // sides, is a guess, and the caller names it.
+  if (p.includes("/")) {
+    const sides = p.split("/").map((x) => x.trim());
+    const base = cleanSymbol(sides[0] ?? "") || p;
+    const quote = cleanSymbol(sides[1] ?? "") || "EUR";
+    const known = isEcbResolvable(quote) || KNOWN_CRYPTO_SYMBOLS.has(quote) || QUOTE_SUFFIXES.some((q) => cleanSymbol(q) === quote);
+    return { base, quote, assumedQuote: sides.length !== 2 || !sides[0] || !sides[1] || !known };
+  }
+
+  for (const suffix of QUOTE_SUFFIXES) {
     if (p.endsWith(suffix) && p.length > suffix.length) {
       const baseRaw = p.slice(0, p.length - suffix.length);
       // A legacy quote (ZEUR, XXBT) follows only a legacy base (XXBTZEUR,

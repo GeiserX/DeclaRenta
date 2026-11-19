@@ -687,6 +687,10 @@ práctico Renta 2025. The decisions, each pinned in
       coin at another broker did not block a Kraken loss. A legacy quote
       (ZEUR, XXBT) is split off only after a legacy base, so Tezos
       (XTZEUR) is no longer read as XT/ZEUR.
+      A pair written with a slash (BTC/EUR) was booked as the coin "BTC/",
+      so it matched no BTC lot, reward or rebuy. It is now split at the
+      slash; a slash pair that is not two sides, or whose quote is no known
+      currency or coin, is named by `kraken.unrecognized_pair`.
     - Coinbase: a buy, sale or Convert whose `Asset` is empty or whose
       `Quantity Transacted` cannot be read is an unreadable row, named by
       that cell (with no Asset, by its type and quantity). A Convert still

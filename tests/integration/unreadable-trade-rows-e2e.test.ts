@@ -3327,4 +3327,45 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
       expect(r.interest.entries).toEqual([]);
     });
   });
+
+  describe("a pair written with a slash", () => {
+    // BTC/EUR was booked as the coin "BTC/": it matched no BTC lot, reward
+    // or rebuy, so a loss was deducted although the coin was bought back.
+    const BN_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+    const lossAndRebuy = (pair: string): [Statement, string][] => [
+      [kraken(`"T1","O1","${pair}","2024-06-01 10:00:00","buy","limit","60000","6000","0","0.1","0.0","",""`,
+        `"T2","O2","${pair}","2025-03-01 10:00:00","sell","market","50000","5000","0","0.1","0.0","",""`), "Kraken"],
+      [binanceParser.parse([BN_H, "2025-04-01 10:30:00,BTCEUR,BUY,51000,0.1,5100.00,0EUR"].join("\n")), "Binance"],
+    ];
+    describe.each(["XBTEUR", "BTC/EUR", "XBT/EUR", "XXBT/ZEUR"])("%s sold at a loss and bought back at Binance", (pair) => {
+      it.each(METHODS)("[%s] the loss of 1000 € is blocked on BTC", (method) => {
+        const r = run(lossAndRebuy(pair), 2025, method);
+        expect(r.capitalGains.disposals.map((d) => d.symbol)).toEqual(["BTC"]);
+        expect([net(r), r.capitalGains.blockedLosses.toFixed(2)]).toEqual(["-1000.00", "1000.00"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a BTC/EUR sale takes the cost of an XXBT staking reward", (method) => {
+      const reward = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
+        `"L1","R1","2024-06-01 00:00:00","staking","","currency","XXBT","0.01","0","5"`].join("\n"));
+      const sale = (pair: string): Statement => kraken(`"T2","O2","${pair}","2025-03-01 10:00:00","sell","market","90000.00","900.00","0","0.01","0.0","",""`);
+      const btc = manual({ BTC: "50000" });
+      const r = runWith([[reward, "Kraken"], [sale("BTC/EUR"), "Kraken"]], 2025, method, btc);
+      expect(net(r)).toBe(net(runWith([[reward, "Kraken"], [sale("XBTEUR"), "Kraken"]], 2025, method, btc)));
+      expect(net(r)).toBe("400.00");
+    });
+
+    it("a crypto-quoted slash pair books both coins", () => {
+      const parsed = kraken(`"T1","O1","ETH/XBT","2024-03-15 10:30:00","buy","limit","0.05","0.05","0","1","0.0","",""`);
+      expect(parsed.trades.map((t) => [t.symbol, t.currency, t.buySell, t.quantity])).toEqual([["ETH", "BTC", "BUY", "1"], ["BTC", "ETH", "SELL", "-0.05"]]);
+      expect(parsed.parserMessages).toBeUndefined();
+    });
+
+    it.each([["BTC/FOO", "BTC/FOO"], ["BTC/", "BTC/EUR"], ["BTC/EUR/X", "BTC/EUR"]])("a slash pair %s whose quote is not recognised is named as %s", (pair, split) => {
+      const parsed = kraken(`"T1","O1","${pair}","2024-03-15 10:30:00","buy","limit","0.05","0.05","0","1","0.0","",""`);
+      const m = parsed.parserMessages?.find((x) => x.id === "kraken.unrecognized_pair");
+      expect(m?.message).toContain(`${pair} (interpretado como ${split})`);
+      expect(parsed.trades[0]!.symbol).not.toContain("/");
+    });
+  });
 });
