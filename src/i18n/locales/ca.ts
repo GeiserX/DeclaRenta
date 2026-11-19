@@ -1079,6 +1079,14 @@ const ca: TranslationKeys = {
     "Binance: {{count}} moviment(s) d'operacions amb diverses criptomonedes alhora no diuen quin pagament o cobrament va amb cadascuna. DeclaRenta ha repartit els imports entre elles: {{rows}}.",
   "binance.spot_cost_split.hint":
     "Binance dona diverses operacions en el mateix segon. No posa cada pagament o cobrament al costat de la seva compra o venda. Per això DeclaRenta no sap quin import va amb cada criptomoneda. Ha repartit els imports entre elles per ordre o a parts iguals. El total és correcte, però el cost o l'import de venda de cada criptomoneda no és fiable. Per això els guanys i les pèrdues d'aquestes criptomonedes no són fiables. Si una d'elles és una recompra en l'any següent a una venda amb pèrdues, la comprovació de l'art. 33.5.e LIRPF tampoc no és fiable. Busca aquestes ordres al teu historial de Binance i corregeix a mà a Renta Web el cost o l'import de venda de cada criptomoneda.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} comissió(ns) no diuen de quina operació del mateix segon són, i DeclaRenta no les resta: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance dona diverses operacions en el mateix segon. Aquestes comissions són entre dues operacions de la mateixa moneda. Per això DeclaRenta no sap de quina són. No les suma al cost ni les resta de l'import de venda, i així no pagues de menys. Si saps de quina compra o venda és cada comissió, corregeix a mà a Renta Web el seu cost o el seu import de venda.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} fila(es) canvien una moneda oficial per una altra (per exemple, euros per dòlars) i no es calculen: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRenta no calcula el guany o la pèrdua per tipus de canvi d'aquests canvis de Binance. Canviar una divisa per euros o per una altra divisa pot donar un guany o una pèrdua. És la diferència entre el seu valor en euros en canviar-la i el que et va costar en euros. Calcula'l i afegeix-lo a mà a Renta Web.",
   "binance.unsupported_pair":
     "S'han omès {{count}} operació(ns) del CSV de Binance amb un parell no reconegut: {{rows}}.",
   "binance.unsupported_pair.hint":

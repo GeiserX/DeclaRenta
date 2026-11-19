@@ -1116,6 +1116,14 @@ const es = {
     "Binance: {{count}} fila(s) de operaciones con varias criptomonedas en el mismo segundo no dicen qué pago o cobro va con cada criptomoneda. DeclaRenta ha repartido los importes entre ellas: {{rows}}.",
   "binance.spot_cost_split.hint":
     "Binance anota varias operaciones en el mismo segundo. No pone cada pago o cobro junto a su compra o venta. Por eso DeclaRenta no sabe qué importe va con cada criptomoneda. Ha repartido los importes entre ellas por orden o a partes iguales. El total es correcto, pero el coste o el importe de venta de cada criptomoneda no es fiable. Sus ganancias y sus pérdidas tampoco lo son. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste o el importe de venta de cada criptomoneda.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} comisión(es) no dicen de qué operación del mismo segundo son, y DeclaRenta no las resta: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance anota varias operaciones en el mismo segundo. Estas comisiones están entre dos operaciones de la misma moneda. Por eso DeclaRenta no sabe de cuál son. No las suma al coste ni las resta del importe de venta, y así no pagas de menos. Si sabes de qué compra o venta es cada comisión, corrige a mano en Renta Web su coste o su importe de venta.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} fila(s) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRenta no calcula la ganancia o la pérdida por tipo de cambio de estos cambios de Binance. Cambiar una divisa por euros o por otra divisa puede dar una ganancia o una pérdida. Es la diferencia entre su valor en euros al cambiarla y lo que te costó en euros. Calcúlala y añádela a mano en Renta Web.",
   "binance.unsupported_pair":
     "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{rows}}.",
   "binance.unsupported_pair.hint":

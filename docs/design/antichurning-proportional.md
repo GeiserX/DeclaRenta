@@ -745,6 +745,19 @@ práctico Renta 2025. The decisions, each pinned in
       every Buy (or Sold) too when one is left over. Otherwise the numbers
       are booked as before and `binance.spot_cost_split`, now worded for
       purchases and sales, names every leg.
+      Fees follow the same rule. Binance writes an order's rows together,
+      with the fee first, between or last, so a fee belongs to the order
+      written beside it. A fee in a coin that only one order of its second
+      takes goes to that order. When two or more orders take its coin, the
+      nearest leg rows before and after the fee must belong to one of them;
+      otherwise the fee is deducted from no order, which can only raise a
+      gain, and `binance.fee_unassigned` names it. Before, the last spot
+      trade of a second took every fee ("Buy BTC, Sell EUR, Fee -5, Buy ETH,
+      Sell EUR, Fee -1" put 6 € on ETH), each Strategy pair took the first
+      fee row of its coin (BTC paid ETH's 5 € and the 1 € row vanished), and
+      a fiat-for-fiat Strategy pair wrote its fee onto an earlier, unrelated
+      trade. A fiat-for-fiat swap books nothing, as before, and is now named
+      (`binance.fiat_conversion_not_booked`).
       In the Trade History export, FIFO values a fiat-pair trade at Price ×
       Executed: a Price that cannot be read was read as 0 (a 3000 € sale
       showed a 2000 € loss), so the price is now Amount ÷ Executed, and a

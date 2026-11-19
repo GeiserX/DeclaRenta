@@ -1077,6 +1077,14 @@ const en: TranslationKeys = {
     "Binance: {{count}} row(s) of trades in several cryptocurrencies in the same second do not say which payment or proceeds go with each cryptocurrency. DeclaRenta shared the amounts among them: {{rows}}.",
   "binance.spot_cost_split.hint":
     "Binance lists several trades in the same second. It does not write each payment or proceeds next to its purchase or sale. So DeclaRenta does not know which amount goes with each cryptocurrency. It shared the amounts among them by order or in equal parts. The total is correct, but the cost or sale value of each cryptocurrency is not reliable. Their gains and losses are not reliable either. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost or sale value of each cryptocurrency by hand in Renta Web.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} fee(s) do not say which trade of the same second they belong to, and DeclaRenta does not deduct them: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance lists several trades in the same second. These fees sit between two trades in the same currency. So DeclaRenta does not know which one they belong to. It does not add them to the cost or deduct them from the sale amount, so you do not pay too little. If you know which purchase or sale each fee belongs to, correct its cost or sale amount by hand in Renta Web.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} row(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRenta does not calculate the exchange-rate gain or loss of these Binance exchanges. Exchanging a currency for euros or for another currency can give a gain or a loss. It is the difference between its value in euros when you exchange it and what it cost you in euros. Calculate it and add it by hand in Renta Web.",
   "binance.unsupported_pair":
     "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{rows}}.",
   "binance.unsupported_pair.hint":

@@ -342,6 +342,14 @@ interface TxRow {
    * is named (#467).
    */
   costSplitGuessed?: boolean;
+  /**
+   * A fee row of a window where two or more orders take its coin and the file
+   * does not write it beside one of them: it is deducted from no order and
+   * named (#467).
+   */
+  feeUnassigned?: boolean;
+  /** A leg of a swap of one fiat currency for another: no engine books it, so it is named (#467). */
+  fiatConversion?: boolean;
   /** The row a trade phase paired this leg with, when each leg is one row. */
   partner?: TxRow;
   /**
@@ -400,6 +408,8 @@ interface NetLeg {
   date: string;
   index: number;
   key: string;
+  /** The rows this leg stands for, so a phase can name them (fiatConversion) or tie a fee to them. */
+  rows?: TxRow[];
 }
 
 /**
@@ -839,6 +849,36 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       context: { count, rows },
     });
   }
+  // A fee row two or more orders of its second could take, written beside
+  // neither alone (tieFees): it is deducted from no order, so the user pays
+  // no less, and each row is named (#467).
+  const unassignedFees = rows.filter((r) => r.feeUnassigned);
+  if (unassignedFees.length > 0) {
+    const count = String(unassignedFees.length);
+    const rows = unassignedFees.map((r) => `${r.coin} ${r.operationText} ${r.changeText} ${r.utcTime}`).join("; ");
+    parserMessages.push({
+      id: "binance.fee_unassigned",
+      severity: "warning",
+      message: `Binance: ${count} comisión(es) no dicen de qué operación del mismo segundo son, y DeclaRenta no las resta: ${rows}.`,
+      hint: "Binance anota varias operaciones en el mismo segundo. Estas comisiones están entre dos operaciones de la misma moneda. Por eso DeclaRenta no sabe de cuál son. No las suma al coste ni las resta del importe de venta, y así no pagas de menos. Si sabes de qué compra o venta es cada comisión, corrige a mano en Renta Web su coste o su importe de venta.",
+      context: { count, rows },
+    });
+  }
+  // A swap of one fiat currency for another (EUR to USD) is no crypto event,
+  // and the FX engine reads only cash trades, so nothing books it. Each row
+  // is named (#467), never dropped with no word.
+  const fiatConversions = rows.filter((r) => r.fiatConversion);
+  if (fiatConversions.length > 0) {
+    const count = String(fiatConversions.length);
+    const rows = fiatConversions.map((r) => `${r.coin} ${r.operationText} ${r.changeText} ${r.utcTime}`).join("; ");
+    parserMessages.push({
+      id: "binance.fiat_conversion_not_booked",
+      severity: "warning",
+      message: `Binance: ${count} fila(s) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: ${rows}.`,
+      hint: "DeclaRenta no calcula la ganancia o la pérdida por tipo de cambio de estos cambios de Binance. Cambiar una divisa por euros o por otra divisa puede dar una ganancia o una pérdida. Es la diferencia entre su valor en euros al cambiarla y lo que te costó en euros. Calcúlala y añádela a mano en Renta Web.",
+      context: { count, rows },
+    });
+  }
   // A row still unparsed after every phase has an Operation no phase handles
   // (futures PnL, card spending, Auto-Invest, cashback...). It is left out of
   // the report, so name each operation with its row count instead of dropping
@@ -887,8 +927,9 @@ function netLegs(window: TxRow[]): NetLeg[] {
     if (existing) {
       existing.qty = existing.qty.plus(r.change);
       existing.eur = existing.eur === null || r.eurValue === null ? null : existing.eur.plus(r.eurValue);
+      existing.rows!.push(r);
     } else {
-      byCoin.set(r.coin, { coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index, key: r.key });
+      byCoin.set(r.coin, { coin: r.coin, qty: r.change, eur: r.eurValue, date: r.tradeDate, index: r.index, key: r.key, rows: [r] });
     }
   }
   // Drop coins whose net is zero (intra-account split rows that cancel out).
@@ -920,7 +961,7 @@ type AddHint = (coin: string, date: string, qty: Decimal, eur: Decimal | null) =
  * #467). Returns the legs left without a counterpart, so the Convert path can
  * hand them back instead of losing them.
  */
-function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: AddHint, label: string): NetLeg[] {
+function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: AddHint, label: string, units?: FeeUnit[]): NetLeg[] {
   const sells = legs.filter((l) => l.qty.isNegative());
   const buys = legs.filter((l) => l.qty.isPositive());
   const usedBuys = new Set<number>();
@@ -946,7 +987,7 @@ function pairAndEmit(trades: Trade[], legs: NetLeg[], rows: TxRow[], addHint: Ad
     pairs.push([sell, buy]);
     addHint(sell.coin, sell.date, sell.qty, sell.eur);
     addHint(buy.coin, buy.date, buy.qty, buy.eur);
-    emitCryptoSwap(trades, sell, buy, label);
+    emitUnit(trades, sell, buy, label, units);
   }
   const left = [...unpaired, ...buys.filter((_, j) => !usedBuys.has(j))];
   // Each leg one row of the group (no netting): the pairs are rows, and a
@@ -1025,11 +1066,28 @@ function absEur(l: NetLeg): number {
 }
 
 /**
+ * emitCryptoSwap, recording the order it booked (its leg rows and trades) in
+ * `units` when given, so a spot fee can be tied to its own order (tieFees). A
+ * spot order takes a fee in a coin one of its trades is in.
+ */
+function emitUnit(trades: Trade[], sell: NetLeg, buy: NetLeg, label: string, units: FeeUnit[] | undefined): void {
+  const before = trades.length;
+  emitCryptoSwap(trades, sell, buy, label);
+  if (!units) return;
+  const emitted = trades.slice(before);
+  units.push({
+    rows: [...(sell.rows ?? []), ...(buy.rows ?? [])],
+    trades: emitted,
+    takes: (coin) => emitted.some((t) => t.symbol === coin || t.currency === coin),
+  });
+}
+
+/**
  * Emit a crypto leg-pair. If one side is genuine FIAT (not a stablecoin), the
  * trade is a plain acquisition/disposal in that fiat currency (NOT a permuta) —
  * this prevents the FIFO engine from hunting for nonexistent "EUR lots". If both
- * sides are crypto (incl. stablecoins), emit the two-leg permuta. Both-fiat
- * conversions are skipped (handled by the FX engine, not capital gains).
+ * sides are crypto (incl. stablecoins), emit the two-leg permuta. A both-fiat
+ * conversion books nothing: its rows are flagged `fiatConversion` and named.
  */
 function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: string): void {
   const sellQty = sell.qty.abs();
@@ -1038,7 +1096,13 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
   const sellFiat = isFiat(sell.coin);
   const buyFiat = isFiat(buy.coin);
 
-  if (sellFiat && buyFiat) return; // pure fiat conversion — not a capital-gains event
+  // A swap of one fiat currency for another is no crypto event, and the FX
+  // engine reads only cash trades, so nothing books it. Its rows are named
+  // (binance.fiat_conversion_not_booked), never dropped with no word (#467).
+  if (sellFiat && buyFiat) {
+    for (const r of [...(sell.rows ?? []), ...(buy.rows ?? [])]) r.fiatConversion = true;
+    return;
+  }
 
   if (sellFiat && !buyFiat) {
     // Spent fiat to acquire crypto → single BUY priced in fiat.
@@ -1133,7 +1197,8 @@ function emitCryptoSwap(trades: Trade[], sell: NetLeg, buy: NetLeg, label: strin
  * no word. Then the rows are named (`binance.spot_cost_split`) unless the
  * choice cannot change a lot or the file writes each pair as two adjacent
  * rows (pairByOrder, #467). Fees in
- * the acquired/received coin reduce cost / proceeds. A Sold/Revenue/Buy/Spend
+ * the acquired/received coin reduce cost / proceeds; each fee row goes to the
+ * order the file writes it beside, once (tieFees). A Sold/Revenue/Buy/Spend
  * leg left without a counterpart is handed back (parsed = false): when the next
  * trade starts in this window's last second, its first leg lands here but its
  * counterpart sits one second later, so a later window must be able to take it.
@@ -1151,41 +1216,84 @@ function emitStrategyTrades(trades: Trade[], window: TxRow[], addHint: AddHint):
   const nBuy = Math.min(bought.length, spend.length);
   pairByOrder(sold, revenue);
   pairByOrder(bought, spend);
-  for (let k = 0; k < nSell; k++) {
-    const soldRow = sold[k]!;
-    const revenueRow = revenue[k]!;
-    const feeRow = fees.find((f) => f.coin === revenueRow.coin && !f.change.isZero());
-    const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
-    addHint(soldRow.coin, soldRow.tradeDate, soldRow.change, soldRow.eurValue);
-    addHint(revenueRow.coin, revenueRow.tradeDate, revenueRow.change, revenueRow.eurValue);
+  const units: FeeUnit[] = [];
+  // A sale's fee is in the coin received, a purchase's in the coin bought.
+  const emit = (given: TxRow, received: TxRow, feeCoin: string, label: string): void => {
+    addHint(given.coin, given.tradeDate, given.change, given.eurValue);
+    addHint(received.coin, received.tradeDate, received.change, received.eurValue);
+    const before = trades.length;
     emitCryptoSwap(
       trades,
-      { coin: soldRow.coin, qty: soldRow.change, eur: soldRow.eurValue, date: soldRow.tradeDate, index: soldRow.index, key: soldRow.key },
-      { coin: revenueRow.coin, qty: revenueRow.change, eur: revenueRow.eurValue, date: revenueRow.tradeDate, index: revenueRow.index, key: revenueRow.key },
-      "Sell",
+      { coin: given.coin, qty: given.change, eur: given.eurValue, date: given.tradeDate, index: given.index, key: given.key, rows: [given] },
+      { coin: received.coin, qty: received.change, eur: received.eurValue, date: received.tradeDate, index: received.index, key: received.key, rows: [received] },
+      label,
     );
-    applyFee(trades, feeAmount, revenueRow.coin);
-  }
+    units.push({ rows: [given, received], trades: trades.slice(before), takes: (coin) => coin === feeCoin });
+  };
+  for (let k = 0; k < nSell; k++) emit(sold[k]!, revenue[k]!, revenue[k]!.coin, "Sell");
+  for (let k = 0; k < nBuy; k++) emit(spend[k]!, bought[k]!, bought[k]!.coin, "Buy");
 
-  for (let k = 0; k < nBuy; k++) {
-    const buyRow = bought[k]!;
-    const spendRow = spend[k]!;
-    const feeRow = fees.find((f) => f.coin === buyRow.coin && !f.change.isZero());
-    const feeAmount = feeRow ? feeRow.change.abs() : new Decimal(0);
-    addHint(buyRow.coin, buyRow.tradeDate, buyRow.change, buyRow.eurValue);
-    addHint(spendRow.coin, spendRow.tradeDate, spendRow.change, spendRow.eurValue);
-    emitCryptoSwap(
-      trades,
-      { coin: spendRow.coin, qty: spendRow.change, eur: spendRow.eurValue, date: spendRow.tradeDate, index: spendRow.index, key: spendRow.key },
-      { coin: buyRow.coin, qty: buyRow.change, eur: buyRow.eurValue, date: buyRow.tradeDate, index: buyRow.index, key: buyRow.key },
-      "Buy",
-    );
-    applyFee(trades, feeAmount, buyRow.coin);
+  // The fee goes on the last trade its own order emitted, never on a trade
+  // of another order (#467).
+  for (const [unit, feeRows] of tieFees(window.filter((r) => r.operation !== "transaction fee"), units, fees)) {
+    const last = unit.trades[unit.trades.length - 1]!;
+    for (const f of feeRows) {
+      last.commission = new Decimal(last.commission || "0").minus(f.change.abs()).toString();
+      last.commissionCurrency = f.coin;
+    }
   }
 
   for (const r of [...sold.slice(nSell), ...revenue.slice(nSell), ...bought.slice(nBuy), ...spend.slice(nBuy)]) {
     r.parsed = false;
   }
+}
+
+/** One order a trade phase booked: its leg rows, the trades it emitted, and the fee coins it takes. */
+interface FeeUnit {
+  rows: TxRow[];
+  trades: Trade[];
+  takes: (coin: string) => boolean;
+}
+
+/**
+ * Tie each fee row of a window to the order it belongs to (#467). Binance
+ * writes an order's rows together, the fee first, between or last, so a fee
+ * belongs to an order whose rows sit next to it. A fee in a coin that only
+ * one order of the window takes goes to that order. When several orders take
+ * it, it goes to the one the file writes it beside: of the nearest leg rows
+ * before and after it (`legs`, fees left out), each belongs to one order and
+ * exactly one of those orders takes the coin. Otherwise ("Buy BTC, Sell EUR,
+ * Fee EUR, Buy ETH, Sell EUR, Fee EUR": the first fee sits between both
+ * orders) the file does not say whose fee it is. It is deducted from no
+ * order, which can only raise a gain or lower a loss, and flagged
+ * `feeUnassigned`, so binance.fee_unassigned names it. Before, every pair
+ * took the first fee row of its coin, or the last trade took them all, with
+ * no word. A fee in a coin no order takes stays dropped, as before.
+ */
+function tieFees(legs: TxRow[], units: FeeUnit[], fees: TxRow[]): Map<FeeUnit, TxRow[]> {
+  // null: a row two orders share (an equal split), so it ties no fee.
+  const owner = new Map<TxRow, FeeUnit | null>();
+  for (const u of units) for (const r of u.rows) owner.set(r, owner.has(r) && owner.get(r) !== u ? null : u);
+  const ordered = [...legs].sort((x, y) => x.index - y.index);
+  const tied = new Map<FeeUnit, TxRow[]>();
+  for (const f of fees) {
+    const takers = units.filter((u) => u.trades.length > 0 && u.takes(f.coin));
+    if (takers.length === 0) continue;
+    let unit = takers.length === 1 ? takers[0] : undefined;
+    if (!unit) {
+      const beside = [ordered.filter((r) => r.index < f.index).at(-1), ordered.find((r) => r.index > f.index)]
+        .filter((r) => r !== undefined)
+        .map((r) => owner.get(r));
+      const fit = new Set(beside.filter((u) => u && takers.includes(u)));
+      if (fit.size === 1 && beside.every((u) => u)) unit = [...fit][0]!;
+    }
+    if (!unit) {
+      f.feeUnassigned = true;
+      continue;
+    }
+    tied.set(unit, [...(tied.get(unit) ?? []), f]);
+  }
+  return tied;
 }
 
 /**
@@ -1215,14 +1323,6 @@ function pairByOrder(a: TxRow[], b: TxRow[]): void {
   proveOrder(pairs, [...a.slice(n), ...b.slice(n)], [...a, ...b]);
 }
 
-/** Attach a fee to the most recently emitted trade (in the same coin). */
-function applyFee(trades: Trade[], feeAmount: Decimal, feeCoin: string): void {
-  if (feeAmount.isZero() || trades.length === 0) return;
-  const last = trades[trades.length - 1]!;
-  last.commission = feeAmount.neg().toString();
-  last.commissionCurrency = feeCoin;
-}
-
 /**
  * Emit plain SPOT trades from a ±1s window of `Buy`/`Sell`/`Sell Crypto to Fiat`
  * (+ `Fee`) rows. Pairs by SIGN via netLegs/pairAndEmit (the same path as Convert),
@@ -1232,8 +1332,9 @@ function applyFee(trades: Trade[], feeAmount: Decimal, feeCoin: string): void {
  * different coins each get their own EUR leg, never merged). Bare `Buy`/`Sell` have
  * an empty Remark; their same-second multi-fills are of the SAME bought coin paying
  * the SAME fiat, so per-coin netting is correct. Fees are attached to the matching
- * emitted trade; a fee in a coin with no ECB rate (e.g. BNB third-coin fee) is
- * dropped as immaterial dust, consistent with the `BNB Fee Deduction` policy.
+ * trade of their own order (tieFees); a fee in a coin with no ECB rate (e.g. BNB
+ * third-coin fee) is dropped as immaterial dust, consistent with the `BNB Fee
+ * Deduction` policy.
  */
 function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): void {
   window.forEach((r) => (r.parsed = true));
@@ -1250,33 +1351,33 @@ function emitSpotTrades(trades: Trade[], window: TxRow[], addHint: AddHint): voi
     byRemark.get(key)!.push(r);
   }
 
-  const before = trades.length;
+  const units: FeeUnit[] = [];
   for (const group of byRemark.values()) {
     // A leg its window could not pair stays consumed (no later window pairs
     // it across seconds) but is flagged, so it is named (#467).
-    for (const leg of emitBareSpotGroup(trades, group, addHint)) {
+    for (const leg of emitBareSpotGroup(trades, group, addHint, units)) {
       for (const r of group) if (r.coin === leg.coin && r.change.isNegative() === leg.qty.isNegative()) r.unpaired = true;
     }
   }
 
-  // Attach each fee to the emitted trade whose coin matches the fee coin. The FIFO
-  // engine homogenizes a commission to EUR via its ECB rate, so only a fee in a
-  // genuinely ECB-resolvable coin (fiat or stablecoin) can be valued — attach those
+  // Attach each fee to the trade of its own order whose coin matches the fee coin.
+  // The FIFO engine homogenizes a commission to EUR via its ECB rate, so only a fee
+  // in a genuinely ECB-resolvable coin (fiat or stablecoin) can be valued — attach those
   // (a fiat/stablecoin sell/buy fee correctly adjusts cost/proceeds, Art. 35.1.b/35.2,
   // DGT V1604-18). A fee in a non-resolvable coin (a BNB third-coin fee, or the bought
   // alt-coin itself) has no EUR rate and is sub-cent dust → drop it, consistent with the
   // `BNB Fee Deduction` policy; dropping a buy fee only understates cost → overstates
   // gain (conservative, never underpays). Fees ACCUMULATE (a trade can carry several
-  // partial-fill fee rows). The `before` scope confines matching to THIS window's trades.
-  for (const f of fees) {
-    if (!isEcbResolvable(f.coin)) continue; // crypto/dust fee — immaterial, no rate
-    const feeAmount = f.change.abs();
-    const target = trades.slice(before).reverse().find(
-      (t) => t.symbol === f.coin || t.currency === f.coin,
-    );
-    if (target) {
+  // partial-fill fee rows). With two or more orders in the fee coin, the fee goes to
+  // the order the file writes it beside, else to none and it is named (tieFees, #467):
+  // before, the last trade of the window took every fee ("Buy BTC, Sell EUR, Fee -5,
+  // Buy ETH, Sell EUR, Fee -1" gave ETH both fees with no word).
+  const valued = fees.filter((f) => isEcbResolvable(f.coin)); // crypto/dust fee — immaterial, no rate
+  for (const [unit, feeRows] of tieFees(tradeRows, units, valued)) {
+    for (const f of feeRows) {
+      const target = [...unit.trades].reverse().find((t) => t.symbol === f.coin || t.currency === f.coin)!;
       const prior = new Decimal(target.commission || "0"); // emitCryptoSwap sets "0"
-      target.commission = prior.minus(feeAmount).toString();
+      target.commission = prior.minus(f.change.abs()).toString();
       target.commissionCurrency = f.coin;
     }
   }
@@ -1315,7 +1416,7 @@ function paymentsBesideFills(legRows: TxRow[]): boolean {
  * a cost-basis-0 phantom gain.
  * Returns the legs left without a counterpart, so the caller can name them.
  */
-function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): NetLeg[] {
+function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint, units: FeeUnit[]): NetLeg[] {
   const recv = netLegs(rows.filter((r) => r.change.isPositive())).sort((a, b) => a.index - b.index);
   const give = netLegs(rows.filter((r) => r.change.isNegative())).sort((a, b) => a.index - b.index);
 
@@ -1323,7 +1424,7 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
   // closest-EUR pairing is correct (and merges same-coin multi-fills cleanly).
   const giveSingleFiat = give.length === 1 && isFiat(give[0]!.coin);
   if (recv.length <= 1 || !giveSingleFiat) {
-    return pairAndEmit(trades, [...give, ...recv], rows, addHint, "Spot");
+    return pairAndEmit(trades, [...give, ...recv], rows, addHint, "Spot", units);
   }
 
   // Multiple distinct bought coins sharing ONE fiat leg. Split the fiat across them
@@ -1351,10 +1452,10 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
       const g = legs[0]!;
       const qty = legs.reduce((sum, l) => sum.plus(l.change), new Decimal(0));
       const eur = legs.some((l) => l.eurValue === null) ? null : legs.reduce((sum, l) => sum.plus(l.eurValue!), new Decimal(0));
-      const sell: NetLeg = { coin: g.coin, qty, eur, date: g.tradeDate, index: g.index, key: g.key };
+      const sell: NetLeg = { coin: g.coin, qty, eur, date: g.tradeDate, index: g.index, key: g.key, rows: legs };
       addHint(sell.coin, sell.date, sell.qty, sell.eur);
       addHint(r.coin, r.date, r.qty, r.eur);
-      emitCryptoSwap(trades, sell, r, "Spot");
+      emitUnit(trades, sell, r, "Spot", units);
     }
     return [];
   }
@@ -1363,10 +1464,10 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
     for (let k = 0; k < recv.length; k++) {
       const r = recv[k]!;
       const g = fiatRows[k]!;
-      const sell: NetLeg = { coin: g.coin, qty: g.change, eur: g.eurValue, date: g.tradeDate, index: g.index, key: g.key };
+      const sell: NetLeg = { coin: g.coin, qty: g.change, eur: g.eurValue, date: g.tradeDate, index: g.index, key: g.key, rows: [g] };
       addHint(sell.coin, sell.date, sell.qty, sell.eur);
       addHint(r.coin, r.date, r.qty, r.eur);
-      emitCryptoSwap(trades, sell, r, "Spot");
+      emitUnit(trades, sell, r, "Spot", units);
     }
     return [];
   }
@@ -1374,9 +1475,9 @@ function emitBareSpotGroup(trades: Trade[], rows: TxRow[], addHint: AddHint): Ne
   const totalFiat = give[0]!.qty; // negative
   const share = totalFiat.div(recv.length);
   for (const r of recv) {
-    const sell: NetLeg = { coin: give[0]!.coin, qty: share, eur: null, date: give[0]!.date, index: give[0]!.index, key: give[0]!.key };
+    const sell: NetLeg = { coin: give[0]!.coin, qty: share, eur: null, date: give[0]!.date, index: give[0]!.index, key: give[0]!.key, rows: give[0]!.rows };
     addHint(r.coin, r.date, r.qty, r.eur);
-    emitCryptoSwap(trades, sell, r, "Spot");
+    emitUnit(trades, sell, r, "Spot", units);
   }
   return [];
 }

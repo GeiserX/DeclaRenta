@@ -1756,7 +1756,7 @@ describe("#467 crypto income whose coin cannot be read is named, never skipped w
 describe("#466 #467 #468 the warnings of these issues read as plain short sentences in Spanish and English", () => {
   const KEYS = [
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
-    "binance.unsupported_pair",
+    "binance.fee_unassigned", "binance.fiat_conversion_not_booked", "binance.unsupported_pair",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
@@ -2154,10 +2154,19 @@ describe("#467 a dividend or interest row whose amount cannot be read is named, 
   });
 });
 
-describe("#467 Binance: a Trade History price or pair is read from the file or named", () => {
+describe("#467 Binance: every fee, fiat swap and price is booked from the file or named", () => {
+  const TX_H = "User_ID,UTC_Time,Account,Operation,Coin,Change,Remark";
   const TH_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
   const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const ids = (s: Statement): string[] => (s.parserMessages ?? []).map((m) => m.id);
+  // Rows as "seconds|Operation,Coin,Change[,Remark]" on 10/01/2025 10:00:0s, or "date time|..." for another day.
+  const tx = (...rows: string[]): Statement => binanceParser.parse([TX_H, ...rows.map((r) => {
+    const [when, cells] = r.split("|") as [string, string];
+    const time = when.length === 1 ? `2025-01-10 10:00:0${when}` : when;
+    return `1,${time},Spot,${cells}${cells.split(",").length === 3 ? "," : ""}`;
+  })].join("\n"));
   const gains = (r: TaxReport, coin: string): string[] => r.capitalGains.disposals.filter((d) => d.symbol === coin).map((d) => new Decimal(d.gainLossEur).toFixed(2));
+  const comm = (s: Statement, coin: string): string[] => s.trades.filter((t) => t.symbol === coin).map((t) => `${t.commission} ${t.commissionCurrency}`);
 
   // Trade History: FIFO values a fiat-quoted trade at Price × Executed. A
   // Price it cannot read was read as 0: BTC bought for 2000 € and sold for
@@ -2206,7 +2215,99 @@ describe("#467 Binance: a Trade History price or pair is read from the file or n
     });
   });
 
-  it("the unsupported-pair warning names the rows in the five locales", () => {
+  // Strategy: every pair took the first fee row of its coin, so in "Sold ETH,
+  // Fee -5, Revenue, Sold BTC, Fee -1, Revenue" BTC paid ETH's 5 € and the -1 €
+  // row vanished, with no word. Each fee row now goes, once, to the pair the
+  // file writes it beside.
+  const sales = [
+    "0|Transaction Sold,ETH,-1", "0|Transaction Fee,EUR,-5", "0|Transaction Revenue,EUR,3000",
+    "0|Transaction Sold,BTC,-0.1", "0|Transaction Fee,EUR,-1", "0|Transaction Revenue,EUR,9000",
+  ];
+  const strategy: [string, string[], string, string, string | undefined][] = [
+    ["each fee inside its pair", sales, "2995.00", "8999.00", undefined],
+    ["the first sale has no fee row", [sales[0]!, sales[2]!, ...sales.slice(3)], "3000.00", "8999.00", undefined],
+    ["a fee written between the two sales is no one's", ["0|Transaction Sold,ETH,-1", "0|Transaction Revenue,EUR,3000", "0|Transaction Fee,EUR,-5", "0|Transaction Sold,BTC,-0.1", "0|Transaction Revenue,EUR,9000", "0|Transaction Fee,EUR,-1"], "3000.00", "8999.00", "EUR Transaction Fee -5 2025-01-10 10:00:00"],
+    ["control: the two sales 5 s apart", [...sales.slice(0, 3), ...sales.slice(3).map((r) => r.replace("0|", "5|"))], "2995.00", "8999.00", undefined],
+  ];
+  describe.each(strategy)("Strategy, two sales in one second, %s", (_label, rows, eth, btc, unassigned) => {
+    it.each(METHODS)("[%s] each sale pays only its own fee, and a fee the file ties to no sale is named and deducted from none", (method) => {
+      const parsed = tx(...rows);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      expect([gains(r, "ETH"), gains(r, "BTC")]).toEqual([[eth], [btc]]);
+      expect(message(r.messages, "binance.fee_unassigned")?.context?.rows).toBe(unassigned);
+    });
+  });
+  it("Strategy: two fee rows of one sale (partial fills) are both deducted", () => {
+    expect(comm(tx("0|Transaction Sold,BTC,-0.1", "0|Transaction Fee,EUR,-1", "0|Transaction Fee,EUR,-2", "0|Transaction Revenue,EUR,9000"), "BTC")).toEqual(["-3 EUR"]);
+  });
+  it("Strategy, revenue in USDT: each permuta takes its own fee", () => {
+    const parsed = tx("0|Transaction Sold,ETH,-1", "0|Transaction Fee,USDT,-5", "0|Transaction Revenue,USDT,3300",
+      "0|Transaction Sold,BTC,-0.1", "0|Transaction Fee,USDT,-1", "0|Transaction Revenue,USDT,9900");
+    expect(comm(parsed, "USDT")).toEqual(["-5 USDT", "-1 USDT"]);
+  });
+
+  // Strategy: a pair that emitted no trade (EUR for USD) wrote its fee onto
+  // the last trade of the file, an unrelated BTC sale 5 s earlier (-50 €).
+  it.each(METHODS)("[%s] Strategy: a fiat-for-fiat window puts its fee on no earlier trade, and its rows are named", (method) => {
+    const parsed = tx("0|Transaction Sold,BTC,-0.1", "0|Transaction Revenue,EUR,9000",
+      "5|Transaction Sold,USD,-110", "5|Transaction Fee,EUR,-50", "5|Transaction Revenue,EUR,100");
+    expect(comm(parsed, "BTC")).toEqual(["0 EUR"]);
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(gains(r, "BTC")).toEqual(["9000.00"]);
+    expect(message(r.messages, "binance.fiat_conversion_not_booked")?.context?.rows)
+      .toBe("USD Transaction Sold -110 2025-01-10 10:00:05; EUR Transaction Revenue 100 2025-01-10 10:00:05");
+  });
+
+  // Spot: the last trade of the window took every fee, so two orders in one
+  // second put both fees on ETH (1994 € instead of 1999 €) with no word.
+  const spotTail = ["2025-06-01 10:00:00|Sell,ETH,-1", "2025-06-01 10:00:00|Buy,EUR,5000", "2025-06-02 10:00:00|Sell,BTC,-0.1", "2025-06-02 10:00:00|Buy,EUR,20000"];
+  const spot: [string, string[], string, string, string | undefined][] = [
+    ["each fee after its order: the first one sits between both orders", ["0|Buy,BTC,0.1", "0|Sell,EUR,-9000", "0|Fee,EUR,-5", "0|Buy,ETH,1", "0|Sell,EUR,-3000", "0|Fee,EUR,-1"], "1999.00", "11000.00", "EUR Fee -5 2025-01-10 10:00:00"],
+    ["each fee inside its order", ["0|Buy,BTC,0.1", "0|Fee,EUR,-5", "0|Sell,EUR,-9000", "0|Buy,ETH,1", "0|Fee,EUR,-1", "0|Sell,EUR,-3000"], "1999.00", "10995.00", undefined],
+    ["control: the two orders 5 s apart", ["0|Buy,BTC,0.1", "0|Sell,EUR,-9000", "0|Fee,EUR,-5", "5|Buy,ETH,1", "5|Sell,EUR,-3000", "5|Fee,EUR,-1"], "1999.00", "10995.00", undefined],
+  ];
+  describe.each(spot)("spot, two purchases in one second, %s", (_label, rows, eth, btc, unassigned) => {
+    it.each(METHODS)("[%s] each order pays only its own fee, and a fee the file ties to no order is named and deducted from none", (method) => {
+      const parsed = tx(...rows, ...spotTail);
+      const r = run([[parsed, "Binance"]], 2025, method);
+      expect([gains(r, "ETH"), gains(r, "BTC")]).toEqual([[eth], [btc]]);
+      expect(message(r.messages, "binance.fee_unassigned")?.context?.rows).toBe(unassigned);
+    });
+  });
+
+  // A Convert of EUR for USD and back was dropped with no word: the comment
+  // said the FX engine handles it, but that engine reads only cash trades.
+  it.each(METHODS)("[%s] a fiat-for-fiat Convert is named, never dropped with no word", (method) => {
+    const parsed = tx("0|Binance Convert,EUR,-100", "0|Binance Convert,USD,110", "2025-06-01 10:00:00|Binance Convert,USD,-110", "2025-06-01 10:00:00|Binance Convert,EUR,110");
+    expect(parsed.trades).toEqual([]);
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(message(r.messages, "binance.fiat_conversion_not_booked")?.context).toEqual({
+      count: "4",
+      rows: "EUR Binance Convert -100 2025-01-10 10:00:00; USD Binance Convert 110 2025-01-10 10:00:00; USD Binance Convert -110 2025-06-01 10:00:00; EUR Binance Convert 110 2025-06-01 10:00:00",
+    });
+  });
+  it("control: a Convert of EUR for BTC is booked and names nothing", () => {
+    const parsed = tx("0|Binance Convert,EUR,-100", "0|Binance Convert,BTC,0.001");
+    expect(parsed.trades.map((t) => `${t.buySell} ${t.symbol}`)).toEqual(["BUY BTC"]);
+    expect(ids(parsed)).toEqual([]);
+  });
+
+  it("the new warnings exist in the five locales, name the rows, and the parser emits the Spanish text", () => {
+    const esText = es as Record<string, string>;
+    const emitted: TaxMessage[] = [
+      ...(tx("0|Buy,BTC,0.1", "0|Sell,EUR,-9000", "0|Fee,EUR,-5", "0|Buy,ETH,1", "0|Sell,EUR,-3000", "0|Fee,EUR,-1").parserMessages ?? []),
+      ...(tx("0|Binance Convert,EUR,-100", "0|Binance Convert,USD,110").parserMessages ?? []),
+    ];
+    expect(emitted.map((m) => m.id)).toEqual(["binance.fee_unassigned", "binance.fiat_conversion_not_booked"]);
+    for (const m of emitted) {
+      expect(isTranslationKey(m.id) && isTranslationKey(`${m.id}.hint`)).toBe(true);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale[m.id]).toContain("{{rows}}");
+        expect(locale[m.id]).toContain("{{count}}");
+      }
+      expect(m.message).toBe(esText[m.id]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? ""));
+      expect(m.hint).toBe(esText[`${m.id}.hint`]);
+    }
     for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) expect(locale["binance.unsupported_pair"]).toContain("{{rows}}");
   });
 });

@@ -1081,6 +1081,14 @@ const eu: TranslationKeys = {
     "Binance: aldi berean kriptomoneta batzuekin egindako eragiketen {{count}} errenkadek ez dute esaten zein ordainketa edo kobrantza doan bakoitzarekin. DeclaRentak zenbatekoak haien artean banatu ditu: {{rows}}.",
   "binance.spot_cost_split.hint":
     "Binance-k hainbat eragiketa ematen ditu segundo berean. Ez du ordainketa edo kobrantza bakoitza bere erosketaren edo salmentaren ondoan jartzen. Beraz, DeclaRentak ez daki zein zenbateko doan kriptomoneta bakoitzarekin. Zenbatekoak haien artean banatu ditu, ordenaren arabera edo zati berdinetan. Guztizkoa zuzena da, baina kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa ez da fidagarria. Beraz, kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, LIRPF 33.5.e artikuluaren egiaztapena ere ez da fidagarria. Bilatu agindu horiek zure Binance historian, eta zuzendu eskuz Renta Web-en kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa.",
+  "binance.fee_unassigned":
+    "Binance: {{count}} komisiok ez dute esaten segundo bereko zein eragiketarenak diren, eta DeclaRentak ez ditu kentzen: {{rows}}.",
+  "binance.fee_unassigned.hint":
+    "Binance-k hainbat eragiketa ematen ditu segundo berean. Komisio horiek moneta bereko bi eragiketaren artean daude. Beraz, DeclaRentak ez daki zeinenak diren. Ez ditu kostuari gehitzen, ezta salmenta-zenbatekotik kentzen ere, eta horrela ez duzu gutxiago ordaintzen. Komisio bakoitza zein erosketa edo salmentarena den badakizu, zuzendu eskuz Renta Web-en haren kostua edo salmenta-zenbatekoa.",
+  "binance.fiat_conversion_not_booked":
+    "Binance: {{count}} errenkadak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
+  "binance.fiat_conversion_not_booked.hint":
+    "DeclaRentak ez du kalkulatzen Binance-ko aldaketa horien truke-tasagatiko irabazia edo galera. Dibisa bat euroengatik edo beste dibisa batengatik aldatzeak irabazi edo galera bat eman dezake. Aldatzean eurotan duen balioaren eta eurotan kostatu zitzaizunaren arteko aldea da. Kalkulatu eta gehitu eskuz Renta Web-en.",
   "binance.unsupported_pair":
     "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{rows}}.",
   "binance.unsupported_pair.hint":
