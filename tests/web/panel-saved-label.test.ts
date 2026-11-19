@@ -766,7 +766,7 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
     await redrawn(cryptoPanel, crypto, "rerun after the crypto Save");
     expect(shown(cryptoLabel())).toBe(true);
-    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)[0].eurPerUnit).toBe("31000");
+    expect((JSON.parse(localStorage.getItem("declarenta_manual_rates")!) as { eurPerUnit: string }[])[0]!.eurPerUnit).toBe("31000");
   });
 
   it("a crypto Save, a refused crypto Save, then an anti-churning Save: the run keeps the flagged price and the error", async () => {
