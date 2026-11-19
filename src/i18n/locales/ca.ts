@@ -1112,6 +1112,8 @@ const ca: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta accions per elles, així que els guanys i les pèrdues d'aquest valor no són fiables i no s'aplica l'excepció de compra única de la regla dels 2 mesos. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
   "parser.crypto_quantity_unknown": "{{broker}} no dona un nombre d'unitats o un preu llegible per a {{count}} operació(ns) amb criptomonedes: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta no suma ni resta unitats per elles, així que els guanys i les pèrdues d'aquesta criptomoneda no són fiables. Si una d'elles és una recompra en l'any següent a una venda amb pèrdues, aquesta pèrdua pot haver de quedar pendent (art. 33.5.e LIRPF), i DeclaRenta no la bloqueja perquè no sap quantes unitats vas recomprar. Comprova que el fitxer exportat porta la quantitat i el preu de cada operació i torna'l a exportar.",
+  "revolut.bad_fx_rate": "S'han omès {{count}} ingrés(sos) o retirada(es) d'efectiu de l'extracte de Revolut perquè el seu tipus de canvi (FX Rate) no és vàlid: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Només els ingressos i les retirades d'efectiu fan servir aquesta columna; les compres, les vendes i els dividends es calculen amb el tipus del BCE i no s'ometen. Sol passar per una cel·la de tipus de canvi no numèrica, negativa o igual a zero a l'exportació. Torna a descarregar el Trading Account Statement complet des de l'app de Revolut perquè aquests moviments s'hi incloguin.",
 };
 
 export default ca;

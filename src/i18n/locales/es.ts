@@ -1151,6 +1151,8 @@ const es = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta no suma ni resta acciones por ellas, así que las ganancias y pérdidas de ese valor no son fiables y no se aplica la excepción de compra única de la regla de los 2 meses. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
   "parser.crypto_quantity_unknown": "{{broker}} no da un número de unidades o un precio legible para {{count}} operación(es) con criptomonedas: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta no suma ni resta unidades por ellas, así que las ganancias y pérdidas de esa criptomoneda no son fiables. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF), y DeclaRenta no la bloquea porque no sabe cuántas unidades recompraste. Comprueba que el archivo exportado trae la cantidad y el precio de cada operación y vuelve a exportarlo.",
+  "revolut.bad_fx_rate": "Se ha(n) omitido {{count}} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Solo los ingresos y las retiradas de efectivo usan esa columna; las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. Suele deberse a una celda de tipo de cambio no numérica, negativa o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esos movimientos se incluyan.",
 } as const;
 
 export type TranslationKeys = Record<keyof typeof es, string>;

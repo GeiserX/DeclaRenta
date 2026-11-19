@@ -103,6 +103,17 @@ export function quantityUnknownTrade(
 }
 
 /**
+ * A cell that makes a row unreadable, as the user sees it in the file:
+ * `Type: "BUY - STOP"`, `date: null`, `ISIN: ""`. A missing cell reads `—`.
+ */
+export function unreadableCell(column: string, value: unknown): string {
+  if (value === undefined) return `${column}: —`;
+  const text = typeof value === "string" ? value.trim() : value;
+  const shown = JSON.stringify(text) ?? String(text);
+  return `${column}: ${shown.length > 42 ? `${shown.slice(0, 40)}…"` : shown}`;
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none. Shared by every

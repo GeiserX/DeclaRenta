@@ -30,7 +30,7 @@ import Decimal from "decimal.js";
 import type { BrokerParser, Statement } from "../types/broker.js";
 import type { Trade, CashTransaction, CorporateAction, OpenPosition, AssetCategory } from "../types/ibkr.js";
 import type { TaxMessage } from "../types/tax.js";
-import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages } from "./csv-utils.js";
+import { findColumn, parseNumber, toFiniteDecimal, quantityUnknownTrade, quantityUnreadable, tradeQuantityUnknownMessages, unreadableCell } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
 type WorkSheet = import("xlsx").WorkSheet;
@@ -315,9 +315,10 @@ function parseTransactionLog(
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   const corporateActions: CorporateAction[] = [];
-  // Rows whose FX rate cell was present but not a finite positive number — the
-  // conversion would be wrong, so we skip them and warn (never default to 1).
-  let skippedBadFxRate = 0;
+  // Cash rows whose FX rate cell was present but not a finite positive number,
+  // by date and amount: the conversion would be wrong, so they are skipped and
+  // named (never default to 1). Only cash rows read the cell (#466).
+  const badFxRateRows: string[] = [];
   // Ticker rows whose `type` is none of BUY/SELL/DIVIDEND/STOCK SPLIT, whatever
   // their amount (a spin-off or stock merger can carry USD 0) — counted and warned.
   let skippedUnknownType = 0;
@@ -344,30 +345,32 @@ function parseTransactionLog(
     const ticker = (row[cols.ticker] ?? "").trim();
     const currencyRaw = (row[cols.currency] ?? "").trim();
 
-    // FX rate validation: the cell defaults to "1" only when ABSENT (missing
-    // column or empty cell) — a legitimate case (EUR rows, no FX column). But a
-    // cell that IS present and parses to a non-finite or non-positive value
-    // would silently corrupt the conversion (and divide-by-zero), so the row is
-    // skipped and counted rather than defaulting to 1.
-    const fxRateRaw = cols.fxRate >= 0 ? (row[cols.fxRate] ?? "").trim() : "";
-    let fxRate = 1;
-    if (fxRateRaw) {
-      const fxRateDec = toFiniteDecimal(fxRateRaw);
-      if (!fxRateDec.isFinite() || fxRateDec.lessThanOrEqualTo(0)) {
-        skippedBadFxRate++;
-        continue;
-      }
-      fxRate = fxRateDec.toNumber();
-    }
-
     const totalRaw = (row[cols.total] ?? "").trim();
     const { amount: totalAmountStr } = parseCcyAmount(totalRaw);
     // Route money through toFiniteDecimal so a garbled cell can never yield
     // NaN/Infinity (which would poison cost basis), mirroring the parseTrades path.
     const totalAmountDec = toFiniteDecimal(totalAmountStr, "0", false);
 
-    // Cash flows: CASH TOP-UP, CASH WITHDRAWAL, REWARD
+    // Cash flows: CASH TOP-UP, CASH WITHDRAWAL
     if (TXN_TYPE_CASH_IN.test(type) || TXN_TYPE_CASH_OUT.test(type)) {
+      // FX rate validation, for the only rows that read the cell: it defaults
+      // to "1" only when ABSENT (missing column or empty cell), a legitimate
+      // case (EUR rows, no FX column). A cell that IS present and parses to a
+      // non-finite or non-positive value would silently corrupt the
+      // conversion (and divide by zero), so the row is skipped and named. A
+      // trade, dividend or split row never reads it: it stores fxRateToBase
+      // "1" and the engine takes the ECB rate, so a bad cell there must not
+      // drop it (#466: the sale or the dividend vanished).
+      const fxRateRaw = cols.fxRate >= 0 ? (row[cols.fxRate] ?? "").trim() : "";
+      let fxRate = 1;
+      if (fxRateRaw) {
+        const fxRateDec = toFiniteDecimal(fxRateRaw);
+        if (!fxRateDec.isFinite() || fxRateDec.lessThanOrEqualTo(0)) {
+          badFxRateRows.push(`${tradeDate} ${totalRaw} [${unreadableCell(headers[cols.fxRate] ?? "FX Rate", fxRateRaw)}]`);
+          continue;
+        }
+        fxRate = fxRateDec.toNumber();
+      }
       cashTransactions.push({
         transactionID: `revolut-cash-${tradeDate}-${i}`,
         accountId: "",
@@ -576,13 +579,15 @@ function parseTransactionLog(
   }
 
   const parserMessages: TaxMessage[] = [];
-  if (skippedBadFxRate > 0) {
+  if (badFxRateRows.length > 0) {
+    const count = String(badFxRateRows.length);
+    const rows = badFxRateRows.join("; ");
     parserMessages.push({
       id: "revolut.bad_fx_rate",
       severity: "warning" as const,
-      message: `Se ${skippedBadFxRate === 1 ? "ha omitido 1 operación" : `han omitido ${skippedBadFxRate} operaciones`} del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido.`,
-      hint: "Suele deberse a una celda de tipo de cambio vacía, no numérica o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esas operaciones se incluyan.",
-      context: { count: String(skippedBadFxRate) },
+      message: `Se ha(n) omitido ${count} ingreso(s) o retirada(s) de efectivo del extracto de Revolut por tener un tipo de cambio (FX Rate) no válido: ${rows}.`,
+      hint: "Solo los ingresos y las retiradas de efectivo usan esa columna; las compras, las ventas y los dividendos se calculan con el tipo del BCE y no se omiten. Suele deberse a una celda de tipo de cambio no numérica, negativa o igual a cero en la exportación. Vuelve a descargar el Trading Account Statement completo desde la app de Revolut para que esos movimientos se incluyan.",
+      context: { count, rows },
     });
   }
   if (skippedUnknownType > 0) {

@@ -1114,6 +1114,8 @@ const eu: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRentak ez du akziorik gehitzen edo kentzen haiengatik; beraz, balio horren irabaziak eta galerak ez dira fidagarriak, eta ez da aplikatzen 2 hilabeteko arauaren erosketa bakarraren salbuespena. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
   "parser.crypto_quantity_unknown": "{{broker}} brokerraren fitxategiak ez du unitate kopuru edo prezio irakurgarririk ematen kriptomonetekin egindako {{count}} eragiketatarako: {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRentak ez du unitaterik gehitzen edo kentzen haiengatik; beraz, kriptomoneta horren irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, galera horrek zain geratu beharko du agian (LIRPF 33.5.e art.), eta DeclaRentak ez du blokeatzen, ez dakielako zenbat unitate berrerosi dituzun. Egiaztatu esportatutako fitxategiak eragiketa bakoitzaren kopurua eta prezioa dituela eta esportatu berriro.",
+  "revolut.bad_fx_rate": "Revoluteko laburpeneko {{count}} diru-sarrera edo diru-erretiratze baztertu dira, haien truke-tasa (FX Rate) baliozkoa ez delako: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Diru-sarrerek eta diru-erretiratzeek bakarrik erabiltzen dute zutabe hori; erosketak, salmentak eta dibidenduak EBZren truke-tasarekin kalkulatzen dira, eta ez dira baztertzen. Normalean esportazioko truke-tasaren gelaxka zenbakia ez delako, negatiboa delako edo zero delako gertatzen da. Deskargatu berriro Trading Account Statement osoa Revolut aplikaziotik, mugimendu horiek sar daitezen.",
 };
 
 export default eu;

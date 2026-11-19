@@ -1110,6 +1110,8 @@ const en: TranslationKeys = {
   "parser.trade_quantity_unknown.hint": "DeclaRenta adds or removes no shares for them, so the gains and losses of that security are not reliable and the one-purchase exception of the 2-month rule is not applied. Make sure the exported file has the quantity and the price of every trade and export it again.",
   "parser.crypto_quantity_unknown": "{{broker}} gives no readable unit count or price for {{count}} crypto trade(s): {{trades}}.",
   "parser.crypto_quantity_unknown.hint": "DeclaRenta adds or removes no units for them, so the gains and losses of that cryptocurrency are not reliable. If one of them is a repurchase in the year after a sale at a loss, that loss may have to stay pending (art. 33.5.e LIRPF), and DeclaRenta does not block it because it does not know how many units you bought back. Make sure the exported file has the quantity and the price of every trade and export it again.",
+  "revolut.bad_fx_rate": "{{count}} cash top-up(s) or withdrawal(s) of the Revolut statement were skipped because their exchange rate (FX Rate) is not valid: {{rows}}.",
+  "revolut.bad_fx_rate.hint": "Only cash top-ups and withdrawals use that column; purchases, sales and dividends are calculated at the ECB rate and are not skipped. It is usually caused by an exchange rate cell that is not a number, negative or zero in the export. Download the full Trading Account Statement again from the Revolut app so those movements are included.",
 };
 
 export default en;
