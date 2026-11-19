@@ -74,8 +74,12 @@ export function clearWindowOverrides(): boolean {
 
 const monthsLabel = (m: WindowMonths): string => tr(m === 12 ? "antichurning_window.months_12" : "antichurning_window.months_2");
 
-function row(s: AntichurningSecurity): string {
-  const value = s.source === "user" ? String(s.months) : "auto";
+function row(s: AntichurningSecurity, stored: Readonly<Record<string, WindowMonths>>): string {
+  // The select shows what is stored, not the report's reading: a locale
+  // redraw in the middle of a Save or Clear rerun draws from the report before
+  // it, and a run keeps that panel once the user edits it (#472).
+  const months = stored[s.isin];
+  const value = months === undefined ? "auto" : String(months);
   const option = (v: string, label: string): string =>
     `<option value="${v}"${v === value ? " selected" : ""}>${esc(label)}</option>`;
   const listing = s.listingExchanges.length > 0 ? s.listingExchanges.join(", ") : tr("antichurning_window.no_listing");
@@ -107,7 +111,8 @@ export function renderAntichurningWindowPanel(
   { saved = false }: { saved?: boolean } = {},
 ): string {
   if (!securities || securities.length === 0) return "";
-  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || s.source === "user");
+  const stored = getWindowOverrides();
+  const open = securities.some((s) => (s.source === "ibkr" && s.months === 12) || (s.source !== "user" && s.openDecision) || stored[s.isin] !== undefined);
   // A Save back to «auto» can leave no reason to open: open it anyway so
   // «Guardado» is on screen (#472).
   return `<details class="antichurning-window-panel crypto-rates-panel"${open || saved ? " open" : ""}>
@@ -123,7 +128,7 @@ export function renderAntichurningWindowPanel(
           <th>${esc(tr("antichurning_window.col_listing"))}</th>
           <th>${esc(tr("antichurning_window.col_window"))}</th>
         </tr></thead>
-        <tbody>${securities.map(row).join("")}</tbody>
+        <tbody>${securities.map((s) => row(s, stored)).join("")}</tbody>
       </table></div>
       <div class="crypto-rates-actions">
         <button type="button" class="btn-cta antichurning-window-save">${esc(tr("antichurning_window.save_btn"))}</button>

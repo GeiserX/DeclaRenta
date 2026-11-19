@@ -23,20 +23,21 @@ import type { AntichurningSecurity, TaxMessage, UnresolvedValuation } from "../.
 const INDEX_HTML = readFileSync(resolve(__dirname, "../../src/web/index.html"), "utf-8");
 const YEAR = new Date().getFullYear() - 1; // the profile's default declaration year
 const LSE_ISIN = "GB0007980591";
+const LSE2_ISIN = "GB0002374006";
 
-const lseRow = (id: string, date: string, qty: number, price: number) => {
+const lseRow = (id: string, date: string, qty: number, price: number, isin = LSE_ISIN, symbol = "LSEONLY") => {
   const side = qty > 0 ? "BUY" : "SELL";
   const money = (Math.abs(qty) * price).toFixed(2);
-  return `<Trade tradeID="${id}" accountId="U0000001" symbol="LSEONLY" description="LONDON ONLY PLC"
-    isin="${LSE_ISIN}" assetCategory="STK" currency="EUR" tradeDate="${YEAR}${date}" settlementDate=""
+  return `<Trade tradeID="${id}" accountId="U0000001" symbol="${symbol}" description="LONDON ONLY PLC ${symbol}"
+    isin="${isin}" assetCategory="STK" currency="EUR" tradeDate="${YEAR}${date}" settlementDate=""
     quantity="${qty}" tradePrice="${price}" tradeMoney="${side === "BUY" ? money : `-${money}`}" proceeds="${side === "BUY" ? `-${money}` : money}"
     cost="0" fifoPnlRealized="0" fxRateToBase="1" buySell="${side}" openCloseIndicator="${side === "BUY" ? "O" : "C"}"
     exchange="LSE" listingExchange="LSE" ibCommissionCurrency="EUR" ibCommission="0" taxes="0" />`;
 };
 
 /**
- * One statement that opens all three panels: a London-only share bought, sold at
- * a loss and bought back (anti-churning window panel), a EUR sale with no
+ * One statement that opens all three panels: two London-only shares, each bought,
+ * sold at a loss and bought back (anti-churning window panel, two rows), a EUR sale with no
  * earlier purchase (opening lots) and a BTC buy priced in SOL (crypto price).
  * A buy the year before gives the results year select a second year.
  * Nothing needs an ECB rate, so fetch is stubbed to fail.
@@ -46,6 +47,7 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
   <FlexStatements count="1">
     <FlexStatement accountId="U0000001" fromDate="${YEAR - 1}0101" toDate="${YEAR}1231" period="Custom">
       <Trades>${lseRow("1", "0201", 1, 100)}${lseRow("2", "0301", -1, 80)}${lseRow("3", "0801", 1, 85)}
+        ${lseRow("11", "0202", 1, 100, LSE2_ISIN, "LSETWO")}${lseRow("12", "0302", -1, 80, LSE2_ISIN, "LSETWO")}${lseRow("13", "0802", 1, 85, LSE2_ISIN, "LSETWO")}
         <Trade tradeID="6" accountId="U0000001" symbol="OTHER" description="OTHER SA"
           isin="XX0000000002" assetCategory="STK" currency="EUR"
           tradeDate="${YEAR - 1}0601" settlementDate="" quantity="1" tradePrice="10"
@@ -462,6 +464,54 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     expect(order).toEqual([lotsPanel(), cryptoPanel(), windowPanel()]);
   });
 
+  // A kept locale-drawn panel must show the stored window on every row it was
+  // not edited in, or its next Save writes back the windows from before the
+  // Save or Clear (#472 review of 7f727ca).
+  const secondSelect = (p: HTMLElement) => p.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE2_ISIN}']`)!;
+  const storedWindows = () => JSON.parse(localStorage.getItem("declarenta_antichurning_windows") ?? "{}") as Record<string, number>;
+
+  it("a Save, a locale redraw and an edit of another row: the kept panel shows the saved window and its Save keeps it", async () => {
+    const before = await waitFor(windowPanel, "window panel");
+    let strip = document.getElementById("results-split");
+    windowSelect(before).value = "2";
+    before.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    redrawOnLocaleChange();
+    const localeDrawn = windowPanel()!;
+    expect(windowSelect(localeDrawn).value).toBe("2");
+    secondSelect(localeDrawn).value = "12";
+    secondSelect(localeDrawn).dispatchEvent(new Event("change", { bubbles: true }));
+    await runLands(strip);
+    expect(windowPanel()).toBe(localeDrawn);
+    expect(windowSelect(localeDrawn).value).toBe("2");
+    expect(secondSelect(localeDrawn).value).toBe("12");
+    strip = document.getElementById("results-split");
+    localeDrawn.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await runLands(strip);
+    expect(storedWindows()).toEqual({ [LSE_ISIN]: 2, [LSE2_ISIN]: 12 });
+  });
+
+  it("a Clear, a locale redraw and an edit of another row: the kept panel shows no window and its Save does not restore one", async () => {
+    const first = await waitFor(windowPanel, "window panel");
+    let strip = document.getElementById("results-split");
+    windowSelect(first).value = "2";
+    first.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    const second = await redrawn(windowPanel, first, "rerun after Save");
+    strip = document.getElementById("results-split");
+    second.querySelector<HTMLButtonElement>(".antichurning-window-clear")!.click();
+    expect(localStorage.getItem("declarenta_antichurning_windows")).toBeNull();
+    redrawOnLocaleChange();
+    const localeDrawn = windowPanel()!;
+    secondSelect(localeDrawn).value = "12";
+    secondSelect(localeDrawn).dispatchEvent(new Event("change", { bubbles: true }));
+    await runLands(strip);
+    expect(windowPanel()).toBe(localeDrawn);
+    expect(windowSelect(localeDrawn).value).toBe("auto");
+    strip = document.getElementById("results-split");
+    localeDrawn.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    await runLands(strip);
+    expect(storedWindows()).toEqual({ [LSE2_ISIN]: 12 });
+  });
+
   it("a panel touched while a year change reruns is still replaced: it belongs to the year on screen", async () => {
     const before = await waitFor(windowPanel, "window panel");
     const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
@@ -529,6 +579,17 @@ describe("the panel renderers carry «Guardado» only when asked (#472)", () => 
     const saved = parse(renderAntichurningWindowPanel([twoMonths], { saved: true }));
     expect(saved.querySelector<HTMLDetailsElement>("details")!.open).toBe(true);
     expect(shown(saved.querySelector<HTMLElement>(".antichurning-window-saved")!)).toBe(true);
+  });
+
+  it("anti-churning window: each select shows the stored window, not the report's reading", () => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    const select = (html: string) => parse(html).querySelector<HTMLSelectElement>(".antichurning-window-select")!;
+    // The report says the user set 2 months, but storage was cleared since.
+    expect(select(renderAntichurningWindowPanel([{ ...security, months: 2, source: "user" }])).value).toBe("auto");
+    // The report reads 1 year from IBKR, but the user saved 2 months since.
+    localStorage.setItem("declarenta_antichurning_windows", JSON.stringify({ [LSE_ISIN]: 2 }));
+    expect(select(renderAntichurningWindowPanel([security])).value).toBe("2");
+    vi.unstubAllGlobals();
   });
 
   it("crypto prices", () => {
