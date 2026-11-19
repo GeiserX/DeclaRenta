@@ -819,6 +819,10 @@ const es = {
     "Operación roll procesada correctamente como cierre de la posición anterior y apertura de la nueva.",
   "fifo.unknown_direction": '⚠ Operación con dirección desconocida ("{{buySell}}"): {{symbol}} el {{date}}. No se ha procesado.',
   "fifo.unknown_direction.hint": "Solo se procesan compras (BUY) y ventas (SELL). Revisa esta fila en el archivo del broker y, si es una operación real, corrige su dirección.",
+  "fifo.zero_quantity_buy": "⚠ Compra con cantidad 0: {{symbol}}{{isinSuffix}} el {{date}}. No se ha procesado.",
+  "fifo.zero_quantity_buy.hint": "La fila del archivo no compra ninguna unidad, así que no crea ningún lote y su comisión no se cuenta. Si en realidad compraste, revisa la cantidad de esta fila en el archivo del broker.",
+  "fifo.zero_quantity_sell": "⚠ Venta con cantidad 0: {{symbol}}{{isinSuffix}} el {{date}}. No se ha procesado.",
+  "fifo.zero_quantity_sell.hint": "La fila del archivo no vende ninguna unidad, así que no consume ningún lote y su comisión no se cuenta. Si en realidad vendiste, revisa la cantidad de esta fila en el archivo del broker.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicado ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicado a todos los lotes. El coste total se mantiene — solo cambia el número de acciones.",

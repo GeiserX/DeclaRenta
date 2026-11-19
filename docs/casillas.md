@@ -243,6 +243,7 @@ Cada compra crea un **lote** con su fecha de adquisición, cantidad, precio por 
 - Si la venta es mayor que un lote, se consume parcialmente el siguiente.
 - El coste base se calcula proporcionalmente: si un lote de 100 acciones con coste de 1.000 EUR pierde 30 acciones, el coste base de esas 30 es 300 EUR.
 - El resto del lote (70 acciones, 700 EUR) permanece en la cola para futuras ventas.
+- Una compra o una venta con cantidad 0 en el fichero no mueve ninguna acción: no crea ni consume lotes, su comisión no se cuenta y DeclaRenta avisa de cada una. Hasta la versión 0.66.14 creaba un lote de 0 acciones, y la venta siguiente dividía su coste entre 0: el valor de adquisición (o, en una venta en corto, el de transmisión) de todo el año salía como 0 y las casillas mostraban «NaN».
 
 ### Tipos de cambio del BCE
 

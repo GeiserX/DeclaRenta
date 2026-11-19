@@ -103,6 +103,29 @@ function accumulate(block: CasillaBlock, d: FifoDisposal): void {
 }
 
 /**
+ * The casilla boxes never render "NaN" (#469). A non-finite disposal amount
+ * (a division by an unexpected zero deep in an engine) would otherwise reach the
+ * CSV, the PDFs, the web cards and the CLI, which all recompute the boxes here
+ * from the raw disposals. Same rule as report.ts guardNonFiniteTotals, which
+ * already emitted `report.non_finite_total` for the totals: a non-finite leg is
+ * 0, and a non-finite net is the difference of the two legs, as the report's.
+ * A strict no-op when every amount is finite.
+ */
+function finiteBlock(block: CasillaBlock): CasillaBlock {
+  const finite = (d: Decimal): Decimal => (d.isFinite() ? d : new Decimal(0));
+  const transmissionValue = finite(block.transmissionValue);
+  const acquisitionValue = finite(block.acquisitionValue);
+  return {
+    transmissionValue,
+    acquisitionValue,
+    gains: finite(block.gains),
+    losses: finite(block.losses),
+    netGainLoss: block.netGainLoss.isFinite() ? block.netGainLoss : transmissionValue.minus(acquisitionValue),
+    count: block.count,
+  };
+}
+
+/**
  * Partition capital-gains disposals into the two AEAT blocks.
  *
  * Foreign-currency (FX) gains also belong to "otros elementos patrimoniales"
@@ -115,7 +138,7 @@ export function computeCasillaBlocks(disposals: FifoDisposal[]): CasillaBlocks {
   for (const d of disposals) {
     accumulate(isListedShare(d) ? listedShares : otherElements, d);
   }
-  return { listedShares, otherElements };
+  return { listedShares: finiteBlock(listedShares), otherElements: finiteBlock(otherElements) };
 }
 
 /**
@@ -144,7 +167,7 @@ export function computeCasillaBlocksWithFx(report: TaxSummary): CasillaBlocks {
     netGainLoss: otherElements.netGainLoss.plus(fx.netGainLoss),
     count: otherElements.count + fx.disposals.length,
   };
-  return { listedShares, otherElements: merged };
+  return { listedShares, otherElements: finiteBlock(merged) };
 }
 
 /**

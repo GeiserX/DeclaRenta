@@ -53,6 +53,16 @@ function commissionCost(trade: { commission: string }): Decimal {
 }
 
 /** " (ISIN)" after a symbol in a message, or nothing when the asset has no ISIN (most crypto). */
+/** True when a trade's quantity reads as a finite zero ("0", "0.0", "-0"). An
+ *  unreadable one is the parser's `quantityUnknown`, never zero here. */
+function isZeroQuantity(quantity: string): boolean {
+  try {
+    return new Decimal(quantity).isZero();
+  } catch {
+    return false;
+  }
+}
+
 function isinSuffix(isin: string): string {
   return isin ? ` (${isin})` : "";
 }
@@ -250,7 +260,28 @@ export class FifoEngine {
             if ((t.isin && deliveryKeys.has(`${date}|${t.isin}`)) || deliveryKeys.has(`${date}|${t.symbol}`)) return false;
           }
         }
-        return t.assetCategory !== "WAR" && t.assetCategory !== "CASH";
+        if (t.assetCategory === "WAR" || t.assetCategory === "CASH") return false;
+        // A buy or sale of 0 shares (an explicit "0", "0.0") moves no share: as
+        // a lot it gave the next sale a 0/0 cost (NaN) and the final guard then
+        // zeroed the whole year's acquisition or transmission value (#469). It
+        // books nothing, its commission included, and is named. The
+        // anti-churning evidence still reads it (report.ts passes the
+        // statement's own trades to detectWashSales).
+        if (isZeroQuantity(t.quantity)) {
+          const date = normalizeDate(t.tradeDate);
+          const isBuy = direction === "BUY";
+          this.emit({
+            id: isBuy ? "fifo.zero_quantity_buy" : "fifo.zero_quantity_sell",
+            severity: "warning",
+            message: `⚠ ${isBuy ? "Compra" : "Venta"} con cantidad 0: ${t.symbol}${isinSuffix(t.isin)} el ${date}. No se ha procesado.`,
+            hint: isBuy
+              ? "La fila del archivo no compra ninguna unidad, así que no crea ningún lote y su comisión no se cuenta. Si en realidad compraste, revisa la cantidad de esta fila en el archivo del broker."
+              : "La fila del archivo no vende ninguna unidad, así que no consume ningún lote y su comisión no se cuenta. Si en realidad vendiste, revisa la cantidad de esta fila en el archivo del broker.",
+            context: { symbol: t.symbol, isin: t.isin, isinSuffix: isinSuffix(t.isin), date },
+          });
+          return false;
+        }
+        return true;
       })
       .sort(compareFifoTradeOrder);
 
@@ -912,8 +943,12 @@ export class FifoEngine {
   }
 
   private addLot(trade: Trade, rateMap: EcbRateMap): void {
-    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const quantity = new Decimal(trade.quantity).abs();
+    // Defense in depth (#469), as fx-fifo.ts addLot: a lot of 0 units gives
+    // every later division by lot.quantity (sale, option exercise, spin-off,
+    // merger) a NaN. The trade filter already drops a 0-quantity trade.
+    if (!quantity.greaterThan(0)) return;
+    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
     const commission = commissionCost(trade);
@@ -1170,8 +1205,10 @@ export class FifoEngine {
   }
 
   private addShortLot(trade: Trade, rateMap: EcbRateMap): void {
-    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const quantity = new Decimal(trade.quantity).abs();
+    // Defense in depth (#469): never a short lot of 0 units (see addLot).
+    if (!quantity.greaterThan(0)) return;
+    const ecbRate = getEcbRate(rateMap, trade.tradeDate, trade.currency);
     const pricePerShare = new Decimal(trade.tradePrice);
     const multiplier = new Decimal(trade.multiplier || "1");
     const commission = commissionCost(trade);

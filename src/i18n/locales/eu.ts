@@ -783,6 +783,10 @@ const eu: TranslationKeys = {
     "Roll eragiketa zuzen prozesatu da, aurreko posizioaren itxiera eta berriaren irekiera gisa.",
   "fifo.unknown_direction": '⚠ Norabide ezezaguneko eragiketa ("{{buySell}}"): {{symbol}} {{date}} egunean. Ez da prozesatu.',
   "fifo.unknown_direction.hint": "Erosketak (BUY) eta salmentak (SELL) bakarrik prozesatzen dira. Berrikusi errenkada hau brokerraren fitxategian eta, benetako eragiketa bada, zuzendu haren norabidea.",
+  "fifo.zero_quantity_buy": "⚠ 0 kopuruko erosketa: {{symbol}}{{isinSuffix}} {{date}} egunean. Ez da prozesatu.",
+  "fifo.zero_quantity_buy.hint": "Fitxategiko errenkadak ez du unitaterik erosten; beraz, ez du loterik sortzen eta haren komisioa ez da kontatzen. Benetan erosi bazenuen, berrikusi errenkada honen kopurua brokerraren fitxategian.",
+  "fifo.zero_quantity_sell": "⚠ 0 kopuruko salmenta: {{symbol}}{{isinSuffix}} {{date}} egunean. Ez da prozesatu.",
+  "fifo.zero_quantity_sell.hint": "Fitxategiko errenkadak ez du unitaterik saltzen; beraz, ez du loterik kontsumitzen eta haren komisioa ez da kontatzen. Benetan saldu bazenuen, berrikusi errenkada honen kopurua brokerraren fitxategian.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplikatua ({{date}})",
   "fifo.split_applied.hint":
     "Split-a lote guztiei aplikatu zaie. Kostu osoa mantentzen da — akzio kopurua bakarrik aldatzen da.",

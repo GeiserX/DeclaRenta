@@ -783,6 +783,10 @@ const ca: TranslationKeys = {
     "Operació roll processada correctament com a tancament de la posició anterior i obertura de la nova.",
   "fifo.unknown_direction": "⚠ Operació amb direcció desconeguda (\"{{buySell}}\"): {{symbol}} el {{date}}. No s'ha processat.",
   "fifo.unknown_direction.hint": "Només es processen compres (BUY) i vendes (SELL). Revisa aquesta fila al fitxer del broker i, si és una operació real, corregeix-ne la direcció.",
+  "fifo.zero_quantity_buy": "⚠ Compra amb quantitat 0: {{symbol}}{{isinSuffix}} el {{date}}. No s'ha processat.",
+  "fifo.zero_quantity_buy.hint": "La fila del fitxer no compra cap unitat, així que no crea cap lot i la seva comissió no es compta. Si realment vas comprar, revisa la quantitat d'aquesta fila al fitxer del broker.",
+  "fifo.zero_quantity_sell": "⚠ Venda amb quantitat 0: {{symbol}}{{isinSuffix}} el {{date}}. No s'ha processat.",
+  "fifo.zero_quantity_sell.hint": "La fila del fitxer no ven cap unitat, així que no consumeix cap lot i la seva comissió no es compta. Si realment vas vendre, revisa la quantitat d'aquesta fila al fitxer del broker.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) aplicat ({{date}})",
   "fifo.split_applied.hint":
     "Split aplicat a tots els lots. El cost total es manté — només canvia el nombre d'accions.",

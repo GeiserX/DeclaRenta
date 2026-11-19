@@ -781,6 +781,10 @@ const en: TranslationKeys = {
     "Roll operation processed correctly as a close of the previous position and an open of the new one.",
   "fifo.unknown_direction": '⚠ Trade with unknown direction ("{{buySell}}"): {{symbol}} on {{date}}. It was not processed.',
   "fifo.unknown_direction.hint": "Only purchases (BUY) and sales (SELL) are processed. Check this row in the broker file and, if it is a real trade, correct its direction.",
+  "fifo.zero_quantity_buy": "⚠ Purchase with quantity 0: {{symbol}}{{isinSuffix}} on {{date}}. It was not processed.",
+  "fifo.zero_quantity_buy.hint": "The file row buys no unit, so it creates no lot and its commission is not counted. If you really bought, check the quantity of this row in the broker file.",
+  "fifo.zero_quantity_sell": "⚠ Sale with quantity 0: {{symbol}}{{isinSuffix}} on {{date}}. It was not processed.",
+  "fifo.zero_quantity_sell.hint": "The file row sells no unit, so it consumes no lot and its commission is not counted. If you really sold, check the quantity of this row in the broker file.",
   "fifo.split_applied": "⚡ Split {{isin}} {{ratio}} ({{direction}}) applied ({{date}})",
   "fifo.split_applied.hint":
     "Split applied to all lots. The total cost is unchanged — only the number of shares changes.",

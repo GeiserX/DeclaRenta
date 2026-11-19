@@ -1913,6 +1913,9 @@ export class FxFifoEngine {
       // quantity × tradePrice × multiplier + taxes + commission (homogenized to
       // the share currency via the trade-date cross-rate when in another currency).
       const quantity = new Decimal(trade.quantity).abs();
+      // A buy of 0 shares books no lot in fifo.ts (#469), so the matching sale
+      // never unparks its commission: park nothing either (the mirror).
+      if (quantity.isZero()) continue;
       const pricePerShare = new Decimal(trade.tradePrice);
       const multiplier = new Decimal(trade.multiplier || "1");
       const taxes = new Decimal(trade.taxes || "0").abs();

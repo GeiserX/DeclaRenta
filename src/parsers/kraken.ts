@@ -23,6 +23,9 @@ import {
   findColumn,
   stripBom,
   timeOfDay,
+  quantityUnknownTrade,
+  quantityUnreadable,
+  tradeQuantityUnknownMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -239,6 +242,20 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     const tradeTime = timeOfDay(timeStr);
     const isSell = type === "sell";
 
+    // A blank or unreadable vol is no "0" (#469): the row is a trade of unknown
+    // size, named in the warning below; on a crypto-quoted pair the coin on the
+    // other side has no price either. An explicit 0 reaches FIFO, which names it.
+    if (quantityUnreadable(fields[cols.vol])) {
+      const legs = isFiat(quote) ? [{ symbol: base, sell: isSell }] : [{ symbol: base, sell: isSell }, { symbol: quote, sell: !isSell }];
+      for (const leg of legs) {
+        trades.push(quantityUnknownTrade({
+          tradeID: leg.symbol === base ? txid : `${txid}-${quote}`, symbol: leg.symbol, description: `${base}/${quote}`, isin: "",
+          assetCategory: "CRYPTO", currency: leg.symbol === base ? quote : base, tradeDate, tradeTime, buySell: leg.sell ? "SELL" : "BUY", exchange: "KRAKEN",
+        }));
+      }
+      continue;
+    }
+
     trades.push({
       tradeID: txid,
       accountId: "",
@@ -303,7 +320,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
   // A pair we couldn't split with certainty (no known quote suffix) was split by
   // a guess — warn so the user knows that trade may be mis-valued and can verify
   // it (skip-and-warn, three-tier message policy).
-  const parserMessages: TaxMessage[] = unrecognizedPairs.size > 0
+  const parserMessages: TaxMessage[] = [...(unrecognizedPairs.size > 0
     ? [{
         id: "kraken.unrecognized_pair",
         severity: "warning" as const,
@@ -311,7 +328,7 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la moneda o la divisa de cotización no son las indicadas, corrige su valor manualmente.",
         context: { count: String(unrecognizedPairs.size) },
       }]
-    : [];
+    : []), ...tradeQuantityUnknownMessages("Kraken", trades)];
 
   return {
     accountId: "",
