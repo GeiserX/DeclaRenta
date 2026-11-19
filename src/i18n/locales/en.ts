@@ -1069,6 +1069,10 @@ const en: TranslationKeys = {
     "Freedom24: {{count}} dividend(s) or coupon(s) have no usable withholding (tax_amount) and are calculated with no withholding: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
     "The square brackets show the withholding cell (tax_amount). It is not a number, or it is larger than the dividend amount (amount). DeclaRenta adds the full income, but does not know how much was withheld. So you do not underpay, but you lose the deduction for that withholding (box 0588, or 0597 if the security is Spanish). Take the withholding from the Freedom24 tax report and add it by hand in Renta Web.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: {{count}} cash_flows money movement(s) are not calculated: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRenta calculates only the trades (trades) and the dividends and coupons (corporate_actions) of the report. It does not calculate the cash_flows rows. It does not warn you about deposits to and withdrawals from your account, because they are not taxed. Each row of this warning can be an interest, a dividend, a coupon, a withholding or a fee. An interest or a dividend that is not in corporate_actions is income you must declare. Add it by hand in Renta Web. If the row repeats a dividend of corporate_actions, it is already calculated. A missing fee can only make you pay more.",
   "binance.unhandled_operation":
     "{{count}} Binance CSV movement(s) with unrecognized operations were skipped: {{operations}}.",
   "binance.unhandled_operation.hint":

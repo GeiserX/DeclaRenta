@@ -1071,6 +1071,10 @@ const ca: TranslationKeys = {
     "Freedom24: {{count}} dividend(s) o cupó(ns) no tenen una retenció (tax_amount) que es pugui fer servir i es calculen sense retenció: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
     "Entre claudàtors hi ha la cel·la de la retenció (tax_amount). No és un número, o és més gran que l'import (amount) del dividend. DeclaRenta suma l'ingrés complet, però no sap quant et van retenir. Així no pagues de menys, però perds la deducció per aquesta retenció (casella 0588, o 0597 si el valor és espanyol). Agafa la retenció de l'informe fiscal de Freedom24 i afegeix-la a mà a Renta Web.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: {{count}} moviment(s) de diners de cash_flows no es calculen: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRenta només calcula les operacions (trades) i els dividends i cupons (corporate_actions) de l'informe. No calcula les files de cash_flows. No t'avisa dels ingressos i les retirades de diners del teu compte, perquè no tributen. Cada fila d'aquest avís pot ser un interès, un dividend, un cupó, una retenció o una comissió. Un interès o un dividend que no és a corporate_actions és un ingrés que has de declarar. Afegeix-lo a mà a Renta Web. Si la fila repeteix un dividend de corporate_actions, ja està calculat. Una comissió que falta només et pot fer pagar més.",
   "binance.unhandled_operation":
     "S'han omès {{count}} moviment(s) del CSV de Binance amb operacions no reconegudes: {{operations}}.",
   "binance.unhandled_operation.hint":

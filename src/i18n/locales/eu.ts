@@ -1073,6 +1073,10 @@ const eu: TranslationKeys = {
     "Freedom24: {{count}} dibidendu edo kupoik ez dute atxikipen (tax_amount) erabilgarririk, eta atxikipenik gabe kalkulatzen dira: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
     "Kortxete artean dago atxikipenaren gelaxka (tax_amount). Ez da zenbaki bat, edo dibidenduaren zenbatekoa (amount) baino handiagoa da. DeclaRentak diru-sarrera osoa batzen du, baina ez daki zenbat atxiki zizuten. Horrela ez duzu gutxiago ordaintzen, baina atxikipen horren kenkaria galtzen duzu (0588 laukia, edo 0597 balorea espainiarra bada). Hartu atxikipena Freedom24-ren txosten fiskaletik eta gehitu eskuz Renta Web-en.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: cash_flows ataleko {{count}} diru-mugimendu ez dira kalkulatzen: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRentak txostenaren eragiketak (trades) eta dibidenduak eta kupoiak (corporate_actions) bakarrik kalkulatzen ditu. Ez ditu cash_flows ataleko errenkadak kalkulatzen. Ez dizu zure kontuko diru-sarrera eta diru-ateratzeen berri ematen, ez baitute zergarik ordaintzen. Abisu honetako errenkada bakoitza interes bat, dibidendu bat, kupoi bat, atxikipen bat edo komisio bat izan daiteke. corporate_actions atalean ez dagoen interes edo dibidendu bat aitortu behar duzun diru-sarrera da. Gehitu eskuz Renta Web-en. Errenkadak corporate_actions ataleko dibidendu bat errepikatzen badu, kalkulatuta dago jada. Falta den komisio batek gehiago ordainarazi diezazuke bakarrik.",
   "binance.unhandled_operation":
     "Binance-ren CSVko {{count}} mugimendu baztertu dira, eragiketa ezezagunak dituztelako: {{operations}}.",
   "binance.unhandled_operation.hint":

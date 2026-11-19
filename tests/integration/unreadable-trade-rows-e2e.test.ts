@@ -3056,3 +3056,152 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
     expect(isTranslationKey(FEE)).toBe(true);
   });
 });
+
+// Round 10 (Freedom24 sweep, #467): the price `p` went into tradePrice raw (a
+// missing one became "0", so a 270.60 € gain became a 1654.40 € loss; "" or
+// "abc" stopped the report); a missing curr_c was read as USD (a euro stock
+// or dividend converted at the dollar rate); every cash_flows row was dropped
+// with no word; a dividend description that is not text stopped the report.
+describe("#467 Freedom24 sweep: price, currency, cash flows and description", () => {
+  const F24_BUY = { date: "2024-03-15 09:30:00", ticker: "ACME.US", isin: "US0000000001", operation: "buy", p: "150.00", q: "10", curr_c: "USD", commission: "2.00", amount: "-1502.00", exchange: "NYSE" };
+  const F24_SELL = { ...F24_BUY, date: "2024-09-20 14:00:00", operation: "sell", p: "175.00", amount: "1748.00" };
+  const F24_DIV = { date: "2024-06-15 00:00:00", ticker: "ACME.US", isin: "US0000000001", type_id: "dividend", amount: "100.00", tax_amount: "15.00", curr_c: "USD", description: "Q2 Dividend" };
+  const f24 = (sections: { trades?: unknown[]; ca?: unknown[]; flows?: unknown[] }): Statement => freedom24Parser.parse(JSON.stringify({
+    report: { trades: { detailed: sections.trades ?? [] }, corporate_actions: { detailed: sections.ca ?? [] }, cash_flows: { detailed: sections.flows ?? [] } },
+  }));
+  const gains = (r: TaxReport): string[] => [r.capitalGains.transmissionValue.toFixed(2), r.capitalGains.netGainLoss.toFixed(2)];
+
+  it.each(METHODS)("[%s] control: buy 10 at 150 USD, sell 10 at 175 USD is a 270.60 € gain", (method) => {
+    const parsed = f24({ trades: [F24_BUY, F24_SELL] });
+    expect(parsed.parserMessages ?? []).toEqual([]);
+    expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["1922.80", "270.60"]);
+  });
+
+  const badPrices: [string, unknown, string][] = [
+    ["missing", undefined, "p: —"], ["empty", "", 'p: ""'], ["text", "abc", 'p: "abc"'], ["decimal comma", "175,00", 'p: "175,00"'],
+    ["null", null, "p: null"], ["negative", "-175", 'p: "-175"'], ["NaN", "NaN", 'p: "NaN"'], ["Infinity", "Infinity", 'p: "Infinity"'], ["an object", {}, "p: {}"],
+  ];
+  describe.each(badPrices)("a sale whose price is %s", (_label, p, cell) => {
+    it.each(METHODS)("[%s] is an unreadable row named by p: no sale at that price, no crash", (method) => {
+      const parsed = f24({ trades: [F24_BUY, { ...F24_SELL, p }] });
+      expect(parsed.trades.map((t) => [t.buySell, t.quantity, t.quantityUnknown ?? false])).toEqual([["BUY", "10", false], ["SELL", "0", true]]);
+      expect(unreadableRows(parsed)).toBe(`ACME (US0000000001) 20240920 [${cell}]`);
+      const r = run([[parsed, "Freedom24"]], 2024, method);
+      expect(r.capitalGains.disposals).toEqual([]);
+      expect(gains(r)).toEqual(["0.00", "0.00"]);
+    });
+  });
+
+  it.each(METHODS)("[%s] a buy with no price is an unreadable row, never a lot that cost 0", (method) => {
+    const parsed = f24({ trades: [{ ...F24_BUY, p: undefined }, F24_SELL] });
+    expect(unreadableRows(parsed)).toBe("ACME (US0000000001) 20240315 [p: —]");
+    expect(parsed.trades.map((t) => [t.buySell, t.quantity])).toEqual([["BUY", "0"], ["SELL", "-10"]]);
+    expect(() => run([[parsed, "Freedom24"]], 2024, method)).not.toThrow();
+  });
+
+  it.each(METHODS)("[%s] a sale with a written zero price is a corporate action not applied, never a sale for 0", (method) => {
+    for (const p of ["0", "0.00", 0]) {
+      const parsed = f24({ trades: [F24_BUY, { ...F24_SELL, p }] });
+      expect(parsed.parserMessages?.find((m) => m.id === "parser.corporate_action_not_applied")?.context?.rows)
+        .toBe(`ACME (US0000000001) 20240920 [p ${String(p)}: 10]`);
+      expect(unreadableRows(parsed)).toBeUndefined();
+      const r = run([[parsed, "Freedom24"]], 2024, method);
+      expect(r.capitalGains.disposals).toEqual([]);
+    }
+  });
+
+  it("a readable price keeps the file's text, a number price is read too", () => {
+    expect(f24({ trades: [F24_BUY, F24_SELL] }).trades.map((t) => t.tradePrice)).toEqual(["150.00", "175.00"]);
+    expect(f24({ trades: [{ ...F24_BUY, p: 150 }, { ...F24_SELL, p: " 175 " }] }).trades.map((t) => t.tradePrice)).toEqual(["150", "175"]);
+  });
+
+  const SAN_BUY = { ...F24_BUY, ticker: "SAN.MC", isin: "ES0113900J37", exchange: "BME" };
+  const SAN_SELL = { ...F24_SELL, ticker: "SAN.MC", isin: "ES0113900J37", exchange: "BME" };
+  it.each(METHODS)("[%s] a trade with no readable curr_c is an unreadable row, never a trade in dollars", (method) => {
+    expect(gains(run([[f24({ trades: [{ ...SAN_BUY, curr_c: "EUR" }, { ...SAN_SELL, curr_c: "EUR" }] }), "Freedom24"]], 2024, method))).toEqual(["1748.00", "246.00"]);
+    for (const [curr, cell] of [[undefined, "curr_c: —"], ["", 'curr_c: ""'], [null, "curr_c: null"], [978, "curr_c: 978"], ["euro", 'curr_c: "euro"']] as const) {
+      const parsed = f24({ trades: [{ ...SAN_BUY, curr_c: curr }, { ...SAN_SELL, curr_c: curr }] });
+      expect(unreadableRows(parsed)).toBe(`SAN (ES0113900J37) 20240315 [${cell}]; SAN (ES0113900J37) 20240920 [${cell}]`);
+      expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["0.00", "0.00"]);
+    }
+  });
+
+  it.each(METHODS)("[%s] a curr_c with spaces or in lower case is read: the 270.60 € gain", (method) => {
+    for (const curr of [" USD", "usd", "Usd "]) {
+      const parsed = f24({ trades: [{ ...F24_BUY, curr_c: curr }, { ...F24_SELL, curr_c: curr }] });
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      expect(parsed.trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+      expect(gains(run([[parsed, "Freedom24"]], 2024, method))).toEqual(["1922.80", "270.60"]);
+    }
+  });
+
+  it.each(METHODS)("[%s] a dividend with no readable curr_c is not booked and is named, never read as dollars", (method) => {
+    const SAP = { ...F24_DIV, ticker: "SAP.DE", isin: "DE0007164600", tax_amount: "26.38" };
+    expect(run([[f24({ ca: [{ ...SAP, curr_c: "EUR" }] }), "Freedom24"]], 2024, method).dividends.grossIncome.toFixed(2)).toBe("100.00");
+    expect(run([[f24({ ca: [{ ...SAP, curr_c: " eur" }] }), "Freedom24"]], 2024, method).dividends.grossIncome.toFixed(2)).toBe("100.00");
+    const parsed = f24({ ca: [{ ...SAP, curr_c: undefined }, { ...SAP, curr_c: "", amount: "x", date: "2024-06-16 00:00:00" }, { ...SAP, curr_c: null, tax_amount: undefined, date: "2024-06-17 00:00:00" }] });
+    expect(parsed.cashTransactions).toEqual([]);
+    expect(messageRows(parsed, "parser.cash_income_amount_unreadable")).toBe([
+      'dividend SAP (DE0007164600) 20240615 (tax_amount 26.38) [amount: "100.00", curr_c: —]',
+      'dividend SAP (DE0007164600) 20240616 (tax_amount 26.38) [amount: "x", curr_c: ""]',
+      'dividend SAP (DE0007164600) 20240617 [amount: "100.00", curr_c: null]',
+    ].join("; "));
+    expect(messageRows(parsed, "freedom24.dividend_amount_unreadable")).toBeUndefined();
+    const r = run([[parsed, "Freedom24"]], 2024, method);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+    expect(r.doubleTaxation.deduction.toFixed(2)).toBe("0.00");
+  });
+
+  it("a dividend with no security and no curr_c is named with its curr_c cell", () => {
+    const parsed = f24({ ca: [{ ...F24_DIV, ticker: "", isin: "", curr_c: undefined }] });
+    expect(messageRows(parsed, "parser.cash_row_unidentified")).toBe("dividend 100.00 [curr_c: —] (tax_amount 15.00) 20240615");
+  });
+
+  it.each(METHODS)("[%s] a dividend description that is not text gets the default one, never a crash", (method) => {
+    for (const description of [123, {}, [], true, "  "]) {
+      const parsed = f24({ ca: [{ ...F24_DIV, description }] });
+      expect(parsed.cashTransactions[0]!.description).toBe("US Dividend - ACME.US");
+      expect(run([[parsed, "Freedom24"]], 2024, method).dividends.grossIncome.toFixed(2)).toBe("110.00");
+    }
+    expect(f24({ ca: [{ ...F24_DIV, description: " Q2 Dividend " }] }).cashTransactions[0]!.description).toBe("Q2 Dividend");
+  });
+
+  it.each(METHODS)("[%s] a cash_flows row that is not a deposit or a withdrawal is named, never dropped with no word", (method) => {
+    const parsed = f24({ trades: [F24_BUY, F24_SELL], flows: [
+      { date: "2024-06-15 00:00:00", type_id: "interest", amount: "50.00", curr_c: "USD" },
+      { date: "2024-06-16 00:00:00", type_id: "dividend", ticker: "ACME.US", amount: 50, curr_c: "usd" },
+      { date: "2024-06-17 00:00:00", type_id: "commission", amount: "-5.00", curr_c: "USD" },
+      { date: "2024-01-02 00:00:00", type_id: "card_deposit", amount: "5000", curr_c: "EUR" },
+      { date: "2024-12-02 00:00:00", type_id: "withdrawal", amount: "-100", curr_c: "EUR" },
+      { date: "2024-12-03 00:00:00", type_id: "fee", amount: "0", curr_c: "EUR" },
+      { type: "coupon", amount: "7" },
+      null,
+    ] });
+    const warning = parsed.parserMessages?.find((m) => m.id === "freedom24.cash_flow_not_read");
+    expect(warning?.context).toEqual({ count: "5", rows: "interest 50.00 USD 20240615; dividend 50 USD 20240616; commission -5.00 USD 20240617; coupon 7 — —; — — — —" });
+    const r = run([[parsed, "Freedom24"]], 2024, method);
+    expect(r.messages.find((m) => m.id === "freedom24.cash_flow_not_read")?.context?.rows).toBe(warning?.context?.rows);
+    expect(gains(r)).toEqual(["1922.80", "270.60"]);
+    expect(r.dividends.grossIncome.toFixed(2)).toBe("0.00");
+  });
+
+  it("control: deposits, withdrawals, written zeros and an empty cash_flows give no warning", () => {
+    expect(f24({ flows: [{ type_id: "deposit", amount: "100" }, { type_id: "Withdrawal", amount: "-100" }, { type_id: "fee", amount: 0 }] }).parserMessages).toBeUndefined();
+    expect(f24({}).parserMessages).toBeUndefined();
+    expect(freedom24Parser.parse(JSON.stringify({ trades: { detailed: [] }, cash_flows: { detailed: "x" } })).parserMessages).toBeUndefined();
+  });
+
+  it("the cash-flows warning is the es locale and exists in the five locales", () => {
+    const parsed = f24({ flows: [{ date: "2024-06-15 00:00:00", type_id: "interest", amount: "50.00", curr_c: "USD" }] });
+    const m = parsed.parserMessages!.find((x) => x.id === "freedom24.cash_flow_not_read")!;
+    const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+    expect(m.message).toBe(fill((es as Record<string, string>)["freedom24.cash_flow_not_read"]!));
+    expect(m.hint).toBe((es as Record<string, string>)["freedom24.cash_flow_not_read.hint"]);
+    expect(isTranslationKey("freedom24.cash_flow_not_read") && isTranslationKey("freedom24.cash_flow_not_read.hint")).toBe(true);
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+      expect(locale["freedom24.cash_flow_not_read"]).toContain("{{rows}}");
+      expect(locale["freedom24.cash_flow_not_read"]).toContain("cash_flows");
+      expect(locale["freedom24.cash_flow_not_read.hint"]).toContain("Renta Web");
+    }
+  });
+});

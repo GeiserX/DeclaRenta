@@ -1071,6 +1071,10 @@ const gl: TranslationKeys = {
     "Freedom24: {{count}} dividendo(s) ou cupón(s) non teñen unha retención (tax_amount) que se poida usar e calcúlanse sen retención: {{rows}}.",
   "freedom24.tax_amount_unreadable.hint":
     "Entre corchetes vai a cela da retención (tax_amount). Non é un número, ou é maior que o importe (amount) do dividendo. DeclaRenta suma o ingreso completo, pero non sabe canto che retiveron. Así non pagas de menos, pero perdes a dedución por esa retención (casilla 0588, ou 0597 se o valor é español). Toma a retención do informe fiscal de Freedom24 e engádea a man en Renta Web.",
+  "freedom24.cash_flow_not_read":
+    "Freedom24: {{count}} movemento(s) de diñeiro de cash_flows non se calculan: {{rows}}.",
+  "freedom24.cash_flow_not_read.hint":
+    "DeclaRenta só calcula as operacións (trades) e os dividendos e cupóns (corporate_actions) do informe. Non calcula as filas de cash_flows. Non che avisa dos ingresos e as retiradas de diñeiro da túa conta, porque non tributan. Cada fila deste aviso pode ser un xuro, un dividendo, un cupón, unha retención ou unha comisión. Un xuro ou un dividendo que non está en corporate_actions é un ingreso que tes que declarar. Engádeo a man en Renta Web. Se a fila repite un dividendo de corporate_actions, xa está calculado. Unha comisión que falta só pode facerche pagar máis.",
   "binance.unhandled_operation":
     "Omitíronse {{count}} movemento(s) do CSV de Binance con operacións non recoñecidas: {{operations}}.",
   "binance.unhandled_operation.hint":

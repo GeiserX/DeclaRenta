@@ -589,6 +589,19 @@ práctico Renta 2025. The decisions, each pinned in
       readable `tax_amount` larger than the dividend's `amount` ("1e400",
       or "1.234,56" on 500) is treated the same way: it went to box 0597
       with no cap for a Spanish security.
+      A buy or sale whose price `p` is missing, empty, text, written with
+      a decimal comma, not finite or below zero is an unreadable row named
+      by `p`. Before, a missing price was read as 0, so a sale became a
+      full loss, and "" or "abc" stopped the whole report. A written zero
+      price is a corporate-action row, as in Flatex and DEGIRO. A trade or
+      dividend with no readable `curr_c` (missing, empty, null, not a
+      three-letter code) is never read as USD: the trade is an unreadable
+      row named by `curr_c`, and the dividend is not booked and is named by
+      `parser.cash_income_amount_unreadable` with its `amount` and `curr_c`
+      cells. " usd" is USD. Every `cash_flows` row that is not a deposit or
+      a withdrawal is named by `freedom24.cash_flow_not_read` (type,
+      amount, currency, date); before, every one was dropped with no word.
+      A written zero amount stays skipped.
     - Lightyear and Scalable Capital: a buy or sale with no date, ticker or
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also

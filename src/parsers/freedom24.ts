@@ -5,7 +5,8 @@
  * Freedom24 exports contain:
  * - report.trades.detailed[]: trade executions
  * - report.corporate_actions.detailed[]: dividends with tax
- * - report.cash_flows.detailed[]: deposits, withdrawals, fees
+ * - report.cash_flows.detailed[]: deposits, withdrawals, fees (not booked:
+ *   every row that is not a deposit or a withdrawal is named, #467)
  *
  * Ticker format: SYMBOL.EXCHANGE (e.g., SPY.US)
  */
@@ -26,6 +27,8 @@ import {
   dropUndatedCash,
   corporateActionTrade,
   cashRowsUnidentifiedMessages,
+  cashIncomeRowText,
+  cashIncomeAmountUnreadableMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -56,16 +59,25 @@ interface Freedom24CorporateAction {
   description?: string;
 }
 
+/** A cash_flows row as far as the parser reads it: only to name it (#467). */
+interface Freedom24CashFlow {
+  date?: unknown;
+  type_id?: unknown;
+  type?: unknown;
+  amount?: unknown;
+  curr_c?: unknown;
+}
+
 interface Freedom24Report {
   report?: {
     trades?: { detailed?: Freedom24Trade[] };
     corporate_actions?: { detailed?: Freedom24CorporateAction[] };
-    cash_flows?: { detailed?: unknown[] };
+    cash_flows?: { detailed?: unknown };
   };
   // Alternative flat structure
   trades?: { detailed?: Freedom24Trade[] };
   corporate_actions?: { detailed?: Freedom24CorporateAction[] };
-  cash_flows?: { detailed?: unknown[] };
+  cash_flows?: { detailed?: unknown };
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +92,22 @@ function convertFreedom24Date(dateStr: string): string {
 function str(val: string | number | undefined): string {
   if (val === undefined) return "0";
   return String(val).trim();
+}
+
+/** A JSON cell as text: a string trimmed, a number written out, else "". */
+function text(val: unknown): string {
+  return typeof val === "string" ? val.trim() : typeof val === "number" ? String(val) : "";
+}
+
+/**
+ * The currency code a curr_c cell gives: three letters, trimmed and in upper
+ * case (" usd" is USD). A missing, empty or other cell gives "": it is never
+ * guessed as USD, which converted a euro stock or dividend at the dollar
+ * rate (#467).
+ */
+function currencyOf(val: unknown): string {
+  const code = typeof val === "string" ? val.trim().toUpperCase() : "";
+  return /^[A-Z]{3}$/.test(code) ? code : "";
 }
 
 function parseSymbol(ticker: string): { symbol: string; exchange: string } {
@@ -128,6 +156,8 @@ function parseFreedom24(input: string): Statement {
   // Dividend and coupon rows booked with no withholding because their
   // tax_amount cell cannot be read (#467).
   const unreadableTaxCash: string[] = [];
+  // Dividend and coupon rows whose curr_c cannot be read (#467).
+  const unreadableCurrencyCash: string[] = [];
 
   // Parse trades
   const rawTrades = root.trades?.detailed ?? [];
@@ -145,8 +175,11 @@ function parseFreedom24(input: string): Statement {
     const { symbol, exchange } = parseSymbol(ticker);
     const isin = typeof t.isin === "string" ? t.isin.trim() : "";
     const quantity = str(t.q);
-    const price = str(t.p);
-    const currency = t.curr_c || "USD";
+    // The price is read, never passed on raw: a missing one became "0" (a
+    // sale at 0, a full loss), and "" or "abc" stopped the report (#467).
+    const priceText = typeof t.p === "string" || typeof t.p === "number" ? String(t.p).trim() : "";
+    const priceValue = toFiniteDecimalString(priceText, "", false);
+    const currency = currencyOf(t.curr_c);
     const commission = str(t.commission);
     const amount = str(t.amount);
     const isSell = operation === "sell";
@@ -154,6 +187,7 @@ function parseFreedom24(input: string): Statement {
     const cell = !isReadableTradeDate(tradeDate) ? unreadableCell("date", t.date)
       : !ticker ? unreadableCell("ticker", t.ticker)
       : operation !== "buy" && operation !== "sell" ? unreadableCell("operation", t.operation)
+      : !currency ? unreadableCell("curr_c", t.curr_c)
       : undefined;
     // An operation that is neither a buy nor a sale with a written zero
     // quantity moves no shares: skipped.
@@ -162,7 +196,7 @@ function parseFreedom24(input: string): Statement {
     if (cell !== undefined) {
       trades.push(unreadableTrade({
         tradeID: `freedom24-${tradeDate}-${i}`,
-        symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+        symbol, description: ticker, isin, assetCategory: "STK", currency: currency || "EUR", tradeDate,
         ...(operation === "buy" || operation === "sell" ? { buySell: isSell ? "SELL" as const : "BUY" as const } : {}),
         exchange: t.exchange || exchange,
       }, cell));
@@ -183,6 +217,27 @@ function parseFreedom24(input: string): Statement {
       continue;
     }
 
+    // A written zero price moves shares for no money (bonus shares, a
+    // delivery): kept as a corporate action not applied, as Flatex and
+    // DEGIRO do, never a sale for 0. A price that is missing, empty, no
+    // number or below zero makes the row unreadable, named by p (#467).
+    if (priceValue !== "" && toFiniteDecimal(priceValue, "0", false).isZero()) {
+      trades.push(corporateActionTrade({
+        tradeID: `freedom24-${tradeDate}-${i}`,
+        symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+        buySell: isSell ? "SELL" : "BUY", exchange: t.exchange || exchange,
+      }, `p ${priceText}`, String(t.q).trim()));
+      continue;
+    }
+    if (priceValue === "" || toFiniteDecimal(priceValue, "0", false).isNegative()) {
+      trades.push(unreadableTrade({
+        tradeID: `freedom24-${tradeDate}-${i}`,
+        symbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate,
+        buySell: isSell ? "SELL" : "BUY", exchange: t.exchange || exchange,
+      }, unreadableCell("p", t.p)));
+      continue;
+    }
+
     const commDec = toFiniteDecimal(commission);
 
     trades.push({
@@ -196,7 +251,7 @@ function parseFreedom24(input: string): Statement {
       tradeDate,
       settlementDate: tradeDate,
       quantity: isSell ? qtyDec.neg().toString() : qtyDec.toString(),
-      tradePrice: price,
+      tradePrice: priceText,
       tradeMoney: amount || "0",
       proceeds: isSell ? amount || "0" : "0",
       cost: isSell ? "0" : amount || "0",
@@ -228,7 +283,8 @@ function parseFreedom24(input: string): Statement {
     // out, named with its amount, by dropUndatedCash below (#467).
     const dateRaw = typeof ca.date === "string" ? ca.date.trim() : "";
     const tradeDate = convertFreedom24Date(dateRaw);
-    const currency = ca.curr_c || "USD";
+    const currency = currencyOf(ca.curr_c);
+    const currencyCell = unreadableCell("curr_c", ca.curr_c);
     const { symbol: tickerSymbol, exchange } = parseSymbol(ticker);
 
     // Every corporate action that is not a dividend or a coupon (a split, a
@@ -246,7 +302,7 @@ function parseFreedom24(input: string): Statement {
       if (!typeId) skippedMalformed++;
       trades.push(corporateActionTrade({
         tradeID: `freedom24-ca-${tradeDate}-${i}`,
-        symbol: tickerSymbol, description: ticker, isin, assetCategory: "STK", currency, tradeDate, exchange,
+        symbol: tickerSymbol, description: ticker, isin, assetCategory: "STK", currency: currency || "EUR", tradeDate, exchange,
       }, typeId ? typeIdText : "type_id", typeId ? "" : unreadableCell("type_id", ca.type_id).slice("type_id: ".length)));
       continue;
     }
@@ -276,11 +332,20 @@ function parseFreedom24(input: string): Statement {
     // A dividend with no ticker goes by its ISIN; with neither it is named,
     // never dropped with no word (#467).
     if (!ticker && !isin) {
-      if (!amountReadable || !toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amountText} ${currency}${tax} ${tradeDate || "—"}`);
+      if (!amountReadable || !toFiniteDecimal(amount).isZero() || tax) unidentifiedCash.push(`${typeIdText} ${amountText} ${currency || `[${currencyCell}]`}${tax} ${tradeDate || "—"}`);
       continue;
     }
     const security = ticker || isin;
     const symbol = ticker ? tickerSymbol : isin;
+    // A dividend with no readable curr_c is not booked: read as USD, a euro
+    // dividend lost 8 % of its income and of its withholding. It is named
+    // by its amount and curr_c cells, as they are in the file (#467).
+    if (!currency) {
+      const taxShown = taxUnreadable ? unreadableCell("tax_amount", ca.tax_amount) : tax ? `tax_amount ${taxAmount}` : "";
+      unreadableCurrencyCash.push(cashIncomeRowText(typeIdText, isin ? (ticker ? `${tickerSymbol} (${isin})` : isin) : tickerSymbol, "",
+        tradeDate, [unreadableCell("amount", ca.amount), currencyCell], taxShown));
+      continue;
+    }
     if (!amountReadable) {
       unreadableAmountCash.push(`${typeIdText} ${isin ? (ticker ? `${tickerSymbol} (${isin})` : isin) : tickerSymbol} ${currency} ${tradeDate || "—"}${tax} ${amountText}`);
       continue;
@@ -296,7 +361,9 @@ function parseFreedom24(input: string): Statement {
       transactionID: `freedom24-div-${tradeDate}-${isin}-${i}`,
       accountId: "",
       symbol,
-      description: ca.description || `${isinCountry} Dividend - ${security}`,
+      // The cast JSON may carry a number or an object: the engine reads the
+      // description as text, so anything else stopped the report (#467).
+      description: typeof ca.description === "string" && ca.description.trim() ? ca.description.trim() : `${isinCountry} Dividend - ${security}`,
       isin,
       currency,
       dateTime: tradeDate,
@@ -322,6 +389,24 @@ function parseFreedom24(input: string): Statement {
         fxRateToBase: "1",
         type: "Withholding Tax",
       });
+    }
+  }
+
+  // Cash flows are not booked. A deposit or a withdrawal is no income. Any
+  // other row (an interest, a dividend, a coupon, a tax, a fee, an unknown
+  // type) is named with its type, amount, currency and date, never dropped
+  // with no word (#467). A written zero amount stays skipped.
+  const flowsNotRead: string[] = [];
+  const rawFlows: unknown = root.cash_flows?.detailed;
+  if (Array.isArray(rawFlows)) {
+    for (const row of rawFlows as unknown[]) {
+      const flow: Freedom24CashFlow = typeof row === "object" && row !== null ? row : {};
+      const type = text(flow.type_id) || text(flow.type);
+      if (/deposit|withdraw/i.test(type)) continue;
+      const amount = text(flow.amount);
+      const amountValue = toFiniteDecimalString(amount, "", false);
+      if (amountValue !== "" && toFiniteDecimal(amountValue, "0", false).isZero()) continue;
+      flowsNotRead.push(`${type || "—"} ${amount || "—"} ${text(flow.curr_c).toUpperCase() || "—"} ${convertFreedom24Date(text(flow.date)) || "—"}`);
     }
   }
 
@@ -357,11 +442,23 @@ function parseFreedom24(input: string): Statement {
       context: { count, rows },
     });
   }
+  if (flowsNotRead.length > 0) {
+    const count = String(flowsNotRead.length);
+    const rows = flowsNotRead.join("; ");
+    parserMessages.push({
+      id: "freedom24.cash_flow_not_read",
+      severity: "warning" as const,
+      message: `Freedom24: ${count} movimiento(s) de dinero de cash_flows no se calculan: ${rows}.`,
+      hint: "DeclaRenta solo calcula las operaciones (trades) y los dividendos y cupones (corporate_actions) del informe. No calcula las filas de cash_flows. No te avisa de los ingresos y las retiradas de dinero de tu cuenta, porque no tributan. Cada fila de este aviso puede ser un interés, un dividendo, un cupón, una retención o una comisión. Un interés o un dividendo que no está en corporate_actions es un ingreso que tienes que declarar. Añádelo a mano en Renta Web. Si la fila repite un dividendo de corporate_actions, ya está calculado. Una comisión que falta solo puede hacerte pagar más.",
+      context: { count, rows },
+    });
+  }
   markUndatedTrades(trades, "date");
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Freedom24", trades),
     ...dropUndatedCash("Freedom24", cashTransactions, "date"),
     ...cashRowsUnidentifiedMessages("Freedom24", unidentifiedCash),
+    ...cashIncomeAmountUnreadableMessages("Freedom24", unreadableCurrencyCash),
   );
 
   return {
