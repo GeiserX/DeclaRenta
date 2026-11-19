@@ -129,6 +129,25 @@ export function finiteDisposalAmounts(d: Pick<FifoDisposal, "proceedsEur" | "cos
   return { proceeds, cost, gainLoss: proceeds.minus(cost), excluded: true };
 }
 
+/**
+ * One sale's amounts as the boxes count them, for an output that lists every
+ * sale (the CLI JSON, the CSV, both PDFs): null where the boxes add nothing.
+ * The proceeds are null when they are left out, and then the cost and the
+ * result too (a cost with no proceeds is no loss); the cost alone is null
+ * when only it is left out, and the result is then the proceeds. Each column
+ * then adds up to its box, and no row prints «NaN» or a 2000-digit figure
+ * (#469, #470). Every amount of an ordinary sale is its own.
+ */
+export function countedDisposalAmounts(d: Pick<FifoDisposal, "proceedsEur" | "costBasisEur" | "gainLossEur">): {
+  proceeds: Decimal | null;
+  cost: Decimal | null;
+  gainLoss: Decimal | null;
+} {
+  if (!isCountableAmount(d.proceedsEur)) return { proceeds: null, cost: null, gainLoss: null };
+  const { gainLoss } = finiteDisposalAmounts(d);
+  return { proceeds: d.proceedsEur, cost: isCountableAmount(d.costBasisEur) ? d.costBasisEur : null, gainLoss };
+}
+
 function accumulate(block: CasillaBlock, d: FifoDisposal): void {
   const { proceeds, cost, gainLoss } = finiteDisposalAmounts(d);
   block.transmissionValue = block.transmissionValue.plus(proceeds);
