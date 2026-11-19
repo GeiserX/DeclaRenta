@@ -250,10 +250,27 @@ transmission that releases them.
   to neither kind of market: one traded only on OTC Markets, or listed only on
   the London Stock Exchange, SIX, Toronto or Tokyo. Letter g gives it 1 year,
   the engine 2 months (#452).
-- **Crypto window.** The engine gives crypto ±1 year. Crypto is no «valor o
-  participación», so letters f and g do not apply: art. 33.5.e («elementos
-  patrimoniales») counts only a repurchase within the year after the sale, so
-  a buy before the sale should not block (#457, not handled here).
+- **Crypto window (handled).** Crypto is no «valor o participación» (DGT
+  V0648-24, V0525-25), so letters f and g do not apply. The engine applies art.
+  33.5.e: only a repurchase of the same coin (the `CRYPTO:<SYMBOL>` key, any
+  exchange) in the year after the sale counts, de fecha a fecha with the end
+  day included, and a buy before the sale or on the sale day never blocks
+  (`looksBack` in `wash-sale.ts`, #457). The window end, the past-data warning
+  and the 30 June split did not move. This is a deduction, not a holding: no
+  consulta names crypto and art. 33.5 together; V1613-25 applies letter e
+  «y no las letras f) y g)» to dollars, the closest fungible non-security.
+  Open points it leaves: (A) letter e has its own release sentence («se
+  integrará cuando se produzca la posterior transmisión del elemento
+  patrimonial», without the f/g «que permanezcan»); the engine keeps the #451
+  definitive test. It never releases earlier than the reading "any later sale
+  releases", which is not built. It can release before the reacquired units
+  are sold: a later definitive sale of older units releases the loss while
+  the rebought coin is still held. The reading "the sale of the reacquired
+  element" (FIFO lot identification, V1550-25) would release nothing until
+  those units are sold. (B) A partial reacquisition stays
+  proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
+  reward receipts are no repurchase (reward lots stay out of
+  `washSaleTrades`), the less strict choice, which no source settles.
 - **Same-day intraday** sell-then-rebuy still excluded (no intraday timestamps).
   This now also covers the definitive test: the DGT treats a buy on the sale day
   as a rebuy that makes the sale non-definitive (V0571-21, 11/08/2020), and the

@@ -33,7 +33,7 @@ DeclaRenta automatiza todo esto.
 | 0029 | Dividendos brutos de acciones extranjeras |
 | 0027 | Intereses de cuentas, depósitos y activos financieros (Art. 25.2 LIRPF) |
 | — | Intereses pagados al broker (margen, no deducible — informativo) |
-| — | Pérdidas bloqueadas por regla anti-churning (Art. 33.5.f/g) — informativo, no hay casilla agregada en Renta Web |
+| — | Pérdidas bloqueadas por regla anti-churning (Art. 33.5.f/g; 33.5.e en cripto) — informativo, no hay casilla agregada en Renta Web |
 | 0588 | Deducción por doble imposición internacional |
 
 > La casilla **0327** es un campo de texto (denominación de los valores), no un importe. Las ganancias por tipo de cambio (Art. 33.1 LIRPF) se declaran junto a los «otros elementos patrimoniales» en las casillas 1633/1637.
@@ -44,7 +44,7 @@ Referencia completa de cada casilla, con fórmulas y base legal: [casillas.md](c
 
 - **FIFO estricto** con tipos de cambio ECB oficiales por fecha de operación
 - **Todos los tipos de activo**: acciones, ETFs, opciones, futuros, forex, bonos, CFDs y criptomonedas
-- **Regla anti-churning** (Art. 33.5.f/g LIRPF): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (admitido a negociación en un mercado regulado del Espacio Económico Europeo o en un mercado declarado equivalente por la Comisión Europea, como NYSE o Nasdaq: DGT V0778-25) o 1 año (en ninguno de ellos: no cotizados, solo OTC, o solo en una bolsa de un tercer país sin equivalencia, como Londres, SIX o Toronto). DeclaRenta no sabe en qué mercado cotiza cada valor y aplica 2 meses a todo valor con ISIN: si el tuyo solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, revisa a mano las recompras de entre 2 meses y 1 año, porque esa pérdida también se bloquea ([issue #452](https://github.com/GeiserX/DeclaRenta/issues/452)). Solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se integra, primero la más antigua, a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva); si se recompra parte, solo cuentan las acciones no recompradas. Excluye derivados y forex
+- **Regla anti-churning** (Art. 33.5.f/g LIRPF; en las criptomonedas, art. 33.5.e): bloqueo **proporcional** de la pérdida si se recompra el mismo valor en 2 meses (admitido a negociación en un mercado regulado del Espacio Económico Europeo o en un mercado declarado equivalente por la Comisión Europea, como NYSE o Nasdaq: DGT V0778-25) o 1 año (en ninguno de ellos: no cotizados, solo OTC, o solo en una bolsa de un tercer país sin equivalencia, como Londres, SIX o Toronto). DeclaRenta no sabe en qué mercado cotiza cada valor y aplica 2 meses a todo valor con ISIN: si el tuyo solo cotiza en Londres, SIX, Toronto, Tokio u OTC Markets, revisa a mano las recompras de entre 2 meses y 1 año, porque esa pérdida también se bloquea ([issue #452](https://github.com/GeiserX/DeclaRenta/issues/452)). En las criptomonedas solo cuenta la recompra de la misma criptomoneda en el año siguiente a la venta, nunca una compra anterior (art. 33.5.e, [issue #457](https://github.com/GeiserX/DeclaRenta/issues/457)). Solo se difiere la parte correspondiente a la cantidad recomprada. La pérdida diferida no se suma al coste: se integra, primero la más antigua, a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva); si se recompra parte, solo cuentan las acciones no recompradas. Excluye derivados y forex
 - **Doble imposición** (Art. 80 LIRPF): deducción por retenciones en origen, desglosado por país
 - **Stock splits**: forward y reverse (tipos FS y RS de IBKR); las fracciones de acción conservan su coste y, si el split cambia el ISIN, los lotes pasan al nuevo
 - **Corporate actions**: fusiones (transferencia de coste) y spin-offs (distribución proporcional)
@@ -112,7 +112,7 @@ Mediante la opción `--prior-losses` del CLI, puedes proporcionar un fichero JSO
 4. Aplica compensación cruzada de las pérdidas anteriores. El límite del 25% se calcula sobre el saldo positivo del año antes de compensar y es uno solo, compartido con el paso 2.
 5. Añade al arrastre lo que quede del saldo negativo del ejercicio.
 
-Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f) no cuentan como pérdida del año: se integran a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva).
+Las ganancias por divisa (casillas 1633/1637) cuentan en el saldo de ganancias y pérdidas patrimoniales, y las pérdidas bloqueadas por la regla antiaplicación (Art. 33.5.f/g, o 33.5.e en las criptomonedas) no cuentan como pérdida del año: se integran a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva).
 
 El formato del fichero JSON es:
 
@@ -184,6 +184,7 @@ DeclaRenta implementa las siguientes normas de la legislación fiscal española:
 | Art. 25.2 LIRPF | Rendimientos del capital mobiliario: intereses de cuentas, depósitos y activos financieros. |
 | Art. 26.1.a LIRPF | Gastos deducibles de los rendimientos del capital mobiliario (gastos de administración y custodia). |
 | Art. 33.5.f/g LIRPF | Norma anti-churning: no se computa la parte proporcional de la pérdida por venta de valores si se recompran homogéneos en 2 meses (mercado regulado del Espacio Económico Europeo o mercado de un tercer país declarado equivalente, como NYSE o Nasdaq: DGT V0778-25) o 1 año (en ningún mercado de esos: no cotizados, solo OTC, o solo en una bolsa de un tercer país sin equivalencia, como Londres, SIX o Toronto). La pérdida bloqueada se difiere y se integra, primero la más antigua, a medida que se venden acciones del mismo valor que ninguna recompra en su plazo cubre (transmisión definitiva). |
+| Art. 33.5.e LIRPF | Criptomonedas: la pérdida no se computa si se recompra la misma criptomoneda en el año siguiente a la venta; las compras anteriores no cuentan. Las criptomonedas no son valores (DGT V0525-25), así que no les alcanzan las letras f y g. |
 | Art. 35 LIRPF | Transmisiones onerosas: valor de transmisión y valor de adquisición de elementos patrimoniales. |
 | Art. 37.2 LIRPF | Método FIFO obligatorio para valores homogéneos: las primeras adquiridas se consideran las primeras transmitidas. |
 | Art. 46 LIRPF | Base del ahorro: ganancias y pérdidas patrimoniales derivadas de transmisión de elementos patrimoniales. |

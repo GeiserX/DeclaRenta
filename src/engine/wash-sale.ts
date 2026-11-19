@@ -1,5 +1,5 @@
 /**
- * Anti-churning rule detector (Art. 33.5.f/g LIRPF) — PROPORTIONAL blocking.
+ * Anti-churning rule detector (Art. 33.5.e/f/g LIRPF) — PROPORTIONAL blocking.
  *
  * Spanish tax law blocks capital losses if homogeneous securities are
  * repurchased within:
@@ -11,9 +11,13 @@
  * - **1 year** before or after the sale — for securities admitted to neither
  *   (33.5.g): unlisted shares, OTC-only securities, shares listed only on a
  *   third-country market with no equivalence decision (London, SIX, Toronto).
- * Crypto is no «valor o participación»: the law applies 33.5.e to it (only a
- * repurchase in the year after the sale counts); the engine gives it ±1 year
- * (#457).
+ * Crypto is no «valor o participación» (DGT V0525-25, V0648-24), so letters f
+ * and g do not reach it; the engine applies 33.5.e to it (#457): only a
+ * repurchase of the same coin, on any exchange, in the year after the sale
+ * counts (de fecha a fecha, end day included), never a buy before the sale.
+ * No consulta names crypto and art. 33.5 together: this is a deduction from
+ * that doctrine and from V1613-25 (letter e, «y no las letras f) y g)», for
+ * dollars), not a holding.
  *
  * The block is **proportional to the repurchased quantity** ("por paquetes",
  * DGT V0913-08): sell 100 at a loss, rebuy 30 → only the loss on 30 is deferred,
@@ -167,7 +171,7 @@ interface PendingLoss {
 /**
  * Detect wash sales: compute PROPORTIONAL blocked losses and release pending
  * losses on definitive transmissions, in ONE chronological pass (Art. 33.5.f/g
- * LIRPF).
+ * LIRPF; 33.5.e for crypto, whose window holds only the year after the sale).
  *
  * Per homogeneous key the pass keeps (a) a FIFO budget of in-window repurchase
  * quantities and (b) a queue of pending losses, oldest first, counted in shares.
@@ -507,7 +511,9 @@ export function detectWashSales(
     if (buyEvents && need.greaterThan(0)) {
       const first = result[idxs[0]!]!;
       const months = windowMonths(first.assetCategory, first.isin);
-      const windowStart = addMonths(sellDate, -months).getTime();
+      // Art. 33.5.e (#457): for crypto only a buy in the year after the sale
+      // counts, so its window starts at the sale and the pre-sale pass is empty.
+      const windowStart = looksBack(first.assetCategory) ? addMonths(sellDate, -months).getTime() : sellTime;
       const windowEnd = addMonths(sellDate, months).getTime();
 
       // Consume repurchase quantity from in-window buys, excluding any buy on the
@@ -1266,11 +1272,11 @@ function buyQtyConversionToSellUnits(
  *  - **1 year (12 months)** on neither (unlisted shares, OTC-only securities
  *    such as OTC Markets / pink sheets, shares listed only on the London Stock
  *    Exchange, SIX or Toronto).
- * Crypto gets 12 months here; the law applies 33.5.e to it, which counts only
- * a repurchase in the year after the sale (#457, not handled).
+ * Crypto gets 12 months too, but under 33.5.e: the window runs from the sale to
+ * 12 months after it and never looks back (`looksBack`, #457).
  *
  * We have no reliable "is listed" flag from the brokers, so we use a heuristic:
- *  - CRYPTO → always unlisted (12 months).
+ *  - CRYPTO → 12 months, after the sale only (33.5.e).
  *  - STK/FUND/BOND WITH a real ISIN → treated as listed (2 months).
  *  - Anything else with NO ISIN → treated as unlisted (12 months).
  *
@@ -1287,6 +1293,16 @@ function windowMonths(assetCategory: string, isin: string): number {
   if (isin && LISTED_CATEGORIES.has(assetCategory)) return 2;
   // No ISIN (and not a recognized listed category) → assume unlisted.
   return isin ? 2 : 12;
+}
+
+/**
+ * Whether the window also reaches back before the sale. Letters f and g count
+ * «valores homogéneos» bought in the months «anteriores o posteriores»; letter e,
+ * which applies to crypto, counts only a reacquisition «dentro del año siguiente
+ * a la fecha de dicha transmisión» (#457).
+ */
+function looksBack(assetCategory: string): boolean {
+  return assetCategory !== "CRYPTO";
 }
 
 function homogeneousKey(isin: string, symbol: string, assetCategory: string): string {

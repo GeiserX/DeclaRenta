@@ -186,7 +186,8 @@ export interface FifoDisposal {
   washSaleBlocked: boolean;
   /**
    * Portion of THIS disposal's loss deferred now by anti-churning, proportional
-   * to the homogeneous quantity repurchased within the ±2-month/±1-year window
+   * to the homogeneous quantity repurchased within the ±2-month/±1-year window,
+   * or the year after the sale for crypto (art. 33.5.e)
    * (DGT V0913-08 "por paquetes"): `|gainLossEur| × absorbed/quantity`, with
    * `0 ≤ blockedLossEur ≤ |gainLossEur|`. A non-loss disposal carries 0. This is
    * the amount added BACK to the deductible base (deferred, not deducted now).
