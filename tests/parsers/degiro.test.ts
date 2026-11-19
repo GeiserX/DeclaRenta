@@ -443,8 +443,9 @@ describe("degiroParser", () => {
 
     it("should parse trades from the export", () => {
       const result = degiroParser.parse(sampleCsv);
-      // 13 data rows minus 1 zero-price rights assignment = 12 trades
-      expect(result.trades.length).toBe(12);
+      // 13 data rows: 12 trades plus the zero-price rights assignment, kept
+      // as a row that books nothing (#467)
+      expect(result.trades.length).toBe(13);
     });
 
     it("should parse USD buy with FX rate correctly", () => {
@@ -479,10 +480,12 @@ describe("degiroParser", () => {
       expect(eurTrade.fxRateToBase).toBe("1");
     });
 
-    it("should skip zero-price rights assignments", () => {
+    it("should book nothing for a zero-price rights assignment, and name it (#467)", () => {
       const result = degiroParser.parse(sampleCsv);
-      const rights = result.trades.find((t) => t.symbol.includes("RTS"));
-      expect(rights).toBeUndefined();
+      const rights = result.trades.find((t) => t.symbol.includes("RTS"))!;
+      expect([rights.quantity, rights.quantityUnknown, rights.tradeMoney, rights.cost]).toEqual(["0", true, "0", "0"]);
+      expect(result.parserMessages?.find((m) => m.id === "parser.corporate_action_not_applied")?.context?.rows)
+        .toBe("ZETA ENERGY SA-RTS (XX0000000009) 20230707 [Precio 0.0000: 42]");
     });
 
     it("should parse commission correctly", () => {

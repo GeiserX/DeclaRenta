@@ -44,6 +44,7 @@ import {
   corporateActionTrade,
   markUndatedTrades,
   dropUndatedCash,
+  cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -179,6 +180,8 @@ function parseTrading212Csv(lines: string[]): Statement {
   // Total is in a currency that differs from the instrument's — we can derive
   // neither a per-share price nor usable trade money, so the row is unresolvable.
   let unresolvedPriceSkipped = 0;
+  // Dividend and withholding rows with no ticker and no ISIN (#467).
+  const unidentifiedCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -232,13 +235,16 @@ function parseTrading212Csv(lines: string[]): Statement {
     // A row of an unknown action that writes a zero share count moves no
     // shares and stays skipped, as does one that names no security. One that
     // names its security only by Name is kept when it writes a share count.
+    // One with an empty share cell is a cash row ("Result adjustment", a fee,
+    // a tax): it moves no shares and stays skipped, as it was.
     const buy = isBuyAction(action);
     const sell = isSellAction(action);
     const otherAction = !buy && !sell && !isDividendTaxAction(action) && !isDividendAction(action) && !isInterestAction(action);
     const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
     const movesNoShares = !sharesUnreadable && new Decimal(sharesStr).isZero();
     const named = ticker || isin ? true : name !== "" && !sharesUnreadable;
-    if (otherAction && (!named || movesNoShares)) continue;
+    const sharesEmpty = (fields[cols.shares] ?? "").trim() === "";
+    if (otherAction && (!named || movesNoShares || sharesEmpty)) continue;
     const unreadableCellOf = (): string | undefined => {
       if (!timeRaw) return unreadableCell(headers[cols.time] ?? "Time", timeRaw);
       if (otherAction) return unreadableCell(headers[cols.action] ?? "Action", action);
@@ -257,17 +263,24 @@ function parseTrading212Csv(lines: string[]): Statement {
     // A dividend, withholding or interest row with no readable Time is
     // booked with that Time and taken out, named, by dropUndatedCash below.
 
+    // A dividend or withholding row with no ticker goes by its ISIN; with
+    // neither it is named, never dropped with no word (#467).
+    const security = ticker || isin;
+
     // Withholding tax on dividend — must be checked before the generic dividend branch
     if (isDividendTaxAction(action)) {
-      if (!ticker) continue;
       const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
+      if (!security) {
+        unidentifiedCash.push(`${action} -${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        continue;
+      }
 
       cashTransactions.push({
         transactionID: `trading212-tax-${uniqueId}`,
         accountId: "",
-        symbol: ticker,
-        description: `Withholding tax - ${ticker}`,
+        symbol: security,
+        description: `Withholding tax - ${security}`,
         isin,
         currency: cashCurrency,
         dateTime: tradeDate,
@@ -281,15 +294,18 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     // Dividends
     if (isDividendAction(action)) {
-      if (!ticker) continue;
       const amountDec = new Decimal(totalStr).abs().div(cashDivisor);
       if (amountDec.isZero()) continue;
+      if (!security) {
+        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+        continue;
+      }
 
       cashTransactions.push({
         transactionID: `trading212-div-${uniqueId}`,
         accountId: "",
-        symbol: ticker,
-        description: `Dividend - ${ticker}`,
+        symbol: security,
+        description: `Dividend - ${security}`,
         isin,
         currency: cashCurrency,
         dateTime: tradeDate,
@@ -425,6 +441,7 @@ function parseTrading212Csv(lines: string[]): Statement {
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Trading 212", trades),
     ...dropUndatedCash("Trading 212", cashTransactions, headers[cols.time] ?? "Time"),
+    ...cashRowsUnidentifiedMessages("Trading 212", unidentifiedCash),
   );
 
   return {

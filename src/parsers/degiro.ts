@@ -31,6 +31,7 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
+  corporateActionTrade,
   markUndatedTrades,
   dropUndatedCash,
 } from "./csv-utils.js";
@@ -110,6 +111,18 @@ interface TransactionColumns {
   total: number;
   totalCurrency: number;
   orderId: number;
+}
+
+/**
+ * The asset category of a DEGIRO product name with the shape of an option
+ * ("AAPL C200.00 20DEC24", "ASML P600 17JAN25") or a future ("FDAX MAR25",
+ * "FESX DEC24"), or undefined. Used only for a row with no ISIN.
+ */
+function derivativeCategory(product: string): "OPT" | "FUT" | undefined {
+  const month = "(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)";
+  if (new RegExp(`\\s[CP]\\d+(?:[.,]\\d+)?\\s+\\d{1,2}${month}\\d{2,4}$`, "i").test(product.trim())) return "OPT";
+  if (new RegExp(`^[A-Z0-9]{2,6}\\s+${month}\\d{2}$`).test(product.trim())) return "FUT";
+  return undefined;
 }
 
 /**
@@ -287,8 +300,11 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       !toFiniteDecimal(price, "0", false).isZero() || orderId !== "";
     if (!isin && noIsinTradeLike) {
       const sell = toFiniteDecimal(value, "0", false).greaterThan(0) || toFiniteDecimal(quantity, "0", false).lessThan(0);
+      // An option or a future ("AAPL C200.00 20DEC24", "FDAX MAR25") is no
+      // share: kept as a derivative, so it does not stand for every share in
+      // the one-purchase evidence (#453), which derivatives never enter.
       trades.push(unreadableTrade({
-        tradeID: orderId, symbol: product, description: product, isin: "", assetCategory: "STK",
+        tradeID: orderId, symbol: product, description: product, isin: "", assetCategory: derivativeCategory(product) ?? "STK",
         currency: normalizeFractionalCurrency(currency || "EUR").currency, tradeDate, tradeTime,
         buySell: sell ? "SELL" : "BUY", exchange,
       }, unreadableCell(headers[cols.isin] ?? "ISIN", isin)));
@@ -308,16 +324,28 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
-    // Skip zero-price rows (rights assignments, non-tradeable conversions). A
-    // row whose price is empty or unreadable is still a buy or sale when it
-    // has an order id or a value (#453); a written zero price is always skipped,
-    // and so is a written zero quantity with no readable price ("0,00" reads
-    // "0.00", past the check above).
+    // A row whose price is empty or unreadable is still a buy or sale when it
+    // has an order id or a value (#453). A written zero quantity with no
+    // readable price is skipped ("0,00" reads "0.00", past the check above).
     const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
     const priceUnreadable = quantityUnreadable(fields[cols.price]);
     if (!quantityUnknown && toFiniteDecimal(quantity).isZero() && priceUnreadable) continue;
     const priceUnknown = priceUnreadable && tradeEvidence;
-    if ((price === "0" || price === "0.0000") && !priceUnknown) continue;
+    // A zero-price row (a rights assignment, a non-tradeable conversion, a
+    // transfer), whatever the spelling of the zero ("0", "0.00", "0,0000"),
+    // has no price to book but moves shares of its ISIN: kept as a row that
+    // books nothing and named, never skipped with no word (#467). Dropped, it
+    // would hide a holding at the anti-churning window start (#453). A row
+    // with neither a readable price nor an order id or a value is no trade.
+    if (toFiniteDecimal(price, "0", false).isZero() && !priceUnknown) {
+      if (!priceUnreadable && (quantityUnknown || !toFiniteDecimal(quantity, "0", false).isZero())) {
+        trades.push(corporateActionTrade({
+          tradeID: orderId, symbol: product, description: product, isin, assetCategory: "STK",
+          currency: normalizeFractionalCurrency(currency || "EUR").currency, tradeDate, tradeTime, exchange,
+        }, `${headers[cols.price] ?? "Price"} ${(fields[cols.price] ?? "").trim() || "—"}`, fields[cols.quantity] ?? ""));
+      }
+      continue;
+    }
 
     // Determine buy/sell: negative local value = you paid = buy; or negative
     // quantity = sell. toFiniteDecimal keeps the comparison finite-safe so a

@@ -34,6 +34,8 @@ import {
   markUndatedTrades,
   dropUndatedCash,
   isoDateCells,
+  slashDateOrder,
+  convertSlashDate,
 } from "./csv-utils.js";
 
 // We use dynamic import for xlsx to keep it optional
@@ -87,22 +89,20 @@ function sheetToRows(xlsx: typeof import("xlsx"), sheet: WorkSheet): string[][] 
   return xlsx.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: "" });
 }
 
-function parseEtoroDate(dateStr: string): string {
+/**
+ * An eToro date as YYYYMMDD. eToro writes "DD/MM/YYYY HH:MM:SS"; a slash date
+ * is read in the file's order (`order`, {@link slashDateOrder}: day first
+ * unless the file shows month first), the same way with or without a leading
+ * zero.
+ */
+function parseEtoroDate(dateStr: string, order: "DMY" | "MDY"): string {
   const trimmed = dateStr.trim();
-  // DD/MM/YYYY HH:MM:SS or DD/MM/YYYY
-  const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (slashMatch) {
-    return `${slashMatch[3]}${slashMatch[2]}${slashMatch[1]}`;
-  }
+  const slash = convertSlashDate(trimmed, order);
+  if (slash !== undefined) return slash;
   // YYYY-MM-DD
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
     return `${isoMatch[1]}${isoMatch[2]}${isoMatch[3]}`;
-  }
-  // MM/DD/YYYY (US format sometimes used)
-  const usMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (usMatch) {
-    return `${usMatch[3]}${usMatch[1]!.padStart(2, "0")}${usMatch[2]!.padStart(2, "0")}`;
   }
   return trimmed.replace(/[-/]/g, "").slice(0, 8);
 }
@@ -128,6 +128,8 @@ function parseClosedPositions(
   parserMessages: TaxMessage[],
 ): Trade[] {
   const rows = sheetToRows(xlsx, sheet);
+  // Every date of a sheet is in one order; no other cell has a slash date.
+  const order = slashDateOrder(rows.slice(1).flat());
   if (rows.length < 2) return [];
 
   const headers = rows[0]!;
@@ -255,8 +257,8 @@ function parseClosedPositions(
       : profitCol >= 0 ? (row[profitCol] ?? "0").trim()
       : profitEurCol >= 0 ? (row[profitEurCol] ?? "0").trim() : "0";
     const profit = parseNumber(profitRaw);
-    const openDate = openDateCol >= 0 ? parseEtoroDate(row[openDateCol] ?? "") : "";
-    const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "") : "";
+    const openDate = openDateCol >= 0 ? parseEtoroDate(row[openDateCol] ?? "", order) : "";
+    const closeDate = closeDateCol >= 0 ? parseEtoroDate(row[closeDateCol] ?? "", order) : "";
 
     const unitsNum = parseFloat(parseNumber(units));
     if (cell !== undefined || direction === undefined) {
@@ -386,6 +388,8 @@ function parseClosedPositions(
 
 function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTransaction[] {
   const rows = sheetToRows(xlsx, sheet);
+  // Every date of a sheet is in one order; no other cell has a slash date.
+  const order = slashDateOrder(rows.slice(1).flat());
   if (rows.length < 2) return [];
 
   const headers = rows[0]!;
@@ -421,7 +425,7 @@ function parseDividends(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTran
     // named with its amount, by dropUndatedCash (#467). A row with no date
     // that names no security (a totals line) stays skipped.
     if (!dateStr && (!(instrument || isin) || /^total/i.test(instrument))) continue;
-    const tradeDate = parseEtoroDate(dateStr);
+    const tradeDate = parseEtoroDate(dateStr, order);
 
     const netNum = parseFloat(parseNumber(netAmount));
     if (isNaN(netNum) || netNum === 0) continue;
@@ -509,6 +513,8 @@ const ACTIVITY_AMOUNT_HEADERS = ["amount", "importe"];
 
 function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): CashTransaction[] {
   const rows = sheetToRows(xlsx, sheet);
+  // Every date of a sheet is in one order; no other cell has a slash date.
+  const order = slashDateOrder(rows.slice(1).flat());
   if (rows.length < 2) return [];
 
   const headers = rows[0]!;
@@ -531,7 +537,7 @@ function parseAccountActivity(xlsx: typeof import("xlsx"), sheet: WorkSheet): Ca
     // An interest row with no readable date is booked with that date and
     // taken out, named with its amount, by dropUndatedCash (#467).
     const dateStr = (row[dateCol] ?? "").trim();
-    const tradeDate = parseEtoroDate(dateStr);
+    const tradeDate = parseEtoroDate(dateStr, order);
     const amountStr = (row[amountCol] ?? "0").trim();
     const amountNum = parseFloat(parseNumber(amountStr));
     if (isNaN(amountNum) || amountNum === 0) continue;
@@ -569,7 +575,7 @@ export async function parseEtoroXlsx(data: Buffer | Uint8Array): Promise<Stateme
   const wb = xlsx.read(data, { type: "buffer", cellNF: true });
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name];
-    if (sheet) isoDateCells(xlsx, sheet);
+    if (sheet) isoDateCells(xlsx, sheet, wb.Workbook?.WBProps?.date1904 === true);
   }
 
   const closedSheet = getSheet(wb, ["closed positions", "posiciones cerradas"]);

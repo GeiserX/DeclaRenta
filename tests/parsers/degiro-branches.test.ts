@@ -20,12 +20,15 @@ describe("degiroParser - Transactions CSV branches", () => {
     expect(result.trades[0]!.buySell).toBe("SELL");
   });
 
-  it("should skip rows with zero price", () => {
+  it("keeps a zero-price row as a row that books nothing, named as not applied (#467)", () => {
     const header = "Fecha;Hora;Producto;ISIN;Centro de ejecución;Número;Precio;EUR;Valor;EUR;Costes de transacción;EUR;Total;EUR;ID Orden";
     const row = "15-01-2025;10:00;RIGHTS;US111111;NASDAQ;100;0.0000;EUR;0;EUR;0;EUR;0;EUR;abc-123";
     const input = `${header}\n${row}`;
     const result = degiroParser.parse(input);
-    expect(result.trades).toHaveLength(0);
+    expect(result.trades.map((t) => [t.isin, t.quantity, t.quantityUnknown, t.tradeMoney, t.corporateActionRow])).toEqual([
+      ["US111111", "0", true, "0", "RIGHTS (US111111) 20250115 [Precio 0.0000: 100]"],
+    ]);
+    expect(result.parserMessages?.map((m) => m.id)).toEqual(["parser.corporate_action_not_applied"]);
   });
 
   it("keeps a trade row with no ISIN as an unreadable row that books nothing (#467)", () => {

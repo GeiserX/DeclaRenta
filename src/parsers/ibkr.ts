@@ -739,6 +739,20 @@ function isCashSummaryRow(raw: Record<string, string>): boolean {
   return (raw.transactionID ?? "") === "" && (raw.accountId ?? "") === SUMMARY_ACCOUNT_PLACEHOLDER;
 }
 
+/**
+ * A Flex dateTime with ";" between the date and the time. The Flex Query
+ * "Date/Time Separator" setting also offers ",", a space and none, and the
+ * time may be HHmmss or HH:mm:ss: "20240615,103000", "2024-06-15 10:30:00",
+ * "20240615103000". The engine and the date check read only ";", so every
+ * such dividend or withholding was dropped as undated, or crashed the report.
+ * The date keeps its own shape (yyyyMMdd or yyyy-MM-dd); a value that is
+ * already in this form, a date alone, or no date is left as it is.
+ */
+function flexDateTime(raw: string): string {
+  const m = /^((?:19|20)\d\d(-?)\d{2}\2\d{2})(?:[, ]|(?=\d))(.+)$/.exec(raw.trim());
+  return m ? `${m[1]};${m[3]}` : raw;
+}
+
 function mapCashTransaction(raw: Record<string, string>): CashTransaction {
   return {
     transactionID: raw.transactionID ?? "",
@@ -747,7 +761,7 @@ function mapCashTransaction(raw: Record<string, string>): CashTransaction {
     description: raw.description ?? "",
     isin: raw.isin ?? "",
     currency: raw.currency ?? "",
-    dateTime: raw.dateTime ?? "",
+    dateTime: flexDateTime(raw.dateTime ?? ""),
     settleDate: raw.settleDate ?? "",
     amount: raw.amount ?? "0",
     fxRateToBase: raw.fxRateToBase ?? "1",

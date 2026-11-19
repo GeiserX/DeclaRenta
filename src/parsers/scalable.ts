@@ -31,6 +31,7 @@ import {
   isCorporateActionType,
   markUndatedTrades,
   dropUndatedCash,
+  cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -111,6 +112,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   let interestWithholdingRows = 0;
+  // Distribution rows with no ISIN (#467).
+  const unidentifiedCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -187,6 +190,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const otherType = !sellType && !buyType && !DIVIDEND_TYPES.some((d) => type.includes(d));
     const sharesUnreadable = quantityUnreadable(fields[cols.shares]);
     const movesNoShares = !sharesUnreadable && parseFloat(parseNumber(shares)) === 0;
+    // An unknown type with an empty share cell is a cash row (a fee, a tax).
+    const sharesEmpty = (fields[cols.shares] ?? "").trim() === "";
     const keptOther = otherType && (isin ? !movesNoShares : !sharesUnreadable && !movesNoShares);
     // A split or another corporate action moves shares of its security: kept
     // as a row that books nothing (evidence of a holding, #453) and named as
@@ -200,7 +205,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
     const cell = (sellType || buyType) && !isin ? unreadableCell(headers[cols.isin] ?? "isin", isin)
-      : keptOther ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
+      : keptOther && !sharesEmpty ? unreadableCell(headers[cols.type] ?? "type", fields[cols.type] ?? "")
       : undefined;
     if (cell !== undefined) {
       trades.push(unreadableTrade({
@@ -212,6 +217,15 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       continue;
     }
 
+    // A distribution with no ISIN names no security (the description is only
+    // a name): it is named, never dropped with no word (#467).
+    if (!isin && DIVIDEND_TYPES.some((d) => type.includes(d))) {
+      if (!new Decimal(amount).isZero()) {
+        const taxShown = new Decimal(tax).isZero() ? "" : ` (${headers[cols.tax] ?? "tax"} ${tax})`;
+        unidentifiedCash.push(`${(fields[cols.type] ?? "").trim()} ${description || "—"} ${amount} ${currency || "EUR"}${taxShown} ${tradeDate || "—"}`);
+      }
+      continue;
+    }
     if (!isin) continue;
 
     // Distributions → cash transactions (dividends)
@@ -317,6 +331,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Scalable Capital", trades),
     ...dropUndatedCash("Scalable Capital", cashTransactions, headers[cols.date] ?? "date"),
+    ...cashRowsUnidentifiedMessages("Scalable Capital", unidentifiedCash),
   );
 
   return {

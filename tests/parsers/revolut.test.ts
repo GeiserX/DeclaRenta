@@ -115,8 +115,12 @@ describe("revolutParser", () => {
       expect(parseRevolutDate("15/01/2020")).toBe("20200115");
     });
 
-    it("should parse M/D/YYYY (US format)", () => {
-      expect(parseRevolutDate("1/5/2020")).toBe("20200105");
+    it("should parse D/M/YYYY as day first, as DD/MM/YYYY (#467)", () => {
+      expect(parseRevolutDate("1/5/2020")).toBe("20200501");
+    });
+
+    it("should parse M/D/YYYY when the file shows month first", () => {
+      expect(parseRevolutDate("1/5/2020", "MDY")).toBe("20200105");
     });
 
     it("should handle YYYY-MM-DD with trailing time", () => {

@@ -42,7 +42,11 @@ import {
   isReadableTradeDate,
   markUndatedTrades,
   dropUndatedCash,
+  cashRowsUnidentifiedMessages,
+  corporateActionTrade,
   isoDateCells,
+  slashDateOrder,
+  convertSlashDate,
 } from "./csv-utils.js";
 import { KNOWN_CRYPTO_SYMBOLS } from "./crypto-symbols.js";
 
@@ -77,8 +81,10 @@ const TXN_TOTAL_HEADERS = ["total amount", "importe total", "cantidad total"];
 const TXN_CURRENCY_HEADERS = ["currency", "divisa", "moneda"];
 const TXN_FX_RATE_HEADERS = ["fx rate", "tipo de cambio", "tasa de cambio"];
 
-const TXN_TYPE_BUY = /^BUY\s*-\s*(MARKET|LIMIT)$/i;
-const TXN_TYPE_SELL = /^SELL\s*-\s*(MARKET|LIMIT)$/i;
+// A buy or a sale of any order kind Revolut writes: market, limit, stop and
+// stop limit. The order kind changes how it was placed, not what was traded.
+const TXN_TYPE_BUY = /^BUY\s*-\s*(MARKET|LIMIT|STOP(\s*-?\s*LIMIT)?)$/i;
+const TXN_TYPE_SELL = /^SELL\s*-\s*(MARKET|LIMIT|STOP(\s*-?\s*LIMIT)?)$/i;
 const TXN_TYPE_CASH_IN = /^CASH\s*TOP[- ]?UP$/i;
 const TXN_TYPE_CASH_OUT = /^CASH\s*WITHDRAWAL$/i;
 const TXN_TYPE_DIVIDEND = /^DIVIDEND$/i;
@@ -86,7 +92,8 @@ const TXN_TYPE_DIVIDEND = /^DIVIDEND$/i;
 // ticker, no quantity and a signed amount, often in +/- pairs. No trade: the
 // withholding comes from Revolut's annual tax report (revolut.dividends_net).
 const TXN_TYPE_DIVIDEND_TAX = /^DIVIDEND\s+TAX\b/i;
-// A buy or sale of any order kind ("BUY - STOP" too), for a row with no ticker.
+// A buy or sale of any order kind, also one not listed above ("BUY - TRAILING
+// STOP"), for a row with no ticker.
 const TXN_TYPE_ANY_TRADE = /^(BUY|SELL)\b/i;
 const TXN_TYPE_SPLIT = /^STOCK\s*SPLIT$/i;
 // One row per ticker when Revolut moved accounts between its own entities
@@ -110,7 +117,13 @@ function detectAssetCategory(symbol: string): AssetCategory {
 // Date helpers
 // ---------------------------------------------------------------------------
 
-export function parseRevolutDate(dateStr: string): string {
+/**
+ * A Revolut date as YYYYMMDD. Revolut writes ISO dates; a slash date comes
+ * from a file re-saved as text ("15/01/2020", "1/5/2020"), read in the
+ * file's order (`order`, {@link slashDateOrder}: day first unless the file
+ * shows month first), the same way with or without a leading zero.
+ */
+export function parseRevolutDate(dateStr: string, order: "DMY" | "MDY" = "DMY"): string {
   const trimmed = dateStr.trim();
   // ISO 8601 timestamp: 2025-10-20T06:00:02.425Z or 2025-10-19T00:02:32.169239Z
   const isoTsMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T/);
@@ -118,13 +131,14 @@ export function parseRevolutDate(dateStr: string): string {
   // YYYY-MM-DD (primary Revolut closed-positions format)
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}${isoMatch[2]}${isoMatch[3]}`;
-  // DD/MM/YYYY (EU format fallback)
-  const euMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (euMatch) return `${euMatch[3]}${euMatch[2]}${euMatch[1]}`;
-  // MM/DD/YYYY (US format fallback)
-  const usMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (usMatch) return `${usMatch[3]}${usMatch[1]!.padStart(2, "0")}${usMatch[2]!.padStart(2, "0")}`;
+  const slash = convertSlashDate(trimmed, order);
+  if (slash !== undefined) return slash;
   return trimmed.replace(/[-/]/g, "").slice(0, 8);
+}
+
+/** The order of the slash dates in the given columns of a sheet's rows. */
+function dateOrderOf(rows: string[][], columns: number[]): "DMY" | "MDY" {
+  return slashDateOrder(rows.slice(1).flatMap((row) => columns.map((c) => row[c] ?? "")));
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +176,7 @@ function parseTrades(
     costBasisCol < 0 || grossProceedsCol < 0 || currencyCol < 0
   ) return { trades: [], parserMessages: [] };
 
+  const order = dateOrderOf(rows, [dateAcqCol, dateSoldCol]);
   const trades: Trade[] = [];
 
   for (let i = 1; i < rows.length; i++) {
@@ -169,8 +184,8 @@ function parseTrades(
     if (!row.length || row.every((c) => !c.trim())) continue;
 
     const symbol = (row[symbolCol] ?? "").trim();
-    const dateAcquired = parseRevolutDate(row[dateAcqCol] ?? "");
-    const dateSold = parseRevolutDate(row[dateSoldCol] ?? "");
+    const dateAcquired = parseRevolutDate(row[dateAcqCol] ?? "", order);
+    const dateSold = parseRevolutDate(row[dateSoldCol] ?? "", order);
     if (!symbol) {
       // A closed position with no symbol is still a purchase and a sale of
       // some shares: keep both legs, which book nothing, so the one-purchase
@@ -345,6 +360,7 @@ function parseTransactionLog(
   const cols = findTxnLogColumns(headers);
   if (!cols) return empty;
 
+  const order = dateOrderOf(rows, [cols.date]);
   const trades: Trade[] = [];
   const cashTransactions: CashTransaction[] = [];
   const corporateActions: CorporateAction[] = [];
@@ -358,6 +374,8 @@ function parseTransactionLog(
   let unresolvedSplits = 0;
   // DIVIDEND TAX (CORRECTION) rows, not booked: ticker, date and amount.
   const dividendTaxRows: string[] = [];
+  // DIVIDEND rows with no ticker: type, amount and date (#467).
+  const unidentifiedCash: string[] = [];
 
   // Track net positions per symbol for open-position inference
   const positions = new Map<string, {
@@ -380,7 +398,7 @@ function parseTransactionLog(
     if (!row.length || row.every((c) => !c.trim())) continue;
 
     const dateStr = (row[cols.date] ?? "").trim();
-    const tradeDate = parseRevolutDate(dateStr);
+    const tradeDate = parseRevolutDate(dateStr, order);
 
     const type = (row[cols.type] ?? "").trim();
     const ticker = (row[cols.ticker] ?? "").trim();
@@ -448,6 +466,12 @@ function parseTransactionLog(
       dividendTaxRows.push(`${ticker || "—"} ${isReadableTradeDate(tradeDate) ? tradeDate : dateStr || "—"} ${totalRaw || "—"}`);
       continue;
     }
+    // A dividend with no ticker names no security: named, never dropped with
+    // no word (#467).
+    if (!ticker && TXN_TYPE_DIVIDEND.test(type)) {
+      if (!totalAmountDec.isZero()) unidentifiedCash.push(`${type} ${totalRaw} ${isReadableTradeDate(tradeDate) ? tradeDate : dateStr || "—"}`);
+      continue;
+    }
     // Skip other rows without a ticker (e.g. REWARD, CUSTODY FEE): no trade.
     if (!ticker) continue;
 
@@ -462,7 +486,9 @@ function parseTransactionLog(
     // spin-off, a stock merger, a stop order) but cannot be read is kept as a
     // trade that books nothing, never dropped or booked as a buy (#467,
     // #468). A row of an unknown type that writes a zero quantity moves no
-    // shares and stays skipped.
+    // shares and stays skipped when it moves no money either, or is a fee
+    // ("CUSTODY FEE"). One with an amount (a cash merger, cash in lieu) may
+    // be a taxable sale, so it is kept and named like the others.
     const buy = TXN_TYPE_BUY.test(type);
     const sell = TXN_TYPE_SELL.test(type);
     const otherType = !buy && !sell && !TXN_TYPE_DIVIDEND.test(type) && !TXN_TYPE_SPLIT.test(type) &&
@@ -478,7 +504,8 @@ function parseTransactionLog(
       }, cell));
       markUnknownSize(ticker, currencyRaw, buy);
     };
-    if (otherType && !quantityUnreadable(quantityCell) && qtyDec.isZero()) continue;
+    if (otherType && !quantityUnreadable(quantityCell) && qtyDec.isZero() &&
+      (totalAmountDec.isZero() || /\bFEES?$/i.test(type))) continue;
     if ((buy || sell || otherType) && !isReadableTradeDate(tradeDate)) {
       keepUnreadable(unreadableCell(headers[cols.date] ?? "Date", dateStr));
       continue;
@@ -487,9 +514,19 @@ function parseTransactionLog(
       keepUnreadable(unreadableCell(headers[cols.type] ?? "Type", type));
       continue;
     }
-    // A split row with no date stays skipped, as before. A dividend with no
-    // readable date is booked with that date and taken out, named with its
-    // amount, by dropUndatedCash below (#467).
+    // A split row with no readable date cannot be applied at its day: it is
+    // kept as a row that books nothing, named as not applied, and its holding
+    // is of unknown size (#467), never applied on a false day or dropped. A
+    // dividend with no readable date is booked with that date and taken out,
+    // named with its amount, by dropUndatedCash below (#467).
+    if (TXN_TYPE_SPLIT.test(type) && !isReadableTradeDate(tradeDate)) {
+      trades.push(corporateActionTrade({
+        tradeID: `revolut-split-${tradeDate}-${ticker}-${i}`, symbol: ticker, isin: "",
+        assetCategory: detectAssetCategory(ticker), currency: currencyRaw, tradeDate: dateStr, exchange: "REVOLUT",
+      }, type, quantityCell));
+      markUnknownSize(ticker, currencyRaw, false);
+      continue;
+    }
     if (!dateStr && !TXN_TYPE_DIVIDEND.test(type)) continue;
 
     // DIVIDEND: Quantity is empty and the amount is net of withholding.
@@ -751,6 +788,7 @@ function parseTransactionLog(
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Revolut", trades),
     ...dropUndatedCash("Revolut", cashTransactions, headers[cols.date] ?? "Date"),
+    ...cashRowsUnidentifiedMessages("Revolut", unidentifiedCash),
   );
   return { trades, cashTransactions, corporateActions, openPositions, parserMessages };
 }
@@ -793,7 +831,7 @@ export async function parseRevolutXlsx(data: Buffer | Uint8Array): Promise<State
   const wb = xlsx.read(data, { type: "buffer", cellNF: true });
 
   const sheet = wb.Sheets[wb.SheetNames[0]!];
-  if (sheet) isoDateCells(xlsx, sheet);
+  if (sheet) isoDateCells(xlsx, sheet, wb.Workbook?.WBProps?.date1904 === true);
   if (!sheet) {
     return {
       accountId: "", fromDate: "", toDate: "", period: "",

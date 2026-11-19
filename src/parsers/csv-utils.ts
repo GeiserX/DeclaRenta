@@ -252,6 +252,26 @@ export function dropUndatedCash(broker: string, cash: CashTransaction[], dateCol
 }
 
 /**
+ * The warning naming every dividend or withholding row the file gives with no
+ * security (no ticker, no ISIN): `rows` are "type amount currency date" (#467).
+ * The security decides the source country and pairs a withholding with its
+ * dividend, so the row is not booked under a guessed one, and is never
+ * dropped with no word: the user adds it by hand.
+ */
+export function cashRowsUnidentifiedMessages(broker: string, rows: readonly string[]): TaxMessage[] {
+  if (rows.length === 0) return [];
+  const count = String(rows.length);
+  const list = rows.join("; ");
+  return [{
+    id: "parser.cash_row_unidentified",
+    severity: "warning",
+    message: `${broker}: ${count} dividendo(s) o retención(es) no dicen de qué valor son y no se calculan: ${list}.`,
+    hint: "La fila no trae ni el ticker ni el ISIN. Sin el valor, DeclaRenta no sabe de qué país viene el dividendo ni con qué retención va, así que no lo suma y no se inventa el valor. Si es un ingreso del año que declaras, corrige la fila en el archivo del broker y vuelve a subirlo, o añade el importe a mano en Renta Web.",
+    context: { broker, count, rows: list },
+  }];
+}
+
+/**
  * The warnings naming every trade whose quantity or price the file does not
  * give: one for shares and other securities, one for crypto (whose rule is
  * art. 33.5.e, with no one-purchase exception), or none; one naming every
@@ -441,22 +461,66 @@ export function convertDateDMYSlash(date: string): string {
  * turned it into a false or unreadable date (Revolut gave "11024"). The day
  * comes from the cell's serial number, so no time zone moves it. The workbook
  * must be read with `cellNF: true`, which gives each cell its format.
+ * `date1904` is the workbook's date system (`wb.Workbook.WBProps.date1904`,
+ * set by Excel for Mac and Numbers): the same serial number is then a day 4
+ * years and 1 day later, so a workbook read without it moves every date.
  */
-export function isoDateCells(xlsx: typeof import("xlsx"), sheet: import("xlsx").WorkSheet): void {
+export function isoDateCells(xlsx: typeof import("xlsx"), sheet: import("xlsx").WorkSheet, date1904: boolean): void {
   // xlsx types SSF as `any`; these are the two calls it documents.
   const ssf = xlsx.SSF as {
     is_date(format: string): boolean;
-    parse_date_code(serial: number): { y: number; m: number; d: number; H: number; M: number; S: number };
+    parse_date_code(serial: number, opts: { date1904: boolean }): { y: number; m: number; d: number; H: number; M: number; S: number } | null;
   };
   const pad = (n: number): string => String(n).padStart(2, "0");
   for (const [address, value] of Object.entries(sheet)) {
     if (address.startsWith("!")) continue;
     const cell = value as import("xlsx").CellObject;
     if (cell.t !== "n" || typeof cell.v !== "number" || typeof cell.z !== "string" || !ssf.is_date(cell.z)) continue;
-    const p = ssf.parse_date_code(cell.v);
+    // A serial out of Excel's range (negative, past 9999) has no day: the
+    // cell keeps its text and the row is named as one with no readable date.
+    const p = ssf.parse_date_code(cell.v, { date1904 });
+    if (p === null) continue;
     const day = `${p.y}-${pad(p.m)}-${pad(p.d)}`;
     cell.w = p.H || p.M || p.S ? `${day} ${pad(p.H)}:${pad(p.M)}:${pad(Math.floor(p.S))}` : day;
   }
+}
+
+const SLASH_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/;
+
+/**
+ * The order of the day and the month in the slash dates of one file
+ * ("1/10/2024", "15/03/24"). A broker writes every date of a file in one
+ * order, so one date whose second part is over 12 ("3/15/2024") shows that
+ * the file is month first, and one whose first part is over 12 that it is day
+ * first. With neither, it is day first, the Spanish order and the one eToro
+ * and Lightyear write. A file with both is day first: its month-first dates
+ * are then no real day and are named, never read as another day.
+ */
+export function slashDateOrder(texts: Iterable<string>): "DMY" | "MDY" {
+  let dayFirst = false;
+  let monthFirst = false;
+  for (const text of texts) {
+    const m = SLASH_DATE.exec(text.trim());
+    if (!m) continue;
+    if (Number(m[1]) > 12) dayFirst = true;
+    if (Number(m[2]) > 12) monthFirst = true;
+  }
+  return monthFirst && !dayFirst ? "MDY" : "DMY";
+}
+
+/**
+ * A slash date ("1/10/2024", "01/10/2024 09:30", "1/10/24") as YYYYMMDD in
+ * the file's order ({@link slashDateOrder}), or undefined when the text is no
+ * slash date. The same day reads the same with or without a leading zero. A
+ * 2-digit year is 20YY. The result is not checked: "31/02/2024" gives
+ * "20240231", which the parsers then name as no readable day.
+ */
+export function convertSlashDate(text: string, order: "DMY" | "MDY"): string | undefined {
+  const m = SLASH_DATE.exec(text.trim());
+  if (!m) return undefined;
+  const [day, month] = order === "DMY" ? [m[1]!, m[2]!] : [m[2]!, m[1]!];
+  const year = m[3]!.length === 2 ? `20${m[3]}` : m[3]!;
+  return `${year}${month.padStart(2, "0")}${day.padStart(2, "0")}`;
 }
 
 /** Convert YYYY-MM-DD to YYYYMMDD */

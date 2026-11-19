@@ -163,9 +163,11 @@ describe("flatexParser — zero guards", () => {
     expect(flatexParser.parse(csv).trades).toHaveLength(0);
   });
 
-  it("skips decimal-formatted zero price rows", () => {
+  it("keeps a decimal-formatted zero price row as a row that books nothing (#467)", () => {
     const csv = `${header}\n1;01.12.2025;01.12.2025;US0000000000;TEST CORP.;10;Stk.;Ausführung ORDER Kauf US0000000000 1;1;0,00;EUR;***xxx Depot`;
-    expect(flatexParser.parse(csv).trades).toHaveLength(0);
+    expect(flatexParser.parse(csv).trades.map((t) => [t.quantity, t.quantityUnknown, t.tradeMoney, t.corporateActionRow])).toEqual([
+      ["0", true, "0", "TEST CORP. (US0000000000) 20251201 [Ausführung ORDER Kauf US0000000000 1: 10]"],
+    ]);
   });
 });
 
@@ -412,7 +414,8 @@ describe("flatexParser — Lagerstellenwechsel warning", () => {
   it("warns when a custody transfer leg has no counterpart", () => {
     const csv = `${depotHeader}\n1;12.12.2025;12.12.2025;NO0011082075;HOEEGH;100;Stk.;Lagerstellenwechsel in NO0011082075;4640912524;8,22;EUR;***xxx Depot`;
     const stmt = flatexParser.parse(csv);
-    expect(stmt.trades).toHaveLength(0);
+    // The unmatched leg is kept as a row that books nothing (#467).
+    expect(stmt.trades.map((t) => [t.quantity, t.quantityUnknown])).toEqual([["0", true]]);
     const msg = (stmt.parserMessages ?? []).find(
       (m) => m.id === "flatex.lagerstellenwechsel.unmatched",
     )!;

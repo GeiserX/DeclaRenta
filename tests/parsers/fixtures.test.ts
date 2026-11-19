@@ -41,10 +41,12 @@ describe("fixture file integration", () => {
       expect(degiroParser.detect(csv)).toBe(true);
     });
 
-    it("should parse all trades (skipping zero-price rights)", () => {
+    it("should parse all trades (the zero-price rights row books nothing)", () => {
       const r = degiroParser.parse(csv);
-      // 13 data rows minus 1 zero-price rights = 12 trades
-      expect(r.trades).toHaveLength(12);
+      // 13 data rows: 12 trades, plus the zero-price rights row kept as a
+      // row that books nothing and named as not applied (#467)
+      expect(r.trades).toHaveLength(13);
+      expect(r.trades.filter((t) => t.corporateActionRow !== undefined).map((t) => [t.symbol, t.quantity])).toEqual([["ZETA ENERGY SA-RTS", "0"]]);
       expect(r.trades.every((t) => t.isin.startsWith("XX"))).toBe(true);
     });
   });

@@ -32,6 +32,7 @@ import {
   tradeQuantityUnknownMessages,
   unreadableTrade,
   unreadableCell,
+  corporateActionTrade,
   markUndatedTrades,
   dropUndatedCash,
 } from "./csv-utils.js";
@@ -122,6 +123,8 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   // a position entered or left the depot without a cost basis — same phantom-lot
   // risk as missing prior-year lots — so we warn the user.
   const custodyNet = new Map<string, Decimal>();
+  // The same legs per ISIN and day, each kept as a row that books nothing.
+  const custodyLegs = new Map<string, { net: Decimal; unknown: boolean; rows: Trade[] }>();
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -163,17 +166,40 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     }
     if (qtyNum.isZero() && !qtyUnknown) continue;
 
-    // Skip custody transfers (Lagerstellenwechsel): net-zero, not a disposal.
+    // A row the parser does not book that still moves shares of the ISIN (a
+    // transfer in, a split, free shares, a conversion) is kept as a row that
+    // books nothing and named (#467): dropped, it would hide a holding at the
+    // anti-churning window start and let the one-purchase exception (#453) be
+    // applied with no proof.
+    const keepAction = (): Trade => corporateActionTrade({
+      tradeID: orderId, symbol: name, description: name, isin, assetCategory: "STK", currency: currency || "EUR",
+      tradeDate, exchange: "",
+    }, info || `${headers[priceCol] ?? "Kurs"} ${(fields[priceCol] ?? "").trim()}`, fields[qtyCol] ?? "");
+
+    // Custody transfers (Lagerstellenwechsel) are no disposal. The legs of
+    // one ISIN on one day that net to zero move nothing and are skipped; the
+    // others are kept below, once every leg is read.
     if (/lagerstellenwechsel/i.test(info)) {
       custodyNet.set(isin, (custodyNet.get(isin) ?? new Decimal(0)).plus(qtyNum));
+      const key = `${isin}|${tradeDate}`;
+      const legs = custodyLegs.get(key) ?? { net: new Decimal(0), unknown: false, rows: [] };
+      legs.net = legs.net.plus(qtyNum);
+      legs.unknown ||= qtyUnknown;
+      legs.rows.push(keepAction());
+      custodyLegs.set(key, legs);
       continue;
     }
 
-    // Skip zero-price rows (non-tradeable conversions, rights): a written zero
-    // Kurs is always skipped. A row whose Kurs is empty or unreadable is kept.
+    // A row with a written zero Kurs (a non-tradeable conversion, rights,
+    // free shares, a transfer in) has no price to book: kept as a row that
+    // books nothing and named, never skipped with no word. A row whose Kurs is
+    // empty or unreadable is a buy or a sale of unknown quantity (below).
     const priceDec = toFiniteDecimal(price);
     const priceUnknown = quantityUnreadable(fields[priceCol]);
-    if (priceDec.isZero() && !priceUnknown) continue;
+    if (priceDec.isZero() && !priceUnknown) {
+      trades.push(keepAction());
+      continue;
+    }
 
     // A row whose text is neither Kauf nor Verkauf (a transfer in or out, a
     // corporate action) is no purchase or sale the parser can book: the sign
@@ -234,6 +260,11 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       multiplier: "1",
       ...(orderKey ? { notes: `flatex-order:${orderKey}` } : {}),
     });
+  }
+
+  // An unmatched transfer leg moves shares in or out of the depot: kept.
+  for (const legs of custodyLegs.values()) {
+    if (legs.unknown || !legs.net.isZero()) trades.push(...legs.rows);
   }
 
   const parserMessages: TaxMessage[] = [];

@@ -44,6 +44,7 @@ import {
   isCorporateActionType,
   markUndatedTrades,
   dropUndatedCash,
+  cashRowsUnidentifiedMessages,
 } from "./csv-utils.js";
 
 
@@ -194,6 +195,8 @@ function parseLightyearCsv(lines: string[]): Statement {
 
   // Rows of a type no branch handles (e.g. a split or transfer), per raw type.
   const unknownTypes = new Map<string, number>();
+  // Dividend rows with no ticker and no ISIN (#467).
+  const unidentifiedCash: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -225,8 +228,10 @@ function parseLightyearCsv(lines: string[]): Statement {
     // transfer in, a split) that names a ticker or an ISIN, is kept as a trade
     // that books nothing when it cannot be read: no date, no ticker, an
     // unknown type. Dropping it would hide a purchase or a sale (#467). A row
-    // of an unknown type that writes a zero quantity moves no shares and stays
-    // skipped; one that names no security is only listed by its type.
+    // of an unknown type that writes a zero quantity, or none (a fee, a tax:
+    // a cash row), moves no shares and stays skipped; one that names no
+    // security is only listed by its type. A split or another corporate
+    // action is kept even with no quantity.
     const tradeType = txType === "buy" || txType === "sell";
     const otherType = !tradeType && !SKIP_TYPES.has(txType) && !DIVIDEND_TYPES.has(txType) &&
       !INCOME_TYPES.has(txType) && txType !== "conversion";
@@ -242,7 +247,8 @@ function parseLightyearCsv(lines: string[]): Statement {
       }, (fields[cols.type] ?? "").trim(), fields[cols.quantity] ?? ""));
       continue;
     }
-    if (tradeType || (otherType && namesSecurity && !movesNoShares)) {
+    const quantityEmpty = (fields[cols.quantity] ?? "").trim() === "";
+    if (tradeType || (otherType && namesSecurity && !movesNoShares && !quantityEmpty)) {
       const cell = !dateRaw ? unreadableCell(headers[cols.date] ?? "Date", dateRaw)
         : otherType ? unreadableCell(headers[cols.type] ?? "Type", fields[cols.type] ?? "")
         : !ticker ? unreadableCell(headers[cols.ticker] ?? "Ticker", ticker)
@@ -265,15 +271,22 @@ function parseLightyearCsv(lines: string[]): Statement {
 
     // Dividends and distributions → cash transactions
     if (DIVIDEND_TYPES.has(txType)) {
-      if (!ticker) continue;
+      // With no ticker the dividend goes by its ISIN; with neither it is
+      // named, never dropped with no word (#467).
+      const security = ticker || isin;
+      if (!security) {
+        const tax = new Decimal(taxAmount).isZero() ? "" : ` (${headers[cols.taxAmount] ?? "Tax Amt."} ${taxAmount})`;
+        if (!new Decimal(grossAmount).isZero()) unidentifiedCash.push(`${(fields[cols.type] ?? "").trim()} ${grossAmount} ${currency}${tax} ${tradeDate || "—"}`);
+        continue;
+      }
 
       const grossDec = new Decimal(grossAmount).abs();
       // Gross dividend
       cashTransactions.push({
-        transactionID: `lightyear-${txType}-${reference || `${tradeDate}-${ticker}-${i}`}`,
+        transactionID: `lightyear-${txType}-${reference || `${tradeDate}-${security}-${i}`}`,
         accountId: "",
-        symbol: ticker,
-        description: `${txType === "distribution" ? "Distribution" : "Dividend"} - ${ticker}`,
+        symbol: security,
+        description: `${txType === "distribution" ? "Distribution" : "Dividend"} - ${security}`,
         isin,
         currency,
         dateTime: tradeDate,
@@ -287,10 +300,10 @@ function parseLightyearCsv(lines: string[]): Statement {
       const taxDec = new Decimal(taxAmount);
       if (!taxDec.isZero()) {
         cashTransactions.push({
-          transactionID: `lightyear-tax-${reference || `${tradeDate}-${ticker}-${i}`}`,
+          transactionID: `lightyear-tax-${reference || `${tradeDate}-${security}-${i}`}`,
           accountId: "",
-          symbol: ticker,
-          description: `Withholding tax - ${ticker}`,
+          symbol: security,
+          description: `Withholding tax - ${security}`,
           isin,
           currency,
           dateTime: tradeDate,
@@ -453,6 +466,7 @@ function parseLightyearCsv(lines: string[]): Statement {
   parserMessages.push(
     ...tradeQuantityUnknownMessages("Lightyear", trades),
     ...dropUndatedCash("Lightyear", cashTransactions, headers[cols.date] ?? "Date"),
+    ...cashRowsUnidentifiedMessages("Lightyear", unidentifiedCash),
   );
 
   return {
