@@ -1762,13 +1762,23 @@ describe("#466 #467 #468 the warnings of these issues read as plain short senten
     "revolut.bad_fx_rate", "revolut.holding_size_unknown", "revolut.dividend_tax_correction",
   ];
   const sentences = (text: string): string[] => text.split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
-  it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 28 words", (_name, locale) => {
+  it.each([["es", es], ["en", en]] as [string, Record<string, string>][])("%s: no hint joins clauses with a semicolon, and no sentence is longer than 25 words", (_name, locale) => {
     for (const key of KEYS) {
       for (const text of [locale[key]!, locale[`${key}.hint`]!]) {
         expect(text, key).not.toContain(";");
-        for (const sentence of sentences(text)) expect(sentence.split(/\s+/).length, `${key}: ${sentence}`).toBeLessThanOrEqual(28);
+        for (const sentence of sentences(text)) expect(sentence.split(/\s+/).length, `${key}: ${sentence}`).toBeLessThanOrEqual(25);
       }
     }
+  });
+
+  it("the corporate-action warning says who did not apply the rows, in Spanish, in English and in the Spanish the parser emits", () => {
+    expect((es as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta no ha aplicado");
+    expect((en as Record<string, string>)["parser.corporate_action_not_applied"]).toContain("DeclaRenta did not apply");
+    const parsed = trading212Parser.parse([T212_H,
+      `Stock split close,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,10,10,EUR,1.00,,,0,EUR,,s1`,
+      `Stock split open,2025-03-03 09:30:00,${ISIN},XYZ,XYZ SA,40,2.5,EUR,1.00,,,0,EUR,,s2`].join("\n"));
+    const emitted = parsed.parserMessages?.find((m) => m.id === "parser.corporate_action_not_applied");
+    expect(emitted?.message).toBe((es as Record<string, string>)["parser.corporate_action_not_applied"]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted?.context?.[k] ?? ""));
   });
 });
 

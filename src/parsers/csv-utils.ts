@@ -246,7 +246,7 @@ export function dropUndatedCash(broker: string, cash: CashTransaction[], dateCol
     id: "parser.cash_row_undated",
     severity: "warning",
     message: `${broker}: ${count} movimiento(s) de dinero no tienen una fecha legible y no se calculan: ${list}.`,
-    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Si es un dividendo, una retención, un interés u otro ingreso del año que declaras, corrige la fecha en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
+    hint: "Entre corchetes va la celda de la fecha. Sin fecha, DeclaRenta no sabe a qué año pertenece el importe ni qué tipo de cambio del BCE le toca. Por eso no lo suma y no se inventa una fecha. Puede ser un dividendo, una retención, un interés u otro ingreso del año que declaras. Entonces corrige la fecha en el archivo del broker y vuelve a subirlo. También puedes añadir el importe a mano en Renta Web.",
     context: { broker, count, rows: list },
   }];
 }
@@ -352,7 +352,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
       id: "parser.trade_row_unreadable",
       severity: "warning",
       message: `${broker}: ${count} fila(s) de operación no se pueden leer y no se calculan: ${list}.`,
-      hint: "Entre corchetes va la celda que falla. Falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a ningún valor al que pueda pertenecer una de esas filas. Si una fila es una recompra de una criptomoneda en el año siguiente a una venta con pérdidas, esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
+      hint: "Entre corchetes va la celda que falla. Falta, está vacía, no se puede leer o trae un tipo de operación que DeclaRenta no reconoce. DeclaRenta no suma ni resta acciones, unidades ni dinero por esas filas. Por eso las ganancias y pérdidas de esos valores no son fiables. Tampoco aplica la excepción de compra única de la regla de los 2 meses a ningún valor al que pueda pertenecer una de esas filas. Una fila puede ser la recompra de una criptomoneda en el año siguiente a una venta con pérdidas. Entonces esa pérdida puede tener que quedar pendiente (art. 33.5.e LIRPF). DeclaRenta no la bloquea. Si una fila es una compra o una venta real, corrige esa celda en el archivo del broker y vuelve a subirlo.",
       context: { broker, count, rows: list },
     });
   }
@@ -363,7 +363,7 @@ export function tradeQuantityUnknownMessages(broker: string, trades: readonly Tr
     messages.push({
       id: "parser.corporate_action_not_applied",
       severity: "warning",
-      message: `${broker}: no se han aplicado ${count} fila(s) de desdoblamiento, agrupación u otra operación societaria: ${list}.`,
+      message: `${broker}: DeclaRenta no ha aplicado ${count} fila(s) de desdoblamiento, agrupación u otra operación societaria: ${list}.`,
       hint: "DeclaRenta no cambia por ellas el número de acciones ni el coste de esos valores. Por eso las ganancias y pérdidas de sus ventas posteriores pueden no ser correctas. Compruébalas con el extracto del broker. Tampoco aplica a esos valores la excepción de compra única de la regla de los 2 meses. Si una de esas filas te pagó dinero, como un vencimiento o un reembolso, esa venta no está en el informe. Añádela a mano en Renta Web.",
       context: { broker, count, rows: list },
     });
