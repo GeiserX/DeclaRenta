@@ -184,13 +184,17 @@ function fixedWidthText(value: string, length: number, alignRight = false): stri
 
 function numPad(value: string, intLen: number, decLen: number): string {
   const dec = new Decimal(value).abs();
-  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
-  // ("1e+25"), which padded to the width carried no number. A value past the
-  // field fails fast, as the 720's numPad does, never shifting the record (#470).
-  const intDigits = dec.floor().toFixed(0);
-  if (intDigits.length > intLen) {
-    throw new Error(`Modelo 721: importe ${dec.toFixed()} excede el campo de ${intLen} dígitos enteros`);
+  // A value past the field fails fast, as the 720's numPad does, never shifting
+  // the record (#470). The size is compared before any digit is written:
+  // toFixed writes one digit per exponent step, so an acquisition cost of
+  // 1e1000000000 (no 720 fit guards it) ran out of memory. The error keeps the
+  // compact form ("1e+25").
+  if (dec.floor().greaterThanOrEqualTo(new Decimal(10).pow(intLen))) {
+    throw new Error(`Modelo 721: importe ${dec.toString()} excede el campo de ${intLen} dígitos enteros`);
   }
+  // toFixed, never toString: decimal.js writes 1e21 and above in exponent form
+  // ("1e+25"), which padded to the width carried no number.
+  const intDigits = dec.floor().toFixed(0);
   const intPart = intDigits.padStart(intLen, "0");
   const fracPart = dec.minus(dec.floor()).mul(new Decimal(10).pow(decLen)).floor().toFixed(0).padStart(decLen, "0");
   return intPart + fracPart;

@@ -424,5 +424,29 @@ describe("#470 the 721 library export writes numbers as the 720 does: digits in 
   it("a quantity past its 9 integer digits throws", () => {
     expect(() => generateModelo721([entry("60000", "1e21")], cfg721)).toThrow(/excede el campo/);
   });
+
+  // CodeRabbit on 45c5712: the acquisition cost skips the 720 fit, and numPad
+  // wrote the integer digits with toFixed(0) before its width check, one digit
+  // per exponent step. costBasisMoney="1e1000000000" ran out of memory. Now
+  // the size is compared first and the error stays short.
+  const hugeCases = (process.env.M721_HUGE_CASES ?? "1e100000,1e1000000000").split(",");
+  for (const cost of hugeCases) {
+    it(`an IBKR coin with costBasisMoney="${cost}" fails fast with a short error, never a long string`, () => {
+      const xml = coin("60000").replace('costBasisMoney="40000"', `costBasisMoney="${cost}"`);
+      const entries = buildModelo721Entries(flex(xml).openPositions, rateMap, "2025-12-31").positions.map((p) => p.entry);
+      let message = "";
+      try {
+        generateModelo721(entries, cfg721);
+      } catch (e) {
+        message = (e as Error).message;
+      }
+      expect(message).toMatch(/^Modelo 721: importe .* excede el campo de 13 dígitos enteros$/);
+      expect(message.length).toBeLessThan(100);
+    });
+
+    it(`a coin quantity of ${cost} fails fast with a short error`, () => {
+      expect(() => generateModelo721([entry("60000", cost)], cfg721)).toThrow(/^.{0,100}$/);
+    });
+  }
 });
 
