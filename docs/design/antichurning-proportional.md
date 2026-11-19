@@ -257,15 +257,22 @@ transmission that releases them.
   and the 30 June split did not move. This is a deduction, not a holding: no
   consulta names crypto and art. 33.5 together; V1613-25 applies letter e
   «y no las letras f) y g)» to dollars, the closest fungible non-security.
-  Open points it leaves: (A) letter e has its own release sentence («se
+  Release (#457 follow-up): letter e has its own release sentence («se
   integrará cuando se produzca la posterior transmisión del elemento
-  patrimonial», without the f/g «que permanezcan»); the engine keeps the #451
-  definitive test. It never releases earlier than the reading "any later sale
-  releases", which is not built. It can release before the reacquired units
-  are sold: a later definitive sale of older units releases the loss while
-  the rebought coin is still held. The reading "the sale of the reacquired
-  element" (FIFO lot identification, V1550-25) would release nothing until
-  those units are sold. (B) A partial reacquisition stays
+  patrimonial», without the f/g «que permanezcan»), and the AEAT Manual
+  integrates the loss when «se transmita el elemento patrimonial adquirido».
+  So a crypto loss does not go into the share-count queue's definitive test.
+  It is tied to the coins of the repurchase that blocked it (tie groups per
+  buy day) and released when FIFO transmits those coins, in proportion to the
+  quantity. A sale of other coins releases nothing, and so does a sell-out
+  before the rebuy arrives (no total exit for crypto). Of one buy day's coins
+  the tied ones go last. A tied coin sold and rebought in the year after
+  passes its claims to the new coins (the same coins also block the new
+  loss, never counted twice): the statute is silent there, and this is the
+  deferring choice, as in the definitive test of f/g. Only the tied coins of a gain sale seek a
+  rebuy. No consulta names crypto and art. 33.5 together; the rule reads the
+  statute and the Manual, and never releases earlier than the law allows.
+  Open points it leaves: (B) A partial reacquisition stays
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
   reward receipts are no repurchase (reward lots stay out of
   `washSaleTrades`), the less strict choice, which no source settles.

@@ -1225,7 +1225,7 @@ export function generateTaxReport(
         id,
         severity: "warning",
         message: `Hay ${ctx.count} venta(s) de ${ctx.year} cuyo plazo de recompra de la regla anti-churning termina el ${ctx.windowEnd} como muy tarde: después del ${ctx.deadline}, último día para presentar la declaración, y después de la última fecha que cubren los ficheros subidos de ese bróker (${ctx.lastDate}). Cuando presentes la declaración, ese plazo seguirá abierto.`,
-        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda antes del ${ctx.windowEnd}, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
+        hint: `Antes de presentar, sube también el fichero con tus operaciones posteriores al ${ctx.lastDate} y calcula de nuevo. Si compras el mismo valor o la misma criptomoneda hasta el ${ctx.windowEnd} inclusive, parte de la pérdida de esas ventas puede quedar bloqueada, o la venta deja de ser una transmisión definitiva y no libera pérdidas pendientes. En ese caso, corrige la declaración presentada con una autoliquidación rectificativa.`,
         context: ctx,
       });
     }

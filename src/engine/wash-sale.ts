@@ -167,6 +167,19 @@ interface PendingLoss {
 }
 
 /**
+ * Crypto (art. 33.5.e): units of one buy day that carry pending losses. A
+ * crypto loss waits on the coins its repurchase brought in, not on any later
+ * sale. The units of one group carry the same claims; a loss sale whose
+ * rebuy also keeps older losses pending puts both on the same units.
+ */
+interface TieGroup {
+  /** Units of the buy day that carry the claims. */
+  qty: Decimal;
+  /** The pending losses these units carry, and the EUR of each on them. */
+  claims: { entry: PendingLoss; eur: Decimal }[];
+}
+
+/**
  * Detect wash sales: compute PROPORTIONAL blocked losses and release pending
  * losses on definitive transmissions, in ONE chronological pass (Art. 33.5.f/g
  * LIRPF; 33.5.e for crypto, whose window holds only the year after the sale).
@@ -188,6 +201,9 @@ interface PendingLoss {
  *     and in FIFO) releases every loss still pending.
  *  4. BLOCK (loss lots only) — defer `|loss| × absorbed/qty` and append it to
  *     the queue. The same absorbed shares keep the old losses pending.
+ * Crypto (art. 33.5.e) runs neither 2 nor 3: each blocked loss is tied to the
+ * coins of the rebuys that absorbed it, and only a sale of those coins releases
+ * it («la posterior transmisión del elemento patrimonial»).
  * Only held shares are transmitted: a short cover (`isShort`) runs no definitive
  * test, releases nothing and is no exit, the shares its buy covers are no
  * repurchase, and a zero-share disposal is skipped.
@@ -257,6 +273,9 @@ export function detectWashSales(
   const buyOpsByAsset = new Map<string, BuyOperation[]>();
   const positionEventsByAsset = new Map<string, PositionEvent[]>();
   const longEventsByAsset = new Map<string, LongEvent[]>();
+  // Crypto units bought per `key|day`, for the coins still held of a buy day
+  // when FIFO's remaining lots are not given.
+  const cryptoBoughtByDay = new Map<string, Decimal>();
   for (const trade of [...allTrades].sort(compareFifoTradeOrder)) {
     if (WASH_SALE_EXEMPT.has(trade.assetCategory)) continue;
     const key = homogeneousKey(trade.isin, trade.symbol, trade.assetCategory);
@@ -310,6 +329,10 @@ export function detectWashSales(
           buysByAsset.set(key, events);
         }
         events.push({ time, date: normalizeDay(trade.tradeDate), remainingQty: repurchased });
+        if (trade.assetCategory === "CRYPTO") {
+          const dayKey = `${key}|${normalizeDay(trade.tradeDate)}`;
+          cryptoBoughtByDay.set(dayKey, (cryptoBoughtByDay.get(dayKey) ?? new Decimal(0)).plus(repurchased));
+        }
       }
     } else {
       positionEvents.push({ time, qty: qty.neg() });
@@ -339,6 +362,10 @@ export function detectWashSales(
   // Entries are appended in sell-time order and released from the front, so the
   // spent ones are a prefix that `head` skips.
   const pendingByAsset = new Map<string, { entries: PendingLoss[]; head: number }>();
+  // Crypto (art. 33.5.e): per key, the tie groups on each buy day (YYYY-MM-DD),
+  // oldest first. Only crypto losses are tied to their repurchase's coins.
+  const tiesByAsset = new Map<string, Map<string, TieGroup[]>>();
+  const cryptoHeldAfter = buildCryptoDayHoldings(disposals, remainingLots, cryptoBoughtByDay);
 
   // Process disposals oldest-first so a block is recorded before the later
   // disposal that releases it (stable sort by sell date; preserve input order
@@ -491,15 +518,53 @@ export function detectWashSales(
     const queue = pendingByAsset.get(key);
     const hasPending = queue !== undefined && queue.head < queue.entries.length && queue.entries[queue.head]!.time < sellTime;
 
+    // Crypto (art. 33.5.e): «se integrará cuando se produzca la posterior
+    // transmisión del elemento patrimonial», the coins the repurchase brought
+    // in. Of each buy day's coins sold today, the tied ones are the units that
+    // leave the tie pool: the coins of that day still held after today keep the
+    // ties first (the tied coins of a day go last, so a release never comes
+    // early). Loss lots take the tied units first, because the rebuy that
+    // blocks their loss then also keeps the tie.
+    const ties = tiesByAsset.get(key);
+    const tiedOf = new Map<number, Decimal>();
+    if (ties) {
+      const lotsByDay = new Map<string, number[]>();
+      for (const idx of idxs) {
+        if (isShortAt(idx)) continue;
+        const day = normalizeDay(result[idx]!.acquireDate);
+        if (!ties.has(day)) continue;
+        const dayIdxs = lotsByDay.get(day);
+        if (dayIdxs) dayIdxs.push(idx);
+        else lotsByDay.set(day, [idx]);
+      }
+      for (const [day, dayIdxs] of lotsByDay) {
+        const tied = ties.get(day)!.reduce((sum, g) => sum.plus(g.qty), new Decimal(0));
+        let leaving = Decimal.max(0, tied.minus(cryptoHeldAfter(key, day, sellTime)));
+        for (const idx of [...dayIdxs.filter((i) => isLossAt(i)), ...dayIdxs.filter((i) => !isLossAt(i))]) {
+          if (leaving.lessThanOrEqualTo(0)) break;
+          const take = Decimal.min(result[idx]!.quantity.abs(), leaving);
+          tiedOf.set(idx, take);
+          leaving = leaving.minus(take);
+        }
+      }
+    }
+
     // 1. ABSORB: the in-window homogeneous repurchases not yet used by an earlier
     //    transmission. A loss lot needs them to block its own loss; while losses
     //    are pending every sold share, gain or loss, needs them for the definitive
     //    test («con independencia de que determinen ganancias o pérdidas»,
     //    V3282-18), and a rebuy counted there is used up (V0248-18). With nothing
     //    pending a gain lot has nothing to test and uses no rebuy, and a short
-    //    cover never has one.
-    const seekers = idxs.filter((idx) => isLossAt(idx) || (hasPending && !isShortAt(idx)));
-    const need = seekers.reduce((sum, idx) => sum.plus(result[idx]!.quantity.abs()), new Decimal(0));
+    //    cover never has one. For crypto only the tied coins of a gain lot run
+    //    that test: the other coins carry no pending loss.
+    const isCrypto = key.startsWith("CRYPTO:");
+    const seekQty = (idx: number): Decimal => {
+      if (isLossAt(idx)) return result[idx]!.quantity.abs();
+      if (isCrypto) return tiedOf.get(idx) ?? new Decimal(0);
+      return hasPending && !isShortAt(idx) ? result[idx]!.quantity.abs() : new Decimal(0);
+    };
+    const seekers = idxs.filter((idx) => seekQty(idx).greaterThan(0));
+    const need = seekers.reduce((sum, idx) => sum.plus(seekQty(idx)), new Decimal(0));
     let dayAbsorbed = new Decimal(0);
     const consumed: { date: string; qty: Decimal }[] = [];
     const buyEvents = buysByAsset.get(key);
@@ -582,8 +647,11 @@ export function detectWashSales(
     // gain lots, so a loss lot of the sale stays blocked (V0279-25) and a pending
     // loss elsewhere cannot hand its rebuy to a gain lot. Each lot keeps the
     // dates of the repurchases it took, for the display trail.
+    // A crypto lot also keeps the quantity per buy day (`chunksOf`): its
+    // pending losses are tied to those coins.
     const absorbedOf = new Map<number, Decimal>();
     const datesOf = new Map<number, Set<string>>();
+    const chunksOf = new Map<number, { date: string; qty: Decimal }[]>();
     const allocation = [
       ...seekers.filter((idx) => isLossAt(idx)).sort(newestFirst),
       ...seekers.filter((idx) => !isLossAt(idx)).sort(newestFirst),
@@ -592,20 +660,23 @@ export function detectWashSales(
     let chunk = 0;
     for (const idx of allocation) {
       if (toAllocate.lessThanOrEqualTo(0)) break;
-      const take = Decimal.min(result[idx]!.quantity.abs(), toAllocate);
+      const take = Decimal.min(seekQty(idx), toAllocate);
       absorbedOf.set(idx, take);
       toAllocate = toAllocate.minus(take);
       const dates = new Set<string>();
+      const chunks: { date: string; qty: Decimal }[] = [];
       let toCover = take;
       while (toCover.greaterThan(0) && chunk < consumed.length) {
         const c = consumed[chunk]!;
         const part = Decimal.min(c.qty, toCover);
         dates.add(c.date);
+        chunks.push({ date: c.date, qty: part });
         c.qty = c.qty.minus(part);
         toCover = toCover.minus(part);
         if (c.qty.lessThanOrEqualTo(0)) chunk++;
       }
       datesOf.set(idx, dates);
+      chunksOf.set(idx, chunks);
     }
 
     // 2. RELEASE: the shares no rebuy absorbed are a «transmisión definitiva».
@@ -624,7 +695,29 @@ export function detectWashSales(
       }
       from.add(entry.sellDate);
     };
-    if (queue && hasPending) {
+    // Crypto: only the tied coins sold release, and only the ones no rebuy in
+    // their own year after absorbed (the same definitive test). The absorbed
+    // ones pass their claims on to the rebuy's coins (`rolledOf`, tied in step
+    // 4), so the loss waits for those coins. A sale of other coins releases
+    // nothing. Oldest group first.
+    const rolledOf = new Map<number, { qty: Decimal; claims: { entry: PendingLoss; eur: Decimal }[] }>();
+    for (const [idx, tied] of tiedOf) {
+      const day = normalizeDay(result[idx]!.acquireDate);
+      const dayGroups = ties!.get(day)!;
+      const rolled = Decimal.min(tied, absorbedOf.get(idx) ?? 0);
+      takeTiedUnits(dayGroups, tied.minus(rolled), (entry, eur, units) => {
+        releaseInto(idx, entry, eur);
+        entry.eur = entry.eur.minus(eur);
+        entry.qty = entry.qty.minus(units);
+      });
+      if (rolled.greaterThan(0)) {
+        const claims: { entry: PendingLoss; eur: Decimal }[] = [];
+        takeTiedUnits(dayGroups, rolled, (entry, eur) => claims.push({ entry, eur }));
+        rolledOf.set(idx, { qty: rolled, claims });
+      }
+      if (dayGroups.length === 0) ties!.delete(day);
+    }
+    if (queue && hasPending && !isCrypto) {
       // The cursor moves past each entry as it is spent, so a sale of many lots
       // walks the queue once instead of rescanning the spent prefix per lot.
       let cursor = queue.head;
@@ -658,8 +751,11 @@ export function detectWashSales(
     //    hold more shares than the position, because a rebought sale both keeps
     //    the old losses pending and adds its own. Both the trades and FIFO must
     //    show the position at zero, and the day must transmit held shares: a
-    //    day of short covers only is no exit.
+    //    day of short covers only is no exit. Crypto has no total exit: every
+    //    pending crypto loss is tied to its rebuy's coins, and selling out
+    //    before a rebuy that comes later transmits none of them.
     if (
+      !isCrypto &&
       queue &&
       hasPending &&
       idxs.some((idx) => !isShortAt(idx)) &&
@@ -688,6 +784,7 @@ export function detectWashSales(
     //    loss, `|loss| × absorbed / qty`, which joins the end of the pending
     //    queue. The shares that keep the old losses pending are the same that
     //    block this one; they are not counted twice (V0913-08).
+    const blockOf = new Map<number, PendingLoss>();
     for (const idx of idxs) {
       const disposal = result[idx]!;
       const absorbed = absorbedOf.get(idx);
@@ -705,11 +802,139 @@ export function detectWashSales(
         pending = { entries: [], head: 0 };
         pendingByAsset.set(key, pending);
       }
-      pending.entries.push({ qty: absorbed, eur: blocked, time: sellTime, sellDate: normalizeDay(disposal.sellDate) });
+      const entry: PendingLoss = { qty: absorbed, eur: blocked, time: sellTime, sellDate: normalizeDay(disposal.sellDate) };
+      pending.entries.push(entry);
+      blockOf.set(idx, entry);
+    }
+
+    // Crypto: tie each lot's new block and the claims it passed on to the coins
+    // of the rebuys that absorbed it. The first `rolled` units carry the passed
+    // claims as well as the new block: the same coins block the new loss and
+    // keep the old ones pending, never counted twice.
+    if (isCrypto) {
+      for (const [idx, chunks] of chunksOf) {
+        const block = blockOf.get(idx);
+        const rolled = rolledOf.get(idx);
+        if (!block && !rolled) continue;
+        const absorbed = absorbedOf.get(idx)!;
+        const blockShare = block ? shareOut(block.eur, absorbed) : undefined;
+        const rolledShares = rolled ? rolled.claims.map((c) => ({ entry: c.entry, take: shareOut(c.eur, rolled.qty) })) : [];
+        let rolledLeft = rolled?.qty ?? new Decimal(0);
+        let keyTies = tiesByAsset.get(key);
+        if (!keyTies) {
+          keyTies = new Map();
+          tiesByAsset.set(key, keyTies);
+        }
+        for (const c of chunks) {
+          const withRolled = Decimal.min(c.qty, rolledLeft);
+          rolledLeft = rolledLeft.minus(withRolled);
+          const parts: { qty: Decimal; claims: { entry: PendingLoss; eur: Decimal }[] }[] = [];
+          if (withRolled.greaterThan(0)) {
+            const claims = rolledShares.map((r) => ({ entry: r.entry, eur: r.take(withRolled) }));
+            if (block) claims.push({ entry: block, eur: blockShare!(withRolled) });
+            parts.push({ qty: withRolled, claims });
+          }
+          const rest = c.qty.minus(withRolled);
+          if (rest.greaterThan(0) && block) parts.push({ qty: rest, claims: [{ entry: block, eur: blockShare!(rest) }] });
+          if (parts.length === 0) continue;
+          const dayGroups = keyTies.get(c.date);
+          if (dayGroups) dayGroups.push(...parts);
+          else keyTies.set(c.date, parts);
+        }
+      }
     }
   }
 
   return result;
+}
+
+/**
+ * Hand out `eur` over `units` in parts: each call takes `eur × part / units`,
+ * and the call that takes the last units takes what is left, so the parts sum
+ * to `eur` exactly.
+ */
+function shareOut(eur: Decimal, units: Decimal): (part: Decimal) => Decimal {
+  let eurLeft = eur;
+  let unitsLeft = units;
+  return (part: Decimal): Decimal => {
+    const take = part.greaterThanOrEqualTo(unitsLeft) ? eurLeft : eurLeft.mul(part).div(unitsLeft);
+    eurLeft = eurLeft.minus(take);
+    unitsLeft = unitsLeft.minus(part);
+    return take;
+  };
+}
+
+/**
+ * Take `units` tied coins off a buy day's groups, oldest group first. Each
+ * claim on the units taken gives up its share of EUR (all of it when the whole
+ * group goes) through `onClaim`, with the units taken from that group.
+ */
+function takeTiedUnits(
+  groups: TieGroup[],
+  units: Decimal,
+  onClaim: (entry: PendingLoss, eur: Decimal, units: Decimal) => void,
+): void {
+  let left = units;
+  while (left.greaterThan(0) && groups.length > 0) {
+    const group = groups[0]!;
+    const take = Decimal.min(group.qty, left);
+    const whole = take.equals(group.qty);
+    for (const claim of group.claims) {
+      const eur = whole ? claim.eur : claim.eur.mul(take).div(group.qty);
+      claim.eur = claim.eur.minus(eur);
+      onClaim(claim.entry, eur, take);
+    }
+    group.qty = group.qty.minus(take);
+    left = left.minus(take);
+    if (group.qty.lessThanOrEqualTo(0)) groups.shift();
+  }
+}
+
+/**
+ * Crypto coins of each buy day still held after a given day, per key: the
+ * disposals of that buy day sold later, plus the lots of that day FIFO still
+ * holds at the end. Without FIFO's lots, the coins bought that day that no
+ * disposal sold. Keyed `key|YYYY-MM-DD` on the lot's acquisition day, which is
+ * the trade day of the buy that opened it.
+ */
+function buildCryptoDayHoldings(
+  disposals: readonly FifoDisposal[],
+  remainingLots: ReadonlyMap<string, readonly Lot[]> | undefined,
+  boughtByDay: ReadonlyMap<string, Decimal>,
+): (key: string, day: string, time: number) => Decimal {
+  const sales = new Map<string, { time: number; qty: Decimal }[]>();
+  const soldByDay = new Map<string, Decimal>();
+  for (const d of disposals) {
+    if (d.assetCategory !== "CRYPTO" || d.isShort === true || d.quantity.isZero()) continue;
+    const dayKey = `${homogeneousKey(d.isin, d.symbol, d.assetCategory)}|${normalizeDay(d.acquireDate)}`;
+    const qty = d.quantity.abs();
+    const sale = { time: parseDate(d.sellDate).getTime(), qty };
+    const daySales = sales.get(dayKey);
+    if (daySales) daySales.push(sale);
+    else sales.set(dayKey, [sale]);
+    soldByDay.set(dayKey, (soldByDay.get(dayKey) ?? new Decimal(0)).plus(qty));
+  }
+  const heldAtEnd = new Map<string, Decimal>();
+  if (remainingLots) {
+    for (const [mapKey, lots] of remainingLots) {
+      if (!mapKey.startsWith("CRYPTO:")) continue;
+      for (const lot of lots) {
+        if (lot.isShort || lot.quantity.lessThanOrEqualTo(0)) continue;
+        const dayKey = `${mapKey}|${normalizeDay(lot.acquireDate)}`;
+        heldAtEnd.set(dayKey, (heldAtEnd.get(dayKey) ?? new Decimal(0)).plus(lot.quantity));
+      }
+    }
+  } else {
+    for (const [dayKey, bought] of boughtByDay) {
+      heldAtEnd.set(dayKey, Decimal.max(0, bought.minus(soldByDay.get(dayKey) ?? 0)));
+    }
+  }
+  return (key: string, day: string, time: number): Decimal => {
+    const dayKey = `${key}|${day}`;
+    let held = heldAtEnd.get(dayKey) ?? new Decimal(0);
+    for (const sale of sales.get(dayKey) ?? []) if (sale.time > time) held = held.plus(sale.qty);
+    return held;
+  };
 }
 
 /**
