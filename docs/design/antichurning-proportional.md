@@ -579,6 +579,10 @@ práctico Renta 2025. The decisions, each pinned in
       as unreadable rows (it was a sale at 0). One with no symbol and no
       readable date is kept too when it has a quantity; only a line with a
       `Total` label or no quantity is skipped as a totals line.
+      The column lookup matches each header as the detection does, so
+      "Price per share (USD)" or "Gross proceeds (USD)" is read (every
+      trade was priced 0, or the file came out empty). A detected sheet
+      with a required column missing is refused, naming the column.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
       action that is not a buy, sale, dividend, interest, split or cash row
       and writes a share count. An unknown action with an empty share cell

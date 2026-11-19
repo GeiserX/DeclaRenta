@@ -151,6 +151,29 @@ function sheetToRows(xlsx: typeof import("xlsx"), sheet: WorkSheet): string[][] 
   return xlsx.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: "" });
 }
 
+/**
+ * A column of a Revolut sheet, found the same way for the detection and the
+ * lookup: by an exact name, else, for a `loose` column, by a header that
+ * contains a name ("Price per share (USD)", "Gross proceeds (USD)"). The
+ * detection accepted such a header and the lookup did not, so every trade was
+ * priced 0, or the file gave an empty statement with no word (#467).
+ */
+function revolutColumn(headers: string[], names: string[], loose = false): number {
+  const exact = findColumn(headers, names);
+  if (exact >= 0 || !loose) return exact;
+  return headers.findIndex((h) => names.some((n) => h.toLowerCase().trim().includes(n)));
+}
+
+/**
+ * Refuse a sheet the detection took for Revolut that lacks a column the
+ * parser needs, naming it, as the other parsers do: an empty statement would
+ * drop the whole file with no word next to another broker's file.
+ */
+function requireColumns(columns: Record<string, number>): void {
+  const missing = Object.entries(columns).filter(([, c]) => c < 0).map(([name]) => name);
+  if (missing.length > 0) throw new Error(`Revolut XLSX: faltan columnas obligatorias (${missing.join(", ")})`);
+}
+
 // ---------------------------------------------------------------------------
 // Trade parser
 // ---------------------------------------------------------------------------
@@ -163,20 +186,20 @@ function parseTrades(
   if (rows.length < 2) return { trades: [], parserMessages: [] };
 
   const headers = rows[0]!;
-  const dateAcqCol = findColumn(headers, DATE_ACQUIRED_HEADERS);
+  const dateAcqCol = revolutColumn(headers, DATE_ACQUIRED_HEADERS, true);
   const dateSoldCol = findColumn(headers, DATE_SOLD_HEADERS);
   const symbolCol = findColumn(headers, SYMBOL_HEADERS);
   const quantityCol = findColumn(headers, QUANTITY_HEADERS);
-  const costBasisCol = findColumn(headers, COST_BASIS_HEADERS);
-  const grossProceedsCol = findColumn(headers, GROSS_PROCEEDS_HEADERS);
+  const costBasisCol = revolutColumn(headers, COST_BASIS_HEADERS, true);
+  const grossProceedsCol = revolutColumn(headers, GROSS_PROCEEDS_HEADERS, true);
   const grossPnlCol = findColumn(headers, GROSS_PNL_HEADERS);
   const feesCol = findColumn(headers, FEES_HEADERS);
   const currencyCol = findColumn(headers, CURRENCY_HEADERS);
 
-  if (
-    dateAcqCol < 0 || dateSoldCol < 0 || symbolCol < 0 || quantityCol < 0 ||
-    costBasisCol < 0 || grossProceedsCol < 0 || currencyCol < 0
-  ) return { trades: [], parserMessages: [] };
+  requireColumns({
+    "Date acquired": dateAcqCol, "Date sold": dateSoldCol, Symbol: symbolCol, Quantity: quantityCol,
+    "Cost basis": costBasisCol, "Gross proceeds": grossProceedsCol, Currency: currencyCol,
+  });
 
   const order = dateOrderOf(rows, [dateAcqCol, dateSoldCol]);
   const trades: Trade[] = [];
@@ -366,17 +389,19 @@ interface TxnLogColumns {
   fxRate: number;
 }
 
-function findTxnLogColumns(headers: string[]): TxnLogColumns | null {
+function findTxnLogColumns(headers: string[]): TxnLogColumns {
   const date = findColumn(headers, TXN_DATE_HEADERS);
   const ticker = findColumn(headers, TXN_TICKER_HEADERS);
   const type = findColumn(headers, TXN_TYPE_HEADERS);
   const quantity = findColumn(headers, TXN_QUANTITY_HEADERS);
-  const price = findColumn(headers, TXN_PRICE_HEADERS);
-  const total = findColumn(headers, TXN_TOTAL_HEADERS);
+  const price = revolutColumn(headers, TXN_PRICE_HEADERS, true);
+  const total = revolutColumn(headers, TXN_TOTAL_HEADERS, true);
   const currency = findColumn(headers, TXN_CURRENCY_HEADERS);
   const fxRate = findColumn(headers, TXN_FX_RATE_HEADERS);
 
-  if (date < 0 || type < 0 || total < 0 || currency < 0) return null;
+  // A missing Price per share is priced from Total Amount ÷ Quantity, and a
+  // missing Quantity makes rows of unknown size: both are named row by row.
+  requireColumns({ Date: date, Type: type, "Total Amount": total, Currency: currency });
   return { date, ticker, type, quantity, price, total, currency, fxRate };
 }
 
@@ -393,7 +418,6 @@ function parseTransactionLog(
 
   const headers = rows[0]!;
   const cols = findTxnLogColumns(headers);
-  if (!cols) return empty;
 
   const order = dateOrderOf(rows, [cols.date]);
   const trades: Trade[] = [];
@@ -865,23 +889,16 @@ function parseTransactionLog(
 // Transaction-log detection
 // ---------------------------------------------------------------------------
 
+// The detection matches each column as the lookup does (revolutColumn).
 function hasTxnLogHeaders(headers: string[]): boolean {
-  const lower = headers.map((h) => h.toLowerCase().trim());
-  const hasDate = lower.some(h => TXN_DATE_HEADERS.includes(h));
-  const hasTicker = lower.some(h => TXN_TICKER_HEADERS.includes(h));
-  const hasType = lower.some(h => TXN_TYPE_HEADERS.includes(h));
-  const hasTotal = lower.some(h => TXN_TOTAL_HEADERS.some(p => h.includes(p)));
-  const hasPrice = lower.some(h => TXN_PRICE_HEADERS.some(p => h.includes(p)));
-  return hasDate && hasTicker && hasType && hasTotal && hasPrice;
+  return revolutColumn(headers, TXN_DATE_HEADERS) >= 0 && revolutColumn(headers, TXN_TICKER_HEADERS) >= 0 &&
+    revolutColumn(headers, TXN_TYPE_HEADERS) >= 0 && revolutColumn(headers, TXN_TOTAL_HEADERS, true) >= 0 &&
+    revolutColumn(headers, TXN_PRICE_HEADERS, true) >= 0;
 }
 
 function hasClosedPositionHeaders(headers: string[]): boolean {
-  const lower = headers.map((h) => h.toLowerCase().trim());
-  const hasDateAcq = lower.some(h => DATE_ACQUIRED_HEADERS.some(p => h.includes(p)));
-  const hasCostOrProceeds = lower.some(h =>
-    [...COST_BASIS_HEADERS, ...GROSS_PROCEEDS_HEADERS].some(p => h.includes(p)),
-  );
-  return hasDateAcq && hasCostOrProceeds;
+  return revolutColumn(headers, DATE_ACQUIRED_HEADERS, true) >= 0 &&
+    revolutColumn(headers, [...COST_BASIS_HEADERS, ...GROSS_PROCEEDS_HEADERS], true) >= 0;
 }
 
 // ---------------------------------------------------------------------------

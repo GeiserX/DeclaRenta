@@ -13,6 +13,9 @@
  *   booked at price 0: a sale became a full loss with no word.
  * - A closed position whose Gross proceeds cannot be read was booked as a
  *   sale at 0, and one with no symbol and no readable date was dropped.
+ * - A header the detection accepts ("Price per share (USD)") was not found
+ *   by the column lookup: every trade was priced 0, or the file gave an
+ *   empty statement with no word.
  */
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
@@ -260,5 +263,30 @@ describe("Revolut closed positions: proceeds that cannot be read are no sale at 
       expect(s.trades.map((t) => t.symbol), row.join()).toEqual(["AAPL", "AAPL"]);
       expect(s.parserMessages, row.join()).toBeUndefined();
     }
+  });
+});
+
+describe("Revolut headers: the lookup finds every column the detection accepts", () => {
+  const swap = (header: string[], from: string, to: string) => header.map((h) => (h === from ? to : h));
+
+  it.each(METHODS)("[%s] \"Price per share (USD)\" and \"Total Amount (USD)\" are read like the exact headers", async (method) => {
+    for (const header of [swap(H, "Price per share", "Price per share (USD)"), swap(H, "Total Amount", "Total Amount (USD)")]) {
+      const r = await report([BUY, sell()], method, header);
+      expect(r.capitalGains.transmissionValue.toFixed(2), header.join()).toBe("1650.00");
+      expect(r.capitalGains.netGainLoss.toFixed(2), header.join()).toBe("550.00");
+    }
+  });
+
+  it.each(METHODS)("[%s] closed positions: \"Gross proceeds (USD)\" and \"Cost basis (USD)\" are read", async (method) => {
+    const header = swap(swap(HC, "Gross proceeds", "Gross proceeds (USD)"), "Cost basis", "Cost basis (USD)");
+    const r = await report([closed()], method, header);
+    expect(r.capitalGains.netGainLoss.toFixed(2)).toBe("547.80");
+  });
+
+  it("a file the detection accepts with a required column missing is refused, naming the column", async () => {
+    const noCurrency = [H.filter((h) => h !== "Currency"), BUY.filter((_, i) => i !== 6)];
+    await expect(parseRevolutXlsx(workbook(noCurrency))).rejects.toThrow("Revolut XLSX: faltan columnas obligatorias (Currency)");
+    const noSymbol = [HC.filter((h) => h !== "Symbol"), closed().filter((_, i) => i !== 2)];
+    await expect(parseRevolutXlsx(workbook(noSymbol))).rejects.toThrow("Revolut XLSX: faltan columnas obligatorias (Symbol)");
   });
 });
