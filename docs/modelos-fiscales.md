@@ -123,6 +123,8 @@ El formato del fichero JSON es:
 ]
 ```
 
+DeclaRenta no usa una entrada cuyo importe llega a un billón de euros (más de 12 cifras enteras), y la línea de comandos avisa con el año de esa entrada. Ninguna pérdida real llega a esa cifra, y sin esa pérdida solo puedes pagar de más.
+
 ## Otros tipos de activo
 
 Además de acciones (STK) y fondos (FUND), DeclaRenta procesa estos instrumentos financieros:

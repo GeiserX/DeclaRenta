@@ -55,8 +55,8 @@ export function normalizeManualOpeningLot(lot: ManualOpeningLot): ManualOpeningL
 
   if (!quantity.isFinite() || !pricePerShare.isFinite()) return null;
   if (!quantity.greaterThan(0) || !pricePerShare.greaterThan(0)) return null;
-  // A quantity, price or cost no broker writes (`tradeOutOfRange`: 20 integer
-  // digits or more, or below 10^-20) is no lot: decimal.js reads
+  // A quantity, price or cost no broker writes (`tradeOutOfRange`: more than 20
+  // integer digits, or below 10^-20) is no lot: decimal.js reads
   // "1e1000000000" as finite, and the lot's cost reached FIFO and every
   // output (#470). The web form marks the row invalid.
   if (tradeOutOfRange({
