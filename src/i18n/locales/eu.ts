@@ -1082,9 +1082,9 @@ const eu: TranslationKeys = {
   "binance.spot_cost_split.hint":
     "Binance-k hainbat eragiketa ematen ditu segundo berean. Ez du ordainketa edo kobrantza bakoitza bere erosketaren edo salmentaren ondoan jartzen. Beraz, DeclaRentak ez daki zein zenbateko doan kriptomoneta bakoitzarekin. Zenbatekoak haien artean banatu ditu, ordenaren arabera edo zati berdinetan. Guztizkoa zuzena da, baina kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa ez da fidagarria. Beraz, kriptomoneta horien irabaziak eta galerak ez dira fidagarriak. Horietako bat galerak izan zituen salmenta baten hurrengo urtean egindako berrerosketa bada, LIRPF 33.5.e artikuluaren egiaztapena ere ez da fidagarria. Bilatu agindu horiek zure Binance historian, eta zuzendu eskuz Renta Web-en kriptomoneta bakoitzaren kostua edo salmenta-zenbatekoa.",
   "binance.unsupported_pair":
-    "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{pairs}}.",
+    "Binance-ren CSVko {{count}} eragiketa baztertu dira, pare ezezagun bat dutelako: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "Eragiketa horiek ez dira kalkuluan sartu. Gehitu eskuz zure aitorpenean eta jakinarazi parea, sar dadin.",
+    "Kortxete artean dago parearen gelaxka. Eragiketa horiek ez dira kalkuluan sartu. Gehitu eskuz zure aitorpenean eta jakinarazi parea, sar dadin.",
   "etoro.closed_types_skipped":
     "eToro-ren {{count}} posizio itxi baztertu dira, onartzen ez den mota batekoak direlako: {{types}}.",
   "etoro.closed_types_skipped.hint":

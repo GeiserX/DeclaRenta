@@ -1117,9 +1117,9 @@ const es = {
   "binance.spot_cost_split.hint":
     "Binance anota varias operaciones en el mismo segundo. No pone cada pago o cobro junto a su compra o venta. Por eso DeclaRenta no sabe qué importe va con cada criptomoneda. Ha repartido los importes entre ellas por orden o a partes iguales. El total es correcto, pero el coste o el importe de venta de cada criptomoneda no es fiable. Sus ganancias y sus pérdidas tampoco lo son. Si una de ellas es una recompra en el año siguiente a una venta con pérdidas, la comprobación del art. 33.5.e LIRPF tampoco es fiable. Busca esas órdenes en tu historial de Binance y corrige a mano en Renta Web el coste o el importe de venta de cada criptomoneda.",
   "binance.unsupported_pair":
-    "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{pairs}}.",
+    "Se han omitido {{count}} operación(es) del CSV de Binance con un par no reconocido: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
+    "Entre corchetes va la celda del par. Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
   "etoro.closed_types_skipped":
     "Se ha(n) omitido {{count}} posición(es) cerrada(s) de eToro de un tipo no soportado: {{types}}.",
   "etoro.closed_types_skipped.hint":

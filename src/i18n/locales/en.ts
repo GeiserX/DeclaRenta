@@ -1078,9 +1078,9 @@ const en: TranslationKeys = {
   "binance.spot_cost_split.hint":
     "Binance lists several trades in the same second. It does not write each payment or proceeds next to its purchase or sale. So DeclaRenta does not know which amount goes with each cryptocurrency. It shared the amounts among them by order or in equal parts. The total is correct, but the cost or sale value of each cryptocurrency is not reliable. Their gains and losses are not reliable either. If one of them is a repurchase in the year after a sale at a loss, the art. 33.5.e LIRPF check is not reliable either. Find those orders in your Binance history and correct the cost or sale value of each cryptocurrency by hand in Renta Web.",
   "binance.unsupported_pair":
-    "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{pairs}}.",
+    "{{count}} Binance CSV trade(s) with an unrecognized pair were skipped: {{rows}}.",
   "binance.unsupported_pair.hint":
-    "These trades are not included in the calculation. Add them to your return by hand and report the pair so it can be supported.",
+    "The square brackets show the pair cell. These trades are not included in the calculation. Add them to your return by hand and report the pair so it can be supported.",
   "etoro.closed_types_skipped":
     "{{count}} eToro closed position(s) of an unsupported type were skipped: {{types}}.",
   "etoro.closed_types_skipped.hint":

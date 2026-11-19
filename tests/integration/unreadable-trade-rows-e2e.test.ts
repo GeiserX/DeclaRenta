@@ -1756,6 +1756,7 @@ describe("#467 crypto income whose coin cannot be read is named, never skipped w
 describe("#466 #467 #468 the warnings of these issues read as plain short sentences in Spanish and English", () => {
   const KEYS = [
     "binance.unparseable_amount", "binance.unparseable_coin", "binance.unpaired_leg", "binance.spot_cost_split",
+    "binance.unsupported_pair",
     "freedom24.row_skipped_malformed", "freedom24.dividend_amount_unreadable", "freedom24.tax_amount_unreadable",
     "parser.trade_row_unreadable", "parser.corporate_action_not_applied", "parser.cash_row_undated",
     "parser.cash_row_unidentified", "parser.crypto_income_unidentified", "parser.crypto_income_amount_unreadable", "parser.cash_income_amount_unreadable",
@@ -2150,5 +2151,62 @@ describe("#467 a dividend or interest row whose amount cannot be read is named, 
     const esText = es as Record<string, string>;
     expect(emitted.message).toBe(esText[ID]!.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => emitted.context?.[k] ?? ""));
     expect(emitted.hint).toBe(esText[`${ID}.hint`]);
+  });
+});
+
+describe("#467 Binance: a Trade History price or pair is read from the file or named", () => {
+  const TH_H = "Date(UTC),Pair,Side,Price,Executed,Amount,Fee";
+  const message = (messages: readonly TaxMessage[] | undefined, id: string): TaxMessage | undefined => messages?.find((m) => m.id === id);
+  const gains = (r: TaxReport, coin: string): string[] => r.capitalGains.disposals.filter((d) => d.symbol === coin).map((d) => new Decimal(d.gainLossEur).toFixed(2));
+
+  // Trade History: FIFO values a fiat-quoted trade at Price × Executed. A
+  // Price it cannot read was read as 0: BTC bought for 2000 € and sold for
+  // 3000 € showed a 2000 € loss with no word. Amount ÷ Executed are the
+  // file's own numbers, so the price is taken from them.
+  const buyBtc = "2025-01-10 10:00:00,BTCEUR,BUY,20000,0.1BTC,2000EUR,0EUR";
+  const sellBtc = (price: string, amount = "3000EUR"): string => `2025-06-01 10:00:00,BTCEUR,SELL,${price},0.1BTC,${amount},0EUR`;
+  const history = (...rows: string[]): Statement => binanceParser.parse([TH_H, ...rows].join("\n"));
+  const prices: [string, string[], string][] = [
+    ["sale, Price \"abc\"", [buyBtc, sellBtc("abc")], "1000.00"],
+    ["sale, Price empty", [buyBtc, sellBtc("")], "1000.00"],
+    ["sale, Price \"30,000.00\"", [buyBtc, sellBtc("\"30,000.00\"")], "1000.00"],
+    ["purchase, Price \"abc\"", ["2025-01-10 10:00:00,BTCEUR,BUY,abc,0.1BTC,2000EUR,0EUR", sellBtc("30000")], "1000.00"],
+    ["USD pair, sale Price \"abc\"", ["2025-01-10 10:00:00,BTCUSD,BUY,22000,0.1BTC,2200USD,0USD", "2025-06-01 10:00:00,BTCUSD,SELL,abc,0.1BTC,3300USD,0USD"], "1210.00"],
+    ["control: Price 30000", [buyBtc, sellBtc("30000")], "1000.00"],
+    ["control: USD pair, sale Price 33000", ["2025-01-10 10:00:00,BTCUSD,BUY,22000,0.1BTC,2200USD,0USD", "2025-06-01 10:00:00,BTCUSD,SELL,33000,0.1BTC,3300USD,0USD"], "1210.00"],
+  ];
+  describe.each(prices)("Trade History %s", (_label, rows, gain) => {
+    it.each(METHODS)("[%s] the price is Amount ÷ Executed, the gain is the one of the readable control, and nothing is named", (method) => {
+      const parsed = history(...rows);
+      expect(parsed.parserMessages ?? []).toEqual([]);
+      expect(gains(run([[parsed, "Binance"]], 2025, method), "BTC")).toEqual([gain]);
+    });
+  });
+  it.each(METHODS)("[%s] Trade History: a sale whose Price and Amount both cannot be read is kept as a row that books nothing, named by its Price", (method) => {
+    const parsed = history(buyBtc, sellBtc("abc", "xyz"));
+    expect(unreadableRows(parsed)).toBe('BTC 20250601 [Price: "abc"]');
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(gains(r, "BTC")).toEqual([]);
+    expect(message(r.messages, "parser.trade_row_unreadable")?.context?.rows).toBe('BTC 20250601 [Price: "abc"]');
+  });
+  it("control: a written Price of 0 stays the file's word", () => {
+    const parsed = history(buyBtc, sellBtc("0"));
+    expect(parsed.trades.map((t) => t.tradePrice)).toEqual(["20000", "0"]);
+    expect(parsed.parserMessages ?? []).toEqual([]);
+  });
+
+  // Trade History: a row whose Pair cannot be split was named only by its
+  // Pair text, so an empty Pair named nothing. Each row is now named by
+  // date, side, amount and the Pair cell.
+  it.each(METHODS)("[%s] Trade History: a row with an empty or unknown Pair is named by date, side, amount and cell", (method) => {
+    const parsed = history(buyBtc, "2025-06-01 10:00:00,,SELL,30000,0.1BTC,3000EUR,0EUR", "2025-06-02 10:00:00,XYZABC,BUY,1,5,5,0");
+    const r = run([[parsed, "Binance"]], 2025, method);
+    expect(message(r.messages, "binance.unsupported_pair")?.context).toEqual({
+      count: "2", pairs: ", XYZABC", rows: '20250601 SELL 0.1BTC [Pair: ""]; 20250602 BUY 5 [Pair: "XYZABC"]',
+    });
+  });
+
+  it("the unsupported-pair warning names the rows in the five locales", () => {
+    for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) expect(locale["binance.unsupported_pair"]).toContain("{{rows}}");
   });
 });

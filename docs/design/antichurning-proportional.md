@@ -745,6 +745,11 @@ práctico Renta 2025. The decisions, each pinned in
       every Buy (or Sold) too when one is left over. Otherwise the numbers
       are booked as before and `binance.spot_cost_split`, now worded for
       purchases and sales, names every leg.
+      In the Trade History export, FIFO values a fiat-pair trade at Price ×
+      Executed: a Price that cannot be read was read as 0 (a 3000 € sale
+      showed a 2000 € loss), so the price is now Amount ÷ Executed, and a
+      row with neither is an unreadable row named by its Price. A row whose
+      Pair cannot be split is named by date, side, amount and the Pair cell.
   - `buildEvidenceCheck`, for EVERY account (broker and account id) that
     trades the key or lists it in any holdings list of the upload:
     1. it has a holdings list dated on or after the sale day; the earliest such

@@ -1405,6 +1405,8 @@ function parseBinanceCsv(lines: string[]): Statement {
 
   const trades: Trade[] = [];
   const unsupportedPairs = new Map<string, number>();
+  /** Each row left out for its pair, named as "date side executed [Pair: cell]" (#467). */
+  const unsupportedRows: string[] = [];
   const seenKeys = new Map<string, number>();
 
   for (let i = 1; i < lines.length; i++) {
@@ -1421,21 +1423,26 @@ function parseBinanceCsv(lines: string[]): Statement {
     const pair = parsePair(pairStr);
     if (!pair) {
       // One pair we cannot split must not abort the whole export: skip the row
-      // and name it in a warning so the user can add it by hand.
+      // and name it in a warning so the user can add it by hand. Each row is
+      // named by date, side and amount: an empty Pair alone named nothing.
       unsupportedPairs.set(pairStr, (unsupportedPairs.get(pairStr) ?? 0) + 1);
+      unsupportedRows.push(`${tradeDate} ${(fields[cols.side] ?? "").trim()} ${(fields[cols.executed] ?? "").trim()} [${unreadableCell((headers[cols.pair] ?? "").trim(), pairStr)}]`);
       continue;
     }
     const { symbol, currency } = pair;
 
     const sideLower = (fields[cols.side] ?? "").trim().toLowerCase();
     // A row whose Side is neither BUY nor SELL, whose Executed cannot be read,
-    // or (for a crypto-quoted pair) whose Amount cannot be read, may hide a
+    // (for a crypto-quoted pair) whose Amount cannot be read, or (for a
+    // fiat-quoted pair) whose Price and Amount both cannot be read, may hide a
     // gain, a loss or an art. 33.5.e repurchase: it is kept as a trade that
     // books nothing for each coin it names, and named by its cell, never
     // skipped with no word or booked as zero units (#467).
+    const priceReadable = readableAmount(fields[cols.price]);
     const badCell = sideLower !== "buy" && sideLower !== "sell" ? cols.side
       : !readableAmount(fields[cols.executed]) ? cols.executed
       : !isFiat(currency) && !readableAmount(fields[cols.amount]) ? cols.amount
+      : isFiat(currency) && !priceReadable && !readableAmount(fields[cols.amount]) ? cols.price
       : -1;
     if (badCell >= 0) {
       const cell = unreadableCell((headers[badCell] ?? "").trim(), fields[badCell]);
@@ -1456,9 +1463,16 @@ function parseBinanceCsv(lines: string[]): Statement {
     // non-finite price/qty silently poisons every casilla total. parseEu=false
     // keeps the original raw-string parse (these cells are plain decimals; the
     // suffix-parsed ones are already normalized to [0-9.]+).
-    const price = toFiniteDecimal((fields[cols.price] ?? "0").trim() || "0", "0", false);
     const executed = toFiniteDecimal(parseAmountWithSuffix((fields[cols.executed] ?? "0").trim()).amount || "0", "0", false);
     const amount = toFiniteDecimal(parseAmountWithSuffix((fields[cols.amount] ?? "0").trim()).amount || "0", "0", false);
+    // FIFO values a fiat-quoted trade at Price × Executed. A Price it cannot
+    // read ("", "abc", "30,000.00") was read as 0, so a sale booked no
+    // proceeds and a full loss with no word. Then the price is Amount ÷
+    // Executed, the file's own numbers (#467). A written zero stays the
+    // file's word, and a row of zero units moves nothing whatever its price.
+    const price = priceReadable
+      ? toFiniteDecimal(parseAmountWithSuffix(fields[cols.price]!.trim()).amount, "0", false)
+      : executed.isZero() ? new Decimal(0) : amount.div(executed);
 
     const fee = parseFee((fields[cols.fee] ?? "").trim());
     const feeAmount = toFiniteDecimal(fee.amount || "0", "0", false);
@@ -1520,12 +1534,13 @@ function parseBinanceCsv(lines: string[]): Statement {
   if (unsupportedPairs.size > 0) {
     const count = [...unsupportedPairs.values()].reduce((a, b) => a + b, 0);
     const pairs = [...unsupportedPairs.keys()].join(", ");
+    const rows = unsupportedRows.join("; ");
     parserMessages.push({
       id: "binance.unsupported_pair",
       severity: "warning",
-      message: `Se ${count === 1 ? "ha omitido 1 operación" : `han omitido ${count} operaciones`} del CSV de Binance con un par no reconocido: ${pairs}.`,
-      hint: "Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
-      context: { count: String(count), pairs },
+      message: `Se ${count === 1 ? "ha omitido 1 operación" : `han omitido ${count} operaciones`} del CSV de Binance con un par no reconocido: ${rows}.`,
+      hint: "Entre corchetes va la celda del par. Estas operaciones no se han incluido en el cálculo. Añádelas a mano en tu declaración y comunica el par para que se pueda incorporar.",
+      context: { count: String(count), pairs, rows },
     });
   }
   markUndatedTrades(trades, "Date(UTC)");
