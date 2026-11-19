@@ -71,6 +71,41 @@ describe("#457 issue example: a crypto buy before the sale does not defer the lo
   });
 });
 
+describe("#457 migration: a loss 0.66.13 blocked is deducted in the year of the sale and never released later", () => {
+  // The issue example plus a later sale of the other BTC on 01/03/2026 (+50).
+  // 0.66.13 blocked the 100 in 2025 and released it in 2026. Now 2025 deducts
+  // it and 2026 releases nothing, so a user who filed 2025 with 0.66.13 must
+  // correct 2025 (docs/casillas.md warning box, guide_rw.blocked_losses_hint).
+  const ops: Op[] = [
+    ["2024-12-01", "BUY", 1, 200], ["2025-03-01", "BUY", 1, 100], ["2025-06-01", "SELL", 1, 100], ["2026-03-01", "SELL", 1, 150],
+  ];
+
+  it.each(METHODS)("[%s] 2025 deducts −100; 2026 reintegrates 0 and shows only its +50 gain", (method) => {
+    expect(run(ops, 2025, method)).toMatchObject({ blocked: "0.00", fiscal: "-100.00" });
+    expect(run(ops, 2026, method)).toMatchObject({ reintegrated: "0.00", fiscal: "50.00" });
+  });
+});
+
+describe("#457 open release rule: the definitive test can release while the rebought coin is still held", () => {
+  // Loss −100 on 01/06/2025 (FIFO sells the 01/01 lot), rebought on 01/09/2025.
+  // On 01/10/2026 FIFO sells the 01/03/2025 lot, not the rebought one, and no
+  // buy follows it: the sale is definitive and releases the 100 though the
+  // 01/09 coin is never sold. Under the reading "posterior transmisión" = the
+  // sale of the reacquired element nothing would be released yet. The docs
+  // (casillas.md, CLAUDE.md, the design doc) state this as open point A.
+  const ops: Op[] = [
+    ["2025-01-01", "BUY", 1, 200], ["2025-03-01", "BUY", 1, 150], ["2025-06-01", "SELL", 1, 100],
+    ["2025-09-01", "BUY", 1, 90], ["2026-10-01", "SELL", 1, 160],
+  ];
+
+  it("2025 blocks 100; 2026 releases it on the sale of the 01/03/2025 lot", () => {
+    expect(run(ops, 2025).blocked).toBe("100.00");
+    const r = run(ops, 2026);
+    expect(r.report.capitalGains.disposals.map((d) => d.acquireDate.replace(/-/g, ""))).toEqual(["20250301"]);
+    expect(r.reintegrated).toBe("100.00");
+  });
+});
+
 describe("#457: a crypto buy before a later sale does not keep an older loss pending", () => {
   // 2025: loss −100 on 01/06, rebought on 01/09 (blocks 100). 2026: buy on 01/02,
   // sell 1 on 01/03 (FIFO sells the 01/09 lot: 120 − 90 = +30), nothing after.

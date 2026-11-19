@@ -260,8 +260,12 @@ transmission that releases them.
   Open points it leaves: (A) letter e has its own release sentence («se
   integrará cuando se produzca la posterior transmisión del elemento
   patrimonial», without the f/g «que permanezcan»); the engine keeps the #451
-  definitive test, which defers and never releases early, and the reading
-  "any later sale releases" is not built. (B) A partial reacquisition stays
+  definitive test. It never releases earlier than the reading "any later sale
+  releases", which is not built. It can release before the reacquired units
+  are sold: a later definitive sale of older units releases the loss while
+  the rebought coin is still held. The reading "the sale of the reacquired
+  element" (FIFO lot identification, V1550-25) would release nothing until
+  those units are sold. (B) A partial reacquisition stays
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and
   reward receipts are no repurchase (reward lots stay out of
   `washSaleTrades`), the less strict choice, which no source settles.

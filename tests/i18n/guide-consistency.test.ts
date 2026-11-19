@@ -337,4 +337,44 @@ describe("Renta Web guide consistency", () => {
     // Rewards do not count as a reacquisition: a documented choice.
     expect(texts.casillas).toMatch(/staking[^.]*no cuentan como recompra|no cuentan como recompra[^.]*staking/);
   });
+
+  it("tells users who filed crypto with 0.66.13 or earlier to correct that year, or the loss is never deducted (#457)", () => {
+    // 0.66.13 let a buy before the sale block a crypto loss and released it in a
+    // later year. The new engine deducts it in the year of the sale and no later
+    // year releases it: without a correction the loss is lost.
+    const neverDeducted = {
+      es: /criptomonedas[^]*0\.66\.13[^]*solicitud de rectificación\); si no, no se deduce nunca/,
+      en: /crypto[^]*0\.66\.13[^]*«solicitud de rectificación»\); otherwise it is never deducted/,
+      ca: /criptomonedes[^]*0\.66\.13[^]*sol·licitud de rectificació\); si no, no es dedueix mai/,
+      eu: /Kriptomonetetan[^]*0\.66\.13[^]*zuzenketa-eskaera\); bestela, ez da inoiz kentzen/,
+      gl: /criptomoedas[^]*0\.66\.13[^]*solicitude de rectificación\); se non, non se deduce nunca/,
+    };
+    const twice = { es: /dos veces/, en: /twice/, ca: /dues vegades/, eu: /bi aldiz/, gl: /dúas veces/ };
+    for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(neverDeducted[name]);
+      expect(locale["guide_rw.blocked_losses_hint"], name).toMatch(twice[name]);
+    }
+    const doc = (p: string) => readFileSync(new URL(`../../docs/${p}`, import.meta.url), "utf8");
+    const casillas = doc("casillas.md");
+    expect(casillas).toContain('!!! warning "Criptomonedas: si declaraste con la versión 0.66.13 o anterior"');
+    expect(casillas).toMatch(/0\.66\.13[^]*Si no lo corriges, esa pérdida no se deduce nunca[^]*no la deduzcas dos veces/);
+    expect(doc("faq.md")).toMatch(/criptomonedas, si declaraste un año con la versión 0\.66\.13 o anterior[^.]*no se deduce nunca/);
+  });
+
+  it("does not claim the definitive test never releases a crypto loss early (#457)", () => {
+    // The #451 test never releases earlier than "any later sale releases", but it
+    // can release before the reacquired coins are sold (a later definitive sale
+    // of older lots). The docs must say that, not an absolute "never early".
+    const files = {
+      casillas: readFileSync(new URL("../../docs/casillas.md", import.meta.url), "utf8"),
+      design: readFileSync(new URL("../../docs/design/antichurning-proportional.md", import.meta.url), "utf8"),
+      claude: readFileSync(new URL("../../CLAUDE.md", import.meta.url), "utf8"),
+    };
+    for (const [name, text] of Object.entries(files)) {
+      expect(text, name).not.toMatch(/nunca adelanta la pérdida|never releases early/);
+    }
+    expect(files.casillas).toMatch(/puede liberarla antes de que vendas las unidades recompradas/);
+    expect(files.design).toMatch(/can release before the reacquired units\s+are sold/);
+    expect(files.claude).toMatch(/can release before the reacquired units are sold/);
+  });
 });
