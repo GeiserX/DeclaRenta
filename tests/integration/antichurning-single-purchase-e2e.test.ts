@@ -920,9 +920,14 @@ describe("(g) IBKR writes the held quantity as `position`", () => {
     expectUnverified(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: NONE })] }])]]));
   });
 
-  it("control: position=\"0\" proves zero: applied", () => {
+  it("control: position=\"0\" worth 0 proves zero: applied", () => {
     const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
-    expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: "0" })] }])]]));
+    expectApplied(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: "0", positionValue: "0" })] }])]]));
+  });
+
+  it("position=\"0\" next to a value that is not 0 proves nothing: the 0 is no share count (#470), not applied", () => {
+    const rows: Row[] = [...issueRows, ["20251201", "SELL", 50, 10]];
+    expectUnverified(mergedFiles([[IB, flexXml([{ fromDate: "20250101", toDate: "20251231", rows, rawPositions: [positionRow({ position: "0" })] }])]]));
   });
 });
 

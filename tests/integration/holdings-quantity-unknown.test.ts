@@ -19,7 +19,7 @@ import { generateD6Report } from "../../src/generators/d6.js";
 import { renderSection721 } from "../../src/web/section-721.js";
 import { renderSection720 } from "../../src/web/section-720.js";
 import { renderSectionD6 } from "../../src/web/section-d6.js";
-import { hasNoMarketValue } from "../../src/engine/ecb.js";
+import { hasNoMarketValue, holdsNothing, isNegativePositionValue } from "../../src/engine/ecb.js";
 import type { Statement } from "../../src/types/broker.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
 
@@ -185,5 +185,103 @@ describe("#470 D-6: an IBKR stock with no readable quantity", () => {
     renderSectionD6(flex(stock("700", "70000")), rateMap);
     expect(rows("d6-content")).toEqual(["US0000000001 | ACME CORP | US | 700 | 59.500,00"]);
     expect(document.querySelector("#d6-content .d6-quantity-unknown")).toBeNull();
+  });
+});
+
+describe("#470 D-6: an IBKR stock with neither a readable quantity nor a readable value", () => {
+  // Both blank, or a value written as text: the D-6 must count it to declare
+  // by hand and keep every other holding, never crash (review of #470).
+  for (const value of ["", "N/A"]) {
+    it(`position="" positionValue="${value}": the generator counts it unvalued and keeps the other holding`, () => {
+      const st = flex(stock("", value) + stock("700", "70000", "US0000000002"));
+      const r = generateD6Report(st.openPositions, rateMap, 2025, "X", "12345678Z");
+      expect(r.positions.map((p) => [p.isin, p.sharesAtYearEnd])).toEqual([["US0000000002", "700"]]);
+      expect(r.unvaluedCount).toBe(1);
+    });
+
+    it(`position="" positionValue="${value}": the web section shows «—» shares and «—» value next to the other holding`, () => {
+      useProfile("d6-content");
+      renderSectionD6(flex(stock("", value) + stock("700", "70000", "US0000000002")), rateMap);
+      expect(rows("d6-content")).toEqual([
+        "US0000000001 | ACME CORP | US | — | —",
+        "US0000000002 | ACME CORP | US | 700 | 59.500,00",
+      ]);
+      expect(document.querySelector("#d6-content .d6-quantity-unknown")?.textContent).toContain("ACME (US0000000001)");
+    });
+  }
+
+  it("hasNoMarketValue reads an unreadable value as no value, and isNegativePositionValue proves no short from it", () => {
+    expect(hasNoMarketValue({ quantity: "0", positionValue: "", quantityUnknown: true })).toBe(true);
+    expect(hasNoMarketValue({ quantity: "0", positionValue: "N/A", quantityUnknown: true })).toBe(true);
+    expect(hasNoMarketValue({ quantity: "5", positionValue: "N/A" })).toBe(true);
+    expect(isNegativePositionValue("")).toBe(false);
+    expect(isNegativePositionValue("N/A")).toBe(false);
+    expect(isNegativePositionValue("-1")).toBe(true);
+  });
+});
+
+describe("#470 an IBKR position of 0 next to a value that is not 0", () => {
+  it("the parser flags the 0 as unknown and warns, for shares and for crypto (control: 0 with value 0 is no flag)", () => {
+    const st = flex(stock("0", "70000") + coin("BTC", "BITCOIN", "0", "60000") + stock("0", "0", "US0000000003"));
+    expect(st.openPositions.map((p) => [p.symbol, p.quantity, p.quantityUnknown ?? false])).toEqual([
+      ["ACME", "0", true],
+      ["BTC", "0", true],
+      ["ACME", "0", false],
+    ]);
+    expect((st.parserMessages ?? []).map((m) => m.id).sort()).toEqual(["parser.crypto_position_quantity_unknown", "parser.open_position_quantity_unknown"]);
+  });
+
+  it("the 720 writes no record with 0 shares and lists it for manual entry", () => {
+    const st = flex(stock("0", "70000"));
+    expect(checkModelo720Thresholds(st.openPositions, rateMap, 2025).values.exceeds).toBe(true);
+    expect(generateModelo720(st.openPositions, rateMap, cfg720)).toBe("");
+    expect(findModelo720Omissions(st.openPositions, rateMap, { year: 2025 }).map((o) => (o.kind === "position" ? o.reason : o.kind))).toEqual(["quantity_unknown"]);
+  });
+
+  it("the web 721 shows «—» units, never 0", () => {
+    useProfile("m721-content");
+    renderSection721(flex(coin("BTC", "BITCOIN", "0", "60000")), rateMap);
+    expect(rows("m721-content")).toEqual(["BITCOIN | — | — | 51.000,00"]);
+  });
+
+  it("the D-6 counts it to declare by hand instead of dropping it", () => {
+    const r = generateD6Report(flex(stock("0", "70000")).openPositions, rateMap, 2025, "X", "12345678Z");
+    expect(r.positions).toEqual([]);
+    expect(r.unvaluedCount).toBe(1);
+  });
+});
+
+describe("#470 an IBKR position of 0 units worth 0 holds nothing", () => {
+  it("the 720 writes no phantom record with 0 shares and 0 € next to a real holding", () => {
+    const st = flex(stock("0", "0") + stock("700", "70000", "US0000000002"));
+    const detail = generateModelo720(st.openPositions, rateMap, cfg720).split("\n").slice(1);
+    expect(detail).toHaveLength(1);
+    expect(detail[0]!).toContain("US0000000002");
+    expect(detail[0]!.slice(462, 474)).toBe("000000070000");
+    expect(findModelo720Omissions(st.openPositions, rateMap, { year: 2025 })).toEqual([]);
+  });
+
+  it("the web 720 table leaves it out", () => {
+    useProfile("m720-content");
+    renderSection720(flex(stock("0", "0") + stock("700", "70000", "US0000000002")), rateMap);
+    expect(rows("m720-content").filter((r) => r.includes("US0000000001"))).toEqual([]);
+    expect(rows("m720-content").filter((r) => r.includes("US0000000002"))).toHaveLength(1);
+  });
+
+  it("a security declared last year whose only row is 0 units worth 0 gets its C record, not an M record with 0 shares", () => {
+    const st = flex(stock("0", "0") + stock("700", "70000", "US0000000002"));
+    const config = { ...cfg720, previousYearSecurities: [{ isin: "US0000000001", claveSubclave: "V1", country: "US" }] };
+    const detail = generateModelo720(st.openPositions, rateMap, config).split("\n").slice(1);
+    const acme = detail.filter((r) => r.includes("US0000000001"));
+    expect(acme).toHaveLength(1);
+    // Position 423 is the declaration type: C (cancelled), not M (held).
+    expect(acme[0]![422]).toBe("C");
+  });
+
+  it("holdsNothing: only an explicit 0 with a value of 0", () => {
+    expect(holdsNothing({ quantity: "0", positionValue: "0" })).toBe(true);
+    expect(holdsNothing({ quantity: "0", positionValue: "0", quantityUnknown: true })).toBe(false);
+    expect(holdsNothing({ quantity: "0", positionValue: "" })).toBe(false);
+    expect(holdsNothing({ quantity: "5", positionValue: "0" })).toBe(false);
   });
 });

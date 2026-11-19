@@ -9,7 +9,7 @@ import Decimal from "decimal.js";
 import type { OpenPosition, CashBalance } from "../types/ibkr.js";
 import type { FifoDisposal, Lot } from "../types/tax.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, holdsNothing, lookupPositionRate } from "../engine/ecb.js";
 import { normalizeDate } from "../engine/dates.js";
 import { isClaveSubclave, isIsoCountryCode } from "./modelo720-validator.js";
 
@@ -53,11 +53,13 @@ const THRESHOLD = new Decimal(50000);
 
 /**
  * A V-category holding: a long stock, fund or bond. A short position
- * (negative value) is stock the taxpayer owes, not an asset they own.
+ * (negative value) is stock the taxpayer owes, not an asset they own. A row of
+ * 0 units worth 0 holds nothing (`holdsNothing`): no record with 0 shares.
  */
 function isHeldSecurity(p: OpenPosition): boolean {
   return (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-    && !new Decimal(p.positionValue).isNegative();
+    && !new Decimal(p.positionValue).isNegative()
+    && !holdsNothing(p);
 }
 
 /**

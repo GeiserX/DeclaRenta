@@ -788,8 +788,12 @@ function mapOpenPosition(raw: Record<string, string>): OpenPosition {
   // apart from an explicit zero: the "0" default would prove "no shares held"
   // to the one-purchase exception (#453). An unreadable one still reads "0"
   // for the D-6 and the 720 (new Decimal("") throws), flagged unknown.
+  // An explicit 0 next to a value that is not 0 contradicts itself: the 0 is
+  // no share count, so it is unknown too, never 0 units in the 720/721 (#470).
+  const isNumber = (text: string | undefined): boolean => /^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(text ?? "");
   const rawQuantity = raw.position ?? raw.quantity;
-  const quantityUnknown = !/^\s*[-+]?(\d+\.?\d*|\.\d+)\s*$/.test(rawQuantity ?? "");
+  const quantityUnknown = !isNumber(rawQuantity)
+    || (Number(rawQuantity) === 0 && isNumber(raw.positionValue) && Number(raw.positionValue) !== 0);
   return {
     accountId: raw.accountId ?? "",
     symbol: raw.symbol ?? "",

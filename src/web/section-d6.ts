@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate } from "../engine/ecb.js";
 import type { Statement } from "../types/broker.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
@@ -94,7 +94,7 @@ export function renderSectionD6(
       p.isin.slice(0, 2).toUpperCase() !== "ES" &&
       // A holding whose share count the file does not give is held unless its
       // value is negative (a short), as in the D-6 generator (#470).
-      (p.quantityUnknown === true ? !new Decimal(p.positionValue || "0").isNegative() : new Decimal(p.quantity).greaterThan(0)),
+      (p.quantityUnknown === true ? !isNegativePositionValue(p.positionValue) : new Decimal(p.quantity).greaterThan(0)),
   );
 
   const missingNotice = brokersWithoutHoldings.length > 0

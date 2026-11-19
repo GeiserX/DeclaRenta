@@ -7,7 +7,7 @@
 
 import { getCurrentLocale, t } from "../i18n/index.js";
 import { getProfile, isProfileComplete } from "./profile.js";
-import { getQ4AverageRate, hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { getQ4AverageRate, hasNoMarketValue, holdsNothing, lookupPositionRate } from "../engine/ecb.js";
 import {
   checkModelo720SuccessiveYear,
   checkModelo720Thresholds,
@@ -292,10 +292,11 @@ export function renderSection720(
   }
 
   // Positions table (long holdings only: a short is owed, not owned, and the
-  // threshold above leaves it out too)
+  // threshold above leaves it out too, as it does a row of 0 units worth 0)
   const positions = statement.openPositions.filter(
     (p) => (p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
-      && !new Decimal(p.positionValue).isNegative(),
+      && !new Decimal(p.positionValue).isNegative()
+      && !holdsNothing(p),
   );
 
   const declaredIsins = previous720 ? new Set(previous720.previous.securities.map((s) => s.isin)) : null;

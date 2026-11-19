@@ -19,7 +19,7 @@
 import Decimal from "decimal.js";
 import type { OpenPosition } from "../types/ibkr.js";
 import type { EcbRateMap } from "../types/ecb.js";
-import { hasNoMarketValue, lookupPositionRate } from "../engine/ecb.js";
+import { hasNoMarketValue, isNegativePositionValue, lookupPositionRate } from "../engine/ecb.js";
 
 /** A single position row for the D-6 report */
 export interface D6Position {
@@ -75,15 +75,6 @@ function exchangeFromIsin(isin: string, assetCategory?: string): string {
   return map[country] ?? "XXXX";
 }
 
-/** Whether a position value is a negative number (a short); an unreadable one is not. */
-function negativeValue(value: string): boolean {
-  try {
-    return new Decimal(value).isNegative();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Generate a D-6 report from open positions at year end.
  *
@@ -115,13 +106,14 @@ export function generateD6Report(
     })
     // Exclude short positions. A holding whose share count the file does not
     // give is held unless its value is negative (as heldIsins below, #470).
-    .filter((p) => (p.quantityUnknown === true ? !negativeValue(p.positionValue) : new Decimal(p.quantity).greaterThan(0)))
+    .filter((p) => (p.quantityUnknown === true ? !isNegativePositionValue(p.positionValue) : new Decimal(p.quantity).greaterThan(0)))
     .flatMap((p) => {
       const ecbRate = lookupPositionRate(rateMap, yearEnd, p.currency);
       // No resolvable year-end rate, or no market value in the export → can't
       // value in EUR; skip it (never as 0 €) and count it for the caller. With
-      // no share count the entry would say 0 shares: skip and count it too.
-      if (ecbRate === null || hasNoMarketValue(p) || p.quantityUnknown === true) {
+      // no share count the entry would say 0 shares: skip and count it too
+      // (tested first: its value may be unreadable text).
+      if (ecbRate === null || p.quantityUnknown === true || hasNoMarketValue(p)) {
         unvaluedCount++;
         return [];
       }
@@ -153,7 +145,7 @@ export function generateD6Report(
       .filter((p) => p.isin.slice(0, 2).toUpperCase() !== "ES")
       .filter((p) =>
         p.quantityUnknown === true
-          ? !negativeValue(p.positionValue)
+          ? !isNegativePositionValue(p.positionValue)
           : new Decimal(p.quantity).greaterThan(0))
       .map((p) => p.isin),
   );

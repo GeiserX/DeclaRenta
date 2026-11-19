@@ -282,7 +282,37 @@ export function lookupPositionRate(rateMap: EcbRateMap, date: string, currency: 
  * is unvalued too, never a 0 € holding dropped from the totals (#470).
  */
 export function hasNoMarketValue(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
-  return (p.quantityUnknown === true || new Decimal(p.quantity).greaterThan(0)) && new Decimal(p.positionValue).isZero();
+  if (p.quantityUnknown !== true && !new Decimal(p.quantity).greaterThan(0)) return false;
+  // A value the export writes as text that is no number ("", "N/A") is no
+  // value either: unvalued, never a crash (an IBKR row with both blank).
+  const value = readPositionNumber(p.positionValue);
+  return value === null || value.isZero();
+}
+
+/** A position field read as a number, or null when its text is no number ("", "N/A"). */
+function readPositionNumber(text: string): Decimal | null {
+  try {
+    return new Decimal(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a position value is a negative number (a short). An unreadable value proves no short. */
+export function isNegativePositionValue(value: string): boolean {
+  return readPositionNumber(value)?.isNegative() === true;
+}
+
+/**
+ * A row that holds nothing: the export gives 0 units and a value of 0. It is no
+ * holding, so the 720 writes no record for it (that record would say 0 in
+ * «Número de valores» and 0 €, #470). A 0 with a value that is not 0 is no such
+ * row: the IBKR parser flags that 0 as `quantityUnknown`.
+ */
+export function holdsNothing(p: Pick<OpenPosition, "quantity" | "positionValue" | "quantityUnknown">): boolean {
+  return p.quantityUnknown !== true
+    && readPositionNumber(p.quantity)?.isZero() === true
+    && readPositionNumber(p.positionValue)?.isZero() === true;
 }
 
 /**

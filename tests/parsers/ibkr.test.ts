@@ -289,8 +289,14 @@ describe("parseIbkrFlexXml", () => {
     expect(generateD6Report(held, rates, 2025, "X", "00000000T", previous).positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
     expect(record720(held)?.slice(462, 474)).toBe("000000001000");
     expect(readable.parserMessages?.some((m) => m.id === "parser.open_position_quantity_unknown") ?? false).toBe(false);
-    // Controls: an explicit 0, or no row at all, is no holding: cancelled.
-    expect(generateD6Report(parseIbkrFlexXml(xml("0")).openPositions, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // Controls: an explicit 0 worth 0, or no row at all, is no holding: cancelled.
+    const zero = parseIbkrFlexXml(xml("0").replace('positionValue="60000"', 'positionValue="0"')).openPositions;
+    expect(generateD6Report(zero, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    // An explicit 0 next to a value of 60,000 is no share count (#470): flagged
+    // unknown like a blank one, so it is held, not cancelled.
+    const contradicted = parseIbkrFlexXml(xml("0")).openPositions;
+    expect([contradicted[0]!.quantity, contradicted[0]!.quantityUnknown]).toEqual(["0", true]);
+    expect(generateD6Report(contradicted, rates, 2025, "X", "00000000T", previous).cancelled).toEqual([]);
     expect(generateD6Report([], rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
     // Control: a short holding is no holding, whatever its quantity. With an
     // unreadable quantity the sign comes from its value, as in the 720 (C
