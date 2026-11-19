@@ -636,6 +636,18 @@ práctico Renta 2025. The decisions, each pinned in
       ISIN; a type that is not a buy or sale and moves shares. A split or
       corporate-action type is a corporate-action row (above). Scalable also
       reads a German date (DD.MM.YYYY).
+      FIFO values a Scalable buy or sale at `shares` × `price`. A price that
+      could not be read ("abc", "-") stopped the report with a
+      `DecimalError`, and an empty, "€", written-zero or missing one sold
+      the shares at 0, so a gain became a loss with no word. With no
+      readable or nonzero price the price is now |`amount`| ÷ `shares`, the
+      file's own numbers. With no amount either, a price that cannot be
+      read makes an unreadable row named by `price`, and a written zero
+      price is a corporate-action row. A Scalable `Corporate action` row of
+      an ISIN that writes 0 shares but an amount (a cash merger, a
+      redemption) is a corporate-action row too, so the payout is named; it
+      was dropped with no word. A blank or written zero amount stays
+      skipped.
       FIFO values a Lightyear buy or sale at Quantity × `Price/share`. A
       price that could not be read ("n/a", "-") stopped the report with a
       `DecimalError`, and an empty, missing or written-zero one sold the

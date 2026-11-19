@@ -196,7 +196,8 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     // handles (a security transfer, a corporate action) of an ISIN, is kept
     // as a trade that books nothing and named: dropping it would hide a
     // purchase or a sale (#467). A row of an unknown type that writes a zero
-    // share count moves no shares and stays skipped. With no ISIN, a row of an
+    // share count moves no shares and stays skipped, unless it is a corporate
+    // action that moves money (below). With no ISIN, a row of an
     // unknown type is kept only when it writes a share count (a cash row,
     // such as a deposit or a fee, writes none).
     const sellType = SELL_TYPES.some((t) => type.includes(t));
@@ -206,7 +207,13 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const movesNoShares = !sharesUnreadable && parseFloat(parseNumber(shares)) === 0;
     // An unknown type with an empty share cell is a cash row (a fee, a tax).
     const sharesEmpty = (fields[cols.shares] ?? "").trim() === "";
-    const keptOther = otherType && (isin ? !movesNoShares : !sharesUnreadable && !movesNoShares);
+    // A corporate action of an ISIN that writes 0 shares but moves money (a
+    // cash merger, a redemption) may be a taxable sale: kept and named, never
+    // dropped with no word (#467). A blank or written zero amount stays skipped.
+    const amountCell = (fields[cols.amount] ?? "").trim();
+    const paidAction = isin !== "" && movesNoShares && isCorporateActionType(type) && amountCell !== "" &&
+      (quantityUnreadable(amountCell) || !new Decimal(amount).isZero());
+    const keptOther = otherType && (isin ? !movesNoShares || paidAction : !sharesUnreadable && !movesNoShares);
     // A split or another corporate action moves shares of its security: kept
     // as a row that books nothing (evidence of a holding, #453) and named as
     // not applied, not as an unreadable row.
@@ -301,7 +308,37 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
     const feeNum = parseFloat(parseNumber(fee));
     // Scalable's assetType column flags ETFs/funds explicitly ("ETF").
     // Map those to FUND; "Security" and others remain STK.
-    const assetCategory = /etf|fund/.test(assetType) ? "FUND" : "STK";
+    const assetCategory: Trade["assetCategory"] = /etf|fund/.test(assetType) ? "FUND" : "STK";
+
+    // FIFO values a trade at quantity × tradePrice, never from the amount. A
+    // price it cannot read ("abc", "-") stopped the report, and an empty,
+    // missing or written-zero one sold the shares at 0: a gain became a loss
+    // with no word (#467). Scalable writes amount = shares × price, so with no
+    // price the price is |amount| ÷ shares, the file's own numbers. A readable
+    // price keeps the file's text. With no amount either, a written zero price
+    // moves shares for no money: a corporate action not applied, as in
+    // Lightyear, Flatex, DEGIRO and Freedom24. A price that cannot be read
+    // makes the row one that books nothing, named by its price cell.
+    const priceCell = cols.price >= 0 ? fields[cols.price] : undefined;
+    const priceReadable = !quantityUnreadable(priceCell) && !new Decimal(price).isNegative();
+    const amountAbs = new Decimal(amount).abs();
+    if (!priceReadable || new Decimal(price).isZero()) {
+      const row = {
+        symbol: description, description, isin, assetCategory, currency: currency || "EUR", tradeDate, tradeTime,
+        buySell: isSell ? "SELL" as const : "BUY" as const, exchange: "XETR",
+      };
+      if (amountAbs.isZero() && priceReadable) {
+        trades.push(corporateActionTrade({ ...row, tradeID: reference || `scalable-action-${tradeDate}-${isin}-${i}` },
+          `${headers[cols.price] ?? "price"} ${priceCell!.trim()}`, fields[cols.shares] ?? ""));
+        continue;
+      }
+      if (amountAbs.isZero()) {
+        trades.push(unreadableTrade({ ...row, tradeID: reference || `scalable-row-${tradeDate}-${isin}-${i}` },
+          unreadableCell(headers[cols.price] ?? "price", priceCell)));
+        continue;
+      }
+    }
+    const tradePrice = priceReadable && !new Decimal(price).isZero() ? price : amountAbs.div(new Decimal(parseNumber(shares)).abs()).toString();
 
     trades.push({
       tradeID: reference || `scalable-${tradeDate}-${isin}-${i}`,
@@ -315,7 +352,7 @@ function parseScalableCsv(lines: string[], delimiter: string): Statement {
       tradeTime,
       settlementDate: tradeDate,
       quantity: isSell ? `-${absShares}` : `${absShares}`,
-      tradePrice: price,
+      tradePrice,
       tradeMoney: amount,
       proceeds: isSell ? amount : "0",
       cost: isSell ? "0" : amount,
