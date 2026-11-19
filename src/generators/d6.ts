@@ -39,6 +39,12 @@ export interface D6Cancellation {
   reason: string;
 }
 
+/** A held position the guide cannot list as an entry (no value or no valid share count): declare it by hand. */
+export interface D6Unvalued {
+  isin: string;
+  description: string;
+}
+
 /** Complete D-6 report data */
 export interface D6Report {
   year: number;
@@ -50,6 +56,8 @@ export interface D6Report {
   totalValueEur: string;
   /** Held foreign positions left out because they have no year-end rate, no market value, no valid share count or a value too big for the 720's valoración (#470): declare them by hand. */
   unvaluedCount: number;
+  /** Those positions, as the guide names them. Present only when there is one. */
+  unvalued?: D6Unvalued[];
   guide: string[];
 }
 
@@ -97,7 +105,7 @@ export function generateD6Report(
 ): D6Report {
   const yearEnd = `${year}-12-31`;
 
-  const unvalued: { isin: string; description: string }[] = [];
+  const unvalued: D6Unvalued[] = [];
   const d6Positions: D6Position[] = positions
     .filter((p) => p.assetCategory === "STK" || p.assetCategory === "FUND" || p.assetCategory === "BOND")
     .filter((p) => {
@@ -241,6 +249,7 @@ export function generateD6Report(
     totalPositions: d6Positions.length,
     totalValueEur: totalValue.toFixed(2),
     unvaluedCount: unvalued.length,
+    ...(unvalued.length > 0 ? { unvalued } : {}),
     guide,
   };
 }

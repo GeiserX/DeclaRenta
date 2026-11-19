@@ -108,6 +108,17 @@ function securityValueEur(p: OpenPosition, rateMap: EcbRateMap, year: number): D
 }
 
 /**
+ * The held securities (`isHeldSecurity`) the 720 cannot value in euros
+ * (`securityValueEur` is null): no resolvable rate, no market value, a value
+ * that is no number or too big for valoración 1, a quantity and a value of
+ * opposite signs, or neither a quantity nor a value. The threshold counts them
+ * (`values.unvalued`); the CLI names them (#470).
+ */
+export function unvaluedSecurities(positions: OpenPosition[], rateMap: EcbRateMap, year: number): OpenPosition[] {
+  return positions.filter((p) => isHeldSecurity(p) && securityValueEur(p, rateMap, year) === null);
+}
+
+/**
  * A cash balance in EUR. The Q4 average is null when the statement does not
  * carry it (IBKR's cash report has no such field) or gives no number for it:
  * the 31-Dec balance still counts toward the obligation, but the record cannot

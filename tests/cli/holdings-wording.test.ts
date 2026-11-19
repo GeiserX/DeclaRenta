@@ -34,3 +34,39 @@ describe("CLI texts for a 0 next to a value (#470)", () => {
     expect(res.stderr).not.toContain("legible");
   }, 60_000);
 });
+
+// Round 5 of #470: the CLI prints the parser's own holdings warnings for the
+// 720 and the D-6 (before, only merge.holdings_other_date), and its «sin
+// valorar» lines name each holding and give every reason.
+const unvaluedDir = tempFiles({
+  "u.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="Test" type="AF"><FlexStatements count="1">
+<FlexStatement accountId="U1111111" fromDate="20250101" toDate="20251231" period="">
+<OpenPositions>${row("SAP", "DE0007164600", "-700", "60000")}${row("DBK", "DE0005140008", "0", "N/A")}${row("ALV", "DE0008404005", "100", "NaN")}${row("BAS", "DE000BASF111", "100", "70000")}</OpenPositions>
+<CashReport><CashReportCurrency accountId="U1111111" currency="EUR" levelOfDetail="Currency" endingCash="N/A" averageQ4Cash="0" /></CashReport>
+</FlexStatement></FlexStatements></FlexQueryResponse>
+`,
+});
+
+describe("CLI holdings warnings and unvalued names (#470)", () => {
+  it("modelo720: prints the parser's holdings and cash warnings, and names each unvalued holding with every reason", () => {
+    const res = runCli(["modelo720", "-i", join(unvaluedDir, "u.xml"), ...base, "-o", join(unvaluedDir, "720.txt")]);
+    expect(res.stderr).toContain("IBKR da un número de acciones o unidades y un valor de signo contrario para 1 posición(es) abierta(s): SAP (DE0007164600).");
+    expect(res.stderr).toContain("IBKR da 0 acciones para 1 posición(es) abierta(s) sin un valor legible que lo confirme: DBK (DE0005140008).");
+    expect(res.stderr).toContain("IBKR no da un saldo final legible para 1 saldo(s) en efectivo: U1111111 (EUR).");
+    expect(res.stderr).toContain("Aviso: 3 posición(es) en valores sin valorar en euros: SAP (DE0007164600), DBK (DE0005140008), ALV (DE0008404005).");
+    expect(res.stderr).toContain("signos contrarios");
+    expect(res.stderr).toContain("12 cifras enteras");
+    expect(res.stderr).toContain("un 0 que ningún valor confirma");
+  }, 60_000);
+
+  it("d6: prints the parser's holdings warnings (never the cash one), and names each holding left out", () => {
+    const res = runCli(["d6", "-i", join(unvaluedDir, "u.xml"), ...base, "--format", "json", "-o", join(unvaluedDir, "d6.json")]);
+    expect(res.stderr).toContain("IBKR da un número de acciones o unidades y un valor de signo contrario para 1 posición(es) abierta(s): SAP (DE0007164600).");
+    expect(res.stderr).toContain("IBKR da 0 acciones para 1 posición(es) abierta(s) sin un valor legible que lo confirme: DBK (DE0005140008).");
+    expect(res.stderr).not.toContain("saldo final legible");
+    expect(res.stderr).toContain("Aviso: 3 posición(es) extranjera(s) sin valorar o sin número de títulos válido: SAP SA (DE0007164600), DBK SA (DE0005140008), ALV SA (DE0008404005).");
+    expect(res.stderr).toContain("signos contrarios");
+    expect(res.stderr).toContain("12 cifras enteras");
+  }, 60_000);
+});

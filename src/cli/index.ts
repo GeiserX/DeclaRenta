@@ -32,6 +32,7 @@ import {
   modelo720DeclarationId,
   readPrevious720,
   unvaluedCashBalances,
+  unvaluedSecurities,
 } from "../generators/modelo720.js";
 import { validateModelo720Records } from "../generators/modelo720-validator.js";
 import { generateD6Report } from "../generators/d6.js";
@@ -106,14 +107,51 @@ program
   .version(pkg.version);
 
 /**
+ * The parser's warnings about the holdings of the 720 and the D-6 (securities):
+ * a share count that is missing, a 0 next to a value or with no value that
+ * confirms it, a quantity and a value of opposite signs. Each names its rows.
+ */
+const SECURITY_HOLDING_WARNINGS = [
+  "parser.open_position_quantity_unknown",
+  "parser.open_position_zero_with_value",
+  "parser.open_position_zero_unconfirmed",
+  "parser.open_position_sign_conflict",
+];
+/** The 720 also declares cash: a balance with no readable number. */
+const MODELO720_WARNINGS = [...SECURITY_HOLDING_WARNINGS, "parser.cash_balance_unreadable"];
+const D6_WARNINGS = SECURITY_HOLDING_WARNINGS;
+
+/**
+ * Every way the 720 leaves a held security «sin valorar» (`unvaluedSecurities`):
+ * the CLI says the same as the web banner `m720.positions_unvalued` (#470).
+ */
+const UNVALUED_REASONS_720 =
+  "El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; " +
+  "el valor no es un número o tiene más de 12 cifras enteras en euros; la cantidad y el valor tienen signos contrarios; " +
+  "o el archivo no da ni la cantidad ni el valor (o da un 0 que ningún valor confirma).";
+
+/** The D-6's reasons (`d6.positions_unvalued`): an AFORIX entry also needs a valid share count. */
+const UNVALUED_REASONS_D6 =
+  "El motivo puede ser uno de estos: falta el precio de mercado o el tipo de cambio de su moneda al cierre del ejercicio; " +
+  "falta el número de títulos, o es un 0 que su valor no confirma o contradice; " +
+  "el valor no es un número o tiene más de 12 cifras enteras en euros; o la cantidad y el valor tienen signos contrarios.";
+
+/**
  * The statement for Modelo 720 and D-6 of `year`: the holdings of the input
  * files that end on 31 December (`yearEndHoldings`, the same as the web), with
- * a warning for each file whose holdings are left out, then the date check.
+ * a warning for each file whose holdings are left out, then the parser's own
+ * warnings about the form's holdings (`warningIds`, each naming its rows, with
+ * its hint), then the date check.
  */
-function yearEndStatement(merged: Statement, year: number): Statement {
+function yearEndStatement(merged: Statement, year: number, warningIds: readonly string[]): Statement {
   const statement = yearEndHoldings(merged, year);
   for (const m of statement.parserMessages ?? []) {
     if (m.id === "merge.holdings_other_date") console.error(`⚠ ${m.message}`);
+  }
+  for (const m of statement.parserMessages ?? []) {
+    if (!warningIds.includes(m.id)) continue;
+    console.error(`⚠ ${m.message}`);
+    if (m.hint) console.error(`    → ${m.hint}`);
   }
   assertYearEndPositions(statement, year);
   return statement;
@@ -582,7 +620,7 @@ program
     }) => {
       try {
         const { merged } = await parseAndMerge(opts.input, opts.broker);
-        const statement = yearEndStatement(merged, opts.year);
+        const statement = yearEndStatement(merged, opts.year, MODELO720_WARNINGS);
 
         // Rates for every year with a trade: the FIFO run dates the lots held at
         // 31 December and the sales that ended a previously declared holding.
@@ -683,8 +721,10 @@ program
 
         const thresholds = checkModelo720Thresholds(statement.openPositions, rateMap, opts.year, statement.cashBalances);
         if (thresholds.values.unvalued > 0) {
+          const unvalued = unvaluedSecurities(statement.openPositions, rateMap, opts.year);
           console.error(
-            `Aviso: ${thresholds.values.unvalued} posición(es) en valores sin precio de mercado o sin tipo de cambio al cierre del ejercicio. No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros y decláralas a mano.`,
+            `Aviso: ${unvalued.length} posición(es) en valores sin valorar en euros: ${unvalued.map((p) => `${p.symbol || p.description} (${p.isin})`).join(", ")}. ` +
+              `${UNVALUED_REASONS_720} No cuentan para el umbral de 50.000 EUR ni se incluyen en el fichero: calcula su valor en euros con el extracto de fin de año del bróker y decláralas a mano.`,
           );
         }
         // A cash balance with no number, or in a currency with no year-end
@@ -765,7 +805,7 @@ program
     }) => {
       try {
         const { merged } = await parseAndMerge(opts.input, opts.broker);
-        const statement = yearEndStatement(merged, opts.year);
+        const statement = yearEndStatement(merged, opts.year, D6_WARNINGS);
 
         // Extract ISINs from previous year's D-6 JSON output
         let previousYearIsins: string[] | undefined;
@@ -793,7 +833,8 @@ program
 
         if (report.unvaluedCount > 0) {
           console.error(
-            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin precio de mercado, sin número de títulos válido o sin tipo de cambio al cierre del ejercicio. No se incluyen en las posiciones de la guía, que las nombra: completa su valor en euros y su número de títulos y decláralas a mano.`,
+            `Aviso: ${report.unvaluedCount} posición(es) extranjera(s) sin valorar o sin número de títulos válido: ${(report.unvalued ?? []).map((u) => `${u.description || u.isin} (${u.isin})`).join(", ")}. ` +
+              `${UNVALUED_REASONS_D6} No se incluyen en las posiciones de la guía, que las nombra: completa su valor en euros y su número de títulos y decláralas a mano.`,
           );
         }
         // Positions declared last year and sold since must still be cancelled.
