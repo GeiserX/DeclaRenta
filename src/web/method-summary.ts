@@ -41,9 +41,18 @@ export interface MethodTotals {
    * The deferral as the strip and the table print it: the 2-decimal Total minus
    * the 2-decimal securities and FX cells, so the printed cells add up to the
    * printed Total to the cent. It can differ from `deferred` rounded on its own
-   * by a cent or two of rounding.
+   * by a cent or two of rounding. 0 when `hasDeferred` is false: a rounding
+   * cent is never printed as a deferred loss.
    */
   deferredShown: Decimal;
+  /**
+   * The Total as the strip and the table print it: the sum of the printed
+   * cells. With a deferral it is `total` to the cent (the deferral cell takes
+   * the rounding); without one it is the 2-decimal securities plus the
+   * 2-decimal FX, at most a cent from `total` (1,004 + 1,004 prints
+   * 1,00 + 1,00 = 2,00, not 2,01). The cuota reads the exact `total`.
+   */
+  totalShown: Decimal;
   /**
    * The gains balance of the savings base, the figure the cuota uses:
    * savingsBalances().gains = securities + fx + deferred (#471).
@@ -81,12 +90,16 @@ export function methodTotals(report: TaxSummary): MethodTotals {
     ![securities, fx, deferred, total, tax].every((d) => d.isFinite()) ||
     report.messages.some((m) => m.id === "report.non_finite_total");
   const cents = (d: Decimal) => d.toDecimalPlaces(2);
+  const hasDeferred = !blockedLosses.isZero() || !reintegratedLosses.isZero();
+  const printedParts = cents(securities).plus(cents(fx));
+  const deferredShown = hasDeferred ? cents(total).minus(printedParts) : new Decimal(0);
   return {
     securities,
     fx,
     deferred,
-    hasDeferred: !blockedLosses.isZero() || !reintegratedLosses.isZero(),
-    deferredShown: cents(total).minus(cents(securities)).minus(cents(fx)),
+    hasDeferred,
+    deferredShown,
+    totalShown: printedParts.plus(deferredShown),
     total,
     tax,
     hasOtherElements,
@@ -174,8 +187,9 @@ export function renderHowCalculated(report: TaxSummary, method: FxMethod | null)
 /**
  * `method` is null when the upload has no foreign currency: no method applies
  * and there are no 1633/1637 rows, so the strip leaves the «Divisa» cell out.
- * The «Pérdidas diferidas» cell shows only when a loss is blocked or released,
- * so the cells always add up to the Total (#471).
+ * The «Pérdidas diferidas» cell shows only when a loss is blocked or released.
+ * The printed Total is the sum of the printed cells (`totalShown`), so they
+ * always add up to the cent (#471).
  */
 export function renderResultsSplit(report: TaxSummary, method: FxMethod | null): string {
   const totals = methodTotals(report);
@@ -199,7 +213,7 @@ export function renderResultsSplit(report: TaxSummary, method: FxMethod | null):
     ${cell(securitiesLabel, totals.securities, securitiesSub)}
     ${method ? cell(t("results.split_fx"), totals.fx, fxSub) : ""}
     ${totals.hasDeferred ? cell(t("results.split_deferred"), totals.deferredShown, t("results.split_deferred_sub")) : ""}
-    ${cell(t("results.split_total"), totals.total, totalSub)}
+    ${cell(t("results.split_total"), totals.totalShown, totalSub)}
   </dl>`;
 }
 
@@ -238,7 +252,7 @@ function renderCompareTable(totals: Record<FxMethod, MethodTotals>, current: FxM
           ${row(hasOther ? t("results.split_securities") : t("results.split_shares"), (x) => signed(x.securities))}
           ${row(t("results.split_fx"), (x) => signed(x.fx))}
           ${hasDeferred ? row(t("results.split_deferred"), (x) => signed(x.deferredShown)) : ""}
-          ${row(t("results.split_total"), (x) => signed(x.total), "total")}
+          ${row(t("results.split_total"), (x) => signed(x.totalShown), "total")}
           ${row(t("results.compare_tax"), (x) => fmtEur(x.tax))}
         </tbody>
       </table>

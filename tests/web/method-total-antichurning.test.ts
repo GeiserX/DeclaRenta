@@ -241,6 +241,82 @@ describe("results strip Total = the base the cuota uses (#471)", () => {
     }
   });
 
+  it("with no deferral, half-cent securities and FX (1,004 + 1,004) print a Total that is their printed sum, 2,00, and no extra cell", async () => {
+    // One disposal of +1,004 € and +1,004 € of FX: the exact base is 2,008 €.
+    // Printed on its own it would round to 2,01 next to 1,00 + 1,00 (CodeRabbit
+    // on #471). With no deferral cell to take the cent, the Total is the sum of
+    // the printed cells: 2,00, within a cent of the base; the cuota still reads
+    // the exact base.
+    const real = generateTaxReport(load("ibkr-434-cycle-2025.xml"), rates, 2025, reportOptionsForMethod("multidivisa"));
+    const d = real.capitalGains.disposals.find((x) => x.gainLossEur.isFinite())!;
+    const half = new Decimal("1.004");
+    const report: TaxSummary = {
+      ...real,
+      capitalGains: {
+        ...real.capitalGains,
+        disposals: [{ ...d, proceedsEur: d.costBasisEur.plus(half), gainLossEur: half }],
+        netGainLoss: half,
+        blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
+      },
+      fxGains: { ...real.fxGains, netGainLoss: half },
+    };
+    expect(savingsBalances(report).gains.toFixed(3)).toBe("2.008");
+    const { cells } = strip(report, "multidivisa");
+    expect(cells.map((c) => c.label)).not.toContain(t("results.split_deferred"));
+    expect(cells.map((c) => c.value)).toEqual(["+1,00 €", "+1,00 €", "+2,00 €"]);
+    expectCellsAddUp(cells.map((c) => c.value));
+    // The printed Total stays within a cent of the base the cuota uses.
+    expect(parseCell(cells[2]!.value).minus(savingsBalances(report).gains).abs().lessThanOrEqualTo("0.01")).toBe(true);
+
+    // The comparison table: the same rule in every column, and no deferral row.
+    const root = document.createElement("div");
+    root.innerHTML = renderMethodCompare();
+    bindMethodCompare(root, { method: "multidivisa", report }, () => report);
+    const details = root.querySelector<HTMLDetailsElement>("#method-compare")!;
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    await new Promise((r) => setTimeout(r, 5));
+    const rows = [...root.querySelectorAll(".method-compare-table tbody tr")].map((tr) => ({
+      label: text(tr.querySelector("th")),
+      cells: [...tr.querySelectorAll("td")].map(text),
+    }));
+    expect(rows.map((r) => r.label)).not.toContain(t("results.split_deferred"));
+    expect(rows[2]!.label).toBe(t("results.split_total"));
+    for (let col = 0; col < 3; col++) expectCellsAddUp(rows.slice(0, 3).map((r) => r.cells[col]!));
+  });
+
+  it("a method with no deferral shows 0,00 in the comparison's deferral row, never a rounding cent", async () => {
+    // The deferral row shows when any method has one; a method without a
+    // deferral must not print the rounding residue there as a deferred loss.
+    const blocked = generateTaxReport(load("ibkr-471-blocked-eur-2025.xml"), rates, 2025, reportOptionsForMethod("multidivisa"));
+    const real = generateTaxReport(load("ibkr-434-cycle-2025.xml"), rates, 2025, reportOptionsForMethod("multidivisa"));
+    const d = real.capitalGains.disposals.find((x) => x.gainLossEur.isFinite())!;
+    const half = new Decimal("1.004");
+    const noDeferral: TaxSummary = {
+      ...real,
+      capitalGains: {
+        ...real.capitalGains,
+        disposals: [{ ...d, proceedsEur: d.costBasisEur.plus(half), gainLossEur: half }],
+        netGainLoss: half,
+        blockedLosses: new Decimal(0),
+        reintegratedLosses: new Decimal(0),
+      },
+      fxGains: { ...real.fxGains, netGainLoss: half },
+    };
+    const root = document.createElement("div");
+    root.innerHTML = renderMethodCompare();
+    bindMethodCompare(root, { method: "multidivisa", report: blocked }, () => noDeferral);
+    const details = root.querySelector<HTMLDetailsElement>("#method-compare")!;
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    await new Promise((r) => setTimeout(r, 5));
+    const byLabel = new Map([...root.querySelectorAll(".method-compare-table tbody tr")].map((tr) => [text(tr.querySelector("th")), [...tr.querySelectorAll("td")].map(text)]));
+    const col = METHODS.indexOf("tradicional-divisa");
+    expect(byLabel.get(t("results.split_deferred"))![col]).toBe("0,00");
+    expect(byLabel.get(t("results.split_total"))![col]).toBe("+2,00");
+  });
+
   it("with no blocked or released loss the strip and the table have no deferral cell", async () => {
     const report = generateTaxReport(load("ibkr-434-cycle-2025.xml"), rates, 2025, reportOptionsForMethod("multidivisa"));
     expect(report.capitalGains.blockedLosses.isZero()).toBe(true);
