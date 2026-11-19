@@ -403,16 +403,36 @@ describe("Renta Web guide consistency", () => {
     expect(files.design).toMatch(/A sale of other coins releases nothing/);
     expect(files.claude).toMatch(/Release = transmission of the rebought coins/);
     const otherCoins = {
-      es: /vender otras unidades no la integra/,
-      en: /selling other coins does not release it/,
-      ca: /vendre'n altres unitats no la integra/,
-      eu: /beste unitate batzuk saltzeak ez du integratzen/,
-      gl: /vender outras unidades non a integra/,
+      es: /vender otras unidades no la integra/i,
+      en: /selling other coins does not release it/i,
+      ca: /vendre'n altres unitats no la integra/i,
+      eu: /beste unitate batzuk saltzeak ez du integratzen/i,
+      gl: /vender outras unidades non a integra/i,
     };
+    // A rebuy after the sale of the rebought coins does not hold the loss back
+    // (no roll onto the new coins): the hints say «aunque vuelvas a comprar».
+    const evenIfRebought = {
+      es: /aunque vuelvas a comprar (esa|esta) criptomoneda/,
+      en: /even if you buy (that|this) coin again/,
+      ca: /encara que tornis a comprar aquesta criptomoneda/,
+      eu: /kriptomoneta (bera|hau) berriro erosten baduzu ere/,
+      gl: /aínda que volvas comprar (esa|esta) criptomoeda/,
+    };
+    const roll = /no vuelvas a comprar|do not buy that coin again|no tornis a comprar|erosten ez baduzu|non volvas comprar/;
     for (const [name, locale] of Object.entries(locales) as [keyof typeof locales, (typeof locales)["es"]][]) {
-      for (const key of ["annex.wash_hint", "guide_rw.blocked_losses_hint"] as const) {
+      for (const key of ["annex.wash_hint", "guide_rw.blocked_losses_hint", "annex.wash_released_hint_crypto"] as const) {
         expect(locale[key], `${name} ${key}`).toMatch(otherCoins[name]);
+        expect(locale[key], `${name} ${key}`).toMatch(evenIfRebought[name]);
+        expect(locale[key], `${name} ${key}`).not.toMatch(roll);
       }
+      // A crypto release row never explains itself with the securities rule.
+      for (const key of ["annex.wash_released_crypto", "annex.wash_released_hint_crypto"] as const) {
+        expect(locale[key], `${name} ${key}`).not.toMatch(/definitiva|definitive|behin betiko|oldest first|más antiguas|zaharrenak/);
+        expect(locale[key], `${name} ${key}`).toMatch(/33\.5\.e/);
+      }
+      expect(locale["casilla.reintegrated_losses"], name).toMatch(/cripto|crypto|kripto/);
     }
+    const rollDocs = /pasa a las unidades nuevas|passes its claims to the new coins|rolledOf/;
+    for (const [name, text] of Object.entries(files)) expect(text, name).not.toMatch(rollDocs);
   });
 });

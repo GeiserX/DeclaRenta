@@ -266,11 +266,14 @@ transmission that releases them.
   buy day) and released when FIFO transmits those coins, in proportion to the
   quantity. A sale of other coins releases nothing, and so does a sell-out
   before the rebuy arrives (no total exit for crypto). Of one buy day's coins
-  the tied ones go last. A tied coin sold and rebought in the year after
-  passes its claims to the new coins (the same coins also block the new
-  loss, never counted twice): the statute is silent there, and this is the
-  deferring choice, as in the definitive test of f/g. Only the tied coins of a gain sale seek a
-  rebuy. No consulta names crypto and art. 33.5 together; the rule reads the
+  the tied ones go last, and reward coins of that day carry no tie (FIFO
+  books a day's trade coins before its reward coins). A tied coin sold
+  releases its claims even when the coin is bought again in the year after:
+  letter e names that transmission as the moment and has no f/g «definitiva»
+  test, and the new buy can block the new sale's own loss instead. Only loss
+  lots take a rebuy, so a gain sale (of tied or other coins) uses up none that
+  a later loss needs. A crypto release is final, so by itself it raises no
+  past-data or open-at-filing warning. No consulta names crypto and art. 33.5 together; the rule reads the
   statute and the Manual, and never releases earlier than the law allows.
   Open points it leaves: (B) A partial reacquisition stays
   proportional, though V0913-08 speaks of «valores». (C) Staking, airdrop and

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import Decimal from "decimal.js";
 import { generateTaxReport, reportOptionsForMethod } from "../../src/generators/report.js";
 import { binanceParser } from "../../src/parsers/binance.js";
+import { krakenParser } from "../../src/parsers/kraken.js";
+import { createEmptyStatement, finalizeMergedStatement, mergeStatement } from "../../src/parsers/merge.js";
 import type { FxMethod } from "../../src/types/tax.js";
 import type { FlexStatement, Trade } from "../../src/types/ibkr.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
@@ -132,9 +134,16 @@ describe("#457: a crypto buy before a later sale does not keep an older loss pen
     expect(y26.fiscal).toBe("30.00");
   });
 
-  it("the 2026 release still warns: a buy up to 01/03/2027 that the data does not show would undo it", () => {
-    const m = run(ops, 2026).report.messages.find((x) => x.id === "report.antichurning_window_past_data");
-    expect(m?.context).toEqual({ count: "1", year: "2026", lastDate: "31/12/2026", windowEnd: "01/03/2027" });
+  it("the 2026 release raises no past-data warning: a later buy cannot undo a crypto release (art. 33.5.e)", () => {
+    // The 01/03/2026 sale transmits the rebought coin, so the 100 is integrated
+    // whatever is bought up to 01/03/2027; the sale itself is a gain.
+    const ids = run(ops, 2026).report.messages.map((x) => x.id);
+    expect(ids).not.toContain("report.antichurning_window_past_data");
+    expect(ids).not.toContain("report.antichurning_window_open_at_filing");
+    // A crypto loss the data leaves open still warns (its window runs past
+    // the filing deadline).
+    const open = run([...ops, ["2026-11-02", "SELL", 1, 50]], 2026).report.messages.find((x) => x.id === "report.antichurning_window_open_at_filing");
+    expect(open?.context).toMatchObject({ count: "1", year: "2026", lastDate: "31/12/2026", windowEnd: "02/11/2027" });
   });
 });
 
@@ -190,19 +199,20 @@ describe("#457 follow-up: which coins carry the pending loss", () => {
     expect(run(ops, 2026).reintegrated).toBe("50.00");
   });
 
-  it.each(METHODS)("[%s] a chain: the rebought coin sold and rebought again passes the loss on to the new coin", (method) => {
+  it.each(METHODS)("[%s] a chain: selling the rebought coin releases the loss even if the coin is bought again", (method) => {
     // 01/06/2025 loss −100, rebought 01/07/2025 (110). 01/03/2026 that coin is
-    // sold for 90 (−20) and rebought on 01/04/2026: the sale is no definitive
-    // transmission, so the 100 stays pending on the 01/04 coin and the 20 is
-    // blocked by it. 01/11/2026 the 01/04 coin leaves with nothing after it:
-    // both are integrated.
+    // sold for 90 (−20): the reacquired coin is transmitted, so the 100 is
+    // integrated then («se integrará cuando se produzca la posterior
+    // transmisión del elemento patrimonial»), although 01/04/2026 brings a new
+    // coin. That buy blocks the new −20 instead, which the 01/11/2026 sale of
+    // the 01/04 coin releases.
     const ops: Op[] = [
       ["2025-01-01", "BUY", 1, 200], ["2025-06-01", "SELL", 1, 100], ["2025-07-01", "BUY", 1, 110],
       ["2026-03-01", "SELL", 1, 90], ["2026-04-01", "BUY", 1, 95], ["2026-11-02", "SELL", 1, 100],
     ];
     expect(run(ops, 2025, method)).toMatchObject({ blocked: "100.00", fiscal: "0.00" });
     const r = run(ops, 2026, method);
-    expect(released(r)).toEqual([["20260301", "0.00"], ["20261102", "120.00"]]);
+    expect(released(r)).toEqual([["20260301", "100.00"], ["20261102", "20.00"]]);
     expect(r).toMatchObject({ blocked: "20.00", reintegrated: "120.00", fiscal: "-115.00" });
   });
 
@@ -234,6 +244,91 @@ describe("#457 follow-up: which coins carry the pending loss", () => {
     expect(run(ops, 2025, method)).toMatchObject({ blocked: "100.00", reintegrated: "0.00", fiscal: "50.00" });
     const r = run([...ops, ["2026-03-01", "SELL", 1, 130]], 2026, method);
     expect(released(r)).toEqual([["20260301", "100.00"]]);
+  });
+});
+
+describe("#457 follow-up: through the real parsers, a sale of the rebought coins releases, and only theirs", () => {
+  it.each(METHODS)("[%s] a gain sale of the rebought coin uses up no rebuy: the next loss stays blocked (Binance)", (method) => {
+    // X = −10 on 02/06/2025, blocked by the 01/07/2025 coin. 01/09/2025 FIFO
+    // sells that coin at +5: the reacquired coin is transmitted, so X is
+    // integrated. 01/10/2025 FIFO sells the 01/08 coin, Y = −1000, and the
+    // 03/11/2025 buy (in Y's year after) blocks it. Before this fix the +5
+    // sale ran the definitive test, took the 03/11 buy and moved X onto it, so
+    // Y was deducted in 2025 (−995 instead of −5).
+    const csv = [
+      "Date(UTC),Pair,Side,Price,Executed,Amount,Fee",
+      "2023-03-01 10:00:00,BTCEUR,BUY,200,1BTC,200EUR,",
+      "2025-06-02 10:00:00,BTCEUR,SELL,190,1BTC,190EUR,",
+      "2025-07-01 10:00:00,BTCEUR,BUY,190,1BTC,190EUR,",
+      "2025-08-01 10:00:00,BTCEUR,BUY,2000,1BTC,2000EUR,",
+      "2025-09-01 10:00:00,BTCEUR,SELL,195,1BTC,195EUR,",
+      "2025-10-01 10:00:00,BTCEUR,SELL,1000,1BTC,1000EUR,",
+      "2025-11-03 10:00:00,BTCEUR,BUY,1000,1BTC,1000EUR,",
+      "2026-12-01 10:00:00,BTCEUR,SELL,1100,1BTC,1100EUR,",
+    ];
+    const p = binanceParser.parse(csv.join("\n"));
+    const rateMap: EcbRateMap = new Map(csv.slice(1).map((r) => [r.slice(0, 10), new Map([["EUR", "1"]])] as const));
+    const st: FlexStatement = {
+      accountId: "", fromDate: "", toDate: "20271231", period: "",
+      trades: p.trades, cashTransactions: p.cashTransactions, corporateActions: [], openPositions: [], securitiesInfo: [],
+    };
+    const year = (y: number) => {
+      const cg = generateTaxReport(st, rateMap, y, reportOptionsForMethod(method)).capitalGains;
+      return {
+        rows: cg.disposals.map((d) => [d.sellDate.replace(/-/g, ""), d.gainLossEur.toFixed(2), d.blockedLossEur.toFixed(2), d.reintegratedLossEur.toFixed(2)]),
+        blocked: cg.blockedLosses.toFixed(2),
+        reintegrated: cg.reintegratedLosses.toFixed(2),
+        fiscal: cg.netGainLoss.plus(cg.blockedLosses).minus(cg.reintegratedLosses).toFixed(2),
+      };
+    };
+    const y2025 = year(2025);
+    expect(y2025.rows).toEqual([
+      ["20250602", "-10.00", "10.00", "0.00"],
+      ["20250901", "5.00", "0.00", "10.00"],
+      ["20251001", "-1000.00", "1000.00", "0.00"],
+    ]);
+    expect(y2025.fiscal).toBe("-5.00");
+    // The 03/11 coin leaves on 01/12/2026: Y is integrated then. Σ blocked = Σ released.
+    const y2026 = year(2026);
+    expect(y2026).toMatchObject({ blocked: "0.00", reintegrated: "1000.00" });
+    expect(new Decimal(y2025.blocked).plus(y2026.blocked).toFixed(2)).toBe(new Decimal(y2025.reintegrated).plus(y2026.reintegrated).toFixed(2));
+  });
+
+  // Kraken trades plus a staking reward of 0.5 ETH on the rebuy day. The reward
+  // is no repurchase and carries no tie, so selling the whole rebought coin
+  // releases the whole loss while the reward is still held.
+  const TH = '"txid","ordertxid","pair","time","type","ordertype","price","cost","fee","vol","margin","misc","ledgers"';
+  const LH = '"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"';
+  const kt = (id: string, time: string, type: string, price: number, vol: number) =>
+    `"T${id}","O${id}","ETHEUR","${time}","${type}","market","${price}","${price * vol}","0","${vol}","0.0","","L${id}"`;
+  const kraken = (rewardTime: string, sellVol: number, method: FxMethod, year: number) => {
+    const trades = [TH,
+      kt("1", "2023-03-01 10:00:00", "buy", 200, 1),
+      kt("2", "2025-06-02 10:00:00", "sell", 100, 1),
+      kt("3", "2025-07-01 10:00:00", "buy", 110, 1),
+      kt("4", "2026-03-02 10:00:00", "sell", 150, sellVol),
+    ].join("\n");
+    const ledger = [LH, `"LR1","RR1","${rewardTime}","staking","","currency","XETH","0.5","0","0.5"`].join("\n");
+    const merged = createEmptyStatement();
+    mergeStatement(merged, krakenParser.parse(trades), "Kraken");
+    mergeStatement(merged, krakenParser.parse(ledger), "Kraken");
+    const rateMap: EcbRateMap = new Map(["2023-03-01", "2025-06-02", "2025-07-01", "2026-03-02"].map((d) => [d, new Map([["EUR", "1"]])] as const));
+    const manualRates: EcbRateMap = new Map([["2025-07-01", new Map([["ETH", "110"]])]]);
+    return generateTaxReport(finalizeMergedStatement(merged), rateMap, year, { ...reportOptionsForMethod(method), manualRates }).capitalGains;
+  };
+
+  it.each(METHODS)("[%s] the rebought coin sold, a same-day reward still held: the whole loss is released (Kraken)", (method) => {
+    expect(kraken("2025-07-01 23:00:00", 1, method, 2025).blockedLosses.toFixed(2)).toBe("100.00");
+    for (const time of ["2025-07-01 23:00:00", "2025-07-01 01:00:00"]) {
+      const cg = kraken(time, 1, method, 2026);
+      expect(cg.disposals.map((d) => [d.acquireDate.replace(/-/g, ""), d.quantity.toString(), d.reintegratedLossEur.toFixed(2)]), time).toEqual([["20250701", "1", "100.00"]]);
+    }
+  });
+
+  it("selling the rebought coin and half the reward releases the whole loss, and half the coin releases half (Kraken)", () => {
+    // FIFO sells the day's trade coin before its reward coins.
+    expect(kraken("2025-07-01 23:00:00", 1.5, "multidivisa", 2026).reintegratedLosses.toFixed(2)).toBe("100.00");
+    expect(kraken("2025-07-01 23:00:00", 0.5, "multidivisa", 2026).reintegratedLosses.toFixed(2)).toBe("50.00");
   });
 });
 
