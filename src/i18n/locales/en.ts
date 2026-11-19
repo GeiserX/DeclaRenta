@@ -733,6 +733,8 @@ const en: TranslationKeys = {
   "crypto_rates.saved": "Saved",
   "crypto_rates.save_error":
     "The browser did not let DeclaRenta save the prices: its storage may be full or blocked. The report has not changed.",
+  "crypto_rates.row_invalid":
+    "Check the highlighted prices: enter a price above zero (e.g. 1,234.56). To remove the saved prices, use «Clear saved prices». Nothing was saved.",
   "crypto_rates.recalculate_hint": "Values are saved in your browser and the report is recalculated.",
   "crypto_rates.stored_title": "Saved manual prices",
   "crypto_rates.stored_description":

@@ -735,6 +735,8 @@ const gl: TranslationKeys = {
   "crypto_rates.saved": "Gardado",
   "crypto_rates.save_error":
     "O navegador non deixou gardar os prezos: o seu almacenamento pode estar cheo ou bloqueado. O informe non cambiou.",
+  "crypto_rates.row_invalid":
+    "Revisa os prezos marcados: escribe un prezo maior ca cero (p. ex. 1.234,56). Para quitar os prezos gardados, usa «Borrar prezos gardados». Non se gardou nada.",
   "crypto_rates.recalculate_hint": "Os valores gárdanse no teu navegador e o informe recalcúlase.",
   "crypto_rates.stored_title": "Prezos manuais gardados",
   "crypto_rates.stored_description":

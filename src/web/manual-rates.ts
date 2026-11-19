@@ -528,9 +528,10 @@ export function renderManualOpeningLotsPanel(messages: TaxMessage[], { saved = f
 
 /**
  * Wire the save and clear buttons after the panel HTML has been injected into
- * `container`. On save: reads each non-empty input, persists it via
- * setManualRate, then invokes `onSave("save")` (which re-runs the report so the
- * new rates take effect). On clear: drops every saved price and calls
+ * `container`. On save: reads each non-empty input, persists them in one
+ * write, then invokes `onSave("save")` (which re-runs the report so the new
+ * rates take effect). A price it cannot read, or a saved price left empty,
+ * flags its row and saves nothing (#472 review). On clear: drops every saved price and calls
  * `onSave("clear")`, so the redrawn panel shows no «Guardado» (#472).
  */
 export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "save" | "clear") => void): void {
@@ -545,23 +546,49 @@ export function bindManualRatesPanel(container: HTMLElement, onSave: (action: "s
   btn.addEventListener("click", () => {
     const inputs = [...container.querySelectorAll<HTMLInputElement>(".crypto-rate-input")];
     const quotes: ManualRateQuote[] = [];
+    let invalidRows = 0;
     for (const input of inputs) {
       const value = input.value.trim();
-      if (!value) continue;
       const currency = input.dataset.currency ?? "";
       const date = input.dataset.date ?? "";
       if (!currency || !date) continue;
-      quotes.push({ currency, date, eurPerUnit: value });
+      // Flag a price it cannot read, and a saved price left empty, instead of
+      // skipping them: the old price would stay stored and keep valuing the
+      // swap while the panel says «Guardado» (#472 review). An empty row with
+      // no saved price is simply ignored; «Borrar precios guardados» removes them.
+      const invalid = value
+        ? normalizeManualQuote({ currency, date, eurPerUnit: value }) === null
+        : storedRateFor(currency, date) !== "";
+      if (invalid) {
+        input.setAttribute("aria-invalid", "true");
+        invalidRows++;
+      } else {
+        input.removeAttribute("aria-invalid");
+      }
+      if (value) quotes.push({ currency, date, eurPerUnit: value });
     }
-    // Only count entries that actually persisted (valid, parseable rate, and a
-    // write the browser accepted), so an invalid input or a refused write
-    // doesn't fake a "saved" state or trigger a no-op rerun.
-    const { saved: savedCount, written } = saveManualRates(quotes);
 
     const msg = container.querySelector<HTMLElement>(".crypto-rates-saved-msg");
-    if (msg) msg.hidden = savedCount === 0;
     const errorMsg = container.querySelector<HTMLElement>(".crypto-rates-error-msg");
-    if (errorMsg) errorMsg.hidden = written;
+    const showError = (key: "crypto_rates.row_invalid" | "crypto_rates.save_error" | null): void => {
+      if (!errorMsg) return;
+      errorMsg.hidden = key === null;
+      if (key !== null) errorMsg.textContent = tr(key);
+    };
+    // Save nothing while a row is flagged, as the opening-lots panel does.
+    if (invalidRows > 0) {
+      showError("crypto_rates.row_invalid");
+      if (msg) msg.hidden = true;
+      return;
+    }
+
+    // Only count entries that actually persisted (a write the browser
+    // accepted), so a refused write doesn't fake a "saved" state or trigger a
+    // no-op rerun.
+    const { saved: savedCount, written } = saveManualRates(quotes);
+
+    if (msg) msg.hidden = savedCount === 0;
+    showError(written ? null : "crypto_rates.save_error");
 
     if (savedCount > 0) onSave("save");
   });

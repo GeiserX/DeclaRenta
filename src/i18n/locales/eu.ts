@@ -735,6 +735,8 @@ const eu: TranslationKeys = {
   "crypto_rates.saved": "Gordeta",
   "crypto_rates.save_error":
     "Nabigatzaileak ez du utzi prezioak gordetzen: haren biltegia beteta edo blokeatuta egon daiteke. Txostena ez da aldatu.",
+  "crypto_rates.row_invalid":
+    "Berrikusi markatutako prezioak: idatzi zero baino handiagoa den prezio bat (adib. 1.234,56). Gordetako prezioak kentzeko, erabili «Ezabatu gordetako prezioak». Ez da ezer gorde.",
   "crypto_rates.recalculate_hint": "Balioak zure nabigatzailean gordetzen dira eta txostena birkalkulatzen da.",
   "crypto_rates.stored_title": "Gordetako eskuzko prezioak",
   "crypto_rates.stored_description":

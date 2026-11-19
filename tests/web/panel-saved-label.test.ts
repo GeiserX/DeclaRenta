@@ -149,18 +149,24 @@ function redrawOnLocaleChange(): void {
 const redrawn = (panel: () => HTMLElement | null, old: HTMLElement, what: string) =>
   waitFor(() => (panel() && panel() !== old ? panel() : null), what);
 
+/** Load the real app on the results step; `seed` writes to storage first. */
+async function startApp(seed: () => void = () => {}): Promise<void> {
+  refuseWrites = false;
+  vi.resetModules();
+  vi.stubGlobal("localStorage", memoryStorage());
+  seed();
+  vi.stubGlobal("__APP_VERSION__", "test");
+  vi.stubGlobal("__COMMIT_HASH__", "test");
+  document.documentElement.innerHTML = new DOMParser().parseFromString(INDEX_HTML, "text/html").documentElement.innerHTML;
+  Element.prototype.scrollIntoView = () => {};
+  vi.stubGlobal("fetch", () => Promise.reject(new Error("no network in tests")));
+  await import("../../src/web/main.js");
+  await openResults();
+}
+
 describe("«Guardado» after a Save in the real app (#472)", () => {
   beforeEach(async () => {
-    refuseWrites = false;
-    vi.resetModules();
-    vi.stubGlobal("localStorage", memoryStorage());
-    vi.stubGlobal("__APP_VERSION__", "test");
-    vi.stubGlobal("__COMMIT_HASH__", "test");
-    document.documentElement.innerHTML = new DOMParser().parseFromString(INDEX_HTML, "text/html").documentElement.innerHTML;
-    Element.prototype.scrollIntoView = () => {};
-    vi.stubGlobal("fetch", () => Promise.reject(new Error("no network in tests")));
-    await import("../../src/web/main.js");
-    await openResults();
+    await startApp();
   });
 
   afterEach(() => {
@@ -650,6 +656,77 @@ describe("«Guardado» after a Save in the real app (#472)", () => {
     third.querySelector<HTMLButtonElement>(".manual-opening-lot-add")!.click();
     expect(third.querySelectorAll(".manual-opening-lot-row")).toHaveLength(2);
     expect(lotsLabel().hidden).toBe(true);
+  });
+});
+
+describe("crypto prices a Save cannot store (#472 review)", () => {
+  // A price saved earlier for another swap: it shows in the "saved elsewhere" list.
+  beforeEach(async () => {
+    await startApp(() => {
+      localStorage.setItem("declarenta_manual_rates", JSON.stringify([{ currency: "ETH", date: "2020-01-02", eurPerUnit: "5" }]));
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const inputs = (p: HTMLElement) => {
+    const all = [...p.querySelectorAll<HTMLInputElement>(".crypto-rate-input")];
+    return { eth: all.find((i) => i.dataset.currency === "ETH")!, sol: all.find((i) => i.dataset.currency !== "ETH")! };
+  };
+  const stored = () => JSON.parse(localStorage.getItem("declarenta_manual_rates")!) as { currency: string; eurPerUnit: string }[];
+
+  /** Refused: the row is flagged, the error says why, nothing is stored, no «Guardado», no rerun. */
+  async function expectRefused(panel: HTMLElement, flagged: HTMLInputElement, ok: HTMLInputElement): Promise<void> {
+    await new Promise((r) => setTimeout(r, 100));
+    expect(cryptoPanel()).toBe(panel);
+    expect(cryptoLabel().hidden).toBe(true);
+    const error = panel.querySelector<HTMLElement>(".crypto-rates-error-msg")!;
+    expect(error.hidden).toBe(false);
+    expect(error.textContent).toMatch(/marcados|highlighted/);
+    expect(flagged.getAttribute("aria-invalid")).toBe("true");
+    expect(ok.hasAttribute("aria-invalid")).toBe(false);
+    expect(stored()).toEqual([{ currency: "ETH", date: "2020-01-02", eurPerUnit: "5" }]);
+  }
+
+  it("a saved price emptied next to a new one: the Save is refused, the saved price is not kept silently", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const { eth, sol } = inputs(before);
+    expect(eth.value).toBe("5");
+    sol.value = "30000";
+    eth.value = "";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await expectRefused(before, eth, sol);
+  });
+
+  it("an unreadable price next to a good one: the Save is refused, not half done", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const { eth, sol } = inputs(before);
+    eth.value = "abc";
+    sol.value = "30000";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await expectRefused(before, eth, sol);
+
+    // Corrected: the Save goes through, the flag and the error go, «Guardado» on the redrawn panel.
+    eth.value = "6";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    expect(eth.hasAttribute("aria-invalid")).toBe(false);
+    expect(before.querySelector<HTMLElement>(".crypto-rates-error-msg")!.hidden).toBe(true);
+    await redrawn(cryptoPanel, before, "rerun after the corrected Save");
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(stored().map((e) => `${e.currency}=${e.eurPerUnit}`).sort()).toEqual(["ETH=6", "SOL=30000"]);
+  });
+
+  it("an empty row that has no saved price is still just skipped (control)", async () => {
+    const before = await waitFor(cryptoPanel, "crypto panel");
+    const { sol } = inputs(before);
+    sol.value = "";
+    before.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    // ETH 5 is still on screen and valid: it is saved again, and the run redraws the panel.
+    await redrawn(cryptoPanel, before, "rerun");
+    expect(shown(cryptoLabel())).toBe(true);
+    expect(stored()).toEqual([{ currency: "ETH", date: "2020-01-02", eurPerUnit: "5" }]);
   });
 });
 

@@ -768,6 +768,8 @@ const es = {
   "crypto_rates.saved": "Guardado",
   "crypto_rates.save_error":
     "El navegador no ha dejado guardar los precios: su almacenamiento puede estar lleno o bloqueado. El informe no ha cambiado.",
+  "crypto_rates.row_invalid":
+    "Revisa los precios marcados: escribe un precio mayor que cero (p. ej. 1.234,56). Para quitar los precios guardados, usa «Borrar precios guardados». No se ha guardado nada.",
   "crypto_rates.recalculate_hint": "Los valores se guardan en tu navegador y el informe se recalcula.",
   "crypto_rates.stored_title": "Precios manuales guardados",
   "crypto_rates.stored_description":

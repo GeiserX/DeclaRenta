@@ -735,6 +735,8 @@ const ca: TranslationKeys = {
   "crypto_rates.saved": "Desat",
   "crypto_rates.save_error":
     "El navegador no ha deixat desar els preus: el seu emmagatzematge pot estar ple o bloquejat. L'informe no ha canviat.",
+  "crypto_rates.row_invalid":
+    "Revisa els preus marcats: escriu un preu més gran que zero (p. ex. 1.234,56). Per treure els preus desats, fes servir «Esborra els preus desats». No s'ha desat res.",
   "crypto_rates.recalculate_hint": "Els valors es desen al teu navegador i l'informe es recalcula.",
   "crypto_rates.stored_title": "Preus manuals desats",
   "crypto_rates.stored_description":
