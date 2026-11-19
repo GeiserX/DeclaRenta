@@ -425,13 +425,14 @@ práctico Renta 2025. The decisions, each pinned in
     unreadable. A row of the security whose type is neither a buy nor a
     sale (a Freedom24 transfer, a Flatex Einbuchung) is kept as an unreadable
     row, as the next point says. A DEGIRO row with neither quantity nor price
-    is kept only when it has an order id or a value. A written zero price (a
-    conversion, a rights assignment) stays skipped in these cases only: a
-    Flatex Kurs of any written zero, a DEGIRO price written "0" or "0,0000"
-    (a DEGIRO "0,00" is booked as written), and a Trading 212 price of zero
-    with the Total in another currency (with the Total in the instrument
-    currency the row is valued from the Total and booked). A DEGIRO row with
-    a written zero quantity ("0,00") and no readable price stays skipped too.
+    is kept only when it has an order id or a value. A Flatex or DEGIRO row
+    with a written zero price (a conversion, a rights assignment, free
+    shares, a transfer in) moves shares of its ISIN, so it is kept as a
+    corporate-action row (below), whatever the spelling of the zero ("0",
+    "0.00", "0,0000"). A Trading 212 price of zero with the Total in another
+    currency stays skipped (with the Total in the instrument currency the row
+    is valued from the Total and booked). A DEGIRO row with a written zero
+    quantity ("0,00") and no readable price stays skipped too.
     An IBKR fill with `tradePrice="0"` and a readable quantity still reaches
     `mapTrade`. Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
@@ -466,7 +467,7 @@ práctico Renta 2025. The decisions, each pinned in
     looks like a trade, but whose date, ticker or ISIN, type or direction,
     or amount cannot be read, is kept as a `quantityUnknownTrade` with
     `Trade.unreadableRow`: the security, the date and the cell that failed,
-    for example `XYZ 20241202 [Type: "BUY - STOP"]`. It books no shares and
+    for example `XYZ 20241202 [Type: "TRANSFER IN"]`. It books no shares and
     no money, so it acts as a row of unknown quantity above (the ISIN is
     "unverified"; with no ISIN, the trade is unidentified). The warning
     `parser.trade_row_unreadable` names every such row. The shared helpers
@@ -504,9 +505,29 @@ práctico Renta 2025. The decisions, each pinned in
       its withholding, and a guessed year can move income to the wrong
       return. `parser.cash_row_undated` names each row with its type,
       security, amount and the failing cell, so the user can add it by hand.
+    - A dividend or withholding row with no ticker goes by its ISIN
+      (Lightyear, Trading 212). With no ticker and no ISIN (and for
+      Scalable, no ISIN) it is not booked, for the same reason: the security
+      sets the source country and the pairing with the withholding.
+      `parser.cash_row_unidentified` names each row with its type, amount
+      and date (Lightyear, Scalable, Trading 212, Revolut).
+    - An IBKR cash `dateTime` written with the Flex Date/Time separator ",",
+      a space or none ("20240615,103000", "2024-06-15 10:30:00",
+      "20240615103000") is rewritten with ";" (`flexDateTime`). The engine
+      reads only ";", so such a dividend was dropped as undated or crashed
+      the report.
     - In Revolut and eToro XLSX files, a date stored as a date cell is read
       as its real day (`isoDateCells`). The sheet's display text ("1/10/25"
-      for the default format) is never parsed. A row of
+      for the default format) is never parsed. A workbook in the 1904 date
+      system (Excel for Mac, Numbers) is read with that system: the same
+      serial number is a day 4 years and 1 day later.
+    - A slash date in text ("1/10/2024", "01/10/2024", "1/10/24") reads the
+      same with or without a leading zero, in one order per file
+      (`slashDateOrder`, `convertSlashDate`): day first, unless a date of the
+      file has a second part over 12 ("3/15/2025") and none a first part over
+      12. A 2-digit year is 20YY. A file with both kinds is day first, so its
+      month-first dates are no real day and are named, never read as another
+      day. A row of
     an unknown type that writes a zero share count moves no shares and stays
     skipped, and so does a row that names no security and moves no shares
     (a cash line). A row that names its security only by name and writes a
@@ -515,8 +536,12 @@ práctico Renta 2025. The decisions, each pinned in
     - Revolut: a buy, sale or other type with a ticker and no readable date
       (an undated row with no ticker is kept with no ISIN);
       any type that is not a buy, sale, dividend, dividend tax correction,
-      split or cash row (a `SPINOFF`, a `BUY - STOP`); a buy or sale with no
-      ticker; a closed position with no symbol. The
+      split or cash row (a `SPINOFF`, a `TRANSFER IN`), also with a zero
+      quantity when it has an amount (a cash merger), unless it is a fee; a
+      buy or sale with no ticker; a closed position with no symbol; a split
+      with no readable date (a corporate-action row, and the holding is of
+      unknown size). Stop and stop-limit orders (`BUY - STOP`,
+      `SELL - STOP LIMIT`) are buys and sales. The
       `FX Rate` cell is read only on a cash top-up or withdrawal, the only
       rows that use it (#466): a bad cell no longer deletes a sale, a buy or
       a dividend. A cash row with a bad rate is still skipped, and
@@ -532,7 +557,10 @@ práctico Renta 2025. The decisions, each pinned in
       `revolut.dividend_tax_correction` (info) names it by ticker, date and
       amount.
     - Trading 212: a buy or sale with no readable Time or no ticker; an
-      action that is not a buy, sale, dividend, interest, split or cash row.
+      action that is not a buy, sale, dividend, interest, split or cash row
+      and writes a share count. An unknown action with an empty share cell
+      (`Result adjustment`) is a cash row, not evidence; the same holds for
+      Lightyear and Scalable (`Fee`, `Tax`).
       Each leg of a `Stock split open` or `Stock split close` is a
       corporate-action row (above).
     - Freedom24: a row with no readable date, no ticker, or an operation
@@ -548,7 +576,11 @@ práctico Renta 2025. The decisions, each pinned in
       Kauf with a negative Nominal is unreadable; a Verkauf with a positive
       Nominal stays a sale. A Kauf or Verkauf with no ISIN is kept, and so is
       a row of another text with no ISIN that names a security and moves
-      shares.
+      shares. A row of the ISIN with a written zero Kurs is a corporate-action
+      row. The legs of a custody transfer (`Lagerstellenwechsel`) of one ISIN
+      on one day that net to zero are skipped; every other leg is a
+      corporate-action row, and `flatex.lagerstellenwechsel.unmatched` still
+      names the ISIN.
     - Trade Republic: a buy or sale with no amount; a TRADING row of another
       type with a symbol, or a name and a share count. A CORPORATE_ACTION or
       DELIVERY row that names a security and does not write a zero share
@@ -558,7 +590,11 @@ práctico Renta 2025. The decisions, each pinned in
       could add or remove shares that were never there. The row books
       nothing and keeps the evidence "unverified".
     - DEGIRO: a row with no ISIN but a readable quantity or price, or an
-      order id.
+      order id. When the product name has the shape of an option
+      (`AAPL C200.00 20DEC24`) or a future (`FDAX MAR25`), the row is kept as
+      a derivative (`OPT`, `FUT`): it is named the same way, but it does not
+      stand for every share in the evidence, which derivatives never enter.
+      A row of an ISIN with a written zero price is a corporate-action row.
     - eToro: an unknown direction in the Spanish `Long / Short` column (only
       `Long` and `Short` are read), or an English Action with no Buy or
       Sell, or an empty Action on a row with an ISIN, units or dates. Before,

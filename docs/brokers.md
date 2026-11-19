@@ -20,6 +20,8 @@ Se pueden combinar ficheros de varios brokers en una sola ejecución para FIFO c
 
 Si una fila de compra o venta nombra un valor pero no se puede leer (una fecha que falta o no es válida, un ticker o un ISIN que falta, un tipo de operación desconocido, un importe vacío), DeclaRenta no la descarta ni la cuenta como compra. La guarda sin acciones ni importes y te avisa con la fila y la celda que falla. Esa fila puede ser una segunda compra, así que DeclaRenta no aplica la excepción de una sola compra (art. 33.5.f LIRPF) a ese valor mientras esa fila no se pueda leer. Vuelve a exportar el fichero o corrige la fila y súbelo de nuevo.
 
+Lo mismo pasa con una fila que mueve acciones sin precio, como un desdoblamiento, un traspaso de entrada, unas acciones gratuitas o unos derechos con precio 0. DeclaRenta no la aplica, pero tampoco la descarta: te avisa con la fila. Un dividendo sin ticker se calcula por su ISIN. Si no trae ni ticker ni ISIN, o no tiene una fecha legible, DeclaRenta no lo suma y te avisa con el importe para que lo añadas a mano.
+
 La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?», en el paso de subida.
 
 ## Cómo exportar el informe de cada broker
