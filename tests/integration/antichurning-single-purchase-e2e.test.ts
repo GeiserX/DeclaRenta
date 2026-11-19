@@ -1839,6 +1839,13 @@ describe("(m) a buy or sale with a readable quantity but no readable price is ev
       expectApplied(report("DEGIRO", degiro("0,00", "", "-45,00")));
     });
 
+    it.each(METHODS)("[%s] a written zero quantity (0,00) with an unreadable price (abc, -): skipped, not booked at that price, applied", (method) => {
+      for (const price of ["abc", "-"]) {
+        expect(degiro("0,00", price, "-45,00").trades).toEqual([]);
+        expectApplied(report("DEGIRO", degiro("0,00", price, "-45,00"), method));
+      }
+    });
+
     it("controls: a written price is a second purchase; a written zero price (rights) and a row with no order id and no value are skipped", () => {
       // The readable row is booked as written: 5 shares at 9,00 EUR.
       expect(degiro("5", "9,00", "-45,00").trades.map((t) => [t.quantity, t.tradePrice, t.currency, t.quantityUnknown ?? false])).toEqual([["5", "9.00", "EUR", false]]);

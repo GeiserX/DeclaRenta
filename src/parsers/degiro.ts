@@ -290,10 +290,12 @@ function parseTransactionsCsv(lines: string[], delimiter: string): Statement {
     // Skip zero-price rows (rights assignments, non-tradeable conversions). A
     // row whose price is empty or unreadable is still a buy or sale when it
     // has an order id or a value (#453); a written zero price is always skipped,
-    // and so is a written zero quantity ("0,00" reads "0.00", past the check above).
+    // and so is a written zero quantity with no readable price ("0,00" reads
+    // "0.00", past the check above).
     const tradeEvidence = orderId !== "" || !toFiniteDecimal(value).isZero();
-    const writtenZeroQuantity = !quantityUnknown && toFiniteDecimal(quantity).isZero();
-    const priceUnknown = quantityUnreadable(fields[cols.price]) && tradeEvidence && !writtenZeroQuantity;
+    const priceUnreadable = quantityUnreadable(fields[cols.price]);
+    if (!quantityUnknown && toFiniteDecimal(quantity).isZero() && priceUnreadable) continue;
+    const priceUnknown = priceUnreadable && tradeEvidence;
     if ((price === "0" || price === "0.0000") && !priceUnknown) continue;
 
     // Determine buy/sell: negative local value = you paid = buy; or negative

@@ -425,11 +425,15 @@ práctico Renta 2025. The decisions, each pinned in
     unreadable. Only a buy or sale row is kept: a Freedom24 transfer stays
     skipped, a Flatex row with neither Nominal nor Kurs is kept only when its
     text says Kauf or Verkauf, a DEGIRO row with neither quantity nor price
-    only when it has an order id or a value, and in the Flatex, DEGIRO and
-    Trading 212 trade rows a written zero price (a conversion, a rights
-    assignment) stays skipped, as does a DEGIRO row with a written zero
-    quantity ("0,00") and no price (an IBKR fill with `tradePrice="0"` and a
-    readable quantity still reaches `mapTrade`). Revolut's
+    only when it has an order id or a value. A written zero price (a
+    conversion, a rights assignment) stays skipped in these cases only: a
+    Flatex Kurs of any written zero, a DEGIRO price written "0" or "0,0000"
+    (a DEGIRO "0,00" is booked as written), and a Trading 212 price of zero
+    with the Total in another currency (with the Total in the instrument
+    currency the row is valued from the Total and booked). A DEGIRO row with
+    a written zero quantity ("0,00") and no readable price stays skipped too.
+    An IBKR fill with `tradePrice="0"` and a readable quantity still reaches
+    `mapTrade`. Revolut's
     closed-positions format keeps both legs of such a row, as eToro does. A
     buy or sale with a readable quantity but a blank or unreadable price is
     kept the same way (a Flatex Kauf or Verkauf, a DEGIRO row with an order id
