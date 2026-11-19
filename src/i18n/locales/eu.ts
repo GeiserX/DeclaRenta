@@ -1029,9 +1029,9 @@ const eu: TranslationKeys = {
   "report.trade_out_of_range.hint":
     "Kantitatea irakur badaiteke, erosketak kosturik gabeko lotea sortzen du: hura erabiltzen duen salmentak bere eskualdatze-balioa batzen du, eta ez eskuratze-balioa; beraz, gehiago ordain dezakezu, inoiz ez gutxiago. Horrelako salmenta batek ez du bere emaitza batzen, eta horrelako dibidendu, interes edo atxikipen batek ez du bere zenbatekoa batzen. Berrikusi errenkada horiek brokerraren fitxategian eta adierazi haien emaitza eskuz.",
   "report.cash_amount_too_large":
-    "Fitxategiko {{count}} kobrantza edo karguk bilioi bat euro edo gehiago balio dute: {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
+    "Fitxategiko {{count}} kobrantza edo karguren euroko balioa ez da zenbaki bat, edo bilioi bat eurora iristen da: {{rows}}. Haien zenbatekoak ez dira laukietan batzen.",
   "report.cash_amount_too_large.hint":
-    "Benetako dibidendu, interes edo atxikipen batek ere ez du zifra hori lortzen. Normalean fitxategiaren edo kanbio-tasaren akatsa da. Berrikusi errenkada horiek brokerraren fitxategian eta adierazi haien zenbatekoa eskuz.",
+    "Normalean fitxategiaren edo kanbio-tasaren akatsa da: benetako dibidendu, interes edo atxikipen batek ere ez du bilioi bat euro lortzen. Berrikusi errenkada horiek brokerraren fitxategian eta kanbio-tasetan, eta adierazi haien zenbatekoa eskuz.",
   "report.non_finite_disposal":
     "{{count}} salmentak zenbaki ez den zenbateko bat du (NaN edo infinitua) edo eurotan 12 zifra oso baino gehiago dituena: {{rows}}. Zenbateko hori ez da laukietan batzen. Urteko gainerako eragiketak bai.",
   "report.non_finite_disposal.hint":

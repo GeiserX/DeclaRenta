@@ -1025,9 +1025,9 @@ const en: TranslationKeys = {
   "report.trade_out_of_range.hint":
     "If the quantity can be read, the purchase creates its lot with no cost: the sale that uses it adds its transfer value and not its acquisition value, so you may pay more, never less. Such a sale does not add its result, and such a dividend, interest or withholding does not add its amount. Check those rows in the broker's file and declare their result by hand.",
   "report.cash_amount_too_large":
-    "{{count}} cash row(s) in the file are worth a trillion euros (10^12) or more: {{rows}}. Their amounts are not added to the boxes.",
+    "{{count}} cash row(s) in the file have a value in euros that is not a number or that reaches a trillion euros (10^12): {{rows}}. Their amounts are not added to the boxes.",
   "report.cash_amount_too_large.hint":
-    "No real dividend, interest or withholding reaches that figure. It is usually an error in the file or in the exchange rate. Check those rows in the broker's file and declare their amount by hand.",
+    "It is usually an error in the file or in the exchange rate: no real dividend, interest or withholding reaches a trillion euros. Check those rows in the broker's file and the exchange rates, and declare their amount by hand.",
   "report.non_finite_disposal":
     "{{count}} sale(s) have an amount that is not a number (NaN or infinity) or that has more than 12 integer digits in euros: {{rows}}. That amount is not added to the boxes. The other operations of the year are added.",
   "report.non_finite_disposal.hint":

@@ -786,11 +786,14 @@ export function generateTaxReport(
       });
   const valuation = resolveCryptoTradeValues(fifoInputTrades, rateMap, manualRates);
   const resolvedRateMap = valuation.rateMap;
-  // A cash row the read range lets through but worth 1e12 € or more (a
-  // dividend of 9e15 dollars) fails the counted bound (`isCountableAmount`),
-  // as a sale's amount does: it is named (`report.cash_amount_too_large`)
-  // and counted nowhere, neither in a box nor in the currency engine. Before,
-  // box 0029 showed -9,900,000,000,000,000.00 € with no message.
+  // A cash row the read range lets through but whose value in euros fails
+  // the counted bound (`isCountableAmount`: 1e12 € or more, or no number,
+  // e.g. from a rate of "Infinity"), as a sale's amount does: it is named
+  // (`report.cash_amount_too_large`) and counted nowhere, neither in a box
+  // nor in the currency engine. Before, a dividend of -9e15 dollars put
+  // -9,900,000,000,000,000.00 € in box 0029 with no message, and a value
+  // that was no number zeroed the whole box (`guardNonFiniteTotals`), the
+  // other rows' income included.
   const uncountableCash = readableCash.filter((c) => {
     let value: ReturnType<typeof valueIncomeEur>;
     try {
@@ -1605,8 +1608,8 @@ export function generateTaxReport(
     allMessages.push({
       id: "report.cash_amount_too_large",
       severity: "error",
-      message: `${count} cobro(s) o cargo(s) del fichero valen un billón de euros o más: ${rows}. Sus importes no se suman a las casillas.`,
-      hint: "Ningún dividendo, interés o retención real llega a esa cifra. Suele ser un error del fichero o del tipo de cambio. Revisa esas filas en el fichero del bróker y declara su importe a mano.",
+      message: `${count} cobro(s) o cargo(s) del fichero tienen un valor en euros que no es un número o que llega a un billón de euros: ${rows}. Sus importes no se suman a las casillas.`,
+      hint: "Suele ser un error del fichero o del tipo de cambio: ningún dividendo, interés o retención real llega a un billón de euros. Revisa esas filas en el fichero del bróker y en los tipos de cambio, y declara su importe a mano.",
       context: { count, rows },
     });
   }

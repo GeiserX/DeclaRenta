@@ -1027,9 +1027,9 @@ const gl: TranslationKeys = {
   "report.trade_out_of_range.hint":
     "Se a cantidade se pode ler, a compra crea o seu lote sen custo: a venda que o usa suma o seu valor de transmisión e non o seu valor de adquisición, así que podes pagar de máis, nunca de menos. Unha venda así non suma o seu resultado, nin un dividendo, un xuro ou unha retención así o seu importe. Revisa esas filas no ficheiro do bróker e declara o seu resultado a man.",
   "report.cash_amount_too_large":
-    "{{count}} cobro(s) ou cargo(s) do ficheiro valen un billón de euros ou máis: {{rows}}. Os seus importes non se suman ás casillas.",
+    "{{count}} cobro(s) ou cargo(s) do ficheiro teñen un valor en euros que non é un número ou que chega a un billón de euros: {{rows}}. Os seus importes non se suman ás casillas.",
   "report.cash_amount_too_large.hint":
-    "Ningún dividendo, xuro ou retención real chega a esa cifra. Adoita ser un erro do ficheiro ou do tipo de cambio. Revisa esas filas no ficheiro do bróker e declara o seu importe a man.",
+    "Adoita ser un erro do ficheiro ou do tipo de cambio: ningún dividendo, xuro ou retención real chega a un billón de euros. Revisa esas filas no ficheiro do bróker e nos tipos de cambio, e declara o seu importe a man.",
   "report.non_finite_disposal":
     "{{count}} venda(s) teñen un importe que non é un número (NaN ou infinito) ou que pasa de 12 cifras enteiras en euros: {{rows}}. Ese importe non se suma ás casillas. O resto das operacións do ano si se suman.",
   "report.non_finite_disposal.hint":
