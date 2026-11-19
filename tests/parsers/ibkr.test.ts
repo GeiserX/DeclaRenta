@@ -6,6 +6,7 @@ import { computeCasillaBlocks } from "../../src/generators/casillas.js";
 import { generateD6Report } from "../../src/generators/d6.js";
 import { generateModelo720 } from "../../src/generators/modelo720.js";
 import type { EcbRateMap } from "../../src/types/ecb.js";
+import type { OpenPosition } from "../../src/types/ibkr.js";
 
 function fixture(name: string): string {
   return readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -247,20 +248,33 @@ describe("parseIbkrFlexXml", () => {
 
   it("gives an unreadable Open Positions quantity as \"0\", flagged unknown, so the D-6 and the 720 neither crash nor list it, and warns", () => {
     // position="" with no legacy `quantity`: the parser used to return "", and
-    // new Decimal("") threw in the D-6 (review of #453).
+    // new Decimal("") threw in the D-6 (review of #453). The value, 60,000 USD,
+    // is above the 720's 50,000 EUR threshold, so the 720 writes its record.
     const row = (position: string): string =>
-      `<OpenPosition accountId="U1" symbol="AAPL" description="APPLE INC" conid="265598" isin="US0378331005" currency="USD" assetCategory="STK" position="${position}" markPrice="200" positionValue="2000" costBasisMoney="1500" costBasisPrice="150" fifoPnlUnrealized="500" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
+      `<OpenPosition accountId="U1" symbol="AAPL" description="APPLE INC" conid="265598" isin="US0378331005" currency="USD" assetCategory="STK" position="${position}" markPrice="200" positionValue="60000" costBasisMoney="45000" costBasisPrice="150" fifoPnlUnrealized="15000" fxRateToBase="1" side="Long" levelOfDetail="SUMMARY" />`;
     const xml = (position: string): string =>
       `<FlexQueryResponse queryName="T" type="AF"><FlexStatements count="1"><FlexStatement accountId="U1" fromDate="20250101" toDate="20251231" period="LastYear"><Trades /><OpenPositions>${row(position)}</OpenPositions></FlexStatement></FlexStatements></FlexQueryResponse>`;
     const rates: EcbRateMap = new Map([["2025-12-31", new Map([["USD", "1.1"]])]]);
     const config = { nif: "00000000T", surname: "X", name: "Y", year: 2025, phone: "600000000", contactName: "X Y", declarationId: "7200000000001", isComplementary: false, isReplacement: false };
+    /** The 720 detail record of the holding (ISIN at 132-143), or undefined. */
+    const record720 = (positions: OpenPosition[]): string | undefined =>
+      generateModelo720(positions, rates, config).split("\n").find((line) => line.startsWith("2") && line.slice(131, 143) === "US0378331005");
+    const previous = ["US0378331005"];
 
     for (const position of ["", "abc"]) {
       const parsed = parseIbkrFlexXml(xml(position));
       const positions = parsed.openPositions;
       expect([positions[0]!.quantity, positions[0]!.quantityUnknown]).toEqual(["0", true]);
-      expect(generateD6Report(positions, rates, 2025, "X", "00000000T").positions).toEqual([]);
+      // The D-6 leaves it out of its positions, but the broker lists it, so it
+      // is no sale: declared last year, it gets no cancellation.
+      const d6 = generateD6Report(positions, rates, 2025, "X", "00000000T", previous);
+      expect(d6.positions).toEqual([]);
+      expect(d6.cancelled).toEqual([]);
+      // The 720 keeps it, with its value and 0 in «Número de valores» (463-474).
       expect(() => generateModelo720(positions, rates, config)).not.toThrow();
+      const record = record720(positions);
+      expect(record?.slice(462, 474)).toBe("000000000000");
+      expect(record?.slice(431, 446)).toMatch(/[1-9]/);
       // The D-6 leaves it out and the 720 gives it 0 shares: a warning names it.
       const warning = parsed.parserMessages?.find((m) => m.id === "parser.open_position_quantity_unknown");
       expect(warning?.severity).toBe("warning");
@@ -269,8 +283,12 @@ describe("parseIbkrFlexXml", () => {
     // Control: a readable quantity is listed, with no warning.
     const readable = parseIbkrFlexXml(xml("10"));
     const held = readable.openPositions;
-    expect(generateD6Report(held, rates, 2025, "X", "00000000T").positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
+    expect(generateD6Report(held, rates, 2025, "X", "00000000T", previous).positions.map((p) => p.sharesAtYearEnd)).toEqual(["10"]);
+    expect(record720(held)?.slice(462, 474)).toBe("000000001000");
     expect(readable.parserMessages?.some((m) => m.id === "parser.open_position_quantity_unknown") ?? false).toBe(false);
+    // Controls: an explicit 0, or no row at all, is no holding: cancelled.
+    expect(generateD6Report(parseIbkrFlexXml(xml("0")).openPositions, rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
+    expect(generateD6Report([], rates, 2025, "X", "00000000T", previous).cancelled.map((c) => c.isin)).toEqual(previous);
   });
 
   it("should parse multiple corporate actions as array", () => {

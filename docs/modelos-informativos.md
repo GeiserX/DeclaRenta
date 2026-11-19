@@ -99,6 +99,8 @@ Una **guía orientativa de cumplimentación** con los datos que necesitarías in
 
 Si proporcionas el D-6 del año anterior (vía `--previous-d6`), DeclaRenta genera también las **cancelaciones** para posiciones que ya no mantienes.
 
+Si IBKR lista una posición sin un número de acciones legible, el D-6 no la incluye en sus posiciones (no tiene número de títulos), pero tampoco la da como cancelación, porque el bróker la sigue listando. El Modelo 720 sí la incluye, con su valor y 0 en «Número de valores». DeclaRenta avisa de cada una: revisa a mano las dos declaraciones.
+
 ### Cómo presentarlo
 
 1. Abre el programa AFORIX y crea una declaración del modelo D-6.
