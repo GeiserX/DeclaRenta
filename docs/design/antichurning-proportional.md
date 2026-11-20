@@ -1003,7 +1003,14 @@ práctico Renta 2025. The decisions, each pinned in
       withholding. The `tax` of a reversal is a refund, never a new
       withholding, and a dividend with `original_currency` but no
       `original_amount` is booked in the account currency, the currency of
-      the amount read.
+      the amount read. A Trade Republic DIVIDEND whose amount is a written
+      zero and whose `tax` is not zero is no dividend, since TR writes a
+      dividend's tax on the dividend's own row. A withholding (negative) is
+      not booked and `parser.cash_income_amount_unreadable` names the row:
+      booked, it gave a 0597 or 0588 credit on 0 € of income. A refund
+      (positive) is booked alone, as a refund, which the report takes from
+      a dividend of its ISIN within 7 days, never below 0. Before, it was
+      booked as a new withholding.
     - eToro: a dividend whose net amount cannot be read (in the Spanish
       export, the EUR net), and an Interest Payment whose Amount cannot be
       read, is not booked, and neither is that dividend's withholding.

@@ -349,6 +349,39 @@ function parseTrCsv(lines: string[]): Statement {
         unreadableTax.push(taxRow());
         continue;
       }
+      const pushWithholding = (amount: string): void => {
+        cashTransactions.push({
+          transactionID: txId ? `${txId}-wht` : `tr-div-wht-${tradeDate}-${symbol}-${i}`,
+          accountId: "",
+          symbol: name,
+          description: `${isinCountry} WHT - ${name}`,
+          isin: symbol,
+          currency,
+          dateTime: tradeDate,
+          settleDate: tradeDate,
+          amount,
+          fxRateToBase: "1",
+          type: "Withholding Tax",
+        });
+      };
+      // A written zero with a tax is no dividend: TR writes a dividend's tax
+      // on the dividend's own row. A withholding (negative) on 0 € of income
+      // gave a 0597 credit, or a 0588 credit against another dividend's
+      // income, with no word: it is not booked, and the row is named. A
+      // refund (positive) was booked as a new withholding: it is booked
+      // alone, as a refund, so the report lowers the withholding of a
+      // dividend of its ISIN within 7 days, never below 0 (#467). A written
+      // zero with no tax stays as the file writes it.
+      if (new Decimal(divAmount).isZero() && !taxDec.isZero()) {
+        if (taxDec.isNegative()) {
+          const amountCol = fromOriginal ? cols.originalAmount : cols.amount;
+          unreadableIncome.push(cashIncomeRowText(field(fields, cols.type), dividendSecurity(name, symbol), divCurrency, tradeDate,
+            [unreadableCell(headers[amountCol] ?? "amount", fields[amountCol])], `${headers[cols.tax] ?? "tax"} ${taxStr}`));
+        } else {
+          pushWithholding(taxDec.toString());
+        }
+        continue;
+      }
 
       cashTransactions.push({
         transactionID: txId || `tr-div-${tradeDate}-${symbol}-${i}`,
@@ -369,19 +402,7 @@ function parseTrCsv(lines: string[]): Statement {
       // Withholding tax (if present). A positive dividend's tax is withheld
       // whatever its sign (TR writes "-0.07"); a reversal's is refunded.
       if (!taxDec.isZero()) {
-        cashTransactions.push({
-          transactionID: txId ? `${txId}-wht` : `tr-div-wht-${tradeDate}-${symbol}-${i}`,
-          accountId: "",
-          symbol: name,
-          description: `${isinCountry} WHT - ${name}`,
-          isin: symbol,
-          currency,
-          dateTime: tradeDate,
-          settleDate: tradeDate,
-          amount: reversal ? taxDec.abs().toString() : taxDec.isNegative() ? taxStr : taxDec.neg().toString(),
-          fxRateToBase: "1",
-          type: "Withholding Tax",
-        });
+        pushWithholding(reversal ? taxDec.abs().toString() : taxDec.isNegative() ? taxStr : taxDec.neg().toString());
       }
       continue;
     }

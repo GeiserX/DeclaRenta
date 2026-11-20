@@ -21,6 +21,8 @@
  *   its raw text stopped the report.
  * - A positive tax on a buy or a sale (money paid back) was booked as a cost.
  * - A positive fee on a buy or a sale (a rebate) was booked as a cost.
+ * - A dividend of a written zero with a tax booked the tax as a withholding
+ *   on 0 € of income, and a refund as a new withholding.
  * - A row of an unknown category with a written zero share count, and a CASH
  *   row of an unknown type with an empty amount, that named an ISIN were
  *   dropped with no word.
@@ -428,6 +430,46 @@ describe("Trade Republic trade fee: the fee keeps the sign TR writes, so a posit
   it("an empty fee cell or a written zero is no fee", () => {
     for (const fee of ["", "0", "0.00"]) {
       expect(tr(BUY({ fee }), SELL({ fee })).trades.map((t) => t.commission), fee).toEqual(["0", "0"]);
+    }
+  });
+});
+
+describe("Trade Republic dividend of a written zero with a tax: a withholding with no income is no credit, a refund lowers one", () => {
+  it.each(METHODS)("[%s] control: a Spanish dividend of 100 with -19 gives 0597 19.00", (method) => {
+    const r = report(tr(ES_DIV({ tax: "-19.00" })), method);
+    expect([r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)]).toEqual(["100.00", "19.00"]);
+  });
+
+  it.each(METHODS)("[%s] a Spanish row of amount '0.00' with a tax of -19.00 books nothing and is named: 0597 0.00", (method) => {
+    const s = tr(ES_DIV({ amount: "0.00", tax: "-19.00" }));
+    expect(s.cashTransactions).toEqual([]);
+    expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe('DIVIDEND Iberia SA (ES0000001001) EUR 20250515 (tax -19.00) [amount: "0.00"]');
+    const r = report(s, method);
+    expect([r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)]).toEqual(["0.00", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] a US dividend with no tax and a later row of original_amount 0 with a tax of -15.00 gives 0588 0.00, not 15.00", (method) => {
+    const s = tr(DIV(), DIV({ date: "2025-05-20", original_amount: "0", amount: "0", tax: "-15.00" }));
+    expect(s.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Dividends", "110"]]);
+    expect(rowsOf(s, "parser.cash_income_amount_unreadable")).toBe('DIVIDEND Acme Corp (US0000001001) USD 20250520 (tax -15.00) [original_amount: "0"]');
+    const r = report(s, method);
+    expect([r.dividends.grossIncome.toFixed(2), r.doubleTaxation.deduction.toFixed(2)]).toEqual(["99.99", "0.00"]);
+  });
+
+  it.each(METHODS)("[%s] a row of amount 0 with a tax of +5.00 is a refund: alone it gives 0597 0.00, after a dividend with -19 it gives 14.00, not 24.00", (method) => {
+    const alone = tr(ES_DIV({ amount: "0", tax: "5.00" }));
+    expect(alone.cashTransactions.map((c) => [c.type, c.amount])).toEqual([["Withholding Tax", "5"]]);
+    expect(alone.parserMessages).toBeUndefined();
+    expect(report(alone, method).dividends.spanishWithholding.toFixed(2)).toBe("0.00");
+    const r = report(tr(ES_DIV({ tax: "-19.00" }), ES_DIV({ date: "2025-05-20", amount: "0", tax: "5.00" })), method);
+    expect([r.dividends.grossIncome.toFixed(2), r.dividends.spanishWithholding.toFixed(2)]).toEqual(["100.00", "14.00"]);
+  });
+
+  it("a written zero with no tax, or a tax of 0, stays as the file writes it, with no word", () => {
+    for (const tax of ["", "0"]) {
+      const s = tr(ES_DIV({ amount: "0", tax }));
+      expect(s.cashTransactions.map((c) => [c.type, c.amount]), tax).toEqual([["Dividends", "0"]]);
+      expect(s.parserMessages, tax).toBeUndefined();
     }
   });
 });
