@@ -181,7 +181,7 @@ Los informes antiguos no tienen columnas de tipo de cambio. Entonces DeclaRenta 
 
 **Datos extraídos:** Operaciones de compraventa en mercado spot.
 
-**Limitaciones:** Solo mercado spot. Operaciones de futuros o derivados no están soportadas. Las distribuciones y staking pueden requerir exportaciones adicionales. Una operación del historial spot con la columna `Executed` vacía o ilegible no suma ni resta unidades: DeclaRenta la nombra en un aviso.
+**Limitaciones:** Solo mercado spot. Operaciones de futuros o derivados no están soportadas. Las distribuciones y staking pueden requerir exportaciones adicionales. Una operación del historial spot con la columna `Executed` vacía o ilegible no suma ni resta unidades: DeclaRenta la nombra en un aviso. En el historial de transacciones, una coma en la observación (`Remark`) no cambia nada. Pero si el importe (`Change`) lleva una coma y no va entre comillas («1,5»), la coma lo parte en dos celdas: DeclaRenta no calcula esa fila y te avisa con sus celdas tal como están.
 
 ### Kraken
 

@@ -549,6 +549,9 @@ function parseBinanceTxCsv(lines: string[]): Statement {
     manualRateHints.push({ currency: coin, date, eurPerUnit: perUnit.toString() });
   }
 
+  // The columns the header names: a trailing empty header cell names none.
+  const headerWidth = headers.reduce((width, h, idx) => (h.trim() !== "" ? idx + 1 : width), 0);
+
   // 1. Collect rows, skipping non-taxable internal movements and zero changes.
   function collectRows(): void {
     const seenKeys = new Map<string, number>();
@@ -578,7 +581,22 @@ function parseBinanceTxCsv(lines: string[]): Statement {
       } catch {
         change = null;
       }
-      const changeCell = unreadableCell(headers[cols.change] ?? "Change", changeStr);
+      // A row with more cells than the header had a comma inside an unquoted
+      // cell. Remark is free text, so a comma there is no harm: such a row
+      // keeps its booking. But when the split may come from Change ("1,5"
+      // read as Change "1" and Remark "5", or "1,250.5"), the row was booked
+      // as its first part with no word (1 BTC instead of 1.5, #467). That is
+      // so when the cell after Change is not a value of its column (no
+      // number under EUR_Value), or when Change and that cell read as one
+      // number with a comma. The file does not say which number it is, so
+      // the Change is not read and the row is named by its cells as written.
+      const nextCell = (fields[cols.change + 1] ?? "").trim();
+      const nextInvalid = cols.change + 1 === cols.eurValue && nextCell !== "" && toFiniteDecimalString(nextCell, "", false) === "";
+      const splitChange = fields.length > headerWidth && (nextInvalid || (/^[+-]?\d+$/.test(changeStr) && /^\d+(\.\d+)?$/.test(nextCell)));
+      if (splitChange) change = null;
+      const changeCell = splitChange
+        ? unreadableCell(headers.slice(cols.change, headerWidth).map((h) => h.trim()).join(","), fields.slice(cols.change).join(",").replace(/,+$/, ""))
+        : unreadableCell(headers[cols.change] ?? "Change", changeStr);
       const timeCell = unreadableCell(headers[cols.utcTime] ?? "UTC_Time", utcTime);
       // A row whose UTC_Time can't be parsed has no real epoch. txEpoch returns
       // NaN (not 0) for it; dropping it here is the safe fix: keeping it would

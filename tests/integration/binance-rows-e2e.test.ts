@@ -10,6 +10,8 @@
  *   different coins netted the given coin into one leg, booked against the
  *   first counter-leg only: 0.2 BTC sold for 3000 € in place of 0.1 BTC for
  *   3000 € and 0.1 BTC for 3300 USDT.
+ * - A Transaction History Change of "1,5" with no quotes split into Change
+ *   "1" and Remark "5", and the row was booked as 1 BTC.
  */
 import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
@@ -189,5 +191,57 @@ describe("#467 Binance: two orders in one window that give up the same coin neve
     const r = report(s, method);
     expect(disposals(r, "BTC")).toEqual(["0.05 p1500.00 c1000.00 g500.00", "0.05 p1500.00 c1000.00 g500.00"]);
     expect(message(r.messages, "binance.unpaired_leg")?.context?.rows).toBe("ETH Buy 1 2025-06-01 10:00:01; BTC Sell -0.1 2025-06-01 10:00:02");
+  });
+});
+
+describe("#467 Binance Transaction History: a Change split by an unquoted comma is named, never booked as its first part", () => {
+  // BTC bought twice, 0.5 for 20000 € each time, and 0.5 sold for 25000 €.
+  // The sale takes the first lot: a 5000 € gain. Not quoted, "1,5" splits
+  // into Change "1" and Remark "5": the first buy was booked as 1 BTC for
+  // 20000 €, so the sale cost 10000 € and the gain was 15000 €, with no word.
+  const rows = (first: string, remark = ""): string[] => [
+    `1,2025-02-01 10:00:00,Spot,Buy,BTC,${first},${remark}`,
+    `1,2025-02-01 10:00:00,Spot,Sell,EUR,-20000,${remark}`,
+    "1,2025-03-01 10:00:00,Spot,Buy,BTC,0.5,",
+    "1,2025-03-01 10:00:00,Spot,Sell,EUR,-20000,",
+    "1,2025-06-01 10:00:00,Spot,Sell,BTC,-0.5,",
+    "1,2025-06-01 10:00:00,Spot,Buy,EUR,25000,",
+  ];
+  const AMOUNT = "binance.unparseable_amount";
+
+  it.each(METHODS)("[%s] control: a Change of 0.5 gives a 5000 € gain, with no message", (method) => {
+    const s = parse(TX, rows("0.5"));
+    expect(s.parserMessages ?? []).toEqual([]);
+    expect(disposals(report(s, method), "BTC")).toEqual(["0.5 p25000.00 c20000.00 g5000.00"]);
+  });
+
+  // Remark is free text: a comma there splits only the Remark, and the row
+  // keeps its exact booking.
+  it.each(METHODS)("[%s] control: commas only in the Remark keep the exact booking, with no message", (method) => {
+    for (const remark of ["bought, via app", "a, b, c", "order 12, 5 fills"]) {
+      const s = parse(TX, rows("0.5", remark));
+      expect(s.parserMessages ?? [], remark).toEqual([]);
+      expect(quantities(s, "BTC"), remark).toEqual(quantities(parse(TX, rows("0.5")), "BTC"));
+      expect(disposals(report(s, method), "BTC"), remark).toEqual(["0.5 p25000.00 c20000.00 g5000.00"]);
+    }
+  });
+
+  it.each(METHODS)("[%s] a Change of 1,5 or 1,250.5 with no quotes books nothing and is named: the sale takes the second lot", (method) => {
+    for (const [first, cell] of [["1,5", "1,5"], ["1,250.5", "1,250.5"], ["1,5", "1,5,note"]] as const) {
+      const s = parse(TX, rows(first, cell === "1,5,note" ? "note" : ""));
+      expect(message(s.parserMessages, AMOUNT)?.context?.rows, cell).toBe(`BTC Buy 20250201 [Change,Remark: ${JSON.stringify(cell)}]`);
+      expect(quantities(s, "BTC").includes("1"), cell).toBe(false);
+      const r = report(s, method);
+      expect(disposals(r, "BTC"), cell).toEqual(["0.5 p25000.00 c20000.00 g5000.00"]);
+      expect(r.messages.map((m) => m.id), cell).toContain(AMOUNT);
+    }
+  });
+
+  it("a split Change before an EUR_Value column is named when that cell is no number", () => {
+    const header = "User_ID,UTC_Time,Account,Operation,Coin,Change,EUR_Value,Remark";
+    const s = parse(header, ["1,2025-02-01 10:00:00,Spot,Buy,BTC,0.5,abc,20000,note", "1,2025-02-01 10:00:00,Spot,Sell,EUR,-20000,-20000,"]);
+    expect(message(s.parserMessages, AMOUNT)?.context?.rows).toBe('BTC Buy 20250201 [Change,EUR_Value,Remark: "0.5,abc,20000,note"]');
+    const ok = parse(header, ["1,2025-02-01 10:00:00,Spot,Buy,BTC,0.5,20000,via app, card", "1,2025-02-01 10:00:00,Spot,Sell,EUR,-20000,-20000,"]);
+    expect(ok.parserMessages ?? []).toEqual([]);
   });
 });
