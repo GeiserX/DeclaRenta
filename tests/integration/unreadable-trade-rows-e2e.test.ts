@@ -3003,40 +3003,76 @@ describe("#467 eToro: a row or a sheet the parser cannot read is named, never bo
     });
   });
 
-  // Spanish export: SAP quoted in EUR (FX rate at open 1.08), 10 units, 100 → 150 EUR.
+  // Spanish export: SAP quoted in EUR, 10 units, 100 → 150 EUR. eToro's FX
+  // rates turn the instrument's quote into dollars: 1.08 at open and, unless
+  // given, 1.08 at close, so the legs are 108 and 162 USD (540 USD, 496.80 €).
   const SP_H = ["ID de posición", "Acción", "Long / Short", "Importe", "Unidades", "Fecha de apertura", "Fecha de cierre", "Apalancamiento",
-    "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)", "Tasa de apertura", "Tasa de cierre", "Tipo", "ISIN"];
-  const sap = (fx: string): Promise<Statement> => book([["Posiciones cerradas", [SP_H,
-    ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500", fx, "100", "150", "Acciones", "DE0007164600"]]]]);
+    "Ganancias (USD)", "Ganancias (EUR)", "Tipo de cambio de apertura (USD)", "Tipo de cambio al cierre (USD)", "Tasa de apertura", "Tasa de cierre", "Tipo", "ISIN"];
+  type Position = { name?: string; isin?: string; units?: string; fx?: string; fxClose?: string; open?: string; close?: string };
+  const spRow = (p: Position): string[] => {
+    const fx = p.fx ?? "1.08";
+    return ["1", p.name ?? "SAP", "Long", "1000", p.units ?? "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500",
+      fx, p.fxClose ?? fx, p.open ?? "100", p.close ?? "150", "Acciones", p.isin ?? "DE0007164600"];
+  };
+  const position = (p: Position, header = SP_H): Promise<Statement> =>
+    book([["Posiciones cerradas", [header, spRow(p).filter((_c, i) => header.includes(SP_H[i]!))]]]);
+  const sap = (fx: string): Promise<Statement> => position({ fx });
   describe.each(["abc", "", "-", "0"])("a EUR instrument whose FX rate at open is %j", (fx) => {
-    it.each(METHODS)("[%s] is kept unreadable, never booked in dollars (460 € instead of 500 €)", async (method) => {
-      const parsed = await sap(fx);
+    it.each(METHODS)("[%s] is kept unreadable, never booked at its EUR quote as dollars", async (method) => {
+      const parsed = await position({ fx, fxClose: "1.08" });
       expect(unreadableRows(parsed)).toBe(`SAP (DE0007164600) 20250201 [Tipo de cambio de apertura (USD): ${JSON.stringify(fx)}]; SAP (DE0007164600) 20250615 [Tipo de cambio de apertura (USD): ${JSON.stringify(fx)}]`);
       expect(report(parsed, method).capitalGains.disposals).toEqual([]);
     });
   });
-  it.each(METHODS)("[%s] control: a readable FX rate at open books the EUR legs, and a rate of 1 the USD legs", async (method) => {
+  it.each(METHODS)("[%s] control: a readable FX rate values the legs in dollars at eToro's rates, and a rate of 1 keeps the dollar quote", async (method) => {
     const eur = await sap("1.08");
-    expect(eur.trades.map((t) => t.currency)).toEqual(["EUR", "EUR"]);
-    expect(nums(report(eur, method))).toEqual(["0.00", "0.00", "0.00", "500.00"]);
+    expect(eur.trades.map((t) => [t.currency, t.tradePrice])).toEqual([["USD", "108"], ["USD", "162"]]);
+    expect(nums(report(eur, method))).toEqual(["0.00", "0.00", "0.00", "496.80"]);
     const usd = await sap("1");
-    expect(usd.trades.map((t) => t.currency)).toEqual(["USD", "USD"]);
+    expect(usd.trades.map((t) => [t.currency, t.tradePrice])).toEqual([["USD", "100"], ["USD", "150"]]);
     expect(nums(report(usd, method))).toEqual(["0.00", "0.00", "0.00", "460.00"]);
   });
 
-  // The same SAP position in the English export, whose FX column is "FX rate at open (USD)".
+  // #467 sweep: every instrument whose FX rate was not 1 was booked as EUR, so
+  // a pence or HKD quote became a loss 85 or 8 times too large.
+  describe.each([
+    ["Barclays in pence", { name: "Barclays (BARC.L)", isin: "GB0031348658", units: "100", fx: "0.0127", open: "180", close: "170" }, ["2.286", "2.159"], "-11.68"],
+    ["Tencent in HKD", { name: "Tencent (0700.HK)", isin: "KYG875721634", units: "100", fx: "0.128", open: "400", close: "350" }, ["51.2", "44.8"], "-588.80"],
+    ["SAP in EUR, 1.08 at open and 1.10 at close", { fx: "1.08", fxClose: "1.10" }, ["108", "165"], "524.40"],
+  ] as [string, Position, string[], string][])("%s", (_label, p, prices, gain) => {
+    it.each(METHODS)("[%s] is valued in dollars at eToro's FX rates, never at its own quote as euros", async (method) => {
+      const parsed = await position(p);
+      expect(parsed.trades.map((t) => [t.currency, t.tradePrice])).toEqual([["USD", prices[0]], ["USD", prices[1]]]);
+      expect(nums(report(parsed, method))).toEqual(["0.00", "0.00", "0.00", gain]);
+    });
+  });
+  describe.each(["abc", "", "0"])("a non-USD instrument whose FX rate at close is %j", (fxClose) => {
+    it.each(METHODS)("[%s] is kept unreadable and named by that cell", async (method) => {
+      const parsed = await position({ name: "Barclays (BARC.L)", isin: "GB0031348658", units: "100", fx: "0.0127", fxClose, open: "180", close: "170" });
+      expect(unreadableRows(parsed)).toBe(`Barclays (BARC.L) (GB0031348658) 20250201 [Tipo de cambio al cierre (USD): ${JSON.stringify(fxClose)}]; Barclays (BARC.L) (GB0031348658) 20250615 [Tipo de cambio al cierre (USD): ${JSON.stringify(fxClose)}]`);
+      expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    });
+  });
+  it.each(METHODS)("[%s] a non-USD instrument with no FX rate at close column is named; a USD one needs none", async (method) => {
+    const noClose = SP_H.filter((h) => h !== "Tipo de cambio al cierre (USD)");
+    const parsed = await position({}, noClose);
+    expect(unreadableRows(parsed)).toBe("SAP (DE0007164600) 20250201 [FX rate at close (USD): —]; SAP (DE0007164600) 20250615 [FX rate at close (USD): —]");
+    expect(report(parsed, method).capitalGains.disposals).toEqual([]);
+    expect(nums(report(await position({ fx: "1" }, noClose), method))).toEqual(["0.00", "0.00", "0.00", "460.00"]);
+  });
+
+  // The same SAP position in the English export, whose FX columns are "FX rate at open (USD)" and "FX rate at close (USD)".
   const EN_H = ["Position ID", "Action", "Long / Short", "Amount", "Units / Contracts", "Open Date", "Close Date", "Leverage",
-    "Profit(USD)", "Profit(EUR)", "FX rate at open (USD)", "Open Rate", "Close Rate", "Type", "ISIN"];
+    "Profit(USD)", "Profit(EUR)", "FX rate at open (USD)", "FX rate at close (USD)", "Open Rate", "Close Rate", "Type", "ISIN"];
   const sapEn = (fx: string, open = "100", close = "150"): Promise<Statement> => book([["Closed Positions", [EN_H,
-    ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500", fx, open, close, "Stocks", "DE0007164600"]]]]);
+    ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "540", "500", fx, fx, open, close, "Stocks", "DE0007164600"]]]]);
   it.each(METHODS)("[%s] the English FX rate at open is read like the Spanish one, never a EUR gain booked in dollars", async (method) => {
     const es = await sap("1.08");
     const en = await sapEn("1.08");
     expect(en.trades.map((t) => [t.currency, t.tradePrice])).toEqual(es.trades.map((t) => [t.currency, t.tradePrice]));
     expect(nums(report(en, method))).toEqual(nums(report(es, method)));
     // The loss case too: 150 → 100 in EUR is no larger loss in dollars.
-    const esLoss = await book([["Posiciones cerradas", [SP_H,
-      ["1", "SAP", "Long", "1000", "10", "01/02/2025 10:00:00", "15/06/2025 16:00:00", "1", "-540", "-500", "1.08", "150", "100", "Acciones", "DE0007164600"]]]]);
+    const esLoss = await position({ open: "150", close: "100" });
     expect(nums(report(await sapEn("1.08", "150", "100"), method))).toEqual(nums(report(esLoss, method)));
     // An English FX rate that cannot be read is named like the Spanish one.
     expect(unreadableRows(await sapEn("abc"))).toBe('SAP (DE0007164600) 20250201 [FX rate at open (USD): "abc"]; SAP (DE0007164600) 20250615 [FX rate at open (USD): "abc"]');

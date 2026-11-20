@@ -106,6 +106,8 @@ La web muestra la misma guía de cada broker bajo «¿No se detectó tu broker?�
 
 **Limitaciones:** eToro no proporciona ISINs directamente; DeclaRenta solo los utiliza si están presentes en el extracto exportado (no se infieren desde el nombre del activo). Los CFDs de acciones e índices se procesan; los CFDs de criptomonedas no están soportados.
 
+**Divisa:** eToro lleva la cuenta en dólares. Si un valor no cotiza en dólares (euros, peniques, dólares de Hong Kong...), DeclaRenta pasa sus precios a dólares con los tipos de cambio de apertura y de cierre que da eToro. Después los pasa a euros con el tipo del BCE, como cualquier operación en dólares. Si falta el tipo de cambio de cierre, DeclaRenta no calcula esa posición y la nombra en un aviso.
+
 ### Revolut
 
 1. Inicia sesión en la **web de Revolut** (app.revolut.com o app móvil).

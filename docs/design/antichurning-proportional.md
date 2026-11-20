@@ -900,6 +900,15 @@ práctico Renta 2025. The decisions, each pinned in
       like the Spanish `Tipo de cambio de apertura (USD)`. Only the Spanish
       name was known, so an English export booked a EUR instrument's legs
       as dollars with no word.
+    - eToro: a closed position whose FX rate is not 1 was labelled EUR, so
+      a quote in pence or HKD was booked as euros (a loss 85 or 8 times too
+      large). The FX rate says only that the quote is not in dollars, not
+      which currency it is in. Every leg is now booked in USD, the
+      account's currency: Open Rate × `FX rate at open (USD)` and Close
+      Rate × `FX rate at close (USD)`, eToro's own applied rates. The ECB
+      converts the dollars to euros, as for any USD trade. A non-USD row
+      whose FX rate at close cannot be read, or that has no such column, is
+      kept as an unreadable row named by that cell.
     - DEGIRO Account CSV: a Dividendo, a Retención del dividendo or an
       interest row whose amount cannot be read, or whose currency cell is
       empty, is not booked, and neither are the withholdings of such a
