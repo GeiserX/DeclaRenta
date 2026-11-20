@@ -233,7 +233,10 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * Buchtag, so legs and fills are matched day by day (#467): every day of the
  * order must have both, every leg a readable day, and no fill of the order may
  * be a row the parser kept unreadable (its leg would have no fill). A day with
- * as many legs as fills pairs them 1:1 by amount. A day with a different
+ * as many legs as fills pairs them 1:1 by amount; when one pair gives no fee,
+ * no fill of that day gets one: the legs are not one per fill (a combined
+ * leg uploaded twice with no TA-Nr.), and a pair that passed booked 500 € of
+ * the other fill's value as its fee. A day with a different
  * count (one combined leg for several fills) recovers the day's total fee and
  * splits it pro rata by trade value. Legs paired with fills of another
  * execution booked a fill's whole value as a fee with no word.
@@ -448,22 +451,28 @@ function reconcileOrderLegs(statement: Statement): void {
     let prorated = false;
     for (const day of days) {
       if (day.legs.length === day.trades.length) {
-        // One cash leg per fill: pair them by amount.
+        // One cash leg per fill: pair them by amount. A pair that gives no
+        // fee shows the day's legs are not one per fill (a combined leg
+        // uploaded twice with no TA-Nr.): the pairs that pass would then
+        // book another fill's value as a fee, so no fill of the day gets one.
         const sortedTrades = [...day.trades].sort(tradeOrder);
         const sortedLegs = [...day.legs].sort(legOrder);
-        sortedTrades.forEach((trade, i) => {
+        const fees = sortedTrades.map((trade, i) => {
           const leg = sortedLegs[i]!;
-          if (leg.currency !== trade.currency) {
+          return leg.currency === trade.currency ? legFee([leg], trade.buySell, new Decimal(trade.tradeMoney)) : null;
+        });
+        if (fees.includes(undefined)) {
+          notRecovered.push(orderRow(orderKey, day.legs, day.trades));
+          continue;
+        }
+        sortedTrades.forEach((trade, i) => {
+          const fee = fees[i];
+          if (fee === null || fee === undefined) {
             crossCurrencyTrades++;
             return;
           }
-          const fee = legFee([leg], trade.buySell, new Decimal(trade.tradeMoney));
-          if (fee === undefined) {
-            notRecovered.push(orderRow(orderKey, [leg], [trade]));
-            return;
-          }
           trade.commission = fee.abs().negated().toFixed();
-          trade.commissionCurrency = leg.currency || trade.commissionCurrency || trade.currency;
+          trade.commissionCurrency = sortedLegs[i]!.currency || trade.commissionCurrency || trade.currency;
         });
         continue;
       }

@@ -3581,6 +3581,21 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       expect(message(statement, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1408.26 EUR]`);
       expect(gains(report(statement, method))).toEqual(["714.10", "600.00", "114.10"]);
     });
+
+    // Round 3 of the merge sweep (#467): a day with one leg per fill booked
+    // the pairs that passed even when another pair of the day failed, so a
+    // combined leg uploaded twice with no TA-Nr. gave one fill the other
+    // fill's value as a fee.
+    it.each(METHODS)("[%s] a combined leg uploaded twice with no TA-Nr. gives no fill of that day a fee: the whole day is named", (method) => {
+      const fills = (): Statement => depot(fill("01.03.2024", "10", "9101"), fill("01.03.2024", "5", "9102"), sell("15"));
+      const control = merged(fills(), konto(leg("01.03.2024", "", "-1505,90"), sellLeg("1794,10")));
+      expect(control.parserMessages?.map((m) => m.id)).toEqual(["flatex.commission.multi_fill_prorated"]);
+      expect(gains(report(control, method))).toEqual(["1794.10", "1505.90", "288.20"]);
+      const statement = merged(fills(), konto(leg("01.03.2024", "", "-1505,90"), sellLeg("1794,10")), konto(leg("01.03.2024", "", "-1505,90")));
+      expect(booked(statement)).toEqual([["10", "0"], ["5", "0"], ["-15", "-5.9"]]);
+      expect(statement.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1500 EUR / -3011.8 EUR]`]]);
+      expect(gains(report(statement, method))).toEqual(["1794.10", "1500.00", "294.10"]);
+    });
   });
 
   it.each(METHODS)("[%s] a row with no order number gets no key from the digits of its ISIN: two orders never pool their legs", (method) => {

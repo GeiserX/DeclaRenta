@@ -794,7 +794,10 @@ práctico Renta 2025. The decisions, each pinned in
       or a fill the parser keeps unreadable gives the whole order no fee,
       and `flatex.commission.not_recovered` names it. Before, a leg of
       another day, of a fill missing from the Depot export, or of an
-      unreadable fill became the fee of another fill. A day with one
+      unreadable fill became the fee of another fill. A day with one leg
+      per fill books no fee for any of its fills when one pair gives none:
+      a combined leg uploaded twice with no TA-Nr. gave the larger fill
+      the smaller fill's value as a fee. A day with one
       combined leg for several fills splits the fee pro rata only when the
       fee is below the day's smallest fill: a missing or extra leg (one
       uploaded twice with no TA-Nr.) moves the fee by at least that fill's
