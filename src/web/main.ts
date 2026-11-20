@@ -968,8 +968,13 @@ type SavedPanel = "antichurning" | "crypto" | "openingLots";
  * panel (#472 review). An edit, a refused Save or a Clear in a panel takes it
  * out; a locale change, a year change and a new upload empty the set. The run
  * that renders consumes it.
+ *
+ * Each panel maps to the year of the results the saved panel showed. The old
+ * year's panels stay on screen while a year change waits, and a Save there
+ * reruns for the new year: that run labels only the panels saved in its own
+ * year, so the other year's panel never says «Guardado» for it (#472 review).
  */
-const savedPanels = new Set<SavedPanel>();
+const savedPanels = new Map<SavedPanel, number>();
 
 /**
  * When each drawn results panel was last touched (#472 review): every edit and
@@ -1077,7 +1082,7 @@ async function processFiles(): Promise<void> {
     // the run shows another year (they belong to the year on screen).
     const keep = (el: Element) =>
       report.year === shownResultsYear && (panelUnsaved.has(el) || (panelTouched.get(el) ?? 0) > touchSeqAtStart);
-    const labelled = new Set(savedPanels);
+    const labelled = new Set([...savedPanels].filter(([, savedYear]) => savedYear === report.year).map(([p]) => p));
     savedPanels.clear();
     renderResults(report, labelled, keep);
     shownResultsYear = report.year;
@@ -1341,11 +1346,12 @@ function renderResults(report: TaxSummary, labelled: ReadonlySet<SavedPanel> = n
   });
 
   // A Save reruns the report and redraws its panel: the new panel shows
-  // «Guardado» (#472). A Clear reruns without it. Either one stored what the
+  // «Guardado» (#472), when the run shows the year this panel shows. A Clear
+  // reruns without it. Either one stored what the
   // panel shows, so the panel holds nothing unsaved any more.
   const rerunAfter = (panel: SavedPanel, el: HTMLElement) => (action: "save" | "clear") => {
     panelUnsaved.delete(el);
-    if (action === "save") savedPanels.add(panel);
+    if (action === "save") savedPanels.set(panel, report.year);
     void processFiles();
   };
 

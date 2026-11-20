@@ -850,6 +850,40 @@ describe("Saves in two panels before the first rerun lands (#472 review)", () =>
     expect(cryptoPanel()).not.toBe(crypto);
     expect(cryptoLabel().hidden).toBe(true);
   });
+
+  // The old year's panels stay on screen while a year change waits. A Save
+  // there still stores the value and reruns, but the run shows the other
+  // year's panels: none of them was saved, so none says «Guardado».
+  it("Saves in the old year's panels while a year change waits: the other year shows no «Guardado», and the saved values still apply", async () => {
+    const crypto = await waitFor(cryptoPanel, "crypto panel");
+    const win = await waitFor(windowPanel, "window panel");
+    const yearSelect = document.getElementById("results-year-select") as HTMLSelectElement;
+    const other = [...yearSelect.options].map((o) => o.value).find((v) => v !== String(YEAR));
+    if (!other) throw new Error("the year select offers no other year");
+    const header = document.getElementById("results-year-header")!.innerHTML;
+    yearSelect.value = other;
+    yearSelect.dispatchEvent(new Event("change"));
+    win.querySelector<HTMLSelectElement>(`.antichurning-window-select[data-isin='${LSE_ISIN}']`)!.value = "2";
+    win.querySelector<HTMLButtonElement>(".antichurning-window-save")!.click();
+    solInput(crypto).value = "30000";
+    crypto.querySelector<HTMLButtonElement>("#crypto-rates-save-btn")!.click();
+    await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== header ? true : null), `results for ${other}`);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(win.isConnected).toBe(false);
+    expect(crypto.isConnected).toBe(false);
+    expect([...step3().querySelectorAll<HTMLElement>(".crypto-rates-saved-msg")].filter(shown)).toEqual([]);
+    expect(JSON.parse(localStorage.getItem("declarenta_antichurning_windows")!)).toEqual({ [LSE_ISIN]: 2 });
+    expect(JSON.parse(localStorage.getItem("declarenta_manual_rates")!)).toHaveLength(1);
+    // Back on the first year, the panels show what the Saves stored.
+    const otherHeader = document.getElementById("results-year-header")!.innerHTML;
+    const select = document.getElementById("results-year-select") as HTMLSelectElement;
+    select.value = String(YEAR);
+    select.dispatchEvent(new Event("change"));
+    await waitFor(() => (document.getElementById("results-year-header")!.innerHTML !== otherHeader ? true : null), `results for ${YEAR}`);
+    expect(windowSelect(windowPanel()!).value).toBe("2");
+    expect(step3().querySelector(".crypto-rates-stored-panel")).not.toBeNull();
+    expect([...step3().querySelectorAll<HTMLElement>(".crypto-rates-saved-msg")].filter(shown)).toEqual([]);
+  });
 });
 
 describe("a Save that leaves the panel with no rows (#472 review)", () => {
