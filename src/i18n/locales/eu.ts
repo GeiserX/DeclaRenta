@@ -1027,6 +1027,10 @@ const eu: TranslationKeys = {
     "Kraken: liburu nagusiko (Ledgers) {{count}} salerosketa ez daude igotako eragiketa-fitxategi batean ere (Trades), eta ez dira kalkulatzen: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
     "DeclaRentak Krakeneko erosketak eta salmentak eragiketa-fitxategitik (Trades) bakarrik irakurtzen ditu. Errenkada bakoitzak eragiketaren refid-a eta data ditu. Kortxete artean daude liburu nagusian mugitzen dituen monetak eta zenbatekoak. Deskargatu Krakenetik data horietako Trades fitxategia (History → Export → Trades), eta igo ezazu liburu nagusiarekin batera. Hura gabe, salmenta bat falta daiteke zure aitorpenean, edo erosketa baten kostua.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} eragiketak moneta ofizial bat beste batengatik aldatzen dute (adibidez, euroak dolarrengatik), eta ez dira kalkulatzen: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Errenkada bakoitzak bikotea, mota (buy edo sell), kantitatea (vol), zenbatekoa (cost) eta data ditu. DeclaRentak ez du kalkulatzen Krakeneko aldaketa horien truke-tasagatiko irabazia edo galera. Dibisa bat euroengatik edo beste dibisa batengatik aldatzeak irabazi edo galera bat eman dezake. Aldatzean eurotan duen balioaren eta eurotan kostatu zitzaizunaren arteko aldea da. Kalkulatu eta gehitu eskuz Renta Web-en.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":

@@ -807,6 +807,13 @@ práctico Renta 2025. The decisions, each pinned in
       so it matched no BTC lot, reward or rebuy. It is now split at the
       slash; a slash pair that is not two sides, or whose quote is no known
       currency or coin, is named by `kraken.unrecognized_pair`.
+      A pair of two fiat currencies (ZEURZUSD, EURUSD) was booked as a
+      crypto trade of the coin "EUR": multidivisa made up a capital loss on
+      a euro round trip, and a sale of euros alone gave a gain with
+      `fifo.sell_without_lots`. The FX engine reads only cash trades, so
+      the row books nothing and `kraken.fiat_conversion_not_booked` names
+      it by pair, type, vol, cost and time, as at Binance. Its ledger rows
+      are not named again as missing from the Trades CSV.
       A ledger (Ledgers CSV) row of type `trade` books nothing: trades
       come from the Trades CSV, whose txid is the ledger refid. A ledger
       uploaded with no Trades CSV lost a sale with no word. At merge time,

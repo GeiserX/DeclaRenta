@@ -1062,6 +1062,10 @@ const es = {
     "Kraken: {{count}} compraventa(s) del libro mayor (Ledgers) no están en ningún archivo de operaciones (Trades) subido y no se calculan: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
     "DeclaRenta lee las compras y las ventas de Kraken solo del archivo de operaciones (Trades). Cada fila trae el refid de la operación y su fecha. Entre corchetes van las monedas y los importes que mueve en el libro mayor. Descarga de Kraken el archivo Trades de esas fechas (History → Export → Trades) y súbelo junto al libro mayor. Sin él, puede faltar una venta en tu declaración, o el coste de una compra.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} operación(es) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Cada fila trae el par, el tipo (buy o sell), la cantidad (vol), el importe (cost) y la fecha. DeclaRenta no calcula la ganancia o la pérdida por tipo de cambio de estos cambios de Kraken. Cambiar una divisa por euros o por otra divisa puede dar una ganancia o una pérdida. Es la diferencia entre su valor en euros al cambiarla y lo que te costó en euros. Calcúlala y añádela a mano en Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":

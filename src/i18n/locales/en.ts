@@ -1023,6 +1023,10 @@ const en: TranslationKeys = {
     "Kraken: {{count}} trade(s) of the ledger (Ledgers) are in no uploaded trades file (Trades) and are not calculated: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
     "DeclaRenta reads Kraken purchases and sales only from the trades file (Trades). Each row shows the refid of the trade and its date. The square brackets show the coins and the amounts it moves in the ledger. Download the Trades file for those dates from Kraken (History → Export → Trades) and upload it with the ledger. Without it, a sale can be missing from your return, or the cost of a purchase.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} trade(s) exchange one fiat currency for another (for example, euros for dollars) and are not calculated: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Each row shows the pair, the type (buy or sell), the quantity (vol), the amount (cost) and the date. DeclaRenta does not calculate the exchange-rate gain or loss of these Kraken exchanges. Exchanging a currency for euros or for another currency can give a gain or a loss. It is the difference between its value in euros when you exchange it and what it cost you in euros. Calculate it and add it by hand in Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":

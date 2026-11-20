@@ -49,6 +49,7 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
   target.parserMessages = [...(target.parserMessages ?? []), ...(source.parserMessages ?? [])];
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
   if (source.krakenLedgerTrades) target.krakenLedgerTrades = [...(target.krakenLedgerTrades ?? []), ...source.krakenLedgerTrades];
+  if (source.krakenNamedTradeIds) target.krakenNamedTradeIds = [...(target.krakenNamedTradeIds ?? []), ...source.krakenNamedTradeIds];
   target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
   target.holdingsBySource = [
     ...(target.holdingsBySource ?? []),
@@ -162,9 +163,13 @@ export function finalizeMergedStatement(statement: Statement): Statement {
  */
 function nameUnbookedKrakenLedgerTrades(statement: Statement): void {
   const pending = statement.krakenLedgerTrades;
+  const named = statement.krakenNamedTradeIds ?? [];
   delete statement.krakenLedgerTrades;
+  delete statement.krakenNamedTradeIds;
   if (!pending?.length) return;
-  const booked = new Set(statement.trades.filter((t) => t.exchange === "KRAKEN").map((t) => t.tradeID));
+  // A Trades row already named by its parser (a fiat-for-fiat pair) is in
+  // the upload: its ledger rows are not named again as missing.
+  const booked = new Set([...statement.trades.filter((t) => t.exchange === "KRAKEN").map((t) => t.tradeID), ...named]);
   const rows = new Map(pending.filter((p) => !booked.has(p.refid)).map((p) => [p.refid, p.row]));
   if (rows.size === 0) return;
   const count = String(rows.size);

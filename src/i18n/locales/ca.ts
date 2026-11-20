@@ -1025,6 +1025,10 @@ const ca: TranslationKeys = {
     "Kraken: {{count}} compravenda(es) del llibre major (Ledgers) no són a cap fitxer d'operacions (Trades) pujat i no es calculen: {{rows}}.",
   "kraken.ledger_trade_not_booked.hint":
     "DeclaRenta llegeix les compres i les vendes de Kraken només del fitxer d'operacions (Trades). Cada fila porta el refid de l'operació i la data. Entre claudàtors hi ha les monedes i els imports que mou al llibre major. Descarrega de Kraken el fitxer Trades d'aquestes dates (History → Export → Trades) i puja'l amb el llibre major. Sense ell, pot faltar una venda a la teva declaració, o el cost d'una compra.",
+  "kraken.fiat_conversion_not_booked":
+    "Kraken: {{count}} operació(ns) canvien una moneda oficial per una altra (per exemple, euros per dòlars) i no es calculen: {{rows}}.",
+  "kraken.fiat_conversion_not_booked.hint":
+    "Cada fila porta el parell, el tipus (buy o sell), la quantitat (vol), l'import (cost) i la data. DeclaRenta no calcula el guany o la pèrdua per tipus de canvi d'aquests canvis de Kraken. Canviar una divisa per euros o per una altra divisa pot donar un guany o una pèrdua. És la diferència entre el seu valor en euros en canviar-la i el que et va costar en euros. Calcula'l i afegeix-lo a mà a Renta Web.",
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":

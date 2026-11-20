@@ -31,6 +31,12 @@ export interface FlexStatement {
    */
   krakenLedgerTrades?: { refid: string; row: string }[];
   /**
+   * Txids of Kraken Trades CSV rows the parser named and did not book (a
+   * pair of two fiat currencies). Their ledger rows are not named again as
+   * missing from the Trades CSV. `finalizeMergedStatement` drops it.
+   */
+  krakenNamedTradeIds?: string[];
+  /**
    * Optional EUR-per-unit valuation hints derived from a broker-supplied EUR
    * value column (e.g. a user-added `EUR_Value` column in a Binance Transaction
    * History CSV). Fed into the crypto-valuation pre-pass as a manual-rate source

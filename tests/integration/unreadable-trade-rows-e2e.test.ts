@@ -3908,6 +3908,62 @@ describe("#467 Kraken sweep: price, coin codes, slash pairs, ledger trades and a
     });
   });
 
+  describe("a pair of two fiat currencies", () => {
+    // 1000 EUR bought for 1100 USD and sold for 1050 USD (ZEURZUSD, a forex
+    // pair). It was booked as a crypto trade of the coin "EUR": multidivisa
+    // made up a capital loss on euros, and a sale of euros alone gave a gain
+    // with fifo.sell_without_lots. The FX engine reads only cash trades, so
+    // the row books nothing and is named, as at Binance.
+    const fx = (pair: string, side: string, id: string, date: string, cost: string): string =>
+      `"${id}","O${id}","${pair}","${date}","${side}","limit","1.10","${cost}","0","1000","0.0","",""`;
+    const roundTrip = (pair: string): Statement => kraken(fx(pair, "buy", "F1", "2025-03-01 10:00:00", "1100.0"), fx(pair, "sell", "F2", "2025-06-01 10:00:00", "1050.0"));
+    const named = (m: readonly TaxMessage[] | undefined): TaxMessage | undefined => m?.find((x) => x.id === "kraken.fiat_conversion_not_booked");
+    const ROWS = "ZEURZUSD buy 1000 1100.0 2025-03-01 10:00:00; ZEURZUSD sell 1000 1050.0 2025-06-01 10:00:00";
+
+    it.each(METHODS)("[%s] a ZEURZUSD round trip books nothing and names both rows", (method) => {
+      const parsed = roundTrip("ZEURZUSD");
+      expect(parsed.trades).toEqual([]);
+      expect(named(parsed.parserMessages)?.context).toEqual({ count: "2", rows: ROWS });
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect([net(r), r.capitalGains.disposals.length]).toEqual(["0.00", 0]);
+      expect(named(r.messages)?.severity).toBe("warning");
+    });
+
+    it.each(METHODS)("[%s] a sale of euros alone (EURUSD) books nothing and gives no made-up gain", (method) => {
+      const parsed = kraken(fx("EURUSD", "sell", "F2", "2025-06-01 10:00:00", "1050.0"));
+      expect(named(parsed.parserMessages)?.context?.rows).toBe("EURUSD sell 1000 1050.0 2025-06-01 10:00:00");
+      const r = run([[parsed, "Kraken"]], 2025, method);
+      expect([net(r), r.messages.some((m) => m.id === "fifo.sell_without_lots")]).toEqual(["0.00", false]);
+    });
+
+    it.each(METHODS)("[%s] control: XBTUSD is a crypto trade with a disposal", (method) => {
+      const parsed = roundTrip("XBTUSD");
+      expect(parsed.trades.map((t) => t.symbol)).toEqual(["BTC", "BTC"]);
+      expect(named(parsed.parserMessages)).toBeUndefined();
+      expect(run([[parsed, "Kraken"]], 2025, method).capitalGains.disposals.map((d) => d.symbol)).toEqual(["BTC"]);
+    });
+
+    it("its ledger rows are not named again as missing from the Trades CSV", () => {
+      const ledger = krakenParser.parse([`"txid","refid","time","type","subtype","aclass","asset","amount","fee","balance"`,
+        `"L1","F1","2025-03-01 10:00:00","trade","","currency","ZUSD","-1100","0","0"`,
+        `"L2","F1","2025-03-01 10:00:00","trade","","currency","ZEUR","1000","0","1000"`].join("\n"));
+      const ids = (parts: [Statement, string][]): string[] => run(parts, 2025, "multidivisa").messages.map((m) => m.id).filter((id) => id.startsWith("kraken."));
+      expect(ids([[ledger, "Kraken"], [roundTrip("ZEURZUSD"), "Kraken"]])).toEqual(["kraken.fiat_conversion_not_booked"]);
+      expect(ids([[ledger, "Kraken"]])).toEqual(["kraken.ledger_trade_not_booked"]);
+    });
+
+    it("the warning is the es locale and exists in the five locales", () => {
+      const m = named(roundTrip("ZEURZUSD").parserMessages)!;
+      const fill = (text: string): string => text.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => m.context?.[k] ?? "");
+      expect(m.message).toBe(fill((es as Record<string, string>)["kraken.fiat_conversion_not_booked"]!));
+      expect(m.hint).toBe((es as Record<string, string>)["kraken.fiat_conversion_not_booked.hint"]);
+      for (const locale of [es, en, ca, eu, gl] as Record<string, string>[]) {
+        expect(locale["kraken.fiat_conversion_not_booked"]).toContain("{{rows}}");
+        expect(locale["kraken.fiat_conversion_not_booked.hint"]).toContain("Renta Web");
+      }
+    });
+  });
+
   describe("ledger trade rows with no Trades CSV", () => {
     // A ledger-only upload: 0.1 BTC sold for 9000 € on 01/03/2025. The ledger
     // parser books no trades (they come from the Trades CSV, whose txid is

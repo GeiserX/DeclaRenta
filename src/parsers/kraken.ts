@@ -241,6 +241,9 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
   // Pairs whose quote we could not recognize, mapped to the base/quote split we
   // guessed (may be mis-split or mis-valued).
   const unrecognizedPairs = new Map<string, string>();
+  // Rows that swap one fiat currency for another, by txid and the text that
+  // names them (#467).
+  const fiatConversions: { txid: string; row: string }[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -281,6 +284,15 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     }
 
     const { base, quote, assumedQuote } = splitPair(pair);
+    // A pair of two fiat currencies (ZEURZUSD, EURUSD) is no crypto trade:
+    // booked as the coin "EUR", multidivisa made up a loss on euros and a
+    // sale of euros alone gave a gain. The FX engine reads only cash trades,
+    // so the row books nothing and is named, as at Binance (#467).
+    if (isFiat(base) && isFiat(quote)) {
+      const cell = (idx: number): string => (idx >= 0 ? (fields[idx] ?? "").trim() : "") || "—";
+      fiatConversions.push({ txid: rowId, row: `${pair} ${cell(cols.type)} ${cell(cols.vol)} ${cell(cols.cost)} ${timeStr || "—"}` });
+      continue;
+    }
     if (assumedQuote) unrecognizedPairs.set(pair, `${base}/${quote}`);
     // A type that is neither buy nor sell (empty, "settle", a margin
     // settlement) is no purchase: it was booked as one (#468). The row is
@@ -405,7 +417,15 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
         hint: "Suele deberse a un par poco habitual no incluido en la lista de divisas conocidas. Revisa esas operaciones y, si la moneda o la divisa de cotización no son las indicadas, corrige su valor manualmente.",
         context: { count: String(unrecognizedPairs.size) },
       }]
-    : []), ...tradeQuantityUnknownMessages("Kraken", trades)];
+    : []), ...tradeQuantityUnknownMessages("Kraken", trades), ...(fiatConversions.length > 0
+    ? [{
+        id: "kraken.fiat_conversion_not_booked",
+        severity: "warning" as const,
+        message: `Kraken: ${fiatConversions.length} operación(es) cambian una moneda oficial por otra (por ejemplo, euros por dólares) y no se calculan: ${fiatConversions.map((f) => f.row).join("; ")}.`,
+        hint: "Cada fila trae el par, el tipo (buy o sell), la cantidad (vol), el importe (cost) y la fecha. DeclaRenta no calcula la ganancia o la pérdida por tipo de cambio de estos cambios de Kraken. Cambiar una divisa por euros o por otra divisa puede dar una ganancia o una pérdida. Es la diferencia entre su valor en euros al cambiarla y lo que te costó en euros. Calcúlala y añádela a mano en Renta Web.",
+        context: { count: String(fiatConversions.length), rows: fiatConversions.map((f) => f.row).join("; ") },
+      }]
+    : [])];
 
   return {
     accountId: "",
@@ -418,8 +438,10 @@ function parseTradesCsv(lines: string[], delimiter: string): Statement {
     openPositions: [],
     securitiesInfo: [],
     ...(parserMessages.length > 0 ? { parserMessages } : {}),
+    ...(fiatConversions.length > 0 ? { krakenNamedTradeIds: fiatConversions.map((f) => f.txid) } : {}),
   };
 }
+
 
 // ---------------------------------------------------------------------------
 // Ledgers CSV parser
