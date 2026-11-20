@@ -1044,7 +1044,7 @@ const ca: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operació(ns) no tenen la comissió calculada, perquè els seus apunts de caixa no quadren amb l'operació: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa. Si un import no es pot llegir, hi ha la seva cel·la. Pot faltar un apunt o sobrar-ne un. Un apunt pot tenir un import o una data que no es pot llegir, o una data que no és la de l'operació. També hi pot haver una execució de l'ordre que no es pot llegir. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
+    "Cada fila porta el número d'ordre, el valor i la data. Entre claudàtors hi ha l'import de l'operació i la suma dels seus apunts de caixa. Si un import no es pot llegir, hi ha la seva cel·la. Pot faltar un apunt o sobrar-ne un. Un apunt pot tenir un import o una data que no es pot llegir, o una data que no és la de l'operació. També hi pot haver una execució de l'ordre que no es pot llegir o que té un Nominal de 0. Una comissió de més de 50 € més el 2 % de l'import tampoc es calcula: l'apunt pot pagar també una altra execució que no és a l'arxiu. DeclaRenta deixa aquesta comissió a 0. No la suma al cost de les compres ni la resta del valor de les vendes. Consulta la comissió a la liquidació de l'ordre a Flatex. Si la vols deduir, afegeix-la a mà a Renta Web.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} ordre(s) de compra o venda són al CSV de Kontoumsätze però no a cap CSV de Depotumsätze pujat, i no es calculen: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1056,7 +1056,7 @@ const ca: TranslationKeys = {
   "flatex.commission.multi_fill_prorated":
     "Ordres de Flatex executades en diverses parts: {{orders}}. La seva comissió s'ha repartit entre les execucions en proporció al seu import.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total de comissions de cada ordre és exacte; només el repartiment entre execucions és aproximat.",
+    "Flatex va liquidar aquestes ordres amb un nombre d'apunts de caixa diferent del d'execucions, de manera que no es pot saber quina comissió correspon a cadascuna. El total surt dels apunts de caixa, i el repartiment entre execucions és aproximat. Si un apunt paga també una execució que no és al CSV de Depotumsätze, la comissió surt més alta: revisa-la a la liquidació de l'ordre a Flatex.",
   "flatex.depot.repeated_fills":
     "Operacions de Flatex repetides i comptades una sola vegada: {{fills}}. Tenien el mateix número d'ordre i d'apunt (TA-Nr.) que una altra ja carregada.",
   "flatex.depot.repeated_fills.hint":

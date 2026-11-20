@@ -37,6 +37,13 @@ export interface FlexStatement {
    */
   krakenNamedTradeIds?: string[];
   /**
+   * Order numbers of Flatex Depot rows that are a Kauf or Verkauf with a
+   * written Nominal of 0. The row books nothing (the file's word), but its
+   * cash may sit in a leg of the order, so `reconcileOrderLegs` gives that
+   * order no fee and names it (#467). `finalizeMergedStatement` drops it.
+   */
+  flatexZeroFillOrders?: string[];
+  /**
    * Optional EUR-per-unit valuation hints derived from a broker-supplied EUR
    * value column (e.g. a user-added `EUR_Value` column in a Binance Transaction
    * History CSV). Fed into the crypto-valuation pre-pass as a manual-rate source

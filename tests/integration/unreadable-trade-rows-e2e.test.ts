@@ -3585,7 +3585,9 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
     // Round 3 of the merge sweep (#467): a day with one leg per fill booked
     // the pairs that passed even when another pair of the day failed, so a
     // combined leg uploaded twice with no TA-Nr. gave one fill the other
-    // fill's value as a fee.
+    // fill's value as a fee. And a leg that also pays a fill the Depot export
+    // writes with a Nominal of 0, or does not list, booked that fill's value
+    // as the fee of the fills it lists, with no word.
     it.each(METHODS)("[%s] a combined leg uploaded twice with no TA-Nr. gives no fill of that day a fee: the whole day is named", (method) => {
       const fills = (): Statement => depot(fill("01.03.2024", "10", "9101"), fill("01.03.2024", "5", "9102"), sell("15"));
       const control = merged(fills(), konto(leg("01.03.2024", "", "-1505,90"), sellLeg("1794,10")));
@@ -3595,6 +3597,52 @@ describe("#467 Flatex: a cash leg, income row, currency, Kurs or order number th
       expect(booked(statement)).toEqual([["10", "0"], ["5", "0"], ["-15", "-5.9"]]);
       expect(statement.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1500 EUR / -3011.8 EUR]`]]);
       expect(gains(report(statement, method))).toEqual(["1794.10", "1500.00", "294.10"]);
+    });
+
+    describe.each([
+      ["the Depot export writes with a Nominal of 0", [drow("01.03.2024", "0", BUY_INFO, "9103", "100,00")]],
+      ["the Depot export does not list", []],
+    ] as [string, string[]][])("a leg that also pays a fill %s", (_label, hidden) => {
+      it.each(METHODS)("[%s] gives one fill no fee of that fill's value: 0, named", (method) => {
+        const control = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", "-1005,90"), sellLeg("1194,10")));
+        expect(gains(report(control, method))).toEqual(["1194.10", "1005.90", "188.20"]);
+        const statement = merged(depot(fill("01.03.2024", "10", "9101"), ...hidden, sell("10")), konto(leg("01.03.2024", "8101", "-1305,90"), sellLeg("1194,10")));
+        expect(booked(statement)).toEqual([["10", "0"], ["-10", "-5.9"]]);
+        expect(statement.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1000 EUR / -1305.9 EUR]`]]);
+        expect(gains(report(statement, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      });
+
+      it.each(METHODS)("[%s] gives two fills of one combined leg no split of that fill's value: 0, named", (method) => {
+        const fills = (...rows: string[]): Statement => depot(fill("01.03.2024", "10", "9101"), ...rows, fill("01.03.2024", "5", "9102"), sell("15"));
+        const statement = merged(fills(...hidden), konto(leg("01.03.2024", "8101", "-1805,90"), sellLeg("1794,10")));
+        expect(booked(statement)).toEqual([["10", "0"], ["5", "0"], ["-15", "-5.9"]]);
+        expect(statement.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1500 EUR / -1805.9 EUR]`]]);
+        expect(gains(report(statement, method))).toEqual(["1794.10", "1500.00", "294.10"]);
+      });
+    });
+
+    it.each(METHODS)("[%s] a fill of Nominal 0 names its order even when its cash keeps the fee below the cap; with no row, nothing can tell", (method) => {
+      // A 30 € execution inside the leg: a "fee" of 35.90 € is below 50 € plus 2 %.
+      const legs = (): Statement => konto(leg("01.03.2024", "8101", "-1035,90"), sellLeg("1194,10"));
+      const zero = merged(depot(fill("01.03.2024", "10", "9101"), drow("01.03.2024", "0", BUY_INFO, "9103", "3,00"), sell("10")), legs());
+      expect(booked(zero)).toEqual([["10", "0"], ["-10", "-5.9"]]);
+      expect(zero.parserMessages?.map((m) => [m.id, m.context?.rows])).toEqual([[FEE, `333333 ${ISIN} 20240301 [1000 EUR / -1035.9 EUR]`]]);
+      expect(gains(report(zero, method))).toEqual(["1194.10", "1000.00", "194.10"]);
+      const unlisted = merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), legs());
+      expect(booked(unlisted)).toEqual([["10", "-35.9"], ["-10", "-5.9"]]);
+      expect(unlisted.parserMessages ?? []).toEqual([]);
+    });
+
+    it.each(METHODS)("[%s] a fee up to 50 € plus 2 % of the fill is kept; one above it could pay another fill: 0, named", (method) => {
+      const at = (amount: string): Statement => merged(depot(fill("01.03.2024", "10", "9101"), sell("10")), konto(leg("01.03.2024", "8101", amount), sellLeg("1194,10")));
+      const kept = at("-1069,99");
+      expect(booked(kept)).toEqual([["10", "-69.99"], ["-10", "-5.9"]]);
+      expect(kept.parserMessages ?? []).toEqual([]);
+      expect(gains(report(kept, method))).toEqual(["1194.10", "1069.99", "124.11"]);
+      const named = at("-1070,00");
+      expect(booked(named)).toEqual([["10", "0"], ["-10", "-5.9"]]);
+      expect(message(named, FEE)?.context?.rows).toBe(`333333 ${ISIN} 20240301 [1000 EUR / -1070 EUR]`);
+      expect(gains(report(named, method))).toEqual(["1194.10", "1000.00", "194.10"]);
     });
   });
 

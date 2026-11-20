@@ -1046,7 +1046,7 @@ const eu: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} eragiketak ez dute komisio kalkulaturik, haien kutxa-idazpenak eragiketarekin bat ez datozelako: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Baliteke kutxa-idazpen bat falta izatea edo bat soberan egotea. Baliteke idazpen baten zenbatekoa edo data irakurri ezin izatea, edo haren data eragiketarena ez izatea. Baliteke, halaber, aginduaren exekuzio bat irakurri ezin izatea. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
+    "Errenkada bakoitzak aginduaren zenbakia, balorea eta data ditu. Kortxete artean daude eragiketaren zenbatekoa eta haren kutxa-idazpenen batura. Zenbateko bat irakurri ezin bada, haren gelaxka dago. Baliteke kutxa-idazpen bat falta izatea edo bat soberan egotea. Baliteke idazpen baten zenbatekoa edo data irakurri ezin izatea, edo haren data eragiketarena ez izatea. Baliteke, halaber, aginduaren exekuzio bat irakurri ezin izatea edo haren Nominal-a 0 izatea. 50 € gehi zenbatekoaren % 2 baino handiagoa den komisioa ere ez da kalkulatzen: idazpenak fitxategian ez dagoen beste exekuzio bat ere ordain dezake. DeclaRentak 0an uzten du komisio hori. Ez dio erosketen kostuari gehitzen, eta ez dio salmenten balioari kentzen. Kontsultatu komisioa Flatex-eko aginduaren likidazioan. Kendu nahi baduzu, gehitu eskuz Renta Web-en.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} erosketa- edo salmenta-agindu Kontoumsätze CSVan daude, baina ez igotako Depotumsätze CSV batean ere, eta ez dira kalkulatzen: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1058,7 +1058,7 @@ const eu: TranslationKeys = {
   "flatex.commission.multi_fill_prorated":
     "Hainbat zatitan exekutatutako Flatex aginduak: {{orders}}. Haien komisioa exekuzioen artean banatu da, bakoitzaren zenbatekoaren arabera.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Agindu bakoitzaren komisioen guztizkoa zehatza da; exekuzioen arteko banaketa soilik da gutxi gorabeherakoa.",
+    "Flatex-ek agindu horiek exekuzio kopuruaren desberdina den kutxa-idazpen kopuru batekin likidatu zituen, beraz ezin da jakin zein komisio dagokion bakoitzari. Guztizkoa kutxa-idazpenetatik dator, eta exekuzioen arteko banaketa gutxi gorabeherakoa da. Idazpen batek Depotumsätze CSVan ez dagoen exekuzio bat ere ordaintzen badu, komisioa handiegia ateratzen da: egiaztatu Flatex-eko aginduaren likidazioan.",
   "flatex.depot.repeated_fills":
     "Errepikatutako Flatex eragiketak, behin bakarrik zenbatuak: {{fills}}. Kargatuta zegoen beste baten agindu-zenbaki eta idazpen-zenbaki (TA-Nr.) bera zuten.",
   "flatex.depot.repeated_fills.hint":

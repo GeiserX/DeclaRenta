@@ -52,6 +52,7 @@ export function mergeStatement(target: Statement, source: Statement, brokerName?
   target.pendingOrderLegs = [...(target.pendingOrderLegs ?? []), ...(source.pendingOrderLegs ?? [])];
   if (source.krakenLedgerTrades) target.krakenLedgerTrades = [...(target.krakenLedgerTrades ?? []), ...source.krakenLedgerTrades];
   if (source.krakenNamedTradeIds) target.krakenNamedTradeIds = [...(target.krakenNamedTradeIds ?? []), ...source.krakenNamedTradeIds];
+  if (source.flatexZeroFillOrders) target.flatexZeroFillOrders = [...(target.flatexZeroFillOrders ?? []), ...source.flatexZeroFillOrders];
   target.manualRateHints = [...(target.manualRateHints ?? []), ...(source.manualRateHints ?? [])];
   target.holdingsBySource = [
     ...(target.holdingsBySource ?? []),
@@ -246,9 +247,16 @@ function dateUndatedRowsAtUploadStart(statement: Statement): void {
  * A fee is kept only when the legs can give one (#467): every leg's amount is
  * readable, and the fee is not below zero (a buy pays at least its gross, a
  * sale gets at most its gross; one cent of rounding is allowed) and is below
- * the gross. A split fee is also below the day's smallest fill: a missing or
- * extra leg of a fill of the day (a sale leg not exported, a leg uploaded
- * twice with no TA-Nr.) moves the fee by at least that fill's value. A day
+ * the gross and below 50 plus 2 % of the gross: a larger one is a leg that
+ * also pays a fill the Depot export does not list. An order with a Kauf or
+ * Verkauf of Nominal 0 gets no fee: that row books nothing, but its cash may
+ * be in a leg (Flatex settles fills in one combined leg). Both gave the
+ * listed fill the hidden fill's value as a fee (a 188 € gain became a 112 €
+ * loss). A hidden fill below the cap still passes: nothing in the files
+ * tells its cash from a fee. A split fee is also below the day's smallest
+ * fill: a missing or extra leg of a fill of the day (a sale leg not
+ * exported, a leg uploaded twice with no TA-Nr.) moves the fee by at least
+ * that fill's value. A day
  * with more legs than fills (net of Stornos) is never split: the extra leg
  * may be that of a fill the Depot export does not list or writes with a
  * Nominal of 0, and such a leg can be below the smallest fill. Otherwise
@@ -305,16 +313,25 @@ function executionDays(trades: readonly Trade[], legs: readonly OrderLeg[]): { t
 // One cent: Flatex rounds the cash leg to cents, but not the gross (qty × Kurs).
 const FEE_ROUNDING = new Decimal("0.01");
 
+// No Flatex fee reaches 50 plus 2 % of the gross: the order fee is 5.90 €,
+// and exchange fees and stamp duties stay well below 2 %. A larger "fee" is
+// a leg that also pays a fill the Depot export does not list: nothing else
+// in the files tells them apart, and that fill's value became a fee (#467).
+const FEE_CAP_BASE = new Decimal(50);
+const FEE_CAP_SHARE = new Decimal("0.02");
+
 /**
  * The fee readable legs give fills of one side and `gross` value, or
  * undefined when they give none: a buy pays gross + fee (its legs are
  * debits), a sale gets gross − fee (its legs are credits). The fee must be
- * below `limit` (the gross, or a split fee's smallest fill).
+ * below `limit` (the gross, or a split fee's smallest fill) and below 50
+ * plus 2 % of the gross.
  */
 function legFee(legs: readonly OrderLeg[], side: Trade["buySell"], gross: Decimal, limit: Decimal = gross): Decimal | undefined {
   const signed = legs.reduce((sum, leg) => sum.plus(leg.netAmount), new Decimal(0));
   const fee = side === "SELL" ? gross.minus(signed) : signed.negated().minus(gross);
-  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(limit) ? fee : undefined;
+  const cap = Decimal.min(limit, FEE_CAP_BASE.plus(gross.abs().mul(FEE_CAP_SHARE)));
+  return fee.greaterThan(FEE_ROUNDING.negated()) && fee.lessThan(cap) ? fee : undefined;
 }
 
 /**
@@ -395,6 +412,10 @@ function reconcileOrderLegs(statement: Statement): void {
   // Nominal it cannot read): that fill's leg is in the Konto export, so the
   // legs cannot give the readable fills a fee (#467).
   const keptFillOrders = new Set<string>();
+  // Orders with a Kauf or Verkauf of Nominal 0: it books nothing, but its
+  // cash may be in a leg of the order (#467). Not named as legs without fill.
+  const zeroFillOrders = new Set(statement.flatexZeroFillOrders ?? []);
+  delete statement.flatexZeroFillOrders;
   for (const trade of statement.trades) {
     const key = trade.notes ?? "";
     if (!key.startsWith(FLATEX_ORDER_PREFIX)) continue;
@@ -439,11 +460,12 @@ function reconcileOrderLegs(statement: Statement): void {
     }
 
     // A leg that cannot be read could be any fill's, and a fill that cannot
-    // be read has its leg among them: no fill of the order gets a fee from
-    // them, and the order is named. So is an order whose legs and fills do
-    // not fall on the same days: they are not the same executions.
+    // be read, or written with a Nominal of 0, has its leg among them: no
+    // fill of the order gets a fee from them, and the order is named. So is
+    // an order whose legs and fills do not fall on the same days: they are
+    // not the same executions.
     const days = executionDays(trades, legs);
-    if (legs.some((leg) => leg.unreadableCell !== undefined) || keptFillOrders.has(orderKey) || days === undefined) {
+    if (legs.some((leg) => leg.unreadableCell !== undefined) || keptFillOrders.has(orderKey) || zeroFillOrders.has(orderKey) || days === undefined) {
       notRecovered.push(orderRow(orderKey, legs, trades));
       continue;
     }
@@ -556,7 +578,7 @@ function reconcileOrderLegs(statement: Statement): void {
       id: "flatex.commission.not_recovered",
       severity: "warning",
       message: `Flatex: ${count} operación(es) no tienen la comisión calculada, porque sus apuntes de caja no cuadran con la operación: ${rows}.`,
-      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
+      hint: "Cada fila trae el número de orden, el valor y la fecha. Entre corchetes va el importe de la operación y la suma de sus apuntes de caja. Si un importe no se puede leer, va su celda. Puede faltar un apunte o sobrar uno. Un apunte puede tener un importe o una fecha que no se puede leer, o una fecha que no es la de la operación. También puede haber una ejecución de la orden que no se puede leer o que tiene un Nominal de 0. Una comisión de más de 50 € más el 2 % del importe tampoco se calcula: el apunte puede pagar también otra ejecución que no está en el archivo. DeclaRenta deja esa comisión en 0. No la suma al coste de las compras ni la resta del valor de las ventas. Consulta la comisión en la liquidación de la orden en Flatex. Si quieres deducirla, añádela a mano en Renta Web.",
       context: { count, rows },
     });
   }
@@ -578,7 +600,7 @@ function reconcileOrderLegs(statement: Statement): void {
       id: "flatex.commission.multi_fill_prorated",
       severity: "info",
       message: `Órdenes de Flatex ejecutadas en varias partes: ${proratedOrders}. Su comisión se ha repartido entre las ejecuciones en proporción a su importe.`,
-      hint: "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total de comisiones de cada orden es exacto; solo el reparto entre ejecuciones es aproximado.",
+      hint: "Flatex liquidó esas órdenes con un número de apuntes de caja distinto al de ejecuciones, así que no se puede saber qué comisión corresponde a cada una. El total sale de los apuntes de caja, y el reparto entre ejecuciones es aproximado. Si un apunte paga también una ejecución que no está en el CSV de Depotumsätze, la comisión sale mayor: revísala en la liquidación de la orden en Flatex.",
       context: { orders: String(proratedOrders) },
     });
   }

@@ -1042,7 +1042,7 @@ const en: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} trade(s) have no calculated commission, because their cash entries do not match the trade: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries. If an amount cannot be read, they show its cell. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
+    "Each row gives the order number, the security and the date. The square brackets show the trade amount and the sum of its cash entries. If an amount cannot be read, they show its cell. A cash entry may be missing, or there may be one too many. An entry may have an amount or a date that cannot be read, or a date that is not the trade's date. An execution of the order may also be unreadable or have a Nominal of 0. A commission above 50 € plus 2 % of the amount is not used either: the entry may also pay another execution that is not in the file. DeclaRenta leaves that commission at 0. It does not add it to the cost of purchases or subtract it from the value of sales. Look up the commission in the order's settlement note in Flatex. If you want to deduct it, add it by hand in Renta Web.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} purchase or sale order(s) are in the Kontoumsätze CSV but in no uploaded Depotumsätze CSV, and are not calculated: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1054,7 +1054,7 @@ const en: TranslationKeys = {
   "flatex.commission.multi_fill_prorated":
     "Flatex orders executed in several parts: {{orders}}. Their commission has been split across the executions in proportion to their amount.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total commission of each order is exact; only the split between executions is approximate.",
+    "Flatex settled those orders with a number of cash entries different from the number of executions, so it is not possible to tell which commission belongs to each one. The total comes from the cash entries, and the split between executions is approximate. If an entry also pays an execution that is not in the Depotumsätze CSV, the commission comes out too high: check it in the order's settlement note in Flatex.",
   "flatex.depot.repeated_fills":
     "Repeated Flatex trades counted only once: {{fills}}. They had the same order number and booking number (TA-Nr.) as one already loaded.",
   "flatex.depot.repeated_fills.hint":

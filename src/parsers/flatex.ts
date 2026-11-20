@@ -140,6 +140,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
   }
 
   const trades: Trade[] = [];
+  const zeroFillOrders: string[] = [];
   // Track Lagerstellenwechsel (custody transfer) net quantity per ISIN. A
   // balanced in/out pair nets to zero and is harmless; an unmatched leg means
   // a position entered or left the depot without a cost basis — same phantom-lot
@@ -206,7 +207,13 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
       if (buyText || sellText || movesNamedShares) keepUnreadable(unreadableCell(headers[isinCol] ?? "ISIN", ""));
       continue;
     }
-    if (qtyNum.isZero() && !qtyUnknown) continue;
+    if (qtyNum.isZero() && !qtyUnknown) {
+      // A written 0 books nothing, but a Kauf or Verkauf of 0 may still be
+      // an execution whose cash is in a leg of its order: that leg booked
+      // the fill's value as the other fills' fee (#467). Its order is named.
+      if ((buyText || sellText) && orderKey) zeroFillOrders.push(orderKey);
+      continue;
+    }
 
     // A row the parser does not book that still moves shares of the ISIN (a
     // transfer in, a split, free shares, a conversion) is kept as a row that
@@ -392,6 +399,7 @@ function parseDepotumsaetze(lines: string[], delimiter: string): Statement {
     corporateActions: [],
     openPositions: [],
     securitiesInfo: [],
+    ...(zeroFillOrders.length > 0 ? { flatexZeroFillOrders: zeroFillOrders } : {}),
     ...(parserMessages.length > 0
       ? { parserMessages, parserWarnings: parserMessages.map((m) => m.message) }
       : {}),

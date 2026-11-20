@@ -1044,7 +1044,7 @@ const gl: TranslationKeys = {
   "flatex.commission.not_recovered":
     "Flatex: {{count}} operación(s) non teñen a comisión calculada, porque os seus apuntamentos de caixa non cadran coa operación: {{rows}}.",
   "flatex.commission.not_recovered.hint":
-    "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa. Se un importe non se pode ler, vai a súa cela. Pode faltar un apuntamento ou sobrar un. Un apuntamento pode ter un importe ou unha data que non se pode ler, ou unha data que non é a da operación. Tamén pode haber unha execución da orde que non se pode ler. DeclaRenta deixa esa comisión en 0. Non a suma ao custo das compras nin a resta do valor das vendas. Consulta a comisión na liquidación da orde en Flatex. Se queres deducila, engádea a man en Renta Web.",
+    "Cada fila trae o número de orde, o valor e a data. Entre corchetes vai o importe da operación e a suma dos seus apuntamentos de caixa. Se un importe non se pode ler, vai a súa cela. Pode faltar un apuntamento ou sobrar un. Un apuntamento pode ter un importe ou unha data que non se pode ler, ou unha data que non é a da operación. Tamén pode haber unha execución da orde que non se pode ler ou que ten un Nominal de 0. Unha comisión de máis de 50 € máis o 2 % do importe tampouco se calcula: o apuntamento pode pagar tamén outra execución que non está no ficheiro. DeclaRenta deixa esa comisión en 0. Non a suma ao custo das compras nin a resta do valor das vendas. Consulta a comisión na liquidación da orde en Flatex. Se queres deducila, engádea a man en Renta Web.",
   "flatex.order_leg_without_fill":
     "Flatex: {{count}} orde(s) de compra ou venda están no CSV de Kontoumsätze pero non en ningún CSV de Depotumsätze subido, e non se calculan: {{rows}}.",
   "flatex.order_leg_without_fill.hint":
@@ -1056,7 +1056,7 @@ const gl: TranslationKeys = {
   "flatex.commission.multi_fill_prorated":
     "Ordes de Flatex executadas en varias partes: {{orders}}. A súa comisión repartiuse entre as execucións en proporción ao seu importe.",
   "flatex.commission.multi_fill_prorated.hint":
-    "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total de comisións de cada orde é exacto; só o reparto entre execucións é aproximado.",
+    "Flatex liquidou esas ordes cun número de apuntamentos de caixa distinto ao de execucións, polo que non se pode saber que comisión corresponde a cada unha. O total sae dos apuntamentos de caixa, e o reparto entre execucións é aproximado. Se un apuntamento paga tamén unha execución que non está no CSV de Depotumsätze, a comisión sae máis alta: revísaa na liquidación da orde en Flatex.",
   "flatex.depot.repeated_fills":
     "Operacións de Flatex repetidas e contadas unha soa vez: {{fills}}. Tiñan o mesmo número de orde e de apuntamento (TA-Nr.) que outra xa cargada.",
   "flatex.depot.repeated_fills.hint":

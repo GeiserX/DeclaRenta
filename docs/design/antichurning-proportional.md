@@ -797,7 +797,12 @@ práctico Renta 2025. The decisions, each pinned in
       unreadable fill became the fee of another fill. A day with one leg
       per fill books no fee for any of its fills when one pair gives none:
       a combined leg uploaded twice with no TA-Nr. gave the larger fill
-      the smaller fill's value as a fee. A day with one
+      the smaller fill's value as a fee. A fee of 50 plus 2 % of the
+      gross or more is no fee, and an order with a Kauf or Verkauf of
+      Nominal 0 gets none: the leg can also pay a fill the Depot export
+      does not list or writes with a Nominal of 0, whose value became the
+      listed fills' fee. A hidden fill below that cap still passes, since
+      nothing in the files tells its cash from a fee. A day with one
       combined leg for several fills splits the fee pro rata only when the
       fee is below the day's smallest fill: a missing or extra leg (one
       uploaded twice with no TA-Nr.) moves the fee by at least that fill's
