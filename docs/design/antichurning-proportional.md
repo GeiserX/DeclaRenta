@@ -613,9 +613,15 @@ práctico Renta 2025. The decisions, each pinned in
       corporate-action row, and any other an unreadable row named by both
       cells. A buy or sale with an empty `Currency (Price / share)` (or a
       row cut short) is an unreadable row named by that cell; it was booked
-      as euros. A dividend, interest or withholding with both currency
-      cells empty is not booked and is named by
-      `parser.cash_income_amount_unreadable`. `Dividend (Tax exempted)` is
+      as euros. A dividend, interest or withholding with an empty
+      `Currency (Total)` is not booked and is named by
+      `parser.cash_income_amount_unreadable`: in an EUR account the Total
+      is in EUR while `Currency (Price / share)` is the instrument's, so
+      the Total is never read in the price currency. A buy or sale with no
+      readable price and an empty `Currency (Total)` is an unreadable row
+      named by both cells, never valued from that Total; one with a
+      readable price does not need the cell. A fee with no currency of its
+      own takes `Currency (Total)`, and with neither it is not added. `Dividend (Tax exempted)` is
       a dividend; it was booked as a withholding. `Lending interest` is
       interest (casilla 0027); it was dropped with no word. A withholding
       keeps its sign when the file writes any withholding as negative, so a

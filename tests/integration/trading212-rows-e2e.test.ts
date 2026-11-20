@@ -26,19 +26,19 @@ const H = "Action,Time,ISIN,Ticker,Name,No. of shares,Price / share,Currency (Pr
 const AAPL = "US0378331005";
 const BATS = "GB0002875804";
 
-function rates(): EcbRateMap {
+function rates(usd = "1.10"): EcbRateMap {
   const map: EcbRateMap = new Map();
   for (let t = Date.UTC(2023, 0, 1); t <= Date.UTC(2026, 11, 31); t += 86_400_000) {
-    map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", "1.10"], ["GBP", "1.18"]]));
+    map.set(new Date(t).toISOString().slice(0, 10), new Map([["USD", usd], ["GBP", "1.18"]]));
   }
   return map;
 }
 
-const parse = (rows: string[]): Statement => trading212Parser.parse([H, ...rows].join("\n"));
+const parse = (rows: string[], header = H): Statement => trading212Parser.parse([header, ...rows].join("\n"));
 
-function report(rows: string[], method: FxMethod): TaxReport {
-  const merged = mergeStatement(createEmptyStatement(), parse(rows), "Trading 212");
-  return generateTaxReport(finalizeMergedStatement(merged), rates(), 2025, reportOptionsForMethod(method));
+function report(rows: string[], method: FxMethod, usd = "1.10", header = H): TaxReport {
+  const merged = mergeStatement(createEmptyStatement(), parse(rows, header), "Trading 212");
+  return generateTaxReport(finalizeMergedStatement(merged), rates(usd), 2025, reportOptionsForMethod(method));
 }
 
 const msg = (s: Statement, id: string): string | undefined =>
@@ -158,10 +158,74 @@ describe("Trading 212 currency: an empty currency is never read as EUR", () => {
     expect(r.messages.map((m) => m.id)).toContain("parser.cash_income_amount_unreadable");
   });
 
-  it("control: interest with only Currency (Total), and a dividend with only Currency (Price / share), are booked", () => {
-    const s = parse(["Interest on cash,2025-03-01 00:00:00,,,,,,,,,,10,EUR,,i1", gbpDiv("GBP").replace(",100,GBP,", ",100,,")]);
-    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual(["Broker Interest Received 10 EUR", "Dividends 100 GBP"]);
+  it("control: interest with only Currency (Total) is booked", () => {
+    const s = parse(["Interest on cash,2025-03-01 00:00:00,,,,,,,,,,10,EUR,,i1"]);
+    expect(s.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual(["Broker Interest Received 10 EUR"]);
     expect(s.parserMessages).toBeUndefined();
+  });
+
+  // In an EUR account the Total is in EUR while Currency (Price / share) is
+  // the instrument's. An empty Currency (Total) was read as the price
+  // currency: at a USD rate of 0.91 a 100 € dividend became 91 €.
+  describe("an empty Currency (Total) is never read as the price currency", () => {
+    const usdDiv = (totalCcy: string) => `Dividend (Ordinary),2025-05-15 09:00:00,${AAPL},AAPL,Apple,10,11,USD,0.92,,,100,${totalCcy},,d1`;
+    const batsDiv = `Dividend (Ordinary),2025-05-15 09:00:00,${BATS},BATS,BAT,10,10,GBP,1,,,100,EUR,,d1`;
+    const batsWht = (totalCcy: string) => `Dividend (Dividend tax),2025-05-15 09:00:00,${BATS},BATS,BAT,,,GBP,1,,,-15,${totalCcy},,w1`;
+    const eurSell = (price: string, totalCcy: string) => `Market sell,2025-06-10 10:00:00,${AAPL},AAPL,Apple,10,${price},USD,0.9,,,1363.64,${totalCcy},,s1`;
+
+    it.each(METHODS)("[%s] control: a USD dividend whose Total is 100 EUR gives 0029 = 100.00", (method) => {
+      expect(report([usdDiv("EUR")], method, "0.91").dividends.grossIncome.toFixed(2)).toBe("100.00");
+    });
+
+    it.each(METHODS)("[%s] a dividend with only Currency (Price / share) is named and not booked", (method) => {
+      for (const [row, named] of [
+        [usdDiv(""), 'Dividend (Ordinary) AAPL 20250515 [Currency (Price / share): "USD", Currency (Total): ""]'],
+        [gbpDiv("GBP").replace(",100,GBP,", ",100,,"), 'Dividend (Ordinary) BATS 20250515 [Currency (Price / share): "GBP", Currency (Total): ""]'],
+      ] as const) {
+        const s = parse([row]);
+        expect(s.cashTransactions, named).toEqual([]);
+        expect(msg(s, "parser.cash_income_amount_unreadable"), named).toBe(named);
+        const r = report([row], method, "0.91");
+        expect(r.dividends.grossIncome.toFixed(2), named).toBe("0.00");
+        expect(r.messages.map((m) => m.id), named).toContain("parser.cash_income_amount_unreadable");
+      }
+    });
+
+    it.each(METHODS)("[%s] a withholding with only Currency (Price / share) is named and not booked", (method) => {
+      const s = parse([batsDiv, batsWht("")]);
+      expect(s.cashTransactions.map((c) => `${c.type} ${c.amount} ${c.currency}`)).toEqual(["Dividends 100 EUR"]);
+      expect(msg(s, "parser.cash_income_amount_unreadable")).toBe(
+        'Dividend (Dividend tax) BATS 20250515 [Currency (Price / share): "GBP", Currency (Total): ""]');
+      expect(report([batsDiv, batsWht("")], method, "0.91").dividends.entries.map((e) => e.withholdingTaxEur.toFixed(2))).toEqual(["0.00"]);
+      expect(report([batsDiv, batsWht("EUR")], method, "0.91").dividends.entries.map((e) => e.withholdingTaxEur.toFixed(2))).toEqual(["15.00"]);
+      expect(msg(parse([batsWht("").replace(`,${BATS},BATS,BAT,`, ",,,,")]), "parser.cash_income_amount_unreadable")).toBe(
+        'Dividend (Dividend tax) — 20250515 [Currency (Price / share): "GBP", Currency (Total): ""]');
+    });
+
+    it.each(METHODS)("[%s] a sale with no price is never valued from a Total with no currency", (method) => {
+      for (const price of ["", "0", "abc"]) {
+        const s = parse([buy(), eurSell(price, "")]);
+        expect(msg(s, "parser.trade_row_unreadable"), price).toBe(`AAPL (${AAPL}) 20250610 [Price / share: ${JSON.stringify(price)}, Currency (Total): ""]`);
+        expect(s.trades[1]!.quantityUnknown, price).toBe(true);
+        const r = report([buy(), eurSell(price, "")], method, "0.91");
+        expect(r.capitalGains.transmissionValue.toFixed(2), price).toBe("0.00");
+        expect(r.capitalGains.netGainLoss.toFixed(2), price).toBe("0.00");
+      }
+    });
+
+    it.each(METHODS)("[%s] control: a readable price needs no Currency (Total)", (method) => {
+      expect(report([buy(), eurSell("149.85", "")], method, "0.91").capitalGains.netGainLoss.toFixed(2)).toBe("453.64");
+      expect(report([buy(), eurSell("149.85", "EUR")], method, "0.91").capitalGains.netGainLoss.toFixed(2)).toBe("453.64");
+      expect(report([buy("100", "1000", "USD", ""), sell("150", "1500", "USD", "")], method).capitalGains.netGainLoss.toFixed(2)).toBe("550.00");
+    });
+
+    it("a fee with no currency of its own takes only Currency (Total), never the price currency", () => {
+      const HF = H.replace("Currency (Total),", "Currency (Total),Currency conversion fee,Currency (Currency conversion fee),");
+      const row = (totalCcy: string) => `Market sell,2025-06-10 10:00:00,${AAPL},AAPL,Apple,10,150,USD,1,,,1363.64,${totalCcy},1.5,,,s1`;
+      const fee = (totalCcy: string) => { const t = parse([row(totalCcy)], HF).trades[0]!; return `${t.commission} ${t.commissionCurrency} ${t.taxes}`; };
+      expect(fee("EUR")).toBe("-1.5 EUR 0");
+      expect(fee("")).toBe("0 USD 0");
+    });
   });
 
   it("a withholding with empty currency cells is named, not booked as EUR", () => {

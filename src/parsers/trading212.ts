@@ -229,15 +229,16 @@ function parseTrading212Csv(lines: string[]): Statement {
     const sharesStr = toFiniteDecimalString(fields[cols.shares] ?? "0");
     const priceStr = toFiniteDecimalString(fields[cols.pricePerShare] ?? "0");
     // An empty currency cell is no EUR (#467): a buy or sale with no
-    // Currency (Price / share), and a cash row with neither currency cell, is
+    // Currency (Price / share), and a cash row with no Currency (Total), is
     // not booked and is named below. A row that books nothing keeps "EUR".
     const priceCurrencyCell = (fields[cols.priceCurrency] ?? "").trim();
     const rawCurrency = priceCurrencyCell || "EUR";
     const { currency: priceCurrency, divisor: priceDivisor } = normalizeFractionalCurrency(rawCurrency);
     const currency = priceCurrency;
-    // Currency (Total) is authoritative for cash transaction amounts: in EUR-primary accounts
-    // the Total column holds the credited EUR amount, not the instrument's native currency.
-    const cashCurrencyCell = (fields[cols.totalCurrency] ?? "").trim() || priceCurrencyCell;
+    // Currency (Total) is the only currency of the Total: in an EUR account
+    // the Total holds the credited EUR amount, not the instrument's currency,
+    // so an empty Currency (Total) is never read as the price currency (#467).
+    const cashCurrencyCell = (fields[cols.totalCurrency] ?? "").trim();
     const rawCashCurrency = cashCurrencyCell || rawCurrency;
     const { currency: cashCurrency, divisor: cashDivisor } = normalizeFractionalCurrency(rawCashCurrency);
     const totalStr = toFiniteDecimalString(fields[cols.total] ?? "0");
@@ -318,13 +319,14 @@ function parseTrading212Csv(lines: string[]): Statement {
       const signedDec = new Decimal(totalStr).div(cashDivisor);
       const amountDec = withholdingsSigned ? signedDec : signedDec.abs().neg();
       if (amountDec.isZero()) continue;
-      if (!security) {
-        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
+      // With no Currency (Total) it is no EUR and not the price currency: not
+      // booked, named (#467).
+      if (!cashCurrencyCell) {
+        unreadableIncome.push({ type: action, security: security || "—", currency: "", date: tradeDate, cells: currencyCells(fields) });
         continue;
       }
-      // With no currency it is no EUR: not booked, named (#467).
-      if (!cashCurrencyCell) {
-        unreadableIncome.push({ type: action, security, currency: "", date: tradeDate, cells: currencyCells(fields) });
+      if (!security) {
+        unidentifiedCash.push(`${action} ${amountDec.toString()} ${cashCurrency} ${tradeDate || "—"}`);
         continue;
       }
 
@@ -439,6 +441,17 @@ function parseTrading212Csv(lines: string[]): Statement {
 
     const priceDec = new Decimal(priceStr).div(priceDivisor);
     const totalDec = new Decimal(totalStr).abs().div(cashDivisor);
+    // A row valued from its Total needs the Total's own currency: with an
+    // empty Currency (Total) an EUR Total was read as USD (#467). It books
+    // nothing and is named by both cells.
+    if (priceDec.isZero() && !totalDec.isZero() && !cashCurrencyCell) {
+      trades.push(unreadableTrade({
+        tradeID: `trading212-row-${uniqueId}`,
+        symbol: ticker, description: name, isin, assetCategory: "STK", currency, tradeDate, tradeTime,
+        buySell: sell ? "SELL" : "BUY", exchange: "TRADING212",
+      }, `${unreadableCell(headers[cols.pricePerShare] ?? "Price / share", fields[cols.pricePerShare])}, ${unreadableCell(headers[cols.totalCurrency] ?? "Currency (Total)", fields[cols.totalCurrency])}`));
+      continue;
+    }
     if (priceDec.isZero() && !totalDec.isZero() && cashCurrency !== currency) {
       unresolvedPriceSkipped++;
       // A blank or unreadable price is still a buy or sale for the
@@ -499,7 +512,11 @@ function parseTrading212Csv(lines: string[]): Statement {
       if (fee.amount < 0) continue;
       const amountDec = toFiniteDecimal(fields[fee.amount] ?? "0").abs();
       if (amountDec.isZero()) continue;
-      const rawFeeCurrency = (fields[fee.currency] ?? "").trim() || rawCashCurrency;
+      // A fee with no currency of its own is in Currency (Total), never in
+      // the price currency; with neither it is not added, which can only
+      // raise the tax (#467).
+      const rawFeeCurrency = (fields[fee.currency] ?? "").trim() || cashCurrencyCell;
+      if (!rawFeeCurrency) continue;
       const { currency: feeCurrency, divisor: feeDivisor } = normalizeFractionalCurrency(rawFeeCurrency);
       if (feeCurrency === currency) {
         taxesDec = taxesDec.plus(amountDec.div(feeDivisor));
